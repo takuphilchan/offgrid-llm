@@ -1,0 +1,98 @@
+# 🌐 OffGrid LLM
+
+**AI for Edge & Offline Environments**
+
+OffGrid LLM is a lightweight, offline-first LLM orchestrator designed for environments with limited or intermittent internet connectivity. Built in Go for maximum performance and minimal resource usage.
+
+## 🎯 Features
+
+- ✅ **Offline-First**: Works without internet connectivity
+- 🔄 **P2P Model Sharing**: Share models across local networks
+- 💾 **USB Model Import**: Install models from USB drives/SD cards
+- ⚡ **Low Resource**: Runs on devices with as little as 2GB RAM
+- 🔌 **OpenAI-Compatible API**: Drop-in replacement for OpenAI API
+- 🌍 **Edge-Ready**: Perfect for remote locations, ships, clinics, schools
+- 📦 **Single Binary**: Easy deployment, no dependencies
+
+## 🚀 Quick Start
+
+```bash
+# Build
+go build -o offgrid ./cmd/offgrid
+
+# Run
+./offgrid
+```
+
+Server will start on `http://localhost:8080`
+
+## 📚 API Endpoints
+
+```
+GET  /health                  - Health check
+GET  /v1/models              - List available models
+POST /v1/chat/completions    - Chat completions (OpenAI-compatible)
+POST /v1/completions         - Text completions (OpenAI-compatible)
+```
+
+## 🏗️ Architecture
+
+```
+offgrid-llm/
+├── cmd/offgrid/           # Main application entry point
+├── internal/
+│   ├── server/           # HTTP server & API handlers
+│   ├── models/           # Model management & registry
+│   ├── inference/        # LLM inference engine
+│   ├── resource/         # Resource monitoring & allocation
+│   └── p2p/              # Peer-to-peer networking
+├── pkg/api/              # Public API types
+└── web/ui/               # Web dashboard (future)
+```
+
+## 🎯 Use Cases
+
+- 🚢 **Maritime & Offshore** - Ships, oil rigs, research vessels
+- 🏥 **Healthcare** - Rural clinics, mobile medical units
+- 🏫 **Education** - Schools in low-bandwidth areas
+- 🏭 **Industrial** - Factories, mines, warehouses
+- 🔒 **High-Security** - Air-gapped networks
+- 🏕️ **Field Research** - Remote scientific operations
+
+## 🛣️ Roadmap
+
+### Phase 1 (Current)
+- [x] Basic HTTP server
+- [x] OpenAI-compatible API structure
+- [ ] llama.cpp integration
+- [ ] Model loading from disk
+
+### Phase 2
+- [ ] P2P model discovery & sharing
+- [ ] USB model import
+- [ ] Resource monitoring
+- [ ] Multi-user support
+
+### Phase 3
+- [ ] Advanced quantization
+- [ ] Bandwidth-aware syncing
+- [ ] Web dashboard
+- [ ] Mobile/ARM optimization
+
+## 📖 Documentation
+
+Coming soon!
+
+## 🤝 Contributing
+
+Contributions welcome! This project aims to make AI accessible in underserved environments.
+
+## 📄 License
+
+MIT License - See LICENSE file for details
+
+## 💡 Philosophy
+
+**AI should work everywhere, not just where the internet is fast.**
+
+OffGrid LLM brings powerful language models to edge environments, remote locations, and anywhere reliable internet connectivity isn't guaranteed.
