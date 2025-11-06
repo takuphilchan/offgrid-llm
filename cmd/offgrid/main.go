@@ -32,6 +32,9 @@ func main() {
 		case "catalog":
 			handleCatalog()
 			return
+		case "quantization", "quant":
+			handleQuantization()
+			return
 		case "info", "status":
 			handleInfo()
 			return
@@ -257,24 +260,67 @@ func handleCatalog() {
 
 	fmt.Println("Download: offgrid download <model-id> [quantization]")
 	fmt.Println("Example:  offgrid download tinyllama-1.1b-chat Q4_K_M")
+	fmt.Println()
+	fmt.Println("💡 Tip: Run 'offgrid quantization' to learn about quantization levels")
+}
+
+func handleQuantization() {
+	fmt.Println("📊 Quantization Levels Explained")
+	fmt.Println()
+	fmt.Println("Quantization reduces model size by using fewer bits per weight.")
+	fmt.Println("Lower bits = smaller file, faster loading, but slightly reduced quality.")
+	fmt.Println()
+
+	// Show all quantization levels in order of quality
+	quantLevels := []string{
+		"Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L",
+		"Q4_0", "Q4_K_S", "Q4_K_M",
+		"Q5_0", "Q5_K_S", "Q5_K_M",
+		"Q6_K", "Q8_0",
+	}
+
+	for _, quant := range quantLevels {
+		info := models.GetQuantizationInfo(quant)
+		marker := "  "
+		if quant == "Q4_K_M" || quant == "Q5_K_M" {
+			marker = "🌟"
+		}
+
+		fmt.Printf("%s %s - %s [%s]\n", marker, info.Name, info.QualityLevel, info.Description)
+		fmt.Printf("     %.1f bits/weight | %s\n", info.BitsPerWeight, info.UseCases)
+		fmt.Println()
+	}
+
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("📌 General Recommendations:")
+	fmt.Println("  • For most users: Q4_K_M - Best balance of quality and size")
+	fmt.Println("  • For production: Q5_K_M - Higher quality, worth the extra ~25% size")
+	fmt.Println("  • For limited RAM: Q3_K_M - Acceptable quality in 3-4 GB")
+	fmt.Println("  • For research: Q8_0 - Nearly identical to original model")
+	fmt.Println()
+	fmt.Println("💾 Size comparison for a 7B parameter model:")
+	fmt.Println("  Q4_K_M: ~4.0 GB  |  Q5_K_M: ~4.8 GB  |  Q8_0: ~7.2 GB")
+	fmt.Println()
 }
 
 func printHelp() {
 	fmt.Println("Usage: offgrid [command]")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  serve, server    Start the HTTP server (default)")
-	fmt.Println("  download <id>    Download a model from catalog")
-	fmt.Println("  import <path>    Import model(s) from USB/SD card")
-	fmt.Println("  list             List installed models")
-	fmt.Println("  catalog          Show available models in catalog")
-	fmt.Println("  config <action>  Manage configuration (init, show, validate)")
-	fmt.Println("  info, status     Show system and model information")
-	fmt.Println("  help             Show this help message")
+	fmt.Println("  serve, server       Start the HTTP server (default)")
+	fmt.Println("  download <id>       Download a model from catalog")
+	fmt.Println("  import <path>       Import model(s) from USB/SD card")
+	fmt.Println("  list                List installed models")
+	fmt.Println("  catalog             Show available models in catalog")
+	fmt.Println("  quantization, quant Explain quantization levels and tradeoffs")
+	fmt.Println("  config <action>     Manage configuration (init, show, validate)")
+	fmt.Println("  info, status        Show system and model information")
+	fmt.Println("  help                Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  offgrid                                    # Start server")
 	fmt.Println("  offgrid catalog                            # Browse models")
+	fmt.Println("  offgrid quantization                       # Learn about quantization")
 	fmt.Println("  offgrid download tinyllama-1.1b-chat       # Download model")
 	fmt.Println("  offgrid import /media/usb                  # Import from USB")
 	fmt.Println("  offgrid config init                        # Create config file")

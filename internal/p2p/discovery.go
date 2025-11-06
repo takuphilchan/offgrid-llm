@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -18,6 +19,14 @@ type Peer struct {
 	Models   []string
 }
 
+// Announcement represents a peer announcement message
+type Announcement struct {
+	NodeID  string   `json:"node_id"`
+	Port    int      `json:"port"`
+	Models  []string `json:"models"`
+	Version string   `json:"version"`
+}
+
 // Discovery handles peer discovery on the local network
 type Discovery struct {
 	mu            sync.RWMutex
@@ -26,6 +35,8 @@ type Discovery struct {
 	discoveryPort int
 	enabled       bool
 	stopChan      chan struct{}
+	localModels   []string // Models available on this node
+	nodeID        string   // Unique identifier for this node
 }
 
 // NewDiscovery creates a new P2P discovery instance
@@ -36,7 +47,16 @@ func NewDiscovery(localPort, discoveryPort int) *Discovery {
 		discoveryPort: discoveryPort,
 		enabled:       false,
 		stopChan:      make(chan struct{}),
+		localModels:   []string{},
+		nodeID:        fmt.Sprintf("node-%d", time.Now().Unix()),
 	}
+}
+
+// SetLocalModels updates the list of models available on this node
+func (d *Discovery) SetLocalModels(models []string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.localModels = models
 }
 
 // Start begins peer discovery
@@ -162,9 +182,23 @@ func (d *Discovery) broadcast() {
 	}
 	defer conn.Close()
 
-	// Simple announcement format: "OFFGRID:PORT:MODELS"
-	message := fmt.Sprintf("OFFGRID:%d", d.localPort)
-	_, err = conn.Write([]byte(message))
+	// Create JSON announcement
+	d.mu.RLock()
+	announcement := Announcement{
+		NodeID:  d.nodeID,
+		Port:    d.localPort,
+		Models:  d.localModels,
+		Version: "0.1.0",
+	}
+	d.mu.RUnlock()
+
+	data, err := json.Marshal(announcement)
+	if err != nil {
+		log.Printf("Failed to marshal announcement: %v", err)
+		return
+	}
+
+	_, err = conn.Write(data)
 	if err != nil {
 		log.Printf("Failed to broadcast: %v", err)
 	}
@@ -172,24 +206,38 @@ func (d *Discovery) broadcast() {
 
 // handleAnnouncement processes a peer announcement
 func (d *Discovery) handleAnnouncement(message, fromIP string) {
-	// TODO: Parse announcement and update peer list
-	// For now, just log it
-	log.Printf("Received announcement from %s: %s", fromIP, message)
+	// Parse JSON announcement
+	var announcement Announcement
+	if err := json.Unmarshal([]byte(message), &announcement); err != nil {
+		// Ignore malformed announcements
+		return
+	}
+
+	// Don't add ourselves
+	if announcement.NodeID == d.nodeID {
+		return
+	}
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// Simple peer tracking
-	peerID := fromIP
+	peerID := announcement.NodeID
 	if peer, exists := d.peers[peerID]; exists {
+		// Update existing peer
 		peer.LastSeen = time.Now()
+		peer.Port = announcement.Port
+		peer.Models = announcement.Models
 	} else {
+		// Add new peer
 		d.peers[peerID] = &Peer{
 			ID:       peerID,
 			Address:  fromIP,
+			Port:     announcement.Port,
 			LastSeen: time.Now(),
-			Models:   []string{},
+			Models:   announcement.Models,
 		}
+		log.Printf("🌐 Discovered new peer: %s (%s:%d) with %d models",
+			peerID, fromIP, announcement.Port, len(announcement.Models))
 	}
 }
 
