@@ -41,8 +41,22 @@ See [Model Setup Guide](docs/MODEL_SETUP.md) for downloading models.
 ```
 GET  /health                  - Health check
 GET  /v1/models              - List available models
-POST /v1/chat/completions    - Chat completions (OpenAI-compatible)
+POST /v1/chat/completions    - Chat completions (OpenAI-compatible, supports streaming)
 POST /v1/completions         - Text completions (OpenAI-compatible)
+```
+
+### Streaming Support
+
+Enable streaming by setting `"stream": true` in your request:
+
+```bash
+curl -N http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tinyllama-1.1b-chat",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": true
+  }'
 ```
 
 ## 🎯 CLI Commands
@@ -105,13 +119,16 @@ offgrid-llm/
 - [x] Configuration system
 - [x] P2P discovery foundation
 - [x] Unit tests
+- [x] **Streaming support (SSE)** ⭐ NEW
+- [x] **P2P file transfer** ⭐ NEW
 
 ### Phase 2 (In Progress)
 - [ ] llama.cpp integration
 - [ ] Model loading from disk
-- [ ] P2P model discovery & sharing
+- [ ] P2P model discovery & sharing (discovery done, integration pending)
 - [ ] USB model import API
 - [ ] Multi-user support
+- [ ] Web dashboard
 
 ### Phase 3
 - [ ] Advanced quantization
