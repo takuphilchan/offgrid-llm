@@ -67,6 +67,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("/v1/completions", s.handleCompletions)
 
+	// Web UI
+	mux.HandleFunc("/ui", s.handleWebUI)
+	mux.HandleFunc("/ui/", s.handleWebUI)
+
 	// Root endpoint
 	mux.HandleFunc("/", s.handleRoot)
 
@@ -87,6 +91,8 @@ func (s *Server) Start() error {
 	log.Printf("   - GET  /v1/models")
 	log.Printf("   - POST /v1/chat/completions")
 	log.Printf("   - POST /v1/completions")
+	log.Printf("🎨 Web UI:")
+	log.Printf("   - http://localhost:%d/ui", s.config.ServerPort)
 
 	if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
@@ -371,6 +377,12 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+}
+
+// handleWebUI serves the web dashboard
+func (s *Server) handleWebUI(w http.ResponseWriter, r *http.Request) {
+	// Serve the web UI from web/ui directory
+	http.ServeFile(w, r, "web/ui/index.html")
 }
 
 // writeError writes an error response

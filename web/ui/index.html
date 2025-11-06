@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OffGrid LLM Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            background: #10b981;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .icon {
+            font-size: 24px;
+        }
+
+        .model-list {
+            list-style: none;
+        }
+
+        .model-item {
+            padding: 12px;
+            background: #f7f7f7;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .model-item strong {
+            color: #333;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .model-item small {
+            color: #666;
+        }
+
+        .chat-container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 600px;
+        }
+
+        .chat-messages {
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+
+        .message.assistant {
+            background: white;
+            color: #333;
+            border: 1px solid #e5e7eb;
+        }
+
+        .message-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+
+        .chat-input-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .select {
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+        }
+
+        .select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        .streaming-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+            margin-left: 8px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: white;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 OffGrid LLM</h1>
+            <p>AI for Edge & Offline Environments</p>
+            <span class="status" id="status">🟢 Online</span>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('chat')">💬 Chat</button>
+            <button class="tab" onclick="switchTab('models')">📦 Models</button>
+            <button class="tab" onclick="switchTab('api')">🔌 API Test</button>
+        </div>
+
+        <!-- Chat Tab -->
+        <div id="chat-tab" class="tab-content active">
+            <div class="chat-container">
+                <div>
+                    <h2>💬 Chat Interface</h2>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <select id="chatModel" class="select">
+                            <option value="">Select a model...</option>
+                        </select>
+                        <label style="display: flex; align-items: center; gap: 5px;">
+                            <input type="checkbox" id="streamingEnabled" checked>
+                            <span>Streaming</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="chat-messages" id="chatMessages">
+                    <div class="empty-state">
+                        <div class="icon">💭</div>
+                        <p>Select a model and start chatting!</p>
+                    </div>
+                </div>
+
+                <div class="chat-input-area">
+                    <input 
+                        type="text" 
+                        class="chat-input" 
+                        id="chatInput" 
+                        placeholder="Type your message..."
+                        onkeypress="if(event.key === 'Enter') sendMessage()"
+                    >
+                    <button class="btn" onclick="sendMessage()" id="sendBtn">Send</button>
+                    <button class="btn btn-secondary" onclick="clearChat()">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Models Tab -->
+        <div id="models-tab" class="tab-content">
+            <div class="cards">
+                <div class="card">
+                    <h2><span class="icon">📦</span> Installed Models</h2>
+                    <ul class="model-list" id="modelList">
+                        <li class="empty-state">Loading models...</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h2><span class="icon">ℹ️</span> System Info</h2>
+                    <div id="systemInfo">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Test Tab -->
+        <div id="api-tab" class="tab-content">
+            <div class="card">
+                <h2><span class="icon">🔌</span> API Test</h2>
+                <div style="margin-top: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Endpoint:</label>
+                    <select id="apiEndpoint" class="select" style="width: 100%; margin-bottom: 15px;">
+                        <option value="/health">GET /health</option>
+                        <option value="/v1/models">GET /v1/models</option>
+                        <option value="/v1/chat/completions">POST /v1/chat/completions</option>
+                    </select>
+
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Request Body (for POST):</label>
+                    <textarea 
+                        id="apiBody" 
+                        class="chat-input" 
+                        style="width: 100%; min-height: 150px; margin-bottom: 15px; font-family: monospace;"
+                        placeholder='{"model": "tinyllama-1.1b-chat", "messages": [{"role": "user", "content": "Hello!"}]}'
+                    ></textarea>
+
+                    <button class="btn" onclick="testAPI()">Send Request</button>
+
+                    <div id="apiResponse" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let conversationHistory = [];
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            if (tabName === 'models') {
+                loadModels();
+            }
+        }
+
+        // Load models
+        async function loadModels() {
+            try {
+                const response = await fetch(`${API_BASE}/v1/models`);
+                const data = await response.json();
+                
+                const modelList = document.getElementById('modelList');
+                const chatModelSelect = document.getElementById('chatModel');
+                
+                if (data.data && data.data.length > 0) {
+                    modelList.innerHTML = data.data.map(model => `
+                        <li class="model-item">
+                            <strong>${model.id}</strong>
+                            <small>Created: ${new Date(model.created * 1000).toLocaleDateString()}</small>
+                        </li>
+                    `).join('');
+
+                    chatModelSelect.innerHTML = '<option value="">Select a model...</option>' +
+                        data.data.map(model => `<option value="${model.id}">${model.id}</option>`).join('');
+                } else {
+                    modelList.innerHTML = '<li class="empty-state">No models installed</li>';
+                }
+            } catch (error) {
+                document.getElementById('modelList').innerHTML = `<li class="error">Error: ${error.message}</li>`;
+            }
+        }
+
+        // Send chat message
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const modelSelect = document.getElementById('chatModel');
+            const streamingEnabled = document.getElementById('streamingEnabled').checked;
+            const messagesDiv = document.getElementById('chatMessages');
+            const sendBtn = document.getElementById('sendBtn');
+
+            const message = input.value.trim();
+            const model = modelSelect.value;
+
+            if (!message || !model) {
+                alert('Please select a model and enter a message');
+                return;
+            }
+
+            // Clear empty state
+            if (messagesDiv.querySelector('.empty-state')) {
+                messagesDiv.innerHTML = '';
+            }
+
+            // Add user message
+            conversationHistory.push({ role: 'user', content: message });
+            addMessageToUI('user', message);
+            input.value = '';
+            sendBtn.disabled = true;
+
+            try {
+                if (streamingEnabled) {
+                    await sendStreamingMessage(model);
+                } else {
+                    await sendNormalMessage(model);
+                }
+            } catch (error) {
+                addMessageToUI('system', `Error: ${error.message}`, true);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        async function sendNormalMessage(model) {
+            const response = await fetch(`${API_BASE}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    messages: conversationHistory
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const assistantMessage = data.choices[0].message.content;
+            
+            conversationHistory.push({ role: 'assistant', content: assistantMessage });
+            addMessageToUI('assistant', assistantMessage);
+        }
+
+        async function sendStreamingMessage(model) {
+            const response = await fetch(`${API_BASE}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    messages: conversationHistory,
+                    stream: true
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantMessage = '';
+            
+            const messageDiv = addMessageToUI('assistant', '<span class="streaming-indicator"></span>', false);
+            const contentDiv = messageDiv.querySelector('.message-content') || messageDiv;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6);
+                        if (data === '[DONE]') continue;
+
+                        try {
+                            const json = JSON.parse(data);
+                            const content = json.choices[0]?.delta?.content;
+                            if (content) {
+                                assistantMessage += content;
+                                contentDiv.textContent = assistantMessage;
+                            }
+                        } catch (e) {
+                            // Ignore parse errors
+                        }
+                    }
+                }
+            }
+
+            conversationHistory.push({ role: 'assistant', content: assistantMessage });
+        }
+
+        function addMessageToUI(role, content, isError = false) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            if (!isError) {
+                messageDiv.innerHTML = `
+                    <div class="message-label">${role === 'user' ? 'You' : 'Assistant'}</div>
+                    <div class="message-content">${content}</div>
+                `;
+            } else {
+                messageDiv.className = 'error';
+                messageDiv.textContent = content;
+            }
+
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return messageDiv;
+        }
+
+        function clearChat() {
+            if (confirm('Clear conversation history?')) {
+                conversationHistory = [];
+                document.getElementById('chatMessages').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">💭</div>
+                        <p>Conversation cleared. Start a new chat!</p>
+                    </div>
+                `;
+            }
+        }
+
+        // API Test
+        async function testAPI() {
+            const endpoint = document.getElementById('apiEndpoint').value;
+            const bodyText = document.getElementById('apiBody').value;
+            const responseDiv = document.getElementById('apiResponse');
+
+            try {
+                const options = {
+                    method: endpoint.startsWith('/v1/chat') || endpoint.startsWith('/v1/completions') ? 'POST' : 'GET',
+                };
+
+                if (options.method === 'POST' && bodyText) {
+                    options.headers = { 'Content-Type': 'application/json' };
+                    options.body = bodyText;
+                }
+
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                const data = await response.json();
+
+                responseDiv.innerHTML = `
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                        <strong>Status:</strong> ${response.status} ${response.statusText}<br>
+                        <strong>Response:</strong>
+                        <pre style="margin-top: 10px; overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                responseDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Check server health
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    document.getElementById('status').innerHTML = '🟢 Online';
+                    document.getElementById('status').style.background = '#10b981';
+                } else {
+                    throw new Error('Not healthy');
+                }
+            } catch (error) {
+                document.getElementById('status').innerHTML = '🔴 Offline';
+                document.getElementById('status').style.background = '#ef4444';
+            }
+        }
+
+        // Initialize
+        checkHealth();
+        loadModels();
+        setInterval(checkHealth, 10000); // Check every 10s
+    </script>
+</body>
+</html>

@@ -97,8 +97,26 @@ offgrid-llm/
 │   ├── resource/         # Resource monitoring & allocation
 │   └── p2p/              # Peer-to-peer networking
 ├── pkg/api/              # Public API types
-└── web/ui/               # Web dashboard (future)
+└── web/ui/               # Web dashboard
 ```
+
+## 🎨 Web Dashboard
+
+OffGrid LLM includes a modern web interface for easy interaction:
+
+```bash
+# Start the server
+./offgrid
+
+# Open in your browser
+http://localhost:8080/ui
+```
+
+**Features:**
+- 💬 **Chat Interface** - Interactive chat with streaming support
+- 📦 **Model Management** - View installed models and system info
+- 🔌 **API Testing** - Test API endpoints directly from browser
+- 🎯 **No Dependencies** - Pure HTML/CSS/JavaScript, works offline
 
 ## 🎯 Use Cases
 
@@ -123,19 +141,19 @@ offgrid-llm/
 - [x] **P2P file transfer** ⭐ NEW
 
 ### Phase 2 (In Progress)
-- [ ] llama.cpp integration
+- [x] **Web dashboard** ⭐ NEW
+- [ ] llama.cpp integration (highest priority)
 - [ ] Model loading from disk
-- [ ] P2P model discovery & sharing (discovery done, integration pending)
-- [ ] USB model import API
+- [ ] P2P model sharing integration
+- [ ] USB model import CLI
 - [ ] Multi-user support
-- [ ] Web dashboard
 
 ### Phase 3
 - [ ] Advanced quantization
 - [ ] Bandwidth-aware syncing
-- [ ] Web dashboard
 - [ ] Mobile/ARM optimization
 - [ ] Docker support
+- [ ] Model compression tools
 
 ## 📖 Documentation
 
