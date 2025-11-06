@@ -45,6 +45,32 @@ POST /v1/chat/completions    - Chat completions (OpenAI-compatible)
 POST /v1/completions         - Text completions (OpenAI-compatible)
 ```
 
+## 🎯 CLI Commands
+
+```bash
+offgrid                          # Start server (default)
+offgrid catalog                  # Browse available models
+offgrid download <model-id>      # Download a model
+offgrid list                     # List installed models
+offgrid help                     # Show help
+```
+
+### Example: Download and Run
+
+```bash
+# Browse available models
+offgrid catalog
+
+# Download TinyLlama (638MB)
+offgrid download tinyllama-1.1b-chat
+
+# Start the server
+offgrid
+
+# Test in another terminal
+curl http://localhost:8080/v1/models
+```
+
 ## 🏗️ Architecture
 
 ```
@@ -97,7 +123,38 @@ offgrid-llm/
 ## 📖 Documentation
 
 - [Model Setup Guide](docs/MODEL_SETUP.md) - Download and configure models
+- [Architecture & Distribution Strategy](docs/ARCHITECTURE.md) - How offline distribution works
+- [API Documentation](docs/API.md) - Complete API reference
 - [Quick Start Script](scripts/quickstart.sh) - Automated setup
+
+## 🔧 Scripts & Tools
+
+```bash
+./scripts/quickstart.sh              # Interactive setup with model download
+./scripts/create-usb-package.sh      # Create offline USB installation
+./scripts/example_client.sh          # Bash API examples
+./scripts/example_client.py          # Python API examples
+```
+
+## 💾 Offline Distribution
+
+### USB Package Creation
+
+```bash
+# Create complete offline package
+./scripts/create-usb-package.sh /media/usb tinyllama-1.1b-chat
+
+# Result: USB drive with binaries, models, docs, installers
+# Works on Linux, Windows, macOS - no internet needed!
+```
+
+### Model Catalog
+
+Built-in catalog with 4 recommended models:
+- **TinyLlama 1.1B** - Lightweight (638MB, 2GB RAM)
+- **Llama 2 7B** - Balanced quality (3.8GB, 8GB RAM) 
+- **Mistral 7B** - Excellent for code (4.1GB, 8GB RAM)
+- **Phi-2** - Efficient reasoning (1.5GB, 4GB RAM)
 
 ## 🧪 Testing
 
