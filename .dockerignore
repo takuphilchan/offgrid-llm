@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+offgrid
+offgrid-*
+*.exe
+*.dll
+*.so
+*.dylib
+dist/
+build/
+
+# Models (too large for Docker image)
+models/
+*.gguf
+*.bin
+
+# Data
+data/
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Documentation (can be fetched separately)
+docs/
+*.md
+!Dockerfile
+
+# Scripts (not needed in container)
+scripts/
+
+# Config examples (use volume mounts instead)
+config.yaml
+*.yaml
+!docker-compose.yml

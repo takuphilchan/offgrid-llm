@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  offgrid-llm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: mock  # Change to 'llama' for real inference
+        VERSION: 0.1.0-alpha
+    image: offgrid-llm:latest
+    container_name: offgrid-llm
+    restart: unless-stopped
+    
+    ports:
+      - "8080:8080"  # HTTP API
+      - "8081:8081"  # P2P Discovery
+    
+    volumes:
+      # Model storage (persistent)
+      - ./models:/root/.offgrid/models
+      # Configuration file
+      - ./config.yaml:/root/.offgrid/config.yaml:ro
+      # USB import directory (optional)
+      - /media/usb:/media/usb:ro
+    
+    environment:
+      - OFFGRID_PORT=8080
+      - OFFGRID_HOST=0.0.0.0
+      - OFFGRID_MODELS_DIR=/root/.offgrid/models
+      - OFFGRID_NUM_THREADS=4
+      - OFFGRID_CONTEXT_SIZE=4096
+      - OFFGRID_P2P_ENABLED=true
+      - OFFGRID_P2P_PORT=8081
+    
+    # Resource limits (adjust based on models)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: nginx reverse proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: offgrid-nginx
+    restart: unless-stopped
+    depends_on:
+      - offgrid-llm
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    profiles:
+      - with-proxy
+
+volumes:
+  models:
+    driver: local
+
+networks:
+  default:
+    name: offgrid-network
