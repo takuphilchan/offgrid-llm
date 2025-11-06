@@ -35,6 +35,9 @@ func main() {
 		case "info", "status":
 			handleInfo()
 			return
+		case "config":
+			handleConfig(os.Args[2:])
+			return
 		case "serve", "server":
 			// Fall through to start server
 		case "help", "-h", "--help":
@@ -47,8 +50,16 @@ func main() {
 		}
 	}
 
+	// Load configuration
+	configPath := os.Getenv("OFFGRID_CONFIG")
+	cfg, err := config.LoadWithPriority(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Start the HTTP server (default command)
-	srv := server.New()
+	srv := server.NewWithConfig(cfg)
 	if err := srv.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error starting server: %v\n", err)
 		os.Exit(1)
@@ -257,6 +268,7 @@ func printHelp() {
 	fmt.Println("  import <path>    Import model(s) from USB/SD card")
 	fmt.Println("  list             List installed models")
 	fmt.Println("  catalog          Show available models in catalog")
+	fmt.Println("  config <action>  Manage configuration (init, show, validate)")
 	fmt.Println("  info, status     Show system and model information")
 	fmt.Println("  help             Show this help message")
 	fmt.Println()
@@ -265,10 +277,12 @@ func printHelp() {
 	fmt.Println("  offgrid catalog                            # Browse models")
 	fmt.Println("  offgrid download tinyllama-1.1b-chat       # Download model")
 	fmt.Println("  offgrid import /media/usb                  # Import from USB")
+	fmt.Println("  offgrid config init                        # Create config file")
 	fmt.Println("  offgrid list                               # List local models")
 	fmt.Println("  offgrid info                               # System info")
 	fmt.Println()
 	fmt.Println("Environment Variables:")
+	fmt.Println("  OFFGRID_CONFIG       Path to config file (YAML/JSON)")
 	fmt.Println("  OFFGRID_PORT         Server port (default: 8080)")
 	fmt.Println("  OFFGRID_MODELS_DIR   Models directory")
 	fmt.Println("  OFFGRID_NUM_THREADS  CPU threads to use")
@@ -366,6 +380,120 @@ func handleInfo() {
 		fmt.Printf("  API will be at: http://localhost:%d\n", cfg.ServerPort)
 	}
 	fmt.Println()
+}
+
+func handleConfig(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage: offgrid config <action>")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Actions:")
+		fmt.Fprintln(os.Stderr, "  init [path]      Create a new config file (YAML/JSON)")
+		fmt.Fprintln(os.Stderr, "  show             Display current configuration")
+		fmt.Fprintln(os.Stderr, "  validate [path]  Validate a config file")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Examples:")
+		fmt.Fprintln(os.Stderr, "  offgrid config init                    # Create ~/.offgrid-llm/config.yaml")
+		fmt.Fprintln(os.Stderr, "  offgrid config init custom.json        # Create custom.json")
+		fmt.Fprintln(os.Stderr, "  offgrid config show                    # Show current config")
+		fmt.Fprintln(os.Stderr, "  offgrid config validate config.yaml    # Validate config")
+		os.Exit(1)
+	}
+
+	action := args[0]
+
+	switch action {
+	case "init":
+		// Determine output path
+		outputPath := ""
+		if len(args) > 1 {
+			outputPath = args[1]
+		} else {
+			homeDir, _ := os.UserHomeDir()
+			configDir := filepath.Join(homeDir, ".offgrid-llm")
+			os.MkdirAll(configDir, 0755)
+			outputPath = filepath.Join(configDir, "config.yaml")
+		}
+
+		// Create default config
+		cfg := config.LoadConfig()
+
+		// Save to file
+		if err := cfg.SaveToFile(outputPath); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to create config: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("✅ Created config file: %s\n", outputPath)
+		fmt.Println()
+		fmt.Println("Edit the file to customize your settings, then:")
+		fmt.Printf("  export OFFGRID_CONFIG=%s\n", outputPath)
+		fmt.Println("  offgrid")
+
+	case "show":
+		configPath := os.Getenv("OFFGRID_CONFIG")
+		cfg, err := config.LoadWithPriority(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("📋 Current Configuration")
+		fmt.Println()
+		fmt.Println("Server:")
+		fmt.Printf("  Host: %s\n", cfg.ServerHost)
+		fmt.Printf("  Port: %d\n", cfg.ServerPort)
+		fmt.Println()
+		fmt.Println("Models:")
+		fmt.Printf("  Directory: %s\n", cfg.ModelsDir)
+		fmt.Printf("  Default Model: %s\n", cfg.DefaultModel)
+		fmt.Printf("  Max Context Size: %d\n", cfg.MaxContextSize)
+		fmt.Printf("  CPU Threads: %d\n", cfg.NumThreads)
+		fmt.Println()
+		fmt.Println("Resources:")
+		fmt.Printf("  Max Memory: %d MB\n", cfg.MaxMemoryMB)
+		fmt.Printf("  Max Loaded Models: %d\n", cfg.MaxModels)
+		fmt.Printf("  GPU Enabled: %v\n", cfg.EnableGPU)
+		if cfg.EnableGPU {
+			fmt.Printf("  GPU Layers: %d\n", cfg.NumGPULayers)
+		}
+		fmt.Println()
+		fmt.Println("P2P:")
+		fmt.Printf("  Enabled: %v\n", cfg.EnableP2P)
+		if cfg.EnableP2P {
+			fmt.Printf("  P2P Port: %d\n", cfg.P2PPort)
+			fmt.Printf("  Discovery Port: %d\n", cfg.DiscoveryPort)
+		}
+		fmt.Println()
+		fmt.Println("Logging:")
+		fmt.Printf("  Level: %s\n", cfg.LogLevel)
+		if cfg.LogFile != "" {
+			fmt.Printf("  File: %s\n", cfg.LogFile)
+		}
+
+	case "validate":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "Usage: offgrid config validate <path>")
+			os.Exit(1)
+		}
+
+		configPath := args[1]
+		cfg, err := config.LoadFromFile(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Invalid config: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := cfg.Validate(); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Validation failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("✅ Config file is valid: %s\n", configPath)
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown action: %s\n", action)
+		os.Exit(1)
+	}
 }
 
 func formatBytes(bytes int64) string {

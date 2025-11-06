@@ -30,6 +30,11 @@ type Server struct {
 // New creates a new server instance
 func New() *Server {
 	cfg := config.LoadConfig()
+	return NewWithConfig(cfg)
+}
+
+// NewWithConfig creates a new server instance with provided config
+func NewWithConfig(cfg *config.Config) *Server {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
