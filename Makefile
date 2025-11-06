@@ -1,16 +1,27 @@
-.PHONY: build run clean test coverage help fmt lint install cross-compile
+.PHONY: build run clean test coverage help fmt lint install cross-compile build-llama
 
 # Binary name
 BINARY=offgrid
 MAIN_PATH=./cmd/offgrid
 VERSION?=0.1.0-alpha
 LDFLAGS=-ldflags "-X main.Version=$(VERSION)"
+BUILD_TAGS_LLAMA=-tags llama
 
-# Build the application
+# Build the application (mock mode - no CGO required)
 build:
-	@echo "🔨 Building OffGrid LLM..."
+	@echo "🔨 Building OffGrid LLM (mock mode)..."
 	go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
 	@echo "✅ Build complete: ./$(BINARY)"
+	@echo "   Note: Using mock inference. For real LLM inference, use 'make build-llama'"
+
+# Build with llama.cpp support (requires CGO and llama.cpp installation)
+build-llama:
+	@echo "🔨 Building OffGrid LLM with llama.cpp support..."
+	@echo "   Prerequisites: llama.cpp must be installed and C_INCLUDE_PATH set"
+	@echo "   See docs/LLAMA_CPP_SETUP.md for setup instructions"
+	go build $(LDFLAGS) $(BUILD_TAGS_LLAMA) -o $(BINARY) $(MAIN_PATH)
+	@echo "✅ Build complete: ./$(BINARY)"
+	@echo "   Real llama.cpp inference enabled!"
 
 # Run the application
 run: build

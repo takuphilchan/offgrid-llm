@@ -55,8 +55,8 @@ func DefaultCatalog() *ModelCatalog {
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         669229056, // ~638MB
-						SHA256:       "",        // TODO: Add actual hash
+						Size:         668788096, // ~638MB
+						SHA256:       "9fecc3b3cd76bba89d504f29b616eedf7da85b96540e490ca5824d3f7d2776a0",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
@@ -68,8 +68,8 @@ func DefaultCatalog() *ModelCatalog {
 					},
 					{
 						Quantization: "Q5_K_M",
-						Size:         805232640, // ~768MB
-						SHA256:       "",
+						Size:         783017344, // ~768MB
+						SHA256:       "aa54a5fb99ace5b964859cf072346631b2da6109715a805d07161d157c66ce7f",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
@@ -94,8 +94,8 @@ func DefaultCatalog() *ModelCatalog {
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         4081004544, // ~3.8GB
-						SHA256:       "",
+						Size:         4081004224, // ~3.8GB
+						SHA256:       "08a5566d61d7cb6b420c3e4387a39e0078e1f2fe5f055f3a03887385304d4bfa",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
@@ -107,8 +107,8 @@ func DefaultCatalog() *ModelCatalog {
 					},
 					{
 						Quantization: "Q5_K_M",
-						Size:         4978187264, // ~4.6GB
-						SHA256:       "",
+						Size:         4783156928, // ~4.6GB
+						SHA256:       "e0b99920cf47b94c78d2fb06a1eceb9ed795176dfa3f7feac64629f1b52b997f",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
@@ -133,8 +133,8 @@ func DefaultCatalog() *ModelCatalog {
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         4368438272, // ~4.1GB
-						SHA256:       "",
+						Size:         4368439584, // ~4.1GB
+						SHA256:       "3e0039fd0273fcbebb49228943b17831aadd55cbcbf56f0af00499be2040ccf9",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
@@ -159,8 +159,8 @@ func DefaultCatalog() *ModelCatalog {
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         1600000000, // ~1.5GB estimate
-						SHA256:       "",
+						Size:         1789239136, // ~1.67GB
+						SHA256:       "324356668fa5ba9f4135de348447bb2bbe2467eaa1b8fcfb53719de62fbd2499",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{

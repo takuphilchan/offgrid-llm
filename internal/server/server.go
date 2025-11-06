@@ -41,7 +41,17 @@ func NewWithConfig(cfg *config.Config) *Server {
 
 	// Initialize components
 	registry := models.NewRegistry(cfg.ModelsDir)
-	engine := inference.NewMockEngine() // TODO: Replace with llama.cpp engine
+
+	// Choose engine based on configuration
+	var engine inference.Engine
+	if cfg.UseMockEngine {
+		log.Println("⚠️  Using mock engine (no real inference)")
+		engine = inference.NewMockEngine()
+	} else {
+		log.Println("🚀 Using llama.cpp engine for real inference")
+		engine = inference.NewLlamaEngine()
+	}
+
 	monitor := resource.NewMonitor(5 * time.Second)
 
 	// Scan for available models

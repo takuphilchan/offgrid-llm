@@ -5,6 +5,10 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 // Monitor tracks system resource usage
@@ -73,28 +77,48 @@ func (m *Monitor) updateStats() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
+	// Get system memory stats
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		// Fallback to runtime stats
+		var memStats runtime.MemStats
+		runtime.ReadMemStats(&memStats)
+		vmStat = &mem.VirtualMemoryStat{
+			Total:       memStats.Sys,
+			Used:        memStats.Alloc,
+			UsedPercent: float64(memStats.Alloc) / float64(memStats.Sys) * 100,
+		}
+	}
+
+	// Get CPU usage
+	cpuPercent, err := cpu.Percent(0, false)
+	cpuUsage := 0.0
+	if err == nil && len(cpuPercent) > 0 {
+		cpuUsage = cpuPercent[0]
+	}
+
+	// Get disk usage for current directory
+	diskStat, err := disk.Usage(".")
+	diskUsedGB := uint64(0)
+	diskTotalGB := uint64(0)
+	diskPercent := 0.0
+	if err == nil {
+		diskUsedGB = diskStat.Used / 1024 / 1024 / 1024
+		diskTotalGB = diskStat.Total / 1024 / 1024 / 1024
+		diskPercent = diskStat.UsedPercent
+	}
 
 	m.stats = Stats{
-		CPUUsagePercent:    m.getCPUUsage(),
-		MemoryUsedMB:       memStats.Alloc / 1024 / 1024,
-		MemoryTotalMB:      memStats.Sys / 1024 / 1024,
-		MemoryUsagePercent: float64(memStats.Alloc) / float64(memStats.Sys) * 100,
-		DiskUsedGB:         0, // TODO: Implement disk usage
-		DiskTotalGB:        0, // TODO: Implement disk usage
-		DiskUsagePercent:   0, // TODO: Implement disk usage
+		CPUUsagePercent:    cpuUsage,
+		MemoryUsedMB:       vmStat.Used / 1024 / 1024,
+		MemoryTotalMB:      vmStat.Total / 1024 / 1024,
+		MemoryUsagePercent: vmStat.UsedPercent,
+		DiskUsedGB:         diskUsedGB,
+		DiskTotalGB:        diskTotalGB,
+		DiskUsagePercent:   diskPercent,
 		NumGoroutines:      runtime.NumGoroutine(),
 		LastUpdated:        time.Now(),
 	}
-}
-
-// getCPUUsage returns CPU usage percentage
-// This is a simplified version - in production, use a library like gopsutil
-func (m *Monitor) getCPUUsage() float64 {
-	// TODO: Implement actual CPU usage tracking
-	// For now, return number of CPUs as a placeholder
-	return float64(runtime.NumCPU())
 }
 
 // CheckAvailableMemory checks if there's enough memory for a model
@@ -105,6 +129,22 @@ func (m *Monitor) CheckAvailableMemory(requiredMB uint64) (bool, error) {
 	if availableMB < requiredMB {
 		return false, fmt.Errorf("insufficient memory: need %d MB, have %d MB available",
 			requiredMB, availableMB)
+	}
+
+	return true, nil
+}
+
+// CheckAvailableDisk checks if there's enough disk space
+func (m *Monitor) CheckAvailableDisk(requiredGB uint64, path string) (bool, error) {
+	diskStat, err := disk.Usage(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to check disk usage: %w", err)
+	}
+
+	availableGB := diskStat.Free / 1024 / 1024 / 1024
+	if availableGB < requiredGB {
+		return false, fmt.Errorf("insufficient disk space: need %d GB, have %d GB available",
+			requiredGB, availableGB)
 	}
 
 	return true, nil

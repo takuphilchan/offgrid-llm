@@ -21,6 +21,7 @@ type Config struct {
 	DefaultModel   string `yaml:"default_model" json:"default_model"`
 	MaxContextSize int    `yaml:"max_context_size" json:"max_context_size"`
 	NumThreads     int    `yaml:"num_threads" json:"num_threads"`
+	UseMockEngine  bool   `yaml:"use_mock_engine" json:"use_mock_engine"` // Use mock instead of llama.cpp
 
 	// Resource limits
 	MaxMemoryMB  uint64 `yaml:"max_memory_mb" json:"max_memory_mb"`
