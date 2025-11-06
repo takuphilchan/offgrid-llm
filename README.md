@@ -17,14 +17,24 @@ OffGrid LLM is a lightweight, offline-first LLM orchestrator designed for enviro
 ## 🚀 Quick Start
 
 ```bash
+# Clone the repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Quick start (builds and optionally downloads a model)
+./scripts/quickstart.sh
+
+# Or manually:
 # Build
-go build -o offgrid ./cmd/offgrid
+make build
 
 # Run
 ./offgrid
 ```
 
 Server will start on `http://localhost:8080`
+
+See [Model Setup Guide](docs/MODEL_SETUP.md) for downloading models.
 
 ## 📚 API Endpoints
 
@@ -61,16 +71,20 @@ offgrid-llm/
 
 ## 🛣️ Roadmap
 
-### Phase 1 (Current)
+### Phase 1 ✅ (Completed)
 - [x] Basic HTTP server
 - [x] OpenAI-compatible API structure
+- [x] Model registry and management
+- [x] Resource monitoring
+- [x] Configuration system
+- [x] P2P discovery foundation
+- [x] Unit tests
+
+### Phase 2 (In Progress)
 - [ ] llama.cpp integration
 - [ ] Model loading from disk
-
-### Phase 2
 - [ ] P2P model discovery & sharing
-- [ ] USB model import
-- [ ] Resource monitoring
+- [ ] USB model import API
 - [ ] Multi-user support
 
 ### Phase 3
@@ -78,10 +92,25 @@ offgrid-llm/
 - [ ] Bandwidth-aware syncing
 - [ ] Web dashboard
 - [ ] Mobile/ARM optimization
+- [ ] Docker support
 
 ## 📖 Documentation
 
-Coming soon!
+- [Model Setup Guide](docs/MODEL_SETUP.md) - Download and configure models
+- [Quick Start Script](scripts/quickstart.sh) - Automated setup
+
+## 🧪 Testing
+
+```bash
+# Run tests
+make test
+
+# Build
+make build
+
+# Run in development mode
+make dev
+```
 
 ## 🤝 Contributing
 
