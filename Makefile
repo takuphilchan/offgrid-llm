@@ -1,13 +1,15 @@
-.PHONY: build run clean test help
+.PHONY: build run clean test coverage help fmt lint install cross-compile
 
 # Binary name
 BINARY=offgrid
 MAIN_PATH=./cmd/offgrid
+VERSION?=0.1.0-alpha
+LDFLAGS=-ldflags "-X main.Version=$(VERSION)"
 
 # Build the application
 build:
 	@echo "🔨 Building OffGrid LLM..."
-	go build -o $(BINARY) $(MAIN_PATH)
+	go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
 	@echo "✅ Build complete: ./$(BINARY)"
 
 # Run the application
@@ -25,10 +27,19 @@ test:
 	@echo "🧪 Running tests..."
 	go test -v ./...
 
+# Run tests with coverage
+coverage:
+	@echo "📊 Running tests with coverage..."
+	go test -v -coverprofile=coverage.txt -covermode=atomic ./...
+	go tool cover -html=coverage.txt -o coverage.html
+	@echo "✅ Coverage report: coverage.html"
+
 # Clean build artifacts
 clean:
 	@echo "🧹 Cleaning..."
 	rm -f $(BINARY)
+	rm -f coverage.txt coverage.html
+	rm -f offgrid-*
 	go clean
 	@echo "✅ Cleaned"
 
@@ -41,7 +52,26 @@ fmt:
 # Lint code
 lint:
 	@echo "🔍 Linting code..."
-	golangci-lint run || echo "Install golangci-lint for linting"
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "Installing golangci-lint..."; go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; }
+	golangci-lint run ./...
+	@echo "✅ Linting complete"
+
+# Install locally
+install:
+	@echo "📦 Installing OffGrid LLM..."
+	go install $(LDFLAGS) $(MAIN_PATH)
+	@echo "✅ Installed to $(shell go env GOPATH)/bin/$(BINARY)"
+
+# Cross-compile for all platforms
+cross-compile:
+	@echo "🌍 Cross-compiling for all platforms..."
+	@mkdir -p dist
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-linux-amd64 $(MAIN_PATH)
+	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-linux-arm64 $(MAIN_PATH)
+	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-amd64 $(MAIN_PATH)
+	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-arm64 $(MAIN_PATH)
+	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-windows-amd64.exe $(MAIN_PATH)
+	@echo "✅ Built for all platforms in dist/"
 
 # Download dependencies
 deps:
@@ -53,11 +83,16 @@ deps:
 # Help
 help:
 	@echo "OffGrid LLM - Makefile Commands:"
-	@echo "  make build   - Build the binary"
-	@echo "  make run     - Build and run the application"
-	@echo "  make dev     - Run without building (dev mode)"
-	@echo "  make test    - Run tests"
-	@echo "  make clean   - Remove build artifacts"
-	@echo "  make fmt     - Format code"
-	@echo "  make lint    - Lint code"
-	@echo "  make deps    - Download and tidy dependencies"
+	@echo ""
+	@echo "  make build          - Build the binary"
+	@echo "  make run            - Build and run the application"
+	@echo "  make dev            - Run without building (dev mode)"
+	@echo "  make test           - Run tests"
+	@echo "  make coverage       - Run tests with coverage report"
+	@echo "  make clean          - Remove build artifacts"
+	@echo "  make fmt            - Format code"
+	@echo "  make lint           - Lint code (requires golangci-lint)"
+	@echo "  make install        - Install to GOPATH/bin"
+	@echo "  make cross-compile  - Build for all platforms"
+	@echo "  make deps           - Download and tidy dependencies"
+	@echo ""

@@ -1,13 +1,19 @@
 # Binaries
 offgrid
+offgrid-*
 *.exe
 *.dll
 *.so
 *.dylib
+dist/
 
 # Test binaries
 *.test
 *.out
+
+# Coverage
+coverage.txt
+coverage.html
 
 # Go workspace files
 go.work
