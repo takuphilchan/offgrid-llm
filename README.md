@@ -64,7 +64,8 @@ curl -N http://localhost:8080/v1/chat/completions \
 ```bash
 offgrid                          # Start server (default)
 offgrid catalog                  # Browse available models
-offgrid download <model-id>      # Download a model
+offgrid download <model-id>      # Download a model from internet
+offgrid import <usb-path>        # Import model(s) from USB/SD card
 offgrid list                     # List installed models
 offgrid help                     # Show help
 ```
@@ -83,6 +84,22 @@ offgrid
 
 # Test in another terminal
 curl http://localhost:8080/v1/models
+```
+
+### Example: USB Import
+
+```bash
+# Import all models from USB drive
+offgrid import /media/usb
+
+# Import specific model file
+offgrid import /media/usb/tinyllama-1.1b-chat.Q4_K_M.gguf
+
+# Windows
+offgrid import D:\models
+
+# Verify import
+offgrid list
 ```
 
 ## 🏗️ Architecture
@@ -142,18 +159,19 @@ http://localhost:8080/ui
 
 ### Phase 2 (In Progress)
 - [x] **Web dashboard** ⭐ NEW
+- [x] **USB model import** ⭐ NEW
 - [ ] llama.cpp integration (highest priority)
 - [ ] Model loading from disk
 - [ ] P2P model sharing integration
-- [ ] USB model import CLI
 - [ ] Multi-user support
 
 ### Phase 3
-- [ ] Advanced quantization
+- [ ] Advanced quantization options
 - [ ] Bandwidth-aware syncing
 - [ ] Mobile/ARM optimization
 - [ ] Docker support
 - [ ] Model compression tools
+- [ ] Automatic model updates
 
 ## 📖 Documentation
 

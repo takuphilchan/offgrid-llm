@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
@@ -21,6 +22,9 @@ func main() {
 		switch command {
 		case "download":
 			handleDownload(os.Args[2:])
+			return
+		case "import":
+			handleImport(os.Args[2:])
 			return
 		case "list":
 			handleList(os.Args[2:])
@@ -89,6 +93,104 @@ func handleDownload(args []string) {
 	}
 }
 
+func handleImport(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage: offgrid import <usb-path> [model-file]")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Examples:")
+		fmt.Fprintln(os.Stderr, "  offgrid import /media/usb                    # Import all .gguf files from USB")
+		fmt.Fprintln(os.Stderr, "  offgrid import /media/usb/model.gguf         # Import specific file")
+		fmt.Fprintln(os.Stderr, "  offgrid import D:\\                           # Windows USB drive")
+		os.Exit(1)
+	}
+
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+	importer := models.NewUSBImporter(cfg.ModelsDir, registry)
+
+	usbPath := args[0]
+
+	// Check if path is a specific file or directory
+	info, err := os.Stat(usbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if info.IsDir() {
+		// Import all models from directory
+		fmt.Printf("🔍 Scanning %s for model files...\n", usbPath)
+
+		modelFiles, err := importer.ScanUSBDrive(usbPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Error scanning: %v\n", err)
+			os.Exit(1)
+		}
+
+		if len(modelFiles) == 0 {
+			fmt.Println("No .gguf model files found")
+			os.Exit(0)
+		}
+
+		fmt.Printf("📦 Found %d model file(s):\n", len(modelFiles))
+		for i, file := range modelFiles {
+			modelID, quant := importer.GetModelInfo(filepath.Base(file))
+			size := getFileSize(file)
+			fmt.Printf("  %d. %s (%s) - %s\n", i+1, modelID, quant, formatBytes(size))
+		}
+		fmt.Println()
+
+		// Import all
+		fmt.Println("📥 Importing models...")
+		imported, err := importer.ImportAll(usbPath, func(p models.ImportProgress) {
+			if p.Status == "copying" {
+				fmt.Printf("\r  Copying %s: %.1f%% [%s]",
+					p.FileName, p.Percent, formatBytes(p.BytesDone))
+			} else if p.Status == "verifying" {
+				fmt.Printf("\r  Verifying %s...          ", p.FileName)
+			} else if p.Status == "complete" {
+				fmt.Printf("\r  ✅ %s imported successfully\n", p.FileName)
+			}
+		})
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "\n❌ Import failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("\n✅ Successfully imported %d model(s) to %s\n", imported, cfg.ModelsDir)
+	} else {
+		// Import single file
+		fmt.Printf("📥 Importing %s...\n", filepath.Base(usbPath))
+
+		err := importer.ImportModel(usbPath, func(p models.ImportProgress) {
+			if p.Status == "copying" {
+				fmt.Printf("\r  Progress: %.1f%% [%s / %s]",
+					p.Percent, formatBytes(p.BytesDone), formatBytes(p.BytesTotal))
+			} else if p.Status == "verifying" {
+				fmt.Print("\r  🔍 Verifying integrity...          ")
+			} else if p.Status == "complete" {
+				fmt.Print("\r  ✅ Import complete!                \n")
+			}
+		})
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "\n❌ Import failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("\n✅ Model imported to %s\n", cfg.ModelsDir)
+	}
+}
+
+func getFileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
 func handleList(args []string) {
 	cfg := config.LoadConfig()
 	registry := models.NewRegistry(cfg.ModelsDir)
@@ -152,6 +254,7 @@ func printHelp() {
 	fmt.Println("Commands:")
 	fmt.Println("  serve, server    Start the HTTP server (default)")
 	fmt.Println("  download <id>    Download a model from catalog")
+	fmt.Println("  import <path>    Import model(s) from USB/SD card")
 	fmt.Println("  list             List installed models")
 	fmt.Println("  catalog          Show available models in catalog")
 	fmt.Println("  info, status     Show system and model information")
@@ -161,6 +264,7 @@ func printHelp() {
 	fmt.Println("  offgrid                                    # Start server")
 	fmt.Println("  offgrid catalog                            # Browse models")
 	fmt.Println("  offgrid download tinyllama-1.1b-chat       # Download model")
+	fmt.Println("  offgrid import /media/usb                  # Import from USB")
 	fmt.Println("  offgrid list                               # List local models")
 	fmt.Println("  offgrid info                               # System info")
 	fmt.Println()
