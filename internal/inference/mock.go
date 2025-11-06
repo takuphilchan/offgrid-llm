@@ -77,6 +77,33 @@ func (e *MockEngine) ChatCompletion(ctx context.Context, req *api.ChatCompletion
 	}, nil
 }
 
+// ChatCompletionStream performs a streaming chat completion
+func (e *MockEngine) ChatCompletionStream(ctx context.Context, req *api.ChatCompletionRequest, callback TokenCallback) error {
+	if !e.loaded {
+		return fmt.Errorf("no model loaded")
+	}
+
+	// Mock streaming response - send token by token
+	responseText := "This is a mock streaming response. Each word will be sent separately. Please integrate llama.cpp for actual inference."
+	words := strings.Fields(responseText)
+
+	for _, word := range words {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Simulate processing time
+			time.Sleep(50 * time.Millisecond)
+
+			if err := callback(word + " "); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // Completion performs a text completion
 func (e *MockEngine) Completion(ctx context.Context, req *api.CompletionRequest) (*api.CompletionResponse, error) {
 	if !e.loaded {

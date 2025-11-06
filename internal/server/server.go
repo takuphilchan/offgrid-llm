@@ -201,6 +201,12 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Handle streaming vs non-streaming
+	if req.Stream {
+		s.handleChatCompletionsStream(w, r, &req)
+		return
+	}
+
 	// Perform inference
 	ctx := context.Background()
 	response, err := s.engine.ChatCompletion(ctx, &req)
@@ -213,6 +219,92 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+}
+
+// handleChatCompletionsStream handles streaming chat completions using Server-Sent Events
+func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Request, req *api.ChatCompletionRequest) {
+	// Set headers for SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	ctx := context.Background()
+	chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
+	tokenIndex := 0
+
+	// Send tokens as they arrive
+	err := s.engine.ChatCompletionStream(ctx, req, func(token string) error {
+		chunk := api.ChatCompletionChunk{
+			ID:      chunkID,
+			Object:  "chat.completion.chunk",
+			Created: time.Now().Unix(),
+			Model:   req.Model,
+			Choices: []api.ChatCompletionChoiceChunk{
+				{
+					Index: 0,
+					Delta: api.ChatMessage{
+						Role:    "assistant",
+						Content: token,
+					},
+					FinishReason: nil,
+				},
+			},
+		}
+
+		// Encode and send chunk
+		data, err := json.Marshal(chunk)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+		tokenIndex++
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Streaming error: %v", err)
+		// Send error as final chunk
+		errChunk := map[string]interface{}{
+			"error": map[string]string{
+				"message": err.Error(),
+				"type":    "stream_error",
+			},
+		}
+		data, _ := json.Marshal(errChunk)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+		return
+	}
+
+	// Send final chunk with finish_reason
+	finishReason := "stop"
+	finalChunk := api.ChatCompletionChunk{
+		ID:      chunkID,
+		Object:  "chat.completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []api.ChatCompletionChoiceChunk{
+			{
+				Index:        0,
+				Delta:        api.ChatMessage{},
+				FinishReason: &finishReason,
+			},
+		},
+	}
+
+	data, _ := json.Marshal(finalChunk)
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	fmt.Fprintf(w, "data: [DONE]\n\n")
+	flusher.Flush()
 }
 
 func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {

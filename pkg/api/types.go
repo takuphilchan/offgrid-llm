@@ -36,9 +36,26 @@ type ChatCompletionResponse struct {
 
 // ChatCompletionChoice represents a single completion choice
 type ChatCompletionChoice struct {
+	Index        int          `json:"index"`
+	Message      ChatMessage  `json:"message"`
+	FinishReason string       `json:"finish_reason"`   // "stop", "length", "content_filter"
+	Delta        *ChatMessage `json:"delta,omitempty"` // For streaming responses
+}
+
+// ChatCompletionChunk represents a streaming chunk response
+type ChatCompletionChunk struct {
+	ID      string                      `json:"id"`
+	Object  string                      `json:"object"` // "chat.completion.chunk"
+	Created int64                       `json:"created"`
+	Model   string                      `json:"model"`
+	Choices []ChatCompletionChoiceChunk `json:"choices"`
+}
+
+// ChatCompletionChoiceChunk represents a chunk in streaming mode
+type ChatCompletionChoiceChunk struct {
 	Index        int         `json:"index"`
-	Message      ChatMessage `json:"message"`
-	FinishReason string      `json:"finish_reason"` // "stop", "length", "content_filter"
+	Delta        ChatMessage `json:"delta"`
+	FinishReason *string     `json:"finish_reason"`
 }
 
 // CompletionRequest represents an OpenAI-compatible completion request

@@ -6,6 +6,9 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
+// TokenCallback is called for each token during streaming
+type TokenCallback func(token string) error
+
 // Engine defines the interface for LLM inference backends
 type Engine interface {
 	// Load loads a model from the given path
@@ -16,6 +19,9 @@ type Engine interface {
 
 	// ChatCompletion performs a chat completion
 	ChatCompletion(ctx context.Context, req *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error)
+
+	// ChatCompletionStream performs a streaming chat completion
+	ChatCompletionStream(ctx context.Context, req *api.ChatCompletionRequest, callback TokenCallback) error
 
 	// Completion performs a text completion
 	Completion(ctx context.Context, req *api.CompletionRequest) (*api.CompletionResponse, error)
