@@ -28,6 +28,9 @@ func main() {
 		case "catalog":
 			handleCatalog()
 			return
+		case "info", "status":
+			handleInfo()
+			return
 		case "serve", "server":
 			// Fall through to start server
 		case "help", "-h", "--help":
@@ -113,7 +116,8 @@ func handleList(args []string) {
 func handleCatalog() {
 	catalog := models.DefaultCatalog()
 
-	fmt.Println("📚 Available Models:\n")
+	fmt.Println("📚 Available Models:")
+	fmt.Println()
 
 	for _, entry := range catalog.Models {
 		recommended := ""
@@ -134,7 +138,8 @@ func handleCatalog() {
 			}
 			fmt.Printf("%s (%.1f GB)", v.Quantization, float64(v.Size)/(1024*1024*1024))
 		}
-		fmt.Println("\n")
+		fmt.Println()
+		fmt.Println()
 	}
 
 	fmt.Println("Download: offgrid download <model-id> [quantization]")
@@ -149,6 +154,7 @@ func printHelp() {
 	fmt.Println("  download <id>    Download a model from catalog")
 	fmt.Println("  list             List installed models")
 	fmt.Println("  catalog          Show available models in catalog")
+	fmt.Println("  info, status     Show system and model information")
 	fmt.Println("  help             Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
@@ -156,11 +162,105 @@ func printHelp() {
 	fmt.Println("  offgrid catalog                            # Browse models")
 	fmt.Println("  offgrid download tinyllama-1.1b-chat       # Download model")
 	fmt.Println("  offgrid list                               # List local models")
+	fmt.Println("  offgrid info                               # System info")
 	fmt.Println()
 	fmt.Println("Environment Variables:")
 	fmt.Println("  OFFGRID_PORT         Server port (default: 8080)")
 	fmt.Println("  OFFGRID_MODELS_DIR   Models directory")
 	fmt.Println("  OFFGRID_NUM_THREADS  CPU threads to use")
+	fmt.Println()
+}
+
+func handleInfo() {
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+
+	if err := registry.ScanModels(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error scanning models: %v\n", err)
+	}
+
+	fmt.Println("🌐 OffGrid LLM - System Information")
+	fmt.Println("====================================")
+	fmt.Println()
+
+	// Version
+	fmt.Println("📦 Version")
+	fmt.Println("  OffGrid LLM: 0.1.0-alpha")
+	fmt.Println()
+
+	// Configuration
+	fmt.Println("⚙️  Configuration")
+	fmt.Printf("  Server Port:    %d\n", cfg.ServerPort)
+	fmt.Printf("  Models Dir:     %s\n", cfg.ModelsDir)
+	fmt.Printf("  Max Context:    %d tokens\n", cfg.MaxContextSize)
+	fmt.Printf("  CPU Threads:    %d\n", cfg.NumThreads)
+	fmt.Printf("  Max Memory:     %d MB\n", cfg.MaxMemoryMB)
+	fmt.Printf("  P2P Enabled:    %t\n", cfg.EnableP2P)
+	if cfg.EnableP2P {
+		fmt.Printf("  P2P Port:       %d\n", cfg.P2PPort)
+	}
+	fmt.Println()
+
+	// Installed Models
+	modelList := registry.ListModels()
+	fmt.Printf("📦 Installed Models: %d\n", len(modelList))
+	if len(modelList) > 0 {
+		for _, model := range modelList {
+			meta, err := registry.GetModel(model.ID)
+			if err == nil {
+				loadStatus := "❌ Not loaded"
+				if meta.IsLoaded {
+					loadStatus = "✅ Loaded"
+				}
+				fmt.Printf("  • %s\n", model.ID)
+				if meta.Path != "" {
+					fmt.Printf("    Path: %s\n", meta.Path)
+				}
+				if meta.Size > 0 {
+					fmt.Printf("    Size: %s\n", formatBytes(meta.Size))
+				}
+				if meta.Quantization != "" && meta.Quantization != "unknown" {
+					fmt.Printf("    Quant: %s\n", meta.Quantization)
+				}
+				fmt.Printf("    Status: %s\n", loadStatus)
+			}
+		}
+	} else {
+		fmt.Println("  No models installed")
+		fmt.Println("  Download: offgrid download <model-id>")
+	}
+	fmt.Println()
+
+	// Available Models
+	catalog := models.DefaultCatalog()
+	fmt.Printf("📚 Available in Catalog: %d\n", len(catalog.Models))
+	recommended := 0
+	for _, entry := range catalog.Models {
+		if entry.Recommended {
+			recommended++
+		}
+	}
+	fmt.Printf("  Recommended: %d\n", recommended)
+	fmt.Println("  View: offgrid catalog")
+	fmt.Println()
+
+	// System Resources
+	fmt.Println("💻 System Resources")
+	fmt.Printf("  Go Version: %s\n", "1.21.5")
+	// Note: Could add runtime.NumCPU(), memory stats, etc.
+	fmt.Println()
+
+	// Quick Start
+	if len(modelList) == 0 {
+		fmt.Println("🚀 Quick Start")
+		fmt.Println("  1. Download a model: offgrid download tinyllama-1.1b-chat")
+		fmt.Println("  2. Start server:     offgrid")
+		fmt.Println("  3. Test API:         curl http://localhost:8080/health")
+	} else {
+		fmt.Println("🚀 Ready to go!")
+		fmt.Println("  Start server: offgrid")
+		fmt.Printf("  API will be at: http://localhost:%d\n", cfg.ServerPort)
+	}
 	fmt.Println()
 }
 

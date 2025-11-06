@@ -1,5 +1,7 @@
 package models
 
+import "strings"
+
 // ModelCatalog contains trusted model sources
 type ModelCatalog struct {
 	Models []CatalogEntry `json:"models"`
@@ -174,14 +176,25 @@ func DefaultCatalog() *ModelCatalog {
 	}
 }
 
-// FindModel searches the catalog by ID
+// FindModel finds a model by ID (case-insensitive)
 func (c *ModelCatalog) FindModel(id string) *CatalogEntry {
+	id = strings.ToLower(id)
 	for i := range c.Models {
 		if c.Models[i].ID == id {
 			return &c.Models[i]
 		}
 	}
 	return nil
+}
+
+// GetBestVariant returns the best variant for a model given available RAM
+func (c *ModelCatalog) GetBestVariant(modelID string) *ModelVariant {
+	model := c.FindModel(modelID)
+	if model == nil {
+		return nil
+	}
+	// Default to 16GB if not specified
+	return model.GetBestVariant(16)
 }
 
 // FindVariant finds a specific quantization variant
