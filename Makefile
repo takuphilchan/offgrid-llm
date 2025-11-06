@@ -67,11 +67,31 @@ lint:
 	golangci-lint run ./...
 	@echo "✅ Linting complete"
 
-# Install locally
+# Install to user's Go bin (adds to PATH if GOPATH/bin is configured)
 install:
-	@echo "📦 Installing OffGrid LLM..."
+	@echo "📦 Installing OffGrid LLM to user bin..."
 	go install $(LDFLAGS) $(MAIN_PATH)
 	@echo "✅ Installed to $(shell go env GOPATH)/bin/$(BINARY)"
+	@echo ""
+	@echo "To use 'offgrid' command from anywhere:"
+	@echo "  1. Add this to your ~/.bashrc or ~/.zshrc:"
+	@echo "     export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""
+	@echo "  2. Reload shell: source ~/.bashrc"
+	@echo "  3. Verify: which offgrid"
+
+# Install to system-wide location (requires sudo)
+install-system:
+	@echo "📦 Installing OffGrid LLM system-wide..."
+	go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
+	sudo install -m 755 $(BINARY) /usr/local/bin/$(BINARY)
+	@echo "✅ Installed to /usr/local/bin/$(BINARY)"
+	@echo "   Run 'offgrid' from anywhere!"
+
+# Uninstall from system
+uninstall-system:
+	@echo "🗑️  Uninstalling OffGrid LLM from system..."
+	sudo rm -f /usr/local/bin/$(BINARY)
+	@echo "✅ Uninstalled"
 
 # Cross-compile for all platforms
 cross-compile:
@@ -95,15 +115,17 @@ deps:
 help:
 	@echo "OffGrid LLM - Makefile Commands:"
 	@echo ""
-	@echo "  make build          - Build the binary"
-	@echo "  make run            - Build and run the application"
-	@echo "  make dev            - Run without building (dev mode)"
-	@echo "  make test           - Run tests"
-	@echo "  make coverage       - Run tests with coverage report"
-	@echo "  make clean          - Remove build artifacts"
-	@echo "  make fmt            - Format code"
-	@echo "  make lint           - Lint code (requires golangci-lint)"
-	@echo "  make install        - Install to GOPATH/bin"
-	@echo "  make cross-compile  - Build for all platforms"
-	@echo "  make deps           - Download and tidy dependencies"
+	@echo "  make build            - Build the binary"
+	@echo "  make run              - Build and run the application"
+	@echo "  make dev              - Run without building (dev mode)"
+	@echo "  make test             - Run tests"
+	@echo "  make coverage         - Run tests with coverage report"
+	@echo "  make clean            - Remove build artifacts"
+	@echo "  make fmt              - Format code"
+	@echo "  make lint             - Lint code (requires golangci-lint)"
+	@echo "  make install          - Install to GOPATH/bin (user)"
+	@echo "  make install-system   - Install to /usr/local/bin (system-wide, requires sudo)"
+	@echo "  make uninstall-system - Uninstall from /usr/local/bin"
+	@echo "  make cross-compile    - Build for all platforms"
+	@echo "  make deps             - Download and tidy dependencies"
 	@echo ""

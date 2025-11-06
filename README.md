@@ -19,6 +19,61 @@ Traditional LLM deployments require constant internet connectivity, cloud APIs, 
 
 ### Installation
 
+**Recommended: One-Line Install**
+
+```bash
+# Clone and install system-wide
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+./install.sh
+
+# Or install for current user only (no sudo)
+./install.sh --user
+```
+
+**Manual Installation Options:**
+
+<details>
+<summary>Option 1: System-wide installation (Recommended)</summary>
+
+```bash
+# Clone repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Install system-wide (requires sudo)
+make install-system
+
+# Now use 'offgrid' from anywhere!
+offgrid --version
+```
+</details>
+
+<details>
+<summary>Option 2: User installation (no sudo required)</summary>
+
+```bash
+# Clone repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Install to user's Go bin
+make install
+
+# Add Go bin to PATH (add to ~/.bashrc or ~/.zshrc)
+export PATH="$PATH:$(go env GOPATH)/bin"
+
+# Reload shell
+source ~/.bashrc
+
+# Now use 'offgrid' from anywhere!
+offgrid --version
+```
+</details>
+
+<details>
+<summary>Option 3: Build locally</summary>
+
 ```bash
 # Clone repository
 git clone https://github.com/takuphilchan/offgrid-llm.git
@@ -27,9 +82,10 @@ cd offgrid-llm
 # Build
 make build
 
-# Start server
+# Run from directory
 ./offgrid
 ```
+</details>
 
 Server starts on `http://localhost:8080`
 
@@ -37,16 +93,16 @@ Server starts on `http://localhost:8080`
 
 ```bash
 # Browse available models
-./offgrid catalog
+offgrid catalog
 
 # Learn about quantization levels
-./offgrid quantization
+offgrid quantization
 
 # Download TinyLlama (638MB, 2GB RAM minimum)
-./offgrid download tinyllama-1.1b-chat Q4_K_M
+offgrid download tinyllama-1.1b-chat Q4_K_M
 
 # Start server
-./offgrid serve
+offgrid serve
 ```
 
 ### Test the API
@@ -162,14 +218,14 @@ Create a configuration file for persistent settings:
 
 ```bash
 # Generate default config
-./offgrid config init
+offgrid config init
 
 # Edit ~/.offgrid/config.yaml
 vim ~/.offgrid/config.yaml
 
 # Or use environment variable
 export OFFGRID_CONFIG=/path/to/config.yaml
-./offgrid serve
+offgrid serve
 ```
 
 Example configuration:
@@ -211,7 +267,7 @@ OffGrid LLM includes a curated catalog of verified models:
 - **Q3_K_M** - Severe resource constraints (3-4GB RAM)
 - **Q8_0** - Research/benchmarking (nearly lossless)
 
-Run `./offgrid quantization` for detailed explanations.
+Run `offgrid quantization` for detailed explanations.
 
 ## Offline Distribution
 
@@ -236,16 +292,16 @@ Import models from external storage:
 
 ```bash
 # Import all models from USB
-./offgrid import /media/usb
+offgrid import /media/usb
 
 # Import specific model
-./offgrid import /media/usb/llama-2-7b-chat.Q4_K_M.gguf
+offgrid import /media/usb/llama-2-7b-chat.Q4_K_M.gguf
 
 # Windows
-./offgrid import D:\models
+offgrid import D:\models
 
 # Verify
-./offgrid list
+offgrid list
 ```
 
 Models are automatically verified with SHA256 checksums during import.
@@ -410,7 +466,7 @@ For real LLM inference, build with llama.cpp support:
 # Build
 make build-llama
 
-# Result: ./offgrid binary with full inference capabilities
+# Result: offgrid binary with full inference capabilities
 ```
 
 ## Environment Variables
