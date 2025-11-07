@@ -4,6 +4,17 @@
 
 set -eu
 
+# Lock file to prevent concurrent installations
+LOCK_FILE="/tmp/offgrid-install.lock"
+
+# Cleanup function
+cleanup() {
+    rm -f "$LOCK_FILE"
+}
+
+# Set trap to cleanup on exit
+trap cleanup EXIT
+
 # Color and Formatting Setup
 BOLD='\033[1m'
 CYAN='\033[36m'
@@ -979,13 +990,22 @@ main() {
         print_info "Please run as a regular user with sudo access"
     fi
     
-    # Check if another instance is running
-    if pgrep -f "install.sh" | grep -v "$$" > /dev/null; then
-        print_error "Another installation appears to be running"
-        print_info "PID: $(pgrep -f 'install.sh' | grep -v "$$")"
-        print_info "If this is incorrect, kill the process and try again"
-        exit 1
+    # Check if another instance is running using lock file
+    if [ -f "$LOCK_FILE" ]; then
+        LOCK_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+        if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+            print_error "Another installation appears to be running"
+            print_info "PID: $LOCK_PID"
+            print_info "If this is incorrect, remove $LOCK_FILE and try again"
+            exit 1
+        else
+            print_info "Removing stale lock file"
+            rm -f "$LOCK_FILE"
+        fi
     fi
+    
+    # Create lock file with current PID
+    echo $$ > "$LOCK_FILE"
     
     # Pre-flight checks
     check_dependencies
