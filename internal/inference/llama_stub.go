@@ -6,44 +6,78 @@ package inference
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-// LlamaEngine stub when llama.cpp is not available
-// To enable real llama.cpp support:
-// 1. Install llama.cpp: git clone https://github.com/ggerganov/llama.cpp && cd llama.cpp && make
-// 2. Set environment: export C_INCLUDE_PATH=/path/to/llama.cpp:$C_INCLUDE_PATH
-// 3. Build with: go build -tags llama
+// LlamaEngine stub - uses HTTP proxy to llama.cpp server instead of CGO
+// This is the modern, recommended approach!
 type LlamaEngine struct {
-	MockEngine
+	httpEngine *LlamaHTTPEngine
 }
 
-// NewLlamaEngine creates a stub that delegates to MockEngine
+// NewLlamaEngine creates an engine that uses llama.cpp HTTP server
 func NewLlamaEngine() *LlamaEngine {
+	llamaServerURL := os.Getenv("LLAMA_SERVER_URL")
+	if llamaServerURL == "" {
+		// Try to read from config file (set by install.sh)
+		if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
+			port := strings.TrimSpace(string(portBytes))
+			llamaServerURL = fmt.Sprintf("http://127.0.0.1:%s", port)
+		} else {
+			// Final fallback
+			llamaServerURL = "http://127.0.0.1:8081"
+		}
+	}
+
 	return &LlamaEngine{
-		MockEngine: *NewMockEngine(),
+		httpEngine: NewLlamaHTTPEngine(llamaServerURL),
 	}
 }
 
-// Load shows a warning and delegates to mock
+// Load delegates to HTTP engine
 func (e *LlamaEngine) Load(ctx context.Context, modelPath string, opts LoadOptions) error {
-	fmt.Println("⚠️  Warning: llama.cpp not compiled in. Using mock responses.")
-	fmt.Println("   To enable real inference:")
-	fmt.Println("   1. Install llama.cpp dependencies")
-	fmt.Println("   2. Build with: go build -tags llama")
-	return e.MockEngine.Load(ctx, modelPath, opts)
+	if err := e.httpEngine.Load(ctx, modelPath, opts); err != nil {
+		fmt.Println("⚠️  Warning: llama-server not reachable.")
+		fmt.Println("   To enable real inference:")
+		fmt.Println("   1. Check llama-server status:")
+		fmt.Println("      sudo systemctl status llama-server")
+		fmt.Println("   2. Or set LLAMA_SERVER_URL environment variable")
+		fmt.Println("   Note: llama-server runs on internal localhost-only port for security")
+		return err
+	}
+	fmt.Println("✓ Connected to llama-server - REAL INFERENCE ENABLED")
+	return nil
 }
 
-// All other methods delegate to MockEngine
+// Unload delegates to HTTP engine
+func (e *LlamaEngine) Unload() error {
+	return e.httpEngine.Unload()
+}
+
+// ChatCompletion delegates to HTTP engine
 func (e *LlamaEngine) ChatCompletion(ctx context.Context, req *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error) {
-	return e.MockEngine.ChatCompletion(ctx, req)
+	return e.httpEngine.ChatCompletion(ctx, req)
 }
 
+// ChatCompletionStream delegates to HTTP engine
 func (e *LlamaEngine) ChatCompletionStream(ctx context.Context, req *api.ChatCompletionRequest, callback TokenCallback) error {
-	return e.MockEngine.ChatCompletionStream(ctx, req, callback)
+	return e.httpEngine.ChatCompletionStream(ctx, req, callback)
 }
 
+// Completion delegates to HTTP engine
 func (e *LlamaEngine) Completion(ctx context.Context, req *api.CompletionRequest) (*api.CompletionResponse, error) {
-	return e.MockEngine.Completion(ctx, req)
+	return e.httpEngine.Completion(ctx, req)
+}
+
+// IsLoaded delegates to HTTP engine
+func (e *LlamaEngine) IsLoaded() bool {
+	return e.httpEngine.IsLoaded()
+}
+
+// GetModelInfo delegates to HTTP engine
+func (e *LlamaEngine) GetModelInfo() (*ModelInfo, error) {
+	return e.httpEngine.GetModelInfo()
 }

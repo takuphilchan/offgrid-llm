@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OffGrid LLM Dashboard</title>
+    <title>OffGrid LLM - Offline AI Assistant</title>
     <style>
         * {
             margin: 0;
@@ -11,95 +11,174 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5568d3;
+            --secondary: #764ba2;
+            --accent: #f093fb;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --error: #f87171;
+            --text-dark: #1e293b;
+            --text-light: #64748b;
+            --bg-light: #f8fafc;
+            --bg-white: #ffffff;
+            --border: #e2e8f0;
+            --shadow: rgba(0, 0, 0, 0.05);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-soft: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
-            background: #ffffff;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-attachment: fixed;
             min-height: 100vh;
-            color: #1a1a1a;
+            color: var(--text-dark);
+            line-height: 1.6;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 0;
+            padding: 20px;
         }
 
         .header {
-            background: #ffffff;
-            padding: 40px 60px;
-            border-bottom: 1px solid #e5e5e5;
-            margin-bottom: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px var(--shadow);
+            margin-bottom: 30px;
+            animation: slideDown 0.6s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .header h1 {
-            color: #000000;
-            font-size: 28px;
-            font-weight: 600;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 36px;
+            font-weight: 800;
             margin-bottom: 8px;
-            letter-spacing: -0.5px;
+            letter-spacing: -1px;
         }
 
         .header p {
-            color: #666666;
-            font-size: 15px;
-            font-weight: 400;
+            color: var(--text-light);
+            font-size: 16px;
+            font-weight: 500;
         }
 
         .status {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 16px;
-            background: #f0f0f0;
-            color: #000000;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            margin-top: 16px;
+            gap: 10px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px var(--shadow);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: glow 1.5s ease-in-out infinite;
+        }
+
+        .status.online .status-indicator {
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .status.offline .status-indicator {
+            background: var(--error);
+            box-shadow: 0 0 10px var(--error);
         }
 
         .status.online {
-            background: #e8f5e9;
-            color: #2e7d32;
+            color: var(--success);
+            border: 2px solid var(--success);
         }
 
         .status.offline {
-            background: #ffebee;
-            color: #c62828;
+            color: var(--error);
+            border: 2px solid var(--error);
+        }
+
+        @keyframes glow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
         }
 
         .cards {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 24px;
-            padding: 40px 60px;
+            gap: 25px;
+            margin-bottom: 30px;
         }
 
         .card {
-            background: #ffffff;
-            padding: 32px;
-            border: 1px solid #e5e5e5;
-            border-radius: 12px;
-            transition: all 0.2s ease;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px var(--shadow);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeInUp 0.6s ease;
+            animation-fill-mode: both;
+        }
+
+        .card:nth-child(1) { animation-delay: 0.1s; }
+        .card:nth-child(2) { animation-delay: 0.2s; }
+        .card:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .card:hover {
-            border-color: #000000;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            transform: translateY(-5px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
         }
 
         .card h2 {
-            color: #000000;
-            font-size: 18px;
-            font-weight: 600;
+            color: var(--text-dark);
+            font-size: 20px;
+            font-weight: 700;
             margin-bottom: 20px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
         .icon {
-            font-size: 20px;
+            font-size: 24px;
+            filter: drop-shadow(0 2px 4px var(--shadow));
         }
 
         .model-list {
@@ -107,55 +186,58 @@
         }
 
         .model-item {
-            padding: 16px;
-            background: #fafafa;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
             margin-bottom: 12px;
-            border-radius: 8px;
-            border-left: 3px solid #000000;
-            transition: all 0.2s ease;
+            border-radius: 12px;
+            border-left: 4px solid var(--primary);
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .model-item:hover {
-            background: #f5f5f5;
-            transform: translateX(2px);
+            transform: translateX(5px);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+            box-shadow: 0 4px 15px var(--shadow);
         }
 
         .model-item strong {
-            color: #000000;
+            color: var(--text-dark);
             display: block;
             margin-bottom: 6px;
-            font-weight: 600;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 15px;
         }
 
         .model-item small {
-            color: #666666;
+            color: var(--text-light);
             font-size: 13px;
         }
 
         .chat-container {
-            background: #ffffff;
-            padding: 0;
-            border: 1px solid #e5e5e5;
-            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 10px 40px var(--shadow);
             display: grid;
             grid-template-rows: auto 1fr auto;
             height: 700px;
-            margin: 40px 60px;
+            animation: fadeInUp 0.6s ease 0.4s;
+            animation-fill-mode: both;
+            overflow: hidden;
         }
 
         .chat-header {
-            padding: 24px 32px;
-            border-bottom: 1px solid #e5e5e5;
-            background: #fafafa;
-            border-radius: 12px 12px 0 0;
+            padding: 25px 35px;
+            background: var(--gradient);
+            color: white;
         }
 
         .chat-header h2 {
-            color: #000000;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 16px;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .chat-controls {
@@ -167,86 +249,98 @@
 
         .chat-messages {
             overflow-y: auto;
-            padding: 32px;
-            background: #ffffff;
+            padding: 30px;
+            background: var(--bg-light);
         }
 
         .message {
             margin-bottom: 20px;
-            padding: 16px 20px;
-            border-radius: 12px;
-            max-width: 85%;
-            line-height: 1.6;
-            font-size: 14px;
+            padding: 18px 22px;
+            border-radius: 18px;
+            max-width: 80%;
+            line-height: 1.7;
+            font-size: 15px;
+            animation: messageSlide 0.3s ease;
+            box-shadow: 0 2px 10px var(--shadow);
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
         .message.user {
-            background: #000000;
-            color: #ffffff;
+            background: var(--gradient);
+            color: white;
             margin-left: auto;
             border-bottom-right-radius: 4px;
         }
 
         .message.assistant {
-            background: #f5f5f5;
-            color: #1a1a1a;
-            border: 1px solid #e5e5e5;
+            background: white;
+            color: var(--text-dark);
             margin-right: auto;
             border-bottom-left-radius: 4px;
+            border: 1px solid var(--border);
         }
 
         .message-label {
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 700;
             margin-bottom: 8px;
-            opacity: 0.7;
+            opacity: 0.8;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
         }
 
         .chat-input-area {
             display: flex;
             gap: 12px;
-            padding: 24px 32px;
-            border-top: 1px solid #e5e5e5;
-            background: #fafafa;
-            border-radius: 0 0 12px 12px;
+            padding: 25px 35px;
+            background: white;
+            border-top: 1px solid var(--border);
         }
 
         .chat-input {
             flex: 1;
-            padding: 14px 18px;
-            border: 1px solid #d0d0d0;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 16px 20px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 15px;
             font-family: inherit;
-            background: #ffffff;
-            transition: all 0.2s ease;
+            background: white;
+            transition: all 0.3s ease;
         }
 
         .chat-input:focus {
             outline: none;
-            border-color: #000000;
-            box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
         }
 
         .btn {
-            padding: 14px 28px;
-            background: #000000;
-            color: #ffffff;
+            padding: 16px 32px;
+            background: var(--gradient);
+            color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            letter-spacing: 0.3px;
+            font-size: 15px;
+            font-weight: 700;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
 
         .btn:hover {
-            background: #1a1a1a;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
         }
 
         .btn:active {
@@ -254,117 +348,139 @@
         }
 
         .btn:disabled {
-            background: #d0d0d0;
+            background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
         }
 
         .btn-secondary {
-            background: #ffffff;
-            color: #000000;
-            border: 1px solid #d0d0d0;
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            box-shadow: 0 4px 15px var(--shadow);
         }
 
         .btn-secondary:hover {
-            background: #f5f5f5;
-            border-color: #000000;
+            background: var(--bg-light);
+            box-shadow: 0 8px 25px var(--shadow);
         }
 
         .select {
-            padding: 12px 16px;
-            border: 1px solid #d0d0d0;
-            border-radius: 8px;
+            padding: 12px 18px;
+            border: 2px solid white;
+            border-radius: 10px;
             font-size: 14px;
             font-family: inherit;
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
             min-width: 200px;
+            font-weight: 600;
         }
 
         .select:focus {
             outline: none;
-            border-color: #000000;
-            box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+        }
+
+        .select option {
+            color: var(--text-dark);
+            background: white;
         }
 
         .error {
-            background: #ffebee;
-            color: #c62828;
-            padding: 14px 18px;
-            border-radius: 8px;
+            background: rgba(248, 113, 113, 0.1);
+            color: var(--error);
+            padding: 16px 20px;
+            border-radius: 12px;
             margin-bottom: 16px;
-            border-left: 3px solid #c62828;
-            font-size: 13px;
+            border-left: 4px solid var(--error);
+            font-size: 14px;
+            font-weight: 600;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
         }
 
         .empty-state {
             text-align: center;
-            padding: 60px 40px;
-            color: #999999;
+            padding: 80px 40px;
+            color: var(--text-light);
         }
 
         .empty-state .icon {
-            font-size: 56px;
+            font-size: 64px;
             margin-bottom: 20px;
-            opacity: 0.2;
+            opacity: 0.3;
+            filter: drop-shadow(0 4px 8px var(--shadow));
         }
 
         .empty-state p {
-            font-size: 15px;
-            color: #666666;
+            font-size: 16px;
+            color: var(--text-light);
+            font-weight: 500;
         }
 
         .streaming-indicator {
             display: inline-block;
-            width: 6px;
-            height: 6px;
-            background: #000000;
+            width: 8px;
+            height: 8px;
+            background: white;
             border-radius: 50%;
-            animation: pulse 1.5s ease-in-out infinite;
+            animation: typing 1.4s ease-in-out infinite;
             margin-left: 8px;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.3; transform: scale(0.8); }
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 1; transform: scale(1); }
+            30% { opacity: 0.3; transform: scale(0.7); }
         }
 
         .tabs {
             display: flex;
-            gap: 0;
-            padding: 0 60px;
-            border-bottom: 1px solid #e5e5e5;
-            background: #ffffff;
+            gap: 8px;
+            padding: 0 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 10px 40px var(--shadow);
+            margin-bottom: 0;
         }
 
         .tab {
-            padding: 16px 24px;
+            padding: 18px 28px;
             background: transparent;
             border: none;
-            border-bottom: 2px solid transparent;
+            border-bottom: 3px solid transparent;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            color: #666666;
-            transition: all 0.2s ease;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-light);
+            transition: all 0.3s ease;
             position: relative;
         }
 
         .tab:hover {
-            color: #000000;
-            background: #fafafa;
+            color: var(--primary);
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 10px 10px 0 0;
         }
 
         .tab.active {
-            color: #000000;
-            border-bottom-color: #000000;
-            font-weight: 600;
+            color: var(--primary);
+            border-bottom-color: var(--primary);
         }
 
         .tab-content {
             display: none;
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn 0.4s ease;
         }
 
         .tab-content.active {
@@ -372,24 +488,26 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(15px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         label {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             font-size: 14px;
-            color: #1a1a1a;
+            color: white;
             cursor: pointer;
             user-select: none;
+            font-weight: 600;
         }
 
         input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             cursor: pointer;
+            accent-color: var(--accent);
         }
 
         textarea {
@@ -397,26 +515,26 @@
         }
 
         ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
         }
 
         ::-webkit-scrollbar-track {
-            background: #f5f5f5;
+            background: var(--bg-light);
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #d0d0d0;
-            border-radius: 4px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 10px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #b0b0b0;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--secondary) 100%);
         }
 
         .info-item {
-            padding: 12px 0;
-            border-bottom: 1px solid #f0f0f0;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border);
         }
 
         .info-item:last-child {
@@ -425,99 +543,194 @@
 
         .info-label {
             font-size: 12px;
-            color: #666666;
-            margin-bottom: 4px;
+            color: var(--text-light);
+            margin-bottom: 6px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 500;
+            letter-spacing: 1px;
+            font-weight: 700;
         }
 
         .info-value {
-            font-size: 14px;
-            color: #000000;
-            font-weight: 500;
+            font-size: 15px;
+            color: var(--text-dark);
+            font-weight: 600;
         }
 
         .api-section {
-            padding: 40px 60px;
+            padding: 0;
         }
 
         .api-card {
-            background: #ffffff;
-            padding: 32px;
-            border: 1px solid #e5e5e5;
-            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 35px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px var(--shadow);
         }
 
         .api-card h2 {
-            color: #000000;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 24px;
+            color: var(--text-dark);
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 25px;
         }
 
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 25px;
         }
 
         .form-label {
             display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
+            margin-bottom: 10px;
+            font-weight: 700;
             font-size: 13px;
-            color: #1a1a1a;
+            color: var(--text-dark);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
         }
 
         .api-response {
-            margin-top: 24px;
+            margin-top: 25px;
         }
 
         .response-box {
-            background: #fafafa;
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #e5e5e5;
-            margin-top: 12px;
+            background: var(--bg-light);
+            padding: 22px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            margin-top: 15px;
         }
 
         .response-box strong {
-            color: #000000;
+            color: var(--primary);
             font-size: 13px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            font-weight: 700;
         }
 
         pre {
-            margin: 12px 0 0 0;
+            margin: 15px 0 0 0;
             overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-dark);
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        /* Real inference badge */
+        .inference-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(74, 222, 128, 0.2);
+            border: 2px solid var(--success);
+            color: var(--success);
+            border-radius: 20px;
             font-size: 12px;
-            line-height: 1.6;
-            color: #1a1a1a;
-            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 15px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: glow 1.5s ease-in-out infinite;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Copy button for code */
+        .copy-btn {
+            float: right;
+            padding: 6px 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--primary-dark);
+            transform: scale(1.05);
+        }
+
+        .clear-chat-btn {
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .clear-chat-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
         }
     </style>
+
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>OffGrid LLM</h1>
-            <p>AI for Edge & Offline Environments</p>
-            <span class="status online" id="status">● Online</span>
+            <h1>OffGrid LLM 🚀</h1>
+            <p>AI for Edge & Offline Environments - Powered by llama.cpp</p>
+            <div style="margin-top: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 15px;">
+                <span class="status online" id="status">
+                    <span class="status-indicator"></span>
+                    <span>Online</span>
+                </span>
+                <span class="inference-badge" id="inferenceBadge">
+                    <span class="badge-dot"></span>
+                    <span>Real Inference</span>
+                </span>
+            </div>
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('chat')">Chat</button>
-            <button class="tab" onclick="switchTab('models')">Models</button>
-            <button class="tab" onclick="switchTab('api')">API Test</button>
+            <button class="tab active" onclick="switchTab('chat')">💬 Chat</button>
+            <button class="tab" onclick="switchTab('models')">📦 Models</button>
+            <button class="tab" onclick="switchTab('api')">⚡ API Test</button>
         </div>
 
         <!-- Chat Tab -->
         <div id="chat-tab" class="tab-content active">
             <div class="chat-container">
                 <div class="chat-header">
-                    <h2>Chat Interface</h2>
+                    <h2>💬 Chat Interface</h2>
                     <div class="chat-controls">
                         <select id="chatModel" class="select">
                             <option value="">Select a model...</option>
@@ -526,13 +739,14 @@
                             <input type="checkbox" id="streamingEnabled" checked>
                             <span>Enable Streaming</span>
                         </label>
+                        <button class="clear-chat-btn" onclick="clearChat()">🗑️ Clear Chat</button>
                     </div>
                 </div>
 
                 <div class="chat-messages" id="chatMessages">
                     <div class="empty-state">
-                        <div class="icon">�</div>
-                        <p>Select a model and start chatting</p>
+                        <div class="icon">💭</div>
+                        <p>Select a model and start chatting with your offline AI assistant</p>
                     </div>
                 </div>
 
@@ -541,11 +755,12 @@
                         type="text" 
                         class="chat-input" 
                         id="chatInput" 
-                        placeholder="Type your message..."
+                        placeholder="Type your message... (Press Enter to send)"
                         onkeypress="if(event.key === 'Enter') sendMessage()"
                     >
-                    <button class="btn" onclick="sendMessage()" id="sendBtn">Send</button>
-                    <button class="btn btn-secondary" onclick="clearChat()">Clear</button>
+                    <button class="btn" onclick="sendMessage()" id="sendBtn">
+                        <span id="sendBtnText">Send</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -556,7 +771,10 @@
                 <div class="card">
                     <h2><span class="icon">📦</span> Installed Models</h2>
                     <ul class="model-list" id="modelList">
-                        <li class="empty-state">Loading models...</li>
+                        <li class="empty-state">
+                            <div class="icon">⏳</div>
+                            <p>Loading models...</p>
+                        </li>
                     </ul>
                 </div>
 
@@ -576,7 +794,7 @@
         <div id="api-tab" class="tab-content">
             <div class="api-section">
                 <div class="api-card">
-                    <h2>API Testing</h2>
+                    <h2>⚡ API Testing</h2>
                     
                     <div class="form-group">
                         <label class="form-label">Endpoint</label>

@@ -10,6 +10,7 @@ CYAN='\033[36m'
 GREEN='\033[32m'
 RED='\033[31m'
 YELLOW='\033[33m'
+DIM='\033[2m'
 RESET='\033[0m'
 
 # Print Functions
@@ -330,13 +331,17 @@ build_llama_cpp() {
     print_step "Building llama.cpp (this may take 5-10 minutes)..."
     print_info "Building with $(nproc) CPU cores..."
     
-    # Build and check for success
-    if timeout 600 cmake --build . --config Release -j$(nproc) 2>&1 | tee /tmp/llama_build.log | grep -v "warning:" | grep -E "Built target|error:|Error|FAILED"; then
-        # Check if critical libraries were built
-        if [ -f "src/libllama.so" ] || [ -f "libllama.so" ] || [ -f "ggml/src/libggml.so" ] || ls *.so &>/dev/null; then
-            print_success "Build completed successfully"
+    # Build llama-server specifically
+    if timeout 600 cmake --build . --config Release --target llama-server -j$(nproc) 2>&1 | tee /tmp/llama_build.log | grep -v "warning:" | grep -E "Built target|error:|Error|FAILED"; then
+        if [ -f "bin/llama-server" ]; then
+            print_success "llama-server built successfully"
+            
+            # Install llama-server binary
+            print_step "Installing llama-server to /usr/local/bin..."
+            sudo install -o0 -g0 -m755 bin/llama-server /usr/local/bin/llama-server
+            print_success "llama-server installed"
         else
-            print_warning "Build completed but some libraries may be missing"
+            print_warning "llama-server binary not found"
             print_info "Checking what was built..."
             ls -la *.so src/*.so ggml/src/*.so 2>/dev/null | head -n 5 || true
         fi
@@ -474,19 +479,139 @@ setup_user() {
 }
 
 # Create Systemd Service
+# Setup llama-server systemd service
+setup_llama_server_service() {
+    print_header "Setting Up llama-server Service"
+    
+    local SERVICE_FILE="/etc/systemd/system/llama-server.service"
+    
+    # Generate a random high port for internal use only (49152-65535 dynamic/private range)
+    # Using a specific seed based on hostname for consistency across restarts
+    local RANDOM_PORT=$((49152 + $(hostname | md5sum | cut -c1-4 | xargs -I{} printf "%d" 0x{}) % 16384))
+    print_info "Using internal port: $RANDOM_PORT (localhost-only, not externally accessible)"
+    
+    # Find a model to use (prefer tinyllama)
+    local MODEL_PATH=""
+    if [ -f "/var/lib/offgrid/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" ]; then
+        MODEL_PATH="/var/lib/offgrid/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+    elif [ -f "/var/lib/offgrid/models/tinyllama-1.1b-chat.Q4_K_M.gguf" ]; then
+        MODEL_PATH="/var/lib/offgrid/models/tinyllama-1.1b-chat.Q4_K_M.gguf"
+    elif [ -f "/var/lib/offgrid/models/tinyllama.gguf" ]; then
+        MODEL_PATH="/var/lib/offgrid/models/tinyllama.gguf"
+    else
+        # Use the first .gguf file found
+        MODEL_PATH=$(find /var/lib/offgrid/models -name "*.gguf" -type f | head -n 1)
+    fi
+    
+    if [ -z "$MODEL_PATH" ]; then
+        print_warning "No model found in /var/lib/offgrid/models/"
+        print_info "llama-server service will need to be configured manually with a model"
+        MODEL_PATH="/var/lib/offgrid/models/model.gguf"
+    else
+        print_info "Using model: $MODEL_PATH"
+        # Fix permissions on model files
+        sudo chmod 644 /var/lib/offgrid/models/*.gguf 2>/dev/null || true
+    fi
+    
+    print_step "Creating llama-server service file at $SERVICE_FILE..."
+    
+    sudo tee "$SERVICE_FILE" > /dev/null <<SERVICE_EOF
+[Unit]
+Description=llama.cpp Inference Server (Internal)
+Documentation=https://github.com/ggerganov/llama.cpp
+After=network-online.target
+Wants=network-online.target
+Before=offgrid-llm.service
+
+[Service]
+Type=simple
+User=offgrid
+Group=offgrid
+WorkingDirectory=/var/lib/offgrid
+ExecStart=/usr/local/bin/llama-server -m ${MODEL_PATH} --port ${RANDOM_PORT} --host 127.0.0.1 -c 2048 -ngl 0
+Restart=always
+RestartSec=3
+
+# Security hardening - localhost-only binding for internal IPC
+Environment="LLAMA_SERVER_INTERNAL=1"
+
+# Strict security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/offgrid
+# Network isolation - only localhost
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+    
+    # Store the port in a config file for OffGrid to read
+    print_step "Saving internal port configuration..."
+    sudo mkdir -p /etc/offgrid
+    echo "$RANDOM_PORT" | sudo tee /etc/offgrid/llama-port > /dev/null
+    sudo chmod 644 /etc/offgrid/llama-port
+    
+    print_success "llama-server service created on internal port $RANDOM_PORT"
+    
+    print_step "Reloading systemd daemon..."
+    sudo systemctl daemon-reload
+    
+    print_step "Enabling llama-server service..."
+    sudo systemctl enable llama-server.service
+    
+    print_success "llama-server service enabled (will start on boot)"
+    
+    # Start the service now
+    print_step "Starting llama-server service..."
+    sudo systemctl start llama-server.service
+    
+    sleep 2
+    
+    if sudo systemctl is-active --quiet llama-server.service; then
+        print_success "llama-server is running on internal port $RANDOM_PORT!"
+        
+        # Wait for server to be ready
+        print_step "Waiting for llama-server to be ready..."
+        for i in {1..10}; do
+            if curl -s http://127.0.0.1:${RANDOM_PORT}/health | grep -q "ok"; then
+                print_success "llama-server health check passed"
+                print_info "Internal endpoint: http://127.0.0.1:${RANDOM_PORT} (not accessible externally)"
+                return 0
+            fi
+            sleep 1
+        done
+        print_warning "llama-server is running but health check timed out"
+    else
+        print_error "Failed to start llama-server service"
+        print_info "Check logs with: sudo journalctl -u llama-server.service -n 50"
+    fi
+}
+
 setup_systemd_service() {
     print_header "Setting Up Systemd Service"
     
     local SERVICE_FILE="/etc/systemd/system/offgrid-llm.service"
     
+    # Read the internal llama-server port
+    local LLAMA_PORT=8081
+    if [ -f "/etc/offgrid/llama-port" ]; then
+        LLAMA_PORT=$(cat /etc/offgrid/llama-port)
+        print_info "Configuring OffGrid to connect to llama-server on port $LLAMA_PORT"
+    fi
+    
     print_step "Creating service file at $SERVICE_FILE..."
     
-    sudo tee "$SERVICE_FILE" > /dev/null <<'SERVICE_EOF'
+    sudo tee "$SERVICE_FILE" > /dev/null <<SERVICE_EOF
 [Unit]
 Description=OffGrid LLM - Offline AI Inference Engine
 Documentation=https://github.com/yourusername/offgrid-llm
-After=network-online.target
+After=network-online.target llama-server.service
 Wants=network-online.target
+Requires=llama-server.service
 
 [Service]
 Type=simple
@@ -498,8 +623,9 @@ Restart=always
 RestartSec=3
 Environment="OFFGRID_PORT=11611"
 Environment="OFFGRID_MODELS_DIR=/var/lib/offgrid/models"
+Environment="LLAMA_SERVER_URL=http://127.0.0.1:${LLAMA_PORT}"
 
-# Security settings
+# Security settings - only expose port 11611 externally
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -583,33 +709,48 @@ display_summary() {
         echo -e "  GPU Info: ${CYAN}${GPU_INFO}${RESET}"
     fi
     
-    # Always show mock mode for now
-    echo -e "  Inference: ${YELLOW}MOCK MODE${RESET} ${DIM}(real inference coming soon)${RESET}"
+    # Show real inference mode
+    echo -e "  Inference: ${GREEN}REAL LLM${RESET} ${DIM}(via llama.cpp HTTP server)${RESET}"
     echo ""
     
+    # Get internal port
+    local INTERNAL_PORT="(random)"
+    if [ -f "/etc/offgrid/llama-port" ]; then
+        INTERNAL_PORT=$(cat /etc/offgrid/llama-port)
+    fi
+    
     echo -e "${BOLD}Service Information:${RESET}"
-    echo -e "  Status: ${GREEN}Running${RESET}"
-    echo -e "  Port: ${CYAN}11611${RESET}"
+    echo -e "  llama-server: ${GREEN}Internal Port ${INTERNAL_PORT}${RESET} ${DIM}(localhost-only, not accessible externally)${RESET}"
+    echo -e "  OffGrid LLM: ${GREEN}Port 11611${RESET} ${DIM}(public API endpoint)${RESET}"
     echo -e "  Web UI: ${CYAN}http://localhost:11611/ui${RESET}"
     echo -e "  API: ${CYAN}http://localhost:11611${RESET}"
     echo ""
     
+    echo -e "${BOLD}Security:${RESET}"
+    echo -e "  ${GREEN}✓${RESET} llama-server bound to 127.0.0.1 only (internal IPC)"
+    echo -e "  ${GREEN}✓${RESET} Random high port ${INTERNAL_PORT} not exposed externally"
+    echo -e "  ${GREEN}✓${RESET} Only OffGrid port 11611 is publicly accessible"
+    echo -e "  ${GREEN}✓${RESET} Same architecture as Ollama for security and isolation"
+    echo ""
+    
     echo -e "${BOLD}Useful Commands:${RESET}"
-    echo -e "  ${CYAN}offgrid serve${RESET}          - Start server manually"
-    echo -e "  ${CYAN}offgrid list${RESET}           - List available models"
-    echo -e "  ${CYAN}offgrid download <model>${RESET} - Download a model"
-    echo -e "  ${CYAN}sudo systemctl status offgrid-llm${RESET}  - Check service status"
-    echo -e "  ${CYAN}sudo journalctl -u offgrid-llm -f${RESET}  - View live logs"
+    echo -e "  ${CYAN}offgrid serve${RESET}                      - Start OffGrid manually"
+    echo -e "  ${CYAN}offgrid list${RESET}                       - List available models"
+    echo -e "  ${CYAN}offgrid download <model>${RESET}           - Download a model"
+    echo -e "  ${CYAN}sudo systemctl status offgrid-llm${RESET}  - Check OffGrid status"
+    echo -e "  ${CYAN}sudo systemctl status llama-server${RESET} - Check llama-server status"
+    echo -e "  ${CYAN}sudo journalctl -u offgrid-llm -f${RESET}  - View OffGrid logs"
+    echo -e "  ${CYAN}sudo journalctl -u llama-server -f${RESET} - View llama-server logs"
     echo ""
     
     echo -e "${BOLD}Next Steps:${RESET}"
     echo -e "  1. Visit ${CYAN}http://localhost:11611/ui${RESET} in your browser"
-    echo -e "  2. Test API: ${CYAN}curl http://localhost:11611/health${RESET}"
-    echo -e "  3. Real inference integration coming in next update!"
+    echo -e "  2. Test health: ${CYAN}curl http://localhost:11611/health${RESET}"
+    echo -e "  3. Test chat: ${CYAN}curl -X POST http://localhost:11611/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}'${RESET}"
     echo ""
     
-    echo -e "${DIM}Note: Mock mode returns placeholder responses for testing.${RESET}"
-    echo -e "${DIM}      Real LLM inference will be enabled in a future update.${RESET}"
+    echo -e "${BOLD}${GREEN}🎉 Real LLM inference is enabled!${RESET}"
+    echo -e "${DIM}Architecture: OffGrid (Go) ⟷ HTTP ⟷ llama-server (C++)${RESET}"
     echo ""
 }
 
@@ -636,6 +777,7 @@ main() {
     # System setup
     setup_user
     setup_config
+    setup_llama_server_service
     setup_systemd_service
     start_service
     
