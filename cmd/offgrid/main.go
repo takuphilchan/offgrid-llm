@@ -11,8 +11,9 @@ import (
 )
 
 func main() {
-	fmt.Println("🌐 OffGrid LLM - AI for Edge & Offline Environments")
-	fmt.Println("Version: 0.1.0-alpha")
+	fmt.Println()
+	fmt.Println("OFFGRID-LLM v0.1.0α")
+	fmt.Println("Edge Inference Orchestrator")
 	fmt.Println()
 
 	// Parse command
@@ -88,21 +89,21 @@ func handleDownload(args []string) {
 
 	// Set progress callback
 	downloader.SetProgressCallback(func(p models.DownloadProgress) {
-		fmt.Printf("\r📥 Downloading %s (%s): %.1f%% [%s] %.2f MB/s",
+		fmt.Printf("\r  Downloading %s (%s): %.1f%% · %s · %.1f MB/s",
 			p.ModelID, p.Variant, p.Percent,
 			formatBytes(p.BytesDone), float64(p.Speed)/(1024*1024))
 
 		if p.Status == "complete" {
-			fmt.Println("\n✅ Download complete!")
+			fmt.Println("\n  ✓ Download complete")
 		} else if p.Status == "verifying" {
-			fmt.Print("\n🔍 Verifying...")
+			fmt.Print("\n  Verifying checksum...")
 		}
 	})
 
-	fmt.Printf("Downloading %s (%s)...\n", modelID, quantization)
+	fmt.Printf("Downloading %s (%s)\n\n", modelID, quantization)
 
 	if err := downloader.Download(modelID, quantization); err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ Download failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\n  ✗ Download failed: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -127,73 +128,73 @@ func handleImport(args []string) {
 	// Check if path is a specific file or directory
 	info, err := os.Stat(usbPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "  ✗ Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	if info.IsDir() {
 		// Import all models from directory
-		fmt.Printf("🔍 Scanning %s for model files...\n", usbPath)
+		fmt.Printf("Scanning %s\n\n", usbPath)
 
 		modelFiles, err := importer.ScanUSBDrive(usbPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Error scanning: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  ✗ Scan error: %v\n", err)
 			os.Exit(1)
 		}
 
 		if len(modelFiles) == 0 {
-			fmt.Println("No .gguf model files found")
+			fmt.Println("  No model files found")
 			os.Exit(0)
 		}
 
-		fmt.Printf("📦 Found %d model file(s):\n", len(modelFiles))
+		fmt.Printf("Found %d model file(s):\n\n", len(modelFiles))
 		for i, file := range modelFiles {
 			modelID, quant := importer.GetModelInfo(filepath.Base(file))
 			size := getFileSize(file)
-			fmt.Printf("  %d. %s (%s) - %s\n", i+1, modelID, quant, formatBytes(size))
+			fmt.Printf("  %d. %s (%s) · %s\n", i+1, modelID, quant, formatBytes(size))
 		}
 		fmt.Println()
 
 		// Import all
-		fmt.Println("📥 Importing models...")
+		fmt.Println("Importing models...\n")
 		imported, err := importer.ImportAll(usbPath, func(p models.ImportProgress) {
 			if p.Status == "copying" {
-				fmt.Printf("\r  Copying %s: %.1f%% [%s]",
+				fmt.Printf("\r  %s: %.1f%% · %s",
 					p.FileName, p.Percent, formatBytes(p.BytesDone))
 			} else if p.Status == "verifying" {
 				fmt.Printf("\r  Verifying %s...          ", p.FileName)
 			} else if p.Status == "complete" {
-				fmt.Printf("\r  ✅ %s imported successfully\n", p.FileName)
+				fmt.Printf("\r  ✓ %s\n", p.FileName)
 			}
 		})
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\n❌ Import failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "\n  ✗ Import failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("\n✅ Successfully imported %d model(s) to %s\n", imported, cfg.ModelsDir)
+		fmt.Printf("\n  ✓ Imported %d model(s) to %s\n", imported, cfg.ModelsDir)
 	} else {
 		// Import single file
-		fmt.Printf("📥 Importing %s...\n", filepath.Base(usbPath))
+		fmt.Printf("Importing %s\n\n", filepath.Base(usbPath))
 
 		err := importer.ImportModel(usbPath, func(p models.ImportProgress) {
 			if p.Status == "copying" {
-				fmt.Printf("\r  Progress: %.1f%% [%s / %s]",
+				fmt.Printf("\r  Progress: %.1f%% · %s / %s",
 					p.Percent, formatBytes(p.BytesDone), formatBytes(p.BytesTotal))
 			} else if p.Status == "verifying" {
-				fmt.Print("\r  🔍 Verifying integrity...          ")
+				fmt.Print("\r  Verifying integrity...          ")
 			} else if p.Status == "complete" {
-				fmt.Print("\r  ✅ Import complete!                \n")
+				fmt.Print("\r  ✓ Import complete                \n")
 			}
 		})
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\n❌ Import failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "\n  ✗ Import failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("\n✅ Model imported to %s\n", cfg.ModelsDir)
+		fmt.Printf("\n  ✓ Model imported to %s\n", cfg.ModelsDir)
 	}
 }
 
@@ -217,36 +218,39 @@ func handleList(args []string) {
 	modelList := registry.ListModels()
 
 	if len(modelList) == 0 {
-		fmt.Println("No models found in", cfg.ModelsDir)
-		fmt.Println("\nDownload models with: offgrid download <model-id>")
-		fmt.Println("See available models: offgrid catalog")
+		fmt.Println("No models installed in", cfg.ModelsDir)
+		fmt.Println()
+		fmt.Println("  Download a model:  offgrid download <model-id>")
+		fmt.Println("  Browse catalog:    offgrid catalog")
 		return
 	}
 
-	fmt.Printf("📦 Found %d model(s) in %s:\n\n", len(modelList), cfg.ModelsDir)
+	fmt.Printf("Models (%d)\n", len(modelList))
+	fmt.Println()
 	for _, model := range modelList {
 		fmt.Printf("  • %s\n", model.ID)
 	}
+	fmt.Println()
 }
 
 func handleCatalog() {
 	catalog := models.DefaultCatalog()
 
-	fmt.Println("📚 Available Models:")
+	fmt.Println()
+	fmt.Println("Available Models")
 	fmt.Println()
 
 	for _, entry := range catalog.Models {
 		recommended := ""
 		if entry.Recommended {
-			recommended = " ⭐"
+			recommended = " (recommended)"
 		}
 
-		fmt.Printf("  %s%s\n", entry.ID, recommended)
-		fmt.Printf("    Name: %s\n", entry.Name)
-		fmt.Printf("    Size: %s parameters\n", entry.Parameters)
-		fmt.Printf("    RAM:  %d GB minimum\n", entry.MinRAM)
-		fmt.Printf("    Info: %s\n", entry.Description)
-		fmt.Printf("    Variants: ")
+		fmt.Printf("%s%s\n", entry.ID, recommended)
+		fmt.Printf("  %s · %s parameters · %d GB RAM minimum\n",
+			entry.Name, entry.Parameters, entry.MinRAM)
+		fmt.Printf("  %s\n", entry.Description)
+		fmt.Printf("  Variants: ")
 
 		for i, v := range entry.Variants {
 			if i > 0 {
@@ -258,17 +262,21 @@ func handleCatalog() {
 		fmt.Println()
 	}
 
-	fmt.Println("Download: offgrid download <model-id> [quantization]")
-	fmt.Println("Example:  offgrid download tinyllama-1.1b-chat Q4_K_M")
+	fmt.Println("Usage:")
+	fmt.Println("  offgrid download <model-id> [quantization]")
 	fmt.Println()
-	fmt.Println("💡 Tip: Run 'offgrid quantization' to learn about quantization levels")
+	fmt.Println("Examples:")
+	fmt.Println("  offgrid download tinyllama-1.1b-chat Q4_K_M")
+	fmt.Println("  offgrid quantization  # Learn about quantization levels")
+	fmt.Println()
 }
 
 func handleQuantization() {
-	fmt.Println("📊 Quantization Levels Explained")
+	fmt.Println()
+	fmt.Println("Quantization Levels")
 	fmt.Println()
 	fmt.Println("Quantization reduces model size by using fewer bits per weight.")
-	fmt.Println("Lower bits = smaller file, faster loading, but slightly reduced quality.")
+	fmt.Println("Lower bits = smaller file + faster loading - slight quality reduction")
 	fmt.Println()
 
 	// Show all quantization levels in order of quality
@@ -281,57 +289,57 @@ func handleQuantization() {
 
 	for _, quant := range quantLevels {
 		info := models.GetQuantizationInfo(quant)
-		marker := "  "
+		marker := "   "
 		if quant == "Q4_K_M" || quant == "Q5_K_M" {
-			marker = "🌟"
+			marker = " ★ "
 		}
 
-		fmt.Printf("%s %s - %s [%s]\n", marker, info.Name, info.QualityLevel, info.Description)
-		fmt.Printf("     %.1f bits/weight | %s\n", info.BitsPerWeight, info.UseCases)
+		fmt.Printf("%s %s · %s\n", marker, info.Name, info.QualityLevel)
+		fmt.Printf("     %.1f bits/weight · %s\n", info.BitsPerWeight, info.Description)
+		fmt.Printf("     %s\n", info.UseCases)
 		fmt.Println()
 	}
 
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("📌 General Recommendations:")
-	fmt.Println("  • For most users: Q4_K_M - Best balance of quality and size")
-	fmt.Println("  • For production: Q5_K_M - Higher quality, worth the extra ~25% size")
-	fmt.Println("  • For limited RAM: Q3_K_M - Acceptable quality in 3-4 GB")
-	fmt.Println("  • For research: Q8_0 - Nearly identical to original model")
+	fmt.Println("Recommendations")
 	fmt.Println()
-	fmt.Println("💾 Size comparison for a 7B parameter model:")
+	fmt.Println("  ★ Most users:       Q4_K_M  Best quality/size balance")
+	fmt.Println("  ★ Production:       Q5_K_M  Higher quality (~25% larger)")
+	fmt.Println("    Limited RAM:      Q3_K_M  Acceptable quality (3-4 GB)")
+	fmt.Println("    Research:         Q8_0    Near-original quality")
+	fmt.Println()
+	fmt.Println("Size comparison (7B parameter model):")
 	fmt.Println("  Q4_K_M: ~4.0 GB  |  Q5_K_M: ~4.8 GB  |  Q8_0: ~7.2 GB")
 	fmt.Println()
 }
 
 func printHelp() {
-	fmt.Println("Usage: offgrid [command]")
 	fmt.Println()
-	fmt.Println("Commands:")
-	fmt.Println("  serve, server       Start the HTTP server (default)")
-	fmt.Println("  download <id>       Download a model from catalog")
-	fmt.Println("  import <path>       Import model(s) from USB/SD card")
-	fmt.Println("  list                List installed models")
-	fmt.Println("  catalog             Show available models in catalog")
-	fmt.Println("  quantization, quant Explain quantization levels and tradeoffs")
-	fmt.Println("  config <action>     Manage configuration (init, show, validate)")
-	fmt.Println("  info, status        Show system and model information")
-	fmt.Println("  help                Show this help message")
+	fmt.Println("Usage")
+	fmt.Println("  offgrid [command]")
 	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  offgrid                                    # Start server")
-	fmt.Println("  offgrid catalog                            # Browse models")
-	fmt.Println("  offgrid quantization                       # Learn about quantization")
-	fmt.Println("  offgrid download tinyllama-1.1b-chat       # Download model")
-	fmt.Println("  offgrid import /media/usb                  # Import from USB")
-	fmt.Println("  offgrid config init                        # Create config file")
-	fmt.Println("  offgrid list                               # List local models")
-	fmt.Println("  offgrid info                               # System info")
+	fmt.Println("Commands")
+	fmt.Println("  serve              Start HTTP inference server (default)")
+	fmt.Println("  download <id>      Download a model from catalog")
+	fmt.Println("  import <path>      Import model(s) from USB/SD card")
+	fmt.Println("  list               List installed models")
+	fmt.Println("  catalog            Show available models")
+	fmt.Println("  quantization       Explain quantization levels")
+	fmt.Println("  config <action>    Manage configuration (init, show, validate)")
+	fmt.Println("  info               Show system information")
+	fmt.Println("  help               Show this help")
 	fmt.Println()
-	fmt.Println("Environment Variables:")
-	fmt.Println("  OFFGRID_CONFIG       Path to config file (YAML/JSON)")
+	fmt.Println("Examples")
+	fmt.Println("  offgrid")
+	fmt.Println("  offgrid catalog")
+	fmt.Println("  offgrid download tinyllama-1.1b-chat")
+	fmt.Println("  offgrid import /media/usb")
+	fmt.Println("  offgrid config init")
+	fmt.Println()
+	fmt.Println("Environment Variables")
+	fmt.Println("  OFFGRID_CONFIG       Configuration file path (YAML/JSON)")
 	fmt.Println("  OFFGRID_PORT         Server port (default: 8080)")
 	fmt.Println("  OFFGRID_MODELS_DIR   Models directory")
-	fmt.Println("  OFFGRID_NUM_THREADS  CPU threads to use")
+	fmt.Println("  OFFGRID_NUM_THREADS  CPU threads")
 	fmt.Println()
 }
 
@@ -340,90 +348,74 @@ func handleInfo() {
 	registry := models.NewRegistry(cfg.ModelsDir)
 
 	if err := registry.ScanModels(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error scanning models: %v\n", err)
+		fmt.Fprintf(os.Stderr, "  ✗ Model scan error: %v\n", err)
 	}
 
-	fmt.Println("🌐 OffGrid LLM - System Information")
-	fmt.Println("====================================")
 	fmt.Println()
-
-	// Version
-	fmt.Println("📦 Version")
-	fmt.Println("  OffGrid LLM: 0.1.0-alpha")
+	fmt.Println("OffGrid LLM v0.1.0-alpha")
 	fmt.Println()
 
 	// Configuration
-	fmt.Println("⚙️  Configuration")
-	fmt.Printf("  Server Port:    %d\n", cfg.ServerPort)
-	fmt.Printf("  Models Dir:     %s\n", cfg.ModelsDir)
-	fmt.Printf("  Max Context:    %d tokens\n", cfg.MaxContextSize)
-	fmt.Printf("  CPU Threads:    %d\n", cfg.NumThreads)
-	fmt.Printf("  Max Memory:     %d MB\n", cfg.MaxMemoryMB)
-	fmt.Printf("  P2P Enabled:    %t\n", cfg.EnableP2P)
+	fmt.Println("Configuration")
+	fmt.Printf("  Port:        %d\n", cfg.ServerPort)
+	fmt.Printf("  Models:      %s\n", cfg.ModelsDir)
+	fmt.Printf("  Context:     %d tokens\n", cfg.MaxContextSize)
+	fmt.Printf("  Threads:     %d\n", cfg.NumThreads)
+	fmt.Printf("  Memory:      %d MB\n", cfg.MaxMemoryMB)
 	if cfg.EnableP2P {
-		fmt.Printf("  P2P Port:       %d\n", cfg.P2PPort)
+		fmt.Printf("  P2P:         enabled (port %d)\n", cfg.P2PPort)
 	}
 	fmt.Println()
 
 	// Installed Models
 	modelList := registry.ListModels()
-	fmt.Printf("📦 Installed Models: %d\n", len(modelList))
+	fmt.Printf("Installed Models (%d)\n", len(modelList))
 	if len(modelList) > 0 {
 		for _, model := range modelList {
 			meta, err := registry.GetModel(model.ID)
 			if err == nil {
-				loadStatus := "❌ Not loaded"
+				status := "idle"
 				if meta.IsLoaded {
-					loadStatus = "✅ Loaded"
+					status = "loaded"
 				}
-				fmt.Printf("  • %s\n", model.ID)
-				if meta.Path != "" {
-					fmt.Printf("    Path: %s\n", meta.Path)
-				}
+				fmt.Printf("  • %s", model.ID)
 				if meta.Size > 0 {
-					fmt.Printf("    Size: %s\n", formatBytes(meta.Size))
+					fmt.Printf(" · %s", formatBytes(meta.Size))
 				}
 				if meta.Quantization != "" && meta.Quantization != "unknown" {
-					fmt.Printf("    Quant: %s\n", meta.Quantization)
+					fmt.Printf(" · %s", meta.Quantization)
 				}
-				fmt.Printf("    Status: %s\n", loadStatus)
+				fmt.Printf(" (%s)", status)
+				fmt.Println()
 			}
 		}
 	} else {
 		fmt.Println("  No models installed")
-		fmt.Println("  Download: offgrid download <model-id>")
 	}
 	fmt.Println()
 
 	// Available Models
 	catalog := models.DefaultCatalog()
-	fmt.Printf("📚 Available in Catalog: %d\n", len(catalog.Models))
+	fmt.Printf("Available Models (%d)\n", len(catalog.Models))
 	recommended := 0
 	for _, entry := range catalog.Models {
 		if entry.Recommended {
 			recommended++
 		}
 	}
-	fmt.Printf("  Recommended: %d\n", recommended)
-	fmt.Println("  View: offgrid catalog")
-	fmt.Println()
-
-	// System Resources
-	fmt.Println("💻 System Resources")
-	fmt.Printf("  Go Version: %s\n", "1.21.5")
-	// Note: Could add runtime.NumCPU(), memory stats, etc.
+	fmt.Printf("  %d recommended\n", recommended)
 	fmt.Println()
 
 	// Quick Start
 	if len(modelList) == 0 {
-		fmt.Println("🚀 Quick Start")
-		fmt.Println("  1. Download a model: offgrid download tinyllama-1.1b-chat")
-		fmt.Println("  2. Start server:     offgrid")
-		fmt.Println("  3. Test API:         curl http://localhost:8080/health")
+		fmt.Println("Quick Start")
+		fmt.Println("  1. Download a model:  offgrid download tinyllama-1.1b-chat")
+		fmt.Println("  2. Start server:      offgrid")
+		fmt.Println("  3. Test endpoint:     curl http://localhost:8080/health")
 	} else {
-		fmt.Println("🚀 Ready to go!")
-		fmt.Println("  Start server: offgrid")
-		fmt.Printf("  API will be at: http://localhost:%d\n", cfg.ServerPort)
+		fmt.Println("Server")
+		fmt.Println("  Start:      offgrid")
+		fmt.Printf("  Endpoint:   http://localhost:%d\n", cfg.ServerPort)
 	}
 	fmt.Println()
 }
@@ -465,56 +457,58 @@ func handleConfig(args []string) {
 
 		// Save to file
 		if err := cfg.SaveToFile(outputPath); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to create config: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  ✗ Failed to create config: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("✅ Created config file: %s\n", outputPath)
-		fmt.Println()
-		fmt.Println("Edit the file to customize your settings, then:")
+		fmt.Printf("  ✓ Created config: %s\n\n", outputPath)
+		fmt.Println("To use:")
 		fmt.Printf("  export OFFGRID_CONFIG=%s\n", outputPath)
 		fmt.Println("  offgrid")
+		fmt.Println()
 
 	case "show":
 		configPath := os.Getenv("OFFGRID_CONFIG")
 		cfg, err := config.LoadWithPriority(configPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to load config: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  ✗ Failed to load config: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Println("📋 Current Configuration")
 		fmt.Println()
-		fmt.Println("Server:")
-		fmt.Printf("  Host: %s\n", cfg.ServerHost)
-		fmt.Printf("  Port: %d\n", cfg.ServerPort)
+		fmt.Println("Configuration")
 		fmt.Println()
-		fmt.Println("Models:")
-		fmt.Printf("  Directory: %s\n", cfg.ModelsDir)
-		fmt.Printf("  Default Model: %s\n", cfg.DefaultModel)
-		fmt.Printf("  Max Context Size: %d\n", cfg.MaxContextSize)
-		fmt.Printf("  CPU Threads: %d\n", cfg.NumThreads)
+		fmt.Println("Server")
+		fmt.Printf("  Host:             %s\n", cfg.ServerHost)
+		fmt.Printf("  Port:             %d\n", cfg.ServerPort)
 		fmt.Println()
-		fmt.Println("Resources:")
-		fmt.Printf("  Max Memory: %d MB\n", cfg.MaxMemoryMB)
-		fmt.Printf("  Max Loaded Models: %d\n", cfg.MaxModels)
-		fmt.Printf("  GPU Enabled: %v\n", cfg.EnableGPU)
+		fmt.Println("Models")
+		fmt.Printf("  Directory:        %s\n", cfg.ModelsDir)
+		fmt.Printf("  Default:          %s\n", cfg.DefaultModel)
+		fmt.Printf("  Max context:      %d\n", cfg.MaxContextSize)
+		fmt.Printf("  Threads:          %d\n", cfg.NumThreads)
+		fmt.Println()
+		fmt.Println("Resources")
+		fmt.Printf("  Max memory:       %d MB\n", cfg.MaxMemoryMB)
+		fmt.Printf("  Max models:       %d\n", cfg.MaxModels)
+		fmt.Printf("  GPU:              %v\n", cfg.EnableGPU)
 		if cfg.EnableGPU {
-			fmt.Printf("  GPU Layers: %d\n", cfg.NumGPULayers)
+			fmt.Printf("  GPU layers:       %d\n", cfg.NumGPULayers)
 		}
 		fmt.Println()
-		fmt.Println("P2P:")
-		fmt.Printf("  Enabled: %v\n", cfg.EnableP2P)
 		if cfg.EnableP2P {
-			fmt.Printf("  P2P Port: %d\n", cfg.P2PPort)
-			fmt.Printf("  Discovery Port: %d\n", cfg.DiscoveryPort)
+			fmt.Println("P2P")
+			fmt.Printf("  Enabled:          %v\n", cfg.EnableP2P)
+			fmt.Printf("  Port:             %d\n", cfg.P2PPort)
+			fmt.Printf("  Discovery:        %d\n", cfg.DiscoveryPort)
+			fmt.Println()
+		}
+		fmt.Println("Logging")
+		fmt.Printf("  Level:            %s\n", cfg.LogLevel)
+		if cfg.LogFile != "" {
+			fmt.Printf("  File:             %s\n", cfg.LogFile)
 		}
 		fmt.Println()
-		fmt.Println("Logging:")
-		fmt.Printf("  Level: %s\n", cfg.LogLevel)
-		if cfg.LogFile != "" {
-			fmt.Printf("  File: %s\n", cfg.LogFile)
-		}
 
 	case "validate":
 		if len(args) < 2 {
@@ -525,16 +519,17 @@ func handleConfig(args []string) {
 		configPath := args[1]
 		cfg, err := config.LoadFromFile(configPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Invalid config: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  ✗ Invalid config: %v\n", err)
 			os.Exit(1)
 		}
 
 		if err := cfg.Validate(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Validation failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  ✗ Validation failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("✅ Config file is valid: %s\n", configPath)
+		fmt.Printf("  ✓ Config valid: %s\n", configPath)
+		fmt.Println()
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown action: %s\n", action)

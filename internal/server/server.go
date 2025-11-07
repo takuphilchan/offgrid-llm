@@ -45,10 +45,10 @@ func NewWithConfig(cfg *config.Config) *Server {
 	// Choose engine based on configuration
 	var engine inference.Engine
 	if cfg.UseMockEngine {
-		log.Println("⚠️  Using mock engine (no real inference)")
+		log.Println("Using mock engine (no real inference)")
 		engine = inference.NewMockEngine()
 	} else {
-		log.Println("🚀 Using llama.cpp engine for real inference")
+		log.Println("Using llama.cpp engine")
 		engine = inference.NewLlamaEngine()
 	}
 
@@ -100,14 +100,14 @@ func (s *Server) Start() error {
 	// Graceful shutdown handler
 	go s.handleShutdown()
 
-	log.Printf("🚀 Server starting on http://localhost:%d", s.config.ServerPort)
-	log.Printf("📚 API endpoints:")
-	log.Printf("   - GET  /health")
-	log.Printf("   - GET  /v1/models")
-	log.Printf("   - POST /v1/chat/completions")
-	log.Printf("   - POST /v1/completions")
-	log.Printf("🎨 Web UI:")
-	log.Printf("   - http://localhost:%d/ui", s.config.ServerPort)
+	log.Printf("Server starting on http://localhost:%d", s.config.ServerPort)
+	log.Printf("API endpoints:")
+	log.Printf("  GET  /health")
+	log.Printf("  GET  /v1/models")
+	log.Printf("  POST /v1/chat/completions")
+	log.Printf("  POST /v1/completions")
+	log.Printf("Web UI:")
+	log.Printf("  http://localhost:%d/ui", s.config.ServerPort)
 
 	if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
@@ -122,25 +122,25 @@ func (s *Server) handleShutdown() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	<-sigChan
-	log.Println("\n🛑 Shutdown signal received, gracefully stopping...")
+	log.Println("\nShutdown signal received...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
-		log.Printf("Error during shutdown: %v", err)
+		log.Printf("Shutdown error: %v", err)
 	}
 
-	log.Println("✅ Server stopped")
+	log.Println("Server stopped")
 }
 
 // loggingMiddleware logs all HTTP requests
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log.Printf("→ %s %s", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
-		log.Printf("← %s %s (took %v)", r.Method, r.URL.Path, time.Since(start))
+		duration := time.Since(start)
+		log.Printf("%s %s · %.2fms", r.Method, r.URL.Path, float64(duration.Microseconds())/1000)
 	})
 }
 
