@@ -92,12 +92,92 @@ case "$INSTALL_MODE" in
             echo -e "  ${DIM}Location${RESET}  /usr/local/bin/offgrid"
             echo -e "  ${DIM}Version${RESET}   $VERSION"
             echo ""
-            echo -e "${BOLD}Quick Start${RESET}"
-            echo ""
-            echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
-            echo -e "  ${CYAN}offgrid quantization${RESET}   Learn about quantization"
-            echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
-            echo ""
+            
+            # Ask if user wants to setup systemd service
+            if command -v systemctl &> /dev/null; then
+                echo -e "${BOLD}Setup Options${RESET}"
+                echo ""
+                read -p "$(echo -e ${CYAN}Would you like to install as a systemd service? [y/N]: ${RESET})" -n 1 -r
+                echo ""
+                
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    print_step "Setting up systemd service"
+                    
+                    # Create systemd service file
+                    sudo tee /etc/systemd/system/offgrid-llm.service > /dev/null <<EOF
+[Unit]
+Description=OffGrid LLM - Edge Inference Orchestrator
+After=network.target
+Documentation=https://github.com/takuphilchan/offgrid-llm
+
+[Service]
+Type=simple
+User=$USER
+ExecStart=/usr/local/bin/offgrid serve
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+                    
+                    print_success "Service file created"
+                    
+                    # Reload systemd and enable service
+                    sudo systemctl daemon-reload
+                    sudo systemctl enable offgrid-llm.service
+                    print_success "Service enabled (will start on boot)"
+                    
+                    # Ask to start now
+                    read -p "$(echo -e ${CYAN}Start the service now? [Y/n]: ${RESET})" -n 1 -r
+                    echo ""
+                    
+                    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                        sudo systemctl start offgrid-llm.service
+                        sleep 2
+                        
+                        if systemctl is-active --quiet offgrid-llm.service; then
+                            print_success "Service started successfully"
+                            echo ""
+                            echo -e "${BOLD}Service Status${RESET}"
+                            echo -e "  ${CYAN}systemctl status offgrid-llm${RESET}      Check status"
+                            echo -e "  ${CYAN}systemctl stop offgrid-llm${RESET}        Stop service"
+                            echo -e "  ${CYAN}systemctl restart offgrid-llm${RESET}     Restart service"
+                            echo -e "  ${CYAN}journalctl -u offgrid-llm -f${RESET}      View logs"
+                            echo ""
+                            echo -e "${BOLD}Server Running${RESET}"
+                            echo -e "  ${DIM}Endpoint${RESET}  http://localhost:11611"
+                            echo -e "  ${DIM}Web UI${RESET}    http://localhost:11611/ui"
+                            echo ""
+                        else
+                            print_error "Service failed to start"
+                            echo -e "  ${DIM}Check logs:${RESET} ${CYAN}journalctl -u offgrid-llm -n 50${RESET}"
+                        fi
+                    else
+                        echo ""
+                        echo -e "${DIM}Start manually with:${RESET} ${CYAN}sudo systemctl start offgrid-llm${RESET}"
+                        echo ""
+                    fi
+                else
+                    echo ""
+                    echo -e "${BOLD}Quick Start${RESET}"
+                    echo ""
+                    echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
+                    echo -e "  ${CYAN}offgrid quantization${RESET}   Learn about quantization"
+                    echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
+                    echo ""
+                fi
+            else
+                echo -e "${BOLD}Quick Start${RESET}"
+                echo ""
+                echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
+                echo -e "  ${CYAN}offgrid quantization${RESET}   Learn about quantization"
+                echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
+                echo ""
+            fi
+            
             echo -e "${DIM}Run ${CYAN}offgrid help${DIM} for all commands${RESET}"
             echo ""
         else
