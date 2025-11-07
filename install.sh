@@ -370,74 +370,59 @@ build_offgrid() {
     print_header "Building OffGrid LLM"
     
     local BUILD_DIR=$(pwd)
+    local GO_CMD="go"
+    
+    # Use Go 1.21+ if available
+    if [ -f "/usr/local/go/bin/go" ]; then
+        GO_CMD="/usr/local/go/bin/go"
+        print_info "Using installed Go at /usr/local/go/bin/go"
+    fi
     
     # Verify Go is installed
-    if ! command -v go &> /dev/null; then
+    if ! command -v "$GO_CMD" &> /dev/null; then
         print_error "Go is not installed"
         exit 1
     fi
     
-    GO_VERSION=$(go version | awk '{print $3}')
+    GO_VERSION=$($GO_CMD version | awk '{print $3}')
     print_info "Using Go: $GO_VERSION"
     
-    print_step "Downloading Go dependencies..."
-    go mod download 2>&1 | grep -E "go: downloading|error" || true
-    
-    # Check if llama.cpp libraries exist
-    LLAMA_AVAILABLE=false
-    if [ -f "$HOME/llama.cpp/build/src/libllama.so" ] || \
-       [ -f "$HOME/llama.cpp/build/libllama.so" ] || \
-       [ -f "$HOME/llama.cpp/libllama.so" ] || \
-       [ -f "/usr/local/lib/libggml.so" ] || \
-       [ -f "$HOME/llama.cpp/build/ggml/src/libggml.so" ]; then
-        LLAMA_AVAILABLE=true
-        print_info "llama.cpp libraries found, building with real inference support"
-        
-        # Set CGO environment for llama.cpp
-        export CGO_ENABLED=1
-        export C_INCLUDE_PATH="$HOME/llama.cpp:$HOME/llama.cpp/include:$HOME/llama.cpp/ggml/include:${C_INCLUDE_PATH:-}"
-        export LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp/build/src:$HOME/llama.cpp/build/ggml/src:$HOME/llama.cpp:/usr/local/lib:${LIBRARY_PATH:-}"
-        export LD_LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp/build/src:$HOME/llama.cpp/build/ggml/src:$HOME/llama.cpp:/usr/local/lib:${LD_LIBRARY_PATH:-}"
-        
-        print_step "Building with llama.cpp integration..."
-        print_info "This will enable REAL inference (not mock responses)"
-        
-        if go build -tags llama -o offgrid ./cmd/offgrid 2>&1 | tee /tmp/go_build.log | tail -n 20; then
-            if [ -f offgrid ] && [ -x offgrid ]; then
-                print_success "Built with llama.cpp support - REAL INFERENCE ENABLED"
-                
-                # Verify the build includes llama support
-                if strings offgrid | grep -q "llama.cpp\|ggml"; then
-                    print_success "Verified: llama.cpp integration is active"
-                else
-                    print_warning "Warning: llama.cpp symbols not found in binary"
-                fi
-            else
-                print_error "Build command succeeded but binary not created"
-                LLAMA_AVAILABLE=false
-            fi
-        else
-            print_warning "Failed to build with llama support"
-            print_info "Check /tmp/go_build.log for details"
-            LLAMA_AVAILABLE=false
-        fi
+    # Check Go version meets minimum requirement
+    GO_VERSION_NUM=$(echo $GO_VERSION | sed 's/go//' | cut -d. -f1-2)
+    MIN_GO_VERSION="1.21"
+    if [ "$(printf '%s\n' "$MIN_GO_VERSION" "$GO_VERSION_NUM" | sort -V | head -n1)" != "$MIN_GO_VERSION" ]; then
+        print_warning "Go version $GO_VERSION_NUM is older than required $MIN_GO_VERSION"
+        print_warning "Attempting to use system Go anyway..."
     fi
     
-    # Fallback to mock mode if llama build failed
-    if [ "$LLAMA_AVAILABLE" = false ]; then
-        print_step "Building in mock mode (no real inference)..."
-        if go build -o offgrid ./cmd/offgrid 2>&1 | tail -n 10; then
-            if [ -f offgrid ] && [ -x offgrid ]; then
-                print_success "Built in mock mode"
-                print_warning "Real inference not available - download a model and it will use mock responses"
-            else
-                print_error "Failed to build binary"
-                exit 1
-            fi
+    print_step "Downloading Go dependencies..."
+    $GO_CMD mod download 2>&1 | grep -E "go: downloading|error" || true
+    
+    # TODO: Real llama.cpp inference integration
+    # Currently disabled due to go-llama.cpp version incompatibility with latest llama.cpp
+    # The go-skynet/go-llama.cpp binding from March 2024 expects older llama.cpp with grammar-parser.h
+    # We need to either:
+    # 1. Pin to older llama.cpp version matching the binding
+    # 2. Switch to a more modern Go binding (llama-cpp-python wrapper, or direct CGO)
+    # 3. Fork and update go-llama.cpp to work with latest llama.cpp
+    #
+    # For now, building in mock mode to ensure reliable installation
+    LLAMA_AVAILABLE=false
+    
+    print_step "Building in mock mode..."
+    print_info "Note: Real inference coming soon - version compatibility work in progress"
+    
+    if $GO_CMD build -o offgrid ./cmd/offgrid 2>&1 | tee /tmp/go_build.log | tail -n 10; then
+        if [ -f offgrid ] && [ -x offgrid ]; then
+            print_success "Built successfully"
+            print_warning "Currently using mock mode - real inference integration coming in next update"
         else
-            print_error "Build failed"
+            print_error "Failed to build binary"
             exit 1
         fi
+    else
+        print_error "Build failed - check /tmp/go_build.log for details"
+        exit 1
     fi
     
     # Verify binary was created
@@ -598,12 +583,8 @@ display_summary() {
         echo -e "  GPU Info: ${CYAN}${GPU_INFO}${RESET}"
     fi
     
-    # Check if built with llama support
-    if /usr/local/bin/offgrid --version 2>&1 | grep -q "llama" || strings /usr/local/bin/offgrid 2>/dev/null | grep -q "ggml"; then
-        echo -e "  Inference: ${GREEN}REAL (llama.cpp enabled)${RESET}"
-    else
-        echo -e "  Inference: ${YELLOW}MOCK MODE (llama.cpp not integrated)${RESET}"
-    fi
+    # Always show mock mode for now
+    echo -e "  Inference: ${YELLOW}MOCK MODE${RESET} ${DIM}(real inference coming soon)${RESET}"
     echo ""
     
     echo -e "${BOLD}Service Information:${RESET}"
@@ -623,8 +604,12 @@ display_summary() {
     
     echo -e "${BOLD}Next Steps:${RESET}"
     echo -e "  1. Visit ${CYAN}http://localhost:11611/ui${RESET} in your browser"
-    echo -e "  2. Download a model: ${CYAN}offgrid download tinyllama${RESET}"
-    echo -e "  3. Start chatting with your offline AI!"
+    echo -e "  2. Test API: ${CYAN}curl http://localhost:11611/health${RESET}"
+    echo -e "  3. Real inference integration coming in next update!"
+    echo ""
+    
+    echo -e "${DIM}Note: Mock mode returns placeholder responses for testing.${RESET}"
+    echo -e "${DIM}      Real LLM inference will be enabled in a future update.${RESET}"
     echo ""
 }
 
