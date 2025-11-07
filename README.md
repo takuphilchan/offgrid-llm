@@ -12,10 +12,12 @@ Traditional LLM deployments require constant internet connectivity, cloud APIs, 
 
 - **True Offline Operation** - Works completely disconnected from the internet
 - **GPU Acceleration** - NVIDIA CUDA and AMD ROCm support for fast inference
+- **CPU-Only Mode** - Optional CPU-only installation for environments without GPU
 - **Resource Efficient** - Runs on devices with as little as 2GB RAM
 - **P2P Model Sharing** - Share models across local networks without internet
 - **USB Distribution** - Install models from USB drives and SD cards
 - **OpenAI Compatible** - Drop-in replacement for OpenAI API
+- **Cyberpunk Web UI** - Modern dark theme with real-time chat interface
 - **Production Ready** - Systemd services, security hardening, monitoring
 
 ## Quick Start
@@ -43,13 +45,29 @@ Traditional LLM deployments require constant internet connectivity, cloud APIs, 
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
 
-# Run installer (detects GPU, installs dependencies, builds everything)
+# Auto-detect GPU and install (detects NVIDIA/AMD GPU automatically)
 sudo ./install.sh
+
+# OR: Force CPU-only mode (no GPU, smaller dependencies)
+sudo ./install.sh --cpu-only
+
+# OR: Require GPU mode (fails if no GPU detected)
+sudo ./install.sh --gpu
+
+# Show all installation options
+./install.sh --help
 ```
 
+**Installation Options:**
+
+- **`./install.sh`** - Auto-detect GPU hardware and build accordingly (default)
+- **`./install.sh --cpu-only`** - Force CPU-only mode, skip GPU detection and CUDA build
+- **`./install.sh --gpu`** - Require GPU support, fail if no GPU is detected
+- **`./install.sh --help`** - Show usage information and available options
+
 The installer will:
-- ✅ Detect NVIDIA GPU and install CUDA support automatically
-- ✅ Download and build llama.cpp with GPU acceleration
+- ✅ Detect NVIDIA/AMD GPU and install acceleration support (or skip with `--cpu-only`)
+- ✅ Download and build llama.cpp with optimal configuration
 - ✅ Build OffGrid LLM with real inference engine
 - ✅ Create systemd services for automatic startup
 - ✅ Configure security (localhost-only, random ports)
@@ -446,7 +464,7 @@ offgrid-llm/
 - **Resource Monitor** - Real-time system metrics with gopsutil
 - **P2P Discovery** - JSON-based UDP announcements for local network discovery
 - **API Server** - OpenAI-compatible HTTP endpoints with SSE streaming
-- **Web UI** - Offline-capable dashboard with no external dependencies
+- **Web UI** - Cyberpunk-themed dashboard with black/cyan design, real-time chat, streaming support
 
 ## API Reference
 
