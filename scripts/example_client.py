@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-OffGrid LLM - Python Client Example
-
-This script demonstrates how to interact with the OffGrid LLM API
-using Python and the requests library.
+Example Python client for OffGrid LLM API
+Demonstrates both regular and streaming chat completions
 """
 
 import json
+import sys
 import requests
-from typing import List, Dict, Any
+from typing import Iterator, Dict, Any
 
-BASE_URL = "http://localhost:8080"
+BASE_URL = "http://localhost:11611"
 
 
 class OffGridClient:

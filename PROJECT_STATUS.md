@@ -107,7 +107,7 @@ All with verified SHA256 hashes from HuggingFace.
 **Docker:**
 ```bash
 docker build -t offgrid-llm .
-docker run -p 8080:8080 -v ./models:/root/.offgrid/models offgrid-llm
+docker run -p 11611:11611 -v ./models:/root/.offgrid/models offgrid-llm
 ```
 
 **Docker Compose:**

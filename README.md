@@ -87,7 +87,7 @@ make build
 ```
 </details>
 
-Server starts on `http://localhost:8080`
+Server starts on `http://localhost:11611`
 
 ### Your First Model
 
@@ -109,13 +109,13 @@ offgrid serve
 
 ```bash
 # Check health
-curl http://localhost:8080/health
+curl http://localhost:11611/health
 
 # List models
-curl http://localhost:8080/v1/models
+curl http://localhost:11611/v1/models
 
 # Chat completion
-curl http://localhost:8080/v1/chat/completions \
+curl http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "tinyllama-1.1b-chat",
@@ -124,7 +124,7 @@ curl http://localhost:8080/v1/chat/completions \
   }'
 
 # Streaming chat
-curl -N http://localhost:8080/v1/chat/completions \
+curl -N http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "tinyllama-1.1b-chat",
@@ -269,7 +269,7 @@ Example configuration:
 
 ```yaml
 server:
-  port: 8080
+  port: 11611
   host: "0.0.0.0"
 
 models:
@@ -510,7 +510,7 @@ make build-llama
 
 ```bash
 OFFGRID_CONFIG=/path/to/config.yaml    # Configuration file location
-OFFGRID_PORT=8080                       # Server port
+OFFGRID_PORT=11611                       # Server port
 OFFGRID_HOST=0.0.0.0                    # Server host
 OFFGRID_MODELS_DIR=./models             # Models directory
 OFFGRID_NUM_THREADS=4                   # Inference threads

@@ -6,7 +6,7 @@ echo "======================================"
 echo ""
 
 # Start server in background if not running
-if ! lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+if ! lsof -Pi :11611 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
     echo "Starting server..."
     ./offgrid serve &
     SERVER_PID=$!
@@ -14,7 +14,7 @@ if ! lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
     echo "Server started (PID: $SERVER_PID)"
     CLEANUP=true
 else
-    echo "Server already running on port 8080"
+    echo "Server already running on port 11611"
     CLEANUP=false
 fi
 
@@ -22,7 +22,7 @@ echo ""
 echo "Sending streaming request..."
 echo ""
 
-curl -N http://localhost:8080/v1/chat/completions \
+curl -N http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "mock-model",

@@ -58,7 +58,7 @@ Perfect for air-gapped or offline environments:
 cp /media/usb/models/*.gguf ~/.offgrid-llm/models/
 
 # Or use the API endpoint (once server is running)
-curl -X POST http://localhost:8080/v1/import \
+curl -X POST http://localhost:11611/v1/import \
   -F "file=@/media/usb/models/llama-2-7b.Q4_K_M.gguf" \
   -F "name=llama-2-7b.Q4_K_M.gguf"
 ```
@@ -108,10 +108,10 @@ Once you've downloaded a model:
 
 ```bash
 # List models
-curl http://localhost:8080/v1/models
+curl http://localhost:11611/v1/models
 
 # Test chat completion
-curl http://localhost:8080/v1/chat/completions \
+curl http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "llama-2-7b.Q4_K_M",

@@ -5,7 +5,7 @@ OffGrid LLM provides an OpenAI-compatible REST API for running language models o
 ## Base URL
 
 ```
-http://localhost:8080
+http://localhost:11611
 ```
 
 ## Authentication
@@ -233,10 +233,10 @@ All errors follow a consistent format:
 
 ```bash
 # List models
-curl http://localhost:8080/v1/models
+curl http://localhost:11611/v1/models
 
 # Chat completion
-curl http://localhost:8080/v1/chat/completions \
+curl http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "llama-2-7b.Q4_K_M",
@@ -246,7 +246,7 @@ curl http://localhost:8080/v1/chat/completions \
   }'
 
 # Text completion
-curl http://localhost:8080/v1/completions \
+curl http://localhost:11611/v1/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "llama-2-7b.Q4_K_M",
@@ -259,7 +259,7 @@ curl http://localhost:8080/v1/completions \
 ```python
 import requests
 
-BASE_URL = "http://localhost:8080"
+BASE_URL = "http://localhost:11611"
 
 # List models
 response = requests.get(f"{BASE_URL}/v1/models")
@@ -282,7 +282,7 @@ print(result["choices"][0]["message"]["content"])
 ### JavaScript (fetch)
 
 ```javascript
-const BASE_URL = "http://localhost:8080";
+const BASE_URL = "http://localhost:11611";
 
 // Chat completion
 const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
@@ -314,7 +314,7 @@ OffGrid LLM is designed to be compatible with OpenAI client libraries. Simply po
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8080/v1",
+    base_url="http://localhost:11611/v1",
     api_key="not-needed"  # Required by SDK but not used
 )
 
@@ -334,7 +334,7 @@ print(response.choices[0].message.content)
 import OpenAI from 'openai';
 
 const client = new OpenAI({
-  baseURL: 'http://localhost:8080/v1',
+  baseURL: 'http://localhost:11611/v1',
   apiKey: 'not-needed'
 });
 

@@ -373,11 +373,11 @@ func handleChat(args []string) {
 	fmt.Println("  2. In new terminal, use the API:")
 	fmt.Println()
 	fmt.Println("Example curl command:")
-	fmt.Println(`  curl http://localhost:8080/v1/chat/completions \`)
+	fmt.Println(`  curl http://localhost:11611/v1/chat/completions \`)
 	fmt.Println(`    -H "Content-Type: application/json" \`)
 	fmt.Println(`    -d '{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'`)
 	fmt.Println()
-	fmt.Println("Or use the web UI at: http://localhost:8080/ui")
+	fmt.Println("Or use the web UI at: http://localhost:11611/ui")
 	fmt.Println()
 
 	// TODO: Implement interactive CLI chat
@@ -578,7 +578,7 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println("Environment Variables")
 	fmt.Println("  OFFGRID_CONFIG       Configuration file path (YAML/JSON)")
-	fmt.Println("  OFFGRID_PORT         Server port (default: 8080)")
+	fmt.Println("  OFFGRID_PORT         Server port (default: 11611)")
 	fmt.Println("  OFFGRID_MODELS_DIR   Models directory")
 	fmt.Println("  OFFGRID_NUM_THREADS  CPU threads")
 	fmt.Println()
@@ -652,7 +652,7 @@ func handleInfo() {
 		fmt.Println("Quick Start")
 		fmt.Println("  1. Download a model:  offgrid download tinyllama-1.1b-chat")
 		fmt.Println("  2. Start server:      offgrid")
-		fmt.Println("  3. Test endpoint:     curl http://localhost:8080/health")
+		fmt.Println("  3. Test endpoint:     curl http://localhost:11611/health")
 	} else {
 		fmt.Println("Server")
 		fmt.Println("  Start:      offgrid")

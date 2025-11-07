@@ -249,7 +249,7 @@ make clean              # Clean build artifacts
 # - Real responses instead of "This is a mock response"
 
 # Test inference
-curl -X POST http://localhost:8080/v1/chat/completions \
+curl -X POST http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "tinyllama-1.1b-chat",

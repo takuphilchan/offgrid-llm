@@ -22,7 +22,7 @@ docker build -t offgrid-llm:latest .
 # Run container
 docker run -d \
   --name offgrid-llm \
-  -p 8080:8080 \
+  -p 11611:11611 \
   -p 8081:8081 \
   -v $(pwd)/models:/root/.offgrid/models \
   offgrid-llm:latest
@@ -57,7 +57,7 @@ docker build \
 docker run -d \
   --name offgrid-llm \
   --gpus all \
-  -p 8080:8080 \
+  -p 11611:11611 \
   -v $(pwd)/models:/root/.offgrid/models \
   offgrid-llm:llama
 ```
@@ -68,7 +68,7 @@ Create `config.yaml` and mount it:
 
 ```yaml
 server:
-  port: 8080
+  port: 11611
   host: "0.0.0.0"
 
 models:
@@ -169,7 +169,7 @@ Create `/etc/offgrid/config.yaml`:
 
 ```yaml
 server:
-  port: 8080
+  port: 11611
   host: "0.0.0.0"
 
 models:
@@ -232,7 +232,7 @@ metadata:
 data:
   config.yaml: |
     server:
-      port: 8080
+      port: 11611
       host: "0.0.0.0"
     models:
       directory: "/models"
@@ -274,13 +274,13 @@ spec:
         image: offgrid-llm:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8080
+        - containerPort: 11611
           name: http
         - containerPort: 8081
           name: p2p
         env:
         - name: OFFGRID_PORT
-          value: "8080"
+          value: "11611"
         - name: OFFGRID_MODELS_DIR
           value: "/models"
         volumeMounts:
@@ -299,13 +299,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 11611
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: 11611
           initialDelaySeconds: 5
           periodSeconds: 5
       volumes:
@@ -328,7 +328,7 @@ spec:
     app: offgrid-llm
   ports:
   - name: http
-    port: 8080
+    port: 11611
     targetPort: 8080
   - name: p2p
     port: 8081
@@ -349,7 +349,7 @@ kubectl get svc -n offgrid
 kubectl logs -f -n offgrid deployment/offgrid-llm
 
 # Port forward for local testing
-kubectl port-forward -n offgrid svc/offgrid-llm 8080:8080
+kubectl port-forward -n offgrid svc/offgrid-llm 11611:11611
 
 # Delete deployment
 kubectl delete -f k8s-deployment.yaml
@@ -381,7 +381,7 @@ cp -r models/* offgrid-package/models/
 # Create config
 cat > offgrid-package/config/config.yaml <<EOF
 server:
-  port: 8080
+  port: 11611
   host: "0.0.0.0"
 models:
   directory: "./models"
@@ -456,7 +456,7 @@ Deploy across multiple nodes with P2P model sharing.
 # Configure with models
 cat > ~/.offgrid/config.yaml <<EOF
 server:
-  port: 8080
+  port: 11611
 models:
   directory: "./models"
 p2p:
@@ -478,7 +478,7 @@ EOF
 # Configure without models initially
 cat > ~/.offgrid/config.yaml <<EOF
 server:
-  port: 8080
+  port: 11611
 p2p:
   enabled: true
   discovery_port: 8081
@@ -492,10 +492,10 @@ EOF
 
 ```bash
 # On any node, check discovered peers
-curl http://localhost:8080/peers
+curl http://localhost:11611/peers
 
 # Check available models across network
-curl http://localhost:8080/v1/models
+curl http://localhost:11611/v1/models
 ```
 
 ## Production Best Practices
@@ -520,7 +520,7 @@ sudo ufw enable
 
 ```bash
 # Add health check monitoring
-*/5 * * * * curl -f http://localhost:8080/health || systemctl restart offgrid
+*/5 * * * * curl -f http://localhost:11611/health || systemctl restart offgrid
 
 # Log rotation (systemd handles this automatically)
 # For manual logs:
@@ -547,7 +547,7 @@ MemoryLimit=8G
 CPUQuota=400%  # 4 cores
 
 # Monitor resource usage
-watch -n 1 'curl -s http://localhost:8080/health | jq .resources'
+watch -n 1 'curl -s http://localhost:11611/health | jq .resources'
 ```
 
 ### Scaling
@@ -576,8 +576,8 @@ docker stats offgrid-llm  # Docker
 htop  # Native
 
 # Test API
-curl http://localhost:8080/health
-curl http://localhost:8080/v1/models
+curl http://localhost:11611/health
+curl http://localhost:11611/v1/models
 
 # Validate configuration
 ./offgrid config validate

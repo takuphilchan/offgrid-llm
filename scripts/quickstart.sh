@@ -68,8 +68,8 @@ echo "Or use:"
 echo "  make run"
 echo
 echo "Once running, test with:"
-echo "  curl http://localhost:8080/health"
-echo "  curl http://localhost:8080/v1/models"
+echo "  curl http://localhost:11611/health"
+echo "  curl http://localhost:11611/v1/models"
 echo
 echo "For more information:"
 echo "  - Model setup: docs/MODEL_SETUP.md"

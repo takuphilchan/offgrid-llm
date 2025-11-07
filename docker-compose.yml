@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     
     ports:
-      - "8080:8080"  # HTTP API
+      - "11611:11611"  # HTTP API
       - "8081:8081"  # P2P Discovery
     
     volumes:
@@ -25,7 +25,7 @@ services:
       - /media/usb:/media/usb:ro
     
     environment:
-      - OFFGRID_PORT=8080
+      - OFFGRID_PORT=11611
       - OFFGRID_HOST=0.0.0.0
       - OFFGRID_MODELS_DIR=/root/.offgrid/models
       - OFFGRID_NUM_THREADS=4
@@ -45,7 +45,7 @@ services:
     
     # Health check
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:11611/health"]
       interval: 30s
       timeout: 10s
       retries: 3

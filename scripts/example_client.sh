@@ -1,8 +1,7 @@
 #!/bin/bash
+# Example API client for OffGrid LLM
 
-# OffGrid LLM - Example API Client
-
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:11611"
 
 echo "🌐 OffGrid LLM - Example API Client"
 echo "===================================="

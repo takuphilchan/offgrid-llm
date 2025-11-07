@@ -45,7 +45,7 @@ func LoadConfig() *Config {
 	defaultModelsDir := filepath.Join(homeDir, ".offgrid-llm", "models")
 
 	return &Config{
-		ServerPort:     getEnvInt("OFFGRID_PORT", 8080),
+		ServerPort:     getEnvInt("OFFGRID_PORT", 11611),
 		ServerHost:     getEnv("OFFGRID_HOST", "localhost"),
 		ModelsDir:      getEnv("OFFGRID_MODELS_DIR", defaultModelsDir),
 		DefaultModel:   getEnv("OFFGRID_DEFAULT_MODEL", ""),
@@ -207,7 +207,7 @@ func (c *Config) applyDefaults() {
 	defaultModelsDir := filepath.Join(homeDir, ".offgrid-llm", "models")
 
 	if c.ServerPort == 0 {
-		c.ServerPort = 8080
+		c.ServerPort = 11611
 	}
 	if c.ServerHost == "" {
 		c.ServerHost = "localhost"
