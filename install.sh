@@ -566,14 +566,32 @@ build_llama_cpp() {
             
             # Verify the binary works
             if ldd bin/llama-server > /dev/null 2>&1; then
-                print_step "Installing llama-server to /usr/local/bin..."
+                print_step "Installing llama-server and shared libraries..."
+                
+                # Install the main binary
                 sudo install -o0 -g0 -m755 bin/llama-server /usr/local/bin/llama-server
                 
+                # Install shared libraries to /usr/local/lib
+                print_step "Installing shared libraries..."
+                for lib in bin/*.so*; do
+                    if [ -f "$lib" ]; then
+                        sudo install -o0 -g0 -m755 "$lib" /usr/local/lib/
+                        print_info "  Installed $(basename $lib)"
+                    fi
+                done
+                
+                # Update library cache
+                print_step "Updating library cache..."
+                sudo ldconfig
+                
                 # Verify installation
+                print_step "Verifying installation..."
                 if /usr/local/bin/llama-server --version > /dev/null 2>&1; then
                     print_success "llama-server installed and verified"
                 else
                     print_warning "llama-server installed but may have runtime issues"
+                    print_info "Checking dependencies:"
+                    ldd /usr/local/bin/llama-server | grep -E "not found|=>" | head -10
                 fi
             else
                 print_error "llama-server has missing dependencies:"
