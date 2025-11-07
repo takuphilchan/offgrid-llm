@@ -225,6 +225,7 @@ build_llama_cpp() {
     print_header "Building llama.cpp Inference Engine"
     
     local LLAMA_DIR="$HOME/llama.cpp"
+    local ORIGINAL_DIR="$(pwd)"
     
     # Check if llama.cpp is already built
     if [ -f "$LLAMA_DIR/build/libllama.so" ]; then
@@ -285,7 +286,7 @@ build_llama_cpp() {
     else
         print_error "Build failed or timed out"
         print_warning "Will build OffGrid LLM in mock mode"
-        cd - > /dev/null
+        cd "$ORIGINAL_DIR"
         return 1
     fi
     
@@ -303,7 +304,8 @@ build_llama_cpp() {
     export LIBRARY_PATH="$LLAMA_DIR/build:${LIBRARY_PATH:-}"
     export LD_LIBRARY_PATH="$LLAMA_DIR/build:${LD_LIBRARY_PATH:-}"
     
-    cd - > /dev/null || true
+    # Return to original directory
+    cd "$ORIGINAL_DIR"
 }
 
 # Build OffGrid LLM
