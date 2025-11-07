@@ -6,6 +6,16 @@ OffGrid LLM is a production-ready, self-contained LLM orchestrator designed for 
 
 Built with Go and powered by [llama.cpp](https://github.com/ggerganov/llama.cpp), OffGrid provides an OpenAI-compatible API with GPU acceleration support.
 
+## Screenshots
+
+### Chat Interface
+![Chat Interface](docs/images/chat.png)
+*Industrial-themed chat interface with real-time streaming and model selection*
+
+### Models & System Info
+![Models Dashboard](docs/images/models.png)
+*Model management and live system resource monitoring*
+
 ## Why OffGrid LLM?
 
 Traditional LLM deployments require constant internet connectivity, cloud APIs, and significant bandwidth. OffGrid LLM eliminates these dependencies:
@@ -17,7 +27,7 @@ Traditional LLM deployments require constant internet connectivity, cloud APIs, 
 - **P2P Model Sharing** - Share models across local networks without internet
 - **USB Distribution** - Install models from USB drives and SD cards
 - **OpenAI Compatible** - Drop-in replacement for OpenAI API
-- **Cyberpunk Web UI** - Modern dark theme with real-time chat interface
+- **Industrial Web UI** - Masculine, brutalist design with fixed layout and documentation sidebar
 - **Production Ready** - Systemd services, security hardening, monitoring
 
 ## Quick Start
