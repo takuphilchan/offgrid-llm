@@ -1,268 +1,544 @@
 #!/bin/bash
-set -e
-
 # OffGrid LLM Installation Script
-# Usage: ./install.sh [--user|--system]
+# Comprehensive installation with GPU support, llama.cpp compilation, and systemd integration
 
-BINARY="offgrid"
-INSTALL_MODE="${1:---system}"
+set -eu
 
-# Colors for clean output
+# Color and Formatting Setup
 BOLD='\033[1m'
-DIM='\033[2m'
-RESET='\033[0m'
 CYAN='\033[36m'
 GREEN='\033[32m'
 RED='\033[31m'
 YELLOW='\033[33m'
+RESET='\033[0m'
 
-# Print functions
+# Print Functions
 print_header() {
-    echo ""
-    echo -e "${BOLD}${CYAN}╭─────────────────────────────────────────────────╮${RESET}"
-    echo -e "${BOLD}${CYAN}│                                                 │${RESET}"
-    echo -e "${BOLD}${CYAN}│          OffGrid LLM Installation               │${RESET}"
-    echo -e "${BOLD}${CYAN}│                                                 │${RESET}"
-    echo -e "${BOLD}${CYAN}╰─────────────────────────────────────────────────╯${RESET}"
-    echo ""
+    echo -e "\n${BOLD}${CYAN}┌────────────────────────────────────────────────────────────────┐${RESET}"
+    echo -e "${BOLD}${CYAN}│  $1${RESET}"
+    echo -e "${BOLD}${CYAN}└────────────────────────────────────────────────────────────────┘${RESET}"
 }
 
-print_success() {
-    echo -e "${GREEN}✓${RESET} $1"
-}
+print_success() { echo -e "${GREEN}✓${RESET} $1"; }
+print_error() { echo -e "${RED}✗${RESET} $1" >&2; }
+print_info() { echo -e "${CYAN}ℹ${RESET} $1"; }
+print_warning() { echo -e "${YELLOW}⚠${RESET} $1"; }
+print_step() { echo -e "${BOLD}➜${RESET} $1"; }
 
-print_error() {
-    echo -e "${RED}✗${RESET} $1"
-}
-
-print_info() {
-    echo -e "${DIM}•${RESET} $1"
-}
-
-print_step() {
-    echo ""
-    echo -e "${BOLD}$1${RESET}"
-}
-
-print_divider() {
-    echo -e "${DIM}─────────────────────────────────────────────────${RESET}"
-}
-
-print_header
-
-# Check for Go installation
-if ! command -v go &> /dev/null; then
-    print_error "Go is not installed"
-    echo ""
-    print_info "Please install Go 1.21 or higher"
-    print_info "Download from: ${CYAN}https://golang.org/dl/${RESET}"
-    echo ""
+# Error Handler
+handle_error() {
+    print_error "Installation failed at: $1"
+    print_info "Check the error message above for details"
     exit 1
-fi
+}
 
-GO_VERSION=$(go version | grep -oP 'go\d+\.\d+' | grep -oP '\d+\.\d+')
-print_success "Go $GO_VERSION detected"
+trap 'handle_error "line $LINENO"' ERR
 
-case "$INSTALL_MODE" in
-    --system)
-        print_step "System Installation"
-        print_info "Installing to /usr/local/bin (requires sudo)"
-        echo ""
+# Dependency Checks
+check_dependencies() {
+    print_header "Checking Dependencies"
+    
+    local missing=()
+    for cmd in curl awk grep sed tee xargs git snap; do
+        if ! command -v $cmd &> /dev/null; then
+            missing+=($cmd)
+        else
+            print_success "$cmd is available"
+        fi
+    done
+    
+    if [ ${#missing[@]} -gt 0 ]; then
+        print_error "Missing required dependencies: ${missing[*]}"
+        print_info "Installing missing dependencies..."
         
-        # Build binary
-        print_info "Building binary..."
-        make build > /dev/null 2>&1
-        print_success "Build complete"
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y "${missing[@]}" snapd
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y "${missing[@]}" snapd
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y "${missing[@]}" snapd
+        else
+            print_error "Unable to install dependencies automatically"
+            print_info "Please install: ${missing[*]} snapd"
+            exit 1
+        fi
+    fi
+}
+
+# Architecture Detection
+detect_architecture() {
+    print_header "Detecting System Architecture"
+    
+    local arch=$(uname -m)
+    case $arch in
+        x86_64|amd64)
+            ARCH="amd64"
+            print_success "Architecture: x86_64 (amd64)"
+            ;;
+        aarch64|arm64)
+            ARCH="arm64"
+            print_success "Architecture: aarch64 (arm64)"
+            ;;
+        *)
+            print_error "Unsupported architecture: $arch"
+            exit 1
+            ;;
+    esac
+}
+
+# OS Detection
+detect_os() {
+    print_header "Detecting Operating System"
+    
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_ID=$ID
+        OS_VERSION=$VERSION_ID
+        print_success "OS: $NAME $VERSION"
         
-        # Install to system
-        print_info "Installing to system..."
-        sudo install -m 755 "$BINARY" "/usr/local/bin/$BINARY"
+        case $OS_ID in
+            ubuntu|debian|pop|linuxmint)
+                PKG_MANAGER="apt-get"
+                ;;
+            fedora|rhel|centos|rocky|almalinux)
+                PKG_MANAGER="dnf"
+                ;;
+            amzn)
+                PKG_MANAGER="yum"
+                ;;
+            *)
+                print_warning "Unknown distribution: $OS_ID (will attempt to continue)"
+                PKG_MANAGER="apt-get"
+                ;;
+        esac
+    else
+        print_error "/etc/os-release not found - cannot detect OS"
+        exit 1
+    fi
+}
+
+# GPU Detection
+detect_gpu() {
+    print_header "Detecting GPU Hardware"
+    
+    GPU_TYPE="none"
+    
+    # Check for NVIDIA GPU (vendor ID: 10de)
+    if lspci 2>/dev/null | grep -i 'vga.*nvidia\|3d.*nvidia\|display.*nvidia' &> /dev/null || \
+       lspci -n 2>/dev/null | grep -E '(0300|0302):.*10de:' &> /dev/null; then
+        GPU_TYPE="nvidia"
+        GPU_INFO=$(lspci | grep -i 'vga.*nvidia\|3d.*nvidia\|display.*nvidia' | head -n1)
+        print_success "NVIDIA GPU detected: $GPU_INFO"
+    
+    # Check for AMD GPU (vendor ID: 1002)
+    elif lspci 2>/dev/null | grep -i 'vga.*amd\|vga.*ati\|3d.*amd' &> /dev/null || \
+         lspci -n 2>/dev/null | grep -E '(0300|0302):.*1002:' &> /dev/null; then
+        GPU_TYPE="amd"
+        GPU_INFO=$(lspci | grep -i 'vga.*amd\|vga.*ati\|3d.*amd' | head -n1)
+        print_success "AMD GPU detected: $GPU_INFO"
+    
+    else
+        print_info "No dedicated GPU detected - will use CPU inference"
+    fi
+}
+
+# Install Build Dependencies
+install_build_deps() {
+    print_header "Installing Build Dependencies"
+    
+    local packages=()
+    
+    # Common build tools
+    packages+=(build-essential gcc g++ make cmake git)
+    
+    # Go language
+    if ! command -v go &> /dev/null; then
+        packages+=(golang-go)
+    fi
+    
+    # GPU-specific packages
+    if [ "$GPU_TYPE" = "nvidia" ]; then
+        print_step "Adding NVIDIA CUDA dependencies..."
+        packages+=(nvidia-cuda-toolkit nvidia-cuda-dev)
+    elif [ "$GPU_TYPE" = "amd" ]; then
+        print_step "Adding AMD ROCm dependencies..."
+        if [ "$PKG_MANAGER" = "apt-get" ]; then
+            packages+=(rocm-dev rocm-libs)
+        fi
+    fi
+    
+    print_step "Installing: ${packages[*]}"
+    
+    if [ "$PKG_MANAGER" = "apt-get" ]; then
+        print_info "Updating package lists..."
+        sudo apt-get update -qq || print_warning "apt-get update had issues, continuing..."
         
-        # Verify installation
-        if command -v offgrid &> /dev/null; then
-            VERSION=$(offgrid --version 2>/dev/null || echo 'dev')
-            
-            echo ""
-            echo -e "${BOLD}${GREEN}╭─────────────────────────────────────────────────╮${RESET}"
-            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
-            echo -e "${BOLD}${GREEN}│              Installation Complete              │${RESET}"
-            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
-            echo -e "${BOLD}${GREEN}╰─────────────────────────────────────────────────╯${RESET}"
-            echo ""
-            echo -e "  ${DIM}Location${RESET}  /usr/local/bin/offgrid"
-            echo -e "  ${DIM}Version${RESET}   $VERSION"
-            echo ""
-            
-            # Ask if user wants to setup systemd service
-            if command -v systemctl &> /dev/null; then
-                echo -e "${BOLD}Setup Options${RESET}"
-                echo ""
-                read -p "$(echo -e ${CYAN}Would you like to install as a systemd service? [y/N]: ${RESET})" -n 1 -r
-                echo ""
-                
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    print_step "Setting up systemd service"
-                    
-                    # Create systemd service file
-                    sudo tee /etc/systemd/system/offgrid-llm.service > /dev/null <<EOF
+        print_info "Installing packages (this may take a few minutes)..."
+        sudo apt-get install -y -qq "${packages[@]}" 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking" || {
+            print_warning "Some packages failed to install, continuing..."
+        }
+    elif [ "$PKG_MANAGER" = "dnf" ]; then
+        sudo dnf install -y -q "${packages[@]}"
+    elif [ "$PKG_MANAGER" = "yum" ]; then
+        sudo yum install -y -q "${packages[@]}"
+    fi
+    
+    print_success "Build dependencies installed"
+}
+
+# Install/Verify NVIDIA Drivers
+install_nvidia_drivers() {
+    if [ "$GPU_TYPE" != "nvidia" ]; then
+        return 0
+    fi
+    
+    print_header "Configuring NVIDIA GPU Support"
+    
+    # Check if nvidia-smi exists and works
+    if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+        DRIVER_VERSION=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -n1)
+        print_success "NVIDIA drivers already installed: $DRIVER_VERSION"
+    else
+        print_step "Installing NVIDIA drivers..."
+        
+        if [ "$PKG_MANAGER" = "apt-get" ]; then
+            sudo apt-get update
+            sudo apt-get install -y nvidia-driver-535 || {
+                print_warning "Failed to install NVIDIA drivers automatically"
+                print_info "Please install NVIDIA drivers manually from: https://www.nvidia.com/Download/index.aspx"
+            }
+        else
+            print_warning "Automatic NVIDIA driver installation not supported on this OS"
+            print_info "Please install NVIDIA drivers manually from: https://www.nvidia.com/Download/index.aspx"
+        fi
+    fi
+    
+    # Load nvidia modules
+    print_step "Loading NVIDIA kernel modules..."
+    sudo modprobe nvidia 2>/dev/null || print_warning "Failed to load nvidia module"
+    sudo modprobe nvidia_uvm 2>/dev/null || print_warning "Failed to load nvidia_uvm module"
+}
+
+# Build llama.cpp
+build_llama_cpp() {
+    print_header "Building llama.cpp Inference Engine"
+    
+    local LLAMA_DIR="$HOME/llama.cpp"
+    
+    # Check if llama.cpp is already built
+    if [ -f "$LLAMA_DIR/build/libllama.so" ]; then
+        print_success "llama.cpp already built at $LLAMA_DIR/build"
+        export C_INCLUDE_PATH="$LLAMA_DIR:${C_INCLUDE_PATH:-}"
+        export LIBRARY_PATH="$LLAMA_DIR/build:${LIBRARY_PATH:-}"
+        export LD_LIBRARY_PATH="$LLAMA_DIR/build:${LD_LIBRARY_PATH:-}"
+        return 0
+    fi
+    
+    # Clone or update llama.cpp
+    if [ -d "$LLAMA_DIR/.git" ]; then
+        print_step "Updating existing llama.cpp repository..."
+        cd "$LLAMA_DIR"
+        git pull -q || print_warning "Could not update llama.cpp, using existing version"
+    else
+        print_step "Cloning llama.cpp repository..."
+        git clone --depth 1 -q https://github.com/ggerganov/llama.cpp.git "$LLAMA_DIR" 2>&1 | tail -n 2
+        cd "$LLAMA_DIR"
+    fi
+    
+    print_step "Configuring build with CMake..."
+    mkdir -p build
+    cd build
+    
+    # Configure CMake based on GPU type
+    CMAKE_ARGS="-DBUILD_SHARED_LIBS=ON"
+    
+    if [ "$GPU_TYPE" = "nvidia" ]; then
+        print_info "Configuring for NVIDIA CUDA acceleration..."
+        CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON"
+    elif [ "$GPU_TYPE" = "amd" ]; then
+        print_info "Configuring for AMD ROCm acceleration..."
+        CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_HIPBLAS=ON"
+    else
+        print_info "Configuring for CPU-only inference..."
+    fi
+    
+    cmake .. $CMAKE_ARGS 2>&1 | grep -E "Build files|llama.cpp|CUDA|HIP|OpenBLAS|Accelerate" || true
+    
+    print_step "Building llama.cpp (this may take 5-10 minutes)..."
+    print_info "Building with $(nproc) CPU cores..."
+    
+    if timeout 600 cmake --build . --config Release -j$(nproc) 2>&1 | grep -E "Built target|error:|Error|FAILED" ; then
+        print_success "Build completed"
+    else
+        print_error "llama.cpp build failed or timed out"
+        print_info "Attempting fallback build without GPU support..."
+        
+        # Fallback: try CPU-only build
+        cd "$LLAMA_DIR"
+        rm -rf build
+        mkdir -p build
+        cd build
+        cmake .. -DBUILD_SHARED_LIBS=ON 2>&1 | tail -n 5
+        timeout 600 cmake --build . --config Release -j$(nproc) 2>&1 | grep -E "Built target|error:" || {
+            print_error "Fallback build also failed"
+            print_warning "Will try to build OffGrid LLM in mock mode"
+            cd - > /dev/null
+            return 1
+        }
+    fi
+    
+    # Install libraries
+    print_step "Installing llama.cpp libraries..."
+    sudo cmake --install . 2>&1 | grep -E "Install|Up-to-date" || {
+        print_warning "Failed to install llama.cpp system-wide"
+        print_info "Will use local build"
+    }
+    
+    print_success "llama.cpp built successfully at $LLAMA_DIR/build"
+    
+    # Export paths for Go build
+    export C_INCLUDE_PATH="$LLAMA_DIR:${C_INCLUDE_PATH:-}"
+    export LIBRARY_PATH="$LLAMA_DIR/build:${LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="$LLAMA_DIR/build:${LD_LIBRARY_PATH:-}"
+    
+    cd - > /dev/null || true
+}
+
+# Build OffGrid LLM
+build_offgrid() {
+    print_header "Building OffGrid LLM"
+    
+    local BUILD_DIR=$(pwd)
+    
+    # Verify Go is installed
+    if ! command -v go &> /dev/null; then
+        print_error "Go is not installed"
+        exit 1
+    fi
+    
+    GO_VERSION=$(go version | awk '{print $3}')
+    print_info "Using Go: $GO_VERSION"
+    
+    # Set CGO environment
+    export CGO_ENABLED=1
+    export C_INCLUDE_PATH="$HOME/llama.cpp:${C_INCLUDE_PATH:-}"
+    export LIBRARY_PATH="$HOME/llama.cpp/build:${LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="$HOME/llama.cpp/build:${LD_LIBRARY_PATH:-}"
+    
+    print_step "Downloading Go dependencies..."
+    go mod download 2>&1 | grep -E "go: downloading|error" || true
+    
+    print_step "Building with llama.cpp integration..."
+    if go build -tags llama -o offgrid ./cmd/offgrid 2>&1 | grep -E "error|warning|Build" ; then
+        if [ -f offgrid ]; then
+            print_success "Built with llama.cpp support"
+        else
+            print_warning "Failed to build with llama support, trying mock mode..."
+            go build -o offgrid ./cmd/offgrid
+            print_success "Built in mock mode"
+        fi
+    else
+        print_success "Built successfully"
+    fi
+    
+    # Verify binary was created
+    if [ ! -f offgrid ]; then
+        print_error "Build failed - binary not created"
+        exit 1
+    fi
+    
+    print_success "OffGrid LLM binary built successfully"
+}
+
+# Install Binary
+install_binary() {
+    print_header "Installing OffGrid LLM"
+    
+    local INSTALL_DIR="/usr/local/bin"
+    
+    print_step "Installing binary to $INSTALL_DIR/offgrid..."
+    sudo install -o0 -g0 -m755 offgrid "$INSTALL_DIR/offgrid"
+    
+    print_success "Binary installed to $INSTALL_DIR/offgrid"
+    
+    # Verify installation
+    if command -v offgrid &> /dev/null; then
+        INSTALLED_VERSION=$(offgrid --version 2>/dev/null || echo "unknown")
+        print_success "Installation verified: $INSTALLED_VERSION"
+    fi
+}
+
+# Create User and Groups
+setup_user() {
+    print_header "Setting Up Service User"
+    
+    # Create offgrid user if it doesn't exist
+    if ! id offgrid &> /dev/null; then
+        print_step "Creating offgrid system user..."
+        sudo useradd -r -s /bin/false -U -m -d /var/lib/offgrid offgrid
+        print_success "User 'offgrid' created"
+    else
+        print_info "User 'offgrid' already exists"
+    fi
+    
+    # Add to video and render groups for GPU access
+    if [ "$GPU_TYPE" != "none" ]; then
+        print_step "Adding offgrid user to GPU groups..."
+        sudo usermod -aG video offgrid 2>/dev/null || true
+        sudo usermod -aG render offgrid 2>/dev/null || true
+    fi
+}
+
+# Create Systemd Service
+setup_systemd_service() {
+    print_header "Setting Up Systemd Service"
+    
+    local SERVICE_FILE="/etc/systemd/system/offgrid-llm.service"
+    
+    print_step "Creating service file at $SERVICE_FILE..."
+    
+    sudo tee "$SERVICE_FILE" > /dev/null <<'SERVICE_EOF'
 [Unit]
-Description=OffGrid LLM - Edge Inference Orchestrator
-After=network.target
-Documentation=https://github.com/takuphilchan/offgrid-llm
+Description=OffGrid LLM - Offline AI Inference Engine
+Documentation=https://github.com/yourusername/offgrid-llm
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=$USER
+User=offgrid
+Group=offgrid
 ExecStart=/usr/local/bin/offgrid serve
-Restart=on-failure
-RestartSec=5s
-StandardOutput=journal
-StandardError=journal
+Restart=always
+RestartSec=3
+Environment="OFFGRID_PORT=11611"
+Environment="OFFGRID_MODELS_DIR=/var/lib/offgrid/models"
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/offgrid
 
 [Install]
 WantedBy=multi-user.target
-EOF
-                    
-                    print_success "Service file created"
-                    
-                    # Reload systemd and enable service
-                    sudo systemctl daemon-reload
-                    sudo systemctl enable offgrid-llm.service
-                    print_success "Service enabled (will start on boot)"
-                    
-                    # Ask to start now
-                    read -p "$(echo -e ${CYAN}Start the service now? [Y/n]: ${RESET})" -n 1 -r
-                    echo ""
-                    
-                    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-                        sudo systemctl start offgrid-llm.service
-                        sleep 2
-                        
-                        if systemctl is-active --quiet offgrid-llm.service; then
-                            print_success "Service started successfully"
-                            echo ""
-                            echo -e "${BOLD}Service Status${RESET}"
-                            echo -e "  ${CYAN}systemctl status offgrid-llm${RESET}      Check status"
-                            echo -e "  ${CYAN}systemctl stop offgrid-llm${RESET}        Stop service"
-                            echo -e "  ${CYAN}systemctl restart offgrid-llm${RESET}     Restart service"
-                            echo -e "  ${CYAN}journalctl -u offgrid-llm -f${RESET}      View logs"
-                            echo ""
-                            echo -e "${BOLD}Server Running${RESET}"
-                            echo -e "  ${DIM}Endpoint${RESET}  http://localhost:11611"
-                            echo -e "  ${DIM}Web UI${RESET}    http://localhost:11611/ui"
-                            echo ""
-                        else
-                            print_error "Service failed to start"
-                            echo -e "  ${DIM}Check logs:${RESET} ${CYAN}journalctl -u offgrid-llm -n 50${RESET}"
-                        fi
-                    else
-                        echo ""
-                        echo -e "${DIM}Start manually with:${RESET} ${CYAN}sudo systemctl start offgrid-llm${RESET}"
-                        echo ""
-                    fi
-                else
-                    echo ""
-                    echo -e "${BOLD}Quick Start${RESET}"
-                    echo ""
-                    echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
-                    echo -e "  ${CYAN}offgrid quantization${RESET}   Learn about quantization"
-                    echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
-                    echo ""
-                fi
-            else
-                echo -e "${BOLD}Quick Start${RESET}"
-                echo ""
-                echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
-                echo -e "  ${CYAN}offgrid quantization${RESET}   Learn about quantization"
-                echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
-                echo ""
-            fi
-            
-            echo -e "${DIM}Run ${CYAN}offgrid help${DIM} for all commands${RESET}"
-            echo ""
-        else
-            print_error "Installation failed - 'offgrid' not found in PATH"
-            exit 1
-        fi
-        ;;
+SERVICE_EOF
+    
+    print_success "Systemd service created"
+    
+    print_step "Reloading systemd daemon..."
+    sudo systemctl daemon-reload
+    
+    print_step "Enabling offgrid-llm service..."
+    sudo systemctl enable offgrid-llm.service
+    
+    print_success "Service enabled (will start on boot)"
+}
+
+# Setup Configuration
+setup_config() {
+    print_header "Setting Up Configuration"
+    
+    local CONFIG_DIR="/var/lib/offgrid"
+    local MODELS_DIR="$CONFIG_DIR/models"
+    
+    print_step "Creating directories..."
+    sudo mkdir -p "$MODELS_DIR"
+    sudo chown -R offgrid:offgrid "$CONFIG_DIR"
+    
+    print_success "Configuration directories created"
+}
+
+# Start Service
+start_service() {
+    print_header "Starting OffGrid LLM Service"
+    
+    print_step "Starting offgrid-llm service..."
+    sudo systemctl start offgrid-llm.service
+    
+    sleep 2
+    
+    if sudo systemctl is-active --quiet offgrid-llm.service; then
+        print_success "Service started successfully"
         
-    --user)
-        print_step "User Installation"
-        print_info "Installing to user bin (no sudo required)"
-        echo ""
-        
-        # Install using go install
-        print_info "Building and installing..."
-        make install > /dev/null 2>&1
-        print_success "Build complete"
-        
-        GOPATH=$(go env GOPATH)
-        GOBIN="$GOPATH/bin"
-        
-        # Check if Go bin is in PATH
-        if [[ ":$PATH:" == *":$GOBIN:"* ]]; then
-            VERSION=$(offgrid --version 2>/dev/null || echo 'dev')
-            
-            echo ""
-            echo -e "${BOLD}${GREEN}╭─────────────────────────────────────────────────╮${RESET}"
-            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
-            echo -e "${BOLD}${GREEN}│              Installation Complete              │${RESET}"
-            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
-            echo -e "${BOLD}${GREEN}╰─────────────────────────────────────────────────╯${RESET}"
-            echo ""
-            echo -e "  ${DIM}Location${RESET}  $GOBIN/offgrid"
-            echo -e "  ${DIM}Version${RESET}   $VERSION"
-            echo ""
-            echo -e "${BOLD}Quick Start${RESET}"
-            echo ""
-            echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
-            echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
-            echo ""
-            echo -e "${DIM}Run ${CYAN}offgrid help${DIM} for all commands${RESET}"
-            echo ""
-        else
-            echo ""
-            echo -e "${BOLD}${YELLOW}╭─────────────────────────────────────────────────╮${RESET}"
-            echo -e "${BOLD}${YELLOW}│                                                 │${RESET}"
-            echo -e "${BOLD}${YELLOW}│         Installation Complete - Setup PATH      │${RESET}"
-            echo -e "${BOLD}${YELLOW}│                                                 │${RESET}"
-            echo -e "${BOLD}${YELLOW}╰─────────────────────────────────────────────────╯${RESET}"
-            echo ""
-            echo -e "  ${DIM}Location${RESET}  $GOBIN/offgrid"
-            echo ""
-            echo -e "${BOLD}Add to PATH${RESET}"
-            echo ""
-            echo -e "  ${DIM}1.${RESET} Add to ${CYAN}~/.bashrc${RESET} or ${CYAN}~/.zshrc${RESET}"
-            echo -e "     ${DIM}export PATH=\"\$PATH:$GOBIN\"${RESET}"
-            echo ""
-            echo -e "  ${DIM}2.${RESET} Reload your shell"
-            echo -e "     ${CYAN}source ~/.bashrc${RESET}"
-            echo ""
-            echo -e "  ${DIM}3.${RESET} Verify installation"
-            echo -e "     ${CYAN}which offgrid${RESET}"
-            echo ""
-            echo -e "${DIM}Or use the full path:${RESET}"
-            echo -e "  ${CYAN}$GOBIN/offgrid catalog${RESET}"
-            echo ""
-        fi
-        ;;
-        
-    *)
-        echo -e "${BOLD}Usage${RESET}"
-        echo ""
-        echo -e "  ${CYAN}$0${RESET} [--user|--system]"
-        echo ""
-        echo -e "${BOLD}Options${RESET}"
-        echo ""
-        echo -e "  ${CYAN}--system${RESET}   Install to /usr/local/bin (requires sudo) ${DIM}[default]${RESET}"
-        echo -e "  ${CYAN}--user${RESET}     Install to \$GOPATH/bin (no sudo required)"
-        echo ""
-        echo -e "${BOLD}Examples${RESET}"
-        echo ""
-        echo -e "  ${CYAN}$0${RESET}              System-wide installation"
-        echo -e "  ${CYAN}$0 --system${RESET}     System-wide installation (explicit)"
-        echo -e "  ${CYAN}$0 --user${RESET}       User installation"
-        echo ""
+        print_info "Service status:"
+        sudo systemctl status offgrid-llm.service --no-pager -l | head -n 10
+    else
+        print_error "Service failed to start"
+        print_info "Check logs with: sudo journalctl -u offgrid-llm.service -n 50"
         exit 1
-        ;;
-esac
+    fi
+}
+
+# Display Summary
+display_summary() {
+    print_header "Installation Complete! 🎉"
+    
+    echo ""
+    print_success "OffGrid LLM has been installed successfully"
+    echo ""
+    
+    echo -e "${BOLD}System Information:${RESET}"
+    echo -e "  Architecture: ${CYAN}$ARCH${RESET}"
+    echo -e "  OS: ${CYAN}$NAME $VERSION${RESET}"
+    echo -e "  GPU: ${CYAN}${GPU_TYPE}${RESET}"
+    if [ "$GPU_TYPE" != "none" ]; then
+        echo -e "  GPU Info: ${CYAN}${GPU_INFO}${RESET}"
+    fi
+    echo ""
+    
+    echo -e "${BOLD}Service Information:${RESET}"
+    echo -e "  Status: ${GREEN}Running${RESET}"
+    echo -e "  Port: ${CYAN}11611${RESET}"
+    echo -e "  Web UI: ${CYAN}http://localhost:11611/ui${RESET}"
+    echo -e "  API: ${CYAN}http://localhost:11611${RESET}"
+    echo ""
+    
+    echo -e "${BOLD}Useful Commands:${RESET}"
+    echo -e "  ${CYAN}offgrid serve${RESET}          - Start server manually"
+    echo -e "  ${CYAN}offgrid list${RESET}           - List available models"
+    echo -e "  ${CYAN}offgrid download <model>${RESET} - Download a model"
+    echo -e "  ${CYAN}sudo systemctl status offgrid-llm${RESET}  - Check service status"
+    echo -e "  ${CYAN}sudo journalctl -u offgrid-llm -f${RESET}  - View live logs"
+    echo ""
+    
+    echo -e "${BOLD}Next Steps:${RESET}"
+    echo -e "  1. Visit ${CYAN}http://localhost:11611/ui${RESET} in your browser"
+    echo -e "  2. Download a model: ${CYAN}offgrid download tinyllama${RESET}"
+    echo -e "  3. Start chatting with your offline AI!"
+    echo ""
+}
+
+# Main Installation Flow
+main() {
+    print_header "OffGrid LLM Installation"
+    echo -e "${CYAN}Offline AI inference for the edge${RESET}"
+    echo ""
+    
+    # Pre-flight checks
+    check_dependencies
+    detect_architecture
+    detect_os
+    detect_gpu
+    
+    # Build and install
+    install_build_deps
+    install_nvidia_drivers
+    build_llama_cpp
+    build_offgrid
+    install_binary
+    
+    # System setup
+    setup_user
+    setup_config
+    setup_systemd_service
+    start_service
+    
+    # Summary
+    display_summary
+}
+
+# Run main installation
+main "$@"
