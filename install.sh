@@ -4,6 +4,10 @@
 
 set -eu
 
+# Installation options
+FORCE_CPU_ONLY=false
+FORCE_GPU=false
+
 # Lock file to prevent concurrent installations
 LOCK_FILE="/tmp/offgrid-install.lock"
 
@@ -36,6 +40,60 @@ print_error() { echo -e "${RED}✗${RESET} $1" >&2; }
 print_info() { echo -e "${CYAN}ℹ${RESET} $1"; }
 print_warning() { echo -e "${YELLOW}⚠${RESET} $1"; }
 print_step() { echo -e "${BOLD}➜${RESET} $1"; }
+
+# Usage/Help
+usage() {
+    cat << EOF
+${BOLD}${CYAN}OffGrid LLM Installation Script${RESET}
+Offline AI inference for edge and offline environments
+
+${BOLD}USAGE:${RESET}
+    ./install.sh [OPTIONS]
+
+${BOLD}OPTIONS:${RESET}
+    --cpu-only          Force CPU-only mode (skip GPU detection and CUDA build)
+    --gpu               Force GPU mode (fail if no GPU detected)
+    --help, -h          Show this help message
+
+${BOLD}EXAMPLES:${RESET}
+    ./install.sh                    # Auto-detect GPU and build accordingly
+    ./install.sh --cpu-only         # Build for CPU only (no CUDA)
+    ./install.sh --gpu              # Require GPU support
+
+EOF
+    exit 0
+}
+
+# Parse command line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --cpu-only)
+                FORCE_CPU_ONLY=true
+                print_info "CPU-only mode enabled"
+                shift
+                ;;
+            --gpu)
+                FORCE_GPU=true
+                print_info "GPU mode required"
+                shift
+                ;;
+            --help|-h)
+                usage
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                usage
+                ;;
+        esac
+    done
+
+    # Validate conflicting options
+    if [ "$FORCE_CPU_ONLY" = true ] && [ "$FORCE_GPU" = true ]; then
+        print_error "Cannot use --cpu-only and --gpu together"
+        exit 1
+    fi
+}
 
 # Error Handler
 handle_error() {
@@ -134,6 +192,13 @@ detect_os() {
 detect_gpu() {
     print_header "Detecting GPU Hardware"
     
+    # Check if CPU-only mode is forced
+    if [ "$FORCE_CPU_ONLY" = true ]; then
+        GPU_TYPE="none"
+        print_info "CPU-only mode forced (skipping GPU detection)"
+        return
+    fi
+    
     GPU_TYPE="none"
     
     # Method 1: Check nvidia-smi (most reliable for NVIDIA)
@@ -178,6 +243,12 @@ detect_gpu() {
     else
         print_info "No dedicated GPU detected - will use CPU inference"
         print_dim "  Checked: nvidia-smi, lspci, /proc/driver/nvidia"
+        
+        # If GPU mode was forced, fail
+        if [ "$FORCE_GPU" = true ]; then
+            print_error "GPU mode was required (--gpu) but no GPU detected"
+            exit 1
+        fi
     fi
 }
 
@@ -468,7 +539,11 @@ build_llama_cpp() {
         print_info "Configuring for AMD ROCm acceleration..."
         CMAKE_ARGS="$CMAKE_ARGS -DGGML_HIPBLAS=ON"
     else
-        print_info "Configuring for CPU-only inference..."
+        if [ "$FORCE_CPU_ONLY" = true ]; then
+            print_info "Configuring for CPU-only inference (forced by --cpu-only flag)..."
+        else
+            print_info "Configuring for CPU-only inference (no GPU detected)..."
+        fi
     fi
     
     cmake .. $CMAKE_ARGS 2>&1 | grep -E "Build files|llama.cpp|CUDA|HIP|OpenBLAS|Accelerate|compiler|Configuring done|Generating done" || true
@@ -989,6 +1064,9 @@ display_summary() {
 
 # Main Installation Flow
 main() {
+    # Parse command line arguments first
+    parse_args "$@"
+    
     print_header "OffGrid LLM Installation"
     echo -e "${CYAN}Offline AI inference for the edge${RESET}"
     echo ""
