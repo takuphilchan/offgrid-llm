@@ -7,122 +7,182 @@ set -e
 BINARY="offgrid"
 INSTALL_MODE="${1:---system}"
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  OffGrid LLM - Installation Script"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
+# Colors for clean output
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+CYAN='\033[36m'
+GREEN='\033[32m'
+RED='\033[31m'
+YELLOW='\033[33m'
+
+# Print functions
+print_header() {
+    echo ""
+    echo -e "${BOLD}${CYAN}╭─────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BOLD}${CYAN}│                                                 │${RESET}"
+    echo -e "${BOLD}${CYAN}│          OffGrid LLM Installation               │${RESET}"
+    echo -e "${BOLD}${CYAN}│                                                 │${RESET}"
+    echo -e "${BOLD}${CYAN}╰─────────────────────────────────────────────────╯${RESET}"
+    echo ""
+}
+
+print_success() {
+    echo -e "${GREEN}✓${RESET} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${RESET} $1"
+}
+
+print_info() {
+    echo -e "${DIM}•${RESET} $1"
+}
+
+print_step() {
+    echo ""
+    echo -e "${BOLD}$1${RESET}"
+}
+
+print_divider() {
+    echo -e "${DIM}─────────────────────────────────────────────────${RESET}"
+}
+
+print_header
 
 # Check for Go installation
 if ! command -v go &> /dev/null; then
-    echo "❌ Error: Go is not installed"
-    echo "   Please install Go 1.21 or higher: https://golang.org/dl/"
+    print_error "Go is not installed"
+    echo ""
+    print_info "Please install Go 1.21 or higher"
+    print_info "Download from: ${CYAN}https://golang.org/dl/${RESET}"
+    echo ""
     exit 1
 fi
 
 GO_VERSION=$(go version | grep -oP 'go\d+\.\d+' | grep -oP '\d+\.\d+')
-echo "✓ Go version: $GO_VERSION"
+print_success "Go $GO_VERSION detected"
 
 case "$INSTALL_MODE" in
     --system)
-        echo "📦 Installing system-wide to /usr/local/bin..."
-        echo "   (requires sudo privileges)"
+        print_step "System Installation"
+        print_info "Installing to /usr/local/bin (requires sudo)"
         echo ""
         
         # Build binary
-        echo "🔨 Building OffGrid LLM..."
-        make build
+        print_info "Building binary..."
+        make build > /dev/null 2>&1
+        print_success "Build complete"
         
         # Install to system
-        echo "📥 Installing to /usr/local/bin..."
+        print_info "Installing to system..."
         sudo install -m 755 "$BINARY" "/usr/local/bin/$BINARY"
         
         # Verify installation
         if command -v offgrid &> /dev/null; then
+            VERSION=$(offgrid --version 2>/dev/null || echo 'dev')
+            
             echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "✅ Installation successful!"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo -e "${BOLD}${GREEN}╭─────────────────────────────────────────────────╮${RESET}"
+            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
+            echo -e "${BOLD}${GREEN}│              Installation Complete              │${RESET}"
+            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
+            echo -e "${BOLD}${GREEN}╰─────────────────────────────────────────────────╯${RESET}"
             echo ""
-            echo "Location: /usr/local/bin/offgrid"
-            echo "Version:  $(offgrid --version 2>/dev/null || echo 'dev')"
+            echo -e "  ${DIM}Location${RESET}  /usr/local/bin/offgrid"
+            echo -e "  ${DIM}Version${RESET}   $VERSION"
             echo ""
-            echo "Quick Start:"
-            echo "  offgrid catalog        # Browse available models"
-            echo "  offgrid quantization   # Learn about quantization"
-            echo "  offgrid serve          # Start server"
+            echo -e "${BOLD}Quick Start${RESET}"
             echo ""
-            echo "Documentation:"
-            echo "  offgrid help           # Show all commands"
-            echo "  cat README.md          # Full documentation"
+            echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
+            echo -e "  ${CYAN}offgrid quantization${RESET}   Learn about quantization"
+            echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
+            echo ""
+            echo -e "${DIM}Run ${CYAN}offgrid help${DIM} for all commands${RESET}"
             echo ""
         else
-            echo "❌ Installation failed: 'offgrid' command not found in PATH"
+            print_error "Installation failed - 'offgrid' not found in PATH"
             exit 1
         fi
         ;;
         
     --user)
-        echo "📦 Installing to user bin (no sudo required)..."
+        print_step "User Installation"
+        print_info "Installing to user bin (no sudo required)"
         echo ""
         
         # Install using go install
-        echo "🔨 Installing via 'go install'..."
-        make install
+        print_info "Building and installing..."
+        make install > /dev/null 2>&1
+        print_success "Build complete"
         
         GOPATH=$(go env GOPATH)
         GOBIN="$GOPATH/bin"
         
         # Check if Go bin is in PATH
         if [[ ":$PATH:" == *":$GOBIN:"* ]]; then
+            VERSION=$(offgrid --version 2>/dev/null || echo 'dev')
+            
             echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "✅ Installation successful!"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo -e "${BOLD}${GREEN}╭─────────────────────────────────────────────────╮${RESET}"
+            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
+            echo -e "${BOLD}${GREEN}│              Installation Complete              │${RESET}"
+            echo -e "${BOLD}${GREEN}│                                                 │${RESET}"
+            echo -e "${BOLD}${GREEN}╰─────────────────────────────────────────────────╯${RESET}"
             echo ""
-            echo "Location: $GOBIN/offgrid"
+            echo -e "  ${DIM}Location${RESET}  $GOBIN/offgrid"
+            echo -e "  ${DIM}Version${RESET}   $VERSION"
             echo ""
-            echo "Quick Start:"
-            echo "  offgrid catalog        # Browse available models"
-            echo "  offgrid serve          # Start server"
+            echo -e "${BOLD}Quick Start${RESET}"
+            echo ""
+            echo -e "  ${CYAN}offgrid catalog${RESET}        Browse available models"
+            echo -e "  ${CYAN}offgrid serve${RESET}          Start the server"
+            echo ""
+            echo -e "${DIM}Run ${CYAN}offgrid help${DIM} for all commands${RESET}"
             echo ""
         else
             echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "⚠️  Installation complete - PATH configuration needed"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo -e "${BOLD}${YELLOW}╭─────────────────────────────────────────────────╮${RESET}"
+            echo -e "${BOLD}${YELLOW}│                                                 │${RESET}"
+            echo -e "${BOLD}${YELLOW}│         Installation Complete - Setup PATH      │${RESET}"
+            echo -e "${BOLD}${YELLOW}│                                                 │${RESET}"
+            echo -e "${BOLD}${YELLOW}╰─────────────────────────────────────────────────╯${RESET}"
             echo ""
-            echo "Location: $GOBIN/offgrid"
+            echo -e "  ${DIM}Location${RESET}  $GOBIN/offgrid"
             echo ""
-            echo "To use 'offgrid' from anywhere, add Go bin to your PATH:"
+            echo -e "${BOLD}Add to PATH${RESET}"
             echo ""
-            echo "  1. Add to ~/.bashrc or ~/.zshrc:"
-            echo "     export PATH=\"\$PATH:$GOBIN\""
+            echo -e "  ${DIM}1.${RESET} Add to ${CYAN}~/.bashrc${RESET} or ${CYAN}~/.zshrc${RESET}"
+            echo -e "     ${DIM}export PATH=\"\$PATH:$GOBIN\"${RESET}"
             echo ""
-            echo "  2. Reload shell:"
-            echo "     source ~/.bashrc"
+            echo -e "  ${DIM}2.${RESET} Reload your shell"
+            echo -e "     ${CYAN}source ~/.bashrc${RESET}"
             echo ""
-            echo "  3. Verify installation:"
-            echo "     which offgrid"
+            echo -e "  ${DIM}3.${RESET} Verify installation"
+            echo -e "     ${CYAN}which offgrid${RESET}"
             echo ""
-            echo "Or use the full path:"
-            echo "  $GOBIN/offgrid catalog"
+            echo -e "${DIM}Or use the full path:${RESET}"
+            echo -e "  ${CYAN}$GOBIN/offgrid catalog${RESET}"
             echo ""
         fi
         ;;
         
     *)
-        echo "Usage: $0 [--user|--system]"
+        echo -e "${BOLD}Usage${RESET}"
         echo ""
-        echo "Options:"
-        echo "  --system   Install to /usr/local/bin (requires sudo) [default]"
-        echo "  --user     Install to \$GOPATH/bin (no sudo required)"
+        echo -e "  ${CYAN}$0${RESET} [--user|--system]"
         echo ""
-        echo "Examples:"
-        echo "  $0              # System-wide installation"
-        echo "  $0 --system     # System-wide installation (explicit)"
-        echo "  $0 --user       # User installation"
+        echo -e "${BOLD}Options${RESET}"
+        echo ""
+        echo -e "  ${CYAN}--system${RESET}   Install to /usr/local/bin (requires sudo) ${DIM}[default]${RESET}"
+        echo -e "  ${CYAN}--user${RESET}     Install to \$GOPATH/bin (no sudo required)"
+        echo ""
+        echo -e "${BOLD}Examples${RESET}"
+        echo ""
+        echo -e "  ${CYAN}$0${RESET}              System-wide installation"
+        echo -e "  ${CYAN}$0 --system${RESET}     System-wide installation (explicit)"
+        echo -e "  ${CYAN}$0 --user${RESET}       User installation"
+        echo ""
         exit 1
         ;;
 esac
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
