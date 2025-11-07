@@ -441,6 +441,7 @@ Wants=network-online.target
 Type=simple
 User=offgrid
 Group=offgrid
+WorkingDirectory=/var/lib/offgrid
 ExecStart=/usr/local/bin/offgrid serve
 Restart=always
 RestartSec=3
@@ -475,9 +476,20 @@ setup_config() {
     
     local CONFIG_DIR="/var/lib/offgrid"
     local MODELS_DIR="$CONFIG_DIR/models"
+    local WEB_DIR="$CONFIG_DIR/web/ui"
     
     print_step "Creating directories..."
     sudo mkdir -p "$MODELS_DIR"
+    sudo mkdir -p "$WEB_DIR"
+    
+    print_step "Copying web UI files..."
+    if [ -f "web/ui/index.html" ]; then
+        sudo cp -r web/ui/* "$WEB_DIR/"
+        print_success "Web UI files copied"
+    else
+        print_warning "Web UI files not found in current directory"
+    fi
+    
     sudo chown -R offgrid:offgrid "$CONFIG_DIR"
     
     print_success "Configuration directories created"
