@@ -22,6 +22,12 @@ sudo rm -rf /etc/offgrid
 sudo rm -f /usr/local/bin/offgrid
 sudo rm -f /usr/local/bin/llama-server
 
+# Remove llama.cpp shared libraries
+sudo rm -f /usr/local/lib/libllama.so*
+sudo rm -f /usr/local/lib/libggml*.so*
+sudo rm -f /usr/local/lib/libmtmd.so*
+sudo ldconfig
+
 # Remove llama.cpp build (optional - comment out to keep)
 # rm -rf ~/llama.cpp/build
 
@@ -30,5 +36,5 @@ echo ""
 echo "🚀 Starting fresh installation..."
 echo ""
 
-# Run installation
-./install.sh
+# Run installation (pass through any arguments)
+./install.sh "$@"
