@@ -145,6 +145,8 @@ curl -N http://localhost:8080/v1/chat/completions \
 **Model Management**
 - Download models from HuggingFace with SHA256 verification
 - Import models from USB drives, SD cards, or network shares
+- Export models to create offline distribution media
+- Remove models to free up storage space
 - Support for GGUF format (llama.cpp compatible)
 - Automatic quantization detection
 
@@ -152,10 +154,12 @@ curl -N http://localhost:8080/v1/chat/completions \
 - `/v1/chat/completions` - Chat interface with history
 - `/v1/completions` - Direct text completion
 - `/v1/models` - List available models
+- `/health` - Comprehensive system diagnostics with resource stats
+- `/stats` - Inference statistics and usage tracking
 - Server-Sent Events (SSE) streaming support
 
 **Web Dashboard**
-- Modern, professional white-themed interface
+- Modern, minimalistic white-themed interface (Apple/Claude-inspired)
 - Interactive chat with streaming responses
 - Model management and system monitoring
 - API testing tools built-in
@@ -163,8 +167,17 @@ curl -N http://localhost:8080/v1/chat/completions \
 
 **Resource Monitoring**
 - Real-time CPU, RAM, and disk usage tracking
+- Detailed health diagnostics via `/health` endpoint
+- Inference statistics tracking (requests, tokens, response times)
 - Pre-load validation to prevent OOM crashes
 - Automatic quantization recommendations based on available RAM
+
+**Statistics & Analytics**
+- Track total requests and tokens processed per model
+- Monitor average response times
+- Aggregate statistics across all models
+- Query stats via `/stats` endpoint
+- Performance insights for optimization
 
 **P2P Discovery**
 - Automatic peer discovery on local networks
@@ -200,17 +213,41 @@ curl -N http://localhost:8080/v1/chat/completions \
 ### CLI Reference
 
 ```bash
+# Server
 offgrid                          # Start server (default)
 offgrid serve                    # Start server explicitly
+
+# Model Discovery & Information
 offgrid catalog                  # Browse available models
 offgrid quantization             # Learn about quantization levels
+offgrid list                     # List installed models
+offgrid info                     # Show system information
+
+# Model Management
 offgrid download <id> [quant]    # Download model from internet
 offgrid import <path>            # Import from USB/SD card
-offgrid list                     # List installed models
+offgrid export <id> <path>       # Export model to USB/SD card
+offgrid remove <id>              # Remove installed model
+
+# Development & Testing
+offgrid chat [model]             # Interactive chat mode (upcoming)
+offgrid benchmark <id>           # Benchmark model performance (upcoming)
+
+# Configuration
 offgrid config init              # Generate configuration file
-offgrid info                     # Show system information
+offgrid config show              # Display current configuration
+offgrid config validate <path>   # Validate configuration file
+
+# Help
 offgrid help                     # Display help
 ```
+
+**New in v0.1.0:**
+- `export` - Copy models to external storage for offline distribution
+- `remove` - Clean up storage by deleting unused models
+- `chat` - Framework for interactive CLI chat (coming soon)
+- `benchmark` - Performance testing and metrics (coming soon)
+
 
 ### Configuration
 

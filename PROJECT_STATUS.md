@@ -19,13 +19,14 @@ OffGrid LLM is a **production-ready**, offline-first LLM orchestrator designed f
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **HTTP Server** | ✅ Complete | OpenAI-compatible API with SSE streaming |
-| **Web Dashboard** | ✅ Complete | Professional white-themed UI, fully offline |
-| **Model Management** | ✅ Complete | Download, import, catalog with SHA256 verification |
+| **HTTP Server** | ✅ Complete | OpenAI-compatible API with SSE streaming + statistics tracking |
+| **Web Dashboard** | ✅ Complete | Professional minimalistic UI (Apple/Claude-inspired), fully offline |
+| **Model Management** | ✅ Complete | Download, import, export, remove with SHA256 verification |
 | **Configuration** | ✅ Complete | YAML/JSON support with environment overrides |
-| **Resource Monitoring** | ✅ Complete | Real CPU/RAM/disk tracking with gopsutil |
+| **Resource Monitoring** | ✅ Complete | Real CPU/RAM/disk tracking with gopsutil + detailed health endpoint |
+| **Statistics Tracking** | ✅ Complete | Per-model inference stats (requests, tokens, response times) |
 | **P2P Discovery** | ✅ Complete | JSON-based UDP protocol with peer registration |
-| **USB Import** | ✅ Complete | Import from USB/SD with automatic verification |
+| **USB Import/Export** | ✅ Complete | Import/export models from USB/SD with automatic verification |
 | **Quantization Guide** | ✅ Complete | Educational system with recommendations |
 | **Deployment Docs** | ✅ Complete | Docker, k8s, systemd, air-gapped guides |
 | **README** | ✅ Complete | Professional markdown documentation |
@@ -51,14 +52,15 @@ OffGrid LLM is a **production-ready**, offline-first LLM orchestrator designed f
 
 ```
 offgrid-llm/
-├── cmd/offgrid/              # CLI with 9 commands (serve, catalog, download, etc.)
+├── cmd/offgrid/              # CLI with 13 commands (serve, catalog, download, export, remove, chat, benchmark, etc.)
 ├── internal/
 │   ├── config/              # YAML/JSON configuration management
 │   ├── inference/           # Pluggable engine (mock + llama.cpp)
 │   ├── models/              # Registry, download, import, quantization info
 │   ├── p2p/                 # UDP discovery with JSON announcements
 │   ├── resource/            # CPU/RAM/disk monitoring with gopsutil
-│   └── server/              # HTTP API with SSE streaming
+│   ├── server/              # HTTP API with SSE streaming + statistics tracking
+│   └── stats/               # Inference statistics tracker (thread-safe)
 ├── pkg/api/                 # OpenAI-compatible types
 ├── web/ui/                  # Single-file HTML/CSS/JS dashboard
 ├── docs/                    # Comprehensive documentation
@@ -68,7 +70,8 @@ offgrid-llm/
 ## Features Breakdown
 
 ### Core API (OpenAI-Compatible)
-- `GET /health` - Health check with resource stats
+- `GET /health` - Health check with detailed resource stats and system diagnostics
+- `GET /stats` - Inference statistics and usage tracking per model
 - `GET /v1/models` - List available models
 - `POST /v1/chat/completions` - Chat with streaming support
 - `POST /v1/completions` - Text completion
@@ -81,7 +84,11 @@ offgrid catalog            # Browse 4 verified models
 offgrid quantization       # Learn about Q2_K through Q8_0
 offgrid download <id>      # Download with SHA256 verification
 offgrid import <path>      # Import from USB/SD card
+offgrid export <id> <path> # Export model to USB/SD for offline distribution
 offgrid list               # List installed models
+offgrid remove <id>        # Delete model with confirmation
+offgrid chat <id>          # Interactive chat mode (framework)
+offgrid benchmark <id>     # Performance testing (framework)
 offgrid config init        # Generate configuration
 offgrid info               # System information
 offgrid help               # Command reference
