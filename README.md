@@ -8,6 +8,10 @@ Built with Go and powered by [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
 ## Screenshots
 
+### Installation Banner
+![Installation Banner](docs/images/install-banner.png)
+*Industrial ASCII art banner with muted amber color scheme*
+
 ### Chat Interface
 ![Chat Interface](docs/images/chat.png)
 *Industrial-themed chat interface with real-time streaming and model selection*
