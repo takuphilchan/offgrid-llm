@@ -366,10 +366,14 @@ build_llama_cpp() {
     if [ -d "$LLAMA_DIR/.git" ]; then
         print_step "Updating existing llama.cpp repository..."
         cd "$LLAMA_DIR"
+        # Clean any existing Makefile or build artifacts that might have old configuration
+        make clean 2>/dev/null || true
         git pull -q || print_warning "Could not update llama.cpp, using existing version"
     elif [ -d "$LLAMA_DIR" ]; then
         print_step "Using existing llama.cpp directory (not a git repo)..."
         cd "$LLAMA_DIR"
+        # Clean any existing Makefile or build artifacts
+        make clean 2>/dev/null || true
     else
         print_step "Downloading llama.cpp repository..."
         
@@ -403,6 +407,11 @@ build_llama_cpp() {
     fi
     
     print_step "Configuring build with CMake..."
+    # Clean any existing build files to avoid cached configuration issues
+    if [ -d "build" ]; then
+        print_info "Cleaning previous build configuration..."
+        rm -rf build
+    fi
     mkdir -p build
     cd build
     
