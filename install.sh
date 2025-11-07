@@ -252,10 +252,10 @@ build_llama_cpp() {
     
     # Clean environment to avoid MinGW conflicts in WSL
     unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
-    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
     
     # Configure CMake based on GPU type
-    CMAKE_ARGS="-DBUILD_SHARED_LIBS=ON -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++"
+    CMAKE_ARGS="-DBUILD_SHARED_LIBS=ON -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DLLAMA_CURL=OFF"
     
     if [ "$GPU_TYPE" = "nvidia" ]; then
         print_info "Configuring for NVIDIA CUDA acceleration..."
