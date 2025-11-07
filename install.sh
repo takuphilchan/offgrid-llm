@@ -125,22 +125,48 @@ detect_gpu() {
     
     GPU_TYPE="none"
     
-    # Check for NVIDIA GPU (vendor ID: 10de)
-    if lspci 2>/dev/null | grep -i 'vga.*nvidia\|3d.*nvidia\|display.*nvidia' &> /dev/null || \
-       lspci -n 2>/dev/null | grep -E '(0300|0302):.*10de:' &> /dev/null; then
+    # Method 1: Check nvidia-smi (most reliable for NVIDIA)
+    if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+        GPU_TYPE="nvidia"
+        GPU_INFO=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1)
+        DRIVER_VERSION=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n1)
+        CUDA_VERSION=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n1)
+        print_success "NVIDIA GPU detected: $GPU_INFO"
+        print_info "  Driver: $DRIVER_VERSION | Compute Capability: $CUDA_VERSION"
+    
+    # Method 2: Check lspci for NVIDIA GPU (vendor ID: 10de)
+    elif lspci 2>/dev/null | grep -i 'vga.*nvidia\|3d.*nvidia\|display.*nvidia' &> /dev/null || \
+         lspci -n 2>/dev/null | grep -E '(0300|0302):.*10de:' &> /dev/null; then
         GPU_TYPE="nvidia"
         GPU_INFO=$(lspci | grep -i 'vga.*nvidia\|3d.*nvidia\|display.*nvidia' | head -n1)
         print_success "NVIDIA GPU detected: $GPU_INFO"
+        print_warning "  nvidia-smi not working - drivers may need to be installed/loaded"
     
-    # Check for AMD GPU (vendor ID: 1002)
+    # Method 3: Check for AMD GPU (vendor ID: 1002)
     elif lspci 2>/dev/null | grep -i 'vga.*amd\|vga.*ati\|3d.*amd' &> /dev/null || \
          lspci -n 2>/dev/null | grep -E '(0300|0302):.*1002:' &> /dev/null; then
         GPU_TYPE="amd"
         GPU_INFO=$(lspci | grep -i 'vga.*amd\|vga.*ati\|3d.*amd' | head -n1)
         print_success "AMD GPU detected: $GPU_INFO"
+        
+        # Check for ROCm
+        if command -v rocm-smi &> /dev/null; then
+            ROCM_VERSION=$(rocm-smi --showdriverversion 2>/dev/null | grep -oP 'ROCm version: \K[0-9.]+' || echo "unknown")
+            print_info "  ROCm version: $ROCM_VERSION"
+        else
+            print_warning "  rocm-smi not found - ROCm drivers may need to be installed"
+        fi
+    
+    # Method 4: Check /proc/driver/nvidia for NVIDIA in WSL
+    elif [ -d "/proc/driver/nvidia" ]; then
+        GPU_TYPE="nvidia"
+        GPU_INFO="NVIDIA GPU (detected via /proc/driver/nvidia)"
+        print_success "$GPU_INFO"
+        print_warning "  nvidia-smi not available - may be running in WSL or container"
     
     else
         print_info "No dedicated GPU detected - will use CPU inference"
+        print_dim "  Checked: nvidia-smi, lspci, /proc/driver/nvidia"
     fi
 }
 
@@ -318,7 +344,23 @@ build_llama_cpp() {
     
     if [ "$GPU_TYPE" = "nvidia" ]; then
         print_info "Configuring for NVIDIA CUDA acceleration..."
-        CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON"
+        
+        # Check if CUDA toolkit is available
+        if command -v nvcc &> /dev/null; then
+            CUDA_VERSION=$(nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
+            print_info "  Found CUDA toolkit: $CUDA_VERSION"
+            CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON"
+        elif [ -d "/usr/local/cuda" ]; then
+            print_info "  Found CUDA at /usr/local/cuda"
+            CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc"
+        elif [ -d "/usr/lib/cuda" ]; then
+            print_info "  Found CUDA at /usr/lib/cuda"
+            CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON"
+        else
+            print_warning "  CUDA toolkit not found - building CPU version"
+            print_info "  Install CUDA toolkit for GPU acceleration: https://developer.nvidia.com/cuda-downloads"
+            GPU_TYPE="none"  # Fallback to CPU
+        fi
     elif [ "$GPU_TYPE" = "amd" ]; then
         print_info "Configuring for AMD ROCm acceleration..."
         CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_HIPBLAS=ON"
