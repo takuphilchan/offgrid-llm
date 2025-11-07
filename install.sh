@@ -250,8 +250,12 @@ build_llama_cpp() {
     mkdir -p build
     cd build
     
+    # Clean environment to avoid MinGW conflicts in WSL
+    unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    
     # Configure CMake based on GPU type
-    CMAKE_ARGS="-DBUILD_SHARED_LIBS=ON"
+    CMAKE_ARGS="-DBUILD_SHARED_LIBS=ON -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++"
     
     if [ "$GPU_TYPE" = "nvidia" ]; then
         print_info "Configuring for NVIDIA CUDA acceleration..."
@@ -263,29 +267,45 @@ build_llama_cpp() {
         print_info "Configuring for CPU-only inference..."
     fi
     
-    cmake .. $CMAKE_ARGS 2>&1 | grep -E "Build files|llama.cpp|CUDA|HIP|OpenBLAS|Accelerate" || true
+    cmake .. $CMAKE_ARGS 2>&1 | grep -E "Build files|llama.cpp|CUDA|HIP|OpenBLAS|Accelerate|compiler" || true
     
     print_step "Building llama.cpp (this may take 5-10 minutes)..."
     print_info "Building with $(nproc) CPU cores..."
     
-    if timeout 600 cmake --build . --config Release -j$(nproc) 2>&1 | grep -E "Built target|error:|Error|FAILED" ; then
-        print_success "Build completed"
+    # Check if build actually produces the library
+    if timeout 600 cmake --build . --config Release -j$(nproc) 2>&1 | tee /tmp/llama_build.log | grep -v "warning:" | grep -E "Built target|error:|Error|FAILED"; then
+        if [ -f "libllama.so" ] || [ -f "src/libllama.so" ] || [ -f "ggml/src/libggml.so" ]; then
+            print_success "Build completed successfully"
+        else
+            print_error "Build completed but libraries not found"
+            print_warning "Check /tmp/llama_build.log for details"
+            print_info "Attempting simplified build..."
+            
+            # Fallback: Use make instead of cmake
+            cd "$LLAMA_DIR"
+            rm -rf build
+            print_step "Trying simple Makefile build..."
+            if timeout 300 make -j$(nproc) 2>&1 | grep -E "Built|error:"; then
+                if [ -f "libllama.so" ]; then
+                    print_success "Makefile build succeeded"
+                    mkdir -p build
+                    cp *.so build/ 2>/dev/null || true
+                else
+                    print_warning "Will build OffGrid in mock mode (no llama.cpp integration)"
+                    cd - > /dev/null
+                    return 1
+                fi
+            else
+                print_warning "All build methods failed, will use mock mode"
+                cd - > /dev/null
+                return 1
+            fi
+        fi
     else
-        print_error "llama.cpp build failed or timed out"
-        print_info "Attempting fallback build without GPU support..."
-        
-        # Fallback: try CPU-only build
-        cd "$LLAMA_DIR"
-        rm -rf build
-        mkdir -p build
-        cd build
-        cmake .. -DBUILD_SHARED_LIBS=ON 2>&1 | tail -n 5
-        timeout 600 cmake --build . --config Release -j$(nproc) 2>&1 | grep -E "Built target|error:" || {
-            print_error "Fallback build also failed"
-            print_warning "Will try to build OffGrid LLM in mock mode"
-            cd - > /dev/null
-            return 1
-        }
+        print_error "Build failed or timed out"
+        print_warning "Will build OffGrid LLM in mock mode"
+        cd - > /dev/null
+        return 1
     fi
     
     # Install libraries
@@ -320,26 +340,51 @@ build_offgrid() {
     GO_VERSION=$(go version | awk '{print $3}')
     print_info "Using Go: $GO_VERSION"
     
-    # Set CGO environment
-    export CGO_ENABLED=1
-    export C_INCLUDE_PATH="$HOME/llama.cpp:${C_INCLUDE_PATH:-}"
-    export LIBRARY_PATH="$HOME/llama.cpp/build:${LIBRARY_PATH:-}"
-    export LD_LIBRARY_PATH="$HOME/llama.cpp/build:${LD_LIBRARY_PATH:-}"
-    
     print_step "Downloading Go dependencies..."
     go mod download 2>&1 | grep -E "go: downloading|error" || true
     
-    print_step "Building with llama.cpp integration..."
-    if go build -tags llama -o offgrid ./cmd/offgrid 2>&1 | grep -E "error|warning|Build" ; then
-        if [ -f offgrid ]; then
-            print_success "Built with llama.cpp support"
+    # Check if llama.cpp libraries exist
+    LLAMA_AVAILABLE=false
+    if [ -f "$HOME/llama.cpp/build/libllama.so" ] || [ -f "$HOME/llama.cpp/libllama.so" ] || [ -f "/usr/local/lib/libggml.so" ]; then
+        LLAMA_AVAILABLE=true
+        print_info "llama.cpp libraries found, building with real inference support"
+        
+        # Set CGO environment for llama.cpp
+        export CGO_ENABLED=1
+        export C_INCLUDE_PATH="$HOME/llama.cpp:${C_INCLUDE_PATH:-}"
+        export LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp:${LIBRARY_PATH:-}"
+        export LD_LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp:/usr/local/lib:${LD_LIBRARY_PATH:-}"
+        
+        print_step "Building with llama.cpp integration..."
+        if go build -tags llama -o offgrid ./cmd/offgrid 2>&1 | tee /tmp/go_build.log | tail -n 20; then
+            if [ -f offgrid ] && [ -x offgrid ]; then
+                print_success "Built with llama.cpp support"
+            else
+                print_error "Build command succeeded but binary not created"
+                LLAMA_AVAILABLE=false
+            fi
         else
-            print_warning "Failed to build with llama support, trying mock mode..."
-            go build -o offgrid ./cmd/offgrid
-            print_success "Built in mock mode"
+            print_warning "Failed to build with llama support"
+            print_info "Check /tmp/go_build.log for details"
+            LLAMA_AVAILABLE=false
         fi
-    else
-        print_success "Built successfully"
+    fi
+    
+    # Fallback to mock mode if llama build failed
+    if [ "$LLAMA_AVAILABLE" = false ]; then
+        print_step "Building in mock mode (no real inference)..."
+        if go build -o offgrid ./cmd/offgrid 2>&1 | tail -n 10; then
+            if [ -f offgrid ] && [ -x offgrid ]; then
+                print_success "Built in mock mode"
+                print_warning "Real inference not available - download a model and it will use mock responses"
+            else
+                print_error "Failed to build binary"
+                exit 1
+            fi
+        else
+            print_error "Build failed"
+            exit 1
+        fi
     fi
     
     # Verify binary was created
