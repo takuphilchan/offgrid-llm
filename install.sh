@@ -272,34 +272,15 @@ build_llama_cpp() {
     print_step "Building llama.cpp (this may take 5-10 minutes)..."
     print_info "Building with $(nproc) CPU cores..."
     
-    # Check if build actually produces the library
+    # Build and check for success
     if timeout 600 cmake --build . --config Release -j$(nproc) 2>&1 | tee /tmp/llama_build.log | grep -v "warning:" | grep -E "Built target|error:|Error|FAILED"; then
-        if [ -f "libllama.so" ] || [ -f "src/libllama.so" ] || [ -f "ggml/src/libggml.so" ]; then
+        # Check if critical libraries were built
+        if [ -f "src/libllama.so" ] || [ -f "libllama.so" ] || [ -f "ggml/src/libggml.so" ] || ls *.so &>/dev/null; then
             print_success "Build completed successfully"
         else
-            print_error "Build completed but libraries not found"
-            print_warning "Check /tmp/llama_build.log for details"
-            print_info "Attempting simplified build..."
-            
-            # Fallback: Use make instead of cmake
-            cd "$LLAMA_DIR"
-            rm -rf build
-            print_step "Trying simple Makefile build..."
-            if timeout 300 make -j$(nproc) 2>&1 | grep -E "Built|error:"; then
-                if [ -f "libllama.so" ]; then
-                    print_success "Makefile build succeeded"
-                    mkdir -p build
-                    cp *.so build/ 2>/dev/null || true
-                else
-                    print_warning "Will build OffGrid in mock mode (no llama.cpp integration)"
-                    cd - > /dev/null
-                    return 1
-                fi
-            else
-                print_warning "All build methods failed, will use mock mode"
-                cd - > /dev/null
-                return 1
-            fi
+            print_warning "Build completed but some libraries may be missing"
+            print_info "Checking what was built..."
+            ls -la *.so src/*.so ggml/src/*.so 2>/dev/null | head -n 5 || true
         fi
     else
         print_error "Build failed or timed out"
@@ -345,15 +326,19 @@ build_offgrid() {
     
     # Check if llama.cpp libraries exist
     LLAMA_AVAILABLE=false
-    if [ -f "$HOME/llama.cpp/build/libllama.so" ] || [ -f "$HOME/llama.cpp/libllama.so" ] || [ -f "/usr/local/lib/libggml.so" ]; then
+    if [ -f "$HOME/llama.cpp/build/src/libllama.so" ] || \
+       [ -f "$HOME/llama.cpp/build/libllama.so" ] || \
+       [ -f "$HOME/llama.cpp/libllama.so" ] || \
+       [ -f "/usr/local/lib/libggml.so" ] || \
+       [ -f "$HOME/llama.cpp/build/ggml/src/libggml.so" ]; then
         LLAMA_AVAILABLE=true
         print_info "llama.cpp libraries found, building with real inference support"
         
         # Set CGO environment for llama.cpp
         export CGO_ENABLED=1
-        export C_INCLUDE_PATH="$HOME/llama.cpp:${C_INCLUDE_PATH:-}"
-        export LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp:${LIBRARY_PATH:-}"
-        export LD_LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp:/usr/local/lib:${LD_LIBRARY_PATH:-}"
+        export C_INCLUDE_PATH="$HOME/llama.cpp:$HOME/llama.cpp/include:$HOME/llama.cpp/ggml/include:${C_INCLUDE_PATH:-}"
+        export LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp/build/src:$HOME/llama.cpp/build/ggml/src:$HOME/llama.cpp:/usr/local/lib:${LIBRARY_PATH:-}"
+        export LD_LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp/build/src:$HOME/llama.cpp/build/ggml/src:$HOME/llama.cpp:/usr/local/lib:${LD_LIBRARY_PATH:-}"
         
         print_step "Building with llama.cpp integration..."
         if go build -tags llama -o offgrid ./cmd/offgrid 2>&1 | tee /tmp/go_build.log | tail -n 20; then
