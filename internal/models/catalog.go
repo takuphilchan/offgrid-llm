@@ -172,6 +172,110 @@ func DefaultCatalog() *ModelCatalog {
 					},
 				},
 			},
+			{
+				ID:          "llama-3-8b-instruct",
+				Name:        "Llama 3 8B Instruct",
+				Description: "Meta's latest Llama 3 model with improved performance",
+				Parameters:  "8B",
+				License:     "Llama 3 Community",
+				Provider:    "Meta",
+				MinRAM:      8,
+				Recommended: true,
+				Tags:        []string{"instruct", "general", "latest"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         4661219968, // ~4.3GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "codellama-7b-instruct",
+				Name:        "CodeLlama 7B Instruct",
+				Description: "Specialized for code generation and programming tasks",
+				Parameters:  "7B",
+				License:     "Llama 2 Community",
+				Provider:    "Meta",
+				MinRAM:      8,
+				Recommended: false,
+				Tags:        []string{"code", "programming", "specialized"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         4081004224, // ~3.8GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/TheBloke/CodeLlama-7B-Instruct-GGUF/resolve/main/codellama-7b-instruct.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "neural-chat-7b",
+				Name:        "Neural Chat 7B",
+				Description: "Intel's fine-tuned chat model with strong conversational abilities",
+				Parameters:  "7B",
+				License:     "Apache 2.0",
+				Provider:    "Intel",
+				MinRAM:      8,
+				Recommended: false,
+				Tags:        []string{"chat", "conversation", "general"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         4108946752, // ~3.8GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/TheBloke/neural-chat-7B-v3-1-GGUF/resolve/main/neural-chat-7b-v3-1.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "zephyr-7b-beta",
+				Name:        "Zephyr 7B Beta",
+				Description: "HuggingFace's aligned chat model, excellent instruction following",
+				Parameters:  "7B",
+				License:     "MIT",
+				Provider:    "HuggingFace",
+				MinRAM:      8,
+				Recommended: false,
+				Tags:        []string{"chat", "instruct", "aligned"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         4368439584, // ~4.1GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF/resolve/main/zephyr-7b-beta.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 }

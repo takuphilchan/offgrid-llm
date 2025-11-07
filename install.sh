@@ -19,32 +19,55 @@ cleanup() {
 # Set trap to cleanup on exit
 trap cleanup EXIT
 
-# Color and Formatting Setup
-BOLD='\033[1m'
-CYAN='\033[36m'
-GREEN='\033[32m'
-RED='\033[31m'
-YELLOW='\033[33m'
-DIM='\033[2m'
+# Color definitions (industrial theme matching web UI)
+ORANGE='\033[38;5;172m'    # Muted amber-brown (darker, easier on eyes)
+AMBER='\033[38;5;178m'     # Soft gold accent
+TEAL='\033[38;5;37m'       # Secondary color (matches #0891b2 steel teal from UI)
+GRAY='\033[38;5;240m'      # Subtle/dim text (matches #525252 gray from UI)
+GREEN='\033[0;32m'
+RED='\033[0;31m'
 RESET='\033[0m'
+BOLD='\033[1m'
+
+# ASCII Art Banner
+print_banner() {
+    echo -e "${ORANGE}"
+    cat << "EOF"
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║                                                               ║
+    ║     ██████╗ ███████╗███████╗ ██████╗ ██████╗ ██╗██████╗      ║
+    ║    ██╔═══██╗██╔════╝██╔════╝██╔════╝ ██╔══██╗██║██╔══██╗     ║
+    ║    ██║   ██║█████╗  █████╗  ██║  ███╗██████╔╝██║██║  ██║     ║
+    ║    ██║   ██║██╔══╝  ██╔══╝  ██║   ██║██╔══██╗██║██║  ██║     ║
+    ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
+    ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
+    ║                                                               ║
+    ║                       L L M   I N S T A L L E R               ║
+    ║                                                               ║
+    ╚═══════════════════════════════════════════════════════════════╝
+EOF
+    echo -e "${RESET}"
+    echo -e "${GRAY}    Offline AI inference for edge environments${RESET}"
+    echo ""
+}
 
 # Print Functions
 print_header() {
-    echo -e "\n${BOLD}${CYAN}┌────────────────────────────────────────────────────────────────┐${RESET}"
-    echo -e "${BOLD}${CYAN}│  $1${RESET}"
-    echo -e "${BOLD}${CYAN}└────────────────────────────────────────────────────────────────┘${RESET}"
+    echo ""
+    echo -e "${ORANGE}▸${RESET} ${BOLD}$1${RESET}"
+    echo ""
 }
 
-print_success() { echo -e "${GREEN}✓${RESET} $1"; }
-print_error() { echo -e "${RED}✗${RESET} $1" >&2; }
-print_info() { echo -e "${CYAN}ℹ${RESET} $1"; }
-print_warning() { echo -e "${YELLOW}⚠${RESET} $1"; }
-print_step() { echo -e "${BOLD}➜${RESET} $1"; }
+print_success() { echo -e "${GREEN}▸${RESET} $1"; }
+print_error() { echo -e "${RED}▸${RESET} $1" >&2; }
+print_info() { echo -e "${TEAL}▸${RESET} $1"; }
+print_warning() { echo -e "${AMBER}▸${RESET} $1"; }
+print_step() { echo -e "${BOLD}${ORANGE}▸${RESET} $1"; }
 
 # Usage/Help
 usage() {
     cat << EOF
-${BOLD}${CYAN}OffGrid LLM Installation Script${RESET}
+${BOLD}${ORANGE}OffGrid LLM Installation Script${RESET}
 Offline AI inference for edge and offline environments
 
 ${BOLD}USAGE:${RESET}
@@ -1028,15 +1051,15 @@ display_summary() {
     echo ""
     
     echo -e "${BOLD}System Information:${RESET}"
-    echo -e "  Architecture: ${CYAN}$ARCH${RESET}"
-    echo -e "  OS: ${CYAN}$NAME $VERSION${RESET}"
-    echo -e "  GPU: ${CYAN}${GPU_TYPE}${RESET}"
+    echo -e "  Architecture: ${TEAL}$ARCH${RESET}"
+    echo -e "  OS: ${TEAL}$NAME $VERSION${RESET}"
+    echo -e "  GPU: ${TEAL}${GPU_TYPE}${RESET}"
     if [ "$GPU_TYPE" != "none" ]; then
-        echo -e "  GPU Info: ${CYAN}${GPU_INFO}${RESET}"
+        echo -e "  GPU Info: ${TEAL}${GPU_INFO}${RESET}"
     fi
     
     # Show real inference mode
-    echo -e "  Inference: ${GREEN}REAL LLM${RESET} ${DIM}(via llama.cpp HTTP server)${RESET}"
+    echo -e "  Inference: ${GREEN}REAL LLM${RESET} ${GRAY}(via llama.cpp HTTP server)${RESET}"
     echo ""
     
     # Get internal port
@@ -1046,10 +1069,10 @@ display_summary() {
     fi
     
     echo -e "${BOLD}Service Information:${RESET}"
-    echo -e "  llama-server: ${GREEN}Internal Port ${INTERNAL_PORT}${RESET} ${DIM}(localhost-only, not accessible externally)${RESET}"
-    echo -e "  OffGrid LLM: ${GREEN}Port 11611${RESET} ${DIM}(public API endpoint)${RESET}"
-    echo -e "  Web UI: ${CYAN}http://localhost:11611/ui${RESET}"
-    echo -e "  API: ${CYAN}http://localhost:11611${RESET}"
+    echo -e "  llama-server: ${GREEN}Internal Port ${INTERNAL_PORT}${RESET} ${GRAY}(localhost-only, not accessible externally)${RESET}"
+    echo -e "  OffGrid LLM: ${GREEN}Port 11611${RESET} ${GRAY}(public API endpoint)${RESET}"
+    echo -e "  Web UI: ${TEAL}http://localhost:11611/ui${RESET}"
+    echo -e "  API: ${TEAL}http://localhost:11611${RESET}"
     echo ""
     
     echo -e "${BOLD}Security:${RESET}"
@@ -1060,23 +1083,23 @@ display_summary() {
     echo ""
     
     echo -e "${BOLD}Useful Commands:${RESET}"
-    echo -e "  ${CYAN}offgrid serve${RESET}                      - Start OffGrid manually"
-    echo -e "  ${CYAN}offgrid list${RESET}                       - List available models"
-    echo -e "  ${CYAN}offgrid download <model>${RESET}           - Download a model"
-    echo -e "  ${CYAN}sudo systemctl status offgrid-llm${RESET}  - Check OffGrid status"
-    echo -e "  ${CYAN}sudo systemctl status llama-server${RESET} - Check llama-server status"
-    echo -e "  ${CYAN}sudo journalctl -u offgrid-llm -f${RESET}  - View OffGrid logs"
-    echo -e "  ${CYAN}sudo journalctl -u llama-server -f${RESET} - View llama-server logs"
+    echo -e "  ${TEAL}offgrid serve${RESET}                      - Start OffGrid manually"
+    echo -e "  ${TEAL}offgrid list${RESET}                       - List available models"
+    echo -e "  ${TEAL}offgrid download <model>${RESET}           - Download a model"
+    echo -e "  ${TEAL}sudo systemctl status offgrid-llm${RESET}  - Check OffGrid status"
+    echo -e "  ${TEAL}sudo systemctl status llama-server${RESET} - Check llama-server status"
+    echo -e "  ${TEAL}sudo journalctl -u offgrid-llm -f${RESET}  - View OffGrid logs"
+    echo -e "  ${TEAL}sudo journalctl -u llama-server -f${RESET} - View llama-server logs"
     echo ""
     
     echo -e "${BOLD}Next Steps:${RESET}"
-    echo -e "  1. Visit ${CYAN}http://localhost:11611/ui${RESET} in your browser"
-    echo -e "  2. Test health: ${CYAN}curl http://localhost:11611/health${RESET}"
-    echo -e "  3. Test chat: ${CYAN}curl -X POST http://localhost:11611/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}'${RESET}"
+    echo -e "  1. Visit ${TEAL}http://localhost:11611/ui${RESET} in your browser"
+    echo -e "  2. Test health: ${TEAL}curl http://localhost:11611/health${RESET}"
+    echo -e "  3. Test chat: ${TEAL}curl -X POST http://localhost:11611/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}'${RESET}"
     echo ""
     
     echo -e "${BOLD}${GREEN}🎉 Real LLM inference is enabled!${RESET}"
-    echo -e "${DIM}Architecture: OffGrid (Go) ⟷ HTTP ⟷ llama-server (C++)${RESET}"
+    echo -e "${GRAY}Architecture: OffGrid (Go) ⟷ HTTP ⟷ llama-server (C++)${RESET}"
     echo ""
 }
 
@@ -1085,9 +1108,8 @@ main() {
     # Parse command line arguments first
     parse_args "$@"
     
-    print_header "OffGrid LLM Installation"
-    echo -e "${CYAN}Offline AI inference for the edge${RESET}"
-    echo ""
+    # Show banner
+    print_banner
     
     # Check if running as root (not recommended but check dependencies will need sudo)
     if [ "$EUID" -eq 0 ]; then
