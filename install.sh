@@ -177,7 +177,7 @@ install_build_deps() {
     local packages=()
     
     # Common build tools
-    packages+=(build-essential gcc g++ make cmake git)
+    packages+=(build-essential gcc g++ make cmake git unzip curl wget)
     
     # Go language
     if ! command -v go &> /dev/null; then
@@ -199,12 +199,43 @@ install_build_deps() {
     
     if [ "$PKG_MANAGER" = "apt-get" ]; then
         print_info "Updating package lists..."
-        sudo apt-get update -qq || print_warning "apt-get update had issues, continuing..."
+        
+        # Retry apt-get update up to 3 times
+        local retry=0
+        local max_retries=3
+        while [ $retry -lt $max_retries ]; do
+            if sudo apt-get update -qq 2>&1; then
+                break
+            else
+                retry=$((retry + 1))
+                if [ $retry -lt $max_retries ]; then
+                    print_warning "apt-get update failed, retrying ($retry/$max_retries)..."
+                    sleep 2
+                else
+                    print_warning "apt-get update had issues after $max_retries attempts, continuing..."
+                fi
+            fi
+        done
         
         print_info "Installing packages (this may take a few minutes)..."
-        sudo apt-get install -y -qq "${packages[@]}" 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking" || {
-            print_warning "Some packages failed to install, continuing..."
-        }
+        
+        # Try to install packages, but don't fail if some are not available
+        if ! sudo apt-get install -y -qq "${packages[@]}" 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking"; then
+            print_warning "Some packages failed to install, trying individually..."
+            
+            # Try installing packages one by one
+            local failed_packages=()
+            for pkg in "${packages[@]}"; do
+                if ! sudo apt-get install -y -qq "$pkg" 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking"; then
+                    failed_packages+=("$pkg")
+                fi
+            done
+            
+            if [ ${#failed_packages[@]} -gt 0 ]; then
+                print_warning "Failed to install: ${failed_packages[*]}"
+                print_info "Installation will continue with available packages"
+            fi
+        fi
     elif [ "$PKG_MANAGER" = "dnf" ]; then
         sudo dnf install -y -q "${packages[@]}"
     elif [ "$PKG_MANAGER" = "yum" ]; then
@@ -325,10 +356,39 @@ build_llama_cpp() {
         print_step "Updating existing llama.cpp repository..."
         cd "$LLAMA_DIR"
         git pull -q || print_warning "Could not update llama.cpp, using existing version"
-    else
-        print_step "Cloning llama.cpp repository..."
-        git clone --depth 1 -q https://github.com/ggerganov/llama.cpp.git "$LLAMA_DIR" 2>&1 | tail -n 2
+    elif [ -d "$LLAMA_DIR" ]; then
+        print_step "Using existing llama.cpp directory (not a git repo)..."
         cd "$LLAMA_DIR"
+    else
+        print_step "Downloading llama.cpp repository..."
+        
+        # Try git clone first
+        if timeout 60 git clone --depth 1 https://github.com/ggerganov/llama.cpp.git "$LLAMA_DIR" 2>&1 | tail -n 5; then
+            print_success "Git clone successful"
+            cd "$LLAMA_DIR"
+        else
+            # Fallback to downloading zip archive
+            print_warning "Git clone timed out, trying zip download..."
+            local TMP_DIR=$(mktemp -d)
+            cd "$TMP_DIR"
+            
+            if curl -L --max-time 120 -o llama.cpp.zip "https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.zip" 2>&1 | grep -E "Downloaded|failed"; then
+                print_step "Extracting archive..."
+                unzip -q llama.cpp.zip || {
+                    print_error "Failed to extract llama.cpp"
+                    rm -rf "$TMP_DIR"
+                    return 1
+                }
+                mv llama.cpp-master "$LLAMA_DIR"
+                cd "$LLAMA_DIR"
+                rm -rf "$TMP_DIR"
+                print_success "Downloaded and extracted llama.cpp"
+            else
+                print_error "Failed to download llama.cpp"
+                rm -rf "$TMP_DIR"
+                return 1
+            fi
+        fi
     fi
     
     print_step "Configuring build with CMake..."
@@ -345,25 +405,43 @@ build_llama_cpp() {
     if [ "$GPU_TYPE" = "nvidia" ]; then
         print_info "Configuring for NVIDIA CUDA acceleration..."
         
-        # Check if CUDA toolkit is available
+        # Check for CUDA toolkit in multiple locations
+        NVCC_PATH=""
+        CUDA_PATH=""
+        
         if command -v nvcc &> /dev/null; then
-            CUDA_VERSION=$(nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
-            CUDA_PATH=$(which nvcc | sed 's|/bin/nvcc||')
+            NVCC_PATH=$(which nvcc)
+            CUDA_PATH=$(dirname $(dirname "$NVCC_PATH"))
+        elif [ -f "/usr/local/cuda/bin/nvcc" ]; then
+            NVCC_PATH="/usr/local/cuda/bin/nvcc"
+            CUDA_PATH="/usr/local/cuda"
+        elif [ -f "/usr/lib/cuda/bin/nvcc" ]; then
+            NVCC_PATH="/usr/lib/cuda/bin/nvcc"
+            CUDA_PATH="/usr/lib/cuda"
+        else
+            # Search for CUDA installations
+            for cuda_dir in /usr/local/cuda-* /opt/cuda /usr/cuda; do
+                if [ -f "$cuda_dir/bin/nvcc" ]; then
+                    NVCC_PATH="$cuda_dir/bin/nvcc"
+                    CUDA_PATH="$cuda_dir"
+                    break
+                fi
+            done
+        fi
+        
+        if [ -n "$NVCC_PATH" ] && [ -f "$NVCC_PATH" ]; then
+            CUDA_VERSION=$("$NVCC_PATH" --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
             print_info "  Found CUDA toolkit: $CUDA_VERSION at $CUDA_PATH"
-            CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=$CUDA_PATH/bin/nvcc"
-        elif [ -d "/usr/local/cuda" ] && [ -f "/usr/local/cuda/bin/nvcc" ]; then
-            CUDA_VERSION=$(/usr/local/cuda/bin/nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
-            print_info "  Found CUDA toolkit: $CUDA_VERSION at /usr/local/cuda"
-            CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc"
-        elif [ -d "/usr/lib/cuda" ] && [ -f "/usr/lib/cuda/bin/nvcc" ]; then
-            CUDA_VERSION=$(/usr/lib/cuda/bin/nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
-            print_info "  Found CUDA toolkit: $CUDA_VERSION at /usr/lib/cuda"
-            CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/lib/cuda/bin/nvcc"
+            CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=$NVCC_PATH"
+            
+            # Add CUDA to PATH for the build
+            export PATH="$CUDA_PATH/bin:$PATH"
+            export LD_LIBRARY_PATH="$CUDA_PATH/lib64:${LD_LIBRARY_PATH:-}"
         else
             print_warning "  CUDA toolkit (nvcc) not found - building CPU version"
             print_info "  Your NVIDIA GPU is detected but CUDA toolkit is not installed"
             print_info "  For GPU acceleration, install CUDA: https://developer.nvidia.com/cuda-downloads"
-            print_dim "  Checked: nvcc command, /usr/local/cuda, /usr/lib/cuda"
+            print_dim "  Checked: PATH, /usr/local/cuda*, /usr/lib/cuda, /opt/cuda"
             GPU_TYPE="none"  # Fallback to CPU
         fi
     elif [ "$GPU_TYPE" = "amd" ]; then
@@ -373,27 +451,62 @@ build_llama_cpp() {
         print_info "Configuring for CPU-only inference..."
     fi
     
-    cmake .. $CMAKE_ARGS 2>&1 | grep -E "Build files|llama.cpp|CUDA|HIP|OpenBLAS|Accelerate|compiler" || true
+    cmake .. $CMAKE_ARGS 2>&1 | grep -E "Build files|llama.cpp|CUDA|HIP|OpenBLAS|Accelerate|compiler|Configuring done|Generating done" || true
+    
+    if [ ! -f "Makefile" ] && [ ! -f "build.ninja" ]; then
+        print_error "CMake configuration failed - no build files generated"
+        cat CMakeCache.txt 2>/dev/null | grep -i error || true
+        return 1
+    fi
     
     print_step "Building llama.cpp (this may take 5-10 minutes)..."
     print_info "Building with $(nproc) CPU cores..."
     
-    # Build llama-server specifically
-    if timeout 600 cmake --build . --config Release --target llama-server -j$(nproc) 2>&1 | tee /tmp/llama_build.log | grep -v "warning:" | grep -E "Built target|error:|Error|FAILED"; then
+    # Build llama-server specifically with timeout and progress monitoring
+    BUILD_LOG="/tmp/llama_build_$$.log"
+    
+    if cmake --build . --config Release --target llama-server -j$(nproc) > "$BUILD_LOG" 2>&1; then
         if [ -f "bin/llama-server" ]; then
             print_success "llama-server built successfully"
             
-            # Install llama-server binary
-            print_step "Installing llama-server to /usr/local/bin..."
-            sudo install -o0 -g0 -m755 bin/llama-server /usr/local/bin/llama-server
-            print_success "llama-server installed"
+            # Verify the binary works
+            if ldd bin/llama-server > /dev/null 2>&1; then
+                print_step "Installing llama-server to /usr/local/bin..."
+                sudo install -o0 -g0 -m755 bin/llama-server /usr/local/bin/llama-server
+                
+                # Verify installation
+                if /usr/local/bin/llama-server --version > /dev/null 2>&1; then
+                    print_success "llama-server installed and verified"
+                else
+                    print_warning "llama-server installed but may have runtime issues"
+                fi
+            else
+                print_error "llama-server has missing dependencies:"
+                ldd bin/llama-server | grep "not found" || true
+                return 1
+            fi
         else
-            print_warning "llama-server binary not found"
-            print_info "Checking what was built..."
-            ls -la *.so src/*.so ggml/src/*.so 2>/dev/null | head -n 5 || true
+            print_error "llama-server binary not found after build"
+            print_info "Checking build directory..."
+            find . -name "llama-server" -o -name "llama-server.exe" 2>/dev/null || true
+            tail -20 "$BUILD_LOG"
+            return 1
         fi
     else
-        print_error "Build failed or timed out"
+        BUILD_EXIT=$?
+        print_error "Build failed with exit code $BUILD_EXIT"
+        print_info "Last 30 lines of build log:"
+        tail -30 "$BUILD_LOG"
+        
+        # Check for common errors
+        if grep -q "No CMAKE_CUDA_COMPILER" "$BUILD_LOG"; then
+            print_error "CUDA compiler not found - check CUDA installation"
+        elif grep -q "nvcc.*not found" "$BUILD_LOG"; then
+            print_error "nvcc not in PATH - add CUDA bin directory to PATH"
+        elif grep -q "undefined reference" "$BUILD_LOG"; then
+            print_error "Linker error - missing libraries or incompatible CUDA version"
+        fi
+        
         print_warning "Will build OffGrid LLM in mock mode"
         cd "$ORIGINAL_DIR"
         return 1
@@ -401,17 +514,28 @@ build_llama_cpp() {
     
     # Install libraries
     print_step "Installing llama.cpp libraries..."
-    sudo cmake --install . 2>&1 | grep -E "Install|Up-to-date" || {
-        print_warning "Failed to install llama.cpp system-wide"
-        print_info "Will use local build"
-    }
+    if sudo cmake --install . 2>&1 | grep -E "Install|Up-to-date"; then
+        print_success "Libraries installed system-wide"
+    else
+        print_warning "Failed to install llama.cpp system-wide, will use local build"
+    fi
+    
+    # Verify shared libraries exist
+    if [ -f "$LLAMA_DIR/build/ggml/src/libggml.so" ]; then
+        print_step "Copying shared libraries to system path..."
+        sudo cp -v "$LLAMA_DIR/build/ggml/src/libggml*.so" /usr/local/lib/ 2>/dev/null || true
+        sudo ldconfig
+    fi
     
     print_success "llama.cpp built successfully at $LLAMA_DIR/build"
     
     # Export paths for Go build
     export C_INCLUDE_PATH="$LLAMA_DIR:${C_INCLUDE_PATH:-}"
     export LIBRARY_PATH="$LLAMA_DIR/build:${LIBRARY_PATH:-}"
-    export LD_LIBRARY_PATH="$LLAMA_DIR/build:${LD_LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="$LLAMA_DIR/build:/usr/local/lib:${LD_LIBRARY_PATH:-}"
+    
+    # Clean up build log
+    rm -f "$BUILD_LOG"
     
     # Return to original directory
     cd "$ORIGINAL_DIR"
@@ -529,6 +653,21 @@ setup_user() {
 # Setup llama-server systemd service
 setup_llama_server_service() {
     print_header "Setting Up llama-server Service"
+    
+    # Verify llama-server binary exists
+    if [ ! -f "/usr/local/bin/llama-server" ]; then
+        print_error "llama-server binary not found at /usr/local/bin/llama-server"
+        print_warning "Skipping llama-server service setup"
+        print_info "OffGrid LLM will run in mock mode"
+        return 1
+    fi
+    
+    # Verify llama-server can run
+    if ! /usr/local/bin/llama-server --version &> /dev/null; then
+        print_warning "llama-server binary exists but may have issues"
+        print_info "Checking dependencies..."
+        ldd /usr/local/bin/llama-server | grep "not found" || true
+    fi
     
     local SERVICE_FILE="/etc/systemd/system/llama-server.service"
     
@@ -833,6 +972,20 @@ main() {
     print_header "OffGrid LLM Installation"
     echo -e "${CYAN}Offline AI inference for the edge${RESET}"
     echo ""
+    
+    # Check if running as root (not recommended but check dependencies will need sudo)
+    if [ "$EUID" -eq 0 ]; then
+        print_warning "Running as root - this is not recommended"
+        print_info "Please run as a regular user with sudo access"
+    fi
+    
+    # Check if another instance is running
+    if pgrep -f "install.sh" | grep -v "$$" > /dev/null; then
+        print_error "Another installation appears to be running"
+        print_info "PID: $(pgrep -f 'install.sh' | grep -v "$$")"
+        print_info "If this is incorrect, kill the process and try again"
+        exit 1
+    fi
     
     # Pre-flight checks
     check_dependencies
