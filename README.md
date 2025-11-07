@@ -138,6 +138,7 @@ curl http://localhost:11611/v1/models
 curl http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
+    "model": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
     "messages": [{"role": "user", "content": "Explain quantum computing"}],
     "stream": false
   }'
@@ -146,6 +147,7 @@ curl http://localhost:11611/v1/chat/completions \
 curl -N http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
+    "model": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
     "messages": [{"role": "user", "content": "Write a haiku about AI"}],
     "stream": true
   }'
@@ -775,7 +777,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 **Development Setup:**
 ```bash
 # Fork and clone
-git clone https://github.com/YOUR_USERNAME/offgrid-llm.git
+git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
 
 # Create feature branch
