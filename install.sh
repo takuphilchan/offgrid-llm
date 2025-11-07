@@ -187,6 +187,63 @@ install_build_deps() {
     print_success "Build dependencies installed"
 }
 
+# Install Go 1.21+
+install_go() {
+    print_header "Installing Go Programming Language"
+    
+    local REQUIRED_GO_VERSION="1.21"
+    local GO_VERSION="1.21.5"
+    local GO_TARBALL="go${GO_VERSION}.linux-${ARCH}.tar.gz"
+    local GO_URL="https://go.dev/dl/${GO_TARBALL}"
+    
+    # Check if Go is installed and version is sufficient
+    if command -v go &> /dev/null; then
+        CURRENT_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
+        print_info "Found Go version: $CURRENT_VERSION"
+        
+        # Compare versions
+        if [ "$(printf '%s\n' "$REQUIRED_GO_VERSION" "$CURRENT_VERSION" | sort -V | head -n1)" = "$REQUIRED_GO_VERSION" ]; then
+            print_success "Go $CURRENT_VERSION is sufficient (>= $REQUIRED_GO_VERSION)"
+            return 0
+        else
+            print_warning "Go $CURRENT_VERSION is too old, upgrading to $GO_VERSION"
+            sudo rm -rf /usr/local/go
+        fi
+    fi
+    
+    print_step "Downloading Go $GO_VERSION..."
+    cd /tmp
+    if ! curl -sL "$GO_URL" -o "$GO_TARBALL"; then
+        print_error "Failed to download Go"
+        return 1
+    fi
+    
+    print_step "Installing Go to /usr/local/go..."
+    sudo tar -C /usr/local -xzf "$GO_TARBALL"
+    rm "$GO_TARBALL"
+    
+    # Add to PATH if not already there
+    if ! grep -q "/usr/local/go/bin" /etc/profile.d/go.sh 2>/dev/null; then
+        print_step "Adding Go to system PATH..."
+        echo 'export PATH=$PATH:/usr/local/go/bin' | sudo tee /etc/profile.d/go.sh > /dev/null
+        sudo chmod +x /etc/profile.d/go.sh
+    fi
+    
+    # Export for current session
+    export PATH=$PATH:/usr/local/go/bin
+    
+    # Verify installation
+    if command -v go &> /dev/null; then
+        INSTALLED_VERSION=$(go version | awk '{print $3}')
+        print_success "Go $INSTALLED_VERSION installed successfully"
+    else
+        print_error "Go installation failed"
+        return 1
+    fi
+    
+    cd - > /dev/null
+}
+
 # Install/Verify NVIDIA Drivers
 install_nvidia_drivers() {
     if [ "$GPU_TYPE" != "nvidia" ]; then
@@ -343,9 +400,18 @@ build_offgrid() {
         export LD_LIBRARY_PATH="$HOME/llama.cpp/build:$HOME/llama.cpp/build/src:$HOME/llama.cpp/build/ggml/src:$HOME/llama.cpp:/usr/local/lib:${LD_LIBRARY_PATH:-}"
         
         print_step "Building with llama.cpp integration..."
+        print_info "This will enable REAL inference (not mock responses)"
+        
         if go build -tags llama -o offgrid ./cmd/offgrid 2>&1 | tee /tmp/go_build.log | tail -n 20; then
             if [ -f offgrid ] && [ -x offgrid ]; then
-                print_success "Built with llama.cpp support"
+                print_success "Built with llama.cpp support - REAL INFERENCE ENABLED"
+                
+                # Verify the build includes llama support
+                if strings offgrid | grep -q "llama.cpp\|ggml"; then
+                    print_success "Verified: llama.cpp integration is active"
+                else
+                    print_warning "Warning: llama.cpp symbols not found in binary"
+                fi
             else
                 print_error "Build command succeeded but binary not created"
                 LLAMA_AVAILABLE=false
@@ -531,6 +597,13 @@ display_summary() {
     if [ "$GPU_TYPE" != "none" ]; then
         echo -e "  GPU Info: ${CYAN}${GPU_INFO}${RESET}"
     fi
+    
+    # Check if built with llama support
+    if /usr/local/bin/offgrid --version 2>&1 | grep -q "llama" || strings /usr/local/bin/offgrid 2>/dev/null | grep -q "ggml"; then
+        echo -e "  Inference: ${GREEN}REAL (llama.cpp enabled)${RESET}"
+    else
+        echo -e "  Inference: ${YELLOW}MOCK MODE (llama.cpp not integrated)${RESET}"
+    fi
     echo ""
     
     echo -e "${BOLD}Service Information:${RESET}"
@@ -569,6 +642,7 @@ main() {
     
     # Build and install
     install_build_deps
+    install_go
     install_nvidia_drivers
     build_llama_cpp
     build_offgrid
