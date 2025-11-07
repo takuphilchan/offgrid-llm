@@ -348,22 +348,27 @@ build_llama_cpp() {
         # Check if CUDA toolkit is available
         if command -v nvcc &> /dev/null; then
             CUDA_VERSION=$(nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
-            print_info "  Found CUDA toolkit: $CUDA_VERSION"
-            CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON"
-        elif [ -d "/usr/local/cuda" ]; then
-            print_info "  Found CUDA at /usr/local/cuda"
-            CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc"
-        elif [ -d "/usr/lib/cuda" ]; then
-            print_info "  Found CUDA at /usr/lib/cuda"
-            CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_CUBLAS=ON"
+            CUDA_PATH=$(which nvcc | sed 's|/bin/nvcc||')
+            print_info "  Found CUDA toolkit: $CUDA_VERSION at $CUDA_PATH"
+            CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=$CUDA_PATH/bin/nvcc"
+        elif [ -d "/usr/local/cuda" ] && [ -f "/usr/local/cuda/bin/nvcc" ]; then
+            CUDA_VERSION=$(/usr/local/cuda/bin/nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
+            print_info "  Found CUDA toolkit: $CUDA_VERSION at /usr/local/cuda"
+            CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc"
+        elif [ -d "/usr/lib/cuda" ] && [ -f "/usr/lib/cuda/bin/nvcc" ]; then
+            CUDA_VERSION=$(/usr/lib/cuda/bin/nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',')
+            print_info "  Found CUDA toolkit: $CUDA_VERSION at /usr/lib/cuda"
+            CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/lib/cuda/bin/nvcc"
         else
-            print_warning "  CUDA toolkit not found - building CPU version"
-            print_info "  Install CUDA toolkit for GPU acceleration: https://developer.nvidia.com/cuda-downloads"
+            print_warning "  CUDA toolkit (nvcc) not found - building CPU version"
+            print_info "  Your NVIDIA GPU is detected but CUDA toolkit is not installed"
+            print_info "  For GPU acceleration, install CUDA: https://developer.nvidia.com/cuda-downloads"
+            print_dim "  Checked: nvcc command, /usr/local/cuda, /usr/lib/cuda"
             GPU_TYPE="none"  # Fallback to CPU
         fi
     elif [ "$GPU_TYPE" = "amd" ]; then
         print_info "Configuring for AMD ROCm acceleration..."
-        CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_HIPBLAS=ON"
+        CMAKE_ARGS="$CMAKE_ARGS -DGGML_HIPBLAS=ON"
     else
         print_info "Configuring for CPU-only inference..."
     fi
@@ -534,28 +539,55 @@ setup_llama_server_service() {
     
     # Find a model to use (prefer tinyllama)
     local MODEL_PATH=""
-    if [ -f "/var/lib/offgrid/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" ]; then
-        MODEL_PATH="/var/lib/offgrid/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
-    elif [ -f "/var/lib/offgrid/models/tinyllama-1.1b-chat.Q4_K_M.gguf" ]; then
-        MODEL_PATH="/var/lib/offgrid/models/tinyllama-1.1b-chat.Q4_K_M.gguf"
-    elif [ -f "/var/lib/offgrid/models/tinyllama.gguf" ]; then
-        MODEL_PATH="/var/lib/offgrid/models/tinyllama.gguf"
+    local MODELS_DIR="/var/lib/offgrid/models"
+    
+    # Create models directory if it doesn't exist
+    sudo mkdir -p "$MODELS_DIR"
+    sudo chown offgrid:offgrid "$MODELS_DIR"
+    sudo chmod 755 "$MODELS_DIR"
+    
+    if [ -f "$MODELS_DIR/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" ]; then
+        MODEL_PATH="$MODELS_DIR/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+    elif [ -f "$MODELS_DIR/tinyllama-1.1b-chat.Q4_K_M.gguf" ]; then
+        MODEL_PATH="$MODELS_DIR/tinyllama-1.1b-chat.Q4_K_M.gguf"
+    elif [ -f "$MODELS_DIR/tinyllama.gguf" ]; then
+        MODEL_PATH="$MODELS_DIR/tinyllama.gguf"
     else
         # Use the first .gguf file found
-        MODEL_PATH=$(find /var/lib/offgrid/models -name "*.gguf" -type f | head -n 1)
+        MODEL_PATH=$(sudo find "$MODELS_DIR" -name "*.gguf" -type f 2>/dev/null | head -n 1)
     fi
     
     if [ -z "$MODEL_PATH" ]; then
-        print_warning "No model found in /var/lib/offgrid/models/"
-        print_info "llama-server service will need to be configured manually with a model"
-        MODEL_PATH="/var/lib/offgrid/models/model.gguf"
+        print_warning "No model found in $MODELS_DIR"
+        print_info "You can download a model with:"
+        print_dim "  wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+        print_dim "  sudo mv tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf $MODELS_DIR/"
+        print_dim "  sudo chown offgrid:offgrid $MODELS_DIR/*.gguf"
+        print_dim "  sudo systemctl restart llama-server"
+        MODEL_PATH="$MODELS_DIR/model.gguf"
     else
-        print_info "Using model: $MODEL_PATH"
+        print_info "Using model: $(basename $MODEL_PATH)"
         # Fix permissions on model files
-        sudo chmod 644 /var/lib/offgrid/models/*.gguf 2>/dev/null || true
+        sudo chmod 644 "$MODELS_DIR"/*.gguf 2>/dev/null || true
+        sudo chown offgrid:offgrid "$MODELS_DIR"/*.gguf 2>/dev/null || true
     fi
     
     print_step "Creating llama-server service file at $SERVICE_FILE..."
+    
+    # Determine GPU layers based on GPU type
+    local GPU_LAYERS="0"
+    local EXTRA_ARGS=""
+    if [ "$GPU_TYPE" = "nvidia" ]; then
+        GPU_LAYERS="99"  # Offload all layers to GPU
+        EXTRA_ARGS="--n-gpu-layers 99"
+        print_info "Configured for NVIDIA GPU acceleration (99 layers offloaded)"
+    elif [ "$GPU_TYPE" = "amd" ]; then
+        GPU_LAYERS="99"
+        EXTRA_ARGS="--n-gpu-layers 99"
+        print_info "Configured for AMD GPU acceleration (99 layers offloaded)"
+    else
+        print_info "Configured for CPU-only inference"
+    fi
     
     sudo tee "$SERVICE_FILE" > /dev/null <<SERVICE_EOF
 [Unit]
@@ -570,7 +602,7 @@ Type=simple
 User=offgrid
 Group=offgrid
 WorkingDirectory=/var/lib/offgrid
-ExecStart=/usr/local/bin/llama-server -m ${MODEL_PATH} --port ${RANDOM_PORT} --host 127.0.0.1 -c 2048 -ngl 0
+ExecStart=/usr/local/bin/llama-server -m ${MODEL_PATH} --port ${RANDOM_PORT} --host 127.0.0.1 -c 2048 ${EXTRA_ARGS}
 Restart=always
 RestartSec=3
 
