@@ -15,16 +15,18 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
+	"github.com/takuphilchan/offgrid-llm/internal/stats"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer *http.Server
-	config     *config.Config
-	registry   *models.Registry
-	engine     inference.Engine
-	monitor    *resource.Monitor
+	httpServer   *http.Server
+	config       *config.Config
+	registry     *models.Registry
+	engine       inference.Engine
+	monitor      *resource.Monitor
+	statsTracker *stats.Tracker
 }
 
 // New creates a new server instance
@@ -53,6 +55,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 	}
 
 	monitor := resource.NewMonitor(5 * time.Second)
+	statsTracker := stats.NewTracker()
 
 	// Scan for available models
 	if err := registry.ScanModels(); err != nil {
@@ -63,10 +66,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 	monitor.Start()
 
 	return &Server{
-		config:   cfg,
-		registry: registry,
-		engine:   engine,
-		monitor:  monitor,
+		config:       cfg,
+		registry:     registry,
+		engine:       engine,
+		monitor:      monitor,
+		statsTracker: statsTracker,
 	}
 }
 
@@ -81,6 +85,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/models", s.handleListModels)
 	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("/v1/completions", s.handleCompletions)
+
+	// Statistics endpoint
+	mux.HandleFunc("/stats", s.handleStats)
 
 	// Web UI
 	mux.HandleFunc("/ui", s.handleWebUI)
@@ -152,7 +159,86 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"status":"healthy"}`)
+
+	// Get current resource usage
+	stats := s.monitor.GetStats()
+
+	// Get model count
+	models := s.registry.ListModels()
+
+	// Build detailed health response
+	health := map[string]interface{}{
+		"status":  "healthy",
+		"version": "0.1.0-alpha",
+		"uptime":  "running", // TODO: Track actual uptime
+		"system": map[string]interface{}{
+			"cpu_percent":     stats.CPUUsagePercent,
+			"memory_mb":       stats.MemoryUsedMB,
+			"memory_total_mb": stats.MemoryTotalMB,
+			"memory_percent":  stats.MemoryUsagePercent,
+			"disk_free_gb":    stats.DiskTotalGB - stats.DiskUsedGB,
+			"disk_total_gb":   stats.DiskTotalGB,
+			"goroutines":      stats.NumGoroutines,
+		},
+		"models": map[string]interface{}{
+			"available": len(models),
+			"loaded":    0, // TODO: Track loaded models
+		},
+		"config": map[string]interface{}{
+			"port":        s.config.ServerPort,
+			"max_context": s.config.MaxContextSize,
+			"threads":     s.config.NumThreads,
+		},
+		"stats": s.getAggregateStats(),
+	}
+
+	if err := json.NewEncoder(w).Encode(health); err != nil {
+		log.Printf("Error encoding health response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	allStats := s.statsTracker.GetAllStats()
+
+	response := map[string]interface{}{
+		"models":    allStats,
+		"aggregate": s.getAggregateStats(),
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding stats response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) getAggregateStats() map[string]interface{} {
+	allStats := s.statsTracker.GetAllStats()
+
+	var totalRequests int64
+	var totalTokens int64
+	var totalDuration int64
+	modelCount := len(allStats)
+
+	for _, stat := range allStats {
+		totalRequests += stat.TotalRequests
+		totalTokens += stat.TotalTokens
+		totalDuration += stat.TotalDurationMs
+	}
+
+	avgResponse := float64(0)
+	if totalRequests > 0 {
+		avgResponse = float64(totalDuration) / float64(totalRequests)
+	}
+
+	return map[string]interface{}{
+		"total_requests":  totalRequests,
+		"total_tokens":    totalTokens,
+		"models_used":     modelCount,
+		"avg_response_ms": avgResponse,
+	}
 }
 
 func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
@@ -230,11 +316,18 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Perform inference
 	ctx := context.Background()
+	startTime := time.Now()
 	response, err := s.engine.ChatCompletion(ctx, &req)
+	duration := time.Since(startTime)
+
 	if err != nil {
 		writeError(w, fmt.Sprintf("Inference failed: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// Record statistics
+	totalTokens := int64(response.Usage.TotalTokens)
+	s.statsTracker.RecordInference(req.Model, totalTokens, duration.Milliseconds())
 
 	// Send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {

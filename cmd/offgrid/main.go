@@ -27,6 +27,18 @@ func main() {
 		case "import":
 			handleImport(os.Args[2:])
 			return
+		case "remove", "delete", "rm":
+			handleRemove(os.Args[2:])
+			return
+		case "export":
+			handleExport(os.Args[2:])
+			return
+		case "chat":
+			handleChat(os.Args[2:])
+			return
+		case "benchmark", "bench":
+			handleBenchmark(os.Args[2:])
+			return
 		case "list":
 			handleList(os.Args[2:])
 			return
@@ -206,6 +218,229 @@ func getFileSize(path string) int64 {
 	return info.Size()
 }
 
+func handleRemove(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage: offgrid remove <model-id>")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Examples:")
+		fmt.Fprintln(os.Stderr, "  offgrid remove tinyllama-1.1b-chat")
+		fmt.Fprintln(os.Stderr, "  offgrid list  # See installed models")
+		os.Exit(1)
+	}
+
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+
+	if err := registry.ScanModels(); err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Error scanning models: %v\n", err)
+		os.Exit(1)
+	}
+
+	modelID := args[0]
+
+	// Check if model exists
+	meta, err := registry.GetModel(modelID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Model not found: %s\n", modelID)
+		fmt.Fprintln(os.Stderr, "\nRun 'offgrid list' to see installed models")
+		os.Exit(1)
+	}
+
+	// Confirm deletion
+	fmt.Printf("Remove model: %s\n", modelID)
+	if meta.Path != "" {
+		fmt.Printf("  Path: %s\n", meta.Path)
+	}
+	if meta.Size > 0 {
+		fmt.Printf("  Size: %s\n", formatBytes(meta.Size))
+	}
+	fmt.Println()
+	fmt.Print("Are you sure? (y/N): ")
+
+	var response string
+	fmt.Scanln(&response)
+
+	if response != "y" && response != "Y" {
+		fmt.Println("  Cancelled")
+		return
+	}
+
+	// Delete the model file
+	if meta.Path != "" {
+		if err := os.Remove(meta.Path); err != nil {
+			fmt.Fprintf(os.Stderr, "\n  ✗ Failed to remove: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	fmt.Printf("\n  ✓ Removed %s\n", modelID)
+}
+
+func handleExport(args []string) {
+	if len(args) < 2 {
+		fmt.Fprintln(os.Stderr, "Usage: offgrid export <model-id> <destination>")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Examples:")
+		fmt.Fprintln(os.Stderr, "  offgrid export tinyllama-1.1b-chat /media/usb")
+		fmt.Fprintln(os.Stderr, "  offgrid export llama-2-7b-chat D:\\backup")
+		os.Exit(1)
+	}
+
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+
+	if err := registry.ScanModels(); err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Error scanning models: %v\n", err)
+		os.Exit(1)
+	}
+
+	modelID := args[0]
+	destPath := args[1]
+
+	// Check if model exists
+	meta, err := registry.GetModel(modelID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Model not found: %s\n", modelID)
+		os.Exit(1)
+	}
+
+	if meta.Path == "" {
+		fmt.Fprintf(os.Stderr, "  ✗ Model path not found\n")
+		os.Exit(1)
+	}
+
+	// Ensure destination directory exists
+	if err := os.MkdirAll(destPath, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Failed to create destination: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Construct destination file path
+	fileName := filepath.Base(meta.Path)
+	destFile := filepath.Join(destPath, fileName)
+
+	fmt.Printf("Exporting %s\n", modelID)
+	fmt.Printf("  From: %s\n", meta.Path)
+	fmt.Printf("  To:   %s\n", destFile)
+	fmt.Printf("  Size: %s\n\n", formatBytes(meta.Size))
+
+	// Copy file
+	sourceFile, err := os.Open(meta.Path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Failed to open source: %v\n", err)
+		os.Exit(1)
+	}
+	defer sourceFile.Close()
+
+	destFileHandle, err := os.Create(destFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Failed to create destination: %v\n", err)
+		os.Exit(1)
+	}
+	defer destFileHandle.Close()
+
+	// Copy with progress
+	buffer := make([]byte, 1024*1024) // 1MB buffer
+	var totalCopied int64
+
+	for {
+		n, err := sourceFile.Read(buffer)
+		if n > 0 {
+			if _, err := destFileHandle.Write(buffer[:n]); err != nil {
+				fmt.Fprintf(os.Stderr, "\n  ✗ Write error: %v\n", err)
+				os.Exit(1)
+			}
+			totalCopied += int64(n)
+			percent := float64(totalCopied) / float64(meta.Size) * 100
+			fmt.Printf("\r  Progress: %.1f%% · %s / %s",
+				percent, formatBytes(totalCopied), formatBytes(meta.Size))
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	fmt.Printf("\n\n  ✓ Exported to %s\n", destFile)
+}
+
+func handleChat(args []string) {
+	fmt.Println("Interactive Chat Mode")
+	fmt.Println()
+	fmt.Println("This feature requires a running server with loaded models.")
+	fmt.Println()
+	fmt.Println("Quick start:")
+	fmt.Println("  1. Start server:  offgrid serve")
+	fmt.Println("  2. In new terminal, use the API:")
+	fmt.Println()
+	fmt.Println("Example curl command:")
+	fmt.Println(`  curl http://localhost:8080/v1/chat/completions \`)
+	fmt.Println(`    -H "Content-Type: application/json" \`)
+	fmt.Println(`    -d '{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'`)
+	fmt.Println()
+	fmt.Println("Or use the web UI at: http://localhost:8080/ui")
+	fmt.Println()
+
+	// TODO: Implement interactive CLI chat
+	// This would require:
+	// 1. Connect to running server via HTTP client
+	// 2. Read user input in loop
+	// 3. Send requests and stream responses
+	// 4. Handle conversation history
+}
+
+func handleBenchmark(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage: offgrid benchmark <model-id>")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Examples:")
+		fmt.Fprintln(os.Stderr, "  offgrid benchmark tinyllama-1.1b-chat")
+		os.Exit(1)
+	}
+
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+
+	if err := registry.ScanModels(); err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Error scanning models: %v\n", err)
+		os.Exit(1)
+	}
+
+	modelID := args[0]
+
+	// Check if model exists
+	meta, err := registry.GetModel(modelID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Model not found: %s\n", modelID)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Benchmark: %s\n", modelID)
+	fmt.Println()
+	fmt.Println("Model Information")
+	fmt.Printf("  Path:          %s\n", meta.Path)
+	fmt.Printf("  Size:          %s\n", formatBytes(meta.Size))
+	if meta.Quantization != "" {
+		fmt.Printf("  Quantization:  %s\n", meta.Quantization)
+	}
+	fmt.Println()
+
+	fmt.Println("Performance Metrics")
+	fmt.Println("  This feature requires llama.cpp integration.")
+	fmt.Println("  Metrics will include:")
+	fmt.Println("    • Model load time")
+	fmt.Println("    • Tokens per second")
+	fmt.Println("    • Memory usage")
+	fmt.Println("    • First token latency")
+	fmt.Println()
+
+	// TODO: Implement actual benchmarking
+	// This would require:
+	// 1. Load model with inference engine
+	// 2. Run test prompts
+	// 3. Measure timing and resource usage
+	// 4. Display results
+}
+
 func handleList(args []string) {
 	cfg := config.LoadConfig()
 	registry := models.NewRegistry(cfg.ModelsDir)
@@ -321,8 +556,12 @@ func printHelp() {
 	fmt.Println("  serve              Start HTTP inference server (default)")
 	fmt.Println("  download <id>      Download a model from catalog")
 	fmt.Println("  import <path>      Import model(s) from USB/SD card")
+	fmt.Println("  export <id> <path> Export a model to USB/SD card")
+	fmt.Println("  remove <id>        Remove an installed model")
 	fmt.Println("  list               List installed models")
 	fmt.Println("  catalog            Show available models")
+	fmt.Println("  chat [model]       Interactive chat mode (upcoming)")
+	fmt.Println("  benchmark <id>     Benchmark model performance (upcoming)")
 	fmt.Println("  quantization       Explain quantization levels")
 	fmt.Println("  config <action>    Manage configuration (init, show, validate)")
 	fmt.Println("  info               Show system information")
@@ -333,6 +572,8 @@ func printHelp() {
 	fmt.Println("  offgrid catalog")
 	fmt.Println("  offgrid download tinyllama-1.1b-chat")
 	fmt.Println("  offgrid import /media/usb")
+	fmt.Println("  offgrid export llama-2-7b-chat /media/usb")
+	fmt.Println("  offgrid remove tinyllama-1.1b-chat")
 	fmt.Println("  offgrid config init")
 	fmt.Println()
 	fmt.Println("Environment Variables")
