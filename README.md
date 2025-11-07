@@ -76,8 +76,14 @@ The installer will:
 **Quick Reinstall**
 
 ```bash
-# Clean install (removes previous installation)
+# Clean install with auto-detect GPU (default)
 sudo ./reinstall.sh
+
+# Clean install with CPU-only mode
+sudo ./reinstall.sh --cpu-only
+
+# Clean install requiring GPU
+sudo ./reinstall.sh --gpu
 ```
 
 **Manual Build (Development)**
@@ -138,7 +144,7 @@ curl http://localhost:11611/v1/models
 curl http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+    "model": "tinyllama-1.1b-chat.Q4_K_M",
     "messages": [{"role": "user", "content": "Explain quantum computing"}],
     "stream": false
   }'
@@ -147,7 +153,7 @@ curl http://localhost:11611/v1/chat/completions \
 curl -N http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+    "model": "tinyllama-1.1b-chat.Q4_K_M",
     "messages": [{"role": "user", "content": "Write a haiku about AI"}],
     "stream": true
   }'
@@ -675,6 +681,39 @@ sudo apt-get install build-essential cmake git
 # Clean and rebuild
 sudo rm -rf /root/llama.cpp
 sudo ./reinstall.sh
+```
+
+### Symbol Lookup Errors
+
+```bash
+# If you see errors like:
+# "symbol lookup error: undefined symbol: llama_state_seq_get_size_ext"
+
+# This means shared libraries aren't installed. Reinstall:
+sudo ./reinstall.sh
+
+# The installer will now properly install shared libraries to /usr/local/lib
+# and update the library cache with ldconfig
+
+# Verify shared libraries are installed:
+ls -la /usr/local/lib/libllama.so*
+ls -la /usr/local/lib/libggml*.so*
+
+# Check library dependencies:
+ldd /usr/local/bin/llama-server
+```
+
+### Quick Fixes
+
+```bash
+# Reinstall with GPU support (default)
+sudo ./reinstall.sh
+
+# Reinstall with CPU-only mode
+sudo ./reinstall.sh --cpu-only
+
+# Force GPU mode (fails if no GPU detected)
+sudo ./reinstall.sh --gpu
 ```
 
 ## Environment Variables
