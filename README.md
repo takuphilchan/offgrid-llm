@@ -31,7 +31,6 @@ Traditional LLM deployments require constant internet connectivity, cloud APIs, 
 - **P2P Model Sharing** - Share models across local networks without internet
 - **USB Distribution** - Install models from USB drives and SD cards
 - **OpenAI Compatible** - Drop-in replacement for OpenAI API
-- **Industrial Web UI** - Masculine, brutalist design with fixed layout and documentation sidebar
 - **Production Ready** - Systemd services, security hardening, monitoring
 
 ## Quick Start
