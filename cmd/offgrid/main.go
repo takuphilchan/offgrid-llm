@@ -154,11 +154,25 @@ func stripAnsi(str string) string {
 }
 
 func reloadLlamaServer() error {
+	return reloadLlamaServerWithModel("")
+}
+
+func reloadLlamaServerWithModel(modelPath string) error {
 	// Check if systemd is available
 	cmd := exec.Command("systemctl", "--version")
 	if err := cmd.Run(); err != nil {
 		// Systemd not available
 		return fmt.Errorf("systemd not available - manual restart required")
+	}
+
+	// If modelPath is provided, update the active model configuration
+	if modelPath != "" {
+		// Store the active model path for the service to use
+		activeModelFile := "/etc/offgrid/active-model"
+		cmd := exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' > %s", modelPath, activeModelFile))
+		if err := cmd.Run(); err != nil {
+			printWarning(fmt.Sprintf("Could not update active model config: %v", err))
+		}
 	}
 
 	// Restart llama-server service
@@ -181,6 +195,10 @@ func reloadLlamaServer() error {
 	}
 
 	printSuccess("Inference server reloaded")
+
+	// Note: Currently llama-server loads the first model found or default
+	// This will be improved in a future version to support dynamic model loading
+
 	return nil
 }
 
@@ -1503,16 +1521,10 @@ func handleDownloadHF(args []string) {
 	fmt.Printf("  Location: %s\n", destPath)
 	fmt.Println()
 
-	// Reload llama-server with the new model
-	if err := reloadLlamaServer(); err != nil {
-		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
-		fmt.Println()
-		printInfo("Manually restart the server:")
-		printItem("Restart service", "sudo systemctl restart llama-server")
-		fmt.Println()
-	} else {
-		fmt.Println()
-	}
+	printInfo("Note: llama-server currently loads a fixed model")
+	printInfo("To use this model, restart llama-server:")
+	printItem("Restart", "sudo systemctl restart llama-server")
+	fmt.Println()
 
 	fmt.Println("Run it:")
 	fmt.Printf("  offgrid run %s\n", selectedFile.Filename)
