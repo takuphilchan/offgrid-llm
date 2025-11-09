@@ -41,8 +41,19 @@ type Config struct {
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
+	// Prefer system-wide models directory if it exists
+	systemModelsDir := "/var/lib/offgrid/models"
 	homeDir, _ := os.UserHomeDir()
-	defaultModelsDir := filepath.Join(homeDir, ".offgrid-llm", "models")
+	userModelsDir := filepath.Join(homeDir, ".offgrid-llm", "models")
+
+	// Default to system directory if it exists and we can read it
+	defaultModelsDir := userModelsDir
+	if info, err := os.Stat(systemModelsDir); err == nil && info.IsDir() {
+		// Check if directory is readable by trying to list it
+		if _, err := os.ReadDir(systemModelsDir); err == nil {
+			defaultModelsDir = systemModelsDir
+		}
+	}
 
 	return &Config{
 		ServerPort:     getEnvInt("OFFGRID_PORT", 11611),
@@ -203,8 +214,19 @@ func LoadWithPriority(configPath string) (*Config, error) {
 
 // applyDefaults sets default values for unset fields
 func (c *Config) applyDefaults() {
+	// Prefer system-wide models directory if it exists
+	systemModelsDir := "/var/lib/offgrid/models"
 	homeDir, _ := os.UserHomeDir()
-	defaultModelsDir := filepath.Join(homeDir, ".offgrid-llm", "models")
+	userModelsDir := filepath.Join(homeDir, ".offgrid-llm", "models")
+
+	// Default to system directory if it exists and we can read it
+	defaultModelsDir := userModelsDir
+	if info, err := os.Stat(systemModelsDir); err == nil && info.IsDir() {
+		// Check if directory is readable by trying to list it
+		if _, err := os.ReadDir(systemModelsDir); err == nil {
+			defaultModelsDir = systemModelsDir
+		}
+	}
 
 	if c.ServerPort == 0 {
 		c.ServerPort = 11611

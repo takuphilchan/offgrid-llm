@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -185,8 +186,8 @@ func reloadLlamaServerWithModel(modelPath string) error {
 		return fmt.Errorf("failed to restart llama-server: %v\nOutput: %s", err, string(output))
 	}
 
-	// Wait a moment for service to start
-	time.Sleep(2 * time.Second)
+	// Wait for service to be active
+	time.Sleep(1 * time.Second)
 
 	// Check if service is active
 	cmd = exec.Command("systemctl", "is-active", "llama-server")
@@ -194,12 +195,78 @@ func reloadLlamaServerWithModel(modelPath string) error {
 		return fmt.Errorf("llama-server failed to start - check logs with: sudo journalctl -u llama-server -n 50")
 	}
 
+	// Wait for model to actually load (can take several seconds for large models)
+	if err := waitForLlamaServerReady(30); err != nil {
+		printWarning(fmt.Sprintf("Model may still be loading: %v", err))
+		printInfo("Large models can take 10-30 seconds to load")
+	}
+
 	printSuccess("Inference server reloaded")
 
-	// Note: Currently llama-server loads the first model found or default
-	// This will be improved in a future version to support dynamic model loading
-
 	return nil
+}
+
+// waitForLlamaServerReady polls llama-server until it's ready or timeout
+func waitForLlamaServerReady(timeoutSec int) error {
+	// Read llama-server port
+	portBytes, err := os.ReadFile("/etc/offgrid/llama-port")
+	if err != nil {
+		return fmt.Errorf("could not read llama-server port: %w", err)
+	}
+	port := strings.TrimSpace(string(portBytes))
+
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	healthURL := fmt.Sprintf("http://127.0.0.1:%s/health", port)
+	completionURL := fmt.Sprintf("http://127.0.0.1:%s/v1/chat/completions", port)
+
+	startTime := time.Now()
+	for time.Since(startTime) < time.Duration(timeoutSec)*time.Second {
+		// First check health endpoint
+		resp, err := client.Get(healthURL)
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// Health OK, now check if model is loaded (try a minimal completion)
+		testReq := map[string]interface{}{
+			"model": "test",
+			"messages": []map[string]string{
+				{"role": "user", "content": "hi"},
+			},
+			"max_tokens": 1,
+		}
+
+		jsonData, _ := json.Marshal(testReq)
+		resp, err = client.Post(completionURL, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		// Check for "loading model" error
+		if resp.StatusCode == 503 && strings.Contains(string(body), "Loading model") {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// Any other response means model is loaded (even errors about the request)
+		return nil
+	}
+
+	return fmt.Errorf("timeout waiting for model to load")
 }
 
 func main() {
@@ -332,8 +399,11 @@ func handleDownload(args []string) {
 		os.Exit(1)
 	}
 
+	// Construct the model path
+	modelPath := filepath.Join(cfg.ModelsDir, fmt.Sprintf("%s.%s.gguf", modelID, quantization))
+
 	// Reload llama-server with the new model
-	if err := reloadLlamaServer(); err != nil {
+	if err := reloadLlamaServerWithModel(modelPath); err != nil {
 		fmt.Println()
 		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
 		fmt.Println()
@@ -467,8 +537,10 @@ func handleImport(args []string) {
 
 		fmt.Printf("\n  ✓ Model imported to %s\n", cfg.ModelsDir)
 
-		// Reload llama-server with the new model
-		if err := reloadLlamaServer(); err != nil {
+		// Reload llama-server with the imported model
+		// Construct the destination path where the model was imported
+		importedModelPath := filepath.Join(cfg.ModelsDir, filepath.Base(usbPath))
+		if err := reloadLlamaServerWithModel(importedModelPath); err != nil {
 			fmt.Println()
 			printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
 			fmt.Println()
@@ -1521,10 +1593,15 @@ func handleDownloadHF(args []string) {
 	fmt.Printf("  Location: %s\n", destPath)
 	fmt.Println()
 
-	printInfo("Note: llama-server currently loads a fixed model")
-	printInfo("To use this model, restart llama-server:")
-	printItem("Restart", "sudo systemctl restart llama-server")
-	fmt.Println()
+	// Reload llama-server with the downloaded model
+	if err := reloadLlamaServerWithModel(destPath); err != nil {
+		fmt.Println()
+		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
+		fmt.Println()
+		printInfo("Manually restart the server:")
+		printItem("Restart service", "sudo systemctl restart llama-server")
+		fmt.Println()
+	}
 
 	fmt.Println("Run it:")
 	fmt.Printf("  offgrid run %s\n", selectedFile.Filename)
@@ -1588,7 +1665,7 @@ func handleRun(args []string) {
 	}
 
 	// Try to find the model
-	_, err := registry.GetModel(modelName)
+	modelInfo, err := registry.GetModel(modelName)
 	if err != nil {
 		fmt.Println()
 		printError(fmt.Sprintf("Model not found: %s", modelName))
@@ -1608,6 +1685,16 @@ func handleRun(args []string) {
 		}
 		fmt.Println()
 		os.Exit(1)
+	}
+
+	// Switch to the requested model and reload llama-server
+	modelPath := modelInfo.Path
+	if err := reloadLlamaServerWithModel(modelPath); err != nil {
+		fmt.Println()
+		printWarning(fmt.Sprintf("Could not switch to model: %v", err))
+		printInfo("You may need to manually restart llama-server:")
+		printItem("Restart", "sudo systemctl restart llama-server")
+		fmt.Println()
 	}
 
 	printDivider()

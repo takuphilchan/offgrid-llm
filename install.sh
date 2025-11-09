@@ -785,6 +785,9 @@ setup_user() {
         print_info "User 'offgrid' already exists"
     fi
     
+    # Ensure /var/lib/offgrid is readable by all users (needed for model access)
+    sudo chmod 755 /var/lib/offgrid
+    
     # Add to video and render groups for GPU access
     if [ "$GPU_TYPE" != "none" ]; then
         print_step "Adding offgrid user to GPU groups..."
@@ -827,7 +830,21 @@ setup_llama_server_service() {
     # Create models directory if it doesn't exist
     sudo mkdir -p "$MODELS_DIR"
     sudo chown offgrid:offgrid "$MODELS_DIR"
-    sudo chmod 755 "$MODELS_DIR"
+    
+    # Make models directory readable by all, writable by group
+    # Use setgid so new files inherit the offgrid group
+    sudo chmod 2775 "$MODELS_DIR"  # 2 = setgid bit
+    
+    # Create marker file to indicate system directory is ready
+    sudo touch "$MODELS_DIR/.offgrid"
+    sudo chown offgrid:offgrid "$MODELS_DIR/.offgrid"
+    
+    # Add current user to offgrid group for write access
+    if ! groups | grep -q offgrid; then
+        print_info "Adding current user to 'offgrid' group for model management..."
+        sudo usermod -a -G offgrid "$USER"
+        print_info "Group membership will be active in new terminal sessions"
+    fi
     
     if [ -f "$MODELS_DIR/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" ]; then
         MODEL_PATH="$MODELS_DIR/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
@@ -872,6 +889,66 @@ setup_llama_server_service() {
         print_info "Configured for CPU-only inference"
     fi
     
+    # Create startup script that reads active model from config
+    print_step "Creating llama-server startup script..."
+    local START_SCRIPT="/usr/local/bin/llama-server-start.sh"
+    sudo tee "$START_SCRIPT" > /dev/null <<'START_SCRIPT_EOF'
+#!/bin/bash
+# llama-server startup script with dynamic model loading
+
+ACTIVE_MODEL_FILE="/etc/offgrid/active-model"
+MODELS_DIR="/var/lib/offgrid/models"
+DEFAULT_MODEL=""
+LLAMA_PORT_FILE="/etc/offgrid/llama-port"
+
+# Find the first available model if no active model is set
+if [ -f "$ACTIVE_MODEL_FILE" ]; then
+    MODEL_PATH=$(cat "$ACTIVE_MODEL_FILE")
+    if [ ! -f "$MODEL_PATH" ]; then
+        echo "Warning: Configured model not found: $MODEL_PATH" >&2
+        MODEL_PATH=""
+    fi
+fi
+
+# If no active model or it doesn't exist, find the first .gguf file
+if [ -z "$MODEL_PATH" ]; then
+    MODEL_PATH=$(find "$MODELS_DIR" -maxdepth 1 -name "*.gguf" -type f | head -n 1)
+    if [ -z "$MODEL_PATH" ]; then
+        echo "Error: No .gguf models found in $MODELS_DIR" >&2
+        exit 1
+    fi
+    echo "Using first available model: $MODEL_PATH" >&2
+    # Save it as the active model for next time
+    echo "$MODEL_PATH" > "$ACTIVE_MODEL_FILE"
+fi
+
+# Read port from config
+if [ -f "$LLAMA_PORT_FILE" ]; then
+    LLAMA_PORT=$(cat "$LLAMA_PORT_FILE")
+else
+    LLAMA_PORT=49233
+fi
+
+echo "Starting llama-server with model: $(basename $MODEL_PATH)" >&2
+echo "Port: $LLAMA_PORT" >&2
+
+# Execute llama-server with the selected model
+exec /usr/local/bin/llama-server -m "$MODEL_PATH" --port "$LLAMA_PORT" --host 127.0.0.1 -c 2048 EXTRA_ARGS_PLACEHOLDER
+START_SCRIPT_EOF
+    
+    # Replace EXTRA_ARGS_PLACEHOLDER with actual GPU args
+    sudo sed -i "s/EXTRA_ARGS_PLACEHOLDER/$EXTRA_ARGS/" "$START_SCRIPT"
+    sudo chmod +x "$START_SCRIPT"
+    
+    print_success "Created startup script at $START_SCRIPT"
+    
+    # Create initial active model config
+    print_step "Setting up active model configuration..."
+    sudo mkdir -p /etc/offgrid
+    echo "$MODEL_PATH" | sudo tee /etc/offgrid/active-model > /dev/null
+    sudo chmod 644 /etc/offgrid/active-model
+    print_info "Active model: $(basename $MODEL_PATH)"
+    
     sudo tee "$SERVICE_FILE" > /dev/null <<SERVICE_EOF
 [Unit]
 Description=llama.cpp Inference Server (Internal)
@@ -885,7 +962,7 @@ Type=simple
 User=offgrid
 Group=offgrid
 WorkingDirectory=/var/lib/offgrid
-ExecStart=/usr/local/bin/llama-server -m ${MODEL_PATH} --port ${RANDOM_PORT} --host 127.0.0.1 -c 2048 ${EXTRA_ARGS}
+ExecStart=/usr/local/bin/llama-server-start.sh
 Restart=always
 RestartSec=3
 
@@ -898,6 +975,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/offgrid
+ReadWritePaths=/etc/offgrid
 # Network isolation - only localhost
 IPAddressDeny=any
 IPAddressAllow=localhost
@@ -1067,7 +1145,7 @@ display_summary() {
     fi
     
     # Show real inference mode
-    echo -e "  Inference: ${GREEN}REAL LLM${RESET} ${GRAY}(via llama.cpp HTTP server)${RESET}"
+    echo -e "  Inference: ${BRAND_SUCCESS}REAL LLM${RESET} ${BRAND_MUTED}(via llama.cpp HTTP server)${RESET}"
     echo ""
     
     # Get internal port
