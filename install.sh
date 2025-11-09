@@ -19,19 +19,19 @@ cleanup() {
 # Set trap to cleanup on exit
 trap cleanup EXIT
 
-# Color definitions (industrial theme matching web UI)
-ORANGE='\033[38;5;172m'    # Muted amber-brown (darker, easier on eyes)
-AMBER='\033[38;5;178m'     # Soft gold accent
-TEAL='\033[38;5;37m'       # Secondary color (matches #0891b2 steel teal from UI)
-GRAY='\033[38;5;240m'      # Subtle/dim text (matches #525252 gray from UI)
-GREEN='\033[0;32m'
-RED='\033[0;31m'
+# Color definitions (matching CLI brand colors)
+BRAND_PRIMARY='\033[38;5;45m'      # Bright cyan (#00d4ff)
+BRAND_SECONDARY='\033[38;5;141m'   # Purple (#af87ff)
+BRAND_ACCENT='\033[38;5;226m'      # Yellow (#ffff00)
+BRAND_SUCCESS='\033[38;5;78m'      # Green (#5fd787)
+BRAND_ERROR='\033[38;5;196m'       # Red (#ff005f)
+BRAND_MUTED='\033[38;5;240m'       # Gray (#585858)
 RESET='\033[0m'
 BOLD='\033[1m'
 
 # ASCII Art Banner
 print_banner() {
-    echo -e "${ORANGE}"
+    echo -e "${BRAND_PRIMARY}${BOLD}"
     cat << "EOF"
     ╔═══════════════════════════════════════════════════════════════╗
     ║                                                               ║
@@ -42,48 +42,52 @@ print_banner() {
     ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
     ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
     ║                                                               ║
-    ║                       L L M   I N S T A L L E R               ║
+    ║                  E D G E   I N F E R E N C E                  ║
     ║                                                               ║
     ╚═══════════════════════════════════════════════════════════════╝
 EOF
     echo -e "${RESET}"
-    echo -e "${GRAY}    Offline AI inference for edge environments${RESET}"
+    echo -e "${BRAND_MUTED}    Offline-first AI for edge environments${RESET}"
     echo ""
 }
 
 # Print Functions
 print_header() {
     echo ""
-    echo -e "${ORANGE}▸${RESET} ${BOLD}$1${RESET}"
+    echo -e "${BRAND_PRIMARY}◆${RESET} ${BOLD}$1${RESET}"
+    echo -e "${BRAND_MUTED}$(printf '─%.0s' {1..60})${RESET}"
     echo ""
 }
 
-print_success() { echo -e "${GREEN}▸${RESET} $1"; }
-print_error() { echo -e "${RED}▸${RESET} $1" >&2; }
-print_info() { echo -e "${TEAL}▸${RESET} $1"; }
-print_warning() { echo -e "${AMBER}▸${RESET} $1"; }
-print_step() { echo -e "${BOLD}${ORANGE}▸${RESET} $1"; }
+print_success() { echo -e "${BRAND_SUCCESS}✓${RESET} $1"; }
+print_error() { echo -e "${BRAND_ERROR}✗${RESET} $1" >&2; }
+print_info() { echo -e "${BRAND_PRIMARY}→${RESET} $1"; }
+print_warning() { echo -e "${BRAND_ACCENT}⚡${RESET} $1"; }
+print_step() { echo -e "${BOLD}${BRAND_PRIMARY}▸${RESET} $1"; }
+print_divider() { echo -e "${BRAND_MUTED}$(printf '━%.0s' {1..70})${RESET}"; }
 
 # Usage/Help
 usage() {
-    cat << EOF
-${BOLD}${ORANGE}OffGrid LLM Installation Script${RESET}
-Offline AI inference for edge and offline environments
-
-${BOLD}USAGE:${RESET}
-    ./install.sh [OPTIONS]
-
-${BOLD}OPTIONS:${RESET}
-    --cpu-only          Force CPU-only mode (skip GPU detection and CUDA build)
-    --gpu               Force GPU mode (fail if no GPU detected)
-    --help, -h          Show this help message
-
-${BOLD}EXAMPLES:${RESET}
-    ./install.sh                    # Auto-detect GPU and build accordingly
-    ./install.sh --cpu-only         # Build for CPU only (no CUDA)
-    ./install.sh --gpu              # Require GPU support
-
-EOF
+    echo -e "${BRAND_MUTED}$(printf '━%.0s' {1..70})${RESET}"
+    echo ""
+    echo -e "${BRAND_PRIMARY}◆${RESET} ${BOLD}Usage${RESET}"
+    echo -e "${BRAND_MUTED}$(printf '─%.0s' {1..60})${RESET}"
+    echo "  ./install.sh [OPTIONS]"
+    echo ""
+    echo -e "${BRAND_PRIMARY}◆${RESET} ${BOLD}Options${RESET}"
+    echo -e "${BRAND_MUTED}$(printf '─%.0s' {1..60})${RESET}"
+    echo "  --cpu-only          Force CPU-only mode (skip GPU detection)"
+    echo "  --gpu               Force GPU mode (fail if no GPU detected)"
+    echo "  --help, -h          Show this help message"
+    echo ""
+    echo -e "${BRAND_PRIMARY}◆${RESET} ${BOLD}Examples${RESET}"
+    echo -e "${BRAND_MUTED}$(printf '─%.0s' {1..60})${RESET}"
+    echo -e "  ${BRAND_MUTED}\$${RESET} ./install.sh                    # Auto-detect GPU"
+    echo -e "  ${BRAND_MUTED}\$${RESET} ./install.sh --cpu-only         # CPU-only mode"
+    echo -e "  ${BRAND_MUTED}\$${RESET} ./install.sh --gpu              # Require GPU"
+    echo ""
+    echo -e "${BRAND_MUTED}$(printf '━%.0s' {1..70})${RESET}"
+    echo ""
     exit 0
 }
 
@@ -129,6 +133,7 @@ trap 'handle_error "line $LINENO"' ERR
 
 # Dependency Checks
 check_dependencies() {
+    print_divider
     print_header "Checking Dependencies"
     
     local missing=()
@@ -143,6 +148,7 @@ check_dependencies() {
     if [ ${#missing[@]} -gt 0 ]; then
         print_error "Missing required dependencies: ${missing[*]}"
         print_info "Installing missing dependencies..."
+        echo ""
         
         if command -v apt-get &> /dev/null; then
             sudo apt-get update
@@ -161,6 +167,7 @@ check_dependencies() {
 
 # Architecture Detection
 detect_architecture() {
+    print_divider
     print_header "Detecting System Architecture"
     
     local arch=$(uname -m)
@@ -182,6 +189,7 @@ detect_architecture() {
 
 # OS Detection
 detect_os() {
+    print_divider
     print_header "Detecting Operating System"
     
     if [ -f /etc/os-release ]; then
@@ -1051,11 +1059,11 @@ display_summary() {
     echo ""
     
     echo -e "${BOLD}System Information:${RESET}"
-    echo -e "  Architecture: ${TEAL}$ARCH${RESET}"
-    echo -e "  OS: ${TEAL}$NAME $VERSION${RESET}"
-    echo -e "  GPU: ${TEAL}${GPU_TYPE}${RESET}"
+    echo -e "  Architecture: ${BRAND_SECONDARY}$ARCH${RESET}"
+    echo -e "  OS: ${BRAND_SECONDARY}$NAME $VERSION${RESET}"
+    echo -e "  GPU: ${BRAND_SECONDARY}${GPU_TYPE}${RESET}"
     if [ "$GPU_TYPE" != "none" ]; then
-        echo -e "  GPU Info: ${TEAL}${GPU_INFO}${RESET}"
+        echo -e "  GPU Info: ${BRAND_SECONDARY}${GPU_INFO}${RESET}"
     fi
     
     # Show real inference mode
@@ -1071,8 +1079,8 @@ display_summary() {
     echo -e "${BOLD}Service Information:${RESET}"
     echo -e "  llama-server: ${GREEN}Internal Port ${INTERNAL_PORT}${RESET} ${GRAY}(localhost-only, not accessible externally)${RESET}"
     echo -e "  OffGrid LLM: ${GREEN}Port 11611${RESET} ${GRAY}(public API endpoint)${RESET}"
-    echo -e "  Web UI: ${TEAL}http://localhost:11611/ui${RESET}"
-    echo -e "  API: ${TEAL}http://localhost:11611${RESET}"
+    echo -e "  Web UI: ${BRAND_SECONDARY}http://localhost:11611/ui${RESET}"
+    echo -e "  API: ${BRAND_SECONDARY}http://localhost:11611${RESET}"
     echo ""
     
     echo -e "${BOLD}Security:${RESET}"
@@ -1083,19 +1091,19 @@ display_summary() {
     echo ""
     
     echo -e "${BOLD}Useful Commands:${RESET}"
-    echo -e "  ${TEAL}offgrid serve${RESET}                      - Start OffGrid manually"
-    echo -e "  ${TEAL}offgrid list${RESET}                       - List available models"
-    echo -e "  ${TEAL}offgrid download <model>${RESET}           - Download a model"
-    echo -e "  ${TEAL}sudo systemctl status offgrid-llm${RESET}  - Check OffGrid status"
-    echo -e "  ${TEAL}sudo systemctl status llama-server${RESET} - Check llama-server status"
-    echo -e "  ${TEAL}sudo journalctl -u offgrid-llm -f${RESET}  - View OffGrid logs"
-    echo -e "  ${TEAL}sudo journalctl -u llama-server -f${RESET} - View llama-server logs"
+    echo -e "  ${BRAND_SECONDARY}offgrid serve${RESET}                      - Start OffGrid manually"
+    echo -e "  ${BRAND_SECONDARY}offgrid list${RESET}                       - List available models"
+    echo -e "  ${BRAND_SECONDARY}offgrid download <model>${RESET}           - Download a model"
+    echo -e "  ${BRAND_SECONDARY}sudo systemctl status offgrid-llm${RESET}  - Check OffGrid status"
+    echo -e "  ${BRAND_SECONDARY}sudo systemctl status llama-server${RESET} - Check llama-server status"
+    echo -e "  ${BRAND_SECONDARY}sudo journalctl -u offgrid-llm -f${RESET}  - View OffGrid logs"
+    echo -e "  ${BRAND_SECONDARY}sudo journalctl -u llama-server -f${RESET} - View llama-server logs"
     echo ""
     
     echo -e "${BOLD}Next Steps:${RESET}"
-    echo -e "  1. Visit ${TEAL}http://localhost:11611/ui${RESET} in your browser"
-    echo -e "  2. Test health: ${TEAL}curl http://localhost:11611/health${RESET}"
-    echo -e "  3. Test chat: ${TEAL}curl -X POST http://localhost:11611/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}'${RESET}"
+    echo -e "  1. Visit ${BRAND_SECONDARY}http://localhost:11611/ui${RESET} in your browser"
+    echo -e "  2. Test health: ${BRAND_SECONDARY}curl http://localhost:11611/health${RESET}"
+    echo -e "  3. Test chat: ${BRAND_SECONDARY}curl -X POST http://localhost:11611/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}'${RESET}"
     echo ""
     
     echo -e "${BOLD}${GREEN}🎉 Real LLM inference is enabled!${RESET}"

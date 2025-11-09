@@ -86,6 +86,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("/v1/completions", s.handleCompletions)
 
+	// Model search and discovery (OffGrid-specific)
+	mux.HandleFunc("/v1/search", s.handleModelSearch)
+	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
+
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
 
@@ -107,14 +111,29 @@ func (s *Server) Start() error {
 	// Graceful shutdown handler
 	go s.handleShutdown()
 
-	log.Printf("Server starting on http://localhost:%d", s.config.ServerPort)
-	log.Printf("API endpoints:")
-	log.Printf("  GET  /health")
-	log.Printf("  GET  /v1/models")
-	log.Printf("  POST /v1/chat/completions")
-	log.Printf("  POST /v1/completions")
-	log.Printf("Web UI:")
-	log.Printf("  http://localhost:%d/ui", s.config.ServerPort)
+	// Improved startup message with brand aesthetic
+	fmt.Println()
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println()
+	fmt.Printf("  \033[38;5;45m◆\033[0m \033[1mOffGrid LLM Server\033[0m\n")
+	fmt.Println("  ──────────────────────────────────────────────────")
+	fmt.Println()
+	fmt.Printf("  \033[38;5;45m→\033[0m Server:     http://localhost:%d\n", s.config.ServerPort)
+	fmt.Printf("  \033[38;5;45m→\033[0m Web UI:     http://localhost:%d/ui\n", s.config.ServerPort)
+	fmt.Printf("  \033[38;5;45m→\033[0m API Docs:   http://localhost:%d/health\n", s.config.ServerPort)
+	fmt.Println()
+	fmt.Println("  \033[38;5;141m◆\033[0m \033[1mEndpoints\033[0m")
+	fmt.Println("  ──────────────────────────────────────────────────")
+	fmt.Println("    GET  /health")
+	fmt.Println("    GET  /v1/models")
+	fmt.Println("    POST /v1/chat/completions")
+	fmt.Println("    POST /v1/completions")
+	fmt.Println("    POST /v1/search")
+	fmt.Println("    POST /v1/benchmark")
+	fmt.Println()
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println()
+	log.Printf("✓ Server listening on port %d", s.config.ServerPort)
 
 	if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
@@ -485,6 +504,220 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+}
+
+// handleModelSearch searches HuggingFace Hub for models
+func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse query parameters
+	query := r.URL.Query().Get("query")
+	author := r.URL.Query().Get("author")
+	quant := r.URL.Query().Get("quantization")
+	sortBy := r.URL.Query().Get("sort")
+
+	filter := models.SearchFilter{
+		Query:          query,
+		Author:         author,
+		Quantization:   quant,
+		SortBy:         sortBy,
+		OnlyGGUF:       true,
+		ExcludeGated:   true,
+		Limit:          20,
+		ExcludePrivate: true,
+	}
+
+	// Allow JSON body for more complex filters
+	if r.Method == http.MethodPost {
+		if err := json.NewDecoder(r.Body).Decode(&filter); err != nil {
+			writeError(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+
+	hf := models.NewHuggingFaceClient()
+	results, err := hf.SearchModels(filter)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Search failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"total":   len(results),
+		"results": results,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// handleBenchmark benchmarks a model's performance
+func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Model        string `json:"model"`
+		PromptTokens int    `json:"prompt_tokens"` // Default 512
+		OutputTokens int    `json:"output_tokens"` // Default 128
+		Iterations   int    `json:"iterations"`    // Default 3
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Model == "" {
+		writeError(w, "Model is required", http.StatusBadRequest)
+		return
+	}
+
+	// Set defaults
+	if req.PromptTokens == 0 {
+		req.PromptTokens = 512
+	}
+	if req.OutputTokens == 0 {
+		req.OutputTokens = 128
+	}
+	if req.Iterations == 0 {
+		req.Iterations = 3
+	}
+
+	// Get model
+	modelMeta, err := s.registry.GetModel(req.Model)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
+		return
+	}
+
+	// Load model if needed
+	if !modelMeta.IsLoaded {
+		if err := s.registry.LoadModel(req.Model); err != nil {
+			writeError(w, fmt.Sprintf("Failed to load model: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		ctx := context.Background()
+		opts := inference.DefaultLoadOptions()
+		opts.NumThreads = s.config.NumThreads
+		opts.ContextSize = s.config.MaxContextSize
+
+		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
+			writeError(w, fmt.Sprintf("Failed to load model into engine: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Run benchmark
+	log.Printf("Running benchmark: %s (prompt=%d, output=%d, iterations=%d)",
+		req.Model, req.PromptTokens, req.OutputTokens, req.Iterations)
+
+	type BenchmarkRun struct {
+		PromptTokensPerSec     float64 `json:"prompt_tokens_per_sec"`
+		GenerationTokensPerSec float64 `json:"generation_tokens_per_sec"`
+		TotalTimeMs            int64   `json:"total_time_ms"`
+		MemoryUsedMB           int64   `json:"memory_used_mb"`
+	}
+
+	runs := make([]BenchmarkRun, 0, req.Iterations)
+
+	// Generate test prompt of appropriate length
+	testPrompt := generateTestPrompt(req.PromptTokens)
+
+	for i := 0; i < req.Iterations; i++ {
+		startMem := s.monitor.GetStats().MemoryUsedMB
+		startTime := time.Now()
+
+		// Create chat request
+		chatReq := &api.ChatCompletionRequest{
+			Model: req.Model,
+			Messages: []api.ChatMessage{
+				{Role: "user", Content: testPrompt},
+			},
+			MaxTokens: &req.OutputTokens,
+		}
+
+		ctx := context.Background()
+		resp, err := s.engine.ChatCompletion(ctx, chatReq)
+		if err != nil {
+			writeError(w, fmt.Sprintf("Benchmark failed: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		duration := time.Since(startTime)
+		endMem := s.monitor.GetStats().MemoryUsedMB
+
+		promptTPS := float64(resp.Usage.PromptTokens) / duration.Seconds()
+		genTPS := float64(resp.Usage.CompletionTokens) / duration.Seconds()
+
+		runs = append(runs, BenchmarkRun{
+			PromptTokensPerSec:     promptTPS,
+			GenerationTokensPerSec: genTPS,
+			TotalTimeMs:            duration.Milliseconds(),
+			MemoryUsedMB:           int64(endMem - startMem),
+		})
+
+		// Small delay between runs
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Calculate averages
+	var avgPromptTPS, avgGenTPS, avgTimeMs, avgMemMB float64
+	for _, run := range runs {
+		avgPromptTPS += run.PromptTokensPerSec
+		avgGenTPS += run.GenerationTokensPerSec
+		avgTimeMs += float64(run.TotalTimeMs)
+		avgMemMB += float64(run.MemoryUsedMB)
+	}
+	n := float64(len(runs))
+	avgPromptTPS /= n
+	avgGenTPS /= n
+	avgTimeMs /= n
+	avgMemMB /= n
+
+	response := map[string]interface{}{
+		"model": req.Model,
+		"config": map[string]int{
+			"prompt_tokens": req.PromptTokens,
+			"output_tokens": req.OutputTokens,
+			"iterations":    req.Iterations,
+		},
+		"results": map[string]interface{}{
+			"avg_prompt_tokens_per_sec":     avgPromptTPS,
+			"avg_generation_tokens_per_sec": avgGenTPS,
+			"avg_total_time_ms":             avgTimeMs,
+			"avg_memory_mb":                 avgMemMB,
+			"runs":                          runs,
+		},
+		"system": s.monitor.GetStats(),
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// generateTestPrompt creates a test prompt of approximately the target token count
+func generateTestPrompt(targetTokens int) string {
+	// Rough estimate: 1 token ≈ 4 characters
+	chars := targetTokens * 4
+	base := "This is a test prompt for benchmarking purposes. "
+	result := ""
+	for len(result) < chars {
+		result += base
+	}
+	return result[:chars]
 }
 
 // handleWebUI serves the web dashboard
