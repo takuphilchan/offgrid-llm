@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -215,8 +216,14 @@ func waitForLlamaServerReady(timeoutSec int) error {
 	}
 	port := strings.TrimSpace(string(portBytes))
 
+	// Create client that bypasses proxy for localhost
 	client := &http.Client{
 		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return nil, nil // Explicitly bypass all proxies for localhost
+			},
+		},
 	}
 
 	healthURL := fmt.Sprintf("http://127.0.0.1:%s/health", port)

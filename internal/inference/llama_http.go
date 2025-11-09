@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -36,6 +37,11 @@ func NewLlamaHTTPEngine(llamaServerURL string) *LlamaHTTPEngine {
 		baseURL: llamaServerURL,
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
+			Transport: &http.Transport{
+				Proxy: func(req *http.Request) (*url.URL, error) {
+					return nil, nil // Explicitly bypass all proxies for localhost
+				},
+			},
 		},
 		loaded: true, // llama-server handles model loading
 	}
