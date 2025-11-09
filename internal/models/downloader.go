@@ -140,6 +140,7 @@ func (d *Downloader) downloadFromSource(modelID, quantization string, variant *M
 	startTime := time.Now()
 	lastUpdate := time.Now()
 	updateInterval := 500 * time.Millisecond
+	bytesDownloadedThisSession := int64(0) // Track only new bytes for speed calc
 
 	buffer := make([]byte, 32*1024) // 32KB buffer
 
@@ -151,11 +152,12 @@ func (d *Downloader) downloadFromSource(modelID, quantization string, variant *M
 			}
 
 			bytesWritten += int64(n)
+			bytesDownloadedThisSession += int64(n)
 
 			// Update progress periodically
 			if time.Since(lastUpdate) >= updateInterval {
 				elapsed := time.Since(startTime).Seconds()
-				speed := int64(float64(bytesWritten) / elapsed)
+				speed := int64(float64(bytesDownloadedThisSession) / elapsed)
 
 				progress.BytesDone = bytesWritten
 				progress.Percent = float64(bytesWritten) / float64(variant.Size) * 100

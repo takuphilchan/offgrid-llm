@@ -1483,6 +1483,12 @@ func handleRun(args []string) {
 	}
 
 	modelName := args[0]
+
+	// Strip .gguf extension if present (for user convenience)
+	if strings.HasSuffix(strings.ToLower(modelName), ".gguf") {
+		modelName = modelName[:len(modelName)-5]
+	}
+
 	cfg := config.LoadConfig()
 
 	// Check if model exists locally
