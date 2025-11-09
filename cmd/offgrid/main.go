@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -152,6 +153,37 @@ func stripAnsi(str string) string {
 	return result
 }
 
+func reloadLlamaServer() error {
+	// Check if systemd is available
+	cmd := exec.Command("systemctl", "--version")
+	if err := cmd.Run(); err != nil {
+		// Systemd not available
+		return fmt.Errorf("systemd not available - manual restart required")
+	}
+
+	// Restart llama-server service
+	fmt.Println()
+	printInfo("Reloading inference server with new model...")
+
+	cmd = exec.Command("sudo", "systemctl", "restart", "llama-server")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to restart llama-server: %v\nOutput: %s", err, string(output))
+	}
+
+	// Wait a moment for service to start
+	time.Sleep(2 * time.Second)
+
+	// Check if service is active
+	cmd = exec.Command("systemctl", "is-active", "llama-server")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("llama-server failed to start - check logs with: sudo journalctl -u llama-server -n 50")
+	}
+
+	printSuccess("Inference server reloaded")
+	return nil
+}
+
 func main() {
 	// Parse command
 	if len(os.Args) > 1 {
@@ -281,6 +313,16 @@ func handleDownload(args []string) {
 		fmt.Fprintf(os.Stderr, "\n  ✗ Download failed: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Reload llama-server with the new model
+	if err := reloadLlamaServer(); err != nil {
+		fmt.Println()
+		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
+		fmt.Println()
+		printInfo("Manually restart the server:")
+		printItem("Restart service", "sudo systemctl restart llama-server")
+		fmt.Println()
+	}
 }
 
 func handleImport(args []string) {
@@ -373,6 +415,18 @@ func handleImport(args []string) {
 		}
 
 		fmt.Printf("\n  ✓ Imported %d model(s) to %s\n", imported, cfg.ModelsDir)
+
+		// Reload llama-server with imported models
+		if imported > 0 {
+			if err := reloadLlamaServer(); err != nil {
+				fmt.Println()
+				printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
+				fmt.Println()
+				printInfo("Manually restart the server:")
+				printItem("Restart service", "sudo systemctl restart llama-server")
+				fmt.Println()
+			}
+		}
 	} else {
 		// Import single file
 		fmt.Printf("Importing %s\n\n", filepath.Base(usbPath))
@@ -394,6 +448,16 @@ func handleImport(args []string) {
 		}
 
 		fmt.Printf("\n  ✓ Model imported to %s\n", cfg.ModelsDir)
+
+		// Reload llama-server with the new model
+		if err := reloadLlamaServer(); err != nil {
+			fmt.Println()
+			printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
+			fmt.Println()
+			printInfo("Manually restart the server:")
+			printItem("Restart service", "sudo systemctl restart llama-server")
+			fmt.Println()
+		}
 	}
 }
 
@@ -1438,6 +1502,18 @@ func handleDownloadHF(args []string) {
 	fmt.Printf("  Model: %s\n", selectedFile.Filename)
 	fmt.Printf("  Location: %s\n", destPath)
 	fmt.Println()
+
+	// Reload llama-server with the new model
+	if err := reloadLlamaServer(); err != nil {
+		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
+		fmt.Println()
+		printInfo("Manually restart the server:")
+		printItem("Restart service", "sudo systemctl restart llama-server")
+		fmt.Println()
+	} else {
+		fmt.Println()
+	}
+
 	fmt.Println("Run it:")
 	fmt.Printf("  offgrid run %s\n", selectedFile.Filename)
 	fmt.Println()
@@ -1555,6 +1631,43 @@ func handleRun(args []string) {
 	}
 	resp.Body.Close()
 	fmt.Printf(" %s✓%s\n", brandSuccess, colorReset)
+
+	// Check which model is currently loaded in the server
+	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", cfg.ServerPort)
+	resp, err = client.Get(modelsURL)
+	if err == nil {
+		defer resp.Body.Close()
+		var modelsResp struct {
+			Data []struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&modelsResp); err == nil {
+			// Check if requested model is in the active models list
+			foundActive := false
+			var activeModel string
+			for _, m := range modelsResp.Data {
+				if m.ID == modelName {
+					foundActive = true
+					break
+				}
+				activeModel = m.ID
+			}
+
+			if !foundActive && len(modelsResp.Data) > 0 {
+				fmt.Println()
+				printWarning(fmt.Sprintf("Server is currently serving: %s", activeModel))
+				fmt.Println()
+				printInfo("To use a different model, restart llama-server:")
+				fmt.Printf("  %s$%s sudo systemctl stop llama-server\n", brandMuted, colorReset)
+				fmt.Printf("  %s$%s sudo systemctl start llama-server\n", brandMuted, colorReset)
+				fmt.Println()
+				printInfo("Or continue with the loaded model...")
+				fmt.Println()
+			}
+		}
+	}
+
 	fmt.Println()
 
 	// Interactive chat loop
