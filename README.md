@@ -11,6 +11,10 @@ A self-contained LLM inference system for environments with limited connectivity
 - **OpenAI Compatible** - Standard `/v1/chat/completions` and `/v1/completions` endpoints
 - **HuggingFace Integration** - Direct model search and download from HuggingFace Hub
 - **Model Management** - Automatic detection, hot-reload, integrity verification
+- **Prompt Templates** - 10 built-in templates (code-review, summarize, translate, etc.)
+- **Response Caching** - LRU cache with configurable TTL for faster repeated queries
+- **Batch Processing** - Process multiple prompts in parallel from JSONL files
+- **Aliases & Favorites** - Friendly names and starred models for quick access
 - **Production Ready** - Systemd services, health checks, monitoring, security hardening
 - **Portable** - USB/SD card model import/export for air-gapped deployments
 - **Web UI** - Browser-based dashboard with real-time streaming chat
@@ -92,6 +96,66 @@ offgrid run tinyllama-1.1b-chat.Q4_K_M
 # - Multi-turn conversations
 # - Streaming responses
 # - 'exit' to quit, 'clear' to reset
+```
+
+### Prompt Templates
+
+**Use built-in templates for common tasks:**
+
+```bash
+# List all templates
+offgrid template list
+
+# View template details
+offgrid template show code-review
+
+# Apply template interactively
+offgrid template apply summarize
+```
+
+**Available templates:**
+- `summarize` - Condense text concisely
+- `code-review` - Review code for bugs, security, performance
+- `translate` - Translate between languages
+- `explain` - Explain concepts at different skill levels
+- `brainstorm` - Generate creative ideas
+- `debug` - Find and fix code issues
+- `document` - Generate code documentation
+- `refactor` - Suggest code improvements
+- `test` - Create test cases
+- `cli` - Generate CLI tools
+
+### Model Aliases & Favorites
+
+**Create friendly shortcuts:**
+
+```bash
+# Create aliases
+offgrid alias set chat llama-2-7b-chat.Q4_K_M.gguf
+offgrid alias set code codellama-7b.Q4_K_M.gguf
+offgrid alias list
+
+# Mark favorites
+offgrid favorite add llama-2-7b-chat.Q4_K_M.gguf
+offgrid favorite list
+```
+
+### Batch Processing
+
+**Process multiple prompts in parallel:**
+
+```bash
+# Create input file (JSONL)
+cat > batch_input.jsonl << 'EOF'
+{"id": "1", "model": "model.gguf", "prompt": "What is AI?"}
+{"id": "2", "model": "model.gguf", "prompt": "Explain ML"}
+EOF
+
+# Process with 4 concurrent workers
+offgrid batch process batch_input.jsonl results.jsonl --concurrency 4
+
+# View results
+cat results.jsonl | jq .
 ```
 
 ### API Usage
@@ -378,6 +442,40 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
+**Statistics & Monitoring:**
+```
+GET /stats
+```
+Response includes per-model inference statistics.
+
+```
+GET /cache/stats
+```
+Response:
+```json
+{
+  "enabled": true,
+  "entries": 42,
+  "max_entries": 1000,
+  "ttl_seconds": 3600,
+  "hits": 156,
+  "misses": 84,
+  "hit_rate": "65.00%"
+}
+```
+
+**Cache Management:**
+```
+POST /cache/clear
+```
+Clears the response cache.
+
+**Model Search:**
+```
+GET /v1/search?query=llama&sort=downloads&limit=10
+```
+Search HuggingFace for GGUF models.
+
 ## CLI Commands
 
 ### Model Management
@@ -397,6 +495,18 @@ offgrid remove <id>                 # Remove model
 offgrid serve                       # Start HTTP server
 offgrid run <model>                 # Interactive chat
 offgrid benchmark <model>           # Performance test
+```
+
+### Productivity
+```bash
+offgrid template list               # List prompt templates
+offgrid template show <name>        # View template details
+offgrid template apply <name>       # Use a template
+offgrid alias set <alias> <model>   # Create model alias
+offgrid alias list                  # List aliases
+offgrid favorite add <model>        # Star a model
+offgrid favorite list               # List favorites
+offgrid batch process <in> <out>    # Batch processing
 ```
 
 ### Configuration

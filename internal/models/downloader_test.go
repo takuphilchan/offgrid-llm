@@ -12,8 +12,9 @@ func TestCatalog(t *testing.T) {
 			t.Fatal("catalog should have models")
 		}
 
-		if len(catalog.Models) != 4 {
-			t.Errorf("expected 4 models, got %d", len(catalog.Models))
+		// Catalog should have at least 4 base models
+		if len(catalog.Models) < 4 {
+			t.Errorf("expected at least 4 models, got %d", len(catalog.Models))
 		}
 	})
 

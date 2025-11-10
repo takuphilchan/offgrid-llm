@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,9 +15,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/batch"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
+	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/server"
+	"github.com/takuphilchan/offgrid-llm/internal/templates"
 )
 
 // Visual identity constants
@@ -324,6 +328,18 @@ func main() {
 		case "config":
 			handleConfig(os.Args[2:])
 			return
+		case "alias":
+			handleAlias(os.Args[2:])
+			return
+		case "favorite", "fav":
+			handleFavorite(os.Args[2:])
+			return
+		case "template", "tpl":
+			handleTemplate(os.Args[2:])
+			return
+		case "batch":
+			handleBatch(os.Args[2:])
+			return
 		case "serve", "server":
 			// Fall through to start server
 		case "help", "-h", "--help":
@@ -492,7 +508,8 @@ func handleImport(args []string) {
 		fmt.Println()
 
 		// Import all
-		fmt.Println("Importing models...\n")
+		fmt.Println("Importing models...")
+		fmt.Println()
 		imported, err := importer.ImportAll(usbPath, func(p models.ImportProgress) {
 			if p.Status == "copying" {
 				fmt.Printf("\r  %s: %.1f%% · %s",
@@ -1077,6 +1094,10 @@ func printHelp() {
 	fmt.Printf("  %scatalog%s            Show available models\n", brandPrimary, colorReset)
 	fmt.Printf("  %sbenchmark%s <id>     Benchmark model performance\n", brandPrimary, colorReset)
 	fmt.Printf("  %squantization%s       Explain quantization levels\n", brandPrimary, colorReset)
+	fmt.Printf("  %salias%s <cmd>        Manage model aliases (list, set, remove)\n", brandPrimary, colorReset)
+	fmt.Printf("  %sfavorite%s <cmd>     Manage favorite models (list, add, remove)\n", brandPrimary, colorReset)
+	fmt.Printf("  %stemplate%s <cmd>     Manage prompt templates (list, show, apply)\n", brandPrimary, colorReset)
+	fmt.Printf("  %sbatch%s <cmd>        Batch process prompts from JSONL file\n", brandPrimary, colorReset)
 	fmt.Printf("  %sconfig%s <action>    Manage configuration (init, show, validate)\n", brandPrimary, colorReset)
 	fmt.Printf("  %sinfo%s               Show system information\n", brandPrimary, colorReset)
 	fmt.Printf("  %shelp%s               Show this help\n", brandPrimary, colorReset)
@@ -1982,4 +2003,314 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// handleAlias manages model aliases
+func handleAlias(args []string) {
+	printBanner()
+	printSection("Model Aliases")
+
+	if len(args) == 0 {
+		fmt.Println("Usage:")
+		fmt.Println("  offgrid alias list                    - List all aliases")
+		fmt.Println("  offgrid alias set <alias> <model>    - Create an alias")
+		fmt.Println("  offgrid alias remove <alias>          - Remove an alias")
+		fmt.Println()
+		return
+	}
+
+	configDir := "/var/lib/offgrid"
+	if home, err := os.UserHomeDir(); err == nil {
+		configDir = filepath.Join(home, ".offgrid")
+	}
+
+	am := models.NewAliasManager(configDir)
+
+	switch args[0] {
+	case "list", "ls":
+		aliases := am.ListAliases()
+		if len(aliases) == 0 {
+			printInfo("No aliases defined")
+			return
+		}
+
+		for alias, modelID := range aliases {
+			printItem(alias, modelID)
+		}
+
+	case "set", "create", "add":
+		if len(args) < 3 {
+			printError("Usage: offgrid alias set <alias> <model>")
+			return
+		}
+
+		alias := args[1]
+		modelID := args[2]
+
+		if err := am.SetAlias(alias, modelID); err != nil {
+			printError(fmt.Sprintf("Failed to set alias: %v", err))
+			return
+		}
+
+		printSuccess(fmt.Sprintf("Alias '%s' → '%s' created", alias, modelID))
+
+	case "remove", "rm", "delete":
+		if len(args) < 2 {
+			printError("Usage: offgrid alias remove <alias>")
+			return
+		}
+
+		alias := args[1]
+		if err := am.RemoveAlias(alias); err != nil {
+			printError(fmt.Sprintf("Failed to remove alias: %v", err))
+			return
+		}
+
+		printSuccess(fmt.Sprintf("Alias '%s' removed", alias))
+
+	default:
+		printError(fmt.Sprintf("Unknown alias command: %s", args[0]))
+	}
+}
+
+// handleFavorite manages favorite models
+func handleFavorite(args []string) {
+	printBanner()
+	printSection("Favorite Models")
+
+	if len(args) == 0 {
+		fmt.Println("Usage:")
+		fmt.Println("  offgrid favorite list            - List favorite models")
+		fmt.Println("  offgrid favorite add <model>     - Add to favorites")
+		fmt.Println("  offgrid favorite remove <model>  - Remove from favorites")
+		fmt.Println()
+		return
+	}
+
+	configDir := "/var/lib/offgrid"
+	if home, err := os.UserHomeDir(); err == nil {
+		configDir = filepath.Join(home, ".offgrid")
+	}
+
+	am := models.NewAliasManager(configDir)
+
+	switch args[0] {
+	case "list", "ls":
+		favorites := am.ListFavorites()
+		if len(favorites) == 0 {
+			printInfo("No favorite models")
+			return
+		}
+
+		for _, modelID := range favorites {
+			fmt.Printf("%s %s\n", iconStar, modelID)
+		}
+
+	case "add", "set":
+		if len(args) < 2 {
+			printError("Usage: offgrid favorite add <model>")
+			return
+		}
+
+		modelID := args[1]
+		if err := am.SetFavorite(modelID, true); err != nil {
+			printError(fmt.Sprintf("Failed to add favorite: %v", err))
+			return
+		}
+
+		printSuccess(fmt.Sprintf("'%s' added to favorites", modelID))
+
+	case "remove", "rm", "delete":
+		if len(args) < 2 {
+			printError("Usage: offgrid favorite remove <model>")
+			return
+		}
+
+		modelID := args[1]
+		if err := am.SetFavorite(modelID, false); err != nil {
+			printError(fmt.Sprintf("Failed to remove favorite: %v", err))
+			return
+		}
+
+		printSuccess(fmt.Sprintf("'%s' removed from favorites", modelID))
+
+	default:
+		printError(fmt.Sprintf("Unknown favorite command: %s", args[0]))
+	}
+}
+
+// handleTemplate manages prompt templates
+func handleTemplate(args []string) {
+	printBanner()
+	printSection("Prompt Templates")
+
+	if len(args) == 0 {
+		fmt.Println("Usage:")
+		fmt.Println("  offgrid template list              - List all templates")
+		fmt.Println("  offgrid template show <name>       - Show template details")
+		fmt.Println("  offgrid template apply <name>      - Apply template (interactive)")
+		fmt.Println()
+		return
+	}
+
+	switch args[0] {
+	case "list", "ls":
+		fmt.Println()
+		templateList := templates.ListTemplates()
+		for _, name := range templateList {
+			tpl, _ := templates.GetTemplate(name)
+			fmt.Printf("%s %-15s %s %s\n", iconDiamond, name, brandMuted+"|"+colorReset, tpl.Description)
+		}
+		fmt.Println()
+
+	case "show", "info":
+		if len(args) < 2 {
+			printError("Usage: offgrid template show <name>")
+			return
+		}
+
+		tpl, err := templates.GetTemplate(args[1])
+		if err != nil {
+			printError(fmt.Sprintf("Template not found: %s", args[1]))
+			return
+		}
+
+		fmt.Println()
+		printBox(tpl.Name, fmt.Sprintf("%s\n\n%sVariables:%s %s",
+			tpl.Description,
+			colorBold, colorReset,
+			strings.Join(tpl.Variables, ", ")))
+		fmt.Println()
+		fmt.Println(colorDim + "Template:" + colorReset)
+		fmt.Println(tpl.Template)
+		fmt.Println()
+
+		if len(tpl.Examples) > 0 {
+			fmt.Println(colorDim + "Examples:" + colorReset)
+			for key, value := range tpl.Examples {
+				printItem(key, value)
+			}
+			fmt.Println()
+		}
+
+	case "apply", "use":
+		if len(args) < 2 {
+			printError("Usage: offgrid template apply <name>")
+			return
+		}
+
+		tpl, err := templates.GetTemplate(args[1])
+		if err != nil {
+			printError(fmt.Sprintf("Template not found: %s", args[1]))
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("%sTemplate:%s %s - %s\n\n", colorBold, colorReset, tpl.Name, tpl.Description)
+
+		// Collect variables interactively
+		variables := make(map[string]string)
+		scanner := bufio.NewScanner(os.Stdin)
+
+		for _, varName := range tpl.Variables {
+			fmt.Printf("%s%s:%s ", brandPrimary, varName, colorReset)
+			if example, ok := tpl.Examples[varName]; ok {
+				fmt.Printf("%s(%s)%s\n> ", brandMuted, example, colorReset)
+			} else {
+				fmt.Print("\n> ")
+			}
+
+			scanner.Scan()
+			value := scanner.Text()
+			if value != "" {
+				variables[varName] = value
+			}
+		}
+
+		prompt, err := tpl.Apply(variables)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to apply template: %v", err))
+			return
+		}
+
+		fmt.Println()
+		printDivider()
+		fmt.Println()
+		fmt.Println(prompt)
+		fmt.Println()
+		printDivider()
+		fmt.Println()
+
+	default:
+		printError(fmt.Sprintf("Unknown template command: %s", args[0]))
+	}
+}
+
+// handleBatch processes requests in batch mode
+func handleBatch(args []string) {
+	printBanner()
+	printSection("Batch Processing")
+
+	if len(args) == 0 {
+		fmt.Println("Usage:")
+		fmt.Println("  offgrid batch process <input.jsonl> [output.jsonl] [--concurrency N]")
+		fmt.Println()
+		fmt.Println("Input format (JSONL):")
+		fmt.Println(`  {"id": "1", "model": "model.gguf", "prompt": "Hello"}`)
+		fmt.Println(`  {"id": "2", "model": "model.gguf", "prompt": "World"}`)
+		fmt.Println()
+		return
+	}
+
+	if args[0] != "process" {
+		printError("Only 'process' subcommand is supported")
+		return
+	}
+
+	if len(args) < 2 {
+		printError("Usage: offgrid batch process <input.jsonl> [output.jsonl]")
+		return
+	}
+
+	inputPath := args[1]
+	outputPath := "batch-results.jsonl"
+	concurrency := 4
+
+	// Parse remaining args
+	for i := 2; i < len(args); i++ {
+		if args[i] == "--concurrency" || args[i] == "-c" {
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%d", &concurrency)
+				i++
+			}
+		} else if !strings.HasPrefix(args[i], "--") {
+			outputPath = args[i]
+		}
+	}
+
+	printInfo(fmt.Sprintf("Processing: %s → %s (concurrency=%d)", inputPath, outputPath, concurrency))
+	fmt.Println()
+
+	// Load config
+	configPath := os.Getenv("OFFGRID_CONFIG")
+	_, err := config.LoadWithPriority(configPath)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to load config: %v", err))
+		return
+	}
+
+	// Create inference engine
+	engine := inference.NewMockEngine()
+
+	// Create batch processor
+	processor := batch.NewProcessor(engine, concurrency)
+
+	// Process file
+	ctx := context.Background()
+	if err := processor.ProcessFile(ctx, inputPath, outputPath); err != nil {
+		printError(fmt.Sprintf("Batch processing failed: %v", err))
+		return
+	}
+
+	printSuccess(fmt.Sprintf("Results written to: %s", outputPath))
 }

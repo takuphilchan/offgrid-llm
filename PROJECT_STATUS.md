@@ -1,6 +1,6 @@
 # OffGrid LLM - Project Status
 
-**Last Updated:** November 6, 2025  
+**Last Updated:** November 10, 2025  
 **Version:** 0.1.0-alpha  
 **Status:** Production-Ready (Mock Mode) | llama.cpp Build Required for Full Inference
 
@@ -22,6 +22,10 @@ OffGrid LLM is a **production-ready**, offline-first LLM orchestrator designed f
 | **HTTP Server** | ✅ Complete | OpenAI-compatible API with SSE streaming + statistics tracking |
 | **Web Dashboard** | ✅ Complete | Professional minimalistic UI (Apple/Claude-inspired), fully offline |
 | **Model Management** | ✅ Complete | Download, import, export, remove with SHA256 verification |
+| **Prompt Templates** | ✅ Complete | 10 built-in templates (code-review, summarize, translate, etc.) |
+| **Response Caching** | ✅ Complete | LRU cache with TTL, hit rate tracking, /cache/stats endpoint |
+| **Batch Processing** | ✅ Complete | Parallel JSONL processing with configurable concurrency |
+| **Aliases & Favorites** | ✅ Complete | Friendly model names and starred models |
 | **Configuration** | ✅ Complete | YAML/JSON support with environment overrides |
 | **Resource Monitoring** | ✅ Complete | Real CPU/RAM/disk tracking with gopsutil + detailed health endpoint |
 | **Statistics Tracking** | ✅ Complete | Per-model inference stats (requests, tokens, response times) |
@@ -52,11 +56,14 @@ OffGrid LLM is a **production-ready**, offline-first LLM orchestrator designed f
 
 ```
 offgrid-llm/
-├── cmd/offgrid/              # CLI with 13 commands (serve, catalog, download, export, remove, chat, benchmark, etc.)
+├── cmd/offgrid/              # CLI with 17 commands (serve, catalog, download, template, alias, batch, etc.)
 ├── internal/
 │   ├── config/              # YAML/JSON configuration management
 │   ├── inference/           # Pluggable engine (mock + llama.cpp)
-│   ├── models/              # Registry, download, import, quantization info
+│   ├── models/              # Registry, download, import, quantization info, aliases
+│   ├── templates/           # Built-in prompt templates (10 templates)
+│   ├── cache/               # LRU response cache with TTL
+│   ├── batch/               # Parallel batch processing engine
 │   ├── p2p/                 # UDP discovery with JSON announcements
 │   ├── resource/            # CPU/RAM/disk monitoring with gopsutil
 │   ├── server/              # HTTP API with SSE streaming + statistics tracking
@@ -72,12 +79,41 @@ offgrid-llm/
 ### Core API (OpenAI-Compatible)
 - `GET /health` - Health check with detailed resource stats and system diagnostics
 - `GET /stats` - Inference statistics and usage tracking per model
+- `GET /cache/stats` - Cache hit rate, entries, performance metrics
+- `POST /cache/clear` - Clear response cache
 - `GET /v1/models` - List available models
+- `GET /v1/search` - Search HuggingFace for GGUF models
 - `POST /v1/chat/completions` - Chat with streaming support
 - `POST /v1/completions` - Text completion
+- `POST /v1/benchmark` - Model benchmarking
 - `GET /ui` - Web dashboard
 
 ### CLI Commands
+```bash
+offgrid serve              # Start HTTP server
+offgrid catalog            # Browse 4 verified models
+offgrid quantization       # Learn about Q2_K through Q8_0
+offgrid download <id>      # Download with SHA256 verification
+offgrid import <path>      # Import from USB/SD card
+offgrid export <id> <path> # Export model to USB/SD for offline distribution
+offgrid list               # List installed models
+offgrid remove <id>        # Delete model with confirmation
+offgrid run <id>           # Interactive chat mode
+offgrid benchmark <id>     # Performance testing
+offgrid search <query>     # Search HuggingFace
+offgrid download-hf <repo> # Download from HuggingFace
+offgrid template list      # List prompt templates
+offgrid template show <n>  # View template details
+offgrid template apply <n> # Use a template interactively
+offgrid alias set <a> <m>  # Create model alias
+offgrid alias list         # List all aliases
+offgrid favorite add <m>   # Star a model
+offgrid favorite list      # List favorites
+offgrid batch process      # Batch process JSONL prompts
+offgrid config init        # Generate configuration
+offgrid info               # System information
+offgrid help               # Command reference
+```
 ```bash
 offgrid serve              # Start HTTP server
 offgrid catalog            # Browse 4 verified models

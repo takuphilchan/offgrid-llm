@@ -10,9 +10,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - llama.cpp integration for actual inference
 - P2P file transfer implementation
-- Streaming responses (SSE)
-- Web dashboard UI
-- USB model import API
+- Multi-model parallel serving
+- Prometheus metrics endpoint
+- Shell completion scripts
+
+## [0.2.0-alpha] - 2025-11-10
+
+### Added
+- **Prompt Templates** - 10 built-in templates for common tasks
+  - code-review, summarize, translate, explain, brainstorm
+  - debug, document, refactor, test, cli
+  - Commands: `template list`, `template show`, `template apply`
+- **Response Caching** - LRU cache with configurable TTL
+  - 1000 entry capacity, 1 hour default TTL
+  - Automatic cleanup every 15 minutes
+  - API endpoints: `GET /cache/stats`, `POST /cache/clear`
+- **Batch Processing** - Parallel JSONL processing
+  - Configurable concurrency (default: 4 workers)
+  - Per-request metrics (duration, tokens/sec)
+  - Command: `batch process <input.jsonl> <output.jsonl>`
+- **Model Aliases** - Friendly names for models
+  - Commands: `alias set`, `alias list`, `alias remove`
+  - Persistent storage in `~/.offgrid/aliases.json`
+- **Favorites System** - Star frequently used models
+  - Commands: `favorite add`, `favorite list`, `favorite remove`
+  - Visual indicators in CLI output
+
+### Changed
+- Updated README with new features documentation
+- Enhanced PROJECT_STATUS with completion tracking
+- Expanded CLI help text to include new commands
 
 ## [0.1.0-alpha] - 2024-01-XX
 

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/cache"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
@@ -27,6 +28,7 @@ type Server struct {
 	engine       inference.Engine
 	monitor      *resource.Monitor
 	statsTracker *stats.Tracker
+	cache        *cache.ResponseCache
 }
 
 // New creates a new server instance
@@ -57,6 +59,10 @@ func NewWithConfig(cfg *config.Config) *Server {
 	monitor := resource.NewMonitor(5 * time.Second)
 	statsTracker := stats.NewTracker()
 
+	// Initialize response cache (max 1000 entries, 1 hour TTL)
+	responseCache := cache.NewResponseCache(1000, 1*time.Hour)
+	responseCache.StartCleanupRoutine(15 * time.Minute)
+
 	// Scan for available models
 	if err := registry.ScanModels(); err != nil {
 		log.Printf("Warning: Failed to scan models: %v", err)
@@ -71,6 +77,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		engine:       engine,
 		monitor:      monitor,
 		statsTracker: statsTracker,
+		cache:        responseCache,
 	}
 }
 
@@ -92,6 +99,10 @@ func (s *Server) Start() error {
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
+
+	// Cache management endpoints
+	mux.HandleFunc("/cache/stats", s.handleCacheStats)
+	mux.HandleFunc("/cache/clear", s.handleCacheClear)
 
 	// Web UI
 	mux.HandleFunc("/ui", s.handleWebUI)
@@ -257,6 +268,37 @@ func (s *Server) getAggregateStats() map[string]interface{} {
 		"total_tokens":    totalTokens,
 		"models_used":     modelCount,
 		"avg_response_ms": avgResponse,
+	}
+}
+
+func (s *Server) handleCacheStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	stats := s.cache.Stats()
+
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		log.Printf("Error encoding cache stats: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.cache.Clear()
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Cache cleared",
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
 
