@@ -652,6 +652,11 @@ func handleRemove(args []string) {
 	fmt.Println()
 	fmt.Printf("✓ Removed %s\n", modelID)
 
+	// Rescan to update registry after file deletion
+	if err := registry.ScanModels(); err != nil {
+		fmt.Fprintf(os.Stderr, "\n⚠️  Warning: Failed to refresh model list: %v\n", err)
+	}
+
 	// Show remaining models
 	remaining := registry.ListModels()
 	fmt.Printf("\n%d model(s) remaining\n\n", len(remaining))
@@ -1568,19 +1573,38 @@ func handleDownloadHF(args []string) {
 
 	// Download with progress
 	startTime := time.Now()
+	lastUpdate := time.Now()
 	var lastProgress int64
 
 	err = hf.DownloadGGUF(modelID, selectedFile.Filename, destPath, func(current, total int64) {
 		percent := float64(current) / float64(total) * 100
-		speed := float64(current-lastProgress) / time.Since(startTime).Seconds() / (1024 * 1024)
+
+		// Calculate speed from bytes downloaded since last update
+		now := time.Now()
+		elapsed := now.Sub(lastUpdate).Seconds()
+
+		var speed float64
+		if elapsed > 0.5 { // Update speed every half second
+			bytesThisInterval := current - lastProgress
+			speed = float64(bytesThisInterval) / elapsed / (1024 * 1024) // MB/s
+			lastUpdate = now
+			lastProgress = current
+		} else if lastProgress == 0 {
+			// First update - use overall speed
+			totalElapsed := now.Sub(startTime).Seconds()
+			if totalElapsed > 0.5 {
+				speed = float64(current) / totalElapsed / (1024 * 1024)
+			}
+		} else {
+			// Keep previous speed if interval too short
+			return // Don't update display yet
+		}
 
 		fmt.Printf("\r  ⏬ Progress: %.1f%% (%.1f / %.1f GB) · %.1f MB/s  ",
 			percent,
 			float64(current)/(1024*1024*1024),
 			float64(total)/(1024*1024*1024),
 			speed)
-
-		lastProgress = current
 	})
 
 	if err != nil {
