@@ -1634,8 +1634,14 @@ func handleDownloadHF(args []string) {
 		fmt.Println()
 	}
 
+	// Extract model name (filename without .gguf extension for CLI)
+	modelName := selectedFile.Filename
+	if strings.HasSuffix(modelName, ".gguf") {
+		modelName = modelName[:len(modelName)-5]
+	}
+
 	fmt.Println("Run it:")
-	fmt.Printf("  offgrid run %s\n", selectedFile.Filename)
+	fmt.Printf("  offgrid run %s\n", modelName)
 	fmt.Println()
 }
 
