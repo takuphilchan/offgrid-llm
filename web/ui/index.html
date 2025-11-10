@@ -3,1293 +3,630 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OffGrid LLM · Edge Inference</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            /* Brand Colors - Subtle & Eye-Friendly */
-            --brand-primary: #4db8d8;     /* Softer cyan (was #00d4ff) */
-            --brand-primary-dim: #2a7a8f; /* Dimmed cyan for less contrast */
-            --brand-secondary: #9575cd;   /* Softer purple (was #af87ff) */
-            --brand-accent: #ffd54f;      /* Softer yellow (was #ffff00) */
-            --brand-success: #66bb6a;     /* Softer green (was #5fd787) */
-            --brand-error: #ef5350;       /* Softer red (was #ff005f) */
-            --brand-warning: #ffa726;     /* Softer orange */
-            
-            /* Neutrals */
-            --gray-50: #fafafa;
-            --gray-100: #f5f5f5;
-            --gray-200: #e5e5e5;
-            --gray-300: #d4d4d4;
-            --gray-400: #a3a3a3;
-            --gray-500: #737373;
-            --gray-600: #525252;
-            --gray-700: #404040;
-            --gray-800: #262626;
-            --gray-900: #171717;
-            --gray-950: #0a0a0a;
-            
-            /* Semantic Colors */
-            --text-primary: #e8e8e8;      /* Slightly dimmed (was #fafafa) */
-            --text-secondary: #b8b8b8;    /* More subtle (was #d4d4d4) */
-            --text-tertiary: #888888;     /* Softer (was #a3a3a3) */
-            --text-muted: #666666;        /* Dimmer (was #737373) */
-            
-            --bg-page: #0a0a0a;           /* Slightly lighter black */
-            --bg-surface: #141414;        /* Lighter surface (was #0a0a0a) */
-            --bg-elevated: #1e1e1e;       /* More elevated (was #171717) */
-            --bg-hover: #2a2a2a;          /* Lighter hover (was #262626) */
-            --bg-input: #1a1a1a;          /* Slightly lighter (was #0a0a0a) */
-            
-            --border-subtle: #2a2a2a;     /* Lighter subtle border */
-            --border-default: #3a3a3a;    /* Lighter default border */
-            --border-strong: #4a4a4a;     /* Lighter strong border */
-            
-            /* Shadows - More subtle */
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-            --shadow-glow: 0 0 15px rgba(77, 184, 216, 0.15); /* Softer glow */
-            
-            /* Aliases for backward compatibility */
-            --primary: var(--brand-primary);
-            --primary-dark: #2a7a8f;      /* Using dimmed cyan */
-            --secondary: var(--brand-secondary);
-            --accent: var(--brand-accent);
-            --border: var(--border-default);
-            --border-dark: var(--border-strong);
-            --text-inverse: var(--text-primary);
-        }
-
-        @font-face {
-            font-family: 'MonoLisa';
-            src: local('JetBrains Mono'), local('Fira Code'), local('Menlo'), local('Monaco'), monospace;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: var(--bg-page);
-            color: var(--text-primary);
-            line-height: 1.6;
-            height: 100vh;
-            overflow: hidden;
-            font-size: 15px;
-        }
-
-        .app-container {
-            display: grid;
-            grid-template-rows: auto 1fr;
-            height: 100vh;
-            max-width: 1920px;
-            margin: 0 auto;
-        }
-
-        /* Header with ASCII-art inspired design */
-        .header {
-            background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%);
-            color: var(--text-primary);
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid var(--brand-primary-dim);
-            position: relative;
-        }
-
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, 
-                transparent 0%,
-                var(--brand-primary-dim) 20%, 
-                var(--brand-primary) 50%, 
-                var(--brand-primary-dim) 80%,
-                transparent 100%);
-            opacity: 0.6;
-        }
-
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1.5rem;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-        }
-
-        .logo {
-            font-family: 'MonoLisa', monospace;
-            font-size: 1.75rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            color: var(--brand-primary);
-            text-shadow: 0 0 8px rgba(77, 184, 216, 0.2);
-            line-height: 1;
-        }
-
-        .logo-sub {
-            font-size: 0.688rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-top: 0.25rem;
-        }
-
-        .version-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.375rem 0.75rem;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-strong);
-            border-radius: 4px;
-            font-family: 'MonoLisa', monospace;
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--brand-accent);
-            letter-spacing: 0.05em;
-        }
-
-        .status-bar {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-default);
-            border-radius: 4px;
-            font-family: 'MonoLisa', monospace;
-            font-size: 0.75rem;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            transition: all 0.2s ease;
-        }
-
-        .status-badge span {
-            color: var(--text-secondary);
-        }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--brand-success);
-            animation: pulse 3s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 0.9;
-                box-shadow: 0 0 4px var(--brand-success);
-            }
-            50% {
-                opacity: 0.6;
-                box-shadow: 0 0 6px var(--brand-success);
-            }
-        }
-
-        .status-badge:hover {
-            border-color: var(--brand-primary);
-            box-shadow: var(--shadow-glow);
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--brand-success);
-            border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
-            box-shadow: 0 0 8px var(--brand-success);
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.2); }
-        }
-
-        /* Main Content Area */
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 380px;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            overflow: hidden;
-            height: 100%;
-        }
-
-        .content-left {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-            overflow: hidden;
-            gap: 1.5rem;
-        }
-
-        .sidebar {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-default);
-            border-radius: 8px;
-            padding: 2rem;
-            overflow-y: auto;
-            box-shadow: var(--shadow-md);
-        }
-
-        .sidebar h2 {
-            font-size: 1.25rem;
-            font-weight: 800;
-            margin-bottom: 1.5rem;
-            color: var(--brand-primary);
-            letter-spacing: -0.025em;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .sidebar h2::before {
-            content: '◆';
-            color: var(--brand-secondary);
-        }
-
-        .sidebar h3 {
-            font-size: 1rem;
-            font-weight: 700;
-            margin-top: 2rem;
-            margin-bottom: 1rem;
-            color: var(--brand-secondary);
-            letter-spacing: -0.01em;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .sidebar h3::before {
-            content: '›';
-            color: var(--brand-accent);
-            font-weight: 900;
-        }
-
-        .sidebar p, .sidebar li {
-            font-size: 0.938rem;
-            line-height: 1.7;
-            margin-bottom: 1rem;
-            color: var(--text-secondary);
-        }
-
-        .sidebar ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .sidebar li {
-            padding-left: 1.5rem;
-            position: relative;
-            margin-bottom: 0.75rem;
-        }
-
-        .sidebar li::before {
-            content: '▪';
-            position: absolute;
-            left: 0;
-            color: var(--brand-primary);
-            font-weight: 900;
-        }
-
-        .sidebar code {
-            background: var(--bg-input);
-            padding: 0.25rem 0.5rem;
-            font-family: 'MonoLisa', monospace;
-            font-size: 0.875rem;
-            color: var(--brand-accent);
-            border: 1px solid var(--border-subtle);
-            border-radius: 3px;
-        }
-
-        .sidebar .endpoint {
-            background: var(--bg-input);
-            border: 1px solid var(--border-default);
-            border-radius: 4px;
-            padding: 0.75rem;
-            margin: 0.5rem 0;
-            border-left: 3px solid var(--brand-primary-dim);
-            font-family: 'Courier New', monospace;
-            font-size: 0.813rem;
-        }
-
-        /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 0;
-            border-bottom: 1px solid var(--border-default);
-            margin-bottom: 1rem;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            flex-shrink: 0;
-        }
-
-        .tab {
-            padding: 0.75rem 1.25rem;
-            background: transparent;
-            border: none;
-            border-bottom: 2px solid transparent;
-            cursor: pointer;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .tab:hover {
-            color: var(--text-secondary);
-            background: var(--bg-hover);
-        }
-
-        .tab.active {
-            color: var(--brand-primary);
-            background: transparent;
-            border-bottom-color: var(--brand-primary);
-        }
-
-        .tab-content {
-            display: none;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .tab-content.active {
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Chat Container - Fixed Layout */
-        .chat-container {
-            background: var(--bg-surface);
-            border: 3px solid var(--border);
-            display: grid;
-            grid-template-rows: auto 1fr auto;
-            height: 100%;
-            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%);
-        }
-
-        .chat-header {
-            padding: 1rem;
-            border-bottom: 3px solid var(--border);
-            background: var(--bg-input);
-            flex-shrink: 0;
-        }
-
-        .chat-header h2 {
-            font-size: 1rem;
-            font-weight: 900;
-            margin-bottom: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--primary);
-        }
-
-        .chat-controls {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .chat-messages {
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 1rem;
-            background: var(--bg-page);
-            min-height: 0;
-        }
-
-        .message {
-            margin-bottom: 1rem;
-            padding: 1rem;
-            max-width: 85%;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-        }
-
-        .message.user {
-            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
-            color: var(--text-inverse);
-            margin-left: auto;
-            border-left: 4px solid var(--accent);
-            clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
-        }
-
-        .message.assistant {
-            background: var(--bg-surface);
-            color: var(--text-inverse);
-            margin-right: auto;
-            border: 2px solid var(--border);
-            border-left: 4px solid var(--secondary);
-            clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
-        }
-
-        .message-label {
-            font-size: 0.688rem;
-            font-weight: 900;
-            margin-bottom: 0.5rem;
-            opacity: 0.7;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        .message-content {
-            white-space: pre-wrap;
-        }
-
-        .chat-input-area {
-            padding: 1rem;
-            border-top: 3px solid var(--border);
-            background: var(--bg-surface);
-            display: flex;
-            gap: 0.75rem;
-            flex-shrink: 0;
-        }
-
-        .chat-input {
-            flex: 1;
-            min-width: 0;
-            padding: 0.875rem;
-            border: 3px solid var(--border);
-            background: var(--bg-input);
-            color: var(--text-inverse);
-            font-size: 0.938rem;
-            font-family: inherit;
-            font-weight: 600;
-            transition: border-color 0.15s;
-        }
-
-        .chat-input:focus {
-            outline: none;
-            border-color: var(--brand-primary-dim);
-            box-shadow: 0 0 0 1px var(--brand-primary-dim);
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 0.75rem 1.25rem;
-            border: none;
-            font-size: 0.813rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-family: inherit;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-radius: 4px;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .btn-primary {
-            background: var(--brand-primary-dim);
-            color: var(--text-primary);
-            border: 1px solid var(--brand-primary);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background: var(--brand-primary);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background: var(--bg-surface);
-            color: var(--text-inverse);
-            border: 2px solid var(--border-dark);
-            padding: 0.75rem 1rem;
-            font-size: 0.75rem;
-        }
-
-        .btn-secondary:hover {
-            background: var(--bg-hover);
-            border-color: var(--primary);
-        }
-
-        /* Select */
-        .select {
-            padding: 0.75rem;
-            border: 2px solid var(--border);
-            font-size: 0.813rem;
-            font-family: inherit;
-            background: var(--bg-input);
-            color: var(--text-inverse);
-            cursor: pointer;
-            font-weight: 700;
-            flex: 1;
-            min-width: 0;
-        }
-
-        .select:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        /* Checkbox */
-        label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.75rem;
-            font-weight: 800;
-            cursor: pointer;
-            user-select: none;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
-        }
-
-        input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: var(--primary);
-        }
-
-        /* Cards for Models/API tabs */
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-            gap: 1rem;
-            padding: 1rem;
-            overflow-y: auto;
-        }
-
-        .card {
-            background: var(--bg-surface);
-            border: 3px solid var(--border);
-            border-left: 6px solid var(--primary);
-            padding: 1.25rem;
-            clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
-        }
-
-        .card h2 {
-            font-size: 1rem;
-            font-weight: 900;
-            margin-bottom: 1rem;
-            color: var(--primary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* Model List */
-        .model-list {
-            list-style: none;
-        }
-
-        .model-item {
-            padding: 0.875rem;
-            background: var(--bg-page);
-            margin-bottom: 0.5rem;
-            border-left: 4px solid var(--primary);
-            border: 2px solid var(--border);
-            border-left: 4px solid var(--primary);
-            transition: all 0.15s;
-            cursor: pointer;
-            clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
-        }
-
-        .model-item:hover {
-            border-left-width: 8px;
-            background: var(--bg-hover);
-        }
-
-        .model-item strong {
-            display: block;
-            margin-bottom: 0.25rem;
-            color: var(--text-inverse);
-            font-weight: 900;
-            font-size: 0.938rem;
-        }
-
-        .model-item small {
-            color: var(--text-tertiary);
-            font-size: 0.813rem;
-        }
-
-        /* System Info */
-        .info-item {
-            padding: 0.75rem 0;
-            border-bottom: 2px solid var(--border);
-        }
-
-        .info-item:last-child {
-            border-bottom: none;
-        }
-
-        .info-label {
-            font-size: 0.688rem;
-            color: var(--text-tertiary);
-            margin-bottom: 0.25rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 900;
-        }
-
-        .info-value {
-            font-size: 1.25rem;
-            color: var(--primary);
-            font-weight: 900;
-            letter-spacing: -1px;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 3rem 2rem;
-            color: var(--text-tertiary);
-            font-family: 'MonoLisa', monospace;
-            font-size: 0.875rem;
-            letter-spacing: 0.05em;
-        }
-
-        .empty-state::before {
-            content: '◆';
-            display: block;
-            font-size: 2rem;
-            color: var(--brand-primary);
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
-
-        /* Error */
-        .error {
-            background: rgba(255, 0, 95, 0.1);
-            color: var(--brand-error);
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-left: 4px solid var(--brand-error);
-            border-radius: 4px;
-            font-family: 'MonoLisa', monospace;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        .error::before {
-            content: '✗ ';
-            font-weight: 900;
-        }
-
-        /* Textarea */
-        textarea {
-            background: var(--bg-input);
-            color: var(--text-inverse);
-            border: 3px solid var(--border);
-            padding: 0.875rem;
-            font-family: 'Courier New', monospace;
-            font-size: 0.875rem;
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-input);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-dark);
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--primary);
-        }
-
-        /* Mobile Responsive */
-        @media (max-width: 1024px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-
-            .sidebar {
-                display: none;
-            }
-
-            .sidebar.mobile-visible {
-                display: block;
-                position: fixed;
-                top: 0;
-                right: 0;
-                width: 90%;
-                max-width: 400px;
-                height: 100vh;
-                z-index: 1000;
-                box-shadow: -4px 0 20px rgba(0,0,0,0.5);
-            }
-
-            .sidebar-toggle {
-                display: block !important;
-                position: fixed;
-                bottom: 1rem;
-                right: 1rem;
-                z-index: 999;
-            }
-        }
-
-        .sidebar-toggle {
-            display: none;
-        }
-
-        @media (max-width: 768px) {
-            .header-content {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .chat-controls {
-                width: 100%;
-            }
-
-            .select {
-                width: 100%;
-            }
-
-            .message {
-                max-width: 92%;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .app-container {
-                grid-template-rows: auto 1fr;
-            }
-
-            .header {
-                padding: 1rem;
-            }
-
-            .main-content {
-                padding: 0.5rem;
-            }
-
-            .chat-header {
-                padding: 0.875rem;
-            }
-
-            .chat-messages {
-                padding: 0.875rem;
-            }
-
-            .chat-input-area {
-                padding: 0.875rem;
-                flex-wrap: wrap;
-            }
-
-            .chat-input {
-                width: 100%;
-            }
-
-            .btn-primary {
-                width: 100%;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <div class="header">
-            <div class="header-content">
-                <div class="header-left">
-                    <div>
-                        <div class="logo">◆ OFFGRID</div>
-                        <div class="logo-sub">EDGE INFERENCE</div>
-                    </div>
-                    <span class="version-badge">v0.1.0</span>
-                </div>
-                <div class="status-bar">
-                    <span class="status-badge" id="status">
-                        <span class="status-dot"></span>
-                        <span>ONLINE</span>
-                    </span>
-                    <span class="status-badge">
-                        <span>⚡ LIVE</span>
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <div class="main-content">
-            <div class="content-left">
-                <div class="tabs">
-                    <button class="tab active" onclick="switchTab('chat')">Chat</button>
-                    <button class="tab" onclick="switchTab('models')">Models</button>
-                    <button class="tab" onclick="switchTab('api')">API</button>
-                </div>
-
-                <!-- Chat Tab -->
-                <div id="chat-tab" class="tab-content active">
-                    <div class="chat-container">
-                        <div class="chat-header">
-                            <h2>AI Assistant</h2>
-                            <div class="chat-controls">
-                                <select id="chatModel" class="select">
-                                    <option value="">Select Model</option>
-                                </select>
-                                <label>
-                                    <input type="checkbox" id="streamingEnabled" checked>
-                                    <span>Stream</span>
-                                </label>
-                                <button class="btn btn-secondary" onclick="clearChat()">Clear</button>
-                            </div>
-                        </div>
-
-                        <div class="chat-messages" id="chatMessages">
-                            <div class="empty-state">
-                                <p>Select a model and start chatting</p>
-                            </div>
-                        </div>
-
-                        <div class="chat-input-area">
-                            <input 
-                                type="text" 
-                                class="chat-input" 
-                                id="chatInput" 
-                                placeholder="Enter message..."
-                                onkeypress="if(event.key === 'Enter') sendMessage()"
-                            >
-                            <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn">
-                                <span>Send</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Models Tab -->
-                <div id="models-tab" class="tab-content">
-                    <div class="cards">
-                        <div class="card">
-                            <h2>Models</h2>
-                            <ul class="model-list" id="modelList">
-                                <li class="empty-state"><p>Loading...</p></li>
-                            </ul>
-                        </div>
-                        <div class="card">
-                            <h2>System</h2>
-                            <div id="systemInfo">
-                                <div class="info-item">
-                                    <div class="info-label">Status</div>
-                                    <div class="info-value">Loading...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- API Tab -->
-                <div id="api-tab" class="tab-content">
-                    <div class="cards">
-                        <div class="card">
-                            <h2>API Testing</h2>
-                            
-                            <div style="margin-bottom: 1rem;">
-                                <label class="info-label" style="display: block; margin-bottom: 0.5rem;">Endpoint</label>
-                                <select id="apiEndpoint" class="select" style="width: 100%;">
-                                    <option value="/health">GET /health</option>
-                                    <option value="/v1/models">GET /v1/models</option>
-                                    <option value="/v1/chat/completions">POST /v1/chat/completions</option>
-                                </select>
-                            </div>
-
-                            <div style="margin-bottom: 1rem;">
-                                <label class="info-label" style="display: block; margin-bottom: 0.5rem;">Request Body</label>
-                                <textarea 
-                                    id="apiBody" 
-                                    style="width: 100%; min-height: 150px; resize: vertical;"
-                                    placeholder='{"model": "your-model", "messages": [{"role": "user", "content": "Hello!"}]}'
-                                ></textarea>
-                            </div>
-
-                            <button class="btn btn-primary" onclick="testAPI()">Send Request</button>
-
-                            <div id="apiResponse" style="margin-top: 1rem;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar" id="sidebar">
-                <h2>Documentation</h2>
-                
-                <h3>Quick Start</h3>
-                <p>OffGrid LLM is an offline AI platform for edge computing. Select a model from the Chat tab and start asking questions.</p>
-
-                <h3>Features</h3>
-                <ul>
-                    <li>100% offline inference</li>
-                    <li>OpenAI-compatible API</li>
-                    <li>GPU acceleration support</li>
-                    <li>Multiple model support</li>
-                    <li>Streaming responses</li>
-                </ul>
-
-                <h3>API Endpoints</h3>
-                <div class="endpoint">GET /health</div>
-                <p>Check system health and resource usage</p>
-
-                <div class="endpoint">GET /v1/models</div>
-                <p>List all available models</p>
-
-                <div class="endpoint">POST /v1/chat/completions</div>
-                <p>Send chat completion requests</p>
-
-                <h3>Example Request</h3>
-                <div class="endpoint">
-curl -X POST http://localhost:11611/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "your-model-id",
-    "messages": [
-      {"role": "user", "content": "Hello!"}
-    ],
-    "stream": false
-  }'
-                </div>
-
-                <h3>System Requirements</h3>
-                <ul>
-                    <li>4GB+ RAM (8GB+ recommended)</li>
-                    <li>2GB+ disk space</li>
-                    <li>Linux/Windows/macOS</li>
-                    <li>Optional: NVIDIA GPU with CUDA</li>
-                </ul>
-
-                <h3>Model Format</h3>
-                <p>Models must be in GGUF format. Place <code>.gguf</code> files in <code>/var/lib/offgrid/models/</code></p>
-
-                <h3>CLI Commands</h3>
-                <div class="endpoint">offgrid serve</div>
-                <p>Start the server</p>
-
-                <div class="endpoint">offgrid list</div>
-                <p>List installed models</p>
-
-                <div class="endpoint">offgrid download &lt;model&gt;</div>
-                <p>Download a model</p>
-
-                <h3>Environment Variables</h3>
-                <ul>
-                    <li><code>PORT</code> - Server port (default: 11611)</li>
-                    <li><code>MODELS_DIR</code> - Models directory</li>
-                    <li><code>MAX_CONTEXT</code> - Max context size</li>
-                </ul>
-            </div>
-        </div>
-
-        <button class="btn btn-primary sidebar-toggle" onclick="toggleSidebar()">
-            <span id="sidebarToggleText">Docs</span>
-        </button>
-    </div>
-
+    <title>OffGrid LLM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        const API_BASE = window.location.origin;
-        let conversationHistory = [];
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const toggleBtn = document.getElementById('sidebarToggleText');
-            sidebar.classList.toggle('mobile-visible');
-            toggleBtn.textContent = sidebar.classList.contains('mobile-visible') ? 'Close' : 'Docs';
-        }
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            
-            event.target.classList.add('active');
-            document.getElementById(`${tabName}-tab`).classList.add('active');
-
-            if (tabName === 'models') {
-                loadModels();
-                loadSystemInfo();
-            }
-        }
-
-        async function loadModels() {
-            try {
-                const response = await fetch(`${API_BASE}/v1/models`);
-                const data = await response.json();
-                
-                const modelList = document.getElementById('modelList');
-                const chatModelSelect = document.getElementById('chatModel');
-                
-                if (data.data && data.data.length > 0) {
-                    modelList.innerHTML = data.data.map(model => `
-                        <li class="model-item">
-                            <strong>${model.id}</strong>
-                            <small>Created: ${new Date(model.created * 1000).toLocaleDateString()}</small>
-                        </li>
-                    `).join('');
-
-                    chatModelSelect.innerHTML = '<option value="">Select Model</option>' +
-                        data.data.map(model => `<option value="${model.id}">${model.id}</option>`).join('');
-                } else {
-                    modelList.innerHTML = '<li class="empty-state"><p>No models</p></li>';
-                }
-            } catch (error) {
-                document.getElementById('modelList').innerHTML = `<li class="error">Error: ${error.message}</li>`;
-            }
-        }
-
-        async function loadSystemInfo() {
-            try {
-                const response = await fetch(`${API_BASE}/health`);
-                const data = await response.json();
-                
-                const systemInfo = document.getElementById('systemInfo');
-                
-                if (data.system) {
-                    systemInfo.innerHTML = `
-                        <div class="info-item">
-                            <div class="info-label">CPU Usage</div>
-                            <div class="info-value">${data.system.cpu_percent.toFixed(1)}%</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Memory</div>
-                            <div class="info-value">${data.system.memory_mb.toFixed(0)} MB</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Memory %</div>
-                            <div class="info-value">${data.system.memory_percent.toFixed(1)}%</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Disk Free</div>
-                            <div class="info-value">${data.system.disk_free_gb.toFixed(1)} GB</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Threads</div>
-                            <div class="info-value">${data.system.goroutines}</div>
-                        </div>
-                    `;
-                } else {
-                    systemInfo.innerHTML = '<div class="error">Unable to load system info</div>';
-                }
-            } catch (error) {
-                document.getElementById('systemInfo').innerHTML = `<div class="error">Error: ${error.message}</div>`;
-            }
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const modelSelect = document.getElementById('chatModel');
-            const streamingEnabled = document.getElementById('streamingEnabled').checked;
-            const messagesDiv = document.getElementById('chatMessages');
-            const sendBtn = document.getElementById('sendBtn');
-
-            const message = input.value.trim();
-            const model = modelSelect.value;
-
-            if (!message || !model) {
-                alert('Please select a model and enter a message');
-                return;
-            }
-
-            if (messagesDiv.querySelector('.empty-state')) {
-                messagesDiv.innerHTML = '';
-            }
-
-            conversationHistory.push({ role: 'user', content: message });
-            addMessageToUI('user', message);
-            input.value = '';
-            sendBtn.disabled = true;
-
-            try {
-                if (streamingEnabled) {
-                    await sendStreamingMessage(model);
-                } else {
-                    await sendNormalMessage(model);
-                }
-            } catch (error) {
-                addMessageToUI('system', `Error: ${error.message}`, true);
-            } finally {
-                sendBtn.disabled = false;
-            }
-        }
-
-        async function sendNormalMessage(model) {
-            const response = await fetch(`${API_BASE}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: model,
-                    messages: conversationHistory
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            const assistantMessage = data.choices[0].message.content;
-            
-            conversationHistory.push({ role: 'assistant', content: assistantMessage });
-            addMessageToUI('assistant', assistantMessage);
-        }
-
-        async function sendStreamingMessage(model) {
-            const response = await fetch(`${API_BASE}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: model,
-                    messages: conversationHistory,
-                    stream: true
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let assistantMessage = '';
-            
-            const messageDiv = addMessageToUI('assistant', '', false);
-            const contentDiv = messageDiv.querySelector('.message-content') || messageDiv;
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6);
-                        if (data === '[DONE]') continue;
-
-                        try {
-                            const json = JSON.parse(data);
-                            const content = json.choices[0]?.delta?.content;
-                            if (content) {
-                                assistantMessage += content;
-                                contentDiv.textContent = assistantMessage;
-                            }
-                        } catch (e) {}
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 
+                            bg: '#0a0e1a',
+                            card: '#111827', 
+                            elevated: '#1f2937',
+                            border: '#374151',
+                        },
+                        accent: {
+                            primary: '#10b981',     // Green (emerald)
+                            secondary: '#06b6d4',   // Cyan
+                            success: '#10b981',
+                            warning: '#f59e0b',
+                        }
                     }
                 }
             }
-
-            conversationHistory.push({ role: 'assistant', content: assistantMessage });
         }
-
-        function addMessageToUI(role, content, isError = false) {
-            const messagesDiv = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${role}`;
-            
-            if (!isError) {
-                messageDiv.innerHTML = `
-                    <div class="message-label">${role === 'user' ? 'YOU' : 'AI'}</div>
-                    <div class="message-content">${content}</div>
-                `;
-            } else {
-                messageDiv.className = 'error';
-                messageDiv.textContent = content;
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box;
+        }
+        
+        body { 
+            background: #0a0e1a;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+        
+        .card {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(31, 41, 55, 0.9) 100%);
+            border: 1px solid rgba(55, 65, 81, 0.6);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 
+                        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .card:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 20px 70px rgba(0, 0, 0, 0.6),
+                        0 0 0 1px rgba(59, 130, 246, 0.1) inset;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3),
+                        0 0 0 1px rgba(16, 185, 129, 0.1) inset;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            box-shadow: 0 6px 24px rgba(16, 185, 129, 0.4);
+            transform: translateY(-1px);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-secondary {
+            background: rgba(31, 41, 55, 0.8);
+            border: 1px solid rgba(55, 65, 81, 0.8);
+            transition: all 0.2s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(55, 65, 81, 0.9);
+            border-color: rgba(75, 85, 99, 0.9);
+        }
+        
+        .input-field {
+            background: rgba(17, 24, 39, 0.8);
+            border: 1px solid rgba(55, 65, 81, 0.6);
+            transition: all 0.2s ease;
+        }
+        
+        .input-field:focus {
+            background: rgba(17, 24, 39, 0.95);
+            border-color: rgba(16, 185, 129, 0.5);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+            outline: none;
+        }
+        
+        .tab-btn {
+            position: relative;
+            color: #9ca3af;
+            transition: all 0.2s ease;
+        }
+        
+        .tab-btn:hover {
+            color: #d1d5db;
+        }
+        
+        .tab-btn.active {
+            color: #10b981;
+            font-weight: 600;
+        }
+        
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #10b981, #06b6d4);
+            border-radius: 2px;
+        }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(17, 24, 39, 0.5); }
+        ::-webkit-scrollbar-thumb { 
+            background: rgba(16, 185, 129, 0.3); 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.5); }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .message { animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        .spinner { 
+            border: 2px solid rgba(16, 185, 129, 0.2); 
+            border-top-color: #10b981; 
+            border-radius: 50%; 
+            width: 16px; 
+            height: 16px; 
+            animation: spin 0.8s linear infinite; 
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            position: relative;
+        }
+        
+        .status-dot.online {
+            background: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+        
+        .status-dot.online::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border: 2px solid #10b981;
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(1.5);
+                opacity: 0;
             }
-
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            return messageDiv;
         }
-
-        function clearChat() {
-            if (confirm('Clear conversation?')) {
-                conversationHistory = [];
-                document.getElementById('chatMessages').innerHTML = `
-                    <div class="empty-state">
-                        <p>Conversation cleared</p>
+        
+        pre { 
+            background: rgba(10, 14, 26, 0.9) !important; 
+            border: 1px solid rgba(55, 65, 81, 0.3);
+            border-radius: 8px; 
+            padding: 1rem; 
+            overflow-x: auto;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        code { 
+            background: rgba(17, 24, 39, 0.8); 
+            padding: 0.2em 0.5em; 
+            border-radius: 4px; 
+            font-size: 0.875em;
+            border: 1px solid rgba(55, 65, 81, 0.3);
+        }
+        
+        pre code { 
+            background: transparent; 
+            padding: 0; 
+            border: none;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+        }
+        
+        .badge-primary {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .message-user {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.1) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        
+        .message-assistant {
+            background: rgba(17, 24, 39, 0.8);
+            border: 1px solid rgba(55, 65, 81, 0.4);
+        }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen antialiased">
+    <header class="card border-b border-dark-border sticky top-0 z-50 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto px-6 py-5">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-accent-primary via-emerald-500 to-accent-secondary flex items-center justify-center shadow-lg shadow-emerald-500/20 ring-1 ring-white/10">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">OffGrid LLM</h1>
+                            <p class="text-xs text-gray-500 font-medium">Local AI • Privacy First</p>
+                        </div>
                     </div>
-                `;
-            }
-        }
-
-        async function testAPI() {
-            const endpoint = document.getElementById('apiEndpoint').value;
-            const bodyText = document.getElementById('apiBody').value;
-            const responseDiv = document.getElementById('apiResponse');
-
-            try {
-                const options = {
-                    method: endpoint.startsWith('/v1/chat') || endpoint.startsWith('/v1/completions') ? 'POST' : 'GET',
-                };
-
-                if (options.method === 'POST' && bodyText) {
-                    options.headers = { 'Content-Type': 'application/json' };
-                    options.body = bodyText;
-                }
-
-                const response = await fetch(`${API_BASE}${endpoint}`, options);
-                const data = await response.json();
-
-                responseDiv.innerHTML = `
-                    <div class="card" style="margin-top: 0;">
-                        <strong>Status:</strong> ${response.status} ${response.statusText}<br>
-                        <strong>Response:</strong>
-                        <pre style="margin-top: 1rem; padding: 1rem; background: var(--bg-page); overflow-x: auto; font-size: 0.813rem; color: var(--text-inverse);">${JSON.stringify(data, null, 2)}</pre>
+                    <span class="badge badge-primary">v0.1.0</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2.5 px-4 py-2 card rounded-lg">
+                        <div id="statusIndicator" class="status-dot bg-gray-500"></div>
+                        <span id="statusText" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Connecting</span>
                     </div>
-                `;
-            } catch (error) {
-                responseDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
-            }
+                </div>
+            </div>
+            <div class="flex gap-1 mt-5 border-b border-dark-border -mb-[1px]">
+                <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Chat</button>
+                <button onclick="switchTab('models')" id="tab-models" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Models</button>
+                <button onclick="switchTab('api')" id="tab-api" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">API</button>
+            </div>
+        </div>
+    </header>
+    
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <div id="view-chat" class="view hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2">
+                    <div class="card rounded-2xl p-6 shadow-2xl h-[calc(100vh-240px)] flex flex-col">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-bold flex items-center gap-2.5">
+                                <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
+                                <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Conversation</span>
+                            </h2>
+                            <div class="flex gap-2">
+                                <select id="modelSelect" class="input-field px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
+                                    <option value="">Select Model...</option>
+                                </select>
+                                <button onclick="clearChat()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium hover:text-white transition-all">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                        <div id="messages" class="flex-1 overflow-y-auto mb-4 space-y-3 pr-2">
+                            <div class="text-center text-gray-500 mt-24 animate-slide-up">
+                                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-primary/10 to-accent-secondary/10 flex items-center justify-center ring-1 ring-white/5">
+                                    <svg class="w-8 h-8 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"></path>
+                                    </svg>
+                                </div>
+                                <p class="text-sm font-medium">Select a model and start chatting</p>
+                                <p class="text-xs text-gray-600 mt-1">Your conversations are private and processed locally</p>
+                            </div>
+                        </div>
+                        <div class="border-t border-dark-border pt-4">
+                            <div class="flex gap-3">
+                                <input type="text" id="messageInput" placeholder="Type your message..." class="flex-1 input-field px-4 py-3 rounded-xl text-sm" onkeypress="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }">
+                                <button onclick="sendMessage()" class="btn-primary px-6 py-3 rounded-xl font-semibold text-sm transition-all flex items-center gap-2">
+                                    <span>Send</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="streamingIndicator" class="hidden mt-3 text-xs text-gray-500 flex items-center gap-2 font-medium">
+                                <div class="spinner"></div>
+                                <span>AI is thinking...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div class="card rounded-2xl p-6 shadow-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Quick Start
+                        </h3>
+                        <ul class="space-y-3 text-sm">
+                            <li class="flex items-start gap-3 text-gray-300">
+                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">1</span>
+                                <span>Select a model from the dropdown</span>
+                            </li>
+                            <li class="flex items-start gap-3 text-gray-300">
+                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">2</span>
+                                <span>Type your question or prompt</span>
+                            </li>
+                            <li class="flex items-start gap-3 text-gray-300">
+                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">3</span>
+                                <span>Press Enter or click Send</span>
+                            </li>
+                            <li class="flex items-start gap-3 text-gray-300">
+                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">4</span>
+                                <span>Watch responses stream in real-time</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="view-models" class="view hidden">
+            <div class="card rounded-2xl p-6 shadow-2xl">
+                <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
+                    <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
+                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Available Models</span>
+                </h2>
+                <div id="modelsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="text-center text-gray-500 col-span-full py-12 animate-slide-up">
+                        <div class="spinner mx-auto mb-4"></div>
+                        <p class="text-sm font-medium">Loading models...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="card rounded-2xl p-6 mt-6 shadow-lg">
+                <h3 class="text-lg font-bold mb-6 flex items-center gap-2.5">
+                    <span class="w-1 h-5 bg-gradient-to-b from-accent-success to-emerald-400 rounded-full"></span>
+                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">System Stats</span>
+                </h3>
+                <div id="systemStats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="card rounded-xl p-4 hover:border-accent-primary/40 transition-all">
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</div>
+                        <div class="text-xl font-semibold" id="sysStatus">-</div>
+                    </div>
+                    <div class="glass rounded-lg p-4">
+                        <div class="text-xs text-gray-400 uppercase mb-1">Models</div>
+                        <div class="text-xl font-semibold" id="sysModels">-</div>
+                    </div>
+                    <div class="glass rounded-lg p-4">
+                        <div class="text-xs text-gray-400 uppercase mb-1">Uptime</div>
+                        <div class="text-xl font-bold text-white" id="sysUptime">-</div>
+                    </div>
+                    <div class="card rounded-xl p-4 hover:border-accent-primary/40 transition-all">
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Version</div>
+                        <div class="text-xl font-bold text-white">0.1.0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="view-api" class="view hidden">
+            <div class="card rounded-2xl p-6 shadow-2xl">
+                <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
+                    <span class="w-1 h-5 bg-gradient-to-b from-accent-warning to-amber-400 rounded-full"></span>
+                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">API Playground</span>
+                </h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Request</h3>
+                        <select id="apiEndpoint" class="w-full input-field px-4 py-2.5 rounded-lg text-sm font-medium mb-4 cursor-pointer">
+                            <option value="GET /v1/health">GET /v1/health</option>
+                            <option value="GET /v1/models">GET /v1/models</option>
+                            <option value="POST /v1/chat/completions">POST /v1/chat/completions</option>
+                        </select>
+                        <textarea id="apiRequest" class="w-full h-64 input-field px-4 py-3 rounded-xl text-sm font-mono resize-none" placeholder='{"model": "model-name", "messages": [{"role": "user", "content": "Hello"}]}'></textarea>
+                        <button onclick="testAPI()" class="mt-4 btn-primary px-6 py-3 rounded-xl font-semibold transition-all w-full">Send Request</button>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Response</h3>
+                        <pre id="apiResponse" class="h-80 overflow-auto text-sm"><code class="text-gray-400">Response will appear here...</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+    <script>
+        let currentTab = 'chat', messages = [], isStreaming = false;
+        const API_BASE = window.location.origin;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            switchTab('chat');
+            checkHealth();
+            loadModels();
+            setInterval(checkHealth, 5000);
+        });
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            if (tab === 'models') loadModels();
         }
-
+        
         async function checkHealth() {
             try {
-                const response = await fetch(`${API_BASE}/health`);
-                if (response.ok) {
-                    document.getElementById('status').innerHTML = '<span class="status-dot"></span><span>ONLINE</span>';
+                const res = await fetch(`${API_BASE}/v1/health`);
+                const data = await res.json();
+                const indicator = document.getElementById('statusIndicator');
+                const text = document.getElementById('statusText');
+                if (data.status === 'ok' || data.status === 'running') {
+                    indicator.className = 'status-dot online';
+                    text.textContent = 'Online';
+                    text.className = 'text-xs font-semibold text-accent-success uppercase tracking-wider';
                 } else {
-                    throw new Error('Not healthy');
+                    indicator.className = 'status-dot bg-red-500';
+                    text.textContent = 'Error';
+                    text.className = 'text-xs font-semibold text-red-400 uppercase tracking-wider';
                 }
-            } catch (error) {
-                document.getElementById('status').innerHTML = '<span class="status-dot" style="background: var(--error);"></span><span>OFFLINE</span>';
+            } catch (err) {
+                document.getElementById('statusIndicator').className = 'status-dot bg-gray-500';
+                document.getElementById('statusText').textContent = 'Offline';
+                document.getElementById('statusText').className = 'text-xs font-semibold text-gray-400 uppercase tracking-wider';
             }
         }
-
-        checkHealth();
-        loadModels();
-        setInterval(checkHealth, 10000);
+        
+        async function loadModels() {
+            try {
+                const res = await fetch(`${API_BASE}/v1/models`);
+                const data = await res.json();
+                const select = document.getElementById('modelSelect');
+                select.innerHTML = '<option value="">Select Model...</option>';
+                const modelsList = document.getElementById('modelsList');
+                modelsList.innerHTML = '';
+                if (data.data && data.data.length > 0) {
+                    data.data.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.id;
+                        option.textContent = model.id;
+                        select.appendChild(option);
+                        const card = document.createElement('div');
+                        card.className = 'card rounded-xl p-5 hover:border-accent-primary/50 transition-all cursor-pointer group';
+                        card.innerHTML = `
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-primary/20 to-accent-secondary/20 flex items-center justify-center ring-1 ring-white/5 group-hover:ring-accent-primary/30 transition-all">
+                                    <svg class="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                                    </svg>
+                                </div>
+                                <span class="badge badge-primary text-xs">Ready</span>
+                            </div>
+                            <h3 class="font-bold text-white mb-1.5 group-hover:text-accent-primary transition-colors">${model.id}</h3>
+                            <p class="text-xs text-gray-500 font-medium">Owner: <span class="text-gray-400">${model.owned_by || 'local'}</span></p>
+                        `;
+                        modelsList.appendChild(card);
+                    });
+                    document.getElementById('sysStatus').textContent = 'Online';
+                    document.getElementById('sysStatus').className = 'text-xl font-bold text-accent-success';
+                    document.getElementById('sysModels').textContent = data.data.length;
+                } else {
+                    modelsList.innerHTML = '<div class="text-center text-gray-400 col-span-full py-8">No models available</div>';
+                }
+            } catch (err) {
+                console.error('Failed to load models:', err);
+            }
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const modelSelect = document.getElementById('modelSelect');
+            const message = input.value.trim();
+            const model = modelSelect.value;
+            if (!message || !model) { alert('Please select a model and enter a message'); return; }
+            if (isStreaming) return;
+            addMessage('user', message);
+            input.value = '';
+            document.getElementById('streamingIndicator').classList.remove('hidden');
+            isStreaming = true;
+            const assistantMsgId = addMessage('assistant', '');
+            try {
+                const res = await fetch(`${API_BASE}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: model, messages: [{ role: 'user', content: message }], stream: true })
+                });
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n').filter(l => l.trim());
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            try {
+                                const json = JSON.parse(data);
+                                const content = json.choices?.[0]?.delta?.content;
+                                if (content) {
+                                    fullResponse += content;
+                                    updateMessage(assistantMsgId, fullResponse);
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            } catch (err) {
+                updateMessage(assistantMsgId, 'Error: Failed to get response');
+                console.error(err);
+            } finally {
+                isStreaming = false;
+                document.getElementById('streamingIndicator').classList.add('hidden');
+            }
+        }
+        
+        function addMessage(role, content) {
+            const messagesDiv = document.getElementById('messages');
+            if (messages.length === 0) messagesDiv.innerHTML = '';
+            const msgId = `msg-${Date.now()}`;
+            const isUser = role === 'user';
+            const msgDiv = document.createElement('div');
+            msgDiv.id = msgId;
+            msgDiv.className = `message flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`;
+            msgDiv.innerHTML = `
+                <div class="flex gap-3 max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'}">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ring-1 ring-white/10 ${isUser ? 'bg-gradient-to-br from-accent-primary to-emerald-600' : 'bg-gradient-to-br from-accent-secondary to-cyan-600'}">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                            ${isUser ? '<path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>' : '<path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>'}
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">${isUser ? 'You' : 'Assistant'}</div>
+                        <div class="rounded-xl p-4 ${isUser ? 'message-user' : 'message-assistant'} shadow-lg">
+                            <div class="prose prose-invert prose-sm max-w-none msg-content leading-relaxed">${isUser ? escapeHtml(content) : marked.parse(content || '_Thinking..._')}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            messages.push({ id: msgId, role, content });
+            return msgId;
+        }
+        
+        function updateMessage(msgId, content) {
+            const msgDiv = document.getElementById(msgId);
+            if (msgDiv) {
+                msgDiv.querySelector('.msg-content').innerHTML = marked.parse(content || '_Thinking..._');
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            }
+        }
+        
+        function clearChat() {
+            messages = [];
+            document.getElementById('messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><div class="text-4xl mb-4">◆</div><p>Select a model and start chatting</p></div>';
+        }
+        
+        async function testAPI() {
+            const endpoint = document.getElementById('apiEndpoint').value;
+            const requestBody = document.getElementById('apiRequest').value;
+            const responseEl = document.getElementById('apiResponse');
+            responseEl.innerHTML = '<code class="text-gray-400">Loading...</code>';
+            try {
+                // Extract endpoint path (format: "GET /v1/health" -> "/v1/health")
+                const endpointParts = endpoint.split(' ');
+                const method = endpointParts[0] || 'GET';
+                const path = endpointParts[1] || endpoint;
+                
+                const options = { 
+                    method: method, 
+                    headers: { 'Content-Type': 'application/json' } 
+                };
+                
+                if (method === 'POST' && requestBody.trim()) {
+                    options.body = requestBody;
+                }
+                
+                const res = await fetch(`${API_BASE}${path}`, options);
+                const data = await res.json();
+                responseEl.innerHTML = `<code class="text-green-400">${JSON.stringify(data, null, 2)}</code>`;
+            } catch (err) {
+                responseEl.innerHTML = `<code class="text-red-400">Error: ${err.message}</code>`;
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
     </script>
 </body>
 </html>

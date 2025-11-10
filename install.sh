@@ -393,20 +393,65 @@ install_go() {
     sudo tar -C /usr/local -xzf "$GO_TARBALL"
     rm "$GO_TARBALL"
     
-    # Add to PATH if not already there
+    # Configure Go PATH for system-wide persistence across reboots
+    print_step "Configuring Go PATH for persistent access..."
+    
+    # 1. Add to /etc/profile.d/ (system-wide for login shells)
     if ! grep -q "/usr/local/go/bin" /etc/profile.d/go.sh 2>/dev/null; then
-        print_step "Adding Go to system PATH..."
-        echo 'export PATH=$PATH:/usr/local/go/bin' | sudo tee /etc/profile.d/go.sh > /dev/null
+        sudo tee /etc/profile.d/go.sh > /dev/null << 'EOF'
+# Go Programming Language Environment
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+EOF
         sudo chmod +x /etc/profile.d/go.sh
+        print_success "Added Go to /etc/profile.d/go.sh (system-wide)"
     fi
     
-    # Export for current session
+    # 2. Add to /etc/environment (system-wide for all sessions including non-login)
+    if ! grep -q "/usr/local/go/bin" /etc/environment 2>/dev/null; then
+        # Read current PATH from /etc/environment or use default
+        CURRENT_PATH=$(grep "^PATH=" /etc/environment 2>/dev/null | sed 's/^PATH=//' | sed 's/"//g')
+        if [ -z "$CURRENT_PATH" ]; then
+            CURRENT_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        fi
+        
+        # Only add if not already present
+        if ! echo "$CURRENT_PATH" | grep -q "/usr/local/go/bin"; then
+            NEW_PATH="${CURRENT_PATH}:/usr/local/go/bin"
+            sudo sed -i '/^PATH=/d' /etc/environment 2>/dev/null || true
+            echo "PATH=\"${NEW_PATH}\"" | sudo tee -a /etc/environment > /dev/null
+            print_success "Added Go to /etc/environment (persistent across all sessions)"
+        fi
+    fi
+    
+    # 3. Add to current user's profile files for immediate availability
+    for profile_file in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.zshrc"; do
+        if [ -f "$profile_file" ]; then
+            if ! grep -q "/usr/local/go/bin" "$profile_file" 2>/dev/null; then
+                echo "" >> "$profile_file"
+                echo "# Go Programming Language" >> "$profile_file"
+                echo 'export PATH=$PATH:/usr/local/go/bin' >> "$profile_file"
+                echo 'export GOPATH=$HOME/go' >> "$profile_file"
+                echo 'export PATH=$PATH:$GOPATH/bin' >> "$profile_file"
+                print_success "Added Go to $(basename $profile_file)"
+            fi
+        fi
+    done
+    
+    # 4. Export for current session
     export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=$HOME/go
+    export PATH=$PATH:$GOPATH/bin
+    
+    # 5. Create GOPATH directory if it doesn't exist
+    mkdir -p "$HOME/go/bin" 2>/dev/null || true
     
     # Verify installation
     if command -v go &> /dev/null; then
         INSTALLED_VERSION=$(go version | awk '{print $3}')
         print_success "Go $INSTALLED_VERSION installed successfully"
+        print_success "Go PATH configured for persistent access (survives reboots)"
     else
         print_error "Go installation failed"
         return 1
@@ -966,10 +1011,12 @@ ExecStart=/usr/local/bin/llama-server-start.sh
 Restart=always
 RestartSec=3
 
-# Security hardening - localhost-only binding for internal IPC
+# Environment variables
+Environment="PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="LD_LIBRARY_PATH=/usr/local/lib"
 Environment="LLAMA_SERVER_INTERNAL=1"
 
-# Strict security settings
+# Security hardening - localhost-only binding for internal IPC
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -1056,6 +1103,9 @@ WorkingDirectory=/var/lib/offgrid
 ExecStart=/usr/local/bin/offgrid serve
 Restart=always
 RestartSec=3
+
+# Environment variables
+Environment="PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="OFFGRID_PORT=11611"
 Environment="OFFGRID_MODELS_DIR=/var/lib/offgrid/models"
 Environment="LLAMA_SERVER_URL=http://127.0.0.1:${LLAMA_PORT}"
@@ -1094,12 +1144,12 @@ setup_config() {
     sudo mkdir -p "$MODELS_DIR"
     sudo mkdir -p "$WEB_DIR"
     
-    print_step "Copying web UI files..."
+    print_step "Copying web UI..."
     if [ -f "web/ui/index.html" ]; then
         sudo cp -r web/ui/* "$WEB_DIR/"
         print_success "Web UI files copied"
     else
-        print_warning "Web UI files not found in current directory"
+        print_warning "No UI files found"
     fi
     
     sudo chown -R offgrid:offgrid "$CONFIG_DIR"
