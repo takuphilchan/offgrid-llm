@@ -600,20 +600,36 @@ func handleRemove(args []string) {
 	// Check if model exists
 	meta, err := registry.GetModel(modelID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "✗ Model not found: %s\n\n", modelID)
+		printDivider()
+		fmt.Println()
+		printError(fmt.Sprintf("Model not found: %s", modelID))
+		fmt.Println()
 
 		// Show available models
 		modelList := registry.ListModels()
 		if len(modelList) > 0 {
-			fmt.Fprintln(os.Stderr, "Available models:")
+			printSection("Available Models")
 			for _, m := range modelList {
-				fmt.Fprintf(os.Stderr, "  • %s\n", m.ID)
+				modelMeta, _ := registry.GetModel(m.ID)
+				fmt.Printf("  ◭ %s", m.ID)
+				if modelMeta != nil && modelMeta.Size > 0 {
+					fmt.Printf(" · %s", formatBytes(modelMeta.Size))
+				}
+				if modelMeta != nil && modelMeta.Quantization != "" {
+					fmt.Printf(" · %s", modelMeta.Quantization)
+				}
+				fmt.Println()
 			}
-			fmt.Fprintln(os.Stderr, "")
 		} else {
-			fmt.Fprintln(os.Stderr, "No models installed. Use 'offgrid download' to add models.")
-			fmt.Fprintln(os.Stderr, "")
+			printInfo("No models installed")
+			fmt.Println()
+			printInfo("Download models:")
+			printItem("From catalog", "offgrid download <model-id>")
+			printItem("From HuggingFace", "offgrid download-hf <repo> --file <file>.gguf")
 		}
+		fmt.Println()
+		printDivider()
+		fmt.Println()
 		os.Exit(1)
 	}
 
