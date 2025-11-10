@@ -270,6 +270,7 @@
             <div class="flex gap-1 mt-5 border-b border-dark-border -mb-[1px]">
                 <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Chat</button>
                 <button onclick="switchTab('models')" id="tab-models" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Models</button>
+                <button onclick="switchTab('sessions')" id="tab-sessions" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Sessions</button>
                 <button onclick="switchTab('api')" id="tab-api" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">API</button>
             </div>
         </div>
@@ -323,42 +324,116 @@
                     </div>
                 </div>
                 <div class="space-y-4">
-                    <div class="card rounded-2xl p-6 shadow-lg">
+                    <!-- Session Controls -->
+                    <div class="card rounded-2xl p-5 shadow-lg">
                         <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                             <svg class="w-4 h-4 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
                             </svg>
-                            Quick Start
+                            Session
                         </h3>
-                        <ul class="space-y-3 text-sm">
-                            <li class="flex items-start gap-3 text-gray-300">
-                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">1</span>
-                                <span>Select a model from the dropdown</span>
-                            </li>
-                            <li class="flex items-start gap-3 text-gray-300">
-                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">2</span>
-                                <span>Type your question or prompt</span>
-                            </li>
-                            <li class="flex items-start gap-3 text-gray-300">
-                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">3</span>
-                                <span>Press Enter or click Send</span>
-                            </li>
-                            <li class="flex items-start gap-3 text-gray-300">
-                                <span class="flex-shrink-0 w-5 h-5 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center text-xs font-bold">4</span>
-                                <span>Watch responses stream in real-time</span>
-                            </li>
-                        </ul>
+                        <div class="space-y-3">
+                            <input type="text" id="sessionName" placeholder="Session name (optional)" class="w-full input-field px-3 py-2 rounded-lg text-sm">
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="saveSession()" class="btn-secondary px-3 py-2 rounded-lg text-xs font-medium hover:text-white">Save</button>
+                                <button onclick="showLoadSession()" class="btn-secondary px-3 py-2 rounded-lg text-xs font-medium hover:text-white">Load</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Prompt Templates -->
+                    <div class="card rounded-2xl p-5 shadow-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-accent-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Templates
+                        </h3>
+                        <select id="templateSelect" onchange="applyTemplate()" class="w-full input-field px-3 py-2 rounded-lg text-sm font-medium cursor-pointer">
+                            <option value="">Select template...</option>
+                            <option value="summarize">📝 Summarize</option>
+                            <option value="code-review">💻 Code Review</option>
+                            <option value="translate">🌐 Translate</option>
+                            <option value="explain">💡 Explain</option>
+                            <option value="brainstorm">🧠 Brainstorm</option>
+                            <option value="debug">🐛 Debug</option>
+                            <option value="document">📄 Document</option>
+                            <option value="refactor">🔧 Refactor</option>
+                            <option value="test">✅ Test</option>
+                            <option value="cli">⌨️ CLI Helper</option>
+                        </select>
+                    </div>
+
+                    <!-- Advanced Parameters -->
+                    <div class="card rounded-2xl p-5 shadow-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-accent-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                            </svg>
+                            Parameters
+                        </h3>
+                        <div class="space-y-4 text-sm">
+                            <div>
+                                <label class="flex items-center justify-between mb-2">
+                                    <span class="text-gray-400 font-medium">Temperature</span>
+                                    <span class="text-accent-primary font-semibold" id="tempValue">0.7</span>
+                                </label>
+                                <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" oninput="document.getElementById('tempValue').textContent=this.value" class="w-full">
+                            </div>
+                            <div>
+                                <label class="flex items-center justify-between mb-2">
+                                    <span class="text-gray-400 font-medium">Max Tokens</span>
+                                    <span class="text-accent-primary font-semibold" id="tokensValue">500</span>
+                                </label>
+                                <input type="range" id="maxTokens" min="50" max="2000" step="50" value="500" oninput="document.getElementById('tokensValue').textContent=this.value" class="w-full">
+                            </div>
+                            <div>
+                                <label class="flex items-center justify-between mb-2">
+                                    <span class="text-gray-400 font-medium">Top P</span>
+                                    <span class="text-accent-primary font-semibold" id="topPValue">0.9</span>
+                                </label>
+                                <input type="range" id="topP" min="0" max="1" step="0.1" value="0.9" oninput="document.getElementById('topPValue').textContent=this.value" class="w-full">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
         <div id="view-models" class="view hidden">
-            <div class="card rounded-2xl p-6 shadow-2xl">
+            <!-- Model Download Section -->
+            <div class="card rounded-2xl p-6 shadow-2xl mb-6">
                 <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
-                    <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
-                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Available Models</span>
+                    <span class="w-1 h-5 bg-gradient-to-b from-accent-secondary to-purple-400 rounded-full"></span>
+                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Download from HuggingFace</span>
                 </h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <input type="text" id="hfRepo" placeholder="e.g. bartowski/Llama-3.2-3B-Instruct-GGUF" class="input-field px-4 py-3 rounded-lg text-sm" />
+                    <input type="text" id="hfFile" placeholder="e.g. Llama-3.2-3B-Instruct-Q4_K_M.gguf" class="input-field px-4 py-3 rounded-lg text-sm" />
+                </div>
+                <button onclick="downloadModel()" class="btn-primary px-6 py-3 rounded-xl font-semibold mt-4">
+                    <span>Download Model</span>
+                </button>
+                <div id="downloadProgress" class="hidden mt-4">
+                    <div class="text-sm text-gray-400 mb-2">Downloading...</div>
+                    <div class="w-full bg-dark-elevated rounded-full h-2">
+                        <div id="progressBar" class="bg-accent-primary h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card rounded-2xl p-6 shadow-2xl">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold flex items-center gap-2.5">
+                        <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
+                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Available Models</span>
+                    </h2>
+                    <div class="flex gap-2">
+                        <button onclick="toggleFavorites()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">
+                            <span id="favFilterText">⭐ Show Favorites</span>
+                        </button>
+                    </div>
+                </div>
                 <div id="modelsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="text-center text-gray-500 col-span-full py-12 animate-slide-up">
                         <div class="spinner mx-auto mb-4"></div>
@@ -387,6 +462,32 @@
                     <div class="card rounded-xl p-4 hover:border-accent-primary/40 transition-all">
                         <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Version</div>
                         <div class="text-xl font-bold text-white">0.1.0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sessions Tab -->
+        <div id="view-sessions" class="view hidden">
+            <div class="card rounded-2xl p-6 shadow-2xl">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold flex items-center gap-2.5">
+                        <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
+                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Saved Sessions</span>
+                    </h2>
+                    <button onclick="loadSessions()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">
+                        Refresh
+                    </button>
+                </div>
+                <div id="sessionsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="text-center text-gray-500 col-span-full py-12">
+                        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-primary/10 to-accent-secondary/10 flex items-center justify-center ring-1 ring-white/5">
+                            <svg class="w-8 h-8 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                            </svg>
+                        </div>
+                        <p class="text-sm font-medium">No saved sessions</p>
+                        <p class="text-xs text-gray-600 mt-1">Start a chat and save it to create a session</p>
                     </div>
                 </div>
             </div>
@@ -470,13 +571,27 @@
                 const modelsList = document.getElementById('modelsList');
                 modelsList.innerHTML = '';
                 if (data.data && data.data.length > 0) {
-                    data.data.forEach(model => {
+                    let modelsToShow = data.data;
+                    
+                    // Filter favorites if enabled
+                    if (favoritesOnly) {
+                        modelsToShow = modelsToShow.filter(m => favoriteModels.has(m.id));
+                    }
+                    
+                    if (modelsToShow.length === 0) {
+                        modelsList.innerHTML = '<div class="text-center text-gray-400 col-span-full py-8">No favorite models yet</div>';
+                        return;
+                    }
+                    
+                    modelsToShow.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model.id;
                         option.textContent = model.id;
                         select.appendChild(option);
+                        
+                        const isFavorite = favoriteModels.has(model.id);
                         const card = document.createElement('div');
-                        card.className = 'card rounded-xl p-5 hover:border-accent-primary/50 transition-all cursor-pointer group';
+                        card.className = 'card rounded-xl p-5 hover:border-accent-primary/50 transition-all group';
                         card.innerHTML = `
                             <div class="flex items-start justify-between mb-3">
                                 <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-primary/20 to-accent-secondary/20 flex items-center justify-center ring-1 ring-white/5 group-hover:ring-accent-primary/30 transition-all">
@@ -484,7 +599,12 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
                                     </svg>
                                 </div>
-                                <span class="badge badge-primary text-xs">Ready</span>
+                                <div class="flex gap-2">
+                                    <button onclick="event.stopPropagation(); toggleFavorite('${model.id}')" class="text-xl hover:scale-110 transition-transform">
+                                        ${isFavorite ? '⭐' : '☆'}
+                                    </button>
+                                    <span class="badge badge-primary text-xs">Ready</span>
+                                </div>
                             </div>
                             <h3 class="font-bold text-white mb-1.5 group-hover:text-accent-primary transition-colors">${model.id}</h3>
                             <p class="text-xs text-gray-500 font-medium">Owner: <span class="text-gray-400">${model.owned_by || 'local'}</span></p>
@@ -515,10 +635,22 @@
             isStreaming = true;
             const assistantMsgId = addMessage('assistant', '');
             try {
+                // Get advanced parameters
+                const temperature = parseFloat(document.getElementById('temperature').value);
+                const maxTokens = parseInt(document.getElementById('maxTokens').value);
+                const topP = parseFloat(document.getElementById('topP').value);
+                
                 const res = await fetch(`${API_BASE}/v1/chat/completions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: model, messages: [{ role: 'user', content: message }], stream: true })
+                    body: JSON.stringify({ 
+                        model: model, 
+                        messages: [{ role: 'user', content: message }], 
+                        stream: true,
+                        temperature: temperature,
+                        max_tokens: maxTokens,
+                        top_p: topP
+                    })
                 });
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
@@ -627,6 +759,189 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        // ===== Prompt Templates =====
+        const templates = {
+            'summarize': 'Please summarize the following text concisely:\n\n',
+            'code-review': 'Review the following code and provide feedback on best practices, potential bugs, and improvements:\n\n',
+            'translate': 'Translate the following text to [TARGET_LANGUAGE]:\n\n',
+            'explain': 'Explain the following concept in simple terms:\n\n',
+            'brainstorm': 'Help me brainstorm ideas for:\n\n',
+            'debug': 'Help me debug the following code. Identify issues and suggest fixes:\n\n',
+            'document': 'Generate documentation for the following code:\n\n',
+            'refactor': 'Suggest refactoring improvements for this code:\n\n',
+            'test': 'Generate unit tests for the following code:\n\n',
+            'cli': 'Provide a command-line example for:\n\n'
+        };
+
+        function applyTemplate() {
+            const select = document.getElementById('templateSelect');
+            const template = templates[select.value];
+            if (template) {
+                const input = document.getElementById('messageInput');
+                input.value = template;
+                input.focus();
+                select.value = '';
+            }
+        }
+
+        // ===== Session Management =====
+        let currentSession = null;
+        const sessions = {};
+
+        function saveSession() {
+            const name = document.getElementById('sessionName').value.trim() || `session-${Date.now()}`;
+            sessions[name] = {
+                name: name,
+                messages: [...messages],
+                model: document.getElementById('modelSelect').value,
+                timestamp: new Date().toISOString(),
+                messageCount: messages.length
+            };
+            localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
+            alert(`Session "${name}" saved!`);
+            document.getElementById('sessionName').value = '';
+        }
+
+        function loadSessions() {
+            const stored = localStorage.getItem('offgrid-sessions');
+            if (stored) {
+                Object.assign(sessions, JSON.parse(stored));
+            }
+            displaySessions();
+        }
+
+        function displaySessions() {
+            const container = document.getElementById('sessionsList');
+            const sessionKeys = Object.keys(sessions);
+            
+            if (sessionKeys.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-500 col-span-full py-12">
+                        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-primary/10 to-accent-secondary/10 flex items-center justify-center ring-1 ring-white/5">
+                            <svg class="w-8 h-8 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                            </svg>
+                        </div>
+                        <p class="text-sm font-medium">No saved sessions</p>
+                        <p class="text-xs text-gray-600 mt-1">Start a chat and save it to create a session</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = sessionKeys.map(key => {
+                const session = sessions[key];
+                const date = new Date(session.timestamp).toLocaleDateString();
+                return `
+                    <div class="card rounded-xl p-5 hover:border-accent-primary/50 transition-all group">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-primary/20 to-accent-secondary/20 flex items-center justify-center ring-1 ring-white/5">
+                                <svg class="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <h3 class="font-bold text-white mb-2">${escapeHtml(session.name)}</h3>
+                        <p class="text-xs text-gray-500 mb-3">${session.messageCount} messages • ${date}</p>
+                        <div class="flex gap-2">
+                            <button onclick="loadSessionData('${key}')" class="flex-1 btn-primary px-3 py-2 rounded-lg text-xs font-medium">Load</button>
+                            <button onclick="deleteSession('${key}')" class="btn-secondary px-3 py-2 rounded-lg text-xs font-medium hover:text-red-400">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showLoadSession() {
+            loadSessions();
+            switchTab('sessions');
+        }
+
+        function loadSessionData(name) {
+            const session = sessions[name];
+            if (session) {
+                messages = [...session.messages];
+                document.getElementById('modelSelect').value = session.model;
+                displayMessages();
+                switchTab('chat');
+                currentSession = name;
+            }
+        }
+
+        function deleteSession(name) {
+            if (confirm(`Delete session "${name}"?`)) {
+                delete sessions[name];
+                localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
+                displaySessions();
+            }
+        }
+
+        function displayMessages() {
+            const container = document.getElementById('messages');
+            container.innerHTML = messages.map(msg => {
+                return `
+                    <div id="${msg.id}" class="message-${msg.role} rounded-xl p-4">
+                        <div class="flex items-start gap-3">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-lg ${msg.role === 'user' ? 'bg-accent-primary/20' : 'bg-gray-700'} flex items-center justify-center">
+                                <span class="text-sm font-bold">${msg.role === 'user' ? 'U' : 'AI'}</span>
+                            </div>
+                            <div class="flex-1 msg-content prose prose-invert max-w-none">${marked.parse(msg.content)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ===== Model Download =====
+        async function downloadModel() {
+            const repo = document.getElementById('hfRepo').value.trim();
+            const file = document.getElementById('hfFile').value.trim();
+            
+            if (!repo || !file) {
+                alert('Please enter both repository and file name');
+                return;
+            }
+
+            const progressDiv = document.getElementById('downloadProgress');
+            progressDiv.classList.remove('hidden');
+            
+            try {
+                // Note: This would need backend support - showing UI only
+                alert(`Download initiated for ${repo}/${file}\nThis feature requires backend API support.`);
+                progressDiv.classList.add('hidden');
+            } catch (err) {
+                alert('Download failed: ' + err.message);
+                progressDiv.classList.add('hidden');
+            }
+        }
+
+        // ===== Favorites & Filters =====
+        let favoritesOnly = false;
+        const favoriteModels = new Set(JSON.parse(localStorage.getItem('favorite-models') || '[]'));
+
+        function toggleFavorites() {
+            favoritesOnly = !favoritesOnly;
+            document.getElementById('favFilterText').textContent = favoritesOnly ? '📋 Show All' : '⭐ Show Favorites';
+            loadModels();
+        }
+
+        function toggleFavorite(modelId) {
+            if (favoriteModels.has(modelId)) {
+                favoriteModels.delete(modelId);
+            } else {
+                favoriteModels.add(modelId);
+            }
+            localStorage.setItem('favorite-models', JSON.stringify([...favoriteModels]));
+            loadModels();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSessions();
+            if (currentTab === 'sessions') {
+                displaySessions();
+            }
+        });
     </script>
 </body>
 </html>
