@@ -17,12 +17,20 @@ services:
     volumes:
       # Model storage (persistent)
       - offgrid-models:/var/lib/offgrid/models
+      # Session storage (persistent)
+      - offgrid-sessions:/var/lib/offgrid/sessions
       # USB import directory (optional)
       - /media/usb:/media/usb:ro
+      # Optional: mount local models directory
+      # - ./models:/var/lib/offgrid/models
     
     environment:
       - OFFGRID_PORT=11611
       - OFFGRID_HOST=0.0.0.0
+      - OFFGRID_MAX_CONTEXT=4096
+      - OFFGRID_NUM_THREADS=4
+      # Optional: Enable debug logging
+      # - OFFGRID_LOG_LEVEL=debug
     
     # Resource limits (adjust based on models and available RAM)
     deploy:
@@ -51,6 +59,8 @@ services:
 
 volumes:
   offgrid-models:
+    driver: local
+  offgrid-sessions:
     driver: local
 
 
