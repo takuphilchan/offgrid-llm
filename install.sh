@@ -737,10 +737,25 @@ build_offgrid() {
     local BUILD_DIR=$(pwd)
     local GO_CMD="go"
     
-    # Use Go 1.21+ if available
+    # Use Go 1.21+ if available - check multiple possible locations
     if [ -f "/usr/local/go/bin/go" ]; then
         GO_CMD="/usr/local/go/bin/go"
         print_info "Using installed Go at /usr/local/go/bin/go"
+    elif [ -f "$HOME/go1.21.5/bin/go" ]; then
+        GO_CMD="$HOME/go1.21.5/bin/go"
+        print_info "Using installed Go at $HOME/go1.21.5/bin/go"
+    elif [ -f "$HOME/go1.24.10/bin/go" ]; then
+        GO_CMD="$HOME/go1.24.10/bin/go"
+        print_info "Using installed Go at $HOME/go1.24.10/bin/go"
+    else
+        # Try to find Go 1.21+ in PATH
+        if command -v go &> /dev/null; then
+            GO_VERSION_CHECK=$(go version | awk '{print $3}' | sed 's/go//' | cut -d. -f1-2)
+            if [ "$(printf '%s\n' "1.21" "$GO_VERSION_CHECK" | sort -V | head -n1)" = "1.21" ]; then
+                GO_CMD="go"
+                print_info "Using system Go (version check passed)"
+            fi
+        fi
     fi
     
     # Verify Go is installed
