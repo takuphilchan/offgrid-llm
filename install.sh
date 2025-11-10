@@ -358,12 +358,12 @@ install_build_deps() {
     print_success "Build dependencies installed"
 }
 
-# Install Go 1.21+
+# Install Go 1.24+
 install_go() {
     print_header "Installing Go Programming Language"
     
-    local REQUIRED_GO_VERSION="1.21"
-    local GO_VERSION="1.21.5"
+    local REQUIRED_GO_VERSION="1.24"
+    local GO_VERSION="1.24.10"
     local GO_TARBALL="go${GO_VERSION}.linux-${ARCH}.tar.gz"
     local GO_URL="https://go.dev/dl/${GO_TARBALL}"
     
@@ -748,10 +748,10 @@ build_offgrid() {
         GO_CMD="$HOME/go1.24.10/bin/go"
         print_info "Using installed Go at $HOME/go1.24.10/bin/go"
     else
-        # Try to find Go 1.21+ in PATH
+        # Try to find Go 1.24+ in PATH
         if command -v go &> /dev/null; then
             GO_VERSION_CHECK=$(go version | awk '{print $3}' | sed 's/go//' | cut -d. -f1-2)
-            if [ "$(printf '%s\n' "1.21" "$GO_VERSION_CHECK" | sort -V | head -n1)" = "1.21" ]; then
+            if [ "$(printf '%s\n' "1.24" "$GO_VERSION_CHECK" | sort -V | head -n1)" = "1.24" ]; then
                 GO_CMD="go"
                 print_info "Using system Go (version check passed)"
             fi
@@ -769,7 +769,7 @@ build_offgrid() {
     
     # Check Go version meets minimum requirement
     GO_VERSION_NUM=$(echo $GO_VERSION | sed 's/go//' | cut -d. -f1-2)
-    MIN_GO_VERSION="1.21"
+    MIN_GO_VERSION="1.24"
     if [ "$(printf '%s\n' "$MIN_GO_VERSION" "$GO_VERSION_NUM" | sort -V | head -n1)" != "$MIN_GO_VERSION" ]; then
         print_warning "Go version $GO_VERSION_NUM is older than required $MIN_GO_VERSION"
         print_warning "Attempting to use system Go anyway..."
