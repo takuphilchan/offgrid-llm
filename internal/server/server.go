@@ -109,9 +109,16 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/cache/stats", s.handleCacheStats)
 	mux.HandleFunc("/cache/clear", s.handleCacheClear)
 
-	// Web UI
-	mux.HandleFunc("/ui", s.handleWebUI)
-	mux.HandleFunc("/ui/", s.handleWebUI)
+	// Web UI - serve HTML/CSS/JS
+	uiPath := "/var/lib/offgrid/web/ui"
+	// Fallback to local development path if installed path doesn't exist
+	if _, err := os.Stat(uiPath); os.IsNotExist(err) {
+		uiPath = "web/ui"
+	}
+
+	// Serve static files
+	fs := http.FileServer(http.Dir(uiPath))
+	mux.Handle("/ui/", http.StripPrefix("/ui/", fs))
 
 	// Root endpoint
 	mux.HandleFunc("/", s.handleRoot)
@@ -831,10 +838,18 @@ func generateTestPrompt(targetTokens int) string {
 	return result[:chars]
 }
 
-// handleWebUI serves the web dashboard
+// handleWebUI serves the HTML UI
 func (s *Server) handleWebUI(w http.ResponseWriter, r *http.Request) {
-	// Serve the web UI from web/ui directory
-	http.ServeFile(w, r, "web/ui/index.html")
+	// Determine UI path
+	uiPath := "/var/lib/offgrid/web/ui/index.html"
+
+	// Fallback to local development path
+	if _, err := os.Stat(uiPath); os.IsNotExist(err) {
+		uiPath = "web/ui/index.html"
+	}
+
+	// Serve index.html for SPA routing
+	http.ServeFile(w, r, uiPath)
 }
 
 // writeError writes an error response

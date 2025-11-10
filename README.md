@@ -16,7 +16,8 @@ A self-contained LLM inference system for environments with limited connectivity
 - 🔄 **OpenAI Compatible** - Standard `/v1/chat/completions` API endpoints
 - 🤗 **HuggingFace Integration** - Direct model search and download
 - 📦 **Model Management** - Automatic detection, hot-reload, integrity verification
-- 🎨 **Web UI** - Browser-based dashboard with real-time streaming chat
+- 🎨 **Modern Web UI** - Clean HTML/CSS/JS interface with streaming chat, system monitoring, and API testing
+- 🖥️ **Desktop App** - Cross-platform Electron app for Windows, macOS, and Linux (fully offline)
 
 ### New Features (v0.1.0-alpha)
 - 💬 **Session Management** - Save, load, and export chat conversations
@@ -73,6 +74,46 @@ firefox http://localhost:11611/ui
 # 5. Check health
 curl http://localhost:11611/health
 ```
+
+### Desktop Application
+
+Want a standalone app? Build the desktop version:
+
+```bash
+# Install Node.js dependencies
+cd desktop
+npm install
+
+# Run in development mode
+npm start
+
+# Build for your platform
+npm run build
+
+# Build for all platforms
+npm run build:all
+```
+
+Installers will be in `desktop/dist/`:
+- **Windows**: `.exe` installer and portable version
+- **macOS**: `.dmg` and `.zip`
+- **Linux**: `.AppImage`, `.deb`, `.rpm`
+
+The desktop app:
+- ✅ Runs 100% offline (no internet needed)
+- ✅ Auto-starts the Go server
+- ✅ System tray integration
+- ✅ Native menus and notifications
+- ✅ Single-click installation
+
+See [desktop/README.md](desktop/README.md) for details.
+
+### Web UI Features
+
+The web interface provides:
+- **Interactive Chat** - Real-time streaming with markdown and code highlighting
+- **Model Management** - View models and system resources
+- **API Testing** - Interactive playground with request/response testing
 
 ## 📖 Usage
 
