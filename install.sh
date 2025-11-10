@@ -1107,6 +1107,69 @@ setup_config() {
     print_success "Configuration directories created"
 }
 
+# Install Shell Completions
+install_completions() {
+    print_header "Installing Shell Completions"
+    
+    # Detect user's shell
+    USER_SHELL=$(basename "$SHELL")
+    
+    case "$USER_SHELL" in
+        bash)
+            print_step "Installing Bash completions..."
+            
+            # Try user installation (safer, doesn't require sudo)
+            mkdir -p "$HOME/.bash_completion.d"
+            /usr/local/bin/offgrid completions bash > "$HOME/.bash_completion.d/offgrid" 2>/dev/null || {
+                print_warning "Could not generate completions (offgrid binary might not be ready yet)"
+                return
+            }
+            
+            # Add sourcing to .bashrc if not already there
+            if ! grep -q "\.bash_completion\.d/offgrid" "$HOME/.bashrc" 2>/dev/null; then
+                echo "" >> "$HOME/.bashrc"
+                echo "# OffGrid completions" >> "$HOME/.bashrc"
+                echo "[ -f ~/.bash_completion.d/offgrid ] && source ~/.bash_completion.d/offgrid" >> "$HOME/.bashrc"
+            fi
+            
+            print_success "Bash completions installed to ~/.bash_completion.d/offgrid"
+            print_info "Restart your shell or run: source ~/.bashrc"
+            ;;
+            
+        zsh)
+            print_step "Installing Zsh completions..."
+            
+            ZSH_COMPLETIONS="${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions"
+            mkdir -p "$ZSH_COMPLETIONS"
+            
+            /usr/local/bin/offgrid completions zsh > "$ZSH_COMPLETIONS/_offgrid" 2>/dev/null || {
+                print_warning "Could not generate completions"
+                return
+            }
+            
+            print_success "Zsh completions installed to $ZSH_COMPLETIONS/_offgrid"
+            print_info "Restart your shell or run: exec zsh"
+            ;;
+            
+        fish)
+            print_step "Installing Fish completions..."
+            
+            mkdir -p "$HOME/.config/fish/completions"
+            /usr/local/bin/offgrid completions fish > "$HOME/.config/fish/completions/offgrid.fish" 2>/dev/null || {
+                print_warning "Could not generate completions"
+                return
+            }
+            
+            print_success "Fish completions installed (active immediately)"
+            ;;
+            
+        *)
+            print_info "Shell: $USER_SHELL (manual completion setup required)"
+            print_info "Run: offgrid completions <bash|zsh|fish> to generate"
+            ;;
+    esac
+}
+
 # Start Service
 start_service() {
     print_header "Starting OffGrid LLM Service"
@@ -1172,10 +1235,20 @@ display_summary() {
     echo -e "  ${BRAND_SECONDARY}offgrid serve${RESET}                      - Start OffGrid manually"
     echo -e "  ${BRAND_SECONDARY}offgrid list${RESET}                       - List available models"
     echo -e "  ${BRAND_SECONDARY}offgrid download <model>${RESET}           - Download a model"
+    echo -e "  ${BRAND_SECONDARY}offgrid run <model> --save <name>${RESET}  - Start chat with auto-save"
+    echo -e "  ${BRAND_SECONDARY}offgrid session list${RESET}               - View saved chat sessions"
     echo -e "  ${BRAND_SECONDARY}sudo systemctl status offgrid-llm${RESET}  - Check OffGrid status"
     echo -e "  ${BRAND_SECONDARY}sudo systemctl status llama-server${RESET} - Check llama-server status"
     echo -e "  ${BRAND_SECONDARY}sudo journalctl -u offgrid-llm -f${RESET}  - View OffGrid logs"
     echo -e "  ${BRAND_SECONDARY}sudo journalctl -u llama-server -f${RESET} - View llama-server logs"
+    echo ""
+    
+    echo -e "${BOLD}Shell Completions:${RESET}"
+    if [ -f "$HOME/.bash_completion.d/offgrid" ] || [ -f "/etc/bash_completion.d/offgrid" ]; then
+        echo -e "  ${GREEN}✓${RESET} Completions installed (restart shell or run: source ~/.bashrc)"
+    else
+        echo -e "  ${BRAND_MUTED}→${RESET} Run 'offgrid completions bash > ~/.bash_completion.d/offgrid' for tab completion"
+    fi
     echo ""
     
     echo -e "${BOLD}Next Steps:${RESET}"
@@ -1240,6 +1313,9 @@ main() {
     setup_llama_server_service
     setup_systemd_service
     start_service
+    
+    # Install shell completions
+    install_completions
     
     # Summary
     display_summary

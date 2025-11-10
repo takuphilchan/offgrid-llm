@@ -12,14 +12,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/batch"
+	"github.com/takuphilchan/offgrid-llm/internal/completions"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
+	"github.com/takuphilchan/offgrid-llm/internal/output"
 	"github.com/takuphilchan/offgrid-llm/internal/server"
+	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
 )
 
@@ -78,6 +82,9 @@ const (
 )
 
 func printBanner() {
+	if output.JSONMode {
+		return
+	}
 	fmt.Println()
 	fmt.Printf("%s%s", brandPrimary, colorBold)
 	fmt.Println("    ╔═══════════════════════════════════╗")
@@ -92,6 +99,9 @@ func printBanner() {
 }
 
 func printSection(title string) {
+	if output.JSONMode {
+		return
+	}
 	fmt.Printf("%s%s%s %s%s\n", brandPrimary, iconDiamond, colorReset, colorBold, title)
 	fmt.Printf("%s%s%s\n", brandMuted, strings.Repeat(boxH, 50), colorReset)
 }
@@ -281,6 +291,29 @@ func waitForLlamaServerReady(timeoutSec int) error {
 }
 
 func main() {
+	// Check for global --json flag
+	jsonFlag := false
+	filteredArgs := make([]string, 0, len(os.Args))
+	for i, arg := range os.Args {
+		if arg == "--json" {
+			jsonFlag = true
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+		// Also check if it's at position 2 (after command)
+		if i == 2 && arg == "--json" {
+			jsonFlag = true
+		}
+	}
+
+	// Set global JSON mode
+	output.JSONMode = jsonFlag
+
+	// Use filtered args if --json was found
+	if jsonFlag {
+		os.Args = filteredArgs
+	}
+
 	// Parse command
 	if len(os.Args) > 1 {
 		command := os.Args[1]
@@ -339,6 +372,12 @@ func main() {
 			return
 		case "batch":
 			handleBatch(os.Args[2:])
+			return
+		case "session", "sessions":
+			handleSession(os.Args[2:])
+			return
+		case "completions", "completion":
+			handleCompletions(os.Args[2:])
 			return
 		case "serve", "server":
 			// Fall through to start server
@@ -929,12 +968,42 @@ func handleList(args []string) {
 	registry := models.NewRegistry(cfg.ModelsDir)
 
 	if err := registry.ScanModels(); err != nil {
+		if output.JSONMode {
+			output.Error("Error scanning models", err)
+		}
 		printError(fmt.Sprintf("Error scanning models: %v", err))
 		os.Exit(1)
 	}
 
 	modelList := registry.ListModels()
 
+	// JSON output mode
+	if output.JSONMode {
+		var jsonModels []output.ModelInfo
+		for _, model := range modelList {
+			meta, err := registry.GetModel(model.ID)
+			modelInfo := output.ModelInfo{
+				Name: model.ID,
+			}
+			if err == nil {
+				if meta.Size > 0 {
+					modelInfo.Size = formatBytes(meta.Size)
+				}
+				if meta.Quantization != "" && meta.Quantization != "unknown" {
+					modelInfo.Quantization = meta.Quantization
+				}
+				modelInfo.Format = meta.Format
+				if meta.Path != "" {
+					modelInfo.Path = meta.Path
+				}
+			}
+			jsonModels = append(jsonModels, modelInfo)
+		}
+		output.PrintModels(jsonModels)
+		return
+	}
+
+	// Human-readable output
 	printDivider()
 	fmt.Println()
 	printSection("Installed Models")
@@ -1098,6 +1167,8 @@ func printHelp() {
 	fmt.Printf("  %sfavorite%s <cmd>     Manage favorite models (list, add, remove)\n", brandPrimary, colorReset)
 	fmt.Printf("  %stemplate%s <cmd>     Manage prompt templates (list, show, apply)\n", brandPrimary, colorReset)
 	fmt.Printf("  %sbatch%s <cmd>        Batch process prompts from JSONL file\n", brandPrimary, colorReset)
+	fmt.Printf("  %ssession%s <cmd>      Manage chat sessions (list, show, export)\n", brandPrimary, colorReset)
+	fmt.Printf("  %scompletions%s <shell> Generate shell completions (bash/zsh/fish)\n", brandPrimary, colorReset)
 	fmt.Printf("  %sconfig%s <action>    Manage configuration (init, show, validate)\n", brandPrimary, colorReset)
 	fmt.Printf("  %sinfo%s               Show system information\n", brandPrimary, colorReset)
 	fmt.Printf("  %shelp%s               Show this help\n", brandPrimary, colorReset)
@@ -1119,6 +1190,10 @@ func printHelp() {
 	printItem("OFFGRID_NUM_THREADS", "CPU threads")
 	fmt.Println()
 
+	printSection("Global Flags")
+	printItem("--json", "Output in JSON format (for scripting)")
+	fmt.Println()
+
 	printDivider()
 	fmt.Println()
 }
@@ -1128,9 +1203,90 @@ func handleInfo() {
 	registry := models.NewRegistry(cfg.ModelsDir)
 
 	if err := registry.ScanModels(); err != nil {
-		fmt.Fprintf(os.Stderr, "  ✗ Model scan error: %v\n", err)
+		if !output.JSONMode {
+			fmt.Fprintf(os.Stderr, "  ✗ Model scan error: %v\n", err)
+		}
 	}
 
+	modelList := registry.ListModels()
+
+	// JSON output mode
+	if output.JSONMode {
+		var cpuInfo string
+		var memInfo string
+		var gpuInfo string
+		var osInfo string
+		var archInfo string
+
+		// Simple system info gathering
+		if runtime.GOOS != "" {
+			osInfo = runtime.GOOS
+			archInfo = runtime.GOARCH
+		}
+
+		// Get CPU count
+		cpuInfo = fmt.Sprintf("%d cores", runtime.NumCPU())
+
+		// Try to get memory info
+		if memStat, err := os.ReadFile("/proc/meminfo"); err == nil {
+			lines := strings.Split(string(memStat), "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(line, "MemTotal:") {
+					fields := strings.Fields(line)
+					if len(fields) >= 2 {
+						memInfo = fields[1] + " kB"
+						break
+					}
+				}
+			}
+		}
+
+		sysInfo := output.SystemInfo{
+			CPU:          cpuInfo,
+			Memory:       memInfo,
+			GPU:          gpuInfo,
+			OS:           osInfo,
+			Architecture: archInfo,
+		}
+
+		var jsonModels []output.ModelInfo
+		for _, model := range modelList {
+			meta, _ := registry.GetModel(model.ID)
+			modelInfo := output.ModelInfo{
+				Name: model.ID,
+			}
+			if meta.Size > 0 {
+				modelInfo.Size = formatBytes(meta.Size)
+			}
+			if meta.Quantization != "" && meta.Quantization != "unknown" {
+				modelInfo.Quantization = meta.Quantization
+			}
+			if meta.Path != "" {
+				modelInfo.Path = meta.Path
+			}
+			jsonModels = append(jsonModels, modelInfo)
+		}
+
+		output.PrintJSON(map[string]interface{}{
+			"version": "0.1.0-alpha",
+			"config": map[string]interface{}{
+				"port":        cfg.ServerPort,
+				"models_dir":  cfg.ModelsDir,
+				"max_context": cfg.MaxContextSize,
+				"threads":     cfg.NumThreads,
+				"max_memory":  cfg.MaxMemoryMB,
+				"p2p_enabled": cfg.EnableP2P,
+			},
+			"models": map[string]interface{}{
+				"installed": jsonModels,
+				"count":     len(jsonModels),
+			},
+			"system": sysInfo,
+		})
+		return
+	}
+
+	// Human-readable output
 	fmt.Println()
 	fmt.Println("OffGrid LLM v0.1.0-alpha")
 	fmt.Println()
@@ -1148,7 +1304,6 @@ func handleInfo() {
 	fmt.Println()
 
 	// Installed Models
-	modelList := registry.ListModels()
 	fmt.Printf("Installed Models (%d)\n", len(modelList))
 	if len(modelList) > 0 {
 		for _, model := range modelList {
@@ -1384,18 +1539,43 @@ func handleSearch(args []string) {
 
 	filters.Query = query
 
-	fmt.Printf("\n%s%s%s Searching HuggingFace Hub%s\n", brandPrimary, iconSearch, colorBold, colorReset)
-	printDivider()
-	fmt.Println()
+	if !output.JSONMode {
+		fmt.Printf("\n%s%s%s Searching HuggingFace Hub%s\n", brandPrimary, iconSearch, colorBold, colorReset)
+		printDivider()
+		fmt.Println()
+	}
 
 	hf := models.NewHuggingFaceClient()
 	results, err := hf.SearchModels(filters)
 	if err != nil {
+		if output.JSONMode {
+			output.Error("Search failed", err)
+		}
 		printError(fmt.Sprintf("Search failed: %v", err))
 		fmt.Println()
 		os.Exit(1)
 	}
 
+	// JSON output mode
+	if output.JSONMode {
+		var jsonResults []output.SearchResult
+		for _, result := range results {
+			searchResult := output.SearchResult{
+				Name:      result.Model.ID,
+				ModelID:   result.Model.ID,
+				Downloads: int(result.Model.Downloads),
+				Likes:     result.Model.Likes,
+			}
+			if len(result.Model.Tags) > 0 {
+				searchResult.Tags = result.Model.Tags
+			}
+			jsonResults = append(jsonResults, searchResult)
+		}
+		output.PrintSearchResults(jsonResults)
+		return
+	}
+
+	// Human-readable output
 	if len(results) == 0 {
 		printWarning("No models found matching your criteria")
 		fmt.Println()
@@ -1701,20 +1881,31 @@ func extractQuantFromFilename(filename string) string {
 }
 
 func handleRun(args []string) {
+	// Check for help flag first
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		args = []string{} // Trigger help display
+	}
+
 	if len(args) < 1 {
 		printDivider()
 		fmt.Println()
 		printSection("Usage")
-		fmt.Printf("  %soffgrid run%s <model-name>\n", colorBold, colorReset)
+		fmt.Printf("  %soffgrid run%s <model-name> [--save <name>] [--load <name>]\n", colorBold, colorReset)
 		fmt.Println()
 		printSection("Description")
 		fmt.Println("  Start an interactive chat session with a model")
 		fmt.Println()
+		printSection("Options")
+		fmt.Printf("  %s--save <name>%s    Save conversation to session\n", brandPrimary, colorReset)
+		fmt.Printf("  %s--load <name>%s    Load and continue existing session\n", brandPrimary, colorReset)
+		fmt.Println()
 		printSection("Examples")
 		fmt.Printf("  %s$%s offgrid run tinyllama-1.1b-chat.Q4_K_M\n", brandMuted, colorReset)
-		fmt.Printf("  %s$%s offgrid run llama-2-7b-chat.Q4_K_M\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid run llama --save my-project\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid run llama --load my-project\n", brandMuted, colorReset)
 		fmt.Println()
 		printInfo("Use 'offgrid list' to see available models")
+		printInfo("Use 'offgrid session list' to see saved sessions")
 		fmt.Println()
 		printDivider()
 		fmt.Println()
@@ -1722,6 +1913,22 @@ func handleRun(args []string) {
 	}
 
 	modelName := args[0]
+	var sessionName string
+	var loadSession bool
+	var saveSession bool
+
+	// Parse flags
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--save" && i+1 < len(args) {
+			sessionName = args[i+1]
+			saveSession = true
+			i++
+		} else if args[i] == "--load" && i+1 < len(args) {
+			sessionName = args[i+1]
+			loadSession = true
+			i++
+		}
+	}
 
 	// Strip .gguf extension if present (for user convenience)
 	if strings.HasSuffix(strings.ToLower(modelName), ".gguf") {
@@ -1771,10 +1978,59 @@ func handleRun(args []string) {
 		fmt.Println()
 	}
 
+	// Setup session management
+	homeDir, _ := os.UserHomeDir()
+	sessionsDir := filepath.Join(homeDir, ".offgrid", "sessions")
+	sessionMgr := sessions.NewSessionManager(sessionsDir)
+
+	var currentSession *sessions.Session
+
+	// Load existing session or create new one
+	if loadSession {
+		sess, err := sessionMgr.Load(sessionName)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to load session '%s': %v", sessionName, err))
+			fmt.Println()
+			printInfo("Available sessions:")
+			sessionList, _ := sessionMgr.List()
+			for _, s := range sessionList {
+				fmt.Printf("  • %s\n", s.Name)
+			}
+			fmt.Println()
+			os.Exit(1)
+		}
+		currentSession = sess
+		printSuccess(fmt.Sprintf("Loaded session '%s' (%d messages)", sessionName, sess.MessageCount()))
+		fmt.Println()
+
+		// Display previous conversation
+		if sess.MessageCount() > 0 {
+			printInfo("Previous conversation:")
+			fmt.Println()
+			for _, msg := range sess.Messages {
+				if msg.Role == "user" {
+					fmt.Printf("  %sYou:%s %s\n", brandPrimary, colorReset, msg.Content)
+				} else {
+					fmt.Printf("  %sAssistant:%s %s\n", brandSuccess, colorReset, msg.Content)
+				}
+			}
+			fmt.Println()
+			printDivider()
+			fmt.Println()
+		}
+	} else if saveSession {
+		currentSession = sessions.NewSession(sessionName, modelName)
+		printInfo(fmt.Sprintf("Starting new session '%s' (will auto-save)", sessionName))
+		fmt.Println()
+	}
+
 	printDivider()
 	fmt.Println()
 	printSection(fmt.Sprintf("Interactive Chat · %s", modelName))
 	fmt.Println()
+	if currentSession != nil {
+		printInfo(fmt.Sprintf("Session: %s (auto-saving)", currentSession.Name))
+	}
 	printInfo("Type 'exit' to quit, 'clear' to reset conversation")
 	fmt.Println()
 	printDivider()
@@ -1845,6 +2101,17 @@ func handleRun(args []string) {
 
 	// Interactive chat loop
 	messages := []ChatMessage{}
+
+	// Load messages from session if continuing
+	if currentSession != nil && currentSession.MessageCount() > 0 {
+		for _, msg := range currentSession.Messages {
+			messages = append(messages, ChatMessage{
+				Role:    msg.Role,
+				Content: msg.Content,
+			})
+		}
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -1871,6 +2138,13 @@ func handleRun(args []string) {
 
 		if input == "clear" {
 			messages = []ChatMessage{}
+			// Clear session too if active
+			if currentSession != nil {
+				currentSession.Messages = []sessions.Message{}
+				if err := sessionMgr.Save(currentSession); err != nil {
+					printWarning(fmt.Sprintf("Failed to save cleared session: %v", err))
+				}
+			}
 			fmt.Println()
 			printDivider()
 			fmt.Println()
@@ -1886,6 +2160,11 @@ func handleRun(args []string) {
 			Role:    "user",
 			Content: input,
 		})
+
+		// Save user message to session
+		if currentSession != nil {
+			currentSession.AddMessage("user", input)
+		}
 
 		// Make API request
 		reqBody := ChatCompletionRequest{
@@ -1960,6 +2239,26 @@ func handleRun(args []string) {
 			Role:    "assistant",
 			Content: assistantMsg.String(),
 		})
+
+		// Save assistant message to session
+		if currentSession != nil {
+			currentSession.AddMessage("assistant", assistantMsg.String())
+			// Auto-save after each exchange
+			if err := sessionMgr.Save(currentSession); err != nil {
+				// Don't interrupt the conversation, just log the error
+				fmt.Printf("%s⚠ Failed to save session: %v%s\n", brandMuted, err, colorReset)
+			}
+		}
+	}
+
+	// Save session one final time on exit
+	if currentSession != nil && (saveSession || loadSession) {
+		if err := sessionMgr.Save(currentSession); err != nil {
+			printWarning(fmt.Sprintf("Failed to save session: %v", err))
+		} else {
+			printSuccess(fmt.Sprintf("Session '%s' saved (%d messages)", currentSession.Name, currentSession.MessageCount()))
+		}
+		fmt.Println()
 	}
 }
 
@@ -2313,4 +2612,341 @@ func handleBatch(args []string) {
 	}
 
 	printSuccess(fmt.Sprintf("Results written to: %s", outputPath))
+}
+
+// handleSession handles session commands
+func handleSession(args []string) {
+	printBanner()
+	printSection("Session Management")
+
+	homeDir, _ := os.UserHomeDir()
+	sessionsDir := filepath.Join(homeDir, ".offgrid", "sessions")
+	sessionMgr := sessions.NewSessionManager(sessionsDir)
+
+	if len(args) == 0 {
+		fmt.Println("Usage:")
+		fmt.Printf("  %soffgrid session%s list\n", colorBold, colorReset)
+		fmt.Printf("  %soffgrid session%s show <name>\n", colorBold, colorReset)
+		fmt.Printf("  %soffgrid session%s delete <name>\n", colorBold, colorReset)
+		fmt.Printf("  %soffgrid session%s export <name> [output.md]\n", colorBold, colorReset)
+		fmt.Println()
+		fmt.Println("Manage conversation sessions for persistent chat history")
+		fmt.Println()
+		fmt.Println("Examples:")
+		fmt.Printf("  %s$%s offgrid session list\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid session show my-project\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid session export my-project output.md\n", brandMuted, colorReset)
+		fmt.Println()
+		return
+	}
+
+	subcommand := args[0]
+
+	switch subcommand {
+	case "list", "ls":
+		handleSessionList(sessionMgr)
+	case "show", "view":
+		if len(args) < 2 {
+			printError("Usage: offgrid session show <name>")
+			return
+		}
+		handleSessionShow(sessionMgr, args[1])
+	case "delete", "del", "rm":
+		if len(args) < 2 {
+			printError("Usage: offgrid session delete <name>")
+			return
+		}
+		handleSessionDelete(sessionMgr, args[1])
+	case "export":
+		if len(args) < 2 {
+			printError("Usage: offgrid session export <name> [output.md]")
+			return
+		}
+		outputPath := ""
+		if len(args) >= 3 {
+			outputPath = args[2]
+		}
+		handleSessionExport(sessionMgr, args[1], outputPath)
+	default:
+		printError(fmt.Sprintf("Unknown subcommand: %s", subcommand))
+		fmt.Println("Available subcommands: list, show, delete, export")
+	}
+}
+
+func handleSessionList(sessionMgr *sessions.SessionManager) {
+	sessionList, err := sessionMgr.List()
+	if err != nil {
+		if output.JSONMode {
+			output.Error("Failed to list sessions", err)
+		}
+		printError(fmt.Sprintf("Failed to list sessions: %v", err))
+		return
+	}
+
+	// JSON output mode
+	if output.JSONMode {
+		var jsonSessions []output.SessionInfo
+		for _, sess := range sessionList {
+			jsonSessions = append(jsonSessions, output.SessionInfo{
+				Name:      sess.Name,
+				ModelID:   sess.ModelID,
+				Messages:  sess.MessageCount(),
+				CreatedAt: sess.CreatedAt.Format(time.RFC3339),
+				UpdatedAt: sess.UpdatedAt.Format(time.RFC3339),
+			})
+		}
+		output.PrintSessions(jsonSessions)
+		return
+	}
+
+	// Human-readable output
+	if len(sessionList) == 0 {
+		printInfo("No saved sessions found")
+		fmt.Println()
+		printInfo("Sessions are automatically saved when using the chat command with --save flag")
+		return
+	}
+
+	fmt.Printf("Found %d session(s):\n\n", len(sessionList))
+
+	for i, sess := range sessionList {
+		fmt.Printf("  %d. %s%s%s\n", i+1, brandPrimary, sess.Name, colorReset)
+		fmt.Printf("     Model: %s · Messages: %d · Updated: %s\n",
+			sess.ModelID, sess.MessageCount(), formatTimeAgo(sess.UpdatedAt))
+		if i < len(sessionList)-1 {
+			fmt.Println()
+		}
+	}
+	fmt.Println()
+}
+
+func handleSessionShow(sessionMgr *sessions.SessionManager, name string) {
+	sess, err := sessionMgr.Load(name)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to load session: %v", err))
+		return
+	}
+
+	fmt.Printf("%s%s%s\n", colorBold, sess.Name, colorReset)
+	fmt.Printf("Model: %s\n", sess.ModelID)
+	fmt.Printf("Created: %s\n", sess.CreatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Updated: %s (%s)\n", sess.UpdatedAt.Format("2006-01-02 15:04:05"), formatTimeAgo(sess.UpdatedAt))
+	fmt.Printf("Messages: %d\n", sess.MessageCount())
+	fmt.Println()
+	fmt.Println(strings.Repeat("─", 60))
+	fmt.Println()
+
+	for i, msg := range sess.Messages {
+		if msg.Role == "user" {
+			fmt.Printf("%s● User%s (%s)\n", brandPrimary, colorReset, msg.Timestamp.Format("15:04:05"))
+		} else {
+			fmt.Printf("%s● Assistant%s (%s)\n", brandSuccess, colorReset, msg.Timestamp.Format("15:04:05"))
+		}
+		fmt.Println(msg.Content)
+		if i < len(sess.Messages)-1 {
+			fmt.Println()
+			fmt.Println(strings.Repeat("─", 60))
+			fmt.Println()
+		}
+	}
+	fmt.Println()
+}
+
+func handleSessionDelete(sessionMgr *sessions.SessionManager, name string) {
+	if err := sessionMgr.Delete(name); err != nil {
+		printError(fmt.Sprintf("Failed to delete session: %v", err))
+		return
+	}
+
+	printSuccess(fmt.Sprintf("Deleted session: %s", name))
+}
+
+func handleSessionExport(sessionMgr *sessions.SessionManager, name string, outputPath string) {
+	sess, err := sessionMgr.Load(name)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to load session: %v", err))
+		return
+	}
+
+	markdown := sess.ExportMarkdown()
+
+	if outputPath == "" {
+		outputPath = sess.Name + ".md"
+	}
+
+	if err := os.WriteFile(outputPath, []byte(markdown), 0644); err != nil {
+		printError(fmt.Sprintf("Failed to write file: %v", err))
+		return
+	}
+
+	printSuccess(fmt.Sprintf("Exported to: %s", outputPath))
+}
+
+// formatTimeAgo formats a time as a human-readable "ago" string
+func formatTimeAgo(t time.Time) string {
+	duration := time.Since(t)
+
+	if duration < time.Minute {
+		return "just now"
+	} else if duration < time.Hour {
+		minutes := int(duration.Minutes())
+		if minutes == 1 {
+			return "1 minute ago"
+		}
+		return fmt.Sprintf("%d minutes ago", minutes)
+	} else if duration < 24*time.Hour {
+		hours := int(duration.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	} else if duration < 7*24*time.Hour {
+		days := int(duration.Hours() / 24)
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	} else {
+		return t.Format("2006-01-02")
+	}
+}
+
+// handleCompletions generates shell completion scripts
+func handleCompletions(args []string) {
+	printBanner()
+	printSection("Shell Completions")
+
+	if len(args) == 0 {
+		fmt.Println("Usage:")
+		fmt.Printf("  %soffgrid completions%s <shell>\n", colorBold, colorReset)
+		fmt.Println()
+		fmt.Println("Supported shells:")
+		fmt.Printf("  %sbash%s    Bash completion script\n", brandPrimary, colorReset)
+		fmt.Printf("  %szsh%s     Zsh completion script\n", brandPrimary, colorReset)
+		fmt.Printf("  %sfish%s    Fish completion script\n", brandPrimary, colorReset)
+		fmt.Println()
+		fmt.Println("Examples:")
+		fmt.Printf("  %s$%s offgrid completions bash > /etc/bash_completion.d/offgrid\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid completions zsh > ~/.zsh/completions/_offgrid\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid completions fish > ~/.config/fish/completions/offgrid.fish\n", brandMuted, colorReset)
+		fmt.Println()
+		return
+	}
+
+	shell := args[0]
+	gen := completions.NewGenerator("offgrid")
+
+	// Add all commands with their subcommands and flags
+	gen.AddCommand(completions.Command{
+		Name:        "list",
+		Flags:       []string{"--json"},
+		Description: "List available models",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "search",
+		Flags:       []string{"--author", "--limit", "--json"},
+		Description: "Search for models",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "download",
+		Description: "Download a model",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "download-hf",
+		Flags:       []string{"--quant"},
+		Description: "Download from HuggingFace",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "run",
+		Flags:       []string{"--save", "--load"},
+		Description: "Start interactive chat",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "import",
+		Description: "Import models from USB",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "export",
+		Description: "Export model to USB",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "remove",
+		Description: "Remove a model",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "benchmark",
+		Description: "Benchmark a model",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "quantization",
+		Description: "Show quantization info",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "alias",
+		Subcommands: []string{"list", "set", "remove"},
+		Description: "Manage model aliases",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "favorite",
+		Subcommands: []string{"list", "add", "remove"},
+		Description: "Manage favorites",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "template",
+		Subcommands: []string{"list", "show", "apply"},
+		Description: "Manage templates",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "batch",
+		Subcommands: []string{"process"},
+		Flags:       []string{"--concurrency"},
+		Description: "Batch processing",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "session",
+		Subcommands: []string{"list", "show", "export", "delete"},
+		Flags:       []string{"--json"},
+		Description: "Manage sessions",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "completions",
+		Subcommands: []string{"bash", "zsh", "fish"},
+		Description: "Generate completions",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "config",
+		Subcommands: []string{"init", "show", "validate"},
+		Description: "Manage configuration",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "info",
+		Flags:       []string{"--json"},
+		Description: "System information",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "serve",
+		Description: "Start API server",
+	})
+	gen.AddCommand(completions.Command{
+		Name:        "help",
+		Description: "Show help",
+	})
+
+	var script string
+	switch shell {
+	case "bash":
+		script = gen.GenerateBash()
+	case "zsh":
+		script = gen.GenerateZsh()
+	case "fish":
+		script = gen.GenerateFish()
+	default:
+		printError(fmt.Sprintf("Unsupported shell: %s", shell))
+		fmt.Println()
+		fmt.Println("Supported shells: bash, zsh, fish")
+		fmt.Println()
+		return
+	}
+
+	fmt.Println(script)
 }
