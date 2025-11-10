@@ -1,84 +1,21 @@
 # OffGrid LLM
 
-> **Edge Inference Orchestrator · Offline-First AI**
+**Edge Inference Orchestrator · Offline-First AI**
 
-A self-contained LLM inference system designed for environments with limited or no internet connectivity. Built with Go and powered by [llama.cpp](https://github.com/ggerganov/llama.cpp), providing OpenAI-compatible API with GPU acceleration support.
+A self-contained LLM inference system for environments with limited connectivity. Built with Go and powered by [llama.cpp](https://github.com/ggerganov/llama.cpp), providing an OpenAI-compatible API with GPU acceleration.
 
-Suitable for edge devices, air-gapped networks, bandwidth-constrained environments, and scenarios requiring data sovereignty.
+## Features
 
-## Key Features
-
-### HuggingFace Hub Integration
-
-Direct access to GGUF models from HuggingFace Hub:
-
-```bash
-# Search for models with filters
-$ offgrid search llama --quant Q4_K_M --sort downloads
-
-# Download directly from HuggingFace
-$ offgrid download-hf <author>/<repo> --file <model>.gguf
-
-# Interactive chat
-$ offgrid run <model>.gguf
-```
-
-Access to thousands of community-published GGUF models without intermediary registries.
-
-### Offline-First Architecture
-
-- **Offline Operation** - Full functionality without internet connectivity after initial setup
-- **GPU Acceleration** - NVIDIA CUDA and AMD ROCm support
-- **CPU-Only Mode** - Optimized fallback for systems without GPU
-- **Resource Efficient** - Operates on systems with 2GB+ RAM
-- **P2P Model Sharing** - Local network model distribution
-- **Portable Storage** - USB/SD card model import/export
-
-### Developer Experience
-
-- **OpenAI Compatible API** - Standard API endpoints for integration
-- **CLI Interface** - Command-line tools for model and system management
-- **Web Dashboard** - Browser-based UI for monitoring and interaction
-- **Streaming Support** - Real-time token streaming via Server-Sent Events
-- **Benchmark Tools** - Performance testing for hardware validation
-
-### Production Features
-
-- **Systemd Integration** - Service management for Linux systems
-- **Resource Monitoring** - CPU, memory, and GPU utilization tracking
-- **Usage Statistics** - Inference metrics and performance analytics
-- **Security Hardening** - Localhost-only operation, no external telemetry
-- **Health Checks** - System readiness and diagnostic endpoints
-
-## Comparison
-
-| Feature | OffGrid LLM | Ollama | Cloud APIs |
-|---------|-------------|---------|------------|
-| **Offline Operation** | Full | Partial | No |
-| **HuggingFace Search** | Direct | Curated | N/A |
-| **Model Discovery** | 10k+ models | ~100 models | Varies |
-| **USB Import/Export** | Yes | No | No |
-| **P2P Sharing** | Yes | No | No |
-| **OpenAI Compatible** | Yes | Yes | Yes |
-| **GPU Acceleration** | CUDA/ROCm | CUDA | Cloud GPUs |
-| **Self-Hosted** | Yes | Yes | No |
-| **Cost** | Free | Free | Pay-per-use |
+- **Offline-First** - Complete functionality without internet after setup
+- **GPU Acceleration** - NVIDIA CUDA and AMD ROCm support with CPU fallback
+- **OpenAI Compatible** - Standard `/v1/chat/completions` and `/v1/completions` endpoints
+- **HuggingFace Integration** - Direct model search and download from HuggingFace Hub
+- **Model Management** - Automatic detection, hot-reload, integrity verification
+- **Production Ready** - Systemd services, health checks, monitoring, security hardening
+- **Portable** - USB/SD card model import/export for air-gapped deployments
+- **Web UI** - Browser-based dashboard with real-time streaming chat
 
 ## Quick Start
-
-### System Requirements
-
-**Minimum:**
-- CPU: 2 cores
-- RAM: 2GB (Q4 quantized models)
-- Disk: 2GB available
-- OS: Linux (Ubuntu 20.04+, Debian 11+, or compatible)
-
-**Recommended:**
-- CPU: 4+ cores
-- RAM: 8GB+
-- GPU: NVIDIA GPU with CUDA 12.0+ (optional, for acceleration)
-- Disk: 10GB+ available
 
 ### Installation
 
@@ -87,435 +24,321 @@ Access to thousands of community-published GGUF models without intermediary regi
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
 
-# Auto-detect GPU and install
+# Install (auto-detects GPU)
 sudo ./install.sh
 
-# CPU-only mode (skip GPU detection)
+# Or force CPU-only mode
 sudo ./install.sh --cpu-only
-
-# Require GPU mode (fail if no GPU detected)
-sudo ./install.sh --gpu
 ```
 
-**Installation performs:**
-- GPU detection and acceleration setup (NVIDIA/AMD)
-- llama.cpp compilation with optimal configuration
-- Binary compilation and installation
-- Systemd service configuration
-- Security hardening (localhost-only binding, restricted ports)
+The installer handles:
+- GPU detection (NVIDIA/AMD) and driver configuration
+- llama.cpp compilation with optimal settings
+- Binary installation and systemd service setup
+- Security hardening (localhost-only, restricted permissions)
 - Model directory creation at `/var/lib/offgrid/models`
 
-**Quick reinstall:**
+### Basic Usage
 
 ```bash
-sudo ./reinstall.sh              # Auto-detect GPU
-sudo ./reinstall.sh --cpu-only   # Force CPU-only
-sudo ./reinstall.sh --gpu        # Require GPU
-```
-
-### Post-Installation
-
-Services start automatically after installation:
-
-```bash
-# Service status
-sudo systemctl status offgrid-llm llama-server
-
-# View logs
-sudo journalctl -u offgrid-llm -f
+# Check installation
+offgrid list                     # Show installed models
+curl http://localhost:11611/health
 
 # Access web UI
-http://localhost:11611/ui
+firefox http://localhost:11611/ui
+
+# Service management
+sudo systemctl status offgrid-llm llama-server
+sudo journalctl -u offgrid-llm -f
 ```
 
-### Example: TinyLlama Model
+## Usage
 
-```bash
-# Download model (638MB, 2GB RAM requirement)
-wget https://huggingface.co/<author>/<repo>/resolve/main/<model>.gguf
+### Model Management
 
-# Install to model directory
-sudo mv <model>.gguf /var/lib/offgrid/models/
-sudo chown offgrid:offgrid /var/lib/offgrid/models/*.gguf
-
-# Restart service to load model
-sudo systemctl restart llama-server
-
-# Verify
-curl http://localhost:11611/health
-```
-
-**Alternative:** Use web UI at `http://localhost:11611/ui` for model management.
-
-### API Testing
-
-```bash
-# Health check
-curl http://localhost:11611/health
-
-# List models
-curl http://localhost:11611/v1/models
-
-# Chat completion
-curl http://localhost:11611/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "<model-name>",
-    "messages": [{"role": "user", "content": "Explain inference optimization"}],
-    "stream": false
-  }'
-
-# Streaming chat
-curl -N http://localhost:11611/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "<model-name>",
-    "messages": [{"role": "user", "content": "Describe quantization techniques"}],
-    "stream": true
-  }'
-```
-
-## Architecture
-
-Two-process architecture for security and stability:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Client (Browser / API)                                     │
-└───────────────────┬─────────────────────────────────────────┘
-                    │ HTTP :11611 (localhost)
-┌───────────────────▼─────────────────────────────────────────┐
-│  OffGrid LLM (Go)                                           │
-│  - Request routing and validation                           │
-│  - Model management                                         │
-│  - Statistics and monitoring                                │
-│  - Web UI serving                                           │
-└───────────────────┬─────────────────────────────────────────┘
-                    │ HTTP (random port 49152-65535, localhost)
-┌───────────────────▼─────────────────────────────────────────┐
-│  llama-server (C++)                                         │
-│  - llama.cpp inference engine                               │
-│  - GPU acceleration (CUDA/ROCm)                             │
-│  - Model loading and caching                                │
-│  - Token generation                                         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Security:**
-- Localhost-only binding (127.0.0.1)
-- Random high port allocation for inter-process communication
-- Systemd security directives (IPAddressDeny/IPAddressAllow)
-- Dedicated non-privileged user (`offgrid`)
-- Restricted file system access
-
-## Features
-
-### HuggingFace Hub Integration
-
+**Download from HuggingFace:**
 ```bash
 # Search models
-offgrid search <query> --sort downloads
+offgrid search llama --quant Q4_K_M --sort downloads
 
-# Download from HuggingFace
-offgrid download-hf <author>/<repo> --quant Q4_K_M
-
-# Interactive terminal chat
-offgrid run <model>.gguf
-
-# Benchmark performance
-curl -X POST http://localhost:11611/v1/benchmark -d '{"model":"<model>.gguf"}'
-```
-
-Direct integration with HuggingFace Hub for model discovery and download.
-
-📖 **[HuggingFace Integration Documentation](docs/HUGGINGFACE_INTEGRATION.md)**
-
-### Core Capabilities
-
-**Inference Engine**
-- llama.cpp C++ backend
-- GPU acceleration: CUDA (NVIDIA), ROCm (AMD)
-- Automatic GPU detection and configuration
-- CPU fallback mode
-- Edge hardware optimization
-
-**Offline Operation**
-- No internet dependency after initial setup
-- Local inference execution
-- No external data transmission
-- USB/SD card model distribution
-- Pre-configured offline deployments
-
-**Model Management**
-- File-based model loading
-- GGUF format support (llama.cpp)
-- Automatic model detection in `/var/lib/offgrid/models`
-- Hot-reload via service restart
-- SHA256 integrity verification
-
-**API Compatibility**
-- `/v1/chat/completions` - Conversation interface
-- `/v1/completions` - Text completion
-- `/v1/models` - Model enumeration
-- `/v1/search` - HuggingFace Hub search
-- `/v1/benchmark` - Performance testing
-- `/health` - System diagnostics
-- Server-Sent Events streaming
-- OpenAI client library compatibility
-
-**Web Dashboard**
-- Browser-based interface
-- Interactive chat with streaming
-- System monitoring (CPU, RAM, GPU)
-- Model management
-- API testing tools
-- Offline-capable (no CDN dependencies)
-
-**GPU Acceleration**
-- NVIDIA GPU detection (nvidia-smi)
-- CUDA 12.x support with auto-detection
-- GPU layer offloading configuration
-- CPU fallback on GPU unavailability
-- Real-time utilization monitoring
-
-**Production Features**
-- Systemd service management
-- Automatic startup on boot
-- Graceful shutdown handling
-- Process monitoring and restart
-- Structured logging (journald)
-- Health check endpoints
-
-### Technical Details
-
-**Quantization Support**
-- Q2_K through Q8_0 quantization levels
-- Automatic detection from model filename
-- Documented quality/size tradeoffs
-- RAM-based recommendations
-
-**Security**
-- Localhost-only binding (127.0.0.1)
-- Random high ports (49152-65535) for inter-process communication
-- Systemd security directives
-- Non-privileged dedicated user
-- No external network dependencies
-
-**Installation Resilience**
-- Multi-method GPU detection (nvidia-smi, lspci, /proc/driver/nvidia)
-- CUDA toolkit multi-location search
-- Fallback download mechanisms
-- Retry logic for network operations
-- Diagnostic error reporting
-
-**Integrity Verification**
-- SHA256 checksums for catalog models
-- Automatic verification during download
-- Tamper detection
-
-## Commands
-
-### CLI Reference
-
-```bash
-# Server
-offgrid serve                    # Start HTTP server
-
-# Model Discovery
-offgrid catalog                  # Browse available models
-offgrid search <query>           # Search HuggingFace Hub
-offgrid list                     # List installed models
-offgrid info                     # System information
-
-# Model Management
-offgrid download <id> [quant]    # Download from internet
-offgrid download-hf <repo>       # Download from HuggingFace
-offgrid import <path>            # Import from storage
-offgrid export <id> <path>       # Export to storage
-offgrid remove <id>              # Remove model
-offgrid run <model>              # Interactive chat
-
-# Configuration
-offgrid config init              # Generate config file
-offgrid config show              # Display configuration
-offgrid config validate <path>   # Validate config
-
-# Utilities
-offgrid quantization             # Quantization information
-offgrid help                     # Help documentation
-```
-
-
-### Configuration
-
-Create a configuration file for persistent settings:
-
-```bash
-# Generate default config
-offgrid config init
-
-# Edit ~/.offgrid/config.yaml
-vim ~/.offgrid/config.yaml
-
-# Or use environment variable
-export OFFGRID_CONFIG=/path/to/config.yaml
-offgrid serve
-```
-
-Example configuration:
-
-```yaml
-server:
-  port: 11611
-  host: "0.0.0.0"
-
-models:
-  directory: "./models"
-  auto_load: true
-
-inference:
-  num_threads: 4
-  context_size: 4096
-
-p2p:
-  enabled: true
-  discovery_port: 8081
-```
-
-## Model Catalog
-
-Example verified models with SHA256 checksums:
-
-| Model | Size | RAM | Quantization | Use Case |
-|-------|------|-----|--------------|----------|
-| TinyLlama 1.1B | 638MB | 2GB | Q4_K_M | Resource-constrained systems |
-| TinyLlama 1.1B | 768MB | 2GB | Q5_K_M | Better quality, same model |
-| Llama 2 7B | 3.8GB | 8GB | Q4_K_M | General purpose |
-| Llama 2 7B | 4.5GB | 8GB | Q5_K_M | Higher quality |
-| Mistral 7B | 4.1GB | 8GB | Q4_K_M | Instruction following |
-| Phi-2 | 1.7GB | 4GB | Q4_K_M | Efficient reasoning |
-
-**Quantization Levels:**
-- **Q4_K_M** - Balanced quality/size (recommended)
-- **Q5_K_M** - Higher quality, +25% size
-- **Q3_K_M** - Maximum compression
-- **Q8_0** - Near-lossless quality
-
-See `offgrid quantization` for detailed information.
-
-## Offline Distribution
-
-### USB Package Creation
-
-```bash
-# Create offline package for distribution
-./scripts/create-usb-package.sh /media/usb <model-id>
-
-# Package contains:
-# - Compiled binaries (Linux/Windows/macOS)
-# - Selected model with SHA256 verification
-# - Documentation
-# - Installation scripts
-```
-
-### Storage Import/Export
-
-```bash
-# Import from external storage
-offgrid import /media/usb
-offgrid import /media/usb/<model>.gguf
-
-# Export to external storage
-offgrid export <model-id> /media/usb
+# Download specific model
+offgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF \
+  --file llama-2-7b-chat.Q4_K_M.gguf
 
 # Verify installation
 offgrid list
 ```
 
-Models are verified with SHA256 checksums during import.
+**Import from USB/Storage:**
+```bash
+# Import all models from USB
+offgrid import /media/usb
 
-## Use Cases
+# Import specific file
+offgrid import /media/usb/model.gguf
 
-**Bandwidth-Constrained Environments**
-- Limited or expensive internet connectivity
-- Offline-first operations
-- Data sovereignty requirements
+# Export for distribution
+offgrid export tinyllama-1.1b-chat /media/usb
+```
 
-**Air-Gapped Networks**
-- High-security facilities
-- Classified environments
-- Compliance-driven deployments
+**Interactive Chat:**
+```bash
+# Start chat with model
+offgrid run tinyllama-1.1b-chat.Q4_K_M
 
-**Edge Computing**
-- Remote operations
-- Industrial automation
-- Field deployments
+# Models auto-switch and load
+# Chat interface supports:
+# - Multi-turn conversations
+# - Streaming responses
+# - 'exit' to quit, 'clear' to reset
+```
 
-**Resource-Constrained Systems**
-- Low-power devices
-- Embedded systems
-- Cost-sensitive infrastructure
+### API Usage
+
+**Chat Completion:**
+```bash
+curl http://localhost:11611/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tinyllama-1.1b-chat.Q4_K_M",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Explain quantization"}
+    ],
+    "max_tokens": 500,
+    "temperature": 0.7
+  }'
+```
+
+**Streaming:**
+```bash
+curl -N http://localhost:11611/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tinyllama-1.1b-chat.Q4_K_M",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "stream": true
+  }'
+```
+
+**List Models:**
+```bash
+curl http://localhost:11611/v1/models
+```
+
+**Python Example:**
+```python
+import requests
+
+response = requests.post(
+    'http://localhost:11611/v1/chat/completions',
+    json={
+        'model': 'tinyllama-1.1b-chat.Q4_K_M',
+        'messages': [
+            {'role': 'user', 'content': 'Explain edge computing'}
+        ],
+        'max_tokens': 200
+    }
+)
+
+print(response.json()['choices'][0]['message']['content'])
+```
 
 ## Architecture
 
+### System Design
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Client (Browser / API / CLI)                               │
+└───────────────────┬─────────────────────────────────────────┘
+                    │ HTTP :11611 (localhost)
+┌───────────────────▼─────────────────────────────────────────┐
+│  OffGrid LLM Server (Go)                                    │
+│  - OpenAI-compatible API routing                            │
+│  - Model registry and management                            │
+│  - Statistics tracking                                      │
+│  - Web UI serving                                           │
+│  - Health monitoring                                        │
+└───────────────────┬─────────────────────────────────────────┘
+                    │ HTTP (internal port, localhost)
+┌───────────────────▼─────────────────────────────────────────┐
+│  llama-server (llama.cpp C++)                               │
+│  - GGUF model loading                                       │
+│  - GPU-accelerated inference (CUDA/ROCm)                    │
+│  - Context management                                       │
+│  - Token generation                                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Directory Structure
+
+```
+/usr/local/bin/
+├── offgrid                    # Main CLI binary
+├── llama-server               # llama.cpp inference server
+└── llama-server-start.sh      # Dynamic model loader script
+
+/var/lib/offgrid/
+└── models/                    # Model storage (system-wide)
+    ├── tinyllama-1.1b-chat.Q4_K_M.gguf
+    └── llama-2-7b-chat.Q4_K_M.gguf
+
+/etc/offgrid/
+├── active-model               # Currently loaded model
+└── llama-port                 # Internal communication port
+
+/etc/systemd/system/
+├── offgrid-llm.service        # Main service
+└── llama-server.service       # Inference service
+```
+
+### Code Organization
+
 ```
 offgrid-llm/
-├── cmd/offgrid/              # CLI application entry point
+├── cmd/offgrid/              # CLI entry point
 ├── internal/
-│   ├── config/              # Configuration management (YAML/JSON)
-│   ├── server/              # HTTP server & API handlers
-│   ├── models/              # Model registry, download, import
-│   ├── inference/           # LLM inference engine (mock + llama.cpp)
-│   ├── resource/            # CPU/RAM/disk monitoring with gopsutil
-│   └── p2p/                 # Peer discovery and model sharing
-├── pkg/api/                 # OpenAI-compatible API types
-├── web/ui/                  # Web dashboard (pure HTML/CSS/JS)
+│   ├── config/              # Configuration (YAML/JSON/ENV)
+│   ├── inference/           # llama.cpp HTTP proxy
+│   ├── models/              # Registry, download, import/export
+│   ├── server/              # HTTP API handlers
+│   ├── resource/            # System monitoring
+│   └── p2p/                 # Local network discovery
+├── pkg/api/                 # Public API types
+├── web/ui/                  # Web dashboard
 ├── docs/                    # Documentation
-└── scripts/                 # Utilities and examples
+└── scripts/                 # Utilities
 ```
 
-**Key Components:**
+## Technical Details
 
-- **Inference Engine** - Pluggable backend (mock for testing, llama.cpp for production)
-- **Model Registry** - Track installed models, metadata, and availability
-- **Resource Monitor** - Real-time system metrics with gopsutil
-- **P2P Discovery** - JSON-based UDP announcements for local network discovery
-- **API Server** - OpenAI-compatible HTTP endpoints with SSE streaming
-- **Web UI** - Cyberpunk-themed dashboard with black/cyan design, real-time chat, streaming support
+### Model Format
+
+**GGUF (GGML Universal File Format)**
+- Efficient storage and loading
+- Metadata embedded in file
+- Multiple quantization levels
+- Compatible with llama.cpp ecosystem
+
+**Quantization Levels:**
+- `Q2_K` - Maximum compression (~2 bits/weight)
+- `Q3_K_M` - Good compression (~3 bits/weight)
+- `Q4_K_M` - **Recommended** - Balanced quality/size (~4 bits/weight)
+- `Q5_K_M` - Higher quality (~5 bits/weight)
+- `Q6_K` - Near-original quality (~6 bits/weight)
+- `Q8_0` - Minimal quality loss (~8 bits/weight)
+
+```bash
+# View quantization details
+offgrid quantization
+```
+
+### System Requirements
+
+**Minimum Configuration:**
+- CPU: 2 cores, 2GHz+
+- RAM: 2GB (for Q4 quantized small models)
+- Disk: 2GB available
+- OS: Linux (Ubuntu 20.04+, Debian 11+)
+
+**Recommended Configuration:**
+- CPU: 4+ cores
+- RAM: 8GB+
+- GPU: NVIDIA GPU with 6GB+ VRAM (optional)
+- Disk: 10GB+ SSD
+
+**GPU Requirements:**
+- NVIDIA: GTX 1050 Ti or newer, CUDA 12.0+
+- AMD: ROCm-compatible GPU (experimental)
+
+**Model RAM Requirements:**
+
+| Model Size | Quantization | RAM Needed | GPU VRAM |
+|------------|--------------|------------|----------|
+| 1B params  | Q4_K_M      | 2GB        | 2GB      |
+| 3B params  | Q4_K_M      | 4GB        | 4GB      |
+| 7B params  | Q4_K_M      | 8GB        | 6GB      |
+| 13B params | Q4_K_M      | 16GB       | 12GB     |
+
+### Performance
+
+**Throughput (tokens/second):**
+
+| Hardware | 1B Model | 7B Model | 13B Model |
+|----------|----------|----------|-----------|
+| CPU (4 cores) | 20-30 | 5-10 | 2-5 |
+| RTX 3060 (12GB) | 80-100 | 35-45 | 20-25 |
+| RTX 4090 (24GB) | 120-150 | 60-80 | 40-50 |
+
+*Actual performance varies with model architecture, quantization, and prompt length.*
+
+### Security
+
+**Network Security:**
+- Localhost-only binding (`127.0.0.1`)
+- No external network access
+- Random high ports for inter-process communication
+- Systemd security directives
+
+**Process Isolation:**
+- Dedicated `offgrid` system user
+- Restricted file system access
+- No root privileges required for operation
+
+**Data Privacy:**
+- No telemetry or analytics
+- No external API calls
+- All inference runs locally
+- Model files stay on disk
 
 ## API Reference
 
 ### Endpoints
 
-**GET /health**
+**Health Check**
+```
+GET /health
+```
+Response:
 ```json
 {
   "status": "ok",
-  "timestamp": "2025-11-06T..."
+  "timestamp": "2025-11-10T..."
 }
 ```
 
-**GET /v1/models**
+**List Models**
+```
+GET /v1/models
+```
+Response:
 ```json
 {
   "object": "list",
   "data": [
     {
-      "id": "tinyllama-1.1b-chat",
+      "id": "tinyllama-1.1b-chat.Q4_K_M",
       "object": "model",
-      "owned_by": "local"
+      "created": 1731234567,
+      "owned_by": "offgrid-llm"
     }
   ]
 }
 ```
 
-**POST /v1/chat/completions**
+**Chat Completion**
+```
+POST /v1/chat/completions
+```
+Request:
 ```json
 {
-  "model": "tinyllama-1.1b-chat",
+  "model": "tinyllama-1.1b-chat.Q4_K_M",
   "messages": [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Hello!"}
+    {"role": "system", "content": "You are helpful."},
+    {"role": "user", "content": "Hello"}
   ],
   "temperature": 0.7,
   "max_tokens": 500,
@@ -523,69 +346,138 @@ offgrid-llm/
 }
 ```
 
-**POST /v1/completions**
+**Text Completion**
+```
+POST /v1/completions
+```
+Request:
 ```json
 {
-  "model": "tinyllama-1.1b-chat",
+  "model": "tinyllama-1.1b-chat.Q4_K_M",
   "prompt": "Once upon a time",
-  "max_tokens": 100,
-  "temperature": 0.7
+  "max_tokens": 100
 }
 ```
 
-Set `"stream": true` to enable Server-Sent Events streaming.
+**OpenAI Client Compatibility:**
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:11611/v1",
+    api_key="not-needed"  # Local inference, no auth required
+)
+
+response = client.chat.completions.create(
+    model="tinyllama-1.1b-chat.Q4_K_M",
+    messages=[
+        {"role": "user", "content": "Explain quantum computing"}
+    ]
+)
+
+print(response.choices[0].message.content)
+```
+
+## CLI Commands
+
+### Model Management
+```bash
+offgrid list                        # List installed models
+offgrid catalog                     # Browse model catalog
+offgrid search <query>              # Search HuggingFace
+offgrid download <id> [quant]       # Download from catalog
+offgrid download-hf <repo>          # Download from HuggingFace
+offgrid import <path>               # Import from storage
+offgrid export <id> <dest>          # Export to storage
+offgrid remove <id>                 # Remove model
+```
+
+### Inference
+```bash
+offgrid serve                       # Start HTTP server
+offgrid run <model>                 # Interactive chat
+offgrid benchmark <model>           # Performance test
+```
+
+### Configuration
+```bash
+offgrid config init                 # Generate config file
+offgrid config show                 # Display config
+offgrid config validate <path>      # Validate config
+```
+
+### Information
+```bash
+offgrid info                        # System information
+offgrid quantization                # Quantization guide
+offgrid help                        # Help documentation
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Server configuration
+OFFGRID_PORT=11611              # HTTP server port
+OFFGRID_HOST=127.0.0.1         # Bind address (localhost only)
+
+# Model configuration
+OFFGRID_MODELS_DIR=/var/lib/offgrid/models  # Model directory
+OFFGRID_NUM_THREADS=4                        # CPU threads
+
+# Inference settings
+OFFGRID_MAX_CONTEXT=4096        # Context window size
+OFFGRID_GPU_LAYERS=0            # GPU layer offloading (0=auto)
+```
+
+### Config File
+
+Create `~/.offgrid-llm/config.yaml`:
+
+```yaml
+server:
+  port: 11611
+  host: "127.0.0.1"
+
+models:
+  directory: "/var/lib/offgrid/models"
+  
+inference:
+  num_threads: 4
+  context_size: 4096
+  gpu_layers: 0  # 0 = auto-detect
+
+logging:
+  level: "info"
+```
+
+Load with:
+```bash
+export OFFGRID_CONFIG=~/.offgrid-llm/config.yaml
+offgrid serve
+```
 
 ## Development
-
-### Project Structure
-
-```
-offgrid-llm/
-├── cmd/offgrid/          # Main application entry point
-├── internal/
-│   ├── config/           # Configuration management
-│   ├── inference/        # Inference engines (HTTP proxy to llama-server)
-│   ├── models/           # Model management and registry
-│   ├── p2p/             # P2P discovery and transfer
-│   ├── resource/        # System resource monitoring
-│   └── server/          # HTTP server and API handlers
-├── pkg/api/             # Public API types
-├── web/ui/              # Web dashboard (vanilla JS, no build step)
-├── scripts/             # Installation and utility scripts
-├── docs/                # Documentation
-├── install.sh           # Main installation script
-└── reinstall.sh         # Quick cleanup and reinstall
-```
 
 ### Building from Source
 
 ```bash
+# Prerequisites
+sudo apt-get install build-essential cmake git golang-1.21
+
 # Clone repository
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
 
-# Install dependencies (requires Go 1.21+)
-go mod download
+# Build Go binary only
+go build -o offgrid ./cmd/offgrid
 
-# Build Go binary
-make build
-
-# Run locally (for development)
+# Run development server
 ./offgrid serve
-```
 
-### Full Installation (with llama.cpp)
-
-```bash
-# Run full installer - builds everything including llama.cpp
+# Build with llama.cpp (full installation)
 sudo ./install.sh
-
-# This will:
-# - Detect and configure GPU support
-# - Download and build llama.cpp with CUDA
-# - Build OffGrid LLM
-# - Set up systemd services
-# - Configure security
 ```
 
 ### Running Tests
@@ -600,251 +492,371 @@ go test ./internal/server -v
 # With coverage
 go test -cover ./...
 
-# Server tests with verbose output
-go test -v ./internal/server/...
+# Integration tests
+go test -tags=integration ./...
+```
+
+### Project Structure
+
+```
+offgrid-llm/
+├── cmd/offgrid/              # CLI application
+│   └── main.go              # Entry point, command handling
+├── internal/
+│   ├── config/              # Configuration management
+│   │   └── config.go        # ENV/YAML/JSON loading
+│   ├── inference/           # Inference engines
+│   │   ├── llama_http.go    # HTTP proxy to llama-server
+│   │   ├── llama_stub.go    # Wrapper with port detection
+│   │   └── mock.go          # Mock engine for testing
+│   ├── models/              # Model management
+│   │   ├── catalog.go       # Model catalog
+│   │   ├── downloader.go    # HuggingFace downloads
+│   │   ├── registry.go      # Installed model tracking
+│   │   └── usb_importer.go  # USB import/export
+│   ├── server/              # HTTP server
+│   │   └── server.go        # API handlers, routing
+│   ├── resource/            # System monitoring
+│   │   └── monitor.go       # CPU/RAM/GPU tracking
+│   └── p2p/                 # P2P networking
+│       ├── discovery.go     # UDP broadcast
+│       └── transfer.go      # Model sharing
+├── pkg/api/                 # Public API types
+│   └── types.go            # OpenAI-compatible structs
+├── web/ui/                  # Web dashboard
+│   └── index.html          # Single-page app
+├── docs/                    # Documentation
+├── scripts/                 # Utilities
+└── install.sh              # Installation script
 ```
 
 ## Troubleshooting
 
-### Services Won't Start
+### Service Issues
 
+**Services won't start:**
 ```bash
-# Check service status
-sudo systemctl status offgrid-llm
-sudo systemctl status llama-server
-
-# View detailed logs
-sudo journalctl -u offgrid-llm -n 50 --no-pager
-sudo journalctl -u llama-server -n 50 --no-pager
-
-# Check if binary exists
-ls -la /usr/local/bin/llama-server
-ls -la /usr/local/bin/offgrid
-
-# Verify dependencies
-ldd /usr/local/bin/llama-server
-```
-
-### GPU Not Detected
-
-```bash
-# Check GPU detection
-nvidia-smi  # Should show your GPU
-
-# Check CUDA installation
-nvcc --version  # Should show CUDA version
-
-# Verify llama-server was built with CUDA
-ldd /usr/local/bin/llama-server | grep cuda
-
-# Rebuild with GPU support
-sudo ./reinstall.sh
-```
-
-### Connection Refused Errors
-
-```bash
-# Check if services are running
+# Check status
 sudo systemctl status offgrid-llm llama-server
 
-# Check port bindings
-sudo netstat -tulpn | grep -E "(11611|offgrid|llama)"
-
-# Check llama-server port file
-cat /etc/offgrid/llama-port
-
-# Test llama-server directly
-curl http://localhost:$(cat /etc/offgrid/llama-port)/health
-```
-
-### Model Not Loading
-
-```bash
-# Check model directory
-ls -la /var/lib/offgrid/models/
-
-# Check permissions
-sudo chown -R offgrid:offgrid /var/lib/offgrid/models/
-
-# Verify model format (should be .gguf)
-file /var/lib/offgrid/models/*.gguf
+# View logs
+sudo journalctl -u offgrid-llm -n 50
+sudo journalctl -u llama-server -n 50
 
 # Restart services
 sudo systemctl restart llama-server
 sudo systemctl restart offgrid-llm
 ```
 
-### Build Failures
-
+**Connection refused:**
 ```bash
-# Check build logs
-tail -50 /tmp/llama_build*.log
+# Verify services are running
+sudo systemctl is-active offgrid-llm llama-server
 
-# Verify CUDA toolkit
-which nvcc
-nvcc --version
+# Check ports
+sudo netstat -tlnp | grep -E "(11611|offgrid|llama)"
 
-# Check for missing dependencies
+# Test health endpoint
+curl http://localhost:11611/health
+```
+
+### Model Issues
+
+**Model not loading:**
+```bash
+# Check model directory
+ls -la /var/lib/offgrid/models/
+
+# Fix permissions
+sudo chown -R offgrid:offgrid /var/lib/offgrid/models/
+sudo chmod 664 /var/lib/offgrid/models/*.gguf
+
+# Verify model format
+file /var/lib/offgrid/models/*.gguf  # Should show "GGUF model file"
+
+# Check active model
+cat /etc/offgrid/active-model
+
+# Force model reload
+sudo systemctl restart llama-server
+```
+
+**Empty responses in chat:**
+```bash
+# Test llama-server directly
+LLAMAPORT=$(cat /etc/offgrid/llama-port)
+curl http://127.0.0.1:$LLAMAPORT/health
+
+# Check for proxy interference
+env | grep -i proxy
+
+# Test without proxy
+NO_PROXY='*' curl http://localhost:11611/v1/models
+
+# Verify correct model name
+offgrid list
+# Use exact model ID from list in API calls
+```
+
+### GPU Issues
+
+**GPU not detected:**
+```bash
+# Check GPU visibility
+nvidia-smi                    # Should show GPU
+nvcc --version               # Should show CUDA version
+
+# Verify llama-server build
+ldd /usr/local/bin/llama-server | grep cuda
+
+# Check service logs for GPU initialization
+sudo journalctl -u llama-server -n 100 | grep -i gpu
+
+# Rebuild with GPU support
+sudo ./reinstall.sh
+```
+
+**CUDA errors:**
+```bash
+# Check CUDA installation
+ls -la /usr/local/cuda*/lib64/
+
+# Update library paths
+sudo ldconfig
+
+# Verify driver
+cat /proc/driver/nvidia/version
+
+# Rebuild llama.cpp
+sudo ./reinstall.sh
+```
+
+### Build Issues
+
+**Compilation fails:**
+```bash
+# Check dependencies
 sudo apt-get install build-essential cmake git
 
-# Clean and rebuild
-sudo rm -rf /root/llama.cpp
-sudo ./reinstall.sh
-```
+# View build logs
+tail -100 /tmp/llama_build*.log
 
-### Symbol Lookup Errors
-
-```bash
-# If you see errors like:
-# "symbol lookup error: undefined symbol: llama_state_seq_get_size_ext"
-
-# This means shared libraries aren't installed. Reinstall:
+# Clean rebuild
+sudo rm -rf ~/llama.cpp
 sudo ./reinstall.sh
 
-# The installer will now properly install shared libraries to /usr/local/lib
-# and update the library cache with ldconfig
-
-# Verify shared libraries are installed:
-ls -la /usr/local/lib/libllama.so*
-ls -la /usr/local/lib/libggml*.so*
-
-# Check library dependencies:
-ldd /usr/local/bin/llama-server
-```
-
-### Quick Fixes
-
-```bash
-# Reinstall with GPU support (default)
-sudo ./reinstall.sh
-
-# Reinstall with CPU-only mode
+# Force CPU-only if GPU build fails
 sudo ./reinstall.sh --cpu-only
-
-# Force GPU mode (fails if no GPU detected)
-sudo ./reinstall.sh --gpu
 ```
 
-## Environment Variables
-
+**Go version too old:**
 ```bash
-# Systemd services read from /etc/offgrid/config
-# For manual runs:
+# Check Go version
+go version  # Need 1.21+
 
-OFFGRID_PORT=11611                       # Server port (default)
-OFFGRID_HOST=127.0.0.1                   # Server host (localhost only)
+# Install newer Go
+sudo snap install go --classic
+
+# Or download from golang.org
+wget https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
 ```
 
-## Performance
+### Performance Issues
 
-**Resource Requirements:**
+**Slow inference:**
+```bash
+# Check if GPU is being used
+nvidia-smi  # Monitor GPU utilization during inference
 
-| Model | Quantization | RAM | Disk | CPU Speed | GPU Speed |
-|-------|--------------|-----|------|-----------|-----------|
-| TinyLlama 1.1B | Q4_K_M | 2GB | 638MB | 20-30 tok/s | 60-100 tok/s |
-| Phi-2 2.7B | Q4_K_M | 4GB | 1.7GB | 10-15 tok/s | 40-60 tok/s |
-| Llama 2 7B | Q4_K_M | 8GB | 3.8GB | 5-10 tok/s | 30-50 tok/s |
-| Mistral 7B | Q4_K_M | 8GB | 4.1GB | 5-10 tok/s | 30-50 tok/s |
+# Verify CPU threads
+cat /proc/cpuinfo | grep processor | wc -l
 
-**GPU Acceleration:**
-- NVIDIA GTX 1050 Ti and newer
-- CUDA 12.0+ required
-- Typical 3-5x speedup over CPU
-- Automatic layer offloading
+# Check model quantization
+offgrid list  # Look for Q4_K_M or higher
 
-**Optimization:**
-- Q4_K_M recommended for balanced performance
-- GPU acceleration when available
-- Allocate 2x model size in RAM
-- SSD storage for faster model loading
+# Monitor resources
+top
+htop
 
-## Roadmap
+# Test different quantization
+offgrid download <model> Q4_K_M  # Smaller, faster
+offgrid download <model> Q5_K_M  # Larger, better quality
+```
 
-### Completed
-- HTTP server with OpenAI-compatible API
-- llama.cpp integration with GPU support
-- CUDA detection and configuration
-- Systemd service management
-- Security hardening
-- Model loading from filesystem
-- Streaming support (SSE)
-- Web dashboard
-- Health monitoring
-- Installation resilience
-- HuggingFace Hub integration
+**High memory usage:**
+```bash
+# Check model size
+offgrid list
 
-### In Progress
-- Model download via web UI
-- P2P model transfer
-- USB model import/export
-- Quantization tools
+# Use smaller quantization
+offgrid download <model> Q3_K_M  # More compressed
 
-### Planned
-- Multi-model concurrent support
-- Conversation persistence
-- Model fine-tuning
-- AMD ROCm support
-- Container images
-- Cross-platform installers
+# Monitor memory
+free -h
+watch -n 1 free -h
+
+# Restart services to clear cache
+sudo systemctl restart llama-server
+```
+
+## Offline Deployment
+
+### Air-Gapped Installation
+
+**1. Prepare installation package on connected machine:**
+```bash
+# Download repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Download models
+offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-GGUF \
+  --file tinyllama-1.1b-chat.Q4_K_M.gguf
+
+# Package everything
+tar czf offgrid-offline.tar.gz \
+  offgrid-llm/ \
+  ~/.offgrid-llm/models/*.gguf
+```
+
+**2. Transfer to air-gapped system:**
+```bash
+# Copy to USB
+cp offgrid-offline.tar.gz /media/usb/
+
+# On air-gapped machine
+tar xzf /media/usb/offgrid-offline.tar.gz
+cd offgrid-llm
+sudo ./install.sh --cpu-only  # Or with GPU if available
+```
+
+**3. Import models:**
+```bash
+# Copy models
+sudo cp ~/models/*.gguf /var/lib/offgrid/models/
+sudo chown offgrid:offgrid /var/lib/offgrid/models/*.gguf
+
+# Restart to load
+sudo systemctl restart llama-server
+
+# Verify
+offgrid list
+curl http://localhost:11611/v1/models
+```
+
+### USB Model Distribution
+
+**Create portable package:**
+```bash
+# Script creates complete offline package
+./scripts/create-usb-package.sh /media/usb tinyllama-1.1b-chat
+
+# Package includes:
+# - Model file with SHA256 checksum
+# - Verification script
+# - Documentation
+# - Import instructions
+```
+
+**Import on destination:**
+```bash
+# Import from USB
+offgrid import /media/usb
+
+# Verify integrity (automatic)
+# Models include embedded checksums
+```
+
+## Use Cases
+
+**Edge Computing**
+- Remote facilities without internet
+- Industrial automation
+- Field operations
+- IoT gateways
+
+**Air-Gapped Networks**
+- Classified environments
+- High-security facilities
+- Compliance-driven deployments
+- Government/military systems
+
+**Resource-Constrained Deployments**
+- Embedded systems
+- Low-power devices
+- Cost-sensitive infrastructure
+- Limited bandwidth environments
+
+**Privacy-Focused Applications**
+- Healthcare (HIPAA compliance)
+- Legal (attorney-client privilege)
+- Financial (data sovereignty)
+- Personal use (no data sharing)
 
 ## Technology Stack
 
 **Backend:**
-- Go 1.21+ - HTTP server, API routing, system management
-- llama.cpp - C++ inference engine with CUDA/ROCm
-- Systemd - Service management
-
-**Frontend:**
-- Vanilla JavaScript - No build dependencies
-- Server-Sent Events - Real-time streaming
-- CSS3 - Responsive interface
+- Go 1.21+ (HTTP server, orchestration)
+- llama.cpp (C++ inference engine)
+- CUDA 12.0+ / ROCm (GPU acceleration)
 
 **Infrastructure:**
-- Linux (Ubuntu 20.04+, Debian 11+)
-- NVIDIA CUDA 12.0+ (optional)
-- CMake - Build system
+- Systemd (service management)
+- Linux (Ubuntu/Debian)
 
-**Security:**
-- Localhost binding (127.0.0.1)
-- Random port allocation
-- Systemd security directives
-- User isolation
+**Frontend:**
+- Vanilla JavaScript (no build step)
+- Server-Sent Events (streaming)
+- CSS3 (responsive design)
+
+**Dependencies:**
+- CMake (build system)
+- GCC/G++ 11+ (compiler)
+- NVIDIA drivers (for GPU)
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Development areas:**
+**Areas of interest:**
 - AMD ROCm GPU support
-- Cross-platform installers
-- Model management improvements
+- macOS/Windows support
 - Performance optimization
-- Documentation
+- Documentation improvements
+- Test coverage
 
-**Development setup:**
+**Development workflow:**
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
-git checkout -b feature/<name>
+git checkout -b feature/your-feature
+# Make changes
 go test ./...
+git commit -am "Description"
+git push origin feature/your-feature
+# Open pull request
 ```
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details
+MIT License - See [LICENSE](LICENSE)
 
 ## Acknowledgments
 
-- [llama.cpp](https://github.com/ggerganov/llama.cpp) - Inference engine
-- [HuggingFace](https://huggingface.co) - Model distribution platform
-- GGUF model community contributors
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) - High-performance inference engine
+- [HuggingFace](https://huggingface.co) - Model distribution and community
+- GGUF format contributors
 
-## Support
+## Links
 
 - **Documentation**: [docs/](docs/)
+- **Architecture**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **API Reference**: [docs/API.md](docs/API.md)
+- **Model Setup**: [docs/MODEL_SETUP.md](docs/MODEL_SETUP.md)
 - **Issues**: [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)
 
 ---
 
-**Designed for offline-first deployment.**
+**Built for offline-first deployment · Zero external dependencies · Complete data sovereignty**
