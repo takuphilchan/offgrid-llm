@@ -46,3 +46,9 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+
+# Research papers (private until published)
+docs/paper.tex
+docs/PAPER.md
+docs/PAPER_README.md
+*.pdf
