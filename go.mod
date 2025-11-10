@@ -1,8 +1,6 @@
 module github.com/takuphilchan/offgrid-llm
 
-go 1.24.0
-
-toolchain go1.24.10
+go 1.21
 
 require (
 	github.com/go-skynet/go-llama.cpp v0.0.0-20240314183750-6a8041ef6b46
