@@ -26,8 +26,8 @@ go.work.sum
 *.swo
 *~
 
-# Models (can be large)
-models/
+# Models (can be large) - only top-level models directory
+/models/
 *.gguf
 *.bin
 

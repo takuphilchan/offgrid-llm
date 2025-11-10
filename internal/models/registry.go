@@ -1,0 +1,266 @@
+package models
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
+)
+
+// Registry manages available models
+type Registry struct {
+	mu           sync.RWMutex
+	models       map[string]*api.ModelMetadata
+	modelsDir    string
+	loadedModels map[string]interface{} // actual loaded model instances
+}
+
+// NewRegistry creates a new model registry
+func NewRegistry(modelsDir string) *Registry {
+	return &Registry{
+		models:       make(map[string]*api.ModelMetadata),
+		modelsDir:    modelsDir,
+		loadedModels: make(map[string]interface{}),
+	}
+}
+
+// ScanModels scans the models directory for available models
+func (r *Registry) ScanModels() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Clear existing models to get fresh state
+	r.models = make(map[string]*api.ModelMetadata)
+
+	// Ensure models directory exists
+	if err := os.MkdirAll(r.modelsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create models directory: %w", err)
+	}
+
+	// Scan for .gguf files
+	return filepath.Walk(r.modelsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		// Skip temporary download files
+		if strings.HasSuffix(path, ".tmp") {
+			return nil
+		}
+
+		// Check for supported model formats
+		ext := filepath.Ext(path)
+		if ext == ".gguf" || ext == ".ggml" || ext == ".bin" {
+			modelID := r.generateModelID(path)
+			metadata := &api.ModelMetadata{
+				ID:           modelID,
+				Name:         filepath.Base(path),
+				Path:         path,
+				Size:         info.Size(),
+				Format:       ext[1:], // Remove the dot
+				Quantization: r.detectQuantization(path),
+				ContextSize:  4096, // Default, will be updated when loaded
+				Parameters:   r.detectParameters(path),
+				IsLoaded:     false,
+			}
+			r.models[modelID] = metadata
+		}
+
+		return nil
+	})
+}
+
+// ListModels returns all available models
+func (r *Registry) ListModels() []api.Model {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	models := make([]api.Model, 0, len(r.models))
+	for _, meta := range r.models {
+		models = append(models, api.Model{
+			ID:      meta.ID,
+			Object:  "model",
+			Created: time.Now().Unix(),
+			OwnedBy: "offgrid-llm",
+		})
+	}
+
+	return models
+}
+
+// GetModel retrieves a model by ID
+func (r *Registry) GetModel(id string) (*api.ModelMetadata, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	model, exists := r.models[id]
+	if !exists {
+		return nil, fmt.Errorf("model not found: %s", id)
+	}
+
+	return model, nil
+}
+
+// LoadModel loads a model into memory
+func (r *Registry) LoadModel(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	model, exists := r.models[id]
+	if !exists {
+		return fmt.Errorf("model not found: %s", id)
+	}
+
+	if model.IsLoaded {
+		return nil // Already loaded
+	}
+
+	// TODO: Actual model loading with llama.cpp
+	// For now, just mark as loaded
+	model.IsLoaded = true
+	model.LoadedAt = time.Now()
+
+	return nil
+}
+
+// UnloadModel unloads a model from memory
+func (r *Registry) UnloadModel(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	model, exists := r.models[id]
+	if !exists {
+		return fmt.Errorf("model not found: %s", id)
+	}
+
+	if !model.IsLoaded {
+		return nil // Not loaded
+	}
+
+	// TODO: Actual model unloading
+	delete(r.loadedModels, id)
+	model.IsLoaded = false
+
+	return nil
+}
+
+// ImportFromUSB imports a model from a USB drive or external storage
+func (r *Registry) ImportFromUSB(sourcePath, modelName string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Verify source file exists
+	if _, err := os.Stat(sourcePath); err != nil {
+		return fmt.Errorf("source file not found: %w", err)
+	}
+
+	// Copy to models directory
+	destPath := filepath.Join(r.modelsDir, modelName)
+
+	// Read source
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to read source: %w", err)
+	}
+
+	// Write to destination
+	if err := os.WriteFile(destPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write model: %w", err)
+	}
+
+	// Re-scan to pick up the new model
+	return r.ScanModels()
+}
+
+// SaveRegistry saves the registry to disk
+func (r *Registry) SaveRegistry(path string) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	data, err := json.MarshalIndent(r.models, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadRegistry loads the registry from disk
+func (r *Registry) LoadRegistry(path string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // No registry file yet, that's OK
+		}
+		return err
+	}
+
+	return json.Unmarshal(data, &r.models)
+}
+
+// Helper functions
+
+func (r *Registry) generateModelID(path string) string {
+	// Simple ID generation from filename
+	base := filepath.Base(path)
+	return base[:len(base)-len(filepath.Ext(base))]
+}
+
+func (r *Registry) detectQuantization(path string) string {
+	name := filepath.Base(path)
+
+	// Common quantization patterns
+	quantizations := []string{"Q4_0", "Q4_1", "Q5_0", "Q5_1", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K", "F16", "F32"}
+
+	for _, quant := range quantizations {
+		if contains(name, quant) {
+			return quant
+		}
+	}
+
+	return "unknown"
+}
+
+func (r *Registry) detectParameters(path string) string {
+	name := filepath.Base(path)
+
+	// Common parameter sizes
+	sizes := []string{"7B", "13B", "30B", "65B", "70B", "1B", "3B"}
+
+	for _, size := range sizes {
+		if contains(name, size) {
+			return size
+		}
+	}
+
+	return "unknown"
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr ||
+		(len(s) > len(substr) &&
+			(s[:len(substr)] == substr ||
+				s[len(s)-len(substr):] == substr ||
+				containsMiddle(s, substr))))
+}
+
+func containsMiddle(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
