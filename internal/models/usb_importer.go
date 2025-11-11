@@ -14,6 +14,7 @@ import (
 type USBImporter struct {
 	modelsDir string
 	registry  *Registry
+	validator *Validator
 }
 
 // NewUSBImporter creates a new USB importer
@@ -21,6 +22,7 @@ func NewUSBImporter(modelsDir string, registry *Registry) *USBImporter {
 	return &USBImporter{
 		modelsDir: modelsDir,
 		registry:  registry,
+		validator: NewValidator(modelsDir),
 	}
 }
 
@@ -187,6 +189,27 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 	if sourceHash != destHash {
 		os.Remove(destPath)
 		return fmt.Errorf("verification failed: hash mismatch")
+	}
+
+	// Additional validation using the validator
+	validationResult, err := u.validator.ValidateModel(destPath)
+	if err != nil {
+		return fmt.Errorf("validation check failed: %w", err)
+	}
+
+	if !validationResult.Valid {
+		os.Remove(destPath)
+		return fmt.Errorf("model validation failed: %v", validationResult.Errors)
+	}
+
+	if validationResult.IsCorrupted {
+		os.Remove(destPath)
+		return fmt.Errorf("model file is corrupted")
+	}
+
+	if !validationResult.IsGGUF {
+		os.Remove(destPath)
+		return fmt.Errorf("not a valid GGUF file")
 	}
 
 	// Success
