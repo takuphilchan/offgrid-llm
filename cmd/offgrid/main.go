@@ -2818,10 +2818,11 @@ func formatTimeAgo(t time.Time) string {
 
 // handleCompletions generates shell completion scripts
 func handleCompletions(args []string) {
-	printBanner()
-	printSection("Shell Completions")
-
+	// Only show banner/help when no args provided (help mode)
+	// Don't show when generating actual completion scripts
 	if len(args) == 0 {
+		printBanner()
+		printSection("Shell Completions")
 		fmt.Println("Usage:")
 		fmt.Printf("  %soffgrid completions%s <shell>\n", colorBold, colorReset)
 		fmt.Println()
