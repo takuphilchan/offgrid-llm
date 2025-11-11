@@ -126,12 +126,17 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 	}
 	defer sourceFile.Close()
 
-	// Create destination file
-	destFile, err := os.Create(destPath)
+	// Create temporary file first (atomic import)
+	tempPath := destPath + ".tmp"
+	destFile, err := os.Create(tempPath)
 	if err != nil {
-		return fmt.Errorf("cannot create destination file: %w", err)
+		return fmt.Errorf("cannot create temporary file: %w", err)
 	}
-	defer destFile.Close()
+	defer func() {
+		destFile.Close()
+		// Clean up temp file if still exists (error case)
+		os.Remove(tempPath)
+	}()
 
 	// Copy with progress tracking
 	buffer := make([]byte, 1024*1024) // 1MB buffer
@@ -141,7 +146,6 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 		n, err := sourceFile.Read(buffer)
 		if n > 0 {
 			if _, writeErr := destFile.Write(buffer[:n]); writeErr != nil {
-				os.Remove(destPath) // Clean up partial file
 				return fmt.Errorf("write error: %w", writeErr)
 			}
 
@@ -159,14 +163,12 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 		}
 
 		if err != nil {
-			os.Remove(destPath) // Clean up partial file
 			return fmt.Errorf("read error: %w", err)
 		}
 	}
 
 	// Verify size
 	if bytesCopied != sourceInfo.Size() {
-		os.Remove(destPath)
 		return fmt.Errorf("incomplete copy: expected %d bytes, got %d", sourceInfo.Size(), bytesCopied)
 	}
 
@@ -181,38 +183,41 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 		return fmt.Errorf("cannot verify source: %w", err)
 	}
 
-	destHash, err := u.calculateFileHash(destPath)
+	destHash, err := u.calculateFileHash(tempPath)
 	if err != nil {
 		return fmt.Errorf("cannot verify destination: %w", err)
 	}
 
 	if sourceHash != destHash {
-		os.Remove(destPath)
 		return fmt.Errorf("verification failed: hash mismatch")
 	}
 
 	// Additional validation using the validator
-	validationResult, err := u.validator.ValidateModel(destPath)
+	validationResult, err := u.validator.ValidateModel(tempPath)
 	if err != nil {
 		return fmt.Errorf("validation check failed: %w", err)
 	}
 
 	if !validationResult.Valid {
-		os.Remove(destPath)
 		return fmt.Errorf("model validation failed: %v", validationResult.Errors)
 	}
 
 	if validationResult.IsCorrupted {
-		os.Remove(destPath)
 		return fmt.Errorf("model file is corrupted")
 	}
 
 	if !validationResult.IsGGUF {
-		os.Remove(destPath)
 		return fmt.Errorf("not a valid GGUF file")
 	}
 
-	// Success
+	// Atomic move: rename temp file to final destination
+	if err := os.Rename(tempPath, destPath); err != nil {
+		return fmt.Errorf("failed to move file to destination: %w", err)
+	}
+
+	// Success - clear the cleanup flag since rename succeeded
+	tempPath = ""
+
 	progress.Status = "complete"
 	progress.Percent = 100
 	if onProgress != nil {
