@@ -7,7 +7,7 @@ echo
 
 # Check if Go is installed
 if ! command -v go &> /dev/null; then
-    echo "❌ Go is not installed. Please install Go 1.21.5 or higher."
+    echo "❌ Go is not installed. Please install Go 1.21 or higher."
     exit 1
 fi
 

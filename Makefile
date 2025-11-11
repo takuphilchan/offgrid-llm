@@ -7,6 +7,9 @@ VERSION?=0.1.0-alpha
 LDFLAGS=-ldflags "-X main.Version=$(VERSION)"
 BUILD_TAGS_LLAMA=-tags llama
 
+# Force using local Go toolchain to prevent auto-upgrade
+export GOTOOLCHAIN=local
+
 # Build the application (mock mode - no CGO required)
 build:
 	@echo "🔨 Building OffGrid LLM (mock mode)..."
