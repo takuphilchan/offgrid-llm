@@ -329,7 +329,7 @@ spec:
   ports:
   - name: http
     port: 11611
-    targetPort: 8080
+    targetPort: 11611
   - name: p2p
     port: 8081
     targetPort: 8081
@@ -511,7 +511,7 @@ chmod 600 ~/.offgrid/config.yaml
 chmod 700 ~/.offgrid/models
 
 # Use firewall
-sudo ufw allow 8080/tcp
+sudo ufw allow 11611/tcp
 sudo ufw allow 8081/udp  # P2P only
 sudo ufw enable
 ```

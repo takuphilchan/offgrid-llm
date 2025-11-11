@@ -22,14 +22,15 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer   *http.Server
-	config       *config.Config
-	registry     *models.Registry
-	engine       inference.Engine
-	monitor      *resource.Monitor
-	statsTracker *stats.Tracker
-	cache        *cache.ResponseCache
-	startTime    time.Time
+	httpServer      *http.Server
+	config          *config.Config
+	registry        *models.Registry
+	engine          inference.Engine
+	embeddingEngine *inference.EmbeddingEngine
+	monitor         *resource.Monitor
+	statsTracker    *stats.Tracker
+	cache           *cache.ResponseCache
+	startTime       time.Time
 }
 
 // New creates a new server instance
@@ -64,6 +65,9 @@ func NewWithConfig(cfg *config.Config) *Server {
 	responseCache := cache.NewResponseCache(1000, 1*time.Hour)
 	responseCache.StartCleanupRoutine(15 * time.Minute)
 
+	// Initialize embedding engine
+	embeddingEngine := inference.NewEmbeddingEngine()
+
 	// Scan for available models
 	if err := registry.ScanModels(); err != nil {
 		log.Printf("Warning: Failed to scan models: %v", err)
@@ -73,13 +77,14 @@ func NewWithConfig(cfg *config.Config) *Server {
 	monitor.Start()
 
 	return &Server{
-		config:       cfg,
-		registry:     registry,
-		engine:       engine,
-		monitor:      monitor,
-		statsTracker: statsTracker,
-		cache:        responseCache,
-		startTime:    time.Now(),
+		config:          cfg,
+		registry:        registry,
+		engine:          engine,
+		embeddingEngine: embeddingEngine,
+		monitor:         monitor,
+		statsTracker:    statsTracker,
+		cache:           responseCache,
+		startTime:       time.Now(),
 	}
 }
 
@@ -97,6 +102,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/models", s.handleListModels)
 	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("/v1/completions", s.handleCompletions)
+	mux.HandleFunc("/v1/embeddings", s.handleEmbeddings)
 
 	// Model search and discovery (OffGrid-specific)
 	mux.HandleFunc("/v1/search", s.handleModelSearch)
@@ -151,6 +157,7 @@ func (s *Server) Start() error {
 	fmt.Println("    GET  /v1/models")
 	fmt.Println("    POST /v1/chat/completions")
 	fmt.Println("    POST /v1/completions")
+	fmt.Println("    POST /v1/embeddings")
 	fmt.Println("    POST /v1/search")
 	fmt.Println("    POST /v1/benchmark")
 	fmt.Println()
@@ -617,6 +624,85 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Sprintf("Inference failed: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// Send response
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// handleEmbeddings handles POST /v1/embeddings for generating text embeddings
+func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse request
+	var req api.EmbeddingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if req.Model == "" {
+		writeError(w, "Model is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Input == nil {
+		writeError(w, "Input is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if it's an embedding model
+	modelMeta, err := s.registry.GetModel(req.Model)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
+		return
+	}
+
+	// Load embedding model if not loaded
+	if !s.embeddingEngine.IsLoaded() || s.embeddingEngine.GetModelInfo()["model_path"] != modelMeta.Path {
+		log.Printf("Loading embedding model: %s", req.Model)
+
+		ctx := context.Background()
+		opts := inference.DefaultEmbeddingOptions()
+		opts.NumThreads = s.config.NumThreads
+
+		// Check for GPU availability
+		gpuMonitor := resource.NewGPUMonitor()
+		if gpuMonitor.IsAvailable() {
+			// Offload some layers to GPU if available
+			opts.NumGPULayers = 10 // Conservative for embedding models
+		}
+
+		if err := s.embeddingEngine.Load(ctx, modelMeta.Path, opts); err != nil {
+			writeError(w, fmt.Sprintf("Failed to load embedding model: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Mark model as loaded in registry
+		if err := s.registry.LoadModel(req.Model); err != nil {
+			log.Printf("Warning: Failed to mark model as loaded: %v", err)
+		}
+	}
+
+	// Generate embeddings
+	ctx := context.Background()
+	startTime := time.Now()
+	response, err := s.embeddingEngine.GenerateEmbeddings(ctx, &req)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Failed to generate embeddings: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Track stats
+	duration := time.Since(startTime)
+	s.statsTracker.RecordInference(req.Model, int64(response.Usage.TotalTokens), duration.Milliseconds())
 
 	// Send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {

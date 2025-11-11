@@ -276,6 +276,124 @@ func DefaultCatalog() *ModelCatalog {
 					},
 				},
 			},
+			// ========== EMBEDDING MODELS ==========
+			{
+				ID:          "all-minilm-l6-v2",
+				Name:        "all-MiniLM-L6-v2",
+				Description: "Lightweight sentence embedding model, 384 dimensions, perfect for semantic search",
+				Parameters:  "22M",
+				License:     "Apache 2.0",
+				Provider:    "sentence-transformers",
+				MinRAM:      1,
+				Recommended: true,
+				Tags:        []string{"embedding", "semantic-search", "lightweight", "beginner"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "F16",
+						Size:         44588032, // ~42MB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/ggml-model-f16.gguf",
+								Priority: 1,
+							},
+						},
+					},
+					{
+						Quantization: "Q8_0",
+						Size:         23875100, // ~23MB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/ggml-model-q8_0.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "bge-small-en-v1.5",
+				Name:        "BGE Small EN v1.5",
+				Description: "High-quality English embedding model from BAAI, 384 dimensions",
+				Parameters:  "33M",
+				License:     "MIT",
+				Provider:    "BAAI",
+				MinRAM:      1,
+				Recommended: true,
+				Tags:        []string{"embedding", "semantic-search", "retrieval", "rag"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "F16",
+						Size:         67240064, // ~64MB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/main/ggml-model-f16.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "e5-small-v2",
+				Name:        "E5 Small v2",
+				Description: "Multilingual embedding model from Microsoft, 384 dimensions",
+				Parameters:  "33M",
+				License:     "MIT",
+				Provider:    "Microsoft",
+				MinRAM:      1,
+				Recommended: false,
+				Tags:        []string{"embedding", "multilingual", "semantic-search"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "F16",
+						Size:         67108864, // ~64MB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/intfloat/e5-small-v2/resolve/main/ggml-model-f16.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "nomic-embed-text-v1",
+				Name:        "Nomic Embed Text v1",
+				Description: "Open-source embedding model with strong performance, 768 dimensions",
+				Parameters:  "137M",
+				License:     "Apache 2.0",
+				Provider:    "Nomic AI",
+				MinRAM:      2,
+				Recommended: true,
+				Tags:        []string{"embedding", "rag", "long-context", "open-source"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "F16",
+						Size:         274800000, // ~262MB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/nomic-ai/nomic-embed-text-v1/resolve/main/ggml-model-f16.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -326,4 +444,14 @@ func (e *CatalogEntry) GetBestVariant(availableRAMGB int) *ModelVariant {
 		}
 	}
 	return best
+}
+
+// IsEmbeddingModel checks if this model is an embedding model
+func (e *CatalogEntry) IsEmbeddingModel() bool {
+	for _, tag := range e.Tags {
+		if tag == "embedding" {
+			return true
+		}
+	}
+	return false
 }

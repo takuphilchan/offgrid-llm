@@ -139,3 +139,33 @@ type ModelMetadata struct {
 	LoadedAt     time.Time `json:"loaded_at,omitempty"`
 	IsLoaded     bool      `json:"is_loaded"`
 }
+
+// EmbeddingRequest represents an OpenAI-compatible embedding request
+type EmbeddingRequest struct {
+	Model          string      `json:"model"`                     // Model ID to use for embeddings
+	Input          interface{} `json:"input"`                     // String or array of strings
+	EncodingFormat string      `json:"encoding_format,omitempty"` // "float" (default) or "base64"
+	User           string      `json:"user,omitempty"`            // Optional user identifier
+	Dimensions     *int        `json:"dimensions,omitempty"`      // Number of dimensions (for models that support it)
+}
+
+// EmbeddingResponse represents an OpenAI-compatible embedding response
+type EmbeddingResponse struct {
+	Object string          `json:"object"` // "list"
+	Data   []EmbeddingData `json:"data"`
+	Model  string          `json:"model"`
+	Usage  EmbeddingUsage  `json:"usage"`
+}
+
+// EmbeddingData represents a single embedding vector
+type EmbeddingData struct {
+	Object    string    `json:"object"` // "embedding"
+	Embedding []float32 `json:"embedding"`
+	Index     int       `json:"index"`
+}
+
+// EmbeddingUsage represents token usage for embeddings
+type EmbeddingUsage struct {
+	PromptTokens int `json:"prompt_tokens"`
+	TotalTokens  int `json:"total_tokens"`
+}
