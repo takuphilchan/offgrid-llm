@@ -1005,8 +1005,7 @@ setup_llama_server_service() {
 # llama-server startup script with dynamic model loading
 
 ACTIVE_MODEL_FILE="/etc/offgrid/active-model"
-MODELS_DIR="/var/lib/offgrid/models"
-DEFAULT_MODEL=""
+SYSTEM_MODELS_DIR="/var/lib/offgrid/models"
 LLAMA_PORT_FILE="/etc/offgrid/llama-port"
 
 # Find the first available model if no active model is set
@@ -1020,9 +1019,21 @@ fi
 
 # If no active model or it doesn't exist, find the first .gguf file
 if [ -z "$MODEL_PATH" ]; then
-    MODEL_PATH=$(find "$MODELS_DIR" -maxdepth 1 -name "*.gguf" -type f | head -n 1)
+    # Try system models directory first
+    MODEL_PATH=$(find "$SYSTEM_MODELS_DIR" -maxdepth 1 -name "*.gguf" -type f 2>/dev/null | head -n 1)
+    
+    # If not found in system dir, search all user home directories
     if [ -z "$MODEL_PATH" ]; then
-        echo "Error: No .gguf models found in $MODELS_DIR" >&2
+        for user_home in /home/*; do
+            if [ -d "$user_home/.offgrid-llm/models" ]; then
+                MODEL_PATH=$(find "$user_home/.offgrid-llm/models" -maxdepth 1 -name "*.gguf" -type f 2>/dev/null | head -n 1)
+                [ -n "$MODEL_PATH" ] && break
+            fi
+        done
+    fi
+    
+    if [ -z "$MODEL_PATH" ]; then
+        echo "Error: No .gguf models found in $SYSTEM_MODELS_DIR or /home/*/.offgrid-llm/models" >&2
         exit 1
     fi
     echo "Using first available model: $MODEL_PATH" >&2
@@ -1083,7 +1094,7 @@ Environment="LLAMA_SERVER_INTERNAL=1"
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ReadWritePaths=/var/lib/offgrid
 ReadWritePaths=/etc/offgrid
 # Network isolation - only localhost
@@ -1177,7 +1188,7 @@ Environment="LLAMA_SERVER_URL=http://127.0.0.1:${LLAMA_PORT}"
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ReadWritePaths=/var/lib/offgrid
 
 [Install]
