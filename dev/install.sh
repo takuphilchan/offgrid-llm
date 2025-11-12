@@ -622,7 +622,9 @@ build_llama_cpp() {
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
     
     # Configure CMake based on GPU type
-    CMAKE_ARGS="-DBUILD_SHARED_LIBS=ON -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DLLAMA_CURL=OFF"
+    # Note: BUILD_SHARED_LIBS=OFF ensures backends are statically linked into llama-server
+    # This avoids "no backends are loaded" errors when running as a service
+    CMAKE_ARGS="-DBUILD_SHARED_LIBS=OFF -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DLLAMA_CURL=OFF"
     
     if [ "$GPU_TYPE" = "nvidia" ]; then
         print_info "Configuring for NVIDIA CUDA acceleration..."
@@ -1131,6 +1133,7 @@ RestartSec=3
 # Environment variables
 Environment="PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="LD_LIBRARY_PATH=/usr/local/lib"
+Environment="GGML_BACKEND_DL_PATH=/usr/local/lib"
 Environment="LLAMA_SERVER_INTERNAL=1"
 
 # Security hardening - balanced security with functionality
