@@ -6,7 +6,11 @@ offgrid-*
 *.so
 *.dylib
 dist/
+
+# Temporary notes
 DEMO_COMMANDS.md
+GO_VERSION_FIX.md
+
 # Test binaries
 *.test
 *.out

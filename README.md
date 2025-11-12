@@ -15,10 +15,12 @@
 
 <p align="center">
   <a href="#-installation">Installation</a> •
+  <a href="#-repository-structure">Structure</a> •
   <a href="#-features">Features</a> •
   <a href="#-usage">Usage</a> •
   <a href="#-api-reference">API</a> •
-  <a href="#-documentation">Docs</a>
+  <a href="#-documentation">Docs</a> •
+  <a href="#contributing">Contributing</a>
 </p>
 
 </div>
@@ -72,7 +74,34 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ---
 
-## 📦 Installation
+## � Repository Structure
+
+**New here? Here's what's where:**
+
+| Location | Purpose | For |
+|----------|---------|-----|
+| **`installers/`** | 📦 **Quick install scripts** | End users - [Start here!](installers/) |
+| `install.sh` (root) | 🔧 Linux source build with GPU setup | Advanced Linux users |
+| `docs/` | 📖 Complete documentation | Everyone |
+| `cmd/offgrid/` | 💻 Application source code | Developers |
+| `internal/` | ⚙️ Core implementation | Developers |
+| `.github/workflows/` | 🤖 CI/CD & automated releases | Contributors |
+| `Makefile` | 🛠️ Build automation | Developers |
+
+<details>
+<summary><b>💡 Quick Navigation</b></summary>
+
+- **Want to install?** → Use [`installers/install.sh`](installers/)
+- **Want to contribute?** → Read [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Want to build from source?** → Use root `install.sh` (Linux) or `Makefile`
+- **Looking for docs?** → Check [`docs/`](docs/) directory
+- **Need help?** → See [Troubleshooting](#troubleshooting) or [open an issue](https://github.com/takuphilchan/offgrid-llm/issues)
+
+</details>
+
+---
+
+## �📦 Installation
 
 ### Quick Install (Now Available!)
 
@@ -1015,16 +1044,26 @@ offgrid-llm/
 
 ## Contributing
 
-Contributions welcome! Areas of interest:
+We welcome contributions! 🎉
 
-- **Performance** - Optimization & benchmarking
-- **UI/UX** - Web interface improvements
-- **Platforms** - macOS/Windows support
-- **Features** - New capabilities & tools
-- **Documentation** - Guides & tutorials
-- **Bug Fixes** - Issue resolution
+**Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:**
+- 📁 Repository structure explained
+- 🛠️ Development workflow
+- 🚀 How to build and test
+- 📦 Creating releases
+- ❓ Getting help
 
-See [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues) for current priorities.
+**Quick links:**
+- 🐛 [Report bugs](https://github.com/takuphilchan/offgrid-llm/issues)
+- 💡 [Request features](https://github.com/takuphilchan/offgrid-llm/issues)
+- 📖 [Improve docs](https://github.com/takuphilchan/offgrid-llm/tree/main/docs)
+- 💻 [Submit code](https://github.com/takuphilchan/offgrid-llm/pulls)
+
+**Priority areas:**
+- Performance optimization & benchmarking
+- Platform support (macOS/Windows)
+- Web UI improvements
+- Documentation & tutorials
 
 ---
 
