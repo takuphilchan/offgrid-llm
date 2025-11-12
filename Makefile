@@ -10,125 +10,267 @@ BUILD_TAGS_LLAMA=-tags llama
 # Force using local Go toolchain to prevent auto-upgrade
 export GOTOOLCHAIN=local
 
+# Color definitions (matching installer)
+BRAND_PRIMARY=\033[38;5;45m
+BRAND_SUCCESS=\033[38;5;78m
+BRAND_ERROR=\033[38;5;196m
+BRAND_MUTED=\033[38;5;240m
+RESET=\033[0m
+BOLD=\033[1m
+DIM=\033[2m
+
 # Build the application (mock mode - no CGO required)
 build:
-	@echo "🔨 Building OffGrid LLM (mock mode)..."
-	go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
-	@echo "✅ Build complete: ./$(BINARY)"
-	@echo "   Note: Using mock inference. For real LLM inference, use 'make build-llama'"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Building OffGrid LLM$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building binary..."
+	@go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Build complete: $(BOLD)./$(BINARY)$(RESET)"
+	@echo "$(DIM)  Using HTTP-based llama-server integration$(RESET)"
+	@echo ""
 
 # Build with llama.cpp support (requires CGO and llama.cpp installation)
 build-llama:
-	@echo "🔨 Building OffGrid LLM with llama.cpp support..."
-	@echo "   Prerequisites: llama.cpp must be installed and C_INCLUDE_PATH set"
-	@echo "   See docs/LLAMA_CPP_SETUP.md for setup instructions"
-	go build $(LDFLAGS) $(BUILD_TAGS_LLAMA) -o $(BINARY) $(MAIN_PATH)
-	@echo "✅ Build complete: ./$(BINARY)"
-	@echo "   Real llama.cpp inference enabled!"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Building OffGrid LLM with llama.cpp$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_MUTED)Prerequisites: llama.cpp must be installed$(RESET)"
+	@echo "$(DIM)  See docs/LLAMA_CPP_SETUP.md for setup instructions$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building with llama.cpp support..."
+	@go build $(LDFLAGS) $(BUILD_TAGS_LLAMA) -o $(BINARY) $(MAIN_PATH)
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Build complete: $(BOLD)./$(BINARY)$(RESET)"
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Real llama.cpp inference enabled"
+	@echo ""
 
 # Run the application
 run: build
-	@echo "🚀 Starting OffGrid LLM..."
-	./$(BINARY)
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Starting OffGrid LLM$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@./$(BINARY)
 
 # Run without building (for development)
 dev:
-	@echo "🔧 Running in dev mode..."
-	go run $(MAIN_PATH)
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Running in Development Mode$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@go run $(MAIN_PATH)
 
 # Run tests
 test:
-	@echo "🧪 Running tests..."
-	go test -v ./...
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Running Tests$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@go test -v ./...
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Tests complete"
+	@echo ""
 
 # Run tests with coverage
 coverage:
-	@echo "📊 Running tests with coverage..."
-	go test -v -coverprofile=coverage.txt -covermode=atomic ./...
-	go tool cover -html=coverage.txt -o coverage.html
-	@echo "✅ Coverage report: coverage.html"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Running Tests with Coverage$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Running tests..."
+	@go test -v -coverprofile=coverage.txt -covermode=atomic ./...
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Generating coverage report..."
+	@go tool cover -html=coverage.txt -o coverage.html
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Coverage report: $(BOLD)coverage.html$(RESET)"
+	@echo ""
 
 # Clean build artifacts
 clean:
-	@echo "🧹 Cleaning..."
-	rm -f $(BINARY)
-	rm -f coverage.txt coverage.html
-	rm -f offgrid-*
-	go clean
-	@echo "✅ Cleaned"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Cleaning Build Artifacts$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Removing binaries..."
+	@rm -f $(BINARY)
+	@rm -f offgrid-*
+	@echo "$(BRAND_PRIMARY)→$(RESET) Removing coverage files..."
+	@rm -f coverage.txt coverage.html
+	@echo "$(BRAND_PRIMARY)→$(RESET) Running go clean..."
+	@go clean
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Cleaned"
+	@echo ""
 
 # Format code
 fmt:
-	@echo "📝 Formatting code..."
-	go fmt ./...
-	@echo "✅ Formatted"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Formatting Code$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Running go fmt..."
+	@go fmt ./...
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Code formatted"
+	@echo ""
 
 # Lint code
 lint:
-	@echo "🔍 Linting code..."
-	@command -v golangci-lint >/dev/null 2>&1 || { echo "Installing golangci-lint..."; go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; }
-	golangci-lint run ./...
-	@echo "✅ Linting complete"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Linting Code$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "$(BRAND_PRIMARY)→$(RESET) Installing golangci-lint..."; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		echo "$(BRAND_SUCCESS)✓$(RESET) golangci-lint installed"; \
+		echo ""; \
+	}
+	@echo "$(BRAND_PRIMARY)→$(RESET) Running linter..."
+	@golangci-lint run ./...
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Linting complete"
+	@echo ""
 
 # Install to user's Go bin (adds to PATH if GOPATH/bin is configured)
 install:
-	@echo "📦 Installing OffGrid LLM to user bin..."
-	go install $(LDFLAGS) $(MAIN_PATH)
-	@echo "✅ Installed to $(shell go env GOPATH)/bin/$(BINARY)"
 	@echo ""
-	@echo "To use 'offgrid' command from anywhere:"
-	@echo "  1. Add this to your ~/.bashrc or ~/.zshrc:"
-	@echo "     export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""
-	@echo "  2. Reload shell: source ~/.bashrc"
-	@echo "  3. Verify: which offgrid"
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Installing OffGrid LLM (User)$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Installing to user bin..."
+	@go install $(LDFLAGS) $(MAIN_PATH)
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Installed to $(BOLD)$$(go env GOPATH)/bin/$(BINARY)$(RESET)"
+	@echo ""
+	@echo "$(BRAND_MUTED)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_MUTED)│$(RESET) $(BOLD)Post-Installation Steps$(RESET)"
+	@echo "$(BRAND_MUTED)├────────────────────────────────────────────────────────────────────┤$(RESET)"
+	@echo "$(BRAND_MUTED)│$(RESET) Add to your shell configuration:"
+	@echo "$(BRAND_MUTED)│$(RESET)   $(DIM)export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\"$(RESET)"
+	@echo "$(BRAND_MUTED)│$(RESET)"
+	@echo "$(BRAND_MUTED)│$(RESET) Then reload your shell:"
+	@echo "$(BRAND_MUTED)│$(RESET)   $(DIM)source ~/.bashrc$(RESET) or $(DIM)source ~/.zshrc$(RESET)"
+	@echo "$(BRAND_MUTED)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
 
 # Install to system-wide location (requires sudo)
 install-system:
-	@echo "📦 Installing OffGrid LLM system-wide..."
-	go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
-	sudo install -m 755 $(BINARY) /usr/local/bin/$(BINARY)
-	@echo "✅ Installed to /usr/local/bin/$(BINARY)"
-	@echo "   Run 'offgrid' from anywhere!"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Installing OffGrid LLM (System-Wide)$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building binary..."
+	@go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
+	@echo "$(BRAND_PRIMARY)→$(RESET) Installing to /usr/local/bin..."
+	@sudo install -m 755 $(BINARY) /usr/local/bin/$(BINARY)
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Installed to $(BOLD)/usr/local/bin/$(BINARY)$(RESET)"
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Run $(BOLD)offgrid$(RESET) from anywhere"
+	@echo ""
 
 # Uninstall from system
 uninstall-system:
-	@echo "🗑️  Uninstalling OffGrid LLM from system..."
-	sudo rm -f /usr/local/bin/$(BINARY)
-	@echo "✅ Uninstalled"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Uninstalling OffGrid LLM$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Removing from /usr/local/bin..."
+	@sudo rm -f /usr/local/bin/$(BINARY)
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Uninstalled"
+	@echo ""
 
 # Cross-compile for all platforms
 cross-compile:
-	@echo "🌍 Cross-compiling for all platforms..."
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Cross-Compiling for All Platforms$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Creating dist directory..."
 	@mkdir -p dist
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-linux-amd64 $(MAIN_PATH)
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-linux-arm64 $(MAIN_PATH)
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-amd64 $(MAIN_PATH)
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-arm64 $(MAIN_PATH)
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-windows-amd64.exe $(MAIN_PATH)
-	@echo "✅ Built for all platforms in dist/"
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building for linux/amd64..."
+	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-linux-amd64 $(MAIN_PATH)
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building for linux/arm64..."
+	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-linux-arm64 $(MAIN_PATH)
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building for darwin/amd64..."
+	@GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-amd64 $(MAIN_PATH)
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building for darwin/arm64 (Apple Silicon)..."
+	@GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-arm64 $(MAIN_PATH)
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building for windows/amd64..."
+	@GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-windows-amd64.exe $(MAIN_PATH)
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Built for all platforms in $(BOLD)dist/$(RESET)"
+	@echo ""
+	@echo "$(BRAND_MUTED)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_MUTED)│$(RESET) $(BOLD)Available Binaries$(RESET)"
+	@echo "$(BRAND_MUTED)├────────────────────────────────────────────────────────────────────┤$(RESET)"
+	@ls -lh dist/ | tail -n +2 | awk '{print "$(BRAND_MUTED)│$(RESET)  " $$9 " $(DIM)(" $$5 ")$(RESET)"}'
+	@echo "$(BRAND_MUTED)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
 
 # Download dependencies
 deps:
-	@echo "📦 Downloading dependencies..."
-	go mod download
-	go mod tidy
-	@echo "✅ Dependencies updated"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Managing Dependencies$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Downloading dependencies..."
+	@go mod download
+	@echo "$(BRAND_PRIMARY)→$(RESET) Tidying go.mod and go.sum..."
+	@go mod tidy
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Dependencies updated"
+	@echo ""
 
 # Help
 help:
-	@echo "OffGrid LLM - Makefile Commands:"
 	@echo ""
-	@echo "  make build            - Build the binary"
-	@echo "  make run              - Build and run the application"
-	@echo "  make dev              - Run without building (dev mode)"
-	@echo "  make test             - Run tests"
-	@echo "  make coverage         - Run tests with coverage report"
-	@echo "  make clean            - Remove build artifacts"
-	@echo "  make fmt              - Format code"
-	@echo "  make lint             - Lint code (requires golangci-lint)"
-	@echo "  make install          - Install to GOPATH/bin (user)"
-	@echo "  make install-system   - Install to /usr/local/bin (system-wide, requires sudo)"
-	@echo "  make uninstall-system - Uninstall from /usr/local/bin"
-	@echo "  make cross-compile    - Build for all platforms"
-	@echo "  make deps             - Download and tidy dependencies"
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)OffGrid LLM - Makefile Commands$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Building$(RESET)"
+	@echo "  $(BRAND_PRIMARY)make build$(RESET)            Build the binary"
+	@echo "  $(BRAND_PRIMARY)make build-llama$(RESET)      Build with llama.cpp support (CGO)"
+	@echo "  $(BRAND_PRIMARY)make cross-compile$(RESET)    Build for all platforms"
+	@echo ""
+	@echo "$(BOLD)Running$(RESET)"
+	@echo "  $(BRAND_PRIMARY)make run$(RESET)              Build and run the application"
+	@echo "  $(BRAND_PRIMARY)make dev$(RESET)              Run without building (dev mode)"
+	@echo ""
+	@echo "$(BOLD)Testing$(RESET)"
+	@echo "  $(BRAND_PRIMARY)make test$(RESET)             Run tests"
+	@echo "  $(BRAND_PRIMARY)make coverage$(RESET)         Run tests with coverage report"
+	@echo ""
+	@echo "$(BOLD)Code Quality$(RESET)"
+	@echo "  $(BRAND_PRIMARY)make fmt$(RESET)              Format code with go fmt"
+	@echo "  $(BRAND_PRIMARY)make lint$(RESET)             Lint code with golangci-lint"
+	@echo ""
+	@echo "$(BOLD)Installation$(RESET)"
+	@echo "  $(BRAND_PRIMARY)make install$(RESET)          Install to GOPATH/bin (user)"
+	@echo "  $(BRAND_PRIMARY)make install-system$(RESET)   Install to /usr/local/bin (system-wide)"
+	@echo "  $(BRAND_PRIMARY)make uninstall-system$(RESET) Uninstall from /usr/local/bin"
+	@echo ""
+	@echo "$(BOLD)Maintenance$(RESET)"
+	@echo "  $(BRAND_PRIMARY)make clean$(RESET)            Remove build artifacts"
+	@echo "  $(BRAND_PRIMARY)make deps$(RESET)             Download and tidy dependencies"
+	@echo "  $(BRAND_PRIMARY)make help$(RESET)             Show this help message"
 	@echo ""
