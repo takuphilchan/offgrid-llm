@@ -175,15 +175,20 @@ case "$PLATFORM" in
                 print_warning "Requires sudo for installation to $INSTALL_DIR"
             fi
             
-            # Install offgrid binary
+            # Install offgrid binary (check various possible names)
+            BINARY_NAME=""
             if [ -f "bin/offgrid" ]; then
-                $SUDO install -m 755 bin/offgrid "$INSTALL_DIR/offgrid"
+                BINARY_NAME="bin/offgrid"
             elif [ -f "offgrid" ]; then
-                $SUDO install -m 755 offgrid "$INSTALL_DIR/offgrid"
+                BINARY_NAME="offgrid"
+            elif [ -f "offgrid-${PLATFORM}-${ARCH}" ]; then
+                BINARY_NAME="offgrid-${PLATFORM}-${ARCH}"
             else
                 print_error "offgrid binary not found in archive"
                 exit 1
             fi
+            
+            $SUDO install -m 755 "$BINARY_NAME" "$INSTALL_DIR/offgrid"
             print_success "Installed: offgrid"
             
             # Install llama-server if present
