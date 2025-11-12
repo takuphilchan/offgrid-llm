@@ -168,23 +168,22 @@ $offgridVersion = $offgridRelease.tag_name
 Write-Success "Latest OffGrid: $offgridVersion"
 
 # Download
-$offgridFile = "offgrid-$offgridVersion-windows-$arch.tar.gz"
+$offgridFile = if ($arch -eq "x64") { "offgrid-windows-amd64.zip" } else { "offgrid-windows-arm64.zip" }
 $offgridUrl = "https://github.com/takuphilchan/offgrid-llm/releases/download/$offgridVersion/$offgridFile"
-$offgridTarGz = "$env:TEMP\offgrid.tar.gz"
+$offgridZip = "$env:TEMP\offgrid.zip"
 
 Write-Step "Downloading OffGrid..."
 try {
-    Invoke-WebRequest -Uri $offgridUrl -OutFile $offgridTarGz -UseBasicParsing
+    Invoke-WebRequest -Uri $offgridUrl -OutFile $offgridZip -UseBasicParsing
 } catch {
     Write-Warning "Version $offgridVersion not available yet, trying v0.1.2..."
     $offgridVersion = "v0.1.2"
-    $offgridFile = "offgrid-$offgridVersion-windows-$arch.tar.gz"
     $offgridUrl = "https://github.com/takuphilchan/offgrid-llm/releases/download/$offgridVersion/$offgridFile"
-    Invoke-WebRequest -Uri $offgridUrl -OutFile $offgridTarGz -UseBasicParsing
+    Invoke-WebRequest -Uri $offgridUrl -OutFile $offgridZip -UseBasicParsing
 }
 
 Write-Step "Extracting OffGrid..."
-tar -xzf $offgridTarGz -C $binDir
+Expand-Archive -Path $offgridZip -DestinationPath $binDir -Force
 
 # Verify
 if (Test-Path "$binDir\offgrid.exe") {
