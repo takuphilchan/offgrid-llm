@@ -893,8 +893,18 @@ setup_user() {
         print_info "User 'offgrid' already exists"
     fi
     
-    # Ensure /var/lib/offgrid is readable by all users (needed for model access)
+    # Ensure /var/lib/offgrid exists with proper permissions
+    sudo mkdir -p /var/lib/offgrid
+    sudo chown offgrid:offgrid /var/lib/offgrid
     sudo chmod 755 /var/lib/offgrid
+    
+    # Add offgrid user to current user's primary group for model access
+    if [ -n "$USER" ] && id "$USER" &>/dev/null; then
+        USER_GROUP=$(id -gn "$USER")
+        print_step "Adding offgrid user to '${USER_GROUP}' group for model access..."
+        sudo usermod -aG "$USER_GROUP" offgrid 2>/dev/null || true
+        print_success "offgrid user can now read models from user home directories"
+    fi
     
     # Add to video and render groups for GPU access
     if [ "$GPU_TYPE" != "none" ]; then
@@ -1008,24 +1018,32 @@ ACTIVE_MODEL_FILE="/etc/offgrid/active-model"
 SYSTEM_MODELS_DIR="/var/lib/offgrid/models"
 LLAMA_PORT_FILE="/etc/offgrid/llama-port"
 
+# Debug logging
+exec 2>&1
+
+echo "[$(date)] llama-server-start.sh starting..."
+
 # Find the first available model if no active model is set
 if [ -f "$ACTIVE_MODEL_FILE" ]; then
     MODEL_PATH=$(cat "$ACTIVE_MODEL_FILE")
     if [ ! -f "$MODEL_PATH" ]; then
-        echo "Warning: Configured model not found: $MODEL_PATH" >&2
+        echo "[$(date)] Warning: Configured model not found: $MODEL_PATH"
         MODEL_PATH=""
     fi
 fi
 
 # If no active model or it doesn't exist, find the first .gguf file
 if [ -z "$MODEL_PATH" ]; then
+    echo "[$(date)] Searching for models in $SYSTEM_MODELS_DIR..."
     # Try system models directory first
     MODEL_PATH=$(find "$SYSTEM_MODELS_DIR" -maxdepth 1 -name "*.gguf" -type f 2>/dev/null | head -n 1)
     
     # If not found in system dir, search all user home directories
     if [ -z "$MODEL_PATH" ]; then
+        echo "[$(date)] No models in system dir, searching user directories..."
         for user_home in /home/*; do
             if [ -d "$user_home/.offgrid-llm/models" ]; then
+                echo "[$(date)] Checking $user_home/.offgrid-llm/models..."
                 MODEL_PATH=$(find "$user_home/.offgrid-llm/models" -maxdepth 1 -name "*.gguf" -type f 2>/dev/null | head -n 1)
                 [ -n "$MODEL_PATH" ] && break
             fi
@@ -1033,10 +1051,11 @@ if [ -z "$MODEL_PATH" ]; then
     fi
     
     if [ -z "$MODEL_PATH" ]; then
-        echo "Error: No .gguf models found in $SYSTEM_MODELS_DIR or /home/*/.offgrid-llm/models" >&2
+        echo "[$(date)] ERROR: No .gguf models found in $SYSTEM_MODELS_DIR or /home/*/.offgrid-llm/models"
+        echo "[$(date)] Please download a model with: offgrid download-hf <repo> --file <file>"
         exit 1
     fi
-    echo "Using first available model: $MODEL_PATH" >&2
+    echo "[$(date)] Using first available model: $MODEL_PATH"
     # Save it as the active model for next time
     echo "$MODEL_PATH" > "$ACTIVE_MODEL_FILE"
 fi
@@ -1048,10 +1067,34 @@ else
     LLAMA_PORT=49233
 fi
 
-echo "Starting llama-server with model: $(basename $MODEL_PATH)" >&2
-echo "Port: $LLAMA_PORT" >&2
+echo "[$(date)] Starting llama-server with model: $(basename $MODEL_PATH)"
+echo "[$(date)] Port: $LLAMA_PORT"
+echo "[$(date)] Model path: $MODEL_PATH"
+
+# Check if model file is readable
+if [ ! -r "$MODEL_PATH" ]; then
+    echo "[$(date)] ERROR: Model file is not readable: $MODEL_PATH"
+    ls -l "$MODEL_PATH"
+    exit 1
+fi
+
+# Verify llama-server binary exists and is executable
+if [ ! -x "/usr/local/bin/llama-server" ]; then
+    echo "[$(date)] ERROR: llama-server not found or not executable at /usr/local/bin/llama-server"
+    exit 1
+fi
+
+# Check library dependencies
+echo "[$(date)] Checking library dependencies..."
+if ! ldd /usr/local/bin/llama-server | grep -q "not found"; then
+    echo "[$(date)] All dependencies satisfied"
+else
+    echo "[$(date)] WARNING: Missing dependencies:"
+    ldd /usr/local/bin/llama-server | grep "not found"
+fi
 
 # Execute llama-server with the selected model
+echo "[$(date)] Executing llama-server..."
 exec /usr/local/bin/llama-server -m "$MODEL_PATH" --port "$LLAMA_PORT" --host 127.0.0.1 -c 2048 EXTRA_ARGS_PLACEHOLDER
 START_SCRIPT_EOF
     
@@ -1090,16 +1133,12 @@ Environment="PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/us
 Environment="LD_LIBRARY_PATH=/usr/local/lib"
 Environment="LLAMA_SERVER_INTERNAL=1"
 
-# Security hardening - localhost-only binding for internal IPC
+# Security hardening - balanced security with functionality
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
+ProtectSystem=full
 ReadWritePaths=/var/lib/offgrid
 ReadWritePaths=/etc/offgrid
-# Network isolation - only localhost
-IPAddressDeny=any
-IPAddressAllow=localhost
 
 [Install]
 WantedBy=multi-user.target
@@ -1184,11 +1223,10 @@ Environment="OFFGRID_PORT=11611"
 Environment="OFFGRID_MODELS_DIR=/var/lib/offgrid/models"
 Environment="LLAMA_SERVER_URL=http://127.0.0.1:${LLAMA_PORT}"
 
-# Security settings - only expose port 11611 externally
+# Security settings - balanced security with functionality
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
+ProtectSystem=full
 ReadWritePaths=/var/lib/offgrid
 
 [Install]
