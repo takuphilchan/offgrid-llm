@@ -183,7 +183,17 @@ try {
 }
 
 Write-Step "Extracting OffGrid..."
-Expand-Archive -Path $offgridZip -DestinationPath $binDir -Force
+Expand-Archive -Path $offgridZip -DestinationPath "$env:TEMP\offgrid-extract" -Force
+
+# Find and rename the binary
+$extractedBinary = Get-ChildItem "$env:TEMP\offgrid-extract" -Filter "offgrid*.exe" | Select-Object -First 1
+if (-not $extractedBinary) {
+    Write-Error "OffGrid binary not found in archive"
+    exit 1
+}
+
+Copy-Item $extractedBinary.FullName -Destination "$binDir\offgrid.exe" -Force
+Remove-Item "$env:TEMP\offgrid-extract" -Recurse -Force
 
 # Verify
 if (Test-Path "$binDir\offgrid.exe") {
