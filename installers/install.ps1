@@ -238,3 +238,6 @@ Write-Host "    https://github.com/takuphilchan/offgrid-llm"
 Write-Host ""
 
 Write-Warning "⚠ Please restart your terminal for PATH changes to take effect"
+Write-Host ""
+Write-Host "Press any key to close..." -ForegroundColor Yellow
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
