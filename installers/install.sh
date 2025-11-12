@@ -233,6 +233,28 @@ install_offgrid() {
     INSTALL_DIR="/usr/local/bin"
     print_step "Installing offgrid to $INSTALL_DIR..."
     
+    # Check if offgrid is currently running
+    if pgrep -x offgrid > /dev/null 2>&1; then
+        print_warning "OffGrid is currently running. Stopping it first..."
+        pkill -x offgrid || sudo pkill -x offgrid || true
+        sleep 1
+    fi
+    
+    # Remove old binary if it exists (handles "Text file busy" error)
+    if [ -f "$INSTALL_DIR/offgrid" ]; then
+        print_step "Removing old version..."
+        if [ -w "$INSTALL_DIR" ]; then
+            rm -f "$INSTALL_DIR/offgrid" 2>/dev/null || {
+                print_warning "Cannot remove old binary (may be in use)"
+                print_step "Trying with sudo..."
+                sudo rm -f "$INSTALL_DIR/offgrid"
+            }
+        else
+            sudo rm -f "$INSTALL_DIR/offgrid"
+        fi
+    fi
+    
+    # Install new binary
     if [ -w "$INSTALL_DIR" ]; then
         cp "$OFFGRID_BIN" "$INSTALL_DIR/offgrid"
         chmod +x "$INSTALL_DIR/offgrid"
