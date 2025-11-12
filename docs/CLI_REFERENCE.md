@@ -42,9 +42,9 @@ offgrid help          # Command help
 
 ## Design Features
 
-### ✨ Visual Theme
-- **Box Drawing**: `━━━━━` for clear sections
-- **Icons**: 🚀 ⚡ ✓ ✗ 📦 ⏬ 🔍 🗑️ 📚 ⏳ ⚠️
+### Visual Theme
+- **Box Drawing**: Lines and dividers for clear sections
+- **Icons**: Consistent symbols for status and actions
 - **Structure**: Clear hierarchy with consistent spacing
 - **Brutalist**: Minimal, functional, industrial aesthetic
 
@@ -52,10 +52,10 @@ offgrid help          # Command help
 Every command validates inputs and provides:
 - ✗ Clear error explanation
 - 📋 Available options when applicable
-- 💡 Helpful tips and next steps
-- 🔍 Suggestions for fix
+-  Helpful tips and next steps
+-  Suggestions for fix
 
-### 📊 Smart Feedback
+### Smart Feedback
 - Model existence validation before operations
 - File size and space calculations
 - Progress indicators for long operations
@@ -463,7 +463,7 @@ Try:
 
 ## Tips & Best Practices
 
-### 🎯 Quick Start Workflow
+### Quick Start Workflow
 ```bash
 # 1. Search for a model
 offgrid search llama --author TheBloke
@@ -475,7 +475,7 @@ offgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF
 offgrid run llama-2-7b-chat.Q4_K_M
 ```
 
-### 💾 Offline Workflow
+### Offline Workflow
 ```bash
 # Prepare on connected machine
 offgrid search llama --author TheBloke
@@ -487,7 +487,7 @@ offgrid import /media/usb
 offgrid run tinyllama-1.1b-chat.Q4_K_M
 ```
 
-### 🔧 Server Workflow
+### Server Workflow
 ```bash
 # Start server
 offgrid serve
@@ -510,11 +510,11 @@ curl http://localhost:11611/v1/chat/completions \
 - ✗ Error
 - 📦 Package/Model
 - ⏬ Download
-- 🔍 Search
+-  Search
 - 🗑️ Delete
 - 📚 Catalog
 - ⏳ In Progress
-- ⚠️ Warning
+- ️ Warning
 - ❤️ Likes
 - 📅 Date
 

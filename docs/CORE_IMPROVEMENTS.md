@@ -2,7 +2,7 @@
 
 This document describes the foundational improvements added to OffGrid LLM to enhance reliability, resource management, and data integrity for edge/offline deployments.
 
-## 🎯 Overview
+## Overview
 
 Three critical features have been implemented to strengthen the core infrastructure:
 
@@ -196,7 +196,7 @@ if systemLoad < 50 {
 
 ---
 
-## 🚀 Usage Example
+## Usage Example
 
 See `examples/core_features_demo.go` for a complete demonstration:
 
@@ -207,7 +207,7 @@ go run examples/core_features_demo.go
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -252,7 +252,7 @@ config := server.QueueConfig{
 
 ---
 
-## 📊 Performance Impact
+## Performance Impact
 
 ### GPU Monitoring
 - **Overhead**: < 1ms per call (cached for 1 second)
@@ -270,7 +270,7 @@ config := server.QueueConfig{
 
 ---
 
-## 🛠️ Testing
+## Testing
 
 ```bash
 # Build with new features
@@ -300,7 +300,7 @@ These core features enable future advanced functionality:
 
 ---
 
-## 📝 Notes
+## Notes
 
 - GPU monitoring requires GPU drivers and tools (nvidia-smi/rocm-smi)
 - Model validation is non-destructive (read-only)

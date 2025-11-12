@@ -28,6 +28,12 @@ BRAND_ERROR='\033[38;5;196m'       # Red (#ff005f)
 BRAND_MUTED='\033[38;5;240m'       # Gray (#585858)
 RESET='\033[0m'
 BOLD='\033[1m'
+DIM='\033[2m'
+
+# Progress tracking
+TOTAL_STEPS=14
+CURRENT_STEP=0
+START_TIME=$(date +%s)
 
 # ASCII Art Banner
 print_banner() {
@@ -65,6 +71,31 @@ print_info() { echo -e "${BRAND_PRIMARY}→${RESET} $1"; }
 print_warning() { echo -e "${BRAND_ACCENT}⚡${RESET} $1"; }
 print_step() { echo -e "${BOLD}${BRAND_PRIMARY}▸${RESET} $1"; }
 print_divider() { echo -e "${BRAND_MUTED}$(printf '━%.0s' {1..70})${RESET}"; }
+print_dim() { echo -e "${DIM}$1${RESET}"; }
+
+# Progress tracking functions
+get_elapsed_time() {
+    local now=$(date +%s)
+    local elapsed=$((now - START_TIME))
+    printf "%02d:%02d" $((elapsed / 60)) $((elapsed % 60))
+}
+
+print_progress() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    local percent=$((CURRENT_STEP * 100 / TOTAL_STEPS))
+    local elapsed=$(get_elapsed_time)
+    
+    echo ""
+    echo -e "${BRAND_MUTED}╭────────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_MUTED}│${RESET} ${BOLD}Step ${CURRENT_STEP}/${TOTAL_STEPS}${RESET} ${BRAND_MUTED}[${BRAND_SUCCESS}$(printf '█%.0s' $(seq 1 $((percent / 5))))$(printf '░%.0s' $(seq 1 $((20 - percent / 5))))${BRAND_MUTED}] ${BRAND_ACCENT}${percent}%${RESET} ${BRAND_MUTED}│ ${DIM}Elapsed: ${elapsed}${RESET}"
+    echo -e "${BRAND_MUTED}╰────────────────────────────────────────────────────────────────────╯${RESET}"
+    
+    print_header "$1"
+    if [ -n "$2" ]; then
+        echo -e "${DIM}  Estimated time: $2${RESET}"
+        echo ""
+    fi
+}
 
 # Usage/Help
 usage() {
@@ -133,42 +164,50 @@ trap 'handle_error "line $LINENO"' ERR
 
 # Dependency Checks
 check_dependencies() {
-    print_divider
-    print_header "Checking Dependencies"
+    print_progress "Checking System Dependencies" "~30 seconds"
     
     local missing=()
-    for cmd in curl awk grep sed tee xargs git snap; do
+    local total=7
+    local checked=0
+    
+    for cmd in curl awk grep sed tee xargs git; do
+        checked=$((checked + 1))
         if ! command -v $cmd &> /dev/null; then
             missing+=($cmd)
+            print_warning "[$checked/$total] $cmd not found"
         else
-            print_success "$cmd is available"
+            print_success "[$checked/$total] $cmd is available"
         fi
     done
     
     if [ ${#missing[@]} -gt 0 ]; then
-        print_error "Missing required dependencies: ${missing[*]}"
+        echo ""
+        print_error "Missing ${#missing[@]} required dependencies: ${missing[*]}"
         print_info "Installing missing dependencies..."
         echo ""
         
         if command -v apt-get &> /dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y "${missing[@]}" snapd
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq "${missing[@]}" snapd 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking" || true
         elif command -v dnf &> /dev/null; then
-            sudo dnf install -y "${missing[@]}" snapd
+            sudo dnf install -y -q "${missing[@]}" snapd
         elif command -v yum &> /dev/null; then
-            sudo yum install -y "${missing[@]}" snapd
+            sudo yum install -y -q "${missing[@]}" snapd
         else
             print_error "Unable to install dependencies automatically"
             print_info "Please install: ${missing[*]} snapd"
             exit 1
         fi
+        
+        print_success "All dependencies installed"
+    else
+        print_success "All dependencies are available"
     fi
 }
 
 # Architecture Detection
 detect_architecture() {
-    print_divider
-    print_header "Detecting System Architecture"
+    print_progress "Detecting System Architecture" "~5 seconds"
     
     local arch=$(uname -m)
     case $arch in
@@ -189,8 +228,7 @@ detect_architecture() {
 
 # OS Detection
 detect_os() {
-    print_divider
-    print_header "Detecting Operating System"
+    print_progress "Detecting Operating System" "~5 seconds"
     
     if [ -f /etc/os-release ]; then
         . /etc/os-release
@@ -221,7 +259,7 @@ detect_os() {
 
 # GPU Detection
 detect_gpu() {
-    print_header "Detecting GPU Hardware"
+    print_progress "Detecting GPU Hardware" "~10 seconds"
     
     # Check if CPU-only mode is forced
     if [ "$FORCE_CPU_ONLY" = true ]; then
@@ -285,7 +323,7 @@ detect_gpu() {
 
 # Install Build Dependencies
 install_build_deps() {
-    print_header "Installing Build Dependencies"
+    print_progress "Installing Build Dependencies" "~2-3 minutes"
     
     local packages=()
     
@@ -308,39 +346,55 @@ install_build_deps() {
         fi
     fi
     
-    print_step "Installing: ${packages[*]}"
+    print_step "Installing: ${#packages[@]} packages"
+    print_dim "  ${packages[*]}"
+    echo ""
     
     if [ "$PKG_MANAGER" = "apt-get" ]; then
         print_info "Updating package lists..."
+        echo ""
         
         # Retry apt-get update up to 3 times
         local retry=0
         local max_retries=3
         while [ $retry -lt $max_retries ]; do
-            if sudo apt-get update -qq 2>&1; then
+            if sudo apt-get update -qq 2>&1 | tail -1; then
+                print_success "Package lists updated"
                 break
             else
                 retry=$((retry + 1))
                 if [ $retry -lt $max_retries ]; then
-                    print_warning "apt-get update failed, retrying ($retry/$max_retries)..."
+                    print_warning "Update failed, retrying ($retry/$max_retries)..."
                     sleep 2
                 else
-                    print_warning "apt-get update had issues after $max_retries attempts, continuing..."
+                    print_warning "Update had issues after $max_retries attempts, continuing..."
                 fi
             fi
         done
         
+        echo ""
         print_info "Installing packages (this may take a few minutes)..."
+        echo ""
         
         # Try to install packages, but don't fail if some are not available
-        if ! sudo apt-get install -y -qq "${packages[@]}" 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking"; then
+        if sudo apt-get install -y -qq "${packages[@]}" 2>&1 | grep -E "^Setting up|^Processing|^Unpacking" | while read line; do
+            echo -ne "${DIM}  ${line}${RESET}\r"
+        done; then
+            echo ""
+            print_success "All packages installed successfully"
+        else
             print_warning "Some packages failed to install, trying individually..."
             
             # Try installing packages one by one
             local failed_packages=()
+            local installed=0
             for pkg in "${packages[@]}"; do
-                if ! sudo apt-get install -y -qq "$pkg" 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking"; then
+                if sudo apt-get install -y -qq "$pkg" 2>&1 | grep -v "^Selecting\|^Preparing\|^Unpacking"; then
+                    installed=$((installed + 1))
+                    print_success "[$installed/${#packages[@]}] $pkg installed"
+                else
                     failed_packages+=("$pkg")
+                    print_warning "[$installed/${#packages[@]}] $pkg failed"
                 fi
             done
             
@@ -355,12 +409,13 @@ install_build_deps() {
         sudo yum install -y -q "${packages[@]}"
     fi
     
+    echo ""
     print_success "Build dependencies installed"
 }
 
 # Install Go 1.21+
 install_go() {
-    print_header "Installing Go Programming Language"
+    print_progress "Installing Go Programming Language" "~1-2 minutes"
     
     local REQUIRED_GO_VERSION="1.21"
     local GO_VERSION="1.21.13"
@@ -466,7 +521,7 @@ install_nvidia_drivers() {
         return 0
     fi
     
-    print_header "Configuring NVIDIA GPU Support"
+    print_progress "Configuring NVIDIA GPU Support" "~1 minute"
     
     # Check if nvidia-smi exists and works
     if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
@@ -495,7 +550,7 @@ install_nvidia_drivers() {
 
 # Build llama.cpp
 build_llama_cpp() {
-    print_header "Building llama.cpp Inference Engine"
+    print_progress "Building llama.cpp Inference Engine" "~5-10 minutes"
     
     local LLAMA_DIR="$HOME/llama.cpp"
     local ORIGINAL_DIR="$(pwd)"
@@ -732,7 +787,7 @@ build_llama_cpp() {
 
 # Build OffGrid LLM
 build_offgrid() {
-    print_header "Building OffGrid LLM"
+    print_progress "Building OffGrid LLM" "~2-3 minutes"
     
     local BUILD_DIR=$(pwd)
     local GO_CMD="go"
@@ -816,7 +871,7 @@ build_offgrid() {
 
 # Install Binary
 install_binary() {
-    print_header "Installing OffGrid LLM"
+    print_progress "Installing OffGrid LLM Binary" "~10 seconds"
     
     local INSTALL_DIR="/usr/local/bin"
     
@@ -834,7 +889,7 @@ install_binary() {
 
 # Create User and Groups
 setup_user() {
-    print_header "Setting Up Service User"
+    print_progress "Setting Up Service User" "~10 seconds"
     
     # Create offgrid user if it doesn't exist
     if ! id offgrid &> /dev/null; then
@@ -859,7 +914,7 @@ setup_user() {
 # Create Systemd Service
 # Setup llama-server systemd service
 setup_llama_server_service() {
-    print_header "Setting Up llama-server Service"
+    print_progress "Setting Up llama-server Service" "~30 seconds"
     
     # Verify llama-server binary exists
     if [ ! -f "/usr/local/bin/llama-server" ]; then
@@ -1089,7 +1144,7 @@ SERVICE_EOF
 }
 
 setup_systemd_service() {
-    print_header "Setting Up Systemd Service"
+    print_progress "Setting Up OffGrid Systemd Service" "~20 seconds"
     
     local SERVICE_FILE="/etc/systemd/system/offgrid-llm.service"
     
@@ -1149,7 +1204,7 @@ SERVICE_EOF
 
 # Setup Configuration
 setup_config() {
-    print_header "Setting Up Configuration"
+    print_progress "Setting Up Configuration" "~10 seconds"
     
     local CONFIG_DIR="/var/lib/offgrid"
     local MODELS_DIR="$CONFIG_DIR/models"
@@ -1174,7 +1229,7 @@ setup_config() {
 
 # Install Shell Completions
 install_completions() {
-    print_header "Installing Shell Completions"
+    print_progress "Installing Shell Completions" "~10 seconds"
     
     # Detect user's shell
     USER_SHELL=$(basename "$SHELL")
@@ -1237,7 +1292,7 @@ install_completions() {
 
 # Start Service
 start_service() {
-    print_header "Starting OffGrid LLM Service"
+    print_progress "Starting OffGrid LLM Service" "~15 seconds"
     
     print_step "Starting offgrid-llm service..."
     sudo systemctl start offgrid-llm.service
@@ -1258,22 +1313,36 @@ start_service() {
 
 # Display Summary
 display_summary() {
-    print_header "Installation Complete! 🎉"
+    local total_time=$(get_elapsed_time)
     
     echo ""
-    print_success "OffGrid LLM has been installed successfully"
     echo ""
+    print_divider
+    echo -e "${BRAND_SUCCESS}${BOLD}"
+    cat << "EOF"
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║                                                               ║
+    ║              ✓  INSTALLATION COMPLETE  ✓                      ║
+    ║                                                               ║
+    ╚═══════════════════════════════════════════════════════════════╝
+EOF
+    echo -e "${RESET}"
+    print_divider
     
-    echo -e "${BOLD}System Information:${RESET}"
-    echo -e "  Architecture: ${BRAND_SECONDARY}$ARCH${RESET}"
-    echo -e "  OS: ${BRAND_SECONDARY}$NAME $VERSION${RESET}"
-    echo -e "  GPU: ${BRAND_SECONDARY}${GPU_TYPE}${RESET}"
+    echo ""
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}SYSTEM INFORMATION${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  Architecture     ${BRAND_SECONDARY}$ARCH${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  Operating System ${BRAND_SECONDARY}$NAME $VERSION${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  GPU Type         ${BRAND_SECONDARY}${GPU_TYPE}${RESET}"
     if [ "$GPU_TYPE" != "none" ]; then
-        echo -e "  GPU Info: ${BRAND_SECONDARY}${GPU_INFO}${RESET}"
+        echo -e "${BRAND_PRIMARY}│${RESET}  GPU Info         ${BRAND_SECONDARY}${GPU_INFO}${RESET}"
     fi
+    echo -e "${BRAND_PRIMARY}│${RESET}  Inference Mode   ${BRAND_SUCCESS}REAL LLM${RESET} ${DIM}(via llama.cpp)${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  Install Time     ${BRAND_ACCENT}${total_time}${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
     
-    # Show real inference mode
-    echo -e "  Inference: ${BRAND_SUCCESS}REAL LLM${RESET} ${BRAND_MUTED}(via llama.cpp HTTP server)${RESET}"
     echo ""
     
     # Get internal port
@@ -1282,48 +1351,92 @@ display_summary() {
         INTERNAL_PORT=$(cat /etc/offgrid/llama-port)
     fi
     
-    echo -e "${BOLD}Service Information:${RESET}"
-    echo -e "  llama-server: ${GREEN}Internal Port ${INTERNAL_PORT}${RESET} ${GRAY}(localhost-only, not accessible externally)${RESET}"
-    echo -e "  OffGrid LLM: ${GREEN}Port 11611${RESET} ${GRAY}(public API endpoint)${RESET}"
-    echo -e "  Web UI: ${BRAND_SECONDARY}http://localhost:11611/ui${RESET}"
-    echo -e "  API: ${BRAND_SECONDARY}http://localhost:11611${RESET}"
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}SERVICE ENDPOINTS${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  llama-server     ${BRAND_MUTED}http://127.0.0.1:${INTERNAL_PORT}${RESET} ${DIM}(internal only)${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  OffGrid API      ${BRAND_SECONDARY}http://localhost:11611${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  Web UI           ${BRAND_SECONDARY}http://localhost:11611/ui${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    
     echo ""
     
-    echo -e "${BOLD}Security:${RESET}"
-    echo -e "  ${GREEN}✓${RESET} llama-server bound to 127.0.0.1 only (internal IPC)"
-    echo -e "  ${GREEN}✓${RESET} Random high port ${INTERNAL_PORT} not exposed externally"
-    echo -e "  ${GREEN}✓${RESET} Only OffGrid port 11611 is publicly accessible"
-    echo -e "  ${GREEN}✓${RESET} Same architecture as Ollama for security and isolation"
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}SECURITY${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} llama-server bound to 127.0.0.1 only (internal IPC)"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Random high port ${INTERNAL_PORT} not exposed externally"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Only OffGrid port 11611 is publicly accessible"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Same architecture as Ollama for security and isolation"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    
     echo ""
     
-    echo -e "${BOLD}Useful Commands:${RESET}"
-    echo -e "  ${BRAND_SECONDARY}offgrid serve${RESET}                      - Start OffGrid manually"
-    echo -e "  ${BRAND_SECONDARY}offgrid list${RESET}                       - List available models"
-    echo -e "  ${BRAND_SECONDARY}offgrid download <model>${RESET}           - Download a model"
-    echo -e "  ${BRAND_SECONDARY}offgrid run <model> --save <name>${RESET}  - Start chat with auto-save"
-    echo -e "  ${BRAND_SECONDARY}offgrid session list${RESET}               - View saved chat sessions"
-    echo -e "  ${BRAND_SECONDARY}sudo systemctl status offgrid-llm${RESET}  - Check OffGrid status"
-    echo -e "  ${BRAND_SECONDARY}sudo systemctl status llama-server${RESET} - Check llama-server status"
-    echo -e "  ${BRAND_SECONDARY}sudo journalctl -u offgrid-llm -f${RESET}  - View OffGrid logs"
-    echo -e "  ${BRAND_SECONDARY}sudo journalctl -u llama-server -f${RESET} - View llama-server logs"
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}QUICK START COMMANDS${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}# Start interactive chat${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}offgrid run <model>${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}# List available models${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}offgrid list${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}# Download a model${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}offgrid download tinyllama${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}# Start with session auto-save${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}offgrid run <model> --save my-session${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    
     echo ""
     
-    echo -e "${BOLD}Shell Completions:${RESET}"
-    if [ -f "$HOME/.bash_completion.d/offgrid" ] || [ -f "/etc/bash_completion.d/offgrid" ]; then
-        echo -e "  ${GREEN}✓${RESET} Completions installed (restart shell or run: source ~/.bashrc)"
-    else
-        echo -e "  ${BRAND_MUTED}→${RESET} Run 'offgrid completions bash > ~/.bash_completion.d/offgrid' for tab completion"
-    fi
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}SERVICE MANAGEMENT${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}# Check service status${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}sudo systemctl status offgrid-llm${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}sudo systemctl status llama-server${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}# View logs${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}sudo journalctl -u offgrid-llm -f${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}sudo journalctl -u llama-server -f${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}# Restart services${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}sudo systemctl restart offgrid-llm${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    
     echo ""
     
-    echo -e "${BOLD}Next Steps:${RESET}"
-    echo -e "  1. Visit ${BRAND_SECONDARY}http://localhost:11611/ui${RESET} in your browser"
-    echo -e "  2. Test health: ${BRAND_SECONDARY}curl http://localhost:11611/health${RESET}"
-    echo -e "  3. Test chat: ${BRAND_SECONDARY}curl -X POST http://localhost:11611/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}'${RESET}"
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}HEALTH CHECK${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SECONDARY}curl http://localhost:11611/health${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    
     echo ""
     
-    echo -e "${BOLD}${GREEN}🎉 Real LLM inference is enabled!${RESET}"
-    echo -e "${GRAY}Architecture: OffGrid (Go) ⟷ HTTP ⟷ llama-server (C++)${RESET}"
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}NEXT STEPS${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_ACCENT}1.${RESET} Visit ${BRAND_SECONDARY}http://localhost:11611/ui${RESET} in your browser"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_ACCENT}2.${RESET} Test the health endpoint"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_ACCENT}3.${RESET} Try a chat completion"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    
+    echo ""
+    print_divider
+    echo ""
+    echo -e "${BRAND_SUCCESS}${BOLD}  🚀 OffGrid LLM is ready to use!${RESET}"
+    echo -e "${DIM}     Installed in ${total_time} • Real LLM inference enabled${RESET}"
+    echo ""
+    print_divider
     echo ""
 }
 
@@ -1333,7 +1446,23 @@ main() {
     parse_args "$@"
     
     # Show banner
+    clear
     print_banner
+    
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}OffGrid LLM Installation${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  This installer will:"
+    echo -e "${BRAND_PRIMARY}│${RESET}    • Check system dependencies"
+    echo -e "${BRAND_PRIMARY}│${RESET}    • Detect GPU hardware"
+    echo -e "${BRAND_PRIMARY}│${RESET}    • Install Go 1.21+"
+    echo -e "${BRAND_PRIMARY}│${RESET}    • Build llama.cpp inference engine"
+    echo -e "${BRAND_PRIMARY}│${RESET}    • Build and install OffGrid LLM"
+    echo -e "${BRAND_PRIMARY}│${RESET}    • Configure systemd services"
+    echo -e "${BRAND_PRIMARY}│${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${DIM}Estimated time: 10-15 minutes${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    echo ""
     
     # Check if running as root (not recommended but check dependencies will need sudo)
     if [ "$EUID" -eq 0 ]; then
@@ -1358,11 +1487,30 @@ main() {
     # Create lock file with current PID
     echo $$ > "$LOCK_FILE"
     
+    echo ""
+    print_info "Starting installation..."
+    sleep 1
+    
     # Pre-flight checks
     check_dependencies
     detect_architecture
     detect_os
     detect_gpu
+    
+    # Show pre-flight summary
+    echo ""
+    echo -e "${BRAND_PRIMARY}╭─────────────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET} ${BOLD}PRE-FLIGHT CHECK COMPLETE${RESET}"
+    echo -e "${BRAND_PRIMARY}├─────────────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} System dependencies verified"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Architecture: ${BRAND_SECONDARY}${ARCH}${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Operating System: ${BRAND_SECONDARY}${NAME}${RESET}"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} GPU: ${BRAND_SECONDARY}${GPU_TYPE}${RESET}"
+    echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
+    echo ""
+    
+    print_info "Proceeding with installation..."
+    sleep 2
     
     # Build and install
     install_build_deps

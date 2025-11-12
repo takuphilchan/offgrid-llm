@@ -6,7 +6,7 @@ offgrid-*
 *.so
 *.dylib
 dist/
-
+DEMO_COMMANDS.md
 # Test binaries
 *.test
 *.out

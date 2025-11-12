@@ -5,11 +5,11 @@ OffGrid LLM now features **direct HuggingFace Hub integration**, giving you acce
 ## Why This Matters
 
 **OffGrid Advantage over Ollama:**
-- ✅ **No waiting** - Pull any GGUF model from HuggingFace instantly
-- ✅ **Search by metrics** - Find models by downloads, likes, size, quantization
-- ✅ **Automatic discovery** - Browse thousands of models with smart filtering
-- ✅ **Direct downloads** - No intermediary servers or approval process
-- ✅ **Community-driven** - Access bleeding-edge models the day they're released
+-  **No waiting** - Pull any GGUF model from HuggingFace instantly
+-  **Search by metrics** - Find models by downloads, likes, size, quantization
+-  **Automatic discovery** - Browse thousands of models with smart filtering
+-  **Direct downloads** - No intermediary servers or approval process
+-  **Community-driven** - Access bleeding-edge models the day they're released
 
 **Ollama's limitation:** Models must be manually uploaded and approved by Ollama's team before you can use them.
 
@@ -98,10 +98,10 @@ offgrid run tinyllama-1.1b-chat
 ```
 
 **Features:**
-- ✅ Streaming responses (real-time token generation)
-- ✅ Conversation history maintained
-- ✅ Commands: `exit`, `quit`, `clear`
-- ✅ Works with any loaded model
+-  Streaming responses (real-time token generation)
+-  Conversation history maintained
+-  Commands: `exit`, `quit`, `clear`
+-  Works with any loaded model
 
 **Example Session:**
 ```

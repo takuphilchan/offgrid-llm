@@ -2,7 +2,7 @@
 
 This guide explains how to use embedding models with OffGrid LLM for semantic search, document similarity, and RAG (Retrieval Augmented Generation).
 
-## 🎯 What are Embeddings?
+## What are Embeddings?
 
 Embeddings are vector representations of text that capture semantic meaning. They enable:
 - **Semantic Search**: Find similar documents even with different words
@@ -11,7 +11,7 @@ Embeddings are vector representations of text that capture semantic meaning. The
 - **Deduplication**: Find similar/duplicate content
 - **Clustering**: Group related texts together
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Download an Embedding Model
 
@@ -120,7 +120,7 @@ offgrid download e5-small-v2
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
 ### Endpoint
 
@@ -176,7 +176,7 @@ Response will contain embeddings in the same order as input.
 
 ---
 
-## 💡 Use Cases
+## Use Cases
 
 ### 1. Document Similarity
 
@@ -276,7 +276,7 @@ print(answer)
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### GPU Acceleration
 
@@ -316,7 +316,7 @@ def embed_large_batch(texts, model="all-minilm-l6-v2", batch_size=32):
 
 ---
 
-## 🔧 Performance Tips
+## Performance Tips
 
 ### 1. Choose the Right Model
 
@@ -380,7 +380,7 @@ with open("embedded_docs.json") as f:
 
 ---
 
-## 📦 Offline Deployment
+## Offline Deployment
 
 ### USB/SD Card Distribution
 
@@ -411,7 +411,7 @@ offgrid p2p download all-minilm-l6-v2
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Model not found
 
@@ -444,7 +444,7 @@ offgrid download all-minilm-l6-v2 --quantization Q8_0  # 23MB
 
 ---
 
-## 🔗 Integration Examples
+## Integration Examples
 
 ### Node.js
 
@@ -483,7 +483,7 @@ curl -X POST http://localhost:11611/v1/embeddings \
 
 ---
 
-## 📚 Further Reading
+## Further Reading
 
 - [Sentence Transformers Documentation](https://www.sbert.net/)
 - [Retrieval Augmented Generation (RAG)](https://arxiv.org/abs/2005.11401)
@@ -492,7 +492,7 @@ curl -X POST http://localhost:11611/v1/embeddings \
 
 ---
 
-## 💬 Support
+## Support
 
 - **Issues**: https://github.com/takuphilchan/offgrid-llm/issues
 - **Discussions**: https://github.com/takuphilchan/offgrid-llm/discussions

@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ OffGrid LLM
+# OffGrid LLM
 
 ### *Offline-First AI Inference · Edge Computing · Zero Dependencies*
 
@@ -14,18 +14,18 @@
 [![llama.cpp](https://img.shields.io/badge/Powered%20by-llama.cpp-green.svg?style=flat-square)](https://github.com/ggerganov/llama.cpp)
 
 <p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-usage">Usage</a> •
-  <a href="#-api">API</a> •
-  <a href="#-documentation">Docs</a>
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#api">API</a> •
+  <a href="#documentation">Docs</a>
 </p>
 
 </div>
 
 ---
 
-## 🌟 Why OffGrid LLM?
+## Why OffGrid LLM?
 
 Built for **edge environments**, **air-gapped systems**, and **privacy-conscious deployments** where internet connectivity is limited or prohibited.
 
@@ -39,7 +39,7 @@ cd offgrid-llm && sudo ./install.sh
 <tr>
 <td width="50%">
 
-**🔌 100% Offline Operation**
+**100% Offline Operation**
 - No internet required after setup
 - Complete data sovereignty
 - Air-gapped deployment ready
@@ -47,7 +47,7 @@ cd offgrid-llm && sudo ./install.sh
 </td>
 <td width="50%">
 
-**🚀 Production Ready**
+**Production Ready**
 - OpenAI-compatible API
 - GPU acceleration (CUDA/ROCm)
 - Systemd service integration
@@ -57,7 +57,7 @@ cd offgrid-llm && sudo ./install.sh
 <tr>
 <td width="50%">
 
-**🎯 Developer Friendly**
+**Developer Friendly**
 - Modern web UI included
 - CLI with shell completions
 - JSON output for automation
@@ -65,7 +65,7 @@ cd offgrid-llm && sudo ./install.sh
 </td>
 <td width="50%">
 
-**🔒 Security First**
+**Security First**
 - Localhost-only binding
 - No telemetry or tracking
 - Process isolation & hardening
@@ -73,6 +73,63 @@ cd offgrid-llm && sudo ./install.sh
 </td>
 </tr>
 </table>
+
+---
+
+## Features
+
+<table>
+<tr>
+<td>
+
+### Core Capabilities
+- **Offline-First** - Complete functionality without internet
+- **GPU Accelerated** - NVIDIA CUDA & AMD ROCm support
+- **OpenAI Compatible** - Standard API endpoints
+- **HuggingFace Integration** - Direct model downloads
+- **Auto Hot-Reload** - Model changes detected automatically
+- **Modern Web UI** - Clean, responsive interface
+
+</td>
+<td>
+
+### Production Features
+- **Session Management** - Save & resume conversations
+- **Health Monitoring** - Kubernetes-ready probes
+- **Shell Completions** - Bash/Zsh/Fish support
+- **JSON Output** - Automation & CI/CD friendly
+- **Systemd Services** - Auto-start on boot
+- **Security Hardening** - Process isolation
+
+</td>
+</tr>
+<tr>
+<td>
+
+### Productivity Tools
+- **Prompt Templates** - 10 built-in templates
+- **Response Caching** - LRU cache with TTL
+- **Batch Processing** - Parallel JSONL processing
+- **Aliases & Favorites** - Quick model access
+- **USB Import/Export** - Portable deployments
+
+</td>
+<td>
+
+### Developer Experience
+- **Model Search** - Filter by size, quant, author
+- **Health Endpoints** - `/health`, `/ready`, `/livez`
+- **Statistics API** - Per-model metrics
+- **Flexible Config** - ENV vars & YAML support
+- **API Playground** - Built-in testing UI
+
+</td>
+</tr>
+</table>
+
+---
+
+## Quick Start
 
 ---
 
@@ -131,44 +188,63 @@ cd offgrid-llm && sudo ./install.sh
 
 ## 🚀 Quick Start
 
-### Installation (One Command)
+### One-Command Installation
 
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm && sudo ./install.sh
 ```
 
+> **Note:** The installer features a professional progress bar, time estimates, and organized output for a smooth installation experience.
+
 <details>
-<summary><b>📦 What gets installed?</b></summary>
+<summary><b>What gets installed?</b></summary>
 
 The installer automatically:
-- ✅ Detects GPU (NVIDIA/AMD) and configures drivers
-- ✅ Compiles llama.cpp with optimal settings
-- ✅ Installs systemd services for auto-startup
-- ✅ Sets up security (localhost-only, restricted permissions)
-- ✅ Configures Go environment (persists across reboots)
-- ✅ Installs shell completions (bash/zsh/fish)
-- ✅ Creates model directory at `/var/lib/offgrid/models`
+- Detects GPU - Auto-configures NVIDIA CUDA or AMD ROCm
+- Builds llama.cpp - Optimized inference engine with GPU support
+- Installs systemd services - Auto-start on boot with proper isolation
+- Security hardening - Localhost-only binding, process restrictions
+- Go environment - Persistent configuration across reboots
+- Shell completions - Tab completion for bash/zsh/fish
+
+**Installation Progress:**
+```
+╭────────────────────────────────────────────────────────────────────╮
+│ Step 7/14 [████████████░░░░░░░░] 50% │ Elapsed: 05:32
+╰────────────────────────────────────────────────────────────────────╯
+
+◆ Building llama.cpp Inference Engine
+────────────────────────────────────────────────────────
+  Estimated time: ~5-10 minutes
+
+▸ Configuring build with CMake...
+✓ llama-server built successfully
+✓ Libraries installed system-wide
+```
+
+**Total Installation Time:** ~10-15 minutes
+- Creates model directory at `/var/lib/offgrid/models`
 
 </details>
 
 ### First Steps
 
 ```bash
-# 🔍 Search for a model
+# Search for a model
 offgrid search llama --limit 5
 
-# 📥 Download a model (4GB example)
+# Download a model (4GB example)
 offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
   --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
 
-# 💬 Start chatting
+# Start chatting
 offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 
-# 🌐 Access Web UI
+# Access Web UI
 firefox http://localhost:11611/ui
 
-# 🏥 Check system health
+# Check system health
 curl http://localhost:11611/health
 ```
 
@@ -178,18 +254,18 @@ The included web interface provides:
 
 | Feature | Description |
 |---------|-------------|
-| **💬 Interactive Chat** | Real-time streaming with markdown & code highlighting |
-| **📊 Model Management** | Browse installed models with system stats |
-| **🧪 API Playground** | Test endpoints with request/response viewer |
-| **📈 Health Monitor** | CPU, RAM, GPU metrics in real-time |
+| **Interactive Chat** | Real-time streaming with markdown & code highlighting |
+| **Model Management** | Browse installed models with system stats |
+| **API Playground** | Test endpoints with request/response viewer |
+| **Health Monitor** | CPU, RAM, GPU metrics in real-time |
 
 **Access at:** `http://localhost:11611/ui`
 
 ---
 
-## 📖 Usage
+## Usage
 
-### 🔍 Model Management
+### Model Management
 
 <details>
 <summary><b>Search & Download Models</b></summary>
@@ -233,7 +309,7 @@ offgrid remove model-name
 
 </details>
 
-### 💬 Interactive Chat with Sessions
+### Interactive Chat with Sessions
 
 ```bash
 # Start chat and auto-save conversation
@@ -252,7 +328,7 @@ offgrid session show my-project
 offgrid session export my-project output.md
 ```
 
-### 📝 Prompt Templates
+### Prompt Templates
 
 Built-in templates for common tasks:
 
@@ -270,7 +346,7 @@ offgrid template apply debug          # Debug code issues
 **Available templates:**
 `summarize` • `code-review` • `translate` • `explain` • `brainstorm` • `debug` • `document` • `refactor` • `test` • `cli`
 
-### 🤖 Automation & Scripting
+### Automation & Scripting
 
 <details>
 <summary><b>JSON Output Mode</b></summary>
@@ -317,7 +393,7 @@ cat results.jsonl | jq .
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
 ### OpenAI-Compatible Endpoints
 
@@ -460,7 +536,7 @@ chat("Explain async/await in JavaScript")
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### System Design
 
@@ -519,7 +595,7 @@ chat("Explain async/await in JavaScript")
 
 ---
 
-## ⚙️ System Requirements
+## System Requirements
 
 ### Hardware Requirements
 
@@ -578,45 +654,45 @@ chat("Explain async/await in JavaScript")
 
 <sup>* RTX 4090 performance estimates</sup>
 
-## 🔒 Security
+## Security
 
 ### Network Security
-- ✅ Localhost-only binding (`127.0.0.1`)
-- ✅ Random high ports for IPC
-- ✅ No external network access
-- ✅ Systemd security directives
+- Localhost-only binding (`127.0.0.1`)
+- Random high ports for IPC
+- No external network access
+- Systemd security directives
 
 ### Process Isolation
-- ✅ Dedicated `offgrid` system user
-- ✅ Restricted file system access
-- ✅ No root privileges for operation
+- Dedicated `offgrid` system user
+- Restricted file system access
+- No root privileges for operation
 
 ### Data Privacy
-- ✅ No telemetry or analytics
-- ✅ No external API calls
-- ✅ All inference runs locally
-- ✅ Complete data sovereignty
+- No telemetry or analytics
+- No external API calls
+- All inference runs locally
+- Complete data sovereignty
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [📐 Architecture](docs/ARCHITECTURE.md) | System design & components |
-| [🔌 API Reference](docs/API.md) | Complete API documentation |
-| [⌨️ CLI Reference](docs/CLI_REFERENCE.md) | All CLI commands & flags |
-| [📦 Model Setup](docs/MODEL_SETUP.md) | Model installation guide |
-| [🚀 Deployment](docs/DEPLOYMENT.md) | Production deployment guide |
-| [🤗 HuggingFace Integration](docs/HUGGINGFACE_INTEGRATION.md) | Model search & download |
-| [🔧 llama.cpp Setup](docs/LLAMA_CPP_SETUP.md) | Building the inference engine |
-| [📊 JSON Output](docs/JSON_OUTPUT.md) | Automation & scripting guide |
-| [📖 Features Guide](docs/FEATURES_GUIDE.md) | Feature walkthrough |
-| [❓ Quickstart](docs/QUICKSTART_HF.md) | Quick HuggingFace setup |
+| [Architecture](docs/ARCHITECTURE.md) | System design & components |
+| [API Reference](docs/API.md) | Complete API documentation |
+| [CLI Reference](docs/CLI_REFERENCE.md) | All CLI commands & flags |
+| [Model Setup](docs/MODEL_SETUP.md) | Model installation guide |
+| [Deployment](docs/DEPLOYMENT.md) | Production deployment guide |
+| [HuggingFace Integration](docs/HUGGINGFACE_INTEGRATION.md) | Model search & download |
+| [llama.cpp Setup](docs/LLAMA_CPP_SETUP.md) | Building the inference engine |
+| [JSON Output](docs/JSON_OUTPUT.md) | Automation & scripting guide |
+| [Features Guide](docs/FEATURES_GUIDE.md) | Feature walkthrough |
+| [Quickstart](docs/QUICKSTART_HF.md) | Quick HuggingFace setup |
 
 ---
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 <details>
 <summary><b>Service Management Issues</b></summary>
@@ -878,28 +954,28 @@ offgrid-llm/
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! Areas of interest:
 
-- 🚀 **Performance** - Optimization & benchmarking
-- 🎨 **UI/UX** - Web interface improvements
-- 📱 **Platforms** - macOS/Windows support
-- 🔧 **Features** - New capabilities & tools
-- 📖 **Documentation** - Guides & tutorials
-- 🐛 **Bug Fixes** - Issue resolution
+- **Performance** - Optimization & benchmarking
+- **UI/UX** - Web interface improvements
+- **Platforms** - macOS/Windows support
+- **Features** - New capabilities & tools
+- **Documentation** - Guides & tutorials
+- **Bug Fixes** - Issue resolution
 
 See [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues) for current priorities.
 
 ---
 
-## 📄 License
+## License
 
 MIT License - See [LICENSE](LICENSE) for details
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 This project builds on excellent work from:
 
@@ -910,7 +986,7 @@ This project builds on excellent work from:
 
 ---
 
-## 🔗 Links
+## Links
 
 <div align="center">
 
@@ -925,7 +1001,5 @@ This project builds on excellent work from:
 <div align="center">
 
 **Built for offline-first deployment · Zero external dependencies · Complete data sovereignty**
-
-*Star ⭐ this repo if you find it useful!*
 
 </div>
