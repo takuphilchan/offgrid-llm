@@ -64,7 +64,14 @@ detect_platform() {
             if [ "$ARCH" = "arm64" ]; then
                 LLAMACPP_FILE="llama-{VERSION}-bin-ubuntu-arm64.zip"
             else
-                LLAMACPP_FILE="llama-{VERSION}-bin-ubuntu-x64.zip"
+                # Detect GPU for x64 Linux
+                detect_gpu_linux
+                # Build filename based on GPU variant
+                if [ "$GPU_VARIANT" = "vulkan" ]; then
+                    LLAMACPP_FILE="llama-{VERSION}-bin-ubuntu-vulkan-x64.zip"
+                else
+                    LLAMACPP_FILE="llama-{VERSION}-bin-ubuntu-x64.zip"
+                fi
             fi
             ;;
         darwin)
@@ -81,7 +88,65 @@ detect_platform() {
             ;;
     esac
 
-    print_success "Detected: $OS-$ARCH"
+    print_success "Detected: $OS-$ARCH${GPU_INFO}"
+}
+
+# Detect GPU for Linux x64
+detect_gpu_linux() {
+    GPU_VARIANT="cpu"
+    GPU_INFO=""
+    
+    # Check for NVIDIA GPU (Vulkan is best for pre-built binaries)
+    if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+        GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+        print_success "NVIDIA GPU detected: $GPU_NAME"
+        
+        # Check if Vulkan is available
+        if command -v vulkaninfo &> /dev/null || [ -f /usr/lib/x86_64-linux-gnu/libvulkan.so.1 ]; then
+            GPU_VARIANT="vulkan"
+            GPU_INFO=" (Vulkan GPU)"
+            print_success "Using Vulkan-accelerated binary"
+        else
+            print_warning "Vulkan not found. Installing CPU-only binary."
+            print_warning "For GPU acceleration, install vulkan-tools:"
+            echo "  sudo apt-get install vulkan-tools libvulkan1"
+            GPU_INFO=" (CPU-only - install vulkan-tools for GPU)"
+        fi
+        return
+    fi
+    
+    # Check for AMD GPU
+    if command -v rocm-smi &> /dev/null && rocm-smi &> /dev/null; then
+        GPU_NAME=$(rocm-smi --showproductname 2>/dev/null | grep "GPU" | head -1)
+        print_success "AMD GPU detected: $GPU_NAME"
+        
+        # Check if Vulkan is available
+        if command -v vulkaninfo &> /dev/null || [ -f /usr/lib/x86_64-linux-gnu/libvulkan.so.1 ]; then
+            GPU_VARIANT="vulkan"
+            GPU_INFO=" (Vulkan GPU)"
+            print_success "Using Vulkan-accelerated binary"
+        else
+            print_warning "Vulkan not found. Installing CPU-only binary."
+            print_warning "For GPU acceleration, install vulkan-tools:"
+            echo "  sudo apt-get install mesa-vulkan-drivers vulkan-tools"
+            GPU_INFO=" (CPU-only - install vulkan-tools for GPU)"
+        fi
+        return
+    fi
+    
+    # Check for Intel GPU with Vulkan
+    if [ -f /sys/class/drm/card0/device/vendor ] && grep -q "0x8086" /sys/class/drm/card0/device/vendor 2>/dev/null; then
+        if command -v vulkaninfo &> /dev/null || [ -f /usr/lib/x86_64-linux-gnu/libvulkan.so.1 ]; then
+            GPU_VARIANT="vulkan"
+            GPU_INFO=" (Vulkan GPU - Intel)"
+            print_success "Intel GPU detected, using Vulkan binary"
+            return
+        fi
+    fi
+    
+    # No GPU detected or no Vulkan support
+    GPU_INFO=" (CPU-only)"
+    print_step "No GPU detected or Vulkan not available - using CPU-only binary"
 }
 
 # Check dependencies
@@ -142,9 +207,25 @@ install_llamacpp() {
     
     print_step "Downloading llama.cpp..."
     if ! curl -fsSL -o "$TMPDIR/llama.zip" "$LLAMACPP_URL"; then
-        print_error "Download failed: $LLAMACPP_URL"
-        print_warning "Install manually from: https://github.com/ggml-org/llama.cpp/releases"
-        exit 1
+        # If GPU binary download failed, try CPU fallback
+        if [ "$GPU_VARIANT" != "cpu" ]; then
+            print_warning "GPU binary download failed, trying CPU-only version..."
+            LLAMACPP_FILE_CPU=$(echo "$LLAMACPP_FILE" | sed 's/-vulkan//')
+            LLAMACPP_URL_CPU="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMACPP_VERSION}/${LLAMACPP_FILE_CPU}"
+            
+            if curl -fsSL -o "$TMPDIR/llama.zip" "$LLAMACPP_URL_CPU"; then
+                print_success "Downloaded CPU-only version as fallback"
+                GPU_INFO=" (CPU-only - GPU binary unavailable)"
+            else
+                print_error "Download failed: $LLAMACPP_URL_CPU"
+                print_warning "Install manually from: https://github.com/ggml-org/llama.cpp/releases"
+                exit 1
+            fi
+        else
+            print_error "Download failed: $LLAMACPP_URL"
+            print_warning "Install manually from: https://github.com/ggml-org/llama.cpp/releases"
+            exit 1
+        fi
     fi
     
     # Extract
@@ -152,30 +233,51 @@ install_llamacpp() {
     unzip -q "$TMPDIR/llama.zip" -d "$TMPDIR"
     
     # Find binaries - they're usually in build/bin/ or bin/
-    LLAMA_SERVER=""
-    for search_path in "$TMPDIR/build/bin/llama-server" "$TMPDIR/bin/llama-server" "$TMPDIR/llama-server"; do
-        if [ -f "$search_path" ]; then
-            LLAMA_SERVER="$search_path"
+    LLAMA_BIN_DIR=""
+    for search_path in "$TMPDIR/build/bin" "$TMPDIR/bin" "$TMPDIR"; do
+        if [ -f "$search_path/llama-server" ]; then
+            LLAMA_BIN_DIR="$search_path"
             break
         fi
     done
     
-    if [ -z "$LLAMA_SERVER" ]; then
+    if [ -z "$LLAMA_BIN_DIR" ] || [ ! -f "$LLAMA_BIN_DIR/llama-server" ]; then
         print_error "Could not find llama-server binary in archive"
         print_warning "Install manually from: https://github.com/ggml-org/llama.cpp/releases"
         exit 1
     fi
     
-    # Install to /usr/local/bin
-    INSTALL_DIR="/usr/local/bin"
-    print_step "Installing llama-server to $INSTALL_DIR..."
+    # Install binaries and libraries
+    INSTALL_BIN="/usr/local/bin"
+    INSTALL_LIB="/usr/local/lib"
     
-    if [ -w "$INSTALL_DIR" ]; then
-        cp "$LLAMA_SERVER" "$INSTALL_DIR/llama-server"
-        chmod +x "$INSTALL_DIR/llama-server"
+    print_step "Installing llama-server to $INSTALL_BIN..."
+    if [ -w "$INSTALL_BIN" ]; then
+        cp "$LLAMA_BIN_DIR/llama-server" "$INSTALL_BIN/llama-server"
+        chmod +x "$INSTALL_BIN/llama-server"
     else
-        sudo cp "$LLAMA_SERVER" "$INSTALL_DIR/llama-server"
-        sudo chmod +x "$INSTALL_DIR/llama-server"
+        sudo cp "$LLAMA_BIN_DIR/llama-server" "$INSTALL_BIN/llama-server"
+        sudo chmod +x "$INSTALL_BIN/llama-server"
+    fi
+    
+    # Install shared libraries (including GPU backends)
+    print_step "Installing shared libraries..."
+    for lib in "$LLAMA_BIN_DIR"/lib*.so*; do
+        if [ -f "$lib" ]; then
+            lib_name=$(basename "$lib")
+            if [ -w "$INSTALL_LIB" ]; then
+                cp "$lib" "$INSTALL_LIB/$lib_name"
+            else
+                sudo cp "$lib" "$INSTALL_LIB/$lib_name"
+            fi
+        fi
+    done
+    
+    # Update library cache
+    if [ -w "/etc/ld.so.cache" ]; then
+        ldconfig
+    else
+        sudo ldconfig 2>/dev/null || true
     fi
     
     print_success "llama.cpp installed successfully!"
@@ -321,8 +423,23 @@ EOF
     echo ""
     echo "  Installed:"
     echo "    • OffGrid LLM     (/usr/local/bin/offgrid)"
-    echo "    • llama.cpp       (/usr/local/bin/llama-server)"
+    echo "    • llama.cpp       (/usr/local/bin/llama-server)${GPU_INFO}"
     echo ""
+    
+    # Show GPU info if applicable
+    if [ "$GPU_VARIANT" = "vulkan" ]; then
+        echo "  GPU Acceleration:"
+        echo "    • Vulkan-accelerated inference enabled"
+        echo "    • Use --gpu-layers flag to offload layers to GPU"
+        echo ""
+    elif command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+        echo "  GPU Detected but not enabled:"
+        echo "    • Install vulkan-tools for GPU acceleration:"
+        echo "      sudo apt-get install vulkan-tools libvulkan1"
+        echo "    • Then reinstall: curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash"
+        echo ""
+    fi
+    
     echo "  Get Started:"
     echo "    offgrid version           # Check version"
     echo "    offgrid server start      # Start API server"
