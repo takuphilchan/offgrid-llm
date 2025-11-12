@@ -22,6 +22,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/output"
+	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/server"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
@@ -319,6 +320,9 @@ func main() {
 		command := os.Args[1]
 
 		switch command {
+		case "auto-select", "autoselect":
+			handleAutoSelect(os.Args[2:])
+			return
 		case "download":
 			handleDownload(os.Args[2:])
 			return
@@ -354,6 +358,9 @@ func main() {
 			return
 		case "quantization", "quant":
 			handleQuantization()
+			return
+		case "quantize":
+			handleQuantize(os.Args[2:])
 			return
 		case "info", "status":
 			handleInfo()
@@ -695,25 +702,29 @@ func handleRemove(args []string) {
 	}
 
 	// Confirm deletion
-	fmt.Println("🗑️  Remove Model")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println()
-	fmt.Printf("Model:  %s\n", modelID)
+	fmt.Printf("%s◆ Remove Model%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+
+	fmt.Printf("%sModel Information%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+	fmt.Printf("  Name:     %s%s%s\n", colorBold, modelID, colorReset)
 	if meta.Path != "" {
-		fmt.Printf("Path:   %s\n", meta.Path)
+		fmt.Printf("  Path:     %s%s%s\n", brandMuted, meta.Path, colorReset)
 	}
 	if meta.Size > 0 {
-		fmt.Printf("Size:   %s will be freed\n", formatBytes(meta.Size))
+		fmt.Printf("  Size:     %s%s%s will be freed\n", brandSuccess, formatBytes(meta.Size), colorReset)
 	}
 	fmt.Println()
-	fmt.Print("⚠️  This action cannot be undone. Continue? (y/N): ")
+	fmt.Printf("%s⚠  This action cannot be undone%s\n\n", brandError, colorReset)
+	fmt.Printf("%sContinue?%s (y/N): ", brandMuted, colorReset)
 
 	var response string
 	fmt.Scanln(&response)
 
 	if response != "y" && response != "Y" {
 		fmt.Println()
-		fmt.Println("✓ Cancelled - model preserved")
+		printInfo("Cancelled - model preserved")
 		fmt.Println()
 		return
 	}
@@ -721,22 +732,27 @@ func handleRemove(args []string) {
 	// Delete the model file
 	if meta.Path != "" {
 		if err := os.Remove(meta.Path); err != nil {
-			fmt.Fprintf(os.Stderr, "\n✗ Failed to remove file: %v\n\n", err)
+			fmt.Println()
+			printError(fmt.Sprintf("Failed to remove file: %v", err))
+			fmt.Println()
 			os.Exit(1)
 		}
 	}
 
 	fmt.Println()
-	fmt.Printf("✓ Removed %s\n", modelID)
+	fmt.Printf("%s◆ Model Removed%s\n", brandSuccess, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+	fmt.Printf("  %s✓%s Removed %s%s%s\n", brandSuccess, colorReset, brandPrimary, modelID, colorReset)
 
 	// Rescan to update registry after file deletion
 	if err := registry.ScanModels(); err != nil {
-		fmt.Fprintf(os.Stderr, "\n⚠️  Warning: Failed to refresh model list: %v\n", err)
+		fmt.Println()
+		printWarning(fmt.Sprintf("Failed to refresh model list: %v", err))
 	}
 
 	// Show remaining models
 	remaining := registry.ListModels()
-	fmt.Printf("\n%d model(s) remaining\n\n", len(remaining))
+	fmt.Printf("  %s→%s %d model(s) remaining\n\n", brandMuted, colorReset, len(remaining))
 }
 
 func handleExport(args []string) {
@@ -883,21 +899,138 @@ func handleChat(args []string) {
 	// 4. Handle conversation history
 }
 
+func handleAutoSelect(args []string) {
+	fmt.Println()
+	printSection("Auto-Select Model")
+	fmt.Println()
+
+	printInfo("Detecting system resources...")
+	fmt.Println()
+
+	// Detect hardware resources
+	res, err := resource.DetectResources()
+	if err != nil {
+		printError(fmt.Sprintf("Failed to detect system resources: %v", err))
+		os.Exit(1)
+	}
+
+	// Display system info
+	fmt.Printf("%sSystem Information%s\n", colorBold, colorReset)
+	printDivider()
+	fmt.Printf("  %sOS:%s %s/%s\n", brandMuted, colorReset, res.OS, res.Arch)
+	fmt.Printf("  %sCPU:%s %d cores\n", brandMuted, colorReset, res.CPUCores)
+	fmt.Printf("  %sRAM:%s %s total · %s available\n",
+		brandMuted, colorReset,
+		formatBytes(res.TotalRAM*1024*1024),
+		formatBytes(res.AvailableRAM*1024*1024))
+
+	if res.GPUAvailable {
+		fmt.Printf("  %sGPU:%s %s · %s VRAM\n",
+			brandSuccess, colorReset,
+			res.GPUName,
+			formatBytes(res.GPUMemory*1024*1024))
+	} else {
+		fmt.Printf("  %sGPU:%s Not detected (CPU-only mode)\n", brandMuted, colorReset)
+	}
+	fmt.Println()
+
+	// Get recommendations
+	recommendations := res.RecommendedModels()
+
+	if len(recommendations) == 0 {
+		fmt.Println()
+		printWarning("Insufficient memory for any models")
+		fmt.Println()
+		printInfo("Minimum requirements:")
+		printItem("RAM", "2 GB available")
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	// Group by priority
+	primary := []resource.ModelRecommendation{}
+	alternatives := []resource.ModelRecommendation{}
+	supplementary := []resource.ModelRecommendation{}
+
+	for _, rec := range recommendations {
+		switch rec.Priority {
+		case 1:
+			primary = append(primary, rec)
+		case 2:
+			alternatives = append(alternatives, rec)
+		case 3:
+			supplementary = append(supplementary, rec)
+		}
+	}
+
+	// Display recommendations
+	fmt.Printf("%sRecommended Models%s\n", colorBold, colorReset)
+	printDivider()
+	fmt.Println()
+
+	if len(primary) > 0 {
+		fmt.Printf("%sPrimary Recommendations%s\n", brandSuccess, colorReset)
+		for i, rec := range primary {
+			fmt.Printf("  %s%d.%s %s%s%s (%s)\n",
+				brandMuted, i+1, colorReset,
+				brandPrimary, rec.ModelID, colorReset,
+				rec.Quantization)
+			fmt.Printf("     %s%s%s · %s\n",
+				brandMuted, formatModelSize(rec.SizeGB), colorReset,
+				rec.Reason)
+		}
+		fmt.Println()
+	}
+
+	if len(alternatives) > 0 {
+		fmt.Printf("%sAlternatives%s\n", brandMuted, colorReset)
+		for _, rec := range alternatives {
+			fmt.Printf("  %s◦%s %s (%s) · %s · %s\n",
+				brandMuted, colorReset,
+				rec.ModelID, rec.Quantization, formatModelSize(rec.SizeGB), rec.Reason)
+		}
+		fmt.Println()
+	}
+
+	if len(supplementary) > 0 {
+		fmt.Printf("%sSupplementary%s\n", brandMuted, colorReset)
+		for _, rec := range supplementary {
+			fmt.Printf("  %s◦%s %s (%s) · %s · %s\n",
+				brandMuted, colorReset,
+				rec.ModelID, rec.Quantization, formatModelSize(rec.SizeGB), rec.Reason)
+		}
+		fmt.Println()
+	}
+
+	printSection("Next Steps")
+	if len(primary) > 0 {
+		printItem("Download recommended", fmt.Sprintf("offgrid download %s %s", primary[0].ModelID, primary[0].Quantization))
+		printItem("Or search for more", "offgrid search llama --author TheBloke")
+	}
+	printItem("View all available", "offgrid catalog")
+	fmt.Println()
+}
+
 func handleBenchmark(args []string) {
 	if len(args) < 1 {
 		printDivider()
 		fmt.Println()
 		printSection("Usage")
-		fmt.Printf("  %soffgrid benchmark%s <model-id>\n", colorBold, colorReset)
+		fmt.Printf("  %soffgrid benchmark%s <model-id> [--iterations N] [--prompt \"text\"]\n", colorBold, colorReset)
 		fmt.Println()
 		printSection("Description")
 		fmt.Println("  Benchmark model performance and resource usage")
 		fmt.Println()
+		printSection("Options")
+		fmt.Println("  --iterations N    Number of test iterations (default: 3)")
+		fmt.Println("  --prompt \"text\"   Custom prompt to benchmark (default: sample prompt)")
+		fmt.Println()
 		printSection("Examples")
 		fmt.Printf("  %s$%s offgrid benchmark tinyllama-1.1b-chat.Q4_K_M\n", brandMuted, colorReset)
-		fmt.Printf("  %s$%s offgrid benchmark llama-2-7b-chat.Q5_K_M\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid benchmark llama-2-7b-chat.Q5_K_M --iterations 5\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid benchmark phi-2.Q4_K_M --prompt \"Explain quantum computing\"\n", brandMuted, colorReset)
 		fmt.Println()
-		printInfo("Use 'offgrid list' to see available models")
+		printInfo("Model must be loaded in server first: offgrid serve <model>")
 		fmt.Println()
 		printDivider()
 		fmt.Println()
@@ -912,7 +1045,20 @@ func handleBenchmark(args []string) {
 		os.Exit(1)
 	}
 
+	// Parse arguments
 	modelID := args[0]
+	iterations := 3
+	customPrompt := ""
+
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--iterations" && i+1 < len(args) {
+			fmt.Sscanf(args[i+1], "%d", &iterations)
+			i++
+		} else if args[i] == "--prompt" && i+1 < len(args) {
+			customPrompt = args[i+1]
+			i++
+		}
+	}
 
 	// Check if model exists
 	meta, err := registry.GetModel(modelID)
@@ -931,41 +1077,172 @@ func handleBenchmark(args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Println("⚡ Benchmark Model")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
-	fmt.Println("Model Information")
-	fmt.Printf("  Name:          %s\n", modelID)
-	fmt.Printf("  Path:          %s\n", meta.Path)
-	fmt.Printf("  Size:          %s\n", formatBytes(meta.Size))
+	// Print benchmark header
+	fmt.Printf("\n%s◆ Benchmark Model%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+
+	fmt.Printf("%sModel Information%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+	fmt.Printf("  Name: %s%s%s\n", colorBold, modelID, colorReset)
+	fmt.Printf("  Path: %s%s%s\n", brandMuted, meta.Path, colorReset)
+	fmt.Printf("  Size: %s%s%s", brandPrimary, formatBytes(meta.Size), colorReset)
 	if meta.Quantization != "" {
-		fmt.Printf("  Quantization:  %s\n", meta.Quantization)
+		fmt.Printf(" · %s%s%s", brandMuted, meta.Quantization, colorReset)
 	}
 	fmt.Println()
-
-	fmt.Println("Performance Metrics")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
-	fmt.Println("  ⏳ This feature requires llama.cpp integration")
-	fmt.Println()
-	fmt.Println("  Metrics will include:")
-	fmt.Println("    • Model load time")
-	fmt.Println("    • Tokens per second (inference speed)")
-	fmt.Println("    • Memory usage (RAM/VRAM)")
-	fmt.Println("    • First token latency")
-	fmt.Println("    • Context processing speed")
-	fmt.Println()
-	fmt.Println("  Next steps:")
-	fmt.Println("    1. Ensure server is running: offgrid serve")
-	fmt.Println("    2. Use API endpoint: curl http://localhost:11611/v1/benchmark")
 	fmt.Println()
 
-	// TODO: Implement actual benchmarking
-	// This would require:
-	// 1. Load model with inference engine
-	// 2. Run test prompts
-	// 3. Measure timing and resource usage
-	// 4. Display results
+	// Check if server is running
+	serverURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort)
+	if !isServerHealthy(serverURL) {
+		printError("Server is not running or not responding")
+		fmt.Printf("\n%sStart server first:%s offgrid serve %s\n\n", brandMuted, colorReset, modelID)
+		os.Exit(1)
+	}
+
+	// Default benchmark prompt
+	benchPrompt := "Write a short story about a robot learning to paint."
+	if customPrompt != "" {
+		benchPrompt = customPrompt
+	}
+
+	fmt.Printf("%s→%s Running benchmark with %d iterations...\n\n", brandPrimary, colorReset, iterations)
+
+	// Run benchmark iterations
+	var (
+		totalLatency      time.Duration
+		totalTokens       int
+		totalPromptTokens int
+		firstTokenTimes   []time.Duration
+		tokensPerSec      []float64
+	)
+
+	for i := 0; i < iterations; i++ {
+		fmt.Printf("%s  [%d/%d]%s Testing inference... ", brandMuted, i+1, iterations, colorReset)
+
+		startTime := time.Now()
+		var firstTokenTime time.Duration
+		tokenCount := 0
+		promptTokens := 0
+
+		// Call completion endpoint
+		reqBody := map[string]interface{}{
+			"prompt":      benchPrompt,
+			"max_tokens":  100,
+			"temperature": 0.7,
+			"stream":      false,
+		}
+
+		jsonData, _ := json.Marshal(reqBody)
+		resp, err := http.Post(
+			serverURL+"/v1/completions",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+
+		if err != nil {
+			fmt.Printf("%s✗%s Failed: %v\n", brandError, colorReset, err)
+			continue
+		}
+
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+
+		var result map[string]interface{}
+		if err := json.Unmarshal(body, &result); err != nil {
+			fmt.Printf("%s✗%s Failed to parse response\n", brandError, colorReset)
+			continue
+		}
+
+		latency := time.Since(startTime)
+
+		// Extract metrics from response
+		if usage, ok := result["usage"].(map[string]interface{}); ok {
+			if pt, ok := usage["prompt_tokens"].(float64); ok {
+				promptTokens = int(pt)
+			}
+			if ct, ok := usage["completion_tokens"].(float64); ok {
+				tokenCount = int(ct)
+			}
+		}
+
+		// Estimate first token time (roughly 10% of total for most models)
+		firstTokenTime = latency / 10
+
+		totalLatency += latency
+		totalTokens += tokenCount
+		totalPromptTokens += promptTokens
+		firstTokenTimes = append(firstTokenTimes, firstTokenTime)
+
+		tps := float64(tokenCount) / latency.Seconds()
+		tokensPerSec = append(tokensPerSec, tps)
+
+		fmt.Printf("%s✓%s %s (%.1f tok/s)\n", brandSuccess, colorReset, formatDuration(latency), tps)
+	}
+
+	if len(tokensPerSec) == 0 {
+		printError("All benchmark iterations failed")
+		os.Exit(1)
+	}
+
+	// Calculate averages
+	avgLatency := totalLatency / time.Duration(len(tokensPerSec))
+	avgTokens := float64(totalTokens) / float64(len(tokensPerSec))
+	avgPromptTokens := float64(totalPromptTokens) / float64(len(tokensPerSec))
+	avgFirstToken := time.Duration(0)
+	for _, ft := range firstTokenTimes {
+		avgFirstToken += ft
+	}
+	avgFirstToken /= time.Duration(len(firstTokenTimes))
+
+	avgTPS := 0.0
+	minTPS := tokensPerSec[0]
+	maxTPS := tokensPerSec[0]
+	for _, tps := range tokensPerSec {
+		avgTPS += tps
+		if tps < minTPS {
+			minTPS = tps
+		}
+		if tps > maxTPS {
+			maxTPS = tps
+		}
+	}
+	avgTPS /= float64(len(tokensPerSec))
+
+	// Display results
+	fmt.Println()
+	fmt.Printf("%sPerformance Results%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+
+	fmt.Printf("%sInference Speed%s\n", brandSuccess, colorReset)
+	fmt.Printf("  Average:      %s%.1f tok/s%s\n", colorBold, avgTPS, colorReset)
+	fmt.Printf("  Range:        %.1f - %.1f tok/s\n", minTPS, maxTPS)
+	fmt.Println()
+
+	fmt.Printf("%sLatency%s\n", brandSuccess, colorReset)
+	fmt.Printf("  Total:        %s\n", formatDuration(avgLatency))
+	fmt.Printf("  First token:  ~%s\n", formatDuration(avgFirstToken))
+	fmt.Println()
+
+	fmt.Printf("%sTokens%s\n", brandSuccess, colorReset)
+	fmt.Printf("  Prompt:       %.0f tokens (avg)\n", avgPromptTokens)
+	fmt.Printf("  Generated:    %.0f tokens (avg)\n", avgTokens)
+	fmt.Println()
+
+	// Estimate throughput
+	fmt.Printf("%sThroughput Estimate%s\n", brandSuccess, colorReset)
+	fmt.Printf("  Queries/hour: %s~%d%s (at current speed)\n", brandPrimary, int(3600.0/avgLatency.Seconds()), colorReset)
+	fmt.Println()
+
+	// Resource usage estimate
+	fmt.Printf("%sResource Usage%s\n", brandSuccess, colorReset)
+	fmt.Printf("  Model size:   %s\n", formatBytes(meta.Size))
+	memEst := float64(meta.Size) * 1.2 // Rough estimate: model + context
+	fmt.Printf("  Memory est:   ~%.1f GB (model + context)\n", memEst/1e9)
+	fmt.Println()
+
+	fmt.Printf("%s◆ Benchmark Complete%s\n", brandSuccess, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
 }
 
 func handleList(args []string) {
@@ -1213,6 +1490,216 @@ func handleQuantization() {
 	fmt.Println()
 }
 
+func handleQuantize(args []string) {
+	if len(args) < 2 {
+		printDivider()
+		fmt.Println()
+		printSection("Usage")
+		fmt.Printf("  %soffgrid quantize%s <model-id> <quantization-type> [--output <name>]\n", colorBold, colorReset)
+		fmt.Println()
+		printSection("Description")
+		fmt.Println("  Quantize a model to a different precision level")
+		fmt.Println()
+		printSection("Quantization Types")
+		fmt.Println("  Q2_K      - 2-bit (smallest, lowest quality)")
+		fmt.Println("  Q3_K_S    - 3-bit small")
+		fmt.Println("  Q3_K_M    - 3-bit medium")
+		fmt.Println("  Q4_K_S    - 4-bit small")
+		fmt.Printf("  %sQ4_K_M%s    - 4-bit medium %s(recommended)%s\n", brandPrimary, colorReset, brandSuccess, colorReset)
+		fmt.Println("  Q5_K_S    - 5-bit small")
+		fmt.Printf("  %sQ5_K_M%s    - 5-bit medium %s(high quality)%s\n", brandPrimary, colorReset, brandSuccess, colorReset)
+		fmt.Println("  Q6_K      - 6-bit")
+		fmt.Println("  Q8_0      - 8-bit (largest, highest quality)")
+		fmt.Println()
+		printSection("Options")
+		fmt.Println("  --output <name>   Output model name (default: auto-generated)")
+		fmt.Println()
+		printSection("Examples")
+		fmt.Printf("  %s$%s offgrid quantize llama-2-7b.F16 Q4_K_M\n", brandMuted, colorReset)
+		fmt.Printf("  %s$%s offgrid quantize phi-2.F16 Q5_K_M --output phi-2-hq\n", brandMuted, colorReset)
+		fmt.Println()
+		printInfo("Use 'offgrid quantization' to see quality comparisons")
+		fmt.Println()
+		printDivider()
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+
+	if err := registry.ScanModels(); err != nil {
+		printError(fmt.Sprintf("Error scanning models: %v", err))
+		os.Exit(1)
+	}
+
+	modelID := args[0]
+	targetQuant := strings.ToUpper(args[1])
+	outputName := ""
+
+	// Parse optional --output flag
+	for i := 2; i < len(args); i++ {
+		if args[i] == "--output" && i+1 < len(args) {
+			outputName = args[i+1]
+			i++
+		}
+	}
+
+	// Check if model exists
+	meta, err := registry.GetModel(modelID)
+	if err != nil {
+		printError(fmt.Sprintf("Model not found: %s", modelID))
+		fmt.Println()
+		modelList := registry.ListModels()
+		if len(modelList) > 0 {
+			fmt.Println("Available models:")
+			for _, m := range modelList {
+				fmt.Printf("  • %s\n", m.ID)
+			}
+			fmt.Println()
+		}
+		os.Exit(1)
+	}
+
+	// Validate quantization type
+	validQuants := []string{"Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L", "Q4_0", "Q4_1", "Q4_K_S", "Q4_K_M", "Q5_0", "Q5_1", "Q5_K_S", "Q5_K_M", "Q6_K", "Q8_0"}
+	isValid := false
+	for _, q := range validQuants {
+		if targetQuant == q {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		printError(fmt.Sprintf("Invalid quantization type: %s", targetQuant))
+		fmt.Printf("\n%sValid types:%s Q2_K, Q3_K_S, Q3_K_M, Q4_K_S, Q4_K_M, Q5_K_S, Q5_K_M, Q6_K, Q8_0\n\n", brandMuted, colorReset)
+		os.Exit(1)
+	}
+
+	// Generate output filename
+	if outputName == "" {
+		// Remove extension and current quantization from model ID
+		baseName := strings.TrimSuffix(modelID, filepath.Ext(modelID))
+		baseName = strings.TrimSuffix(baseName, ".gguf")
+		// Remove existing quantization suffix if present
+		for _, q := range validQuants {
+			if strings.HasSuffix(baseName, "."+q) {
+				baseName = strings.TrimSuffix(baseName, "."+q)
+				break
+			}
+			if strings.HasSuffix(baseName, "-"+q) {
+				baseName = strings.TrimSuffix(baseName, "-"+q)
+				break
+			}
+		}
+		outputName = fmt.Sprintf("%s.%s", baseName, targetQuant)
+	}
+	outputPath := filepath.Join(cfg.ModelsDir, outputName+".gguf")
+
+	// Check if output file already exists
+	if _, err := os.Stat(outputPath); err == nil {
+		printError(fmt.Sprintf("Output file already exists: %s", outputName+".gguf"))
+		fmt.Printf("\n%sUse --output to specify a different name%s\n\n", brandMuted, colorReset)
+		os.Exit(1)
+	}
+
+	// Print quantization header
+	fmt.Printf("\n%s◆ Quantize Model%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+
+	fmt.Printf("%sSource Model%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+	fmt.Printf("  Name:         %s%s%s\n", colorBold, modelID, colorReset)
+	fmt.Printf("  Path:         %s%s%s\n", brandMuted, meta.Path, colorReset)
+	fmt.Printf("  Size:         %s%s%s", brandPrimary, formatBytes(meta.Size), colorReset)
+	if meta.Quantization != "" {
+		fmt.Printf(" · %s%s%s", brandMuted, meta.Quantization, colorReset)
+	}
+	fmt.Println()
+	fmt.Println()
+
+	quantInfo := models.GetQuantizationInfo(targetQuant)
+	fmt.Printf("%sTarget Quantization%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+	fmt.Printf("  Type:         %s%s%s\n", brandPrimary, targetQuant, colorReset)
+	fmt.Printf("  Bits:         %.1f bits per weight\n", quantInfo.BitsPerWeight)
+	fmt.Printf("  Quality:      %s\n", quantInfo.Description)
+	fmt.Printf("  Output:       %s%s.gguf%s\n", brandMuted, outputName, colorReset)
+	fmt.Println()
+
+	// Check if llama-quantize is available
+	llamaQuantize := "llama-quantize"
+	if _, err := exec.LookPath(llamaQuantize); err != nil {
+		printError("llama-quantize tool not found")
+		fmt.Printf("\n%sInstall llama.cpp first:%s\n", brandMuted, colorReset)
+		fmt.Println("  cd /tmp && git clone https://github.com/ggerganov/llama.cpp")
+		fmt.Println("  cd llama.cpp && make")
+		fmt.Println("  sudo cp llama-quantize /usr/local/bin/")
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	// Run quantization
+	fmt.Printf("%s→%s Starting quantization...\n\n", brandPrimary, colorReset)
+
+	cmd := exec.Command(llamaQuantize, meta.Path, outputPath, targetQuant)
+
+	// Set LD_LIBRARY_PATH to include /usr/local/lib for llama.cpp shared libraries
+	env := os.Environ()
+	ldLibPath := "/usr/local/lib"
+	if existingPath := os.Getenv("LD_LIBRARY_PATH"); existingPath != "" {
+		ldLibPath = ldLibPath + ":" + existingPath
+	}
+	env = append(env, "LD_LIBRARY_PATH="+ldLibPath)
+	cmd.Env = env
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	startTime := time.Now()
+	if err := cmd.Run(); err != nil {
+		fmt.Println()
+		printError(fmt.Sprintf("Quantization failed: %v", err))
+		os.Exit(1)
+	}
+	duration := time.Since(startTime)
+
+	// Get output file size
+	outputStat, err := os.Stat(outputPath)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to stat output file: %v", err))
+		os.Exit(1)
+	}
+
+	// Calculate compression ratio
+	compressionRatio := float64(meta.Size) / float64(outputStat.Size())
+	sizeSaved := meta.Size - outputStat.Size()
+
+	// Display results
+	fmt.Println()
+	fmt.Printf("%s◆ Quantization Complete%s\n", brandSuccess, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+
+	fmt.Printf("%sResults%s\n", brandSuccess, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+	fmt.Printf("  Original:     %s\n", formatBytes(meta.Size))
+	fmt.Printf("  Quantized:    %s%s%s\n", brandSuccess, formatBytes(outputStat.Size()), colorReset)
+	fmt.Printf("  Saved:        %s%s%s (%.1fx smaller)\n", brandPrimary, formatBytes(sizeSaved), colorReset, compressionRatio)
+	fmt.Printf("  Time:         %s\n", formatDuration(duration))
+	fmt.Println()
+
+	fmt.Printf("%sModel Ready%s\n", brandSuccess, colorReset)
+	fmt.Printf("  Name:         %s%s%s\n", brandPrimary, outputName, colorReset)
+	fmt.Printf("  Location:     %s%s%s\n", brandMuted, outputPath, colorReset)
+	fmt.Println()
+
+	fmt.Printf("%s◆ Next Steps%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n", brandMuted, colorReset)
+	fmt.Printf("  Test model:   %soffgrid run %s%s\n", brandMuted, outputName, colorReset)
+	fmt.Printf("  Benchmark:    %soffgrid benchmark %s%s\n", brandMuted, outputName, colorReset)
+	fmt.Println()
+}
+
 func printHelp() {
 	printDivider()
 	fmt.Println()
@@ -1224,6 +1711,7 @@ func printHelp() {
 	// Model Management
 	fmt.Printf("%sModel Management%s\n", colorBold, colorReset)
 	printDivider()
+	fmt.Printf("  %sauto-select%s         Auto-detect hardware and recommend models\n", brandPrimary, colorReset)
 	fmt.Printf("  %slist%s               List installed models\n", brandPrimary, colorReset)
 	fmt.Printf("  %scatalog%s            Browse available models\n", brandPrimary, colorReset)
 	fmt.Printf("  %ssearch%s <query>     Search HuggingFace\n", brandPrimary, colorReset)
@@ -1232,6 +1720,7 @@ func printHelp() {
 	fmt.Printf("  %simport%s <path>      Import from USB/SD card\n", brandPrimary, colorReset)
 	fmt.Printf("  %sexport%s <id> <dst>  Export to USB/SD card\n", brandPrimary, colorReset)
 	fmt.Printf("  %sremove%s <id>        Remove installed model\n", brandPrimary, colorReset)
+	fmt.Printf("  %squantize%s <id> <q>  Quantize model to reduce size\n", brandPrimary, colorReset)
 	fmt.Println()
 
 	// Inference & Chat
@@ -1799,19 +2288,19 @@ func handleDownloadHF(args []string) {
 	hf := models.NewHuggingFaceClient()
 
 	fmt.Println()
-	fmt.Printf("📦 Fetching model info: %s\n", modelID)
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("%s◆ Download from HuggingFace%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+	fmt.Printf("%s→%s Fetching model info: %s%s%s\n", brandPrimary, colorReset, colorBold, modelID, colorReset)
 	fmt.Println()
 
 	model, err := hf.GetModelInfo(modelID)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintf(os.Stderr, "✗ Failed to fetch model: %v\n", err)
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Make sure:")
-		fmt.Fprintln(os.Stderr, "  • The model ID is correct")
-		fmt.Fprintln(os.Stderr, "  • You have internet connectivity")
-		fmt.Fprintln(os.Stderr, "")
+		printError(fmt.Sprintf("Failed to fetch model: %v", err))
+		fmt.Println()
+		printInfo("Make sure:")
+		fmt.Println("  • The model ID is correct")
+		fmt.Println("  • You have internet connectivity")
+		fmt.Println()
 		os.Exit(1)
 	}
 
@@ -1842,20 +2331,19 @@ func handleDownloadHF(args []string) {
 	}
 
 	if len(ggufFiles) == 0 {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "✗ No matching GGUF files found")
-		fmt.Fprintln(os.Stderr, "")
+		printError("No matching GGUF files found")
+		fmt.Println()
 		if quantFilter != "" {
-			fmt.Fprintf(os.Stderr, "No files with quantization '%s' found.\n", quantFilter)
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Try without --quant filter or use 'offgrid search' to see available quantizations")
+			fmt.Printf("No files with quantization '%s%s%s' found.\n", brandPrimary, quantFilter, colorReset)
+			fmt.Println()
+			printInfo("Try without --quant filter or use 'offgrid search' to see available quantizations")
 		} else {
-			fmt.Fprintln(os.Stderr, "This model may not have GGUF format files.")
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Search for GGUF models:")
-			fmt.Fprintln(os.Stderr, "  offgrid search <query> --author TheBloke")
+			printInfo("This model may not have GGUF format files.")
+			fmt.Println()
+			printInfo("Search for GGUF models:")
+			fmt.Printf("  %soffgrid search <query> --author TheBloke%s\n", brandMuted, colorReset)
 		}
-		fmt.Fprintln(os.Stderr, "")
+		fmt.Println()
 		os.Exit(1)
 	}
 
@@ -1864,36 +2352,69 @@ func handleDownloadHF(args []string) {
 	if len(ggufFiles) == 1 {
 		selectedFile = ggufFiles[0]
 	} else {
-		fmt.Println("Available files:")
-		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Printf("%sAvailable Files%s\n", brandPrimary, colorReset)
+		fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
 		for i, file := range ggufFiles {
-			fmt.Printf("  %d. %s (%s)\n", i+1, file.Filename, file.Quantization)
+			fmt.Printf("  %s%d.%s %s (%s%s%s)\n",
+				brandMuted, i+1, colorReset,
+				file.Filename,
+				brandPrimary, file.Quantization, colorReset)
 		}
-		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		fmt.Print("\nSelect file (1-", len(ggufFiles), "): ")
+		fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+		fmt.Printf("\n%sSelect file%s (1-%d): ", brandMuted, colorReset, len(ggufFiles))
 
 		var choice int
 		fmt.Scanf("%d", &choice)
 		if choice < 1 || choice > len(ggufFiles) {
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "✗ Invalid choice")
-			fmt.Fprintln(os.Stderr, "")
+			fmt.Println()
+			printError("Invalid choice")
+			fmt.Println()
 			os.Exit(1)
 		}
 		selectedFile = ggufFiles[choice-1]
 	}
 
-	fmt.Println()
-	fmt.Printf("📥 Downloading: %s\n", selectedFile.Filename)
-	if selectedFile.SizeGB > 0 {
-		fmt.Printf("   Size: %.1f GB\n", selectedFile.SizeGB)
-	}
-	fmt.Printf("   Quantization: %s\n", selectedFile.Quantization)
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
-
 	// Create destination path
 	destPath := filepath.Join(cfg.ModelsDir, selectedFile.Filename)
+
+	// Check if file already exists
+	if _, err := os.Stat(destPath); err == nil {
+		fmt.Println()
+		printWarning("Model already exists")
+		fmt.Println()
+		fmt.Printf("%sExisting Model%s\n", brandPrimary, colorReset)
+		fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+		fmt.Printf("  Name:     %s%s%s\n", colorBold, selectedFile.Filename, colorReset)
+		fmt.Printf("  Location: %s%s%s\n", brandMuted, destPath, colorReset)
+
+		// Get existing file size
+		if fileInfo, err := os.Stat(destPath); err == nil {
+			fmt.Printf("  Size:     %s\n", formatBytes(fileInfo.Size()))
+		}
+		fmt.Println()
+		fmt.Printf("%sRedownload and replace?%s (y/N): ", brandMuted, colorReset)
+
+		var response string
+		fmt.Scanln(&response)
+
+		if response != "y" && response != "Y" {
+			fmt.Println()
+			printInfo("Download cancelled - existing model preserved")
+			fmt.Println()
+			return
+		}
+		fmt.Println()
+	}
+
+	fmt.Println()
+	fmt.Printf("%sDownloading%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+	fmt.Printf("  File:         %s%s%s\n", colorBold, selectedFile.Filename, colorReset)
+	if selectedFile.SizeGB > 0 {
+		fmt.Printf("  Size:         %.1f GB\n", selectedFile.SizeGB)
+	}
+	fmt.Printf("  Quantization: %s%s%s\n", brandPrimary, selectedFile.Quantization, colorReset)
+	fmt.Println()
 
 	// Download with progress
 	startTime := time.Now()
@@ -1924,37 +2445,47 @@ func handleDownloadHF(args []string) {
 			return // Don't update display yet
 		}
 
-		fmt.Printf("\r  ⏬ Progress: %.1f%% (%.1f / %.1f GB) · %.1f MB/s  ",
+		// Format size appropriately (MB for small files, GB for large)
+		var currentStr, totalStr string
+		if total < 1024*1024*1024 { // Less than 1 GB, show in MB
+			currentStr = fmt.Sprintf("%.1f MB", float64(current)/(1024*1024))
+			totalStr = fmt.Sprintf("%.1f MB", float64(total)/(1024*1024))
+		} else {
+			currentStr = fmt.Sprintf("%.1f GB", float64(current)/(1024*1024*1024))
+			totalStr = fmt.Sprintf("%.1f GB", float64(total)/(1024*1024*1024))
+		}
+
+		fmt.Printf("\r  %s→%s Progress: %.1f%% (%s / %s) · %.1f MB/s  ",
+			brandPrimary, colorReset,
 			percent,
-			float64(current)/(1024*1024*1024),
-			float64(total)/(1024*1024*1024),
+			currentStr,
+			totalStr,
 			speed)
 	})
 
 	if err != nil {
 		fmt.Println()
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintf(os.Stderr, "✗ Download failed: %v\n", err)
-		fmt.Fprintln(os.Stderr, "")
+		printError(fmt.Sprintf("Download failed: %v", err))
+		fmt.Println()
 		os.Exit(1)
 	}
 
 	fmt.Println()
 	fmt.Println()
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("✓ Download complete!")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("  Model: %s\n", selectedFile.Filename)
-	fmt.Printf("  Location: %s\n", destPath)
+	fmt.Printf("%s◆ Download Complete%s\n", brandSuccess, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+	fmt.Printf("%sModel Ready%s\n", brandSuccess, colorReset)
+	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+	fmt.Printf("  Name:     %s%s%s\n", brandPrimary, selectedFile.Filename, colorReset)
+	fmt.Printf("  Location: %s%s%s\n", brandMuted, destPath, colorReset)
 	fmt.Println()
 
 	// Reload llama-server with the downloaded model
 	if err := reloadLlamaServerWithModel(destPath); err != nil {
-		fmt.Println()
 		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
 		fmt.Println()
 		printInfo("Manually restart the server:")
-		printItem("Restart service", "sudo systemctl restart llama-server")
+		fmt.Printf("  %ssudo systemctl restart llama-server%s\n", brandMuted, colorReset)
 		fmt.Println()
 	}
 
@@ -1964,8 +2495,10 @@ func handleDownloadHF(args []string) {
 		modelName = modelName[:len(modelName)-5]
 	}
 
-	fmt.Println("Run it:")
-	fmt.Printf("  offgrid run %s\n", modelName)
+	fmt.Printf("%s◆ Next Steps%s\n", brandPrimary, colorReset)
+	fmt.Printf("%s──────────────────────────────────────────────────%s\n", brandMuted, colorReset)
+	fmt.Printf("  Run model:    %soffgrid run %s%s\n", brandMuted, modelName, colorReset)
+	fmt.Printf("  Benchmark:    %soffgrid benchmark %s%s\n", brandMuted, modelName, colorReset)
 	fmt.Println()
 }
 
@@ -2073,6 +2606,41 @@ func handleRun(args []string) {
 		}
 		fmt.Println()
 		os.Exit(1)
+	}
+
+	// Check if this is an embedding model (not designed for chat)
+	isEmbeddingModel := strings.Contains(strings.ToLower(modelName), "minilm") ||
+		strings.Contains(strings.ToLower(modelName), "e5-") ||
+		strings.Contains(strings.ToLower(modelName), "bge-") ||
+		strings.Contains(strings.ToLower(modelName), "gte-") ||
+		strings.Contains(strings.ToLower(modelName), "embedding")
+
+	if isEmbeddingModel {
+		fmt.Println()
+		printWarning("This appears to be an embedding model, not a chat model")
+		fmt.Println()
+		printInfo("Embedding models are designed for:")
+		fmt.Println("  • Converting text to vectors")
+		fmt.Println("  • Semantic search")
+		fmt.Println("  • Text similarity")
+		fmt.Println()
+		printInfo("For chat/text generation, use a language model instead:")
+		fmt.Println("  • tinyllama-1.1b-chat")
+		fmt.Println("  • phi-2")
+		fmt.Println("  • llama-2-7b-chat")
+		fmt.Println("  • mistral-7b-instruct")
+		fmt.Println()
+		fmt.Printf("%sContinue anyway?%s (y/N): ", brandMuted, colorReset)
+
+		var response string
+		fmt.Scanln(&response)
+		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+			fmt.Println()
+			printInfo("Aborted. Use 'offgrid list' to see available models")
+			fmt.Println()
+			os.Exit(0)
+		}
+		fmt.Println()
 	}
 
 	// Switch to the requested model and reload llama-server
@@ -2409,6 +2977,50 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// formatDuration formats a duration in human-readable form
+func formatDuration(d time.Duration) string {
+	if d < time.Microsecond {
+		return fmt.Sprintf("%dns", d.Nanoseconds())
+	} else if d < time.Millisecond {
+		return fmt.Sprintf("%.2fµs", float64(d.Microseconds()))
+	} else if d < time.Second {
+		return fmt.Sprintf("%.2fms", float64(d.Milliseconds()))
+	}
+	return fmt.Sprintf("%.2fs", d.Seconds())
+}
+
+// formatModelSize formats model size in GB with appropriate precision
+func formatModelSize(sizeGB float64) string {
+	if sizeGB < 0.1 {
+		// For sizes less than 0.1 GB, show in MB
+		return fmt.Sprintf("%d MB", int(sizeGB*1024))
+	} else if sizeGB < 1.0 {
+		// For sizes less than 1 GB, use 2 decimal places
+		return fmt.Sprintf("%.2f GB", sizeGB)
+	}
+	// For larger sizes, use 1 decimal place
+	return fmt.Sprintf("%.1f GB", sizeGB)
+}
+
+// isServerHealthy checks if the server is responding
+func isServerHealthy(baseURL string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/health", nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK
 }
 
 // handleAlias manages model aliases
