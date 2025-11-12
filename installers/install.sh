@@ -1,261 +1,315 @@
 #!/bin/bash
-# OffGrid LLM Universal Installer
-# Auto-detects platform and installs the appropriate version
-# Usage: curl -fsSL https://offgrid-llm.io/install.sh | bash
+# OffGrid LLM Easy Installer
+# Automatically installs llama.cpp + OffGrid LLM in one command
+# Usage: curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
 
 set -e
-
-# Configuration
-REPO="takuphilchan/offgrid-llm"
-VERSION="${OFFGRID_VERSION:-latest}"
-INSTALL_DIR="${OFFGRID_INSTALL_DIR:-/usr/local/bin}"
 
 # Colors
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-GRAY='\033[0;90m'
 NC='\033[0m'
 
 # Functions
-print_header() {
+print_banner() {
     echo ""
-    echo -e "${CYAN}╭────────────────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ $1"
-    echo -e "${CYAN}╰────────────────────────────────────────────────────────────────────╯${NC}"
+    echo -e "${CYAN}"
+    cat << "EOF"
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║     ██████╗ ███████╗███████╗ ██████╗ ██████╗ ██╗██████╗      ║
+║    ██╔═══██╗██╔════╝██╔════╝██╔════╝ ██╔══██╗██║██╔══██╗     ║
+║    ██║   ██║█████╗  █████╗  ██║  ███╗██████╔╝██║██║  ██║     ║
+║    ██║   ██║██╔══╝  ██╔══╝  ██║   ██║██╔══██╗██║██║  ██║     ║
+║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
+║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
+║                                                               ║
+║               E A S Y   I N S T A L L E R                     ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+EOF
+    echo -e "${NC}"
+}
+
+print_step() { echo -e "${CYAN}[$(date +%H:%M:%S)]${NC} $1"; }
+print_success() { echo -e "${GREEN}✓${NC} $1"; }
+print_error() { echo -e "${RED}✗${NC} $1" >&2; }
+print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
+
+# Detect platform
+detect_platform() {
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+
+    case "$ARCH" in
+        x86_64|amd64)
+            ARCH="amd64"
+            LLAMACPP_ARCH="x64"
+            ;;
+        aarch64|arm64)
+            ARCH="arm64"
+            LLAMACPP_ARCH="arm64"
+            ;;
+        *)
+            print_error "Unsupported architecture: $ARCH"
+            exit 1
+            ;;
+    esac
+
+    case "$OS" in
+        linux)
+            LLAMACPP_VARIANT="ubuntu"
+            if [ "$ARCH" = "arm64" ]; then
+                LLAMACPP_FILE="llama-{VERSION}-bin-ubuntu-arm64.zip"
+            else
+                LLAMACPP_FILE="llama-{VERSION}-bin-ubuntu-x64.zip"
+            fi
+            ;;
+        darwin)
+            LLAMACPP_VARIANT="macos"
+            if [ "$ARCH" = "arm64" ]; then
+                LLAMACPP_FILE="llama-{VERSION}-bin-macos-arm64.zip"
+            else
+                LLAMACPP_FILE="llama-{VERSION}-bin-macos-x64.zip"
+            fi
+            ;;
+        *)
+            print_error "Unsupported OS: $OS (use install-windows.ps1 for Windows)"
+            exit 1
+            ;;
+    esac
+
+    print_success "Detected: $OS-$ARCH"
+}
+
+# Check dependencies
+check_dependencies() {
+    MISSING=()
+    
+    for cmd in curl tar unzip; do
+        if ! command -v $cmd &> /dev/null; then
+            MISSING+=($cmd)
+        fi
+    done
+    
+    if [ ${#MISSING[@]} -ne 0 ]; then
+        print_error "Missing required tools: ${MISSING[*]}"
+        print_step "Install them with:"
+        if [ "$OS" = "darwin" ]; then
+            echo "  brew install ${MISSING[*]}"
+        else
+            echo "  sudo apt-get install ${MISSING[*]}  # Debian/Ubuntu"
+            echo "  sudo yum install ${MISSING[*]}      # RHEL/CentOS"
+        fi
+        exit 1
+    fi
+}
+
+# Install llama.cpp
+install_llamacpp() {
+    print_step "Checking llama.cpp installation..."
+    
+    if command -v llama-server &> /dev/null; then
+        VERSION_INFO=$(llama-server --version 2>&1 | head -n1 || echo "unknown")
+        print_success "llama.cpp already installed: $VERSION_INFO"
+        return 0
+    fi
+    
+    print_step "Installing llama.cpp (inference engine)..."
+    
+    # Get latest release
+    print_step "Fetching latest llama.cpp release..."
+    LLAMACPP_API=$(curl -sL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest")
+    LLAMACPP_VERSION=$(echo "$LLAMACPP_API" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    
+    if [ -z "$LLAMACPP_VERSION" ]; then
+        print_error "Failed to fetch llama.cpp version"
+        print_warning "You can install manually from: https://github.com/ggml-org/llama.cpp/releases"
+        exit 1
+    fi
+    
+    print_success "Latest llama.cpp: $LLAMACPP_VERSION"
+    
+    # Build download URL
+    LLAMACPP_FILE="${LLAMACPP_FILE/\{VERSION\}/$LLAMACPP_VERSION}"
+    LLAMACPP_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMACPP_VERSION}/${LLAMACPP_FILE}"
+    
+    # Download
+    TMPDIR=$(mktemp -d)
+    trap "rm -rf $TMPDIR" EXIT
+    
+    print_step "Downloading llama.cpp..."
+    if ! curl -fsSL -o "$TMPDIR/llama.zip" "$LLAMACPP_URL"; then
+        print_error "Download failed: $LLAMACPP_URL"
+        print_warning "Install manually from: https://github.com/ggml-org/llama.cpp/releases"
+        exit 1
+    fi
+    
+    # Extract
+    print_step "Extracting llama.cpp..."
+    unzip -q "$TMPDIR/llama.zip" -d "$TMPDIR"
+    
+    # Find binaries - they're usually in build/bin/ or bin/
+    LLAMA_SERVER=""
+    for search_path in "$TMPDIR/build/bin/llama-server" "$TMPDIR/bin/llama-server" "$TMPDIR/llama-server"; do
+        if [ -f "$search_path" ]; then
+            LLAMA_SERVER="$search_path"
+            break
+        fi
+    done
+    
+    if [ -z "$LLAMA_SERVER" ]; then
+        print_error "Could not find llama-server binary in archive"
+        print_warning "Install manually from: https://github.com/ggml-org/llama.cpp/releases"
+        exit 1
+    fi
+    
+    # Install to /usr/local/bin
+    INSTALL_DIR="/usr/local/bin"
+    print_step "Installing llama-server to $INSTALL_DIR..."
+    
+    if [ -w "$INSTALL_DIR" ]; then
+        cp "$LLAMA_SERVER" "$INSTALL_DIR/llama-server"
+        chmod +x "$INSTALL_DIR/llama-server"
+    else
+        sudo cp "$LLAMA_SERVER" "$INSTALL_DIR/llama-server"
+        sudo chmod +x "$INSTALL_DIR/llama-server"
+    fi
+    
+    print_success "llama.cpp installed successfully!"
+}
+
+# Install OffGrid
+install_offgrid() {
+    print_step "Installing OffGrid LLM..."
+    
+    # Get latest release
+    print_step "Fetching latest OffGrid release..."
+    OFFGRID_API=$(curl -sL "https://api.github.com/repos/takuphilchan/offgrid-llm/releases/latest")
+    OFFGRID_VERSION=$(echo "$OFFGRID_API" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    
+    if [ -z "$OFFGRID_VERSION" ]; then
+        print_error "Failed to fetch OffGrid version"
+        exit 1
+    fi
+    
+    print_success "Latest OffGrid: $OFFGRID_VERSION"
+    
+    # Build download URL
+    OFFGRID_FILE="offgrid-${OS}-${ARCH}.tar.gz"
+    OFFGRID_URL="https://github.com/takuphilchan/offgrid-llm/releases/download/${OFFGRID_VERSION}/${OFFGRID_FILE}"
+    
+    # Download
+    TMPDIR=$(mktemp -d)
+    trap "rm -rf $TMPDIR" EXIT
+    
+    print_step "Downloading OffGrid..."
+    if ! curl -fsSL -o "$TMPDIR/offgrid.tar.gz" "$OFFGRID_URL"; then
+        print_error "Download failed: $OFFGRID_URL"
+        exit 1
+    fi
+    
+    # Extract
+    print_step "Extracting OffGrid..."
+    tar -xzf "$TMPDIR/offgrid.tar.gz" -C "$TMPDIR"
+    
+    # Find binary
+    OFFGRID_BIN=""
+    for search_path in "$TMPDIR/offgrid-${OS}-${ARCH}" "$TMPDIR/offgrid"; do
+        if [ -f "$search_path" ]; then
+            OFFGRID_BIN="$search_path"
+            break
+        fi
+    done
+    
+    if [ -z "$OFFGRID_BIN" ]; then
+        print_error "Could not find offgrid binary in archive"
+        exit 1
+    fi
+    
+    # Install
+    INSTALL_DIR="/usr/local/bin"
+    print_step "Installing offgrid to $INSTALL_DIR..."
+    
+    if [ -w "$INSTALL_DIR" ]; then
+        cp "$OFFGRID_BIN" "$INSTALL_DIR/offgrid"
+        chmod +x "$INSTALL_DIR/offgrid"
+    else
+        sudo cp "$OFFGRID_BIN" "$INSTALL_DIR/offgrid"
+        sudo chmod +x "$INSTALL_DIR/offgrid"
+    fi
+    
+    # Create config directory
+    CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/offgrid"
+    mkdir -p "$CONFIG_DIR"
+    
+    print_success "OffGrid installed successfully!"
+    
+    # Verify
+    if command -v offgrid &> /dev/null; then
+        INSTALLED_VERSION=$(offgrid version 2>/dev/null | grep -oP 'v[0-9.]+' || echo "$OFFGRID_VERSION")
+        print_success "Installation verified: $INSTALLED_VERSION"
+    fi
+}
+
+# Main
+main() {
+    print_banner
+    
+    echo ""
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_step "  STEP 1/3: System Check"
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    detect_platform
+    check_dependencies
+    
+    echo ""
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_step "  STEP 2/3: Install llama.cpp (Inference Engine)"
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    install_llamacpp
+    
+    echo ""
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_step "  STEP 3/3: Install OffGrid LLM"
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    install_offgrid
+    
+    echo ""
+    echo -e "${GREEN}"
+    cat << "EOF"
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║              🎉  INSTALLATION COMPLETE!  🎉                   ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+EOF
+    echo -e "${NC}"
+    
+    echo ""
+    print_success "All components installed successfully!"
+    echo ""
+    echo "  Installed:"
+    echo "    • OffGrid LLM     (/usr/local/bin/offgrid)"
+    echo "    • llama.cpp       (/usr/local/bin/llama-server)"
+    echo ""
+    echo "  Get Started:"
+    echo "    offgrid version           # Check version"
+    echo "    offgrid server start      # Start API server"
+    echo "    offgrid chat              # Interactive chat"
+    echo ""
+    echo "  Documentation:"
+    echo "    https://github.com/takuphilchan/offgrid-llm"
     echo ""
 }
 
-print_success() { echo -e "${GREEN}✓${NC} $1"; }
-print_error() { echo -e "${RED}✗${NC} $1" >&2; }
-print_info() { echo -e "${CYAN}→${NC} $1"; }
-print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-
-# Banner
-echo ""
-echo -e "${CYAN}"
-cat << "EOF"
-    ╔═══════════════════════════════════════════════════════════════╗
-    ║                                                               ║
-    ║     ██████╗ ███████╗███████╗ ██████╗ ██████╗ ██╗██████╗      ║
-    ║    ██╔═══██╗██╔════╝██╔════╝██╔════╝ ██╔══██╗██║██╔══██╗     ║
-    ║    ██║   ██║█████╗  █████╗  ██║  ███╗██████╔╝██║██║  ██║     ║
-    ║    ██║   ██║██╔══╝  ██╔══╝  ██║   ██║██╔══██╗██║██║  ██║     ║
-    ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
-    ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
-    ║                                                               ║
-    ║            U N I V E R S A L   I N S T A L L E R              ║
-    ║                                                               ║
-    ╚═══════════════════════════════════════════════════════════════╝
-EOF
-echo -e "${NC}"
-
-print_header "Detecting System..."
-
-# Detect OS
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-
-# Normalize architecture names
-case "$ARCH" in
-    x86_64|amd64)
-        ARCH="amd64"
-        ;;
-    aarch64|arm64)
-        ARCH="arm64"
-        ;;
-    *)
-        print_error "Unsupported architecture: $ARCH"
-        exit 1
-        ;;
-esac
-
-# Determine platform
-case "$OS" in
-    linux)
-        PLATFORM="linux"
-        FILE_EXT=""
-        ARCHIVE_EXT="tar.gz"
-        ;;
-    darwin)
-        PLATFORM="darwin"
-        FILE_EXT=""
-        ARCHIVE_EXT="tar.gz"
-        ;;
-    mingw*|msys*|cygwin*)
-        PLATFORM="windows"
-        FILE_EXT=".exe"
-        ARCHIVE_EXT="zip"
-        ;;
-    *)
-        print_error "Unsupported operating system: $OS"
-        exit 1
-        ;;
-esac
-
-print_success "Detected: $PLATFORM ($ARCH)"
-
-# Get latest version if not specified
-if [ "$VERSION" = "latest" ]; then
-    print_info "Fetching latest version..."
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$VERSION" ]; then
-        print_error "Failed to fetch latest version"
-        exit 1
-    fi
-    print_success "Latest version: $VERSION"
-fi
-
-# Construct download URL (matches GitHub release artifact names)
-# Workflow creates: offgrid-linux-amd64.tar.gz (not offgrid-v0.1.0-linux-amd64.tar.gz)
-FILENAME="offgrid-${PLATFORM}-${ARCH}.${ARCHIVE_EXT}"
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$FILENAME"
-
-print_header "Downloading OffGrid LLM"
-print_info "Version: $VERSION"
-print_info "Platform: $PLATFORM-$ARCH"
-print_info "URL: $DOWNLOAD_URL"
-
-# Create temporary directory
-TMP_DIR=$(mktemp -d)
-trap "rm -rf $TMP_DIR" EXIT
-
-cd "$TMP_DIR"
-
-# Download with progress
-print_info "Downloading..."
-if command -v wget &> /dev/null; then
-    wget --progress=bar:force -O "$FILENAME" "$DOWNLOAD_URL" 2>&1 | \
-        grep --line-buffered -oP '\d+%' | \
-        while read -r percent; do
-            echo -ne "\r${CYAN}→${NC} Downloading... ${GREEN}$percent${NC}"
-        done
-    echo ""
-elif command -v curl &> /dev/null; then
-    curl -L --progress-bar -o "$FILENAME" "$DOWNLOAD_URL"
-else
-    print_error "Neither wget nor curl is available"
-    exit 1
-fi
-
-print_success "Downloaded: $FILENAME"
-
-# Extract archive
-print_info "Extracting..."
-case "$ARCHIVE_EXT" in
-    tar.gz)
-        tar -xzf "$FILENAME"
-        ;;
-    zip)
-        unzip -q "$FILENAME"
-        ;;
-esac
-
-print_success "Extracted"
-
-# Run platform-specific installer
-print_header "Installing OffGrid LLM"
-
-case "$PLATFORM" in
-    linux|darwin)
-        # Check for install script in archive
-        if [ -f "install.sh" ]; then
-            chmod +x install.sh
-            ./install.sh
-        else
-            # Manual installation
-            print_info "Installing binaries to $INSTALL_DIR..."
-            
-            # Check write permissions
-            if [ -w "$INSTALL_DIR" ]; then
-                SUDO=""
-            else
-                SUDO="sudo"
-                print_warning "Requires sudo for installation to $INSTALL_DIR"
-            fi
-            
-            # Install offgrid binary (check various possible names)
-            BINARY_NAME=""
-            if [ -f "bin/offgrid" ]; then
-                BINARY_NAME="bin/offgrid"
-            elif [ -f "offgrid" ]; then
-                BINARY_NAME="offgrid"
-            elif [ -f "offgrid-${PLATFORM}-${ARCH}" ]; then
-                BINARY_NAME="offgrid-${PLATFORM}-${ARCH}"
-            else
-                print_error "offgrid binary not found in archive"
-                exit 1
-            fi
-            
-            $SUDO install -m 755 "$BINARY_NAME" "$INSTALL_DIR/offgrid"
-            print_success "Installed: offgrid"
-            
-            # Install llama-server if present
-            if [ -f "bin/llama-server" ]; then
-                $SUDO install -m 755 bin/llama-server "$INSTALL_DIR/llama-server"
-                print_success "Installed: llama-server"
-            elif [ -f "llama-server" ]; then
-                $SUDO install -m 755 llama-server "$INSTALL_DIR/llama-server"
-                print_success "Installed: llama-server"
-            fi
-            
-            # Create config directory
-            if [ "$PLATFORM" = "darwin" ]; then
-                CONFIG_DIR="$HOME/Library/Application Support/OffGrid"
-            else
-                CONFIG_DIR="$HOME/.config/offgrid"
-            fi
-            
-            mkdir -p "$CONFIG_DIR"
-            print_success "Created config directory: $CONFIG_DIR"
-        fi
-        ;;
-    
-    windows)
-        print_warning "Windows detected"
-        print_info "For Windows, please download the installer from:"
-        print_info "  https://github.com/$REPO/releases/download/$VERSION/OffGridSetup-${VERSION}.exe"
-        print_info ""
-        print_info "Or use PowerShell to install:"
-        print_info "  powershell -ExecutionPolicy Bypass -File install.ps1"
-        exit 0
-        ;;
-esac
-
-# Verify installation
-print_header "Verifying Installation"
-
-if command -v offgrid &> /dev/null; then
-    INSTALLED_VERSION=$(offgrid --version 2>&1 | grep -oP 'v\d+\.\d+\.\d+(-\w+)?' || echo "unknown")
-    print_success "OffGrid LLM installed successfully!"
-    print_info "Version: $INSTALLED_VERSION"
-else
-    print_warning "offgrid command not found in PATH"
-    print_info "You may need to add $INSTALL_DIR to your PATH"
-    print_info "Or restart your terminal"
-fi
-
-echo ""
-echo -e "${GREEN}╭────────────────────────────────────────────────────────────────────╮${NC}"
-echo -e "${GREEN}│ Installation Complete!                                              │${NC}"
-echo -e "${GREEN}╰────────────────────────────────────────────────────────────────────╯${NC}"
-echo ""
-
-echo -e "${CYAN}Quick Start:${NC}"
-echo -e "  ${GRAY}# Check version${NC}"
-echo -e "  offgrid --version"
-echo ""
-echo -e "  ${GRAY}# Start the server${NC}"
-echo -e "  offgrid server start"
-echo ""
-echo -e "  ${GRAY}# Get help${NC}"
-echo -e "  offgrid --help"
-echo ""
-
-echo -e "${CYAN}Documentation:${NC}"
-echo -e "  https://github.com/$REPO"
-echo ""
-
-echo -e "${YELLOW}Tip:${NC} Run 'offgrid doctor' to check system requirements and dependencies"
-echo ""
+# Run
+main
