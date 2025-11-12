@@ -28,6 +28,9 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
 )
 
+// Version is set via ldflags during build
+var Version = "dev"
+
 // Visual identity constants
 const (
 	// Colors (ANSI escape codes)
@@ -90,7 +93,7 @@ func printBanner() {
 	fmt.Printf("%s%s", brandPrimary, colorBold)
 	fmt.Println("    ╔═══════════════════════════════════╗")
 	fmt.Println("    ║                                   ║")
-	fmt.Println("    ║      OFFGRID LLM  v0.1.0α        ║")
+	fmt.Printf("    ║      OFFGRID LLM  %-15s ║\n", Version)
 	fmt.Println("    ║                                   ║")
 	fmt.Println("    ║   Edge Inference Orchestrator    ║")
 	fmt.Println("    ║                                   ║")
@@ -388,6 +391,9 @@ func main() {
 			return
 		case "serve", "server":
 			// Fall through to start server
+		case "version", "-v", "--version":
+			handleVersion()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -1736,6 +1742,7 @@ func printHelp() {
 	// Configuration
 	fmt.Printf("%sConfiguration & Tools%s\n", colorBold, colorReset)
 	printDivider()
+	fmt.Printf("  %sversion%s            Show version information\n", brandPrimary, colorReset)
 	fmt.Printf("  %sinfo%s               System information\n", brandPrimary, colorReset)
 	fmt.Printf("  %sconfig%s <action>    Manage configuration\n", brandPrimary, colorReset)
 	fmt.Printf("  %squantization%s       Quantization guide\n", brandPrimary, colorReset)
@@ -1766,6 +1773,29 @@ func printHelp() {
 	printItem("--json", "Output in JSON format (for scripting)")
 	fmt.Println()
 
+	printDivider()
+	fmt.Println()
+}
+
+func handleVersion() {
+	if output.JSONMode {
+		output.PrintJSON(map[string]interface{}{
+			"version": Version,
+			"go":      runtime.Version(),
+			"os":      runtime.GOOS,
+			"arch":    runtime.GOARCH,
+		})
+		return
+	}
+
+	fmt.Println()
+	printDivider()
+	fmt.Println()
+	printSection("OffGrid LLM Version")
+	fmt.Printf("  Version:      %s%s%s\n", brandPrimary, Version, colorReset)
+	fmt.Printf("  Go Version:   %s\n", runtime.Version())
+	fmt.Printf("  OS/Arch:      %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Println()
 	printDivider()
 	fmt.Println()
 }
