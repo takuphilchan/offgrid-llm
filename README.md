@@ -71,7 +71,7 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 **Production-ready bundles with zero external dependencies:**
 
 ```bash
-curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.0/install-bundle.sh | bash
+curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.1/install-bundle.sh | bash
 ```
 
 **What it does:**
@@ -79,6 +79,7 @@ curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.0/
 - ✅ Auto-detects GPU support (Vulkan on Linux, Metal on macOS)
 - ✅ Downloads optimized bundle (GPU or CPU variant)
 - ✅ Installs both `offgrid` and `llama-server` binaries
+- ✅ **Auto-starts servers** - `offgrid run` just works!
 - ✅ Zero external dependencies - everything included
 - ⚡ Installation completes in ~10 seconds
 

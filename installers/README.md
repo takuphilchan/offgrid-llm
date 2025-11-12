@@ -9,7 +9,7 @@
 **Complete, zero-dependency installation with automatic GPU detection:**
 
 ```bash
-curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.0/install-bundle.sh | bash
+curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.1/install-bundle.sh | bash
 ```
 
 ### What You Get
@@ -17,6 +17,7 @@ curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.0/
 - ✅ **Both binaries bundled**: `offgrid` + `llama-server` in one package
 - ✅ **Zero external dependencies**: Everything statically compiled
 - ✅ **Auto GPU detection**: Downloads Vulkan (Linux) or Metal (macOS) variant
+- ✅ **Auto-starts servers**: Just run `offgrid run <model>` - everything starts automatically!
 - ✅ **Production ready**: Tested, versioned releases
 - ⚡ **Fast**: Installs in ~10 seconds
 
@@ -30,7 +31,7 @@ curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.0/
 | macOS amd64 | CPU-only | ~38MB |
 
 **Installation time:** 10 seconds  
-**Service type:** Manual start with `offgrid run`
+**Service type:** Auto-start on demand with `offgrid run`
 
 ---
 
@@ -153,10 +154,10 @@ offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
 ### Start Using
 
 ```bash
-# Interactive chat (auto-starts API server if needed)
+# Interactive chat - auto-starts both servers!
 offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 
-# Or start API server manually
+# Or start API server manually if needed
 offgrid serve
 
 # Check server status
@@ -166,7 +167,7 @@ curl http://localhost:11611/health
 open http://localhost:11611/ui
 ```
 
-**Note:** The `offgrid run` command now automatically starts the API server if it's not running. No need for manual `offgrid serve` in most cases!
+**Note:** The `offgrid run` command automatically starts both the OffGrid API server AND llama-server if they're not running. Everything is zero-setup - just download a model and run!
 
 ---
 
