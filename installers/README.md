@@ -2,7 +2,10 @@
 
 One-command installation for all platforms. No compilation, no complex setup - just run and go!
 
-**Installation time:** 10-15 seconds
+**Installation time:** 10-15 seconds  
+**Service type:** Manual start (not a background service)
+
+**Note:** This installer provides pre-built binaries for manual use. For automatic startup and systemd service integration, use the [production installer](../dev/) instead.
 
 ---
 
@@ -35,6 +38,10 @@ iwr -useb https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/instal
 - **OffGrid LLM** - Main application (~10MB)
 - **llama.cpp** - Inference engine with GPU support (~15-50MB depending on variant)
 - **All required libraries** - Shared libraries for GPU acceleration
+
+**Important:** This installer does NOT create systemd services or auto-start functionality. You manually start the server with `offgrid server start` when needed.
+
+For automatic startup and background service operation, use the [production installer](../dev/) which builds from source and creates systemd services.
 
 ---
 
@@ -97,9 +104,19 @@ offgrid download tinyllama-1.1b-chat Q4_K_M
 # Interactive chat
 offgrid run tinyllama-1.1b-chat
 
-# API server (OpenAI-compatible)
-offgrid serve
+# Start API server manually (runs in foreground)
+offgrid server start
+
+# Or run API server in background
+offgrid server start &
+
+# Check server status
+curl http://localhost:11611/health
 ```
+
+**Note:** The server does NOT start automatically. You must run `offgrid server start` each time you want to use it.
+
+For automatic startup on boot, use the [production installer](../dev/) which creates systemd services.
 
 ---
 

@@ -66,9 +66,11 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ## Installation
 
-### Quick Install (Recommended)
+Choose the installation method that fits your needs:
 
-**One command - installs in 10-15 seconds:**
+### Quick Install (Recommended for Most Users)
+
+**Fast, pre-built binaries - ready in 10-15 seconds:**
 
 #### Linux / macOS
 ```bash
@@ -80,19 +82,21 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 iwr -useb https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.ps1 | iex
 ```
 
-**Features:**
-- ✅ Auto-detects GPU (NVIDIA, AMD, Intel) and installs optimized binaries
-- ✅ Downloads pre-built llama.cpp server (no compilation needed)
+**What you get:**
+- ✅ Pre-built binaries (no compilation)
+- ✅ Auto-detects GPU and installs optimized version
 - ✅ Sets up PATH automatically
-- ✅ Ready to use immediately
+- ✅ Manual start: Run `offgrid server start` when you need it
 
-For detailed instructions, troubleshooting, and uninstall guide, see **[installers/README.md](installers/README.md)**.
+**Best for:** Development, testing, or manual usage
+
+For detailed instructions, see **[installers/README.md](installers/README.md)**.
 
 ---
 
-### Build from Source (For Developers)
+### Production Install (Systemd Service)
 
-Want to customize builds or contribute? Use the source installer:
+**Build from source with automatic startup on boot:**
 
 ```bash
 # Clone repository
@@ -103,7 +107,16 @@ cd offgrid-llm
 sudo ./dev/install.sh
 ```
 
-This compiles llama.cpp from source with GPU support (CUDA/ROCm/Vulkan) and sets up systemd service.
+**What you get:**
+- ✅ Built from source with custom optimizations
+- ✅ Systemd services (auto-start on boot)
+- ✅ Background service operation
+- ✅ Production-ready security hardening
+- ✅ Automatic model hot-reload
+
+**Best for:** Production servers, always-on deployments, automatic startup
+
+See **[dev/README.md](dev/README.md)** for advanced build options.
 
 ---
 
