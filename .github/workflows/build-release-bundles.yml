@@ -13,22 +13,11 @@ on:
 
 jobs:
   build-linux-bundles:
-    name: Build Linux ${{ matrix.variant }} (${{ matrix.arch }})
+    name: Build Linux (${{ matrix.arch }})
     runs-on: ubuntu-22.04
     strategy:
       matrix:
         arch: [amd64]
-        variant: [cpu, vulkan, cuda]
-        include:
-          - variant: cpu
-            gpu_flags: ""
-            deps: ""
-          - variant: vulkan
-            gpu_flags: "-DGGML_VULKAN=ON"
-            deps: "vulkan-tools libvulkan-dev"
-          - variant: cuda
-            gpu_flags: "-DGGML_CUDA=ON"
-            deps: "nvidia-cuda-toolkit"
     
     steps:
       - name: Checkout code
@@ -43,9 +32,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake git
-          if [ -n "${{ matrix.deps }}" ]; then
-            sudo apt-get install -y ${{ matrix.deps }}
-          fi
       
       - name: Clone llama.cpp
         run: |
@@ -60,8 +46,7 @@ jobs:
           cmake .. \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
-            -DLLAMA_STATIC=ON \
-            ${{ matrix.gpu_flags }}
+            -DLLAMA_STATIC=ON
           cmake --build . --config Release -j $(nproc) --target llama-server
       
       - name: Build OffGrid bundle
@@ -81,7 +66,7 @@ jobs:
           cp /tmp/llama.cpp/build/bin/llama-server ./llama-server
           
           # Create bundle directory
-          BUNDLE_NAME="offgrid-${VERSION}-linux-${{ matrix.arch }}-${{ matrix.variant }}"
+          BUNDLE_NAME="offgrid-${VERSION}-linux-${{ matrix.arch }}"
           mkdir -p "$BUNDLE_NAME"
           cp offgrid "$BUNDLE_NAME/"
           cp llama-server "$BUNDLE_NAME/"
@@ -112,7 +97,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: offgrid-linux-${{ matrix.arch }}-${{ matrix.variant }}
+          name: offgrid-linux-${{ matrix.arch }}
           path: ${{ env.ASSET_PATH }}
       
       - name: Upload to release
@@ -262,22 +247,14 @@ jobs:
               x86_64|amd64) ARCH="amd64" ;;
               aarch64|arm64) ARCH="arm64" ;;
           esac
-          GPU_VARIANT="cpu"
+          
           if [ "$OS" = "linux" ]; then
-              if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
-                  if command -v nvcc &> /dev/null; then
-                      GPU_VARIANT="cuda"
-                  elif command -v vulkaninfo &> /dev/null; then
-                      GPU_VARIANT="vulkan"
-                  fi
-              fi
-          fi
-          if [ "$OS" = "linux" ]; then
-              BUNDLE_NAME="offgrid-${VERSION}-linux-${ARCH}-${GPU_VARIANT}.tar.gz"
+              BUNDLE_NAME="offgrid-${VERSION}-linux-${ARCH}.tar.gz"
           else
               BUNDLE_NAME="offgrid-${VERSION}-darwin-${ARCH}.tar.gz"
           fi
-          echo "Downloading OffGrid LLM ${VERSION} (${OS}-${ARCH}-${GPU_VARIANT})..."
+          
+          echo "Downloading OffGrid LLM ${VERSION} (${OS}-${ARCH})..."
           curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid-bundle.tar.gz
           echo "Extracting..."
           tar -xzf /tmp/offgrid-bundle.tar.gz -C /tmp
