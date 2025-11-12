@@ -833,24 +833,17 @@ build_offgrid() {
     print_step "Downloading Go dependencies..."
     GOTOOLCHAIN=local $GO_CMD mod download 2>&1 | grep -E "go: downloading|error" || true
     
-    # TODO: Real llama.cpp inference integration
-    # Currently disabled due to go-llama.cpp version incompatibility with latest llama.cpp
-    # The go-skynet/go-llama.cpp binding from March 2024 expects older llama.cpp with grammar-parser.h
-    # We need to either:
-    # 1. Pin to older llama.cpp version matching the binding
-    # 2. Switch to a more modern Go binding (llama-cpp-python wrapper, or direct CGO)
-    # 3. Fork and update go-llama.cpp to work with latest llama.cpp
-    #
-    # For now, building in mock mode to ensure reliable installation
-    LLAMA_AVAILABLE=false
+    # Note: OffGrid uses HTTP-based communication with llama-server for inference
+    # This provides better stability and compatibility than direct CGO bindings
+    # Architecture: OffGrid (Go) ⟷ HTTP ⟷ llama-server (C++)
     
-    print_step "Building in mock mode..."
-    print_info "Note: Real inference coming soon - version compatibility work in progress"
+    print_step "Building OffGrid LLM server..."
+    print_info "Using HTTP-based llama.cpp integration for maximum compatibility"
     
     if GOTOOLCHAIN=local $GO_CMD build -o offgrid ./cmd/offgrid 2>&1 | tee /tmp/go_build.log | tail -n 10; then
         if [ -f offgrid ] && [ -x offgrid ]; then
             print_success "Built successfully"
-            print_warning "Currently using mock mode - real inference integration coming in next update"
+            print_info "Real inference via llama-server HTTP backend"
         else
             print_error "Failed to build binary"
             exit 1
