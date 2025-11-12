@@ -1,226 +1,291 @@
-name: Release Build
+name: Release Buildname: Release Build
 
-on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+
+
+on:on:
+
+  push:  push:
+
+    tags:    tags:
+
+      - 'v*'      - 'v*'
+
+  workflow_dispatch:  workflow_dispatch:
+
     inputs:
-      version:
-        description: 'Version to release (e.g., v0.1.0)'
+
+env:      version:
+
+  GO_VERSION: '1.21'        description: 'Version to release (e.g., v0.1.0)'
+
         required: true
-        default: 'v0.1.0-alpha'
 
-env:
-  GO_VERSION: '1.21'
-  LLAMA_CPP_VERSION: 'b4288'  # Specify llama.cpp release or commit
+jobs:        default: 'v0.1.0-alpha'
 
-jobs:
-  # Build llama.cpp binaries for all platforms
-  build-llama-cpp:
-    name: Build llama.cpp - ${{ matrix.os }} (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        include:
-          # Linux builds
-          - os: linux
-            arch: amd64
-            runner: ubuntu-latest
-            output: llama-server
-            cmake_flags: -DGGML_NATIVE=OFF
-          - os: linux
-            arch: arm64
-            runner: ubuntu-latest
-            output: llama-server
-            cmake_flags: -DGGML_NATIVE=OFF
-          # macOS builds
-          - os: darwin
-            arch: amd64
-            runner: macos-13  # Intel runner
-            output: llama-server
-            cmake_flags: -DGGML_METAL=ON -DGGML_NATIVE=OFF
-          - os: darwin
-            arch: arm64
-            runner: macos-14  # Apple Silicon runner
-            output: llama-server
-            cmake_flags: -DGGML_METAL=ON -DGGML_NATIVE=OFF
-          # Windows builds
-          - os: windows
-            arch: amd64
-            runner: windows-latest
-            output: llama-server.exe
-            cmake_flags: -DGGML_NATIVE=OFF
+  # Build and create release with Go binaries only
 
-    steps:
-      - name: Checkout llama.cpp
-        uses: actions/checkout@v4
-        with:
-          repository: ggerganov/llama.cpp
-          ref: ${{ env.LLAMA_CPP_VERSION }}
+  build-and-release:env:
 
-      - name: Install build dependencies (Ubuntu)
-        if: matrix.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake
+    name: Build and Release  GO_VERSION: '1.21'
 
-      - name: Install build dependencies (macOS)
-        if: matrix.os == 'darwin'
-        run: |
-          brew install cmake
-
-      - name: Build llama-server
-        run: |
-          mkdir build
-          cd build
-          cmake .. ${{ matrix.cmake_flags }} -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release --target llama-server -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-
-      - name: Prepare artifact
-        run: |
-          mkdir -p artifact
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            cp build/bin/Release/${{ matrix.output }} artifact/ || cp build/bin/${{ matrix.output }} artifact/
-          else
-            cp build/bin/${{ matrix.output }} artifact/
-          fi
-        shell: bash
-
-      - name: Upload llama-server artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: llama-server-${{ matrix.os }}-${{ matrix.arch }}
-          path: artifact/${{ matrix.output }}
-          retention-days: 1
-
-  # Build OffGrid LLM Go binaries
-  build-offgrid:
-    name: Build OffGrid - ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            os: linux
-            arch: amd64
-          - goos: linux
-            goarch: arm64
-            os: linux
-            arch: arm64
-          - goos: darwin
-            goarch: amd64
-            os: darwin
-            arch: amd64
-          - goos: darwin
-            goarch: arm64
-            os: darwin
-            arch: arm64
-          - goos: windows
-            goarch: amd64
-            os: windows
-            arch: amd64
-          - goos: windows
-            goarch: arm64
-            os: windows
-            arch: arm64
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    jobs:
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
+    steps:  # Build OffGrid LLM Go binaries for all platforms
+
+      - name: Checkout repository  build-offgrid:
+
+        uses: actions/checkout@v4    name: Build OffGrid - ${{ matrix.os }} (${{ matrix.arch }})
+
+    runs-on: ubuntu-latest
+
+      - name: Set up Go    strategy:
+
+        uses: actions/setup-go@v5      matrix:
+
+        with:        include:
+
+          go-version: ${{ env.GO_VERSION }}          - goos: linux
+
+            goarch: amd64
+
+      - name: Get version            os: linux
+
+        id: version            arch: amd64
+
+        run: |          - goos: linux
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then            goarch: arm64
+
+            echo "version=v0.1.0-manual" >> $GITHUB_OUTPUT            os: linux
+
+          else            arch: arm64
+
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT          - goos: darwin
+
+          fi            goarch: amd64
+
+            os: darwin
+
+      - name: Build all platforms            arch: amd64
+
+        run: |          - goos: darwin
+
+          VERSION=${{ steps.version.outputs.version }}            goarch: arm64
+
+                      os: darwin
+
+          # Linux AMD64            arch: arm64
+
+          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-amd64 ./cmd/offgrid          - goos: windows
+
+                      goarch: amd64
+
+          # Linux ARM64            os: windows
+
+          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-arm64 ./cmd/offgrid            arch: amd64
+
+                    - goos: windows
+
+          # macOS AMD64 (Intel)            goarch: arm64
+
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-amd64 ./cmd/offgrid            os: windows
+
+                      arch: arm64
+
+          # macOS ARM64 (Apple Silicon)
+
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-arm64 ./cmd/offgrid    steps:
+
+                - name: Checkout repository
+
+          # Windows AMD64        uses: actions/checkout@v4
+
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-amd64.exe ./cmd/offgrid
+
+                - name: Set up Go
+
+          # Windows ARM64        uses: actions/setup-go@v5
+
+          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-arm64.exe ./cmd/offgrid        with:
+
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Get version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
+      - name: Create release packages
 
-      - name: Build binary
-        run: |
-          BINARY_NAME="offgrid"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            BINARY_NAME="offgrid.exe"
-          fi
-          
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-          go build -ldflags "-X main.Version=${{ steps.version.outputs.version }}" \
-            -o ${BINARY_NAME} ./cmd/offgrid
+        run: |      - name: Get version
 
-      - name: Upload OffGrid artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: offgrid-${{ matrix.os }}-${{ matrix.arch }}
-          path: offgrid${{ matrix.goos == 'windows' && '.exe' || '' }}
-          retention-days: 1
+          VERSION=${{ steps.version.outputs.version }}        id: version
+
+          mkdir -p release        run: |
+
+                    if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+
+          # Linux packages            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+
+          for arch in amd64 arm64; do          else
+
+            mkdir -p pkg-linux-${arch}            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+            cp dist/offgrid-linux-${arch} pkg-linux-${arch}/offgrid          fi
+
+            cp README.md LICENSE pkg-linux-${arch}/        shell: bash
+
+            tar -czf release/offgrid-${VERSION}-linux-${arch}.tar.gz -C pkg-linux-${arch} .
+
+          done      - name: Build binary
+
+                  run: |
+
+          # macOS packages          BINARY_NAME="offgrid"
+
+          for arch in amd64 arm64; do          if [ "${{ matrix.goos }}" = "windows" ]; then
+
+            mkdir -p pkg-darwin-${arch}            BINARY_NAME="offgrid.exe"
+
+            cp dist/offgrid-darwin-${arch} pkg-darwin-${arch}/offgrid          fi
+
+            cp README.md LICENSE pkg-darwin-${arch}/          
+
+            tar -czf release/offgrid-${VERSION}-darwin-${arch}.tar.gz -C pkg-darwin-${arch} .          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+
+          done          go build -ldflags "-X main.Version=${{ steps.version.outputs.version }}" \
+
+                      -o ${BINARY_NAME} ./cmd/offgrid
+
+          # Windows packages
+
+          for arch in amd64 arm64; do      - name: Upload OffGrid artifact
+
+            mkdir -p pkg-windows-${arch}        uses: actions/upload-artifact@v4
+
+            cp dist/offgrid-windows-${arch}.exe pkg-windows-${arch}/offgrid.exe        with:
+
+            cp README.md LICENSE pkg-windows-${arch}/          name: offgrid-${{ matrix.os }}-${{ matrix.arch }}
+
+            cp installers/install-windows.ps1 pkg-windows-${arch}/install.ps1          path: offgrid${{ matrix.goos == 'windows' && '.exe' || '' }}
+
+            cd pkg-windows-${arch} && zip -r ../release/offgrid-${VERSION}-windows-${arch}.zip . && cd ..          retention-days: 1
+
+          done
 
   # Package for Linux (tar.gz archives)
-  package-linux:
-    name: Package Linux
-    needs: [build-llama-cpp, build-offgrid]
-    runs-on: ubuntu-latest
-    strategy:
+
+      - name: Generate checksums  package-linux:
+
+        run: |    name: Package Linux
+
+          cd release    needs: [build-llama-cpp, build-offgrid]
+
+          sha256sum * > checksums.txt    runs-on: ubuntu-latest
+
+          cat checksums.txt    strategy:
+
       matrix:
-        arch: [amd64, arm64]
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Create Release Notes        arch: [amd64, arm64]
 
-      - name: Download OffGrid binary
-        uses: actions/download-artifact@v4
-        with:
-          name: offgrid-linux-${{ matrix.arch }}
-          path: package/
-
-      - name: Download llama-server binary
-        uses: actions/download-artifact@v4
-        with:
-          name: llama-server-linux-${{ matrix.arch }}
-          path: package/
-
-      - name: Get version
-        id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
 
-      - name: Create package structure
-        run: |
-          mkdir -p package/bin
-          chmod +x package/offgrid package/llama-server
-          mv package/offgrid package/bin/
-          mv package/llama-server package/bin/
+          VERSION=${{ steps.version.outputs.version }}    steps:
+
+          cat > release_notes.md << EOF      - name: Checkout repository
+
+          ## OffGrid LLM ${VERSION}        uses: actions/checkout@v4
+
           
-          # Copy documentation
-          cp README.md package/
-          cp LICENSE package/
-          
-          # Create install script
-          cat > package/install.sh << 'EOF'
-          #!/bin/bash
+
+          Cross-platform AI inference system for edge deployments.      - name: Download OffGrid binary
+
+                  uses: actions/download-artifact@v4
+
+          ### Quick Install        with:
+
+                    name: offgrid-linux-${{ matrix.arch }}
+
+          **Linux/macOS:**          path: package/
+
+          \`\`\`bash
+
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/installers/install.sh | bash      - name: Download llama-server binary
+
+          \`\`\`        uses: actions/download-artifact@v4
+
+                  with:
+
+          **Windows (PowerShell as Admin):**          name: llama-server-linux-${{ matrix.arch }}
+
+          \`\`\`powershell          path: package/
+
+          irm https://raw.githubusercontent.com/${{ github.repository }}/main/installers/install-windows.ps1 | iex
+
+          \`\`\`      - name: Get version
+
+                  id: version
+
+          ### Manual Installation        run: |
+
+                    if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+
+          Download the appropriate package for your platform below, extract it, and add to your PATH.            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+
+                    else
+
+          **Note:** You'll need to install llama.cpp separately:            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+          - Linux: Use the root \`install.sh\` script to build from source with GPU support          fi
+
+          - macOS: \`brew install llama.cpp\`
+
+          - Windows: Download from [llama.cpp releases](https://github.com/ggerganov/llama.cpp/releases)      - name: Create package structure
+
+                  run: |
+
+          Or use the quick install scripts above which handle llama.cpp installation automatically.          mkdir -p package/bin
+
+                    chmod +x package/offgrid package/llama-server
+
+          ### Platform Support          mv package/offgrid package/bin/
+
+                    mv package/llama-server package/bin/
+
+          - ✅ Linux (x86_64, ARM64)          
+
+          - ✅ macOS (Intel, Apple Silicon)          # Copy documentation
+
+          - ✅ Windows (x86_64, ARM64)          cp README.md package/
+
+                    cp LICENSE package/
+
+          ### Verify Downloads          
+
+                    # Create install script
+
+          Check integrity with SHA256 checksums in \`checksums.txt\`          cat > package/install.sh << 'EOF'
+
+          EOF          #!/bin/bash
+
           set -e
-          
-          echo "Installing OffGrid LLM..."
-          
-          # Install binaries
-          sudo install -m 755 bin/offgrid /usr/local/bin/offgrid
-          sudo install -m 755 bin/llama-server /usr/local/bin/llama-server
-          
-          # Create config directory
-          mkdir -p ~/.config/offgrid
+
+      - name: Create GitHub Release          
+
+        uses: softprops/action-gh-release@v1          echo "Installing OffGrid LLM..."
+
+        with:          
+
+          files: release/*          # Install binaries
+
+          body_path: release_notes.md          sudo install -m 755 bin/offgrid /usr/local/bin/offgrid
+
+          draft: false          sudo install -m 755 bin/llama-server /usr/local/bin/llama-server
+
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}          
+
+        env:          # Create config directory
+
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          mkdir -p ~/.config/offgrid
+
           
           echo "✓ Installation complete!"
           echo "Run 'offgrid --help' to get started"
