@@ -40,7 +40,7 @@ jobs:
           
           # Install Vulkan dependencies if needed
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            sudo apt-get install -y libvulkan-dev glslang-tools vulkan-validationlayers-dev spirv-tools libshaderc-dev
+            sudo apt-get install -y libvulkan-dev glslang-tools vulkan-validationlayers-dev spirv-tools
           fi
       
       - name: Clone llama.cpp
@@ -58,13 +58,9 @@ jobs:
           GPU_FLAGS=""
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
             GPU_FLAGS="-DGGML_VULKAN=ON"
-            # Help CMake find glslc
+            # Use glslangValidator from glslang-tools package (available in Ubuntu 22.04)
+            # This is the shader compiler that comes with standard repos
             if command -v glslangValidator &> /dev/null; then
-              GLSLC_PATH=$(dirname $(which glslangValidator))
-              export PATH="$GLSLC_PATH:$PATH"
-            fi
-            # Alternative: use glslangValidator instead of glslc
-            if [ ! -x "$(command -v glslc)" ] && command -v glslangValidator &> /dev/null; then
               GPU_FLAGS="$GPU_FLAGS -DVulkan_GLSLC_EXECUTABLE=$(which glslangValidator)"
             fi
           fi
