@@ -74,32 +74,84 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ## 📦 Installation
 
-### Quick Install (Recommended)
+### Build from Source (Recommended for Now)
 
-Choose your platform for a fast, pre-compiled installation:
+**Note**: Pre-built binaries are coming soon. For now, build from source:
+
+#### Linux
+
+```bash
+# Clone repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Full installation with llama.cpp compilation and GPU support (~10-15 min)
+sudo ./install.sh
+```
+
+The installer automatically:
+- Detects and configures GPU (NVIDIA CUDA, AMD ROCm)
+- Compiles llama.cpp with optimizations
+- Sets up systemd service
+- Creates config directories
+
+#### macOS
+
+```bash
+# Clone repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Install dependencies
+brew install go cmake
+
+# Build OffGrid
+make build
+
+# Install llama.cpp
+brew install llama.cpp
+
+# Move binary to PATH
+sudo mv offgrid /usr/local/bin/
+```
+
+#### Windows
+
+```powershell
+# Clone repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Install Go 1.21+ from https://go.dev/dl/
+
+# Build
+go build -o offgrid.exe ./cmd/offgrid
+
+# Install llama.cpp from https://github.com/ggerganov/llama.cpp/releases
+```
+
+### Pre-built Binaries (Coming Soon)
+
+Once [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases) are available, you can use these quick installers:
 
 #### Linux / macOS
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
-```
-
-#### Windows (PowerShell)
-```powershell
-# Download latest release from GitHub, extract, then:
-cd offgrid
-powershell -ExecutionPolicy Bypass -File install.ps1
-```
-
-#### Manual Download
-Download pre-built binaries from [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases):
-- **macOS**: `offgrid-vX.Y.Z-darwin-arm64.dmg` (Apple Silicon) or `offgrid-vX.Y.Z-darwin-amd64.dmg` (Intel)
-- **Windows**: `offgrid-vX.Y.Z-windows-amd64.zip`
-- **Linux**: `offgrid-vX.Y.Z-linux-amd64.tar.gz`
-
-### Build from Source (Linux)
 
 For developers or those who want maximum customization:
 
+```bash
+# Clone repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+
+# Full installation with llama.cpp compilation and GPU support
+sudo ./install.sh
+```
+
+### Pre-built Binaries (Coming Soon)
+
+Once [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases) are available, you can use these quick installers:
+
+#### Linux / macOS
 ```bash
 # Clone repository
 git clone https://github.com/takuphilchan/offgrid-llm.git
@@ -126,12 +178,12 @@ To avoid confusion, here's what each installer does:
 
 | File | Purpose | When to Use |
 |------|---------|-------------|
-| `./install.sh` (root) | **Full Linux source build** - Compiles llama.cpp, sets up systemd | Advanced users, custom builds, GPU optimization |
-| `installers/install.sh` | **Universal quick installer** - Downloads pre-built binaries | Quick installation, any platform |
-| `installers/install-macos.sh` | **macOS binary installer** - Installs from extracted archive | macOS manual install |
-| `installers/install-windows.ps1` | **Windows PowerShell installer** - Adds to PATH, creates shortcuts | Windows manual install |
+| `./install.sh` (root) | **Full Linux source build** - Compiles llama.cpp, sets up systemd | Current recommended method for Linux |
+| `installers/install.sh` | **Universal quick installer** - Downloads pre-built binaries | After first release is published |
+| `installers/install-macos.sh` | **macOS binary installer** - Installs from GitHub Releases | After first release is published |
+| `installers/install-windows.ps1` | **Windows PowerShell installer** - Adds to PATH | After first release is published |
 
-**Most users should use**: The quick install (curl command) or download releases from GitHub.
+**Current Status**: Build from source using instructions above. Quick installers will work after v0.1.0 is published.
 
 </details>
 
