@@ -45,7 +45,17 @@ Thumbs.db
 
 # Build artifacts
 dist/
-build/
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+# Temporary build files
+dmg_temp/
+OffGrid.app/
+package/
 
 # Research papers (private until published)
 docs/paper.tex

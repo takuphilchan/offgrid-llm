@@ -1,4 +1,4 @@
-.PHONY: build run clean test coverage help fmt lint install cross-compile build-llama build-install install-system
+.PHONY: build run clean test coverage help fmt lint install cross-compile build-llama build-install install-system release
 
 # Binary name
 BINARY=offgrid
@@ -232,6 +232,8 @@ cross-compile:
 	@GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-arm64 $(MAIN_PATH)
 	@echo "$(BRAND_PRIMARY)→$(RESET) Building for windows/amd64..."
 	@GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY)-windows-amd64.exe $(MAIN_PATH)
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building for windows/arm64..."
+	@GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-windows-arm64.exe $(MAIN_PATH)
 	@echo ""
 	@echo "$(BRAND_SUCCESS)✓$(RESET) Built for all platforms in $(BOLD)dist/$(RESET)"
 	@echo ""
@@ -239,6 +241,30 @@ cross-compile:
 	@echo "$(BRAND_MUTED)│$(RESET) $(BOLD)Available Binaries$(RESET)"
 	@echo "$(BRAND_MUTED)├────────────────────────────────────────────────────────────────────┤$(RESET)"
 	@ls -lh dist/ | tail -n +2 | awk '{print "$(BRAND_MUTED)│$(RESET)  " $$9 " $(DIM)(" $$5 ")$(RESET)"}'
+	@echo "$(BRAND_MUTED)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+
+# Build release packages for all platforms
+release: cross-compile
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Creating Release Packages$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Creating archives..."
+	@cd dist && tar -czf $(BINARY)-$(VERSION)-linux-amd64.tar.gz $(BINARY)-linux-amd64
+	@cd dist && tar -czf $(BINARY)-$(VERSION)-linux-arm64.tar.gz $(BINARY)-linux-arm64
+	@cd dist && tar -czf $(BINARY)-$(VERSION)-darwin-amd64.tar.gz $(BINARY)-darwin-amd64
+	@cd dist && tar -czf $(BINARY)-$(VERSION)-darwin-arm64.tar.gz $(BINARY)-darwin-arm64
+	@cd dist && zip -q $(BINARY)-$(VERSION)-windows-amd64.zip $(BINARY)-windows-amd64.exe
+	@cd dist && zip -q $(BINARY)-$(VERSION)-windows-arm64.zip $(BINARY)-windows-arm64.exe
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Release packages created in $(BOLD)dist/$(RESET)"
+	@echo ""
+	@echo "$(BRAND_MUTED)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_MUTED)│$(RESET) $(BOLD)Release Archives$(RESET)"
+	@echo "$(BRAND_MUTED)├────────────────────────────────────────────────────────────────────┤$(RESET)"
+	@ls -lh dist/*.tar.gz dist/*.zip 2>/dev/null | awk '{print "$(BRAND_MUTED)│$(RESET)  " $$9 " $(DIM)(" $$5 ")$(RESET)"}'
 	@echo "$(BRAND_MUTED)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
 	@echo ""
 

@@ -10,15 +10,15 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg?style=flat-square&logo=go&logoColor=white)](https://go.dev)
-[![Platform](https://img.shields.io/badge/Platform-Linux-FCC624.svg?style=flat-square&logo=linux&logoColor=black)](https://www.linux.org)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
 [![llama.cpp](https://img.shields.io/badge/Powered%20by-llama.cpp-green.svg?style=flat-square)](https://github.com/ggerganov/llama.cpp)
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#features">Features</a> •
-  <a href="#usage">Usage</a> •
-  <a href="#api">API</a> •
-  <a href="#documentation">Docs</a>
+  <a href="#-installation">Installation</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-usage">Usage</a> •
+  <a href="#-api-reference">API</a> •
+  <a href="#-documentation">Docs</a>
 </p>
 
 </div>
@@ -29,11 +29,7 @@
 
 Built for **edge environments**, **air-gapped systems**, and **privacy-conscious deployments** where internet connectivity is limited or prohibited.
 
-```bash
-# One command to install everything
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm && sudo ./install.sh
-```
+**Cross-platform support**: Linux, macOS (Intel & Apple Silicon), and Windows with native installers.
 
 <table>
 <tr>
@@ -49,8 +45,8 @@ cd offgrid-llm && sudo ./install.sh
 
 **Production Ready**
 - OpenAI-compatible API
-- GPU acceleration (CUDA/ROCm)
-- Systemd service integration
+- GPU acceleration (CUDA/ROCm/Metal)
+- Cross-platform service integration
 
 </td>
 </tr>
@@ -76,60 +72,68 @@ cd offgrid-llm && sudo ./install.sh
 
 ---
 
-## Features
+## 📦 Installation
 
-<table>
-<tr>
-<td>
+### Quick Install (Recommended)
 
-### Core Capabilities
-- **Offline-First** - Complete functionality without internet
-- **GPU Accelerated** - NVIDIA CUDA & AMD ROCm support
-- **OpenAI Compatible** - Standard API endpoints
-- **HuggingFace Integration** - Direct model downloads
-- **Auto Hot-Reload** - Model changes detected automatically
-- **Modern Web UI** - Clean, responsive interface
+Choose your platform for a fast, pre-compiled installation:
 
-</td>
-<td>
+#### Linux / macOS
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
+```
 
-### Production Features
-- **Session Management** - Save & resume conversations
-- **Health Monitoring** - Kubernetes-ready probes
-- **Shell Completions** - Bash/Zsh/Fish support
-- **JSON Output** - Automation & CI/CD friendly
-- **Systemd Services** - Auto-start on boot
-- **Security Hardening** - Process isolation
+#### Windows (PowerShell)
+```powershell
+# Download latest release from GitHub, extract, then:
+cd offgrid
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
 
-</td>
-</tr>
-<tr>
-<td>
+#### Manual Download
+Download pre-built binaries from [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases):
+- **macOS**: `offgrid-vX.Y.Z-darwin-arm64.dmg` (Apple Silicon) or `offgrid-vX.Y.Z-darwin-amd64.dmg` (Intel)
+- **Windows**: `offgrid-vX.Y.Z-windows-amd64.zip`
+- **Linux**: `offgrid-vX.Y.Z-linux-amd64.tar.gz`
 
-### Productivity Tools
-- **Prompt Templates** - 10 built-in templates
-- **Response Caching** - LRU cache with TTL
-- **Batch Processing** - Parallel JSONL processing
-- **Aliases & Favorites** - Quick model access
-- **USB Import/Export** - Portable deployments
+### Build from Source (Linux)
 
-</td>
-<td>
+For developers or those who want maximum customization:
 
-### Developer Experience
-- **Model Search** - Filter by size, quant, author
-- **Health Endpoints** - `/health`, `/ready`, `/livez`
-- **Statistics API** - Per-model metrics
-- **Flexible Config** - ENV vars & YAML support
-- **API Playground** - Built-in testing UI
+```bash
+# Clone repository
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
 
-</td>
-</tr>
-</table>
+# Full installation with llama.cpp compilation and GPU support
+sudo ./install.sh
+```
 
----
+The source installer (`./install.sh` in the root directory) features:
+- GPU detection and auto-configuration (NVIDIA CUDA, AMD ROCm)
+- llama.cpp compilation with optimizations
+- systemd service integration
+- Security hardening and process isolation
+- Professional progress bars and time estimates
+- ~10-15 minutes installation time
 
-## Quick Start
+See [docs/BUILDING.md](docs/BUILDING.md) for detailed build instructions.
+
+<details>
+<summary><b>📁 Installer Files Explained</b></summary>
+
+To avoid confusion, here's what each installer does:
+
+| File | Purpose | When to Use |
+|------|---------|-------------|
+| `./install.sh` (root) | **Full Linux source build** - Compiles llama.cpp, sets up systemd | Advanced users, custom builds, GPU optimization |
+| `installers/install.sh` | **Universal quick installer** - Downloads pre-built binaries | Quick installation, any platform |
+| `installers/install-macos.sh` | **macOS binary installer** - Installs from extracted archive | macOS manual install |
+| `installers/install-windows.ps1` | **Windows PowerShell installer** - Adds to PATH, creates shortcuts | Windows manual install |
+
+**Most users should use**: The quick install (curl command) or download releases from GitHub.
+
+</details>
 
 ---
 
@@ -206,35 +210,20 @@ The installer automatically:
 - Installs systemd services - Auto-start on boot with proper isolation
 - Security hardening - Localhost-only binding, process restrictions
 - Go environment - Persistent configuration across reboots
-- Shell completions - Tab completion for bash/zsh/fish
+---
 
-**Installation Progress:**
-```
-╭────────────────────────────────────────────────────────────────────╮
-│ Step 7/14 [████████████░░░░░░░░] 50% │ Elapsed: 05:32
-╰────────────────────────────────────────────────────────────────────╯
+## 🚀 Quick Start
 
-◆ Building llama.cpp Inference Engine
-────────────────────────────────────────────────────────
-  Estimated time: ~5-10 minutes
-
-▸ Configuring build with CMake...
-✓ llama-server built successfully
-✓ Libraries installed system-wide
-```
-
-**Total Installation Time:** ~10-15 minutes
-- Creates model directory at `/var/lib/offgrid/models`
-
-</details>
-
-### First Steps
+### First Steps After Installation
 
 ```bash
+# Check installation
+offgrid --version
+
 # Search for a model
 offgrid search llama --limit 5
 
-# Download a model (4GB example)
+# Download a model (example: 4GB)
 offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
   --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
 
@@ -263,7 +252,7 @@ The included web interface provides:
 
 ---
 
-## Usage
+## 💻 Usage
 
 ### Model Management
 
