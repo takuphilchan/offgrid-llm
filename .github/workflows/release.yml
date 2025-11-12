@@ -23,14 +23,19 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
       - name: Build binaries
         run: |
           mkdir -p dist
+          VERSION=${{ steps.version.outputs.version }}
           for GOOS in linux darwin windows; do
             for GOARCH in amd64 arm64; do
               EXT=""
               [ "$GOOS" = "windows" ] && EXT=".exe"
-              GOOS=$GOOS GOARCH=$GOARCH go build -o dist/offgrid-${GOOS}-${GOARCH}${EXT} ./cmd/offgrid
+              GOOS=$GOOS GOARCH=$GOARCH go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-${GOOS}-${GOARCH}${EXT} ./cmd/offgrid
             done
           done
       
