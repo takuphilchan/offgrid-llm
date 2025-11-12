@@ -37,7 +37,7 @@ jobs:
           
           # Install Vulkan dependencies if needed
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            sudo apt-get install -y libvulkan-dev vulkan-headers glslang-tools
+            sudo apt-get install -y libvulkan-dev glslang-tools
           fi
       
       - name: Clone llama.cpp
@@ -157,15 +157,14 @@ jobs:
           
           # Set architecture-specific flags
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            ARCH_FLAGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_METAL=ON"
+            ARCH_FLAGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_METAL=ON -DGGML_NATIVE=OFF"
           else
-            ARCH_FLAGS="-DCMAKE_OSX_ARCHITECTURES=x86_64"
+            ARCH_FLAGS="-DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_NATIVE=OFF"
           fi
           
           cmake .. \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
-            -DLLAMA_STATIC=ON \
             -DLLAMA_CURL=OFF \
             $ARCH_FLAGS
           cmake --build . --config Release -j $(sysctl -n hw.ncpu) --target llama-server
