@@ -164,6 +164,40 @@ func printBox(title, content string) {
 	fmt.Printf("%s%s%s%s%s\n", brandPrimary, boxBL, strings.Repeat(boxH, width), boxBR, colorReset)
 }
 
+// ensureOffgridServerRunning checks if OffGrid server is responding
+func ensureOffgridServerRunning() error {
+	cfg := config.LoadConfig()
+	healthURL := fmt.Sprintf("http://localhost:%d/health", cfg.ServerPort)
+
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return nil, nil // Bypass proxy for localhost
+			},
+		},
+	}
+
+	resp, err := client.Get(healthURL)
+	if err != nil {
+		return fmt.Errorf("server not responding: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// startOffgridServerInBackground starts the OffGrid server in background
+func startOffgridServerInBackground() error {
+	// Start offgrid serve in background using shell
+	cmd := exec.Command("sh", "-c", "offgrid serve > /dev/null 2>&1 &")
+	return cmd.Run()
+}
+
 func stripAnsi(str string) string {
 	// Simple ANSI strip for length calculation
 	result := str
@@ -178,61 +212,121 @@ func reloadLlamaServer() error {
 }
 
 func reloadLlamaServerWithModel(modelPath string) error {
-	// Check if systemd is available
-	cmd := exec.Command("systemctl", "--version")
-	if err := cmd.Run(); err != nil {
-		// Systemd not available
-		return fmt.Errorf("systemd not available - manual restart required")
+	// Check if systemd service exists
+	cmd := exec.Command("systemctl", "is-active", "llama-server")
+	systemdAvailable := cmd.Run() == nil || exec.Command("systemctl", "status", "llama-server").Run() == nil
+
+	if systemdAvailable {
+		// Use systemd service
+		// If modelPath is provided, update the active model configuration
+		if modelPath != "" {
+			// Store the active model path for the service to use
+			activeModelFile := "/etc/offgrid/active-model"
+			cmd := exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' > %s", modelPath, activeModelFile))
+			if err := cmd.Run(); err != nil {
+				printWarning(fmt.Sprintf("Could not update active model config: %v", err))
+			}
+		}
+
+		// Restart llama-server service
+		fmt.Println()
+		printInfo("Reloading inference server with new model...")
+
+		cmd = exec.Command("sudo", "systemctl", "restart", "llama-server")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to restart llama-server: %v\nOutput: %s", err, string(output))
+		}
+
+		// Wait for service to be active
+		time.Sleep(1 * time.Second)
+
+		// Check if service is active
+		cmd = exec.Command("systemctl", "is-active", "llama-server")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("llama-server failed to start - check logs with: sudo journalctl -u llama-server -n 50")
+		}
+
+		// Wait for model to actually load (can take several seconds for large models)
+		if err := waitForLlamaServerReady(30); err != nil {
+			printWarning(fmt.Sprintf("Model may still be loading: %v", err))
+			printInfo("Large models can take 10-30 seconds to load")
+		}
+
+		printSuccess("Inference server reloaded")
+		return nil
 	}
 
-	// If modelPath is provided, update the active model configuration
-	if modelPath != "" {
-		// Store the active model path for the service to use
-		activeModelFile := "/etc/offgrid/active-model"
-		cmd := exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' > %s", modelPath, activeModelFile))
-		if err := cmd.Run(); err != nil {
-			printWarning(fmt.Sprintf("Could not update active model config: %v", err))
+	// No systemd service - start llama-server directly in background
+	fmt.Println()
+	printInfo("Starting llama-server in background...")
+
+	// Check if llama-server is already running
+	if isLlamaServerRunning() {
+		// Server is running, just wait for it to be ready
+		if err := waitForLlamaServerReady(5); err == nil {
+			printSuccess("llama-server is already running")
+			return nil
 		}
 	}
 
-	// Restart llama-server service
-	fmt.Println()
-	printInfo("Reloading inference server with new model...")
-
-	cmd = exec.Command("sudo", "systemctl", "restart", "llama-server")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to restart llama-server: %v\nOutput: %s", err, string(output))
+	// Start llama-server as background process
+	// Read internal port (fallback to default if not found)
+	llamaPort := "8081"
+	portFile := "/etc/offgrid/llama-port"
+	if data, err := os.ReadFile(portFile); err == nil {
+		llamaPort = strings.TrimSpace(string(data))
+	} else {
+		// Try user config directory
+		homeDir, _ := os.UserHomeDir()
+		userPortFile := filepath.Join(homeDir, ".config", "offgrid", "llama-port")
+		if data, err := os.ReadFile(userPortFile); err == nil {
+			llamaPort = strings.TrimSpace(string(data))
+		}
 	}
 
-	// Wait for service to be active
-	time.Sleep(1 * time.Second)
+	// Start llama-server with the model in background using shell
+	cmdStr := fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -c 4096 > /dev/null 2>&1 &",
+		modelPath, llamaPort)
 
-	// Check if service is active
-	cmd = exec.Command("systemctl", "is-active", "llama-server")
+	cmd = exec.Command("sh", "-c", cmdStr)
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("llama-server failed to start - check logs with: sudo journalctl -u llama-server -n 50")
+		return fmt.Errorf("failed to start llama-server: %v", err)
 	}
 
-	// Wait for model to actually load (can take several seconds for large models)
+	// Wait for server to be ready
+	fmt.Println()
+	printInfo("Waiting for llama-server to load model...")
 	if err := waitForLlamaServerReady(30); err != nil {
-		printWarning(fmt.Sprintf("Model may still be loading: %v", err))
-		printInfo("Large models can take 10-30 seconds to load")
+		return fmt.Errorf("llama-server failed to start: %v", err)
 	}
 
-	printSuccess("Inference server reloaded")
-
+	printSuccess("llama-server started successfully")
 	return nil
+}
+
+// isLlamaServerRunning checks if llama-server process is running
+func isLlamaServerRunning() bool {
+	cmd := exec.Command("pgrep", "-x", "llama-server")
+	return cmd.Run() == nil
 }
 
 // waitForLlamaServerReady polls llama-server until it's ready or timeout
 func waitForLlamaServerReady(timeoutSec int) error {
-	// Read llama-server port
+	// Read llama-server port (fallback to default if not found)
+	port := "8081"
 	portBytes, err := os.ReadFile("/etc/offgrid/llama-port")
-	if err != nil {
-		return fmt.Errorf("could not read llama-server port: %w", err)
+	if err == nil {
+		port = strings.TrimSpace(string(portBytes))
+	} else {
+		// Try user config directory
+		homeDir, _ := os.UserHomeDir()
+		userPortFile := filepath.Join(homeDir, ".config", "offgrid", "llama-port")
+		if portBytes, err := os.ReadFile(userPortFile); err == nil {
+			port = strings.TrimSpace(string(portBytes))
+		}
 	}
-	port := strings.TrimSpace(string(portBytes))
 
 	// Create client that bypasses proxy for localhost
 	client := &http.Client{
@@ -2607,7 +2701,7 @@ func handleRun(args []string) {
 
 	cfg := config.LoadConfig()
 
-	// Check if model exists locally
+	// Check if model exists locally (for validation only)
 	registry := models.NewRegistry(cfg.ModelsDir)
 	if err := registry.ScanModels(); err != nil {
 		fmt.Fprintf(os.Stderr, "\n✗ Error: Failed to scan models directory\n")
@@ -2615,8 +2709,8 @@ func handleRun(args []string) {
 		os.Exit(1)
 	}
 
-	// Try to find the model
-	modelInfo, err := registry.GetModel(modelName)
+	// Try to find the model (for validation)
+	_, err := registry.GetModel(modelName)
 	if err != nil {
 		fmt.Println()
 		printError(fmt.Sprintf("Model not found: %s", modelName))
@@ -2673,14 +2767,21 @@ func handleRun(args []string) {
 		fmt.Println()
 	}
 
-	// Switch to the requested model and reload llama-server
-	modelPath := modelInfo.Path
-	if err := reloadLlamaServerWithModel(modelPath); err != nil {
+	// Check if OffGrid API server is running and start it if needed
+	if err := ensureOffgridServerRunning(); err != nil {
 		fmt.Println()
-		printWarning(fmt.Sprintf("Could not switch to model: %v", err))
-		printInfo("You may need to manually restart llama-server:")
-		printItem("Restart", "sudo systemctl restart llama-server")
-		fmt.Println()
+		printWarning(fmt.Sprintf("OffGrid server not running: %v", err))
+		printInfo("Starting OffGrid server in background...")
+		if err := startOffgridServerInBackground(); err != nil {
+			fmt.Println()
+			printError("Failed to start OffGrid server")
+			printInfo("Please start the server manually:")
+			printItem("Start server", "offgrid serve &")
+			fmt.Println()
+			os.Exit(1)
+		}
+		// Wait for server to be ready
+		time.Sleep(2 * time.Second)
 	}
 
 	// Setup session management
