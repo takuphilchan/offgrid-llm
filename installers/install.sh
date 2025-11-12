@@ -338,7 +338,10 @@ install_offgrid() {
     # Check if offgrid is currently running
     if pgrep -x offgrid > /dev/null 2>&1; then
         print_warning "OffGrid is currently running. Stopping it first..."
-        pkill -x offgrid || sudo pkill -x offgrid || true
+        # Try without sudo first, then with sudo if needed
+        if ! pkill -x offgrid 2>/dev/null; then
+            sudo pkill -x offgrid 2>/dev/null || true
+        fi
         sleep 1
     fi
     
