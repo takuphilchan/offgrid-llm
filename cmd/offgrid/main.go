@@ -198,6 +198,74 @@ func startOffgridServerInBackground() error {
 	return cmd.Run()
 }
 
+// ensureLlamaServerRunning checks if llama-server is responding
+func ensureLlamaServerRunning() error {
+	healthURL := "http://localhost:8081/health"
+
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return nil, nil // Bypass proxy for localhost
+			},
+		},
+	}
+
+	resp, err := client.Get(healthURL)
+	if err != nil {
+		return fmt.Errorf("llama-server not responding: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("llama-server returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// startLlamaServerInBackground starts llama-server with the specified model
+func startLlamaServerInBackground(modelPath string) error {
+	// Check if llama-server exists
+	llamaServerPath, err := exec.LookPath("llama-server")
+	if err != nil {
+		return fmt.Errorf("llama-server not found in PATH: %w", err)
+	}
+
+	// Get CPU count for optimal threading
+	cpuCores := runtime.NumCPU()
+	threads := cpuCores / 2
+	if threads < 1 {
+		threads = 1
+	}
+
+	// Build llama-server command with optimal flags
+	args := []string{
+		"-m", modelPath,
+		"--port", "8081",
+		"--host", "127.0.0.1",
+		"-t", fmt.Sprintf("%d", threads),
+		"-c", "4096", // context size
+		"--n-gpu-layers", "999", // Auto-detect GPU layers
+	}
+
+	// Start llama-server in background
+	cmd := exec.Command(llamaServerPath, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start llama-server: %w", err)
+	}
+
+	// Detach the process so it continues running
+	go func() {
+		cmd.Wait()
+	}()
+
+	return nil
+}
+
 func stripAnsi(str string) string {
 	// Simple ANSI strip for length calculation
 	result := str
@@ -2782,6 +2850,56 @@ func handleRun(args []string) {
 		}
 		// Wait for server to be ready
 		time.Sleep(2 * time.Second)
+	}
+
+	// Get the full model path
+	model, err := registry.GetModel(modelName)
+	if err != nil {
+		fmt.Println()
+		printError(fmt.Sprintf("Failed to get model path: %v", err))
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	// Check if llama-server is running and start it if needed
+	if err := ensureLlamaServerRunning(); err != nil {
+		fmt.Println()
+		printInfo("Starting llama-server with model...")
+		if err := startLlamaServerInBackground(model.Path); err != nil {
+			fmt.Println()
+			printError("Failed to start llama-server")
+			printInfo("Please start llama-server manually:")
+			printItem("Start llama-server", fmt.Sprintf("llama-server -m %s --port 8081 &", model.Path))
+			fmt.Println()
+			os.Exit(1)
+		}
+		// Wait for llama-server to load the model
+		fmt.Println()
+		printInfo("Loading model into llama-server (this may take a few moments)...")
+
+		// Poll llama-server health endpoint until model is ready
+		maxWait := 60 // seconds
+		for i := 0; i < maxWait; i++ {
+			time.Sleep(1 * time.Second)
+
+			resp, err := http.Get("http://localhost:8081/health")
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == 200 {
+					// Model is loaded and ready
+					break
+				}
+			}
+
+			if i == maxWait-1 {
+				fmt.Println()
+				printError("Timeout waiting for model to load")
+				fmt.Println()
+				os.Exit(1)
+			}
+		}
+		fmt.Println()
+		printInfo("Model loaded successfully!")
 	}
 
 	// Setup session management
