@@ -131,12 +131,10 @@ if (Test-Path "$binDir\llama-server.exe") {
     
     # Extract
     Write-Step "Extracting llama.cpp..."
-    Expand-Archive -Path $llamaCppZip -DestinationPath $tempDir -Force
+    Expand-Archive -Path $llamaCppZip -DestinationPath "$tempDir\llama" -Force
     
-    # Find binaries
-    $llamaBinDir = Get-ChildItem -Path $tempDir -Recurse -Directory | Where-Object { Test-Path "$($_.FullName)\llama-server.exe" } | Select-Object -First 1
-    
-    if (-not $llamaBinDir) {
+    # Check if llama-server.exe exists
+    if (-not (Test-Path "$tempDir\llama\llama-server.exe")) {
         Write-Error "Could not find llama-server.exe in archive"
         exit 1
     }
@@ -146,7 +144,7 @@ if (Test-Path "$binDir\llama-server.exe") {
     
     # Copy all binaries and DLLs
     Write-Step "Installing llama-server to $binDir..."
-    Copy-Item "$($llamaBinDir.FullName)\*" -Destination $binDir -Recurse -Force
+    Copy-Item "$tempDir\llama\*" -Destination $binDir -Recurse -Force
     
     # Cleanup
     Remove-Item -Path $tempDir -Recurse -Force
