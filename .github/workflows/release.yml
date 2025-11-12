@@ -1,132 +1,262 @@
-name: Release Buildname: Release Build
+name: Release Buildname: Release Buildname: Release Build
 
 
 
-on:on:
+on:
 
-  push:  push:
+  push:
 
-    tags:    tags:
+    tags:on:on:
+
+      - 'v*'
+
+  workflow_dispatch:  push:  push:
+
+
+
+env:    tags:    tags:
+
+  GO_VERSION: '1.21'
 
       - 'v*'      - 'v*'
 
-  workflow_dispatch:  workflow_dispatch:
+jobs:
 
-    inputs:
+  build-and-release:  workflow_dispatch:  workflow_dispatch:
 
-env:      version:
+    name: Build and Release
 
-  GO_VERSION: '1.21'        description: 'Version to release (e.g., v0.1.0)'
+    runs-on: ubuntu-latest    inputs:
 
-        required: true
+    
 
-jobs:        default: 'v0.1.0-alpha'
+    steps:env:      version:
 
-  # Build and create release with Go binaries only
+      - name: Checkout repository
 
-  build-and-release:env:
+        uses: actions/checkout@v4  GO_VERSION: '1.21'        description: 'Version to release (e.g., v0.1.0)'
 
-    name: Build and Release  GO_VERSION: '1.21'
 
-    runs-on: ubuntu-latest
 
-    jobs:
+      - name: Set up Go        required: true
 
-    steps:  # Build OffGrid LLM Go binaries for all platforms
+        uses: actions/setup-go@v5
 
-      - name: Checkout repository  build-offgrid:
-
-        uses: actions/checkout@v4    name: Build OffGrid - ${{ matrix.os }} (${{ matrix.arch }})
-
-    runs-on: ubuntu-latest
-
-      - name: Set up Go    strategy:
-
-        uses: actions/setup-go@v5      matrix:
-
-        with:        include:
-
-          go-version: ${{ env.GO_VERSION }}          - goos: linux
-
-            goarch: amd64
-
-      - name: Get version            os: linux
-
-        id: version            arch: amd64
-
-        run: |          - goos: linux
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then            goarch: arm64
-
-            echo "version=v0.1.0-manual" >> $GITHUB_OUTPUT            os: linux
-
-          else            arch: arm64
-
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT          - goos: darwin
-
-          fi            goarch: amd64
-
-            os: darwin
-
-      - name: Build all platforms            arch: amd64
-
-        run: |          - goos: darwin
-
-          VERSION=${{ steps.version.outputs.version }}            goarch: arm64
-
-                      os: darwin
-
-          # Linux AMD64            arch: arm64
-
-          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-amd64 ./cmd/offgrid          - goos: windows
-
-                      goarch: amd64
-
-          # Linux ARM64            os: windows
-
-          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-arm64 ./cmd/offgrid            arch: amd64
-
-                    - goos: windows
-
-          # macOS AMD64 (Intel)            goarch: arm64
-
-          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-amd64 ./cmd/offgrid            os: windows
-
-                      arch: arm64
-
-          # macOS ARM64 (Apple Silicon)
-
-          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-arm64 ./cmd/offgrid    steps:
-
-                - name: Checkout repository
-
-          # Windows AMD64        uses: actions/checkout@v4
-
-          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-amd64.exe ./cmd/offgrid
-
-                - name: Set up Go
-
-          # Windows ARM64        uses: actions/setup-go@v5
-
-          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-arm64.exe ./cmd/offgrid        with:
+        with:jobs:        default: 'v0.1.0-alpha'
 
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Create release packages
+  # Build and create release with Go binaries only
 
-        run: |      - name: Get version
+      - name: Get version
 
-          VERSION=${{ steps.version.outputs.version }}        id: version
+        id: version  build-and-release:env:
+
+        run: |
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then    name: Build and Release  GO_VERSION: '1.21'
+
+            echo "version=v0.1.0-manual" >> $GITHUB_OUTPUT
+
+          else    runs-on: ubuntu-latest
+
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+          fi    jobs:
+
+
+
+      - name: Build all platforms    steps:  # Build OffGrid LLM Go binaries for all platforms
+
+        run: |
+
+          VERSION=${{ steps.version.outputs.version }}      - name: Checkout repository  build-offgrid:
+
+          mkdir -p dist
+
+                  uses: actions/checkout@v4    name: Build OffGrid - ${{ matrix.os }} (${{ matrix.arch }})
+
+          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-amd64 ./cmd/offgrid
+
+          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-arm64 ./cmd/offgrid    runs-on: ubuntu-latest
+
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-amd64 ./cmd/offgrid
+
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-arm64 ./cmd/offgrid      - name: Set up Go    strategy:
+
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-amd64.exe ./cmd/offgrid
+
+          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-arm64.exe ./cmd/offgrid        uses: actions/setup-go@v5      matrix:
+
+
+
+      - name: Create release packages        with:        include:
+
+        run: |
+
+          VERSION=${{ steps.version.outputs.version }}          go-version: ${{ env.GO_VERSION }}          - goos: linux
+
+          mkdir -p release
+
+                      goarch: amd64
+
+          for arch in amd64 arm64; do
+
+            mkdir -p pkg-linux-${arch}      - name: Get version            os: linux
+
+            cp dist/offgrid-linux-${arch} pkg-linux-${arch}/offgrid
+
+            cp README.md LICENSE pkg-linux-${arch}/        id: version            arch: amd64
+
+            tar -czf release/offgrid-${VERSION}-linux-${arch}.tar.gz -C pkg-linux-${arch} .
+
+          done        run: |          - goos: linux
+
+          
+
+          for arch in amd64 arm64; do          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then            goarch: arm64
+
+            mkdir -p pkg-darwin-${arch}
+
+            cp dist/offgrid-darwin-${arch} pkg-darwin-${arch}/offgrid            echo "version=v0.1.0-manual" >> $GITHUB_OUTPUT            os: linux
+
+            cp README.md LICENSE pkg-darwin-${arch}/
+
+            tar -czf release/offgrid-${VERSION}-darwin-${arch}.tar.gz -C pkg-darwin-${arch} .          else            arch: arm64
+
+          done
+
+                      echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT          - goos: darwin
+
+          for arch in amd64 arm64; do
+
+            mkdir -p pkg-windows-${arch}          fi            goarch: amd64
+
+            cp dist/offgrid-windows-${arch}.exe pkg-windows-${arch}/offgrid.exe
+
+            cp README.md LICENSE pkg-windows-${arch}/            os: darwin
+
+            cp installers/install-windows.ps1 pkg-windows-${arch}/install.ps1
+
+            cd pkg-windows-${arch} && zip -r ../release/offgrid-${VERSION}-windows-${arch}.zip . && cd ../..      - name: Build all platforms            arch: amd64
+
+          done
+
+        run: |          - goos: darwin
+
+      - name: Generate checksums
+
+        run: |          VERSION=${{ steps.version.outputs.version }}            goarch: arm64
+
+          cd release
+
+          sha256sum * > checksums.txt                      os: darwin
+
+          cat checksums.txt
+
+          # Linux AMD64            arch: arm64
+
+      - name: Create Release Notes
+
+        run: |          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-amd64 ./cmd/offgrid          - goos: windows
+
+          VERSION=${{ steps.version.outputs.version }}
+
+          cat > release_notes.md << 'EOF'                      goarch: amd64
+
+          ## OffGrid LLM
+
+                    # Linux ARM64            os: windows
+
+          Cross-platform AI inference system for edge deployments.
+
+                    GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-linux-arm64 ./cmd/offgrid            arch: amd64
+
+          ### Quick Install
+
+                              - goos: windows
+
+          **Linux/macOS:**
+
+          ```bash          # macOS AMD64 (Intel)            goarch: arm64
+
+          curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
+
+          ```          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-amd64 ./cmd/offgrid            os: windows
+
+          
+
+          **Windows (PowerShell as Admin):**                      arch: arm64
+
+          ```powershell
+
+          irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install-windows.ps1 | iex          # macOS ARM64 (Apple Silicon)
+
+          ```
+
+                    GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-darwin-arm64 ./cmd/offgrid    steps:
+
+          ### Manual Download
+
+                          - name: Checkout repository
+
+          Download the appropriate package below, extract, and add to PATH.
+
+                    # Windows AMD64        uses: actions/checkout@v4
+
+          **Note:** llama.cpp is required but not included. Install separately:
+
+          - **Linux**: Run root `install.sh` to build from source with GPU support          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-amd64.exe ./cmd/offgrid
+
+          - **macOS**: `brew install llama.cpp`
+
+          - **Windows**: Download from [llama.cpp releases](https://github.com/ggerganov/llama.cpp/releases)                - name: Set up Go
+
+          
+
+          Or use the quick install scripts above - they handle llama.cpp automatically.          # Windows ARM64        uses: actions/setup-go@v5
+
+          
+
+          ### Platform Support          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/offgrid-windows-arm64.exe ./cmd/offgrid        with:
+
+          
+
+          - Linux (x86_64, ARM64)          go-version: ${{ env.GO_VERSION }}
+
+          - macOS (Intel, Apple Silicon)
+
+          - Windows (x86_64, ARM64)      - name: Create release packages
+
+          
+
+          ### Verify Downloads        run: |      - name: Get version
+
+          
+
+          SHA256 checksums in `checksums.txt`          VERSION=${{ steps.version.outputs.version }}        id: version
+
+          EOF
 
           mkdir -p release        run: |
 
-                    if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+      - name: Create GitHub Release
 
-          # Linux packages            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        uses: softprops/action-gh-release@v1                    if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
 
-          for arch in amd64 arm64; do          else
+        with:
 
-            mkdir -p pkg-linux-${arch}            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          files: release/*          # Linux packages            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+
+          body_path: release_notes.md
+
+          draft: false          for arch in amd64 arm64; do          else
+
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+
+        env:            mkdir -p pkg-linux-${arch}            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             cp dist/offgrid-linux-${arch} pkg-linux-${arch}/offgrid          fi
 
