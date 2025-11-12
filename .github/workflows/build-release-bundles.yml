@@ -1,0 +1,270 @@
+name: Build Release Bundles
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v0.1.0'
+
+jobs:
+  build-linux-bundles:
+    name: Build Linux ${{ matrix.variant }} (${{ matrix.arch }})
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        arch: [amd64]
+        variant: [cpu, vulkan, cuda]
+        include:
+          - variant: cpu
+            gpu_flags: ""
+            deps: ""
+          - variant: vulkan
+            gpu_flags: "-DGGML_VULKAN=ON"
+            deps: "vulkan-tools libvulkan-dev"
+          - variant: cuda
+            gpu_flags: "-DGGML_CUDA=ON"
+            deps: "nvidia-cuda-toolkit"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git
+          if [ -n "${{ matrix.deps }}" ]; then
+            sudo apt-get install -y ${{ matrix.deps }}
+          fi
+      
+      - name: Clone llama.cpp
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp /tmp/llama.cpp
+          cd /tmp/llama.cpp
+          echo "LLAMA_VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
+      
+      - name: Build llama.cpp static library
+        run: |
+          cd /tmp/llama.cpp
+          mkdir build && cd build
+          cmake .. \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            ${{ matrix.gpu_flags }}
+          cmake --build . --config Release -j $(nproc)
+      
+      - name: Build OffGrid bundle
+        run: |
+          export CGO_ENABLED=1
+          export CGO_CFLAGS="-I/tmp/llama.cpp"
+          export CGO_LDFLAGS="-L/tmp/llama.cpp/build -lllama -lggml -lstdc++ -lm -lpthread"
+          
+          # Add GPU-specific linker flags
+          if [ "${{ matrix.variant }}" = "vulkan" ]; then
+            export CGO_LDFLAGS="$CGO_LDFLAGS -lvulkan"
+          elif [ "${{ matrix.variant }}" = "cuda" ]; then
+            export CGO_LDFLAGS="$CGO_LDFLAGS -L/usr/local/cuda/lib64 -lcudart -lcublas -lcublasLt"
+          fi
+          
+          VERSION="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          
+          OUTPUT_NAME="offgrid-${VERSION}-linux-${{ matrix.arch }}-${{ matrix.variant }}"
+          
+          go build -tags llama \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.LlamaVersion=${LLAMA_VERSION}" \
+            -o "$OUTPUT_NAME" \
+            ./cmd/offgrid
+          
+          # Create checksum
+          sha256sum "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256"
+          
+          # Create tarball
+          tar -czf "$OUTPUT_NAME.tar.gz" "$OUTPUT_NAME" "$OUTPUT_NAME.sha256"
+          
+          echo "ASSET_PATH=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offgrid-linux-${{ matrix.arch }}-${{ matrix.variant }}
+          path: ${{ env.ASSET_PATH }}
+      
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ASSET_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos-bundles:
+    name: Build macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, amd64]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Install dependencies
+        run: |
+          brew install cmake
+      
+      - name: Clone llama.cpp
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp /tmp/llama.cpp
+          cd /tmp/llama.cpp
+          echo "LLAMA_VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
+      
+      - name: Build llama.cpp static library
+        run: |
+          cd /tmp/llama.cpp
+          mkdir build && cd build
+          
+          # Set architecture-specific flags
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            ARCH_FLAGS="-DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_METAL=ON"
+          else
+            ARCH_FLAGS="-DCMAKE_OSX_ARCHITECTURES=x86_64"
+          fi
+          
+          cmake .. \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            $ARCH_FLAGS
+          cmake --build . --config Release -j $(sysctl -n hw.ncpu)
+      
+      - name: Build OffGrid bundle
+        run: |
+          export CGO_ENABLED=1
+          export CGO_CFLAGS="-I/tmp/llama.cpp"
+          export CGO_LDFLAGS="-L/tmp/llama.cpp/build -lllama -lggml -lstdc++ -framework Foundation"
+          
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            export GOARCH=arm64
+            export CGO_LDFLAGS="$CGO_LDFLAGS -framework Metal -framework MetalKit"
+          else
+            export GOARCH=amd64
+          fi
+          
+          VERSION="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          
+          OUTPUT_NAME="offgrid-${VERSION}-darwin-${{ matrix.arch }}"
+          
+          go build -tags llama \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.LlamaVersion=${LLAMA_VERSION}" \
+            -o "$OUTPUT_NAME" \
+            ./cmd/offgrid
+          
+          # Create checksum
+          shasum -a 256 "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256"
+          
+          # Create tarball
+          tar -czf "$OUTPUT_NAME.tar.gz" "$OUTPUT_NAME" "$OUTPUT_NAME.sha256"
+          
+          echo "ASSET_PATH=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offgrid-darwin-${{ matrix.arch }}
+          path: ${{ env.ASSET_PATH }}
+      
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ASSET_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-installer:
+    name: Create unified installer
+    runs-on: ubuntu-latest
+    needs: [build-linux-bundles, build-macos-bundles]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Create installer script
+        run: |
+          VERSION="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          
+          cat > install-bundle.sh << 'INSTALLER_EOF'
+          #!/bin/bash
+          set -e
+          VERSION="VERSION_PLACEHOLDER"
+          REPO="takuphilchan/offgrid-llm"
+          BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m)
+          case "$ARCH" in
+              x86_64|amd64) ARCH="amd64" ;;
+              aarch64|arm64) ARCH="arm64" ;;
+          esac
+          GPU_VARIANT="cpu"
+          if [ "$OS" = "linux" ]; then
+              if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+                  if command -v nvcc &> /dev/null; then
+                      GPU_VARIANT="cuda"
+                  elif command -v vulkaninfo &> /dev/null; then
+                      GPU_VARIANT="vulkan"
+                  fi
+              fi
+          fi
+          if [ "$OS" = "linux" ]; then
+              BUNDLE_NAME="offgrid-${VERSION}-linux-${ARCH}-${GPU_VARIANT}.tar.gz"
+          else
+              BUNDLE_NAME="offgrid-${VERSION}-darwin-${ARCH}.tar.gz"
+          fi
+          echo "Downloading OffGrid LLM ${VERSION}..."
+          curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid.tar.gz
+          tar -xzf /tmp/offgrid.tar.gz -C /tmp
+          sudo cp /tmp/offgrid /usr/local/bin/offgrid
+          sudo chmod +x /usr/local/bin/offgrid
+          echo "Installation complete!"
+          INSTALLER_EOF
+          
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" install-bundle.sh
+          chmod +x install-bundle.sh
+      
+      - name: Upload installer
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: install-bundle.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
