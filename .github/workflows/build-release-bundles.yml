@@ -11,6 +11,9 @@ on:
         required: true
         default: 'v0.1.0'
 
+permissions:
+  contents: write
+
 jobs:
   build-linux-bundles:
     name: Build Linux ${{ matrix.variant }} (${{ matrix.arch }})
