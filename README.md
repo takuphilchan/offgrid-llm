@@ -74,9 +74,24 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ## 📦 Installation
 
-### Build from Source (Recommended for Now)
+### Quick Install (Now Available!)
 
-**Note**: Pre-built binaries are coming soon. For now, build from source:
+Pre-built binaries are now available from [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases).
+
+#### Linux / macOS
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
+```
+
+#### Windows (PowerShell as Admin)
+Download the latest release from [Releases](https://github.com/takuphilchan/offgrid-llm/releases), extract, and run:
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+### Build from Source (Advanced)
+
+For developers or those who want GPU optimization and full control:
 
 #### Linux
 
@@ -130,11 +145,14 @@ go build -o offgrid.exe ./cmd/offgrid
 # Install llama.cpp from https://github.com/ggerganov/llama.cpp/releases
 ```
 
-### Pre-built Binaries (Coming Soon)
+### Manual Download
 
-Once [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases) are available, you can use these quick installers:
+Download pre-built packages from [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases):
+- **Linux**: `offgrid-linux-amd64.tar.gz` or `offgrid-linux-arm64.tar.gz`
+- **macOS**: `offgrid-darwin-amd64.tar.gz` (Intel) or `offgrid-darwin-arm64.tar.gz` (Apple Silicon)
+- **Windows**: `offgrid-windows-amd64.zip` or `offgrid-windows-arm64.zip`
 
-#### Linux / macOS
+Extract and add to your PATH.
 
 For developers or those who want maximum customization:
 
@@ -178,12 +196,12 @@ To avoid confusion, here's what each installer does:
 
 | File | Purpose | When to Use |
 |------|---------|-------------|
-| `./install.sh` (root) | **Full Linux source build** - Compiles llama.cpp, sets up systemd | Current recommended method for Linux |
-| `installers/install.sh` | **Universal quick installer** - Downloads pre-built binaries | After first release is published |
-| `installers/install-macos.sh` | **macOS binary installer** - Installs from GitHub Releases | After first release is published |
-| `installers/install-windows.ps1` | **Windows PowerShell installer** - Adds to PATH | After first release is published |
+| `./install.sh` (root) | **Full Linux source build** - Compiles llama.cpp, sets up systemd | Advanced users, GPU optimization, custom builds |
+| `installers/install.sh` | **Universal quick installer** - Downloads pre-built binaries | Quick installation (NOW WORKING!) |
+| `installers/install-macos.sh` | **macOS binary installer** - Installs from extracted archive | Manual macOS installation |
+| `installers/install-windows.ps1` | **Windows PowerShell installer** - Adds to PATH | Manual Windows installation |
 
-**Current Status**: Build from source using instructions above. Quick installers will work after v0.1.0 is published.
+**Recommended**: Use the quick install curl command above for fastest setup.
 
 </details>
 

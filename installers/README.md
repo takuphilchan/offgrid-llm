@@ -32,25 +32,27 @@ Used when you've already downloaded and extracted a release:
 
 #### macOS
 ```bash
-# After downloading offgrid-vX.Y.Z-darwin-arm64.tar.gz
-tar -xzf offgrid-vX.Y.Z-darwin-arm64.tar.gz
-cd offgrid-vX.Y.Z-darwin-arm64
-./install.sh  # or use install-macos.sh
+# After downloading offgrid-darwin-arm64.tar.gz
+tar -xzf offgrid-darwin-arm64.tar.gz
+cd offgrid-darwin-arm64
+bash install-macos.sh  # from extracted package
 ```
 
 #### Windows
 ```powershell
-# After extracting offgrid-vX.Y.Z-windows-amd64.zip
-cd offgrid-vX.Y.Z-windows-amd64
+# After extracting offgrid-windows-amd64.zip
+cd offgrid-windows-amd64
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 #### Linux
 ```bash
-# After downloading offgrid-vX.Y.Z-linux-amd64.tar.gz
-tar -xzf offgrid-vX.Y.Z-linux-amd64.tar.gz
-cd offgrid-vX.Y.Z-linux-amd64
-sudo ./install.sh
+#### Linux
+```bash
+# After downloading offgrid-linux-amd64.tar.gz
+tar -xzf offgrid-linux-amd64.tar.gz
+# Binary is extracted directly, move to PATH
+sudo mv offgrid /usr/local/bin/
 ```
 
 ## Difference from Root `install.sh`

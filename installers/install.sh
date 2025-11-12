@@ -107,8 +107,9 @@ if [ "$VERSION" = "latest" ]; then
     print_success "Latest version: $VERSION"
 fi
 
-# Construct download URL
-FILENAME="offgrid-${VERSION}-${PLATFORM}-${ARCH}.${ARCHIVE_EXT}"
+# Construct download URL (matches GitHub release artifact names)
+# Workflow creates: offgrid-linux-amd64.tar.gz (not offgrid-v0.1.0-linux-amd64.tar.gz)
+FILENAME="offgrid-${PLATFORM}-${ARCH}.${ARCHIVE_EXT}"
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$FILENAME"
 
 print_header "Downloading OffGrid LLM"
