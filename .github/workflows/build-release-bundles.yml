@@ -53,54 +53,61 @@ jobs:
           cd /tmp/llama.cpp
           echo "LLAMA_VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
       
-      - name: Build llama.cpp static library
+      - name: Build llama-server binary
         run: |
           cd /tmp/llama.cpp
           mkdir build && cd build
           cmake .. \
             -DBUILD_SHARED_LIBS=OFF \
-            -DGGML_STATIC=ON \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-            -DGGML_LLAMAFILE=OFF \
+            -DLLAMA_STATIC=ON \
             ${{ matrix.gpu_flags }}
-          cmake --build . --config Release -j $(nproc) --target llama ggml || true
-          # Fallback: build just the libraries we need
-          cmake --build . --config Release -j $(nproc) --target ggml llama || true
+          cmake --build . --config Release -j $(nproc) --target llama-server
       
       - name: Build OffGrid bundle
         run: |
-          export CGO_ENABLED=1
-          export CGO_CFLAGS="-I/tmp/llama.cpp"
-          export CGO_LDFLAGS="-L/tmp/llama.cpp/build -lllama -lggml -lstdc++ -lm -lpthread"
-          
-          # Add GPU-specific linker flags
-          if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            export CGO_LDFLAGS="$CGO_LDFLAGS -lvulkan"
-          elif [ "${{ matrix.variant }}" = "cuda" ]; then
-            export CGO_LDFLAGS="$CGO_LDFLAGS -L/usr/local/cuda/lib64 -lcudart -lcublas -lcublasLt"
-          fi
-          
           VERSION="${{ github.ref_name }}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
           fi
           
-          OUTPUT_NAME="offgrid-${VERSION}-linux-${{ matrix.arch }}-${{ matrix.variant }}"
-          
-          go build -tags llama \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.LlamaVersion=${LLAMA_VERSION}" \
-            -o "$OUTPUT_NAME" \
+          # Build OffGrid binary (without CGO)
+          go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" \
+            -o offgrid \
             ./cmd/offgrid
           
-          # Create checksum
-          sha256sum "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256"
+          # Copy llama-server binary
+          cp /tmp/llama.cpp/build/bin/llama-server ./llama-server
+          
+          # Create bundle directory
+          BUNDLE_NAME="offgrid-${VERSION}-linux-${{ matrix.arch }}-${{ matrix.variant }}"
+          mkdir -p "$BUNDLE_NAME"
+          cp offgrid "$BUNDLE_NAME/"
+          cp llama-server "$BUNDLE_NAME/"
+          
+          # Create install script
+          cat > "$BUNDLE_NAME/install.sh" << 'EOF'
+          #!/bin/bash
+          set -e
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
+          sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
+          sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server
+          echo "✓ Installed to /usr/local/bin"
+          EOF
+          chmod +x "$BUNDLE_NAME/install.sh"
+          
+          # Create checksums
+          cd "$BUNDLE_NAME"
+          sha256sum offgrid llama-server > checksums.sha256
+          cd ..
           
           # Create tarball
-          tar -czf "$OUTPUT_NAME.tar.gz" "$OUTPUT_NAME" "$OUTPUT_NAME.sha256"
+          tar -czf "${BUNDLE_NAME}.tar.gz" "$BUNDLE_NAME"
           
-          echo "ASSET_PATH=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
-          echo "ASSET_NAME=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_PATH=${BUNDLE_NAME}.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=${BUNDLE_NAME}.tar.gz" >> $GITHUB_ENV
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -142,7 +149,7 @@ jobs:
           cd /tmp/llama.cpp
           echo "LLAMA_VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
       
-      - name: Build llama.cpp static library
+      - name: Build llama-server binary
         run: |
           cd /tmp/llama.cpp
           mkdir build && cd build
@@ -156,48 +163,62 @@ jobs:
           
           cmake .. \
             -DBUILD_SHARED_LIBS=OFF \
-            -DGGML_STATIC=ON \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-            -DGGML_LLAMAFILE=OFF \
+            -DLLAMA_STATIC=ON \
             $ARCH_FLAGS
-          cmake --build . --config Release -j $(sysctl -n hw.ncpu) --target llama ggml || true
-          # Fallback: build just the libraries
-          cmake --build . --config Release -j $(sysctl -n hw.ncpu) --target ggml llama || true
+          cmake --build . --config Release -j $(sysctl -n hw.ncpu) --target llama-server
       
       - name: Build OffGrid bundle
         run: |
-          export CGO_ENABLED=1
-          export CGO_CFLAGS="-I/tmp/llama.cpp"
-          export CGO_LDFLAGS="-L/tmp/llama.cpp/build -lllama -lggml -lstdc++ -framework Foundation"
-          
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            export GOARCH=arm64
-            export CGO_LDFLAGS="$CGO_LDFLAGS -framework Metal -framework MetalKit"
-          else
-            export GOARCH=amd64
-          fi
-          
           VERSION="${{ github.ref_name }}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
           fi
           
-          OUTPUT_NAME="offgrid-${VERSION}-darwin-${{ matrix.arch }}"
+          # Set architecture for Go build
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            export GOARCH=arm64
+          else
+            export GOARCH=amd64
+          fi
           
-          go build -tags llama \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.LlamaVersion=${LLAMA_VERSION}" \
-            -o "$OUTPUT_NAME" \
+          # Build OffGrid binary (without CGO)
+          go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" \
+            -o offgrid \
             ./cmd/offgrid
           
-          # Create checksum
-          shasum -a 256 "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256"
+          # Copy llama-server binary
+          cp /tmp/llama.cpp/build/bin/llama-server ./llama-server
+          
+          # Create bundle directory
+          BUNDLE_NAME="offgrid-${VERSION}-darwin-${{ matrix.arch }}"
+          mkdir -p "$BUNDLE_NAME"
+          cp offgrid "$BUNDLE_NAME/"
+          cp llama-server "$BUNDLE_NAME/"
+          
+          # Create install script
+          cat > "$BUNDLE_NAME/install.sh" << 'EOF'
+          #!/bin/bash
+          set -e
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
+          sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
+          sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server
+          echo "✓ Installed to /usr/local/bin"
+          EOF
+          chmod +x "$BUNDLE_NAME/install.sh"
+          
+          # Create checksums
+          cd "$BUNDLE_NAME"
+          shasum -a 256 offgrid llama-server > checksums.sha256
+          cd ..
           
           # Create tarball
-          tar -czf "$OUTPUT_NAME.tar.gz" "$OUTPUT_NAME" "$OUTPUT_NAME.sha256"
+          tar -czf "${BUNDLE_NAME}.tar.gz" "$BUNDLE_NAME"
           
-          echo "ASSET_PATH=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
-          echo "ASSET_NAME=$OUTPUT_NAME.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_PATH=${BUNDLE_NAME}.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=${BUNDLE_NAME}.tar.gz" >> $GITHUB_ENV
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -256,14 +277,20 @@ jobs:
           else
               BUNDLE_NAME="offgrid-${VERSION}-darwin-${ARCH}.tar.gz"
           fi
-          echo "Downloading OffGrid LLM ${VERSION}..."
-          curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid.tar.gz
-          tar -xzf /tmp/offgrid.tar.gz -C /tmp
-          EXTRACTED=$(find /tmp -name "offgrid-${VERSION}-*" -type f ! -name "*.sha256" | head -1)
-          sudo cp "$EXTRACTED" /usr/local/bin/offgrid
-          sudo chmod +x /usr/local/bin/offgrid
-          rm -f /tmp/offgrid.tar.gz "$EXTRACTED"
-          echo "Installation complete!"
+          echo "Downloading OffGrid LLM ${VERSION} (${OS}-${ARCH}-${GPU_VARIANT})..."
+          curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid-bundle.tar.gz
+          echo "Extracting..."
+          tar -xzf /tmp/offgrid-bundle.tar.gz -C /tmp
+          BUNDLE_DIR=$(find /tmp -maxdepth 1 -type d -name "offgrid-${VERSION}-*" | head -1)
+          if [ -d "$BUNDLE_DIR" ] && [ -f "$BUNDLE_DIR/install.sh" ]; then
+              cd "$BUNDLE_DIR"
+              bash install.sh
+          else
+              echo "Error: Bundle extraction failed"
+              exit 1
+          fi
+          rm -rf /tmp/offgrid-bundle.tar.gz "$BUNDLE_DIR"
+          echo "✓ Installation complete! Run: offgrid --version"
           INSTALLER_EOF
           
           sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" install-bundle.sh
