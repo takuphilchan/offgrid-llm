@@ -37,7 +37,7 @@ jobs:
           
           # Install Vulkan dependencies if needed
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            sudo apt-get install -y libvulkan-dev glslang-tools
+            sudo apt-get install -y libvulkan-dev glslang-tools vulkan-validationlayers-dev spirv-tools
           fi
       
       - name: Clone llama.cpp
