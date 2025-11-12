@@ -74,26 +74,25 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ---
 
-## � Repository Structure
+## 📁 Repository Structure
 
 **New here? Here's what's where:**
 
 | Location | Purpose | For |
 |----------|---------|-----|
-| **`installers/`** | 📦 **Quick install scripts** | End users - [Start here!](installers/) |
-| `install.sh` (root) | 🔧 Linux source build with GPU setup | Advanced Linux users |
+| **`installers/`** | 📦 **One-command install scripts** | Everyone - [Start here!](installers/) |
+| `dev/` | 🔧 Build from source with GPU optimization | Developers |
 | `docs/` | 📖 Complete documentation | Everyone |
 | `cmd/offgrid/` | 💻 Application source code | Developers |
 | `internal/` | ⚙️ Core implementation | Developers |
 | `.github/workflows/` | 🤖 CI/CD & automated releases | Contributors |
-| `Makefile` | 🛠️ Build automation | Developers |
 
 <details>
 <summary><b>💡 Quick Navigation</b></summary>
 
-- **Want to install?** → Use [`installers/install.sh`](installers/)
-- **Want to contribute?** → Read [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- **Want to build from source?** → Use root `install.sh` (Linux) or `Makefile`
+- **Want to install?** → Use [`installers/install.sh`](installers/) (Linux/Mac) or [`installers/install.ps1`](installers/) (Windows)
+- **Want to contribute?** → Read [`CONTRIBUTING.md`](CONTRIBUTING.md)  
+- **Want to build from source?** → Use [`dev/install.sh`](dev/)
 - **Looking for docs?** → Check [`docs/`](docs/) directory
 - **Need help?** → See [Troubleshooting](#troubleshooting) or [open an issue](https://github.com/takuphilchan/offgrid-llm/issues)
 
@@ -101,138 +100,46 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ---
 
-## �📦 Installation
+## 📦 Installation
 
-### Quick Install (Now Available!)
+### Quick Install (Recommended)
 
-Pre-built binaries are now available from [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases).
+**One command - installs in 10-15 seconds:**
 
 #### Linux / macOS
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
 ```
 
-#### Windows (PowerShell as Admin)
-Download the latest release from [Releases](https://github.com/takuphilchan/offgrid-llm/releases), extract, and run:
+#### Windows (PowerShell as Administrator)
 ```powershell
-powershell -ExecutionPolicy Bypass -File install.ps1
+iwr -useb https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.ps1 | iex
 ```
 
-### Build from Source (Advanced)
+**Features:**
+- ✅ Auto-detects GPU (NVIDIA, AMD, Intel) and installs optimized binaries
+- ✅ Downloads pre-built llama.cpp server (no compilation needed)
+- ✅ Sets up PATH automatically
+- ✅ Ready to use immediately
 
-For developers or those who want GPU optimization and full control:
+For detailed instructions, troubleshooting, and uninstall guide, see **[installers/README.md](installers/README.md)**.
 
-#### Linux
+---
+
+### Build from Source (For Developers)
+
+Want to customize builds or contribute? Use the source installer:
 
 ```bash
 # Clone repository
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
 
-# Full installation with llama.cpp compilation and GPU support (~10-15 min)
-sudo ./install.sh
+# Full build with GPU optimization (~10-15 min)
+sudo ./dev/install.sh
 ```
 
-The installer automatically:
-- Detects and configures GPU (NVIDIA CUDA, AMD ROCm)
-- Compiles llama.cpp with optimizations
-- Sets up systemd service
-- Creates config directories
-
-#### macOS
-
-```bash
-# Clone repository
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm
-
-# Install dependencies
-brew install go cmake
-
-# Build OffGrid
-make build
-
-# Install llama.cpp
-brew install llama.cpp
-
-# Move binary to PATH
-sudo mv offgrid /usr/local/bin/
-```
-
-#### Windows
-
-```powershell
-# Clone repository
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm
-
-# Install Go 1.21+ from https://go.dev/dl/
-
-# Build
-go build -o offgrid.exe ./cmd/offgrid
-
-# Install llama.cpp from https://github.com/ggerganov/llama.cpp/releases
-```
-
-### Manual Download
-
-Download pre-built packages from [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases):
-- **Linux**: `offgrid-linux-amd64.tar.gz` or `offgrid-linux-arm64.tar.gz`
-- **macOS**: `offgrid-darwin-amd64.tar.gz` (Intel) or `offgrid-darwin-arm64.tar.gz` (Apple Silicon)
-- **Windows**: `offgrid-windows-amd64.zip` or `offgrid-windows-arm64.zip`
-
-Extract and add to your PATH.
-
-For developers or those who want maximum customization:
-
-```bash
-# Clone repository
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm
-
-# Full installation with llama.cpp compilation and GPU support
-sudo ./install.sh
-```
-
-### Pre-built Binaries (Coming Soon)
-
-Once [GitHub Releases](https://github.com/takuphilchan/offgrid-llm/releases) are available, you can use these quick installers:
-
-#### Linux / macOS
-```bash
-# Clone repository
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm
-
-# Full installation with llama.cpp compilation and GPU support
-sudo ./install.sh
-```
-
-The source installer (`./install.sh` in the root directory) features:
-- GPU detection and auto-configuration (NVIDIA CUDA, AMD ROCm)
-- llama.cpp compilation with optimizations
-- systemd service integration
-- Security hardening and process isolation
-- Professional progress bars and time estimates
-- ~10-15 minutes installation time
-
-See [docs/BUILDING.md](docs/BUILDING.md) for detailed build instructions.
-
-<details>
-<summary><b>📁 Installer Files Explained</b></summary>
-
-To avoid confusion, here's what each installer does:
-
-| File | Purpose | When to Use |
-|------|---------|-------------|
-| `./install.sh` (root) | **Full Linux source build** - Compiles llama.cpp, sets up systemd | Advanced users, GPU optimization, custom builds |
-| `installers/install.sh` | **Universal quick installer** - Downloads pre-built binaries | Quick installation (NOW WORKING!) |
-| `installers/install-macos.sh` | **macOS binary installer** - Installs from extracted archive | Manual macOS installation |
-| `installers/install-windows.ps1` | **Windows PowerShell installer** - Adds to PATH | Manual Windows installation |
-
-**Recommended**: Use the quick install curl command above for fastest setup.
-
-</details>
+This compiles llama.cpp from source with GPU support (CUDA/ROCm/Vulkan) and sets up systemd service.
 
 ---
 
