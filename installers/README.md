@@ -1,15 +1,42 @@
-# OffGrid LLM - Easy Installation
+# OffGrid LLM - Installation Guide
 
-One-command installation for all platforms. No compilation, no complex setup - just run and go!
-
-**Installation time:** 10-15 seconds  
-**Service type:** Manual start (not a background service)
-
-**Note:** This installer provides pre-built binaries for manual use. For automatic startup and systemd service integration, use the [production installer](../dev/) instead.
+**Choose your installation method:**
 
 ---
 
-## Quick Install
+## 🚀 Production Bundle Install (Recommended)
+
+**Complete, zero-dependency installation with automatic GPU detection:**
+
+```bash
+curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.0/install-bundle.sh | bash
+```
+
+### What You Get
+
+- ✅ **Both binaries bundled**: `offgrid` + `llama-server` in one package
+- ✅ **Zero external dependencies**: Everything statically compiled
+- ✅ **Auto GPU detection**: Downloads Vulkan (Linux) or Metal (macOS) variant
+- ✅ **Production ready**: Tested, versioned releases
+- ⚡ **Fast**: Installs in ~10 seconds
+
+### Available Bundles
+
+| Platform | GPU Support | Download Size |
+|----------|-------------|---------------|
+| Linux amd64 | Vulkan | ~50MB |
+| Linux amd64 | CPU-only | ~35MB |
+| macOS arm64 | Metal (built-in) | ~40MB |
+| macOS amd64 | CPU-only | ~38MB |
+
+**Installation time:** 10 seconds  
+**Service type:** Manual start with `offgrid run`
+
+---
+
+## Quick Install (Go Binary Only)
+
+**Fast install using pre-built Go binaries (requires separate llama-server setup):**
 
 ### Linux / macOS
 
@@ -23,25 +50,50 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 iwr -useb https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.ps1 | iex
 ```
 
+**Installation time:** 10-15 seconds  
+**Service type:** Manual start (not a background service)
+
+**Note:** This installer provides the `offgrid` binary only. You'll need to install `llama-server` separately or use the production bundle above.
+
+---
+
+## 🔧 Production Install with Systemd (Advanced)
+
+**Build from source with automatic startup on boot:**
+
+See [dev/README.md](../dev/) for systemd service installation.
+
+- ✅ Automatic startup on boot
+- ✅ Security hardening with systemd
+- ✅ Custom build flags and optimizations
+- ✅ Full control over compilation
+
 ---
 
 ## Features
 
-### Automatic GPU Detection
+### Automatic GPU Detection (Bundle Installer)
 
-- **Linux/macOS**: Detects NVIDIA, AMD, Intel GPUs and installs Vulkan-accelerated binaries
-- **Windows**: Detects NVIDIA GPU + CUDA and installs CUDA-accelerated binaries
-- **Fallback**: CPU-only if no GPU detected
+The production bundle installer automatically detects your hardware:
 
-### What Gets Installed
+- **Linux**: Checks for Vulkan support, downloads GPU or CPU variant
+- **macOS Apple Silicon**: Automatically uses Metal-enabled bundle
+- **macOS Intel**: CPU-only variant
+- **Fallback**: Always downloads CPU version if GPU detection fails
+
+### What Gets Installed (Bundle)
+
+- **OffGrid LLM** - Main application binary (~15MB)
+- **llama-server** - Statically compiled inference engine (~35-50MB)
+- **No external dependencies** - Everything bundled and ready to run
+
+### What Gets Installed (Quick Install)
 
 - **OffGrid LLM** - Main application (~10MB)
-- **llama.cpp** - Inference engine with GPU support (~15-50MB depending on variant)
-- **All required libraries** - Shared libraries for GPU acceleration
+- **llama.cpp** - Downloaded separately during first use (~15-50MB depending on variant)
+- **Shared libraries** - GPU acceleration libraries if available
 
-**Important:** This installer does NOT create systemd services or auto-start functionality. You manually start the server with `offgrid server start` when needed.
-
-For automatic startup and background service operation, use the [production installer](../dev/) which builds from source and creates systemd services.
+**Important:** Quick installer does NOT create systemd services. Use `offgrid run` to start manually.
 
 ---
 
@@ -84,39 +136,37 @@ Install [CUDA Toolkit 12.4+](https://developer.nvidia.com/cuda-downloads)
 ### Verify Installation
 
 ```bash
-offgrid version
-offgrid info
+offgrid --version
 ```
 
 ### Download Your First Model
 
 ```bash
-# Browse models
-offgrid catalog
+# Search for models
+offgrid search llama --limit 5
 
-# Download small model (600MB)
-offgrid download tinyllama-1.1b-chat Q4_K_M
+# Download a model from HuggingFace
+offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
+  --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
 ```
 
 ### Start Using
 
 ```bash
-# Interactive chat
-offgrid run tinyllama-1.1b-chat
+# Interactive chat (auto-starts API server if needed)
+offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 
-# Start API server manually (runs in foreground)
-offgrid server start
-
-# Or run API server in background
-offgrid server start &
+# Or start API server manually
+offgrid serve
 
 # Check server status
 curl http://localhost:11611/health
+
+# Access Web UI
+open http://localhost:11611/ui
 ```
 
-**Note:** The server does NOT start automatically. You must run `offgrid server start` each time you want to use it.
-
-For automatic startup on boot, use the [production installer](../dev/) which creates systemd services.
+**Note:** The `offgrid run` command now automatically starts the API server if it's not running. No need for manual `offgrid serve` in most cases!
 
 ---
 

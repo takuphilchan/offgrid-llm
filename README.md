@@ -64,13 +64,33 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ---
 
-## Installation
+## 🚀 Installation
 
-Choose the installation method that fits your needs:
+### One-Line Install (Recommended)
 
-### Quick Install (Recommended for Most Users)
+**Production-ready bundles with zero external dependencies:**
 
-**Fast, pre-built binaries - ready in 10-15 seconds:**
+```bash
+curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.0/install-bundle.sh | bash
+```
+
+**What it does:**
+- ✅ Auto-detects your OS and architecture (Linux/macOS, amd64/arm64)
+- ✅ Auto-detects GPU support (Vulkan on Linux, Metal on macOS)
+- ✅ Downloads optimized bundle (GPU or CPU variant)
+- ✅ Installs both `offgrid` and `llama-server` binaries
+- ✅ Zero external dependencies - everything included
+- ⚡ Installation completes in ~10 seconds
+
+**Available bundles:**
+- Linux: CPU and Vulkan GPU variants
+- macOS: Apple Silicon (Metal) and Intel (CPU) variants
+
+---
+
+### Alternative: Quick Install (Go binary only)
+
+**Fast install using pre-built Go binaries (requires llama-server separately):**
 
 #### Linux / macOS
 ```bash
