@@ -408,6 +408,11 @@ func main() {
 }
 
 func handleDownload(args []string) {
+	// Check for help flag
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		args = []string{} // Trigger help display
+	}
+
 	if len(args) < 1 {
 		printDivider()
 		fmt.Println()
@@ -1061,84 +1066,150 @@ func handleList(args []string) {
 func handleCatalog() {
 	catalog := models.DefaultCatalog()
 
-	fmt.Println("📚 Model Catalog")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println()
+	printSection("Model Catalog")
 	fmt.Println()
 
+	// Separate LLMs and embeddings
+	var llms []models.CatalogEntry
+	var embeddings []models.CatalogEntry
+
 	for _, entry := range catalog.Models {
-		recommended := ""
+		// Simple heuristic: embeddings are typically small (<1GB) and have "embed" in name
+		isEmbedding := false
+		for _, v := range entry.Variants {
+			if v.Size < 500*1024*1024 { // < 500MB
+				isEmbedding = true
+				break
+			}
+		}
+		if isEmbedding {
+			embeddings = append(embeddings, entry)
+		} else {
+			llms = append(llms, entry)
+		}
+	}
+
+	// Show LLMs
+	fmt.Printf("%sLanguage Models%s (%d)\n", colorBold, colorReset, len(llms))
+	printDivider()
+	fmt.Println()
+
+	for i, entry := range llms {
+		star := ""
 		if entry.Recommended {
-			recommended = " ★"
+			star = fmt.Sprintf(" %s★%s", brandSuccess, colorReset)
 		}
 
-		fmt.Printf("%s%s\n", entry.ID, recommended)
-		fmt.Printf("  %s · %s parameters · %d GB RAM minimum\n",
-			entry.Name, entry.Parameters, entry.MinRAM)
-		fmt.Printf("  %s\n", entry.Description)
-		fmt.Printf("  Variants: ")
+		fmt.Printf("%s%s%s%s %s· %s · %d GB RAM%s\n",
+			brandPrimary, entry.ID, colorReset, star,
+			brandMuted, entry.Parameters, entry.MinRAM, colorReset)
 
+		// Variants on same line
+		fmt.Printf("   %s", brandMuted)
 		for i, v := range entry.Variants {
 			if i > 0 {
 				fmt.Print(", ")
 			}
 			fmt.Printf("%s (%.1f GB)", v.Quantization, float64(v.Size)/(1024*1024*1024))
 		}
-		fmt.Println()
-		fmt.Println()
+		fmt.Printf("%s\n", colorReset)
+
+		if i < len(llms)-1 {
+			fmt.Println()
+		}
 	}
 
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	// Show embeddings if any
+	if len(embeddings) > 0 {
+		fmt.Println()
+		fmt.Println()
+		fmt.Printf("%sEmbedding Models%s (%d)\n", colorBold, colorReset, len(embeddings))
+		printDivider()
+		fmt.Println()
+
+		for i, entry := range embeddings {
+			star := ""
+			if entry.Recommended {
+				star = fmt.Sprintf(" %s★%s", brandSuccess, colorReset)
+			}
+
+			fmt.Printf("%s%s%s%s\n",
+				brandPrimary, entry.ID, colorReset, star)
+
+			// Variants on same line
+			fmt.Printf("   %s", brandMuted)
+			for i, v := range entry.Variants {
+				if i > 0 {
+					fmt.Print(", ")
+				}
+				sizeGB := float64(v.Size) / (1024 * 1024 * 1024)
+				if sizeGB < 0.1 {
+					fmt.Printf("%s (%d MB)", v.Quantization, v.Size/(1024*1024))
+				} else {
+					fmt.Printf("%s (%.1f GB)", v.Quantization, sizeGB)
+				}
+			}
+			fmt.Printf("%s\n", colorReset)
+
+			if i < len(embeddings)-1 {
+				fmt.Println()
+			}
+		}
+	}
+
 	fmt.Println()
-	fmt.Println("Usage:")
-	fmt.Println("  offgrid download <model-id> [quantization]")
 	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  offgrid download tinyllama-1.1b-chat Q4_K_M")
-	fmt.Println("  offgrid quantization  # Learn about quantization levels")
-	fmt.Println()
-	fmt.Println("Or search HuggingFace for more models:")
-	fmt.Println("  offgrid search llama --author TheBloke")
+	printSection("Usage")
+	printItem("Download model", "offgrid download <model-id> [quantization]")
+	printItem("Search HuggingFace", "offgrid search llama --author TheBloke")
+	printItem("Learn quantization", "offgrid quantization")
 	fmt.Println()
 }
 
 func handleQuantization() {
 	fmt.Println()
-	fmt.Println("Quantization Levels")
+	printSection("Quantization Levels")
 	fmt.Println()
-	fmt.Println("Quantization reduces model size by using fewer bits per weight.")
-	fmt.Println("Lower bits = smaller file + faster loading - slight quality reduction")
+	fmt.Printf("%sLower bits = smaller size + faster speed - slight quality loss%s\n", brandMuted, colorReset)
 	fmt.Println()
 
-	// Show all quantization levels in order of quality
-	quantLevels := []string{
-		"Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L",
-		"Q4_0", "Q4_K_S", "Q4_K_M",
-		"Q5_0", "Q5_K_S", "Q5_K_M",
-		"Q6_K", "Q8_0",
+	// Group by quality tier
+	tiers := []struct {
+		name   string
+		quants []string
+	}{
+		{"Compact (2-3 bit)", []string{"Q2_K", "Q3_K_S", "Q3_K_M"}},
+		{"Balanced (4 bit) - Recommended", []string{"Q4_K_S", "Q4_K_M"}},
+		{"High Quality (5-6 bit)", []string{"Q5_K_S", "Q5_K_M", "Q6_K"}},
+		{"Maximum Quality (8 bit)", []string{"Q8_0"}},
 	}
 
-	for _, quant := range quantLevels {
-		info := models.GetQuantizationInfo(quant)
-		marker := "   "
-		if quant == "Q4_K_M" || quant == "Q5_K_M" {
-			marker = " ★ "
-		}
+	for _, tier := range tiers {
+		fmt.Printf("%s%s%s\n", colorBold, tier.name, colorReset)
+		for _, quant := range tier.quants {
+			info := models.GetQuantizationInfo(quant)
+			star := "  "
+			starColor := ""
+			if quant == "Q4_K_M" || quant == "Q5_K_M" {
+				star = "★ "
+				starColor = brandSuccess
+			}
 
-		fmt.Printf("%s %s · %s\n", marker, info.Name, info.QualityLevel)
-		fmt.Printf("     %.1f bits/weight · %s\n", info.BitsPerWeight, info.Description)
-		fmt.Printf("     %s\n", info.UseCases)
+			fmt.Printf("  %s%s%s%-8s%s %.1f bits %s· %s%s\n",
+				starColor, star, colorReset,
+				info.Name, brandMuted,
+				info.BitsPerWeight,
+				colorReset, info.Description, colorReset)
+		}
 		fmt.Println()
 	}
 
-	fmt.Println("Recommendations")
-	fmt.Println()
-	fmt.Println("  ★ Most users:       Q4_K_M  Best quality/size balance")
-	fmt.Println("  ★ Production:       Q5_K_M  Higher quality (~25% larger)")
-	fmt.Println("    Limited RAM:      Q3_K_M  Acceptable quality (3-4 GB)")
-	fmt.Println("    Research:         Q8_0    Near-original quality")
-	fmt.Println()
-	fmt.Println("Size comparison (7B parameter model):")
-	fmt.Println("  Q4_K_M: ~4.0 GB  |  Q5_K_M: ~4.8 GB  |  Q8_0: ~7.2 GB")
+	printSection("Quick Guide")
+	fmt.Printf("  %s★%s %sQ4_K_M%s  Best for most users (4.0 GB for 7B model)\n", brandSuccess, colorReset, brandPrimary, colorReset)
+	fmt.Printf("  %s★%s %sQ5_K_M%s  Production quality (4.8 GB for 7B model)\n", brandSuccess, colorReset, brandPrimary, colorReset)
+	fmt.Printf("     %sQ3_K_M%s  Limited RAM (3.0 GB for 7B model)\n", brandPrimary, colorReset)
+	fmt.Printf("     %sQ8_0%s    Maximum quality (7.2 GB for 7B model)\n", brandPrimary, colorReset)
 	fmt.Println()
 }
 
@@ -1147,30 +1218,42 @@ func printHelp() {
 	fmt.Println()
 
 	printSection("Usage")
-	fmt.Printf("  %soffgrid%s [command]\n", colorBold, colorReset)
+	fmt.Printf("  %soffgrid%s [command] [options]\n", colorBold, colorReset)
 	fmt.Println()
 
-	printSection("Commands")
-	fmt.Printf("  %sserve%s              Start HTTP inference server (default)\n", brandPrimary, colorReset)
-	fmt.Printf("  %ssearch%s <query>     Search HuggingFace for models\n", brandPrimary, colorReset)
-	fmt.Printf("  %sdownload%s <id>      Download a model from catalog\n", brandPrimary, colorReset)
-	fmt.Printf("  %sdownload-hf%s <id>   Download from HuggingFace Hub\n", brandPrimary, colorReset)
-	fmt.Printf("  %srun%s <model>        Interactive chat with a model\n", brandPrimary, colorReset)
-	fmt.Printf("  %simport%s <path>      Import model(s) from USB/SD card\n", brandPrimary, colorReset)
-	fmt.Printf("  %sexport%s <id> <path> Export a model to USB/SD card\n", brandPrimary, colorReset)
-	fmt.Printf("  %sremove%s <id>        Remove an installed model\n", brandPrimary, colorReset)
-	fmt.Printf("  %slist%s               List installed models (LLMs and embeddings)\n", brandPrimary, colorReset)
-	fmt.Printf("  %scatalog%s            Show available models (LLMs and embeddings)\n", brandPrimary, colorReset)
-	fmt.Printf("  %sbenchmark%s <id>     Benchmark model performance\n", brandPrimary, colorReset)
-	fmt.Printf("  %squantization%s       Explain quantization levels\n", brandPrimary, colorReset)
-	fmt.Printf("  %salias%s <cmd>        Manage model aliases (list, set, remove)\n", brandPrimary, colorReset)
-	fmt.Printf("  %sfavorite%s <cmd>     Manage favorite models (list, add, remove)\n", brandPrimary, colorReset)
-	fmt.Printf("  %stemplate%s <cmd>     Manage prompt templates (list, show, apply)\n", brandPrimary, colorReset)
-	fmt.Printf("  %sbatch%s <cmd>        Batch process prompts from JSONL file\n", brandPrimary, colorReset)
-	fmt.Printf("  %ssession%s <cmd>      Manage chat sessions (list, show, export)\n", brandPrimary, colorReset)
-	fmt.Printf("  %scompletions%s <shell> Generate shell completions (bash/zsh/fish)\n", brandPrimary, colorReset)
-	fmt.Printf("  %sconfig%s <action>    Manage configuration (init, show, validate)\n", brandPrimary, colorReset)
-	fmt.Printf("  %sinfo%s               Show system information\n", brandPrimary, colorReset)
+	// Model Management
+	fmt.Printf("%sModel Management%s\n", colorBold, colorReset)
+	printDivider()
+	fmt.Printf("  %slist%s               List installed models\n", brandPrimary, colorReset)
+	fmt.Printf("  %scatalog%s            Browse available models\n", brandPrimary, colorReset)
+	fmt.Printf("  %ssearch%s <query>     Search HuggingFace\n", brandPrimary, colorReset)
+	fmt.Printf("  %sdownload%s <id>      Download from catalog\n", brandPrimary, colorReset)
+	fmt.Printf("  %sdownload-hf%s <id>   Download from HuggingFace\n", brandPrimary, colorReset)
+	fmt.Printf("  %simport%s <path>      Import from USB/SD card\n", brandPrimary, colorReset)
+	fmt.Printf("  %sexport%s <id> <dst>  Export to USB/SD card\n", brandPrimary, colorReset)
+	fmt.Printf("  %sremove%s <id>        Remove installed model\n", brandPrimary, colorReset)
+	fmt.Println()
+
+	// Inference & Chat
+	fmt.Printf("%sInference & Chat%s\n", colorBold, colorReset)
+	printDivider()
+	fmt.Printf("  %sserve%s              Start API server (default)\n", brandPrimary, colorReset)
+	fmt.Printf("  %srun%s <model>        Interactive chat session\n", brandPrimary, colorReset)
+	fmt.Printf("  %ssession%s <cmd>      Manage chat sessions\n", brandPrimary, colorReset)
+	fmt.Printf("  %stemplate%s <cmd>     Manage prompt templates\n", brandPrimary, colorReset)
+	fmt.Printf("  %sbatch%s <file>       Batch process prompts\n", brandPrimary, colorReset)
+	fmt.Println()
+
+	// Configuration
+	fmt.Printf("%sConfiguration & Tools%s\n", colorBold, colorReset)
+	printDivider()
+	fmt.Printf("  %sinfo%s               System information\n", brandPrimary, colorReset)
+	fmt.Printf("  %sconfig%s <action>    Manage configuration\n", brandPrimary, colorReset)
+	fmt.Printf("  %squantization%s       Quantization guide\n", brandPrimary, colorReset)
+	fmt.Printf("  %salias%s <cmd>        Model aliases\n", brandPrimary, colorReset)
+	fmt.Printf("  %sfavorite%s <cmd>     Favorite models\n", brandPrimary, colorReset)
+	fmt.Printf("  %sbenchmark%s <id>     Performance testing\n", brandPrimary, colorReset)
+	fmt.Printf("  %scompletions%s <shell> Shell completions\n", brandPrimary, colorReset)
 	fmt.Printf("  %shelp%s               Show this help\n", brandPrimary, colorReset)
 	fmt.Println()
 
@@ -1288,69 +1371,87 @@ func handleInfo() {
 
 	// Human-readable output
 	fmt.Println()
-	fmt.Println("OffGrid LLM v0.1.0-alpha")
+	printSection(fmt.Sprintf("OffGrid LLM %sv0.1.0-alpha%s", brandMuted, colorReset))
 	fmt.Println()
 
-	// Configuration
-	fmt.Println("Configuration")
-	fmt.Printf("  Port:        %d\n", cfg.ServerPort)
-	fmt.Printf("  Models:      %s\n", cfg.ModelsDir)
-	fmt.Printf("  Context:     %d tokens\n", cfg.MaxContextSize)
-	fmt.Printf("  Threads:     %d\n", cfg.NumThreads)
-	fmt.Printf("  Memory:      %d MB\n", cfg.MaxMemoryMB)
+	// Configuration - more compact
+	fmt.Printf("%sConfiguration%s\n", colorBold, colorReset)
+	printDivider()
+	fmt.Printf("  %sPort:%s %d  %s│%s  %sModels:%s %s\n",
+		brandMuted, colorReset, cfg.ServerPort,
+		brandMuted, colorReset,
+		brandMuted, colorReset, cfg.ModelsDir)
+	fmt.Printf("  %sThreads:%s %d  %s│%s  %sContext:%s %d tokens  %s│%s  %sMemory:%s %d MB\n",
+		brandMuted, colorReset, cfg.NumThreads,
+		brandMuted, colorReset,
+		brandMuted, colorReset, cfg.MaxContextSize,
+		brandMuted, colorReset,
+		brandMuted, colorReset, cfg.MaxMemoryMB)
 	if cfg.EnableP2P {
-		fmt.Printf("  P2P:         enabled (port %d)\n", cfg.P2PPort)
+		fmt.Printf("  %sP2P:%s enabled (port %d)\n", brandMuted, colorReset, cfg.P2PPort)
 	}
 	fmt.Println()
 
-	// Installed Models
-	fmt.Printf("Installed Models (%d)\n", len(modelList))
+	// Installed Models - more visual
+	var totalSize int64
+	fmt.Printf("%sInstalled Models%s (%s%d%s)\n", colorBold, colorReset, brandPrimary, len(modelList), colorReset)
+	printDivider()
 	if len(modelList) > 0 {
 		for _, model := range modelList {
 			meta, err := registry.GetModel(model.ID)
 			if err == nil {
-				status := "idle"
+				statusIcon := "○"
+				statusColor := brandMuted
 				if meta.IsLoaded {
-					status = "loaded"
+					statusIcon = "●"
+					statusColor = brandSuccess
 				}
-				fmt.Printf("  • %s", model.ID)
+
+				fmt.Printf("  %s%s%s %s", statusColor, statusIcon, colorReset, model.ID)
 				if meta.Size > 0 {
-					fmt.Printf(" · %s", formatBytes(meta.Size))
+					fmt.Printf(" %s·%s %s", brandMuted, colorReset, formatBytes(meta.Size))
+					totalSize += meta.Size
 				}
 				if meta.Quantization != "" && meta.Quantization != "unknown" {
-					fmt.Printf(" · %s", meta.Quantization)
+					fmt.Printf(" %s·%s %s", brandMuted, colorReset, meta.Quantization)
 				}
-				fmt.Printf(" (%s)", status)
 				fmt.Println()
 			}
 		}
+		if totalSize > 0 {
+			fmt.Printf("  %sTotal:%s %s\n", brandMuted, colorReset, formatBytes(totalSize))
+		}
 	} else {
-		fmt.Println("  No models installed")
+		fmt.Printf("  %sNo models installed%s\n", brandMuted, colorReset)
 	}
 	fmt.Println()
 
 	// Available Models
 	catalog := models.DefaultCatalog()
-	fmt.Printf("Available Models (%d)\n", len(catalog.Models))
 	recommended := 0
 	for _, entry := range catalog.Models {
 		if entry.Recommended {
 			recommended++
 		}
 	}
-	fmt.Printf("  %d recommended\n", recommended)
+	fmt.Printf("%sAvailable in Catalog%s (%s%d%s total, %s%d%s recommended)\n",
+		colorBold, colorReset,
+		brandPrimary, len(catalog.Models), colorReset,
+		brandSuccess, recommended, colorReset)
+	printDivider()
 	fmt.Println()
 
 	// Quick Start
 	if len(modelList) == 0 {
-		fmt.Println("Quick Start")
-		fmt.Println("  1. Download a model:  offgrid download tinyllama-1.1b-chat")
-		fmt.Println("  2. Start server:      offgrid")
-		fmt.Println("  3. Test endpoint:     curl http://localhost:11611/health")
+		printSection("Quick Start")
+		printItem("1. Download model", "offgrid download tinyllama-1.1b-chat Q4_K_M")
+		printItem("2. Start server", "offgrid serve")
+		printItem("3. Test endpoint", fmt.Sprintf("curl http://localhost:%d/health", cfg.ServerPort))
 	} else {
-		fmt.Println("Server")
-		fmt.Println("  Start:      offgrid")
-		fmt.Printf("  Endpoint:   http://localhost:%d\n", cfg.ServerPort)
+		printSection("Server")
+		printItem("Start server", "offgrid serve")
+		printItem("API endpoint", fmt.Sprintf("http://localhost:%d", cfg.ServerPort))
+		printItem("Health check", fmt.Sprintf("http://localhost:%d/health", cfg.ServerPort))
 	}
 	fmt.Println()
 }
@@ -1577,6 +1678,7 @@ func handleSearch(args []string) {
 
 	// Human-readable output
 	if len(results) == 0 {
+		fmt.Println()
 		printWarning("No models found matching your criteria")
 		fmt.Println()
 		printInfo("Try broadening your search or adjusting filters")
@@ -1584,48 +1686,48 @@ func handleSearch(args []string) {
 		return
 	}
 
-	fmt.Printf("%s%d%s models found\n\n", colorBold, len(results), colorReset)
+	fmt.Println()
+	fmt.Printf("Found %s%d%s model(s)\n", brandPrimary, len(results), colorReset)
+	printDivider()
+	fmt.Println()
 
 	for i, result := range results {
 		model := result.Model
 
 		// Model name with number
-		fmt.Printf("%s%2d%s %s%s%s%s\n",
+		fmt.Printf("%s%2d.%s %s%s%s %s\n",
 			brandMuted, i+1, colorReset,
 			brandPrimary, iconModel, colorReset,
 			colorBold+model.ID+colorReset)
 
-		// Stats line
-		fmt.Printf("     %s%s%s %s  %s❤%s %s",
-			brandAccent, iconDownload, colorReset, formatNumber(model.Downloads),
-			brandError, colorReset, formatNumber(int64(model.Likes)))
+		// Stats line with colors
+		fmt.Printf("     %s%s%s %s",
+			brandAccent, iconDownload, colorReset,
+			formatNumber(model.Downloads))
+		fmt.Printf("  %s❤%s %s",
+			brandError, colorReset,
+			formatNumber(int64(model.Likes)))
 
-		if result.BestVariant != nil {
-			if result.BestVariant.SizeGB > 0 {
-				fmt.Printf("  %s%s%s Recommended: %s%s%s (%.1f GB)\n",
-					brandMuted, boxV, colorReset,
-					brandSuccess, result.BestVariant.Quantization, colorReset,
-					result.BestVariant.SizeGB)
-			} else {
-				fmt.Printf("  %s%s%s Recommended: %s%s%s\n",
-					brandMuted, boxV, colorReset,
-					brandSuccess, result.BestVariant.Quantization, colorReset)
-			}
-		} else {
-			fmt.Println()
+		// Recommended variant with color
+		if result.BestVariant != nil && result.BestVariant.SizeGB > 0 {
+			fmt.Printf("  %s│%s %s%s%s (%.1f GB)",
+				brandMuted, colorReset,
+				brandSuccess, result.BestVariant.Quantization, colorReset,
+				result.BestVariant.SizeGB)
 		}
+		fmt.Println()
 
-		// Show available variants
+		// Available variants
 		if len(result.GGUFFiles) > 0 {
 			fmt.Printf("     %sVariants:%s ", brandMuted, colorReset)
 			shown := 0
 			for _, file := range result.GGUFFiles {
-				if shown >= 5 {
-					fmt.Printf("%s... (+%d more)%s", brandMuted, len(result.GGUFFiles)-shown, colorReset)
+				if shown >= 6 {
+					fmt.Printf("%s(+%d more)%s", brandMuted, len(result.GGUFFiles)-shown, colorReset)
 					break
 				}
 				if shown > 0 {
-					fmt.Printf("%s,%s ", brandMuted, colorReset)
+					fmt.Printf("%s, %s", brandMuted, colorReset)
 				}
 				fmt.Printf("%s", file.Quantization)
 				shown++
@@ -1633,10 +1735,10 @@ func handleSearch(args []string) {
 			fmt.Println()
 		}
 
-		// Download command
+		// Download command with color
 		if result.BestVariant != nil {
-			fmt.Printf("     %s%s%s %soffgrid download-hf %s --file %s%s\n",
-				brandPrimary, iconArrow, colorReset,
+			fmt.Printf("     %s→%s %soffgrid download-hf %s --file %s%s\n",
+				brandPrimary, colorReset,
 				brandMuted, model.ID, result.BestVariant.Filename, colorReset)
 		}
 
@@ -1647,11 +1749,16 @@ func handleSearch(args []string) {
 
 	fmt.Println()
 	printDivider()
-	printInfo("Use 'offgrid download-hf <model-id> --file <filename>' to download")
+	fmt.Println()
 	fmt.Println()
 }
 
 func handleDownloadHF(args []string) {
+	// Check for help flag
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		args = []string{} // Trigger help display
+	}
+
 	if len(args) < 1 {
 		printDivider()
 		fmt.Println()
