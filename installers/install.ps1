@@ -183,16 +183,31 @@ try {
 }
 
 Write-Step "Extracting OffGrid..."
-Expand-Archive -Path $offgridZip -DestinationPath "$env:TEMP\offgrid-extract" -Force
-
-# Find and rename the binary
-$extractedBinary = Get-ChildItem "$env:TEMP\offgrid-extract" -Filter "offgrid*.exe" | Select-Object -First 1
-if (-not $extractedBinary) {
-    Write-Error "OffGrid binary not found in archive"
+try {
+    Expand-Archive -Path $offgridZip -DestinationPath "$env:TEMP\offgrid-extract" -Force
+} catch {
+    Write-Error "Failed to extract OffGrid archive"
+    Write-Warning "This may require administrator privileges"
+    Write-Warning "Try running PowerShell as Administrator and run the installer again"
     exit 1
 }
 
-Copy-Item $extractedBinary.FullName -Destination "$binDir\offgrid.exe" -Force
+# Find and rename the binary
+$extractedBinary = Get-ChildItem "$env:TEMP\offgrid-extract" -Filter "offgrid*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $extractedBinary) {
+    Write-Error "OffGrid binary not found in archive"
+    Write-Warning "Download may be corrupted. Please try again."
+    exit 1
+}
+
+try {
+    Copy-Item $extractedBinary.FullName -Destination "$binDir\offgrid.exe" -Force -ErrorAction Stop
+} catch {
+    Write-Error "Failed to install OffGrid binary"
+    Write-Warning "This may require administrator privileges"
+    Write-Warning "Try running PowerShell as Administrator and run the installer again"
+    exit 1
+}
 Remove-Item "$env:TEMP\offgrid-extract" -Recurse -Force
 
 # Verify
@@ -235,12 +250,19 @@ if ($gpuVariant -eq "cuda-12.4") {
     Write-Host "    • CUDA-accelerated inference enabled"
     Write-Host "    • Use --gpu-layers flag to offload layers to GPU"
     Write-Host ""
-} elseif ((nvidia-smi 2>$null) -and ($LASTEXITCODE -eq 0)) {
-    Write-Host "  GPU Detected but not enabled:"
-    Write-Host "    • Install CUDA Toolkit for GPU acceleration:"
-    Write-Host "      https://developer.nvidia.com/cuda-downloads"
-    Write-Host "    • Then reinstall this script"
-    Write-Host ""
+} elseif (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+    try {
+        $null = nvidia-smi 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  GPU Detected but not enabled:"
+            Write-Host "    • Install CUDA Toolkit for GPU acceleration:"
+            Write-Host "      https://developer.nvidia.com/cuda-downloads"
+            Write-Host "    • Then reinstall this script"
+            Write-Host ""
+        }
+    } catch {
+        # Silently ignore nvidia-smi errors
+    }
 }
 
 Write-Host "  Get Started (restart terminal first):"
