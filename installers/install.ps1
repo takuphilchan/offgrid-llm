@@ -173,7 +173,15 @@ $offgridUrl = "https://github.com/takuphilchan/offgrid-llm/releases/download/$of
 $offgridTarGz = "$env:TEMP\offgrid.tar.gz"
 
 Write-Step "Downloading OffGrid..."
-Invoke-WebRequest -Uri $offgridUrl -OutFile $offgridTarGz -UseBasicParsing
+try {
+    Invoke-WebRequest -Uri $offgridUrl -OutFile $offgridTarGz -UseBasicParsing
+} catch {
+    Write-Warning "Version $offgridVersion not available yet, trying v0.1.2..."
+    $offgridVersion = "v0.1.2"
+    $offgridFile = "offgrid-$offgridVersion-windows-$arch.tar.gz"
+    $offgridUrl = "https://github.com/takuphilchan/offgrid-llm/releases/download/$offgridVersion/$offgridFile"
+    Invoke-WebRequest -Uri $offgridUrl -OutFile $offgridTarGz -UseBasicParsing
+}
 
 Write-Step "Extracting OffGrid..."
 tar -xzf $offgridTarGz -C $binDir
