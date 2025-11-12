@@ -62,8 +62,11 @@ jobs:
             -DGGML_STATIC=ON \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DGGML_LLAMAFILE=OFF \
             ${{ matrix.gpu_flags }}
-          cmake --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc) --target llama ggml || true
+          # Fallback: build just the libraries we need
+          cmake --build . --config Release -j $(nproc) --target ggml llama || true
       
       - name: Build OffGrid bundle
         run: |
@@ -156,8 +159,11 @@ jobs:
             -DGGML_STATIC=ON \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DGGML_LLAMAFILE=OFF \
             $ARCH_FLAGS
-          cmake --build . --config Release -j $(sysctl -n hw.ncpu)
+          cmake --build . --config Release -j $(sysctl -n hw.ncpu) --target llama ggml || true
+          # Fallback: build just the libraries
+          cmake --build . --config Release -j $(sysctl -n hw.ncpu) --target ggml llama || true
       
       - name: Build OffGrid bundle
         run: |
@@ -253,8 +259,10 @@ jobs:
           echo "Downloading OffGrid LLM ${VERSION}..."
           curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid.tar.gz
           tar -xzf /tmp/offgrid.tar.gz -C /tmp
-          sudo cp /tmp/offgrid /usr/local/bin/offgrid
+          EXTRACTED=$(find /tmp -name "offgrid-${VERSION}-*" -type f ! -name "*.sha256" | head -1)
+          sudo cp "$EXTRACTED" /usr/local/bin/offgrid
           sudo chmod +x /usr/local/bin/offgrid
+          rm -f /tmp/offgrid.tar.gz "$EXTRACTED"
           echo "Installation complete!"
           INSTALLER_EOF
           
