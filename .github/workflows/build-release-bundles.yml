@@ -36,11 +36,16 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake git
+          sudo apt-get install -y build-essential cmake git wget
           
-          # Install Vulkan dependencies if needed
+          # Install Vulkan SDK from LunarG (Ubuntu 22.04 repos have outdated Vulkan headers)
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            sudo apt-get install -y libvulkan-dev glslang-tools vulkan-validationlayers-dev spirv-tools
+            # Add LunarG Vulkan SDK repository
+            wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+            sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+            sudo apt-get update
+            # Install Vulkan SDK (includes up-to-date headers and glslang)
+            sudo apt-get install -y vulkan-sdk
           fi
       
       - name: Clone llama.cpp
@@ -58,11 +63,7 @@ jobs:
           GPU_FLAGS=""
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
             GPU_FLAGS="-DGGML_VULKAN=ON"
-            # Use glslangValidator from glslang-tools package (available in Ubuntu 22.04)
-            # This is the shader compiler that comes with standard repos
-            if command -v glslangValidator &> /dev/null; then
-              GPU_FLAGS="$GPU_FLAGS -DVulkan_GLSLC_EXECUTABLE=$(which glslangValidator)"
-            fi
+            # Vulkan SDK is installed, CMake will find it automatically
           fi
           
           cmake .. \
