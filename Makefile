@@ -1,4 +1,4 @@
-.PHONY: build run clean test coverage help fmt lint install cross-compile build-llama
+.PHONY: build run clean test coverage help fmt lint install cross-compile build-llama build-install install-system
 
 # Binary name
 BINARY=offgrid
@@ -30,6 +30,23 @@ build:
 	@go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
 	@echo "$(BRAND_SUCCESS)✓$(RESET) Build complete: $(BOLD)./$(BINARY)$(RESET)"
 	@echo "$(DIM)  Using HTTP-based llama-server integration$(RESET)"
+	@echo ""
+
+# Build and install in one step (convenient for development)
+build-install:
+	@echo ""
+	@echo "$(BRAND_PRIMARY)╭────────────────────────────────────────────────────────────────────╮$(RESET)"
+	@echo "$(BRAND_PRIMARY)│$(RESET) $(BOLD)Build & Install OffGrid LLM$(RESET)"
+	@echo "$(BRAND_PRIMARY)╰────────────────────────────────────────────────────────────────────╯$(RESET)"
+	@echo ""
+	@echo "$(BRAND_PRIMARY)→$(RESET) Building binary..."
+	@go build $(LDFLAGS) -o $(BINARY) $(MAIN_PATH)
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Build complete: $(BOLD)./$(BINARY)$(RESET)"
+	@echo "$(BRAND_PRIMARY)→$(RESET) Installing to /usr/local/bin..."
+	@sudo install -m 755 $(BINARY) /usr/local/bin/$(BINARY)
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Installed to $(BOLD)/usr/local/bin/$(BINARY)$(RESET)"
+	@echo ""
+	@echo "$(BRAND_SUCCESS)✓$(RESET) Ready to use: $(BOLD)offgrid --help$(RESET)"
 	@echo ""
 
 # Build with llama.cpp support (requires CGO and llama.cpp installation)
@@ -249,6 +266,7 @@ help:
 	@echo ""
 	@echo "$(BOLD)Building$(RESET)"
 	@echo "  $(BRAND_PRIMARY)make build$(RESET)            Build the binary"
+	@echo "  $(BRAND_PRIMARY)make build-install$(RESET)    Build and install to system ($(BRAND_SUCCESS)recommended$(RESET))"
 	@echo "  $(BRAND_PRIMARY)make build-llama$(RESET)      Build with llama.cpp support (CGO)"
 	@echo "  $(BRAND_PRIMARY)make cross-compile$(RESET)    Build for all platforms"
 	@echo ""
