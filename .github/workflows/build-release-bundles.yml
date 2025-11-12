@@ -13,11 +13,13 @@ on:
 
 jobs:
   build-linux-bundles:
-    name: Build Linux (${{ matrix.arch }})
+    name: Build Linux ${{ matrix.variant }} (${{ matrix.arch }})
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         arch: [amd64]
+        variant: [cpu, vulkan]
     
     steps:
       - name: Checkout code
@@ -32,6 +34,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake git
+          
+          # Install Vulkan dependencies if needed
+          if [ "${{ matrix.variant }}" = "vulkan" ]; then
+            sudo apt-get install -y libvulkan-dev vulkan-headers glslang-tools
+          fi
       
       - name: Clone llama.cpp
         run: |
@@ -43,10 +50,19 @@ jobs:
         run: |
           cd /tmp/llama.cpp
           mkdir build && cd build
+          
+          # Set variant-specific flags
+          GPU_FLAGS=""
+          if [ "${{ matrix.variant }}" = "vulkan" ]; then
+            GPU_FLAGS="-DGGML_VULKAN=ON"
+          fi
+          
           cmake .. \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
-            -DLLAMA_STATIC=ON
+            -DGGML_STATIC=ON \
+            -DLLAMA_CURL=OFF \
+            $GPU_FLAGS
           cmake --build . --config Release -j $(nproc) --target llama-server
       
       - name: Build OffGrid bundle
@@ -66,7 +82,7 @@ jobs:
           cp /tmp/llama.cpp/build/bin/llama-server ./llama-server
           
           # Create bundle directory
-          BUNDLE_NAME="offgrid-${VERSION}-linux-${{ matrix.arch }}"
+          BUNDLE_NAME="offgrid-${VERSION}-linux-${{ matrix.arch }}-${{ matrix.variant }}"
           mkdir -p "$BUNDLE_NAME"
           cp offgrid "$BUNDLE_NAME/"
           cp llama-server "$BUNDLE_NAME/"
@@ -97,7 +113,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: offgrid-linux-${{ matrix.arch }}
+          name: offgrid-linux-${{ matrix.arch }}-${{ matrix.variant }}
           path: ${{ env.ASSET_PATH }}
       
       - name: Upload to release
@@ -150,6 +166,7 @@ jobs:
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
             -DLLAMA_STATIC=ON \
+            -DLLAMA_CURL=OFF \
             $ARCH_FLAGS
           cmake --build . --config Release -j $(sysctl -n hw.ncpu) --target llama-server
       
@@ -248,14 +265,30 @@ jobs:
               aarch64|arm64) ARCH="arm64" ;;
           esac
           
+          # Auto-detect GPU variant for Linux
+          GPU_VARIANT="cpu"
           if [ "$OS" = "linux" ]; then
-              BUNDLE_NAME="offgrid-${VERSION}-linux-${ARCH}.tar.gz"
+              if command -v vulkaninfo &> /dev/null && vulkaninfo --summary &> /dev/null 2>&1; then
+                  GPU_VARIANT="vulkan"
+                  echo "✓ Vulkan detected - downloading GPU-accelerated version"
+              else
+                  echo "→ CPU-only version (install vulkan-tools for GPU acceleration)"
+              fi
+          fi
+          
+          if [ "$OS" = "linux" ]; then
+              BUNDLE_NAME="offgrid-${VERSION}-linux-${ARCH}-${GPU_VARIANT}.tar.gz"
           else
               BUNDLE_NAME="offgrid-${VERSION}-darwin-${ARCH}.tar.gz"
           fi
           
-          echo "Downloading OffGrid LLM ${VERSION} (${OS}-${ARCH})..."
-          curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid-bundle.tar.gz
+          echo "Downloading OffGrid LLM ${VERSION} (${OS}-${ARCH}-${GPU_VARIANT})..."
+          if ! curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid-bundle.tar.gz; then
+              echo "⚠️  GPU version not available, falling back to CPU..."
+              BUNDLE_NAME="offgrid-${VERSION}-${OS}-${ARCH}-cpu.tar.gz"
+              curl -fsSL "${BASE_URL}/${BUNDLE_NAME}" -o /tmp/offgrid-bundle.tar.gz
+          fi
+          
           echo "Extracting..."
           tar -xzf /tmp/offgrid-bundle.tar.gz -C /tmp
           BUNDLE_DIR=$(find /tmp -maxdepth 1 -type d -name "offgrid-${VERSION}-*" | head -1)
