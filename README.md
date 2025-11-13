@@ -71,7 +71,7 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 **Production-ready bundles with zero external dependencies:**
 
 ```bash
-curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v1.0.1/install-bundle.sh | bash
+curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v0.0.1/install-bundle.sh | bash
 ```
 
 **What it does:**
