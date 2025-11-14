@@ -1271,11 +1271,9 @@
                 }
 
                 resultsList.innerHTML = data.models.map(model => {
-                    // Extract author from model ID (format: "author/model-name")
-                    const modelId = model.id || model.name || '';
-                    const parts = modelId.split('/');
-                    const author = parts.length > 1 ? parts[0] : (model.author || 'Unknown Author');
-                    const modelName = parts.length > 1 ? parts.slice(1).join('/') : modelId;
+                    // Use the provided author and name from the API
+                    const author = model.author || 'Unknown Author';
+                    const modelName = model.name || model.id || 'Unknown Model';
                     
                     return `
                     <div class="card rounded-xl p-4 hover:border-accent-primary/50 transition-all">
@@ -1289,7 +1287,7 @@
                                     ${model.likes ? `<span class="text-xs text-gray-500">♥ ${formatNumber(model.likes)}</span>` : ''}
                                 </div>
                             </div>
-                            <button onclick="downloadFromSearch('${escapeHtml(modelId)}')" class="btn-primary px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap">
+                            <button onclick="downloadFromSearch('${escapeHtml(model.id)}')" class="btn-primary px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap">
                                 Download
                             </button>
                         </div>

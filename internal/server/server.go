@@ -754,9 +754,53 @@ func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Transform results to include computed fields for UI
+	type UIModel struct {
+		ID          string   `json:"id"`
+		Author      string   `json:"author"`
+		Name        string   `json:"name"`
+		Description string   `json:"description,omitempty"`
+		Downloads   int64    `json:"downloads"`
+		Likes       int      `json:"likes"`
+		Tags        []string `json:"tags,omitempty"`
+		TotalSize   int64    `json:"total_size,omitempty"`
+	}
+
+	uiModels := make([]UIModel, 0, len(results))
+	for _, result := range results {
+		// Extract author from model ID
+		modelID := result.Model.ID
+		if modelID == "" {
+			modelID = result.Model.ModelID
+		}
+
+		author := result.Model.Author
+		name := modelID
+
+		// Parse author from ID if not explicitly set
+		if author == "" && strings.Contains(modelID, "/") {
+			parts := strings.SplitN(modelID, "/", 2)
+			if len(parts) == 2 {
+				author = parts[0]
+				name = parts[1]
+			}
+		}
+
+		uiModels = append(uiModels, UIModel{
+			ID:          modelID,
+			Author:      author,
+			Name:        name,
+			Description: result.Model.Description,
+			Downloads:   result.Model.Downloads,
+			Likes:       result.Model.Likes,
+			Tags:        result.Model.Tags,
+			TotalSize:   result.TotalSize,
+		})
+	}
+
 	response := map[string]interface{}{
-		"total":  len(results),
-		"models": results,
+		"total":  len(uiModels),
+		"models": uiModels,
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
