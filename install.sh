@@ -3,6 +3,7 @@
 # Works on Linux, macOS, and Windows (Git Bash/WSL)
 # Usage: curl -fsSL https://offgrid.dev/install | bash
 #    or: curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+#    or: AUTOSTART=yes bash install.sh  # Auto-enable and start services
 
 set -e
 
@@ -11,6 +12,7 @@ REPO="takuphilchan/offgrid-llm"
 GITHUB_URL="https://github.com/${REPO}"
 INSTALL_DIR="/usr/local/bin"
 VERSION="${VERSION:-latest}"  # Can be overridden with VERSION=v0.1.0 ./install.sh
+AUTOSTART="${AUTOSTART:-ask}"  # Options: yes, no, ask
 
 # Colors
 CYAN='\033[0;36m'
@@ -341,27 +343,48 @@ EOF
     # Reload systemd
     sudo systemctl daemon-reload
     
-    # Ask if user wants to enable auto-start
-    echo ""
-    echo -e "${CYAN}${BOLD}Service Configuration${NC}"
-    echo ""
-    read -p "Enable services to start on boot? [Y/n] " -n 1 -r
-    echo
+    # Determine what to do based on AUTOSTART variable
+    local enable_services="no"
+    local start_services="no"
     
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        sudo systemctl enable llama-server@${USER}.service
-        sudo systemctl enable offgrid@${USER}.service
+    if [ "$AUTOSTART" = "yes" ]; then
+        enable_services="yes"
+        start_services="yes"
+    elif [ "$AUTOSTART" = "no" ]; then
+        enable_services="no"
+        start_services="no"
+    else
+        # Interactive mode
+        echo ""
+        echo -e "${CYAN}${BOLD}Service Configuration${NC}"
+        echo ""
+        read -t 30 -p "Enable services to start on boot? [Y/n] " -n 1 -r 2>/dev/null || REPLY="Y"
+        echo
+        
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            enable_services="yes"
+        fi
+        
+        echo ""
+        read -t 30 -p "Start services now? [Y/n] " -n 1 -r 2>/dev/null || REPLY="Y"
+        echo
+        
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            start_services="yes"
+        fi
+    fi
+    
+    # Enable services if requested
+    if [ "$enable_services" = "yes" ]; then
+        sudo systemctl enable llama-server@${USER}.service >/dev/null 2>&1
+        sudo systemctl enable offgrid@${USER}.service >/dev/null 2>&1
         log_success "Services enabled for auto-start on boot"
     fi
     
-    # Ask if user wants to start now
-    echo ""
-    read -p "Start services now? [Y/n] " -n 1 -r
-    echo
-    
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        sudo systemctl start llama-server@${USER}.service
-        sudo systemctl start offgrid@${USER}.service
+    # Start services if requested
+    if [ "$start_services" = "yes" ]; then
+        sudo systemctl start llama-server@${USER}.service >/dev/null 2>&1
+        sudo systemctl start offgrid@${USER}.service >/dev/null 2>&1
         sleep 2
         
         # Check if services started successfully
