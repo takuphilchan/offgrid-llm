@@ -3,19 +3,19 @@
 ## Current State Analysis
 
 ### What You Have Now
-- ✅ Linux-focused installation script (`install.sh`)
-- ✅ Go binary compilation
-- ✅ Systemd service integration
-- ✅ Docker support
-- ✅ Source-based installation
+- Linux-focused installation script (`install.sh`)
+- Go binary compilation
+- Systemd service integration
+- Docker support
+- Source-based installation
 
 ### What's Missing for Cross-Platform Distribution
-- ❌ macOS native installer (.pkg or .dmg)
-- ❌ Windows installer (.exe or .msi)
-- ❌ Pre-compiled binary releases
-- ❌ Code signing for macOS/Windows
-- ❌ Auto-update mechanism
-- ❌ Platform-specific service managers (launchd for macOS, Windows Service)
+- macOS native installer (.pkg or .dmg)
+- Windows installer (.exe or .msi)
+- Pre-compiled binary releases
+- Code signing for macOS/Windows
+- Auto-update mechanism
+- Platform-specific service managers (launchd for macOS, Windows Service)
 
 ---
 
@@ -180,15 +180,15 @@ jobs:
 **Option A: Bundle Pre-compiled Binaries** (Recommended - Like Ollama)
 ```
 Pros:
-  ✅ Users don't need build tools
-  ✅ Faster installation
-  ✅ Consistent experience
-  ✅ Works on locked-down systems
+  Users don't need build tools
+  Faster installation
+  Consistent experience
+  Works on locked-down systems
   
 Cons:
-  ❌ Larger download size
-  ❌ Multiple binaries to maintain
-  ❌ Need CI/CD for each platform
+  Larger download size
+  Multiple binaries to maintain
+  Need CI/CD for each platform
 ```
 
 **Implementation:**
@@ -450,14 +450,14 @@ cross-compile:
 ## 10. **Cost Considerations**
 
 ### Free Options
-- ✅ GitHub Actions (2,000 minutes/month free)
-- ✅ GitHub Releases (unlimited)
-- ✅ Self-signed certificates (dev only)
+- GitHub Actions (2,000 minutes/month free)
+- GitHub Releases (unlimited)
+- Self-signed certificates (dev only)
 
 ### Paid Requirements
-- 💰 Apple Developer ($99/year) - Required for macOS code signing
-- 💰 Code Signing Certificate ($100-500/year) - Required for Windows SmartScreen
-- 💰 Notarization (included in Apple Developer)
+- Apple Developer ($99/year) - Required for macOS code signing
+- Code Signing Certificate ($100-500/year) - Required for Windows SmartScreen
+- Notarization (included in Apple Developer)
 
 ### Without Code Signing
 - macOS: Users see "unidentified developer" warning (can bypass)
@@ -535,16 +535,16 @@ Installation:
 5. **Simplify installation** from 30 minutes to <5 minutes
 
 ### Your Current install.sh is Good For:
-- ✅ Linux power users
-- ✅ Development environments
-- ✅ Custom configurations
-- ✅ Building from source
+- Linux power users
+- Development environments
+- Custom configurations
+- Building from source
 
 ### But You Also Need:
-- 📦 Binary releases for casual users
-- 🖥️ Native installers (double-click to install)
-- ⚡ Fast installation (no compilation)
-- 🔒 Code-signed binaries (trust)
+- Binary releases for casual users
+- Native installers (double-click to install)
+- Fast installation (no compilation)
+- Code-signed binaries (trust)
 
 ### Files to Create
 ```

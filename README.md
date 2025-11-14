@@ -41,7 +41,7 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 **New here? Here's what's where:**
 
@@ -56,15 +56,15 @@ Built for **edge environments**, **air-gapped systems**, and **privacy-conscious
 
 **Quick Navigation:**
 
-- **Want to install?** → Use [`installers/install.sh`](installers/) (Linux/Mac) or [`installers/install.ps1`](installers/) (Windows)
-- **Want to contribute?** → Read [`CONTRIBUTING.md`](CONTRIBUTING.md)  
-- **Want to build from source?** → Use [`dev/install.sh`](dev/)
-- **Looking for docs?** → Check [`docs/`](docs/) directory
-- **Need help?** → See [Troubleshooting](#troubleshooting) or [open an issue](https://github.com/takuphilchan/offgrid-llm/issues)
+- **Want to install?** Use [`installers/install.sh`](installers/) (Linux/Mac) or [`installers/install.ps1`](installers/) (Windows)
+- **Want to contribute?** Read [`CONTRIBUTING.md`](CONTRIBUTING.md)  
+- **Want to build from source?** Use [`dev/install.sh`](dev/)
+- **Looking for docs?** Check [`docs/`](docs/) directory
+- **Need help?** See [Troubleshooting](#troubleshooting) or [open an issue](https://github.com/takuphilchan/offgrid-llm/issues)
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### One-Line Install (Recommended)
 
@@ -75,13 +75,13 @@ curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v0.0.1/
 ```
 
 **What it does:**
-- ✅ Auto-detects your OS and architecture (Linux/macOS, amd64/arm64)
-- ✅ Auto-detects GPU support (Vulkan on Linux, Metal on macOS)
-- ✅ Downloads optimized bundle (GPU or CPU variant)
-- ✅ Installs both `offgrid` and `llama-server` binaries
-- ✅ **Auto-starts servers** - `offgrid run` just works!
-- ✅ Zero external dependencies - everything included
-- ⚡ Installation completes in ~10 seconds
+- Auto-detects your OS and architecture (Linux/macOS, amd64/arm64)
+- Auto-detects GPU support (Vulkan on Linux, Metal on macOS)
+- Downloads optimized bundle (GPU or CPU variant)
+- Installs both `offgrid` and `llama-server` binaries
+- **Auto-starts servers** - `offgrid run` just works!
+- Zero external dependencies - everything included
+- Installation completes in ~10 seconds
 
 **Available bundles:**
 - Linux: CPU and Vulkan GPU variants
@@ -104,10 +104,10 @@ iwr -useb https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/instal
 ```
 
 **What you get:**
-- ✅ Pre-built binaries (no compilation)
-- ✅ Auto-detects GPU and installs optimized version
-- ✅ Sets up PATH automatically
-- ✅ Manual start: Run `offgrid server start` when you need it
+- Pre-built binaries (no compilation)
+- Auto-detects GPU and installs optimized version
+- Sets up PATH automatically
+- Manual start: Run `offgrid server start` when you need it
 
 **Best for:** Development, testing, or manual usage
 
@@ -129,11 +129,11 @@ sudo ./dev/install.sh
 ```
 
 **What you get:**
-- ✅ Built from source with custom optimizations
-- ✅ Systemd services (auto-start on boot)
-- ✅ Background service operation
-- ✅ Production-ready security hardening
-- ✅ Automatic model hot-reload
+- Built from source with custom optimizations
+- Systemd services (auto-start on boot)
+- Background service operation
+- Production-ready security hardening
+- Automatic model hot-reload
 
 **Best for:** Production servers, always-on deployments, automatic startup
 
@@ -506,9 +506,9 @@ chat("Explain async/await in JavaScript")
 
 | Platform | Requirements | Status |
 |----------|--------------|--------|
-| **NVIDIA** | GTX 1050 Ti+, CUDA 12.0+ | ✅ Fully Supported |
-| **AMD** | ROCm-compatible GPU | ⚠️ Experimental |
-| **CPU** | Any x86_64 CPU | ✅ Supported (slower) |
+| **NVIDIA** | GTX 1050 Ti+, CUDA 12.0+ | Fully Supported |
+| **AMD** | ROCm-compatible GPU | Experimental |
+| **CPU** | Any x86_64 CPU | Supported (slower) |
 
 ### Model Size vs. Memory
 

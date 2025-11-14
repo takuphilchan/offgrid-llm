@@ -44,17 +44,17 @@ Get started with OffGrid's HuggingFace model search and download in 5 minutes.
 
 **Output Example:**
 ```
-🔍 Searching HuggingFace Hub...
+Searching HuggingFace Hub...
 
 Found 15 models:
 
 1. TheBloke/Llama-2-7B-Chat-GGUF
-   ↓ 2.5M downloads  ❤ 342 likes  │  Recommended: Q4_K_M (3.8 GB)
+   2.5M downloads  342 likes  |  Recommended: Q4_K_M (3.8 GB)
    Available: Q4_K_M (3.8GB), Q5_K_M (4.6GB), Q6_K (5.5GB)
    Download: offgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --file llama-2-7b-chat.Q4_K_M.gguf
 
 2. TheBloke/Mistral-7B-Instruct-v0.2-GGUF
-   ↓ 1.8M downloads  ❤ 218 likes  │  Recommended: Q4_K_M (4.1 GB)
+   1.8M downloads  218 likes  |  Recommended: Q4_K_M (4.1 GB)
    ...
 ```
 
@@ -75,12 +75,12 @@ Found 15 models:
 
 **Progress Display:**
 ```
-📦 Fetching model info: TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
+Fetching model info: TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
 
-📥 Downloading tinyllama-1.1b-chat.Q4_K_M.gguf (0.6 GB)
+Downloading tinyllama-1.1b-chat.Q4_K_M.gguf (0.6 GB)
   Progress: 67.3% (0.4 / 0.6 GB) · 15.2 MB/s
 
-✓ Download complete!
+Download complete!
   Model saved to: /var/lib/offgrid/models/tinyllama-1.1b-chat.Q4_K_M.gguf
 
   Run with: offgrid run tinyllama-1.1b-chat.Q4_K_M.gguf
@@ -96,7 +96,7 @@ Found 15 models:
 
 **Chat Session:**
 ```
-🚀 Starting interactive chat with tinyllama-1.1b-chat.Q4_K_M.gguf
+Starting interactive chat with tinyllama-1.1b-chat.Q4_K_M.gguf
 Type 'exit' to quit, 'clear' to reset conversation
 
 Connecting to inference engine...

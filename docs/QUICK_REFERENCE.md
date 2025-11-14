@@ -149,7 +149,7 @@ offgrid --version
 codesign --deep --force --sign "Developer ID" OffGrid.app
 
 # Option 2: Allow in System Preferences
-# Right-click → Open → Open anyway
+# Right-click > Open > Open anyway
 ```
 
 ### Windows: SmartScreen Warning
@@ -157,7 +157,7 @@ codesign --deep --force --sign "Developer ID" OffGrid.app
 # Option 1: Sign the executable (requires code signing cert)
 signtool sign /f cert.pfx offgrid.exe
 
-# Option 2: Click "More info" → "Run anyway"
+# Option 2: Click "More info" > "Run anyway"
 ```
 
 ### Linux: Permission Denied
@@ -218,20 +218,20 @@ offgrid doctor             # Check system
 
 | OS | Version | Arch | Status |
 |----|---------|------|--------|
-| Ubuntu | 20.04+ | x64 | ✅ |
-| Ubuntu | 20.04+ | ARM64 | ✅ |
-| Debian | 11+ | x64 | ✅ |
-| macOS | 11+ | Intel | ✅ |
-| macOS | 11+ | Apple Silicon | ✅ |
-| Windows | 10+ | x64 | ✅ |
-| Windows | 11+ | ARM64 | ⚠️ Experimental |
+| Ubuntu | 20.04+ | x64 | Supported |
+| Ubuntu | 20.04+ | ARM64 | Supported |
+| Debian | 11+ | x64 | Supported |
+| macOS | 11+ | Intel | Supported |
+| macOS | 11+ | Apple Silicon | Supported |
+| Windows | 10+ | x64 | Supported |
+| Windows | 11+ | ARM64 | Experimental |
 
 ## Next Steps
 
-1. ✅ Cross-compilation working
-2. ✅ GitHub Actions workflow configured
-3. ✅ Platform-specific installers created
-4. 🔲 Test on all platforms
-5. 🔲 Get code signing certificates (optional)
-6. 🔲 Create first release
-7. 🔲 Publish to package managers (Homebrew, Chocolatey, etc.)
+1. Cross-compilation working
+2. GitHub Actions workflow configured
+3. Platform-specific installers created
+4. Test on all platforms
+5. Get code signing certificates (optional)
+6. Create first release
+7. Publish to package managers (Homebrew, Chocolatey, etc.)

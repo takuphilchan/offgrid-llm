@@ -84,8 +84,8 @@ offgrid favorite add mistral-7b-instruct.Q4_K_M.gguf
 ### List Favorites
 ```bash
 offgrid favorite list
-# ★ llama-2-7b-chat.Q4_K_M.gguf
-# ★ mistral-7b-instruct.Q4_K_M.gguf
+# llama-2-7b-chat.Q4_K_M.gguf
+# mistral-7b-instruct.Q4_K_M.gguf
 ```
 
 ### Remove from Favorites

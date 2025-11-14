@@ -26,10 +26,10 @@ OffGrid LLM features a professional, automated installer that handles everything
 ────────────────────────────────────────────────────────
   Estimated time: ~5-10 minutes
 
-▸ Configuring build with CMake...
-→ Found CUDA toolkit: 12.2 at /usr/local/cuda
-✓ llama-server built successfully
-✓ Libraries installed system-wide
+  Configuring build with CMake...
+  Found CUDA toolkit: 12.2 at /usr/local/cuda
+  llama-server built successfully
+  Libraries installed system-wide
 ```
 
 ## Quick Start
@@ -65,10 +65,10 @@ sudo ./install.sh --gpu
 The installer performs these steps automatically:
 
 ### 1. System Checks (30 seconds)
-- ✓ Verify required dependencies (curl, git, cmake, etc.)
-- ✓ Detect system architecture (x86_64/arm64)
-- ✓ Identify operating system and package manager
-- ✓ Detect GPU hardware (NVIDIA/AMD/none)
+- Verify required dependencies (curl, git, cmake, etc.)
+- Detect system architecture (x86_64/arm64)
+- Identify operating system and package manager
+- Detect GPU hardware (NVIDIA/AMD/none)
 
 ### 2. Build Dependencies (2-3 minutes)
 - Install build tools (gcc, g++, make, cmake)
@@ -126,7 +126,7 @@ Upon completion, you'll see a comprehensive summary:
 ```
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║              ✓  INSTALLATION COMPLETE  ✓                      ║
+║              INSTALLATION COMPLETE                            ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 
@@ -152,10 +152,10 @@ Upon completion, you'll see a comprehensive summary:
 ╭─────────────────────────────────────────────────────────────────╮
 │ SECURITY
 ├─────────────────────────────────────────────────────────────────┤
-│  ✓ llama-server bound to 127.0.0.1 only (internal IPC)
-│  ✓ Random high port 52341 not exposed externally
-│  ✓ Only OffGrid port 11611 is publicly accessible
-│  ✓ Same architecture as Ollama for security and isolation
+│  llama-server bound to 127.0.0.1 only (internal IPC)
+│  Random high port 52341 not exposed externally
+│  Only OffGrid port 11611 is publicly accessible
+│  Same architecture as Ollama for security and isolation
 ╰─────────────────────────────────────────────────────────────────╯
 ```
 
@@ -245,7 +245,7 @@ curl -X POST http://localhost:11611/v1/chat/completions \
 **Check the error log:**
 ```bash
 # The installer shows the exact line where it failed
-# Look for error messages in red with ✗ symbol
+# Look for error messages in red
 ```
 
 **Common issues:**
