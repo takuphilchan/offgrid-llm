@@ -20,11 +20,11 @@ RED='\033[0;31m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Logging functions
-log_info() { echo -e "${CYAN}▶${NC} $1"; }
-log_success() { echo -e "${GREEN}✓${NC} $1"; }
+# Logging functions (all output to stderr to avoid contaminating variable captures)
+log_info() { echo -e "${CYAN}▶${NC} $1" >&2; }
+log_success() { echo -e "${GREEN}✓${NC} $1" >&2; }
 log_error() { echo -e "${RED}✗${NC} $1" >&2; }
-log_warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+log_warn() { echo -e "${YELLOW}⚠${NC} $1" >&2; }
 
 # Print banner
 print_banner() {
@@ -96,26 +96,26 @@ detect_gpu() {
     if [ "$os" = "linux" ]; then
         # Check for Vulkan (most compatible)
         if command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
-            echo "Vulkan GPU detected" >&2
+            log_info "Vulkan GPU detected"
             variant="vulkan"
         # Check for NVIDIA
         elif command -v nvidia-smi >/dev/null 2>&1; then
-            echo "NVIDIA GPU detected" >&2
+            log_info "NVIDIA GPU detected"
             variant="vulkan"  # Use Vulkan even for NVIDIA (more compatible than CUDA)
         # Check for AMD
         elif [ -d "/sys/class/drm" ] && ls /sys/class/drm/card*/device/vendor 2>/dev/null | xargs cat | grep -q "0x1002"; then
-            echo "AMD GPU detected" >&2
+            log_info "AMD GPU detected"
             variant="vulkan"
         else
-            echo "No GPU detected, using CPU-only version" >&2
+            log_warn "No GPU detected, using CPU-only version"
         fi
     elif [ "$os" = "darwin" ]; then
         # macOS: Check if Apple Silicon
         if [ "$(uname -m)" = "arm64" ]; then
-            echo "Apple Silicon detected - Metal support enabled" >&2
+            log_info "Apple Silicon detected - Metal support enabled"
             variant="metal"
         else
-            echo "Intel Mac - using CPU-only version" >&2
+            log_warn "Intel Mac - using CPU-only version"
             variant="cpu"
         fi
     fi
