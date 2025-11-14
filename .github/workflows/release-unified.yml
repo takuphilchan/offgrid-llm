@@ -422,6 +422,8 @@ jobs:
           cat > release-notes.md << EOF
           # OffGrid LLM ${{ steps.version.outputs.version }}
           
+          **First official release with unified installation system!**
+          
           ## Installation
           
           ### Quick Install (Recommended)
@@ -445,12 +447,12 @@ jobs:
           Choose your platform and GPU variant:
           
           ### Linux
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan.tar.gz\` - Vulkan GPU support (recommended)
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan.tar.gz\` - Vulkan GPU (recommended)
           - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-cpu.tar.gz\` - CPU only
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-arm64-cpu.tar.gz\` - ARM64 (Raspberry Pi, etc.)
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-arm64-cpu.tar.gz\` - ARM64
           
           ### macOS
-          - \`offgrid-${{ steps.version.outputs.version }}-darwin-arm64-metal.tar.gz\` - Apple Silicon (M1/M2/M3)
+          - \`offgrid-${{ steps.version.outputs.version }}-darwin-arm64-metal.tar.gz\` - Apple Silicon (M1/M2/M3) with Metal
           - \`offgrid-${{ steps.version.outputs.version }}-darwin-amd64-cpu.tar.gz\` - Intel Mac
           
           ### Windows

@@ -10,7 +10,7 @@ set -e
 REPO="takuphilchan/offgrid-llm"
 GITHUB_URL="https://github.com/${REPO}"
 INSTALL_DIR="/usr/local/bin"
-VERSION="latest"  # Can be overridden with VERSION=v1.0.0 ./install.sh
+VERSION="${VERSION:-latest}"  # Can be overridden with VERSION=v0.1.0 ./install.sh
 
 # Colors
 CYAN='\033[0;36m'

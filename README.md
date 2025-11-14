@@ -59,13 +59,13 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 
 ### Manual Installation
 
-**Download bundles from [releases](https://github.com/takuphilchan/offgrid-llm/releases):**
+**Download bundles from [releases](https://github.com/takuphilchan/offgrid-llm/releases/latest):**
 
 Choose your platform:
-- `offgrid-v*-linux-amd64-vulkan.tar.gz` (Linux with GPU)
-- `offgrid-v*-darwin-arm64-metal.tar.gz` (macOS Apple Silicon)
-- `offgrid-v*-windows-amd64-cpu.zip` (Windows)
-- See releases for all variants
+- `offgrid-v0.1.0-linux-amd64-vulkan.tar.gz` (Linux with GPU)
+- `offgrid-v0.1.0-darwin-arm64-metal.tar.gz` (macOS Apple Silicon)
+- `offgrid-v0.1.0-windows-amd64-cpu.zip` (Windows)
+- See [all releases](https://github.com/takuphilchan/offgrid-llm/releases) for more variants
 
 Extract and run `install.sh` (or copy binaries to PATH on Windows).
 
@@ -76,7 +76,7 @@ Extract and run `install.sh` (or copy binaries to PATH on Windows).
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
-sudo ./dev/build.sh  # Renamed from dev/install.sh
+sudo ./dev/install.sh  # Build with GPU optimization
 ```
 
 See [dev/CONTRIBUTING.md](dev/CONTRIBUTING.md) for development setup.
