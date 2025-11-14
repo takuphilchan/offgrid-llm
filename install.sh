@@ -383,21 +383,77 @@ EOF
     
     # Start services if requested
     if [ "$start_services" = "yes" ]; then
-        sudo systemctl start llama-server@${USER}.service >/dev/null 2>&1
-        sudo systemctl start offgrid@${USER}.service >/dev/null 2>&1
-        sleep 2
+        log_info "Starting services..."
         
-        # Check if services started successfully
-        if systemctl is-active --quiet llama-server@${USER}.service && \
-           systemctl is-active --quiet offgrid@${USER}.service; then
-            log_success "Services started successfully!"
+        # Start llama-server first
+        sudo systemctl start llama-server@${USER}.service 2>/dev/null
+        
+        # Wait for llama-server to be ready (up to 10 seconds)
+        local retries=20
+        local llama_ready=false
+        for i in $(seq 1 $retries); do
+            if systemctl is-active --quiet llama-server@${USER}.service 2>/dev/null; then
+                # Check if port is listening
+                if command -v netstat >/dev/null 2>&1; then
+                    if netstat -tuln 2>/dev/null | grep -q ":48081 "; then
+                        llama_ready=true
+                        break
+                    fi
+                elif command -v ss >/dev/null 2>&1; then
+                    if ss -tuln 2>/dev/null | grep -q ":48081 "; then
+                        llama_ready=true
+                        break
+                    fi
+                else
+                    # No netstat/ss, just check if service is active
+                    llama_ready=true
+                    break
+                fi
+            fi
+            sleep 0.5
+        done
+        
+        if [ "$llama_ready" = true ]; then
+            echo -e "  ${GREEN}✓${NC} llama-server ready on port 48081" >&2
+        else
+            log_warn "llama-server may still be starting..."
+        fi
+        
+        # Now start offgrid
+        sudo systemctl start offgrid@${USER}.service 2>/dev/null
+        
+        # Wait for offgrid to be ready (up to 10 seconds)
+        retries=20
+        local offgrid_ready=false
+        for i in $(seq 1 $retries); do
+            if systemctl is-active --quiet offgrid@${USER}.service 2>/dev/null; then
+                # Try to hit health endpoint
+                if curl -sf http://localhost:11611/health >/dev/null 2>&1; then
+                    offgrid_ready=true
+                    break
+                fi
+            fi
+            sleep 0.5
+        done
+        
+        # Check final status
+        if [ "$offgrid_ready" = true ]; then
+            log_success "Services started and ready!"
             echo ""
-            echo -e "${GREEN}✓${NC} llama-server running on port 48081"
-            echo -e "${GREEN}✓${NC} offgrid server running on port 11611"
+            echo -e "${GREEN}✓${NC} llama-server running on port 48081" >&2
+            echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
+            return 1  # Signal that services are running
+        elif systemctl is-active --quiet offgrid@${USER}.service && \
+             systemctl is-active --quiet llama-server@${USER}.service; then
+            log_success "Services started!"
+            echo ""
+            echo -e "${GREEN}✓${NC} llama-server running on port 48081" >&2
+            echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
+            log_warn "Services may take a moment to fully initialize..."
             return 1  # Signal that services are running
         else
             log_warn "Services may need a moment to start"
-            echo "   Check status with: systemctl status offgrid@${USER}.service"
+            echo "   Check status with: systemctl status offgrid@${USER}.service" >&2
         fi
     fi
     
