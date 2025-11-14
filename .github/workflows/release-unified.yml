@@ -260,10 +260,13 @@ jobs:
           https://github.com/takuphilchan/offgrid-llm
           EOF
           
-          # Create checksums
+          # Create checksums (use shasum on macOS, sha256sum on Linux)
           cd "$BUNDLE_NAME"
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            sha256sum offgrid.exe llama-server.exe > checksums.sha256
+            sha256sum offgrid.exe llama-server.exe > checksums.sha256 2>/dev/null || \
+              shasum -a 256 offgrid.exe llama-server.exe > checksums.sha256
+          elif [ "${{ matrix.platform }}" = "darwin" ]; then
+            shasum -a 256 offgrid llama-server > checksums.sha256
           else
             sha256sum offgrid llama-server > checksums.sha256
           fi
