@@ -288,25 +288,18 @@ verify_checksums() {
     fi
 }
 
-# Setup systemd service (Linux only, optional)
+# Setup systemd service (Linux only)
 setup_systemd() {
     if [ "$(detect_os)" != "linux" ]; then
-        return
+        return 0
     fi
     
     if ! command -v systemctl >/dev/null 2>&1; then
-        return
+        log_warn "systemd not available - you'll need to start services manually"
+        return 0
     fi
     
-    echo ""
-    read -p "Setup auto-start on boot? (systemd) [y/N] " -n 1 -r
-    echo
-    
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        return
-    fi
-    
-    log_info "Setting up systemd services..."
+    log_info "Setting up systemd services for auto-start..."
     
     # Create llama-server service
     sudo tee /etc/systemd/system/llama-server@.service >/dev/null << 'EOF'
@@ -336,6 +329,7 @@ Wants=llama-server@%i.service
 Type=simple
 User=%i
 WorkingDirectory=/home/%i
+Environment="HOME=/home/%i"
 ExecStart=/usr/local/bin/offgrid serve
 Restart=on-failure
 RestartSec=5s
@@ -344,15 +338,47 @@ RestartSec=5s
 WantedBy=multi-user.target
 EOF
     
-    # Enable and start services
+    # Reload systemd
     sudo systemctl daemon-reload
-    sudo systemctl enable llama-server@${USER}.service
-    sudo systemctl enable offgrid@${USER}.service
-    sudo systemctl start llama-server@${USER}.service
-    sudo systemctl start offgrid@${USER}.service
     
-    log_success "Systemd services configured and started"
-    log_info "Manage with: systemctl {start|stop|status} offgrid@${USER}.service"
+    # Ask if user wants to enable auto-start
+    echo ""
+    echo -e "${CYAN}${BOLD}Service Configuration${NC}"
+    echo ""
+    read -p "Enable services to start on boot? [Y/n] " -n 1 -r
+    echo
+    
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        sudo systemctl enable llama-server@${USER}.service
+        sudo systemctl enable offgrid@${USER}.service
+        log_success "Services enabled for auto-start on boot"
+    fi
+    
+    # Ask if user wants to start now
+    echo ""
+    read -p "Start services now? [Y/n] " -n 1 -r
+    echo
+    
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        sudo systemctl start llama-server@${USER}.service
+        sudo systemctl start offgrid@${USER}.service
+        sleep 2
+        
+        # Check if services started successfully
+        if systemctl is-active --quiet llama-server@${USER}.service && \
+           systemctl is-active --quiet offgrid@${USER}.service; then
+            log_success "Services started successfully!"
+            echo ""
+            echo -e "${GREEN}✓${NC} llama-server running on port 48081"
+            echo -e "${GREEN}✓${NC} offgrid server running on port 11611"
+            return 1  # Signal that services are running
+        else
+            log_warn "Services may need a moment to start"
+            echo "   Check status with: systemctl status offgrid@${USER}.service"
+        fi
+    fi
+    
+    return 0  # Services not started
 }
 
 # Cleanup
@@ -366,17 +392,53 @@ trap cleanup EXIT
 
 # Print success message
 print_success() {
+    local services_running="$1"
+    
     echo ""
-    echo -e "${GREEN}${BOLD}✓ Installation complete!${NC}"
+    echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}${BOLD}  ✓ Installation Complete!${NC}"
+    echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo "Get started:"
-    echo -e "  ${CYAN}offgrid --version${NC}"
-    echo -e "  ${CYAN}offgrid search llama --limit 5${NC}"
-    echo -e "  ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF --file Llama-3.2-3B-Instruct-Q4_K_M.gguf${NC}"
-    echo -e "  ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
+    
+    if [ "$services_running" = "1" ]; then
+        echo -e "${GREEN}${BOLD}🚀 Services are running and ready!${NC}"
+        echo ""
+        echo -e "  ${GREEN}✓${NC} Web UI:  ${CYAN}http://localhost:11611/ui${NC}"
+        echo -e "  ${GREEN}✓${NC} API:     ${CYAN}http://localhost:11611${NC}"
+        echo ""
+        echo -e "${BOLD}Quick Start:${NC}"
+        echo -e "  ${CYAN}offgrid search llama --limit 5${NC}"
+        echo -e "  ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF --file Llama-3.2-3B-Instruct-Q4_K_M.gguf${NC}"
+        echo -e "  ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
+        echo ""
+        echo -e "${BOLD}Manage Services:${NC}"
+        echo -e "  ${CYAN}sudo systemctl status offgrid@${USER}${NC}     # Check status"
+        echo -e "  ${CYAN}sudo systemctl stop offgrid@${USER}${NC}       # Stop server"
+        echo -e "  ${CYAN}sudo systemctl restart offgrid@${USER}${NC}    # Restart server"
+    else
+        echo -e "${YELLOW}⚠${NC}  ${BOLD}Services not started - manual setup required${NC}"
+        echo ""
+        echo -e "${BOLD}Start services manually:${NC}"
+        
+        if command -v systemctl >/dev/null 2>&1; then
+            echo -e "  ${CYAN}sudo systemctl start llama-server@${USER}${NC}"
+            echo -e "  ${CYAN}sudo systemctl start offgrid@${USER}${NC}"
+            echo ""
+            echo -e "${BOLD}Or run directly:${NC}"
+        fi
+        
+        echo -e "  ${CYAN}llama-server --port 48081 --host 127.0.0.1 &${NC}"
+        echo -e "  ${CYAN}offgrid serve &${NC}"
+        echo ""
+        echo -e "${BOLD}Then try:${NC}"
+        echo -e "  ${CYAN}offgrid search llama --limit 5${NC}"
+        echo -e "  ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF --file Llama-3.2-3B-Instruct-Q4_K_M.gguf${NC}"
+        echo -e "  ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
+    fi
+    
     echo ""
-    echo "Web UI: ${CYAN}http://localhost:11611/ui${NC}"
-    echo "Docs: ${CYAN}https://github.com/${REPO}${NC}"
+    echo -e "${BOLD}Documentation:${NC} ${CYAN}https://github.com/${REPO}${NC}"
+    echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
 
@@ -416,11 +478,12 @@ main() {
     # Install binaries
     install_binaries "$BUNDLE_DIR" "$OS"
     
-    # Setup systemd (optional, Linux only)
+    # Setup systemd (returns 1 if services started, 0 if not)
     setup_systemd
+    SERVICES_RUNNING=$?
     
     # Print success
-    print_success
+    print_success "$SERVICES_RUNNING"
 }
 
 # Run main
