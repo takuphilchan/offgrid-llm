@@ -997,16 +997,35 @@
         const sessions = {};
 
         async function saveSession() {
+            // Warn if currently streaming
+            if (isStreaming) {
+                await showMessage('Please Wait', 'Please wait for the AI response to complete before saving the session.', 'warning');
+                return;
+            }
+            
+            // Filter out empty assistant messages (incomplete streaming responses)
+            const validMessages = messages.filter(msg => {
+                if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '')) {
+                    return false; // Skip empty AI messages
+                }
+                return true;
+            });
+            
+            if (validMessages.length === 0) {
+                await showMessage('Nothing to Save', 'No messages to save. Start a conversation first!', 'info');
+                return;
+            }
+            
             const name = document.getElementById('sessionName').value.trim() || `session-${Date.now()}`;
             sessions[name] = {
                 name: name,
-                messages: [...messages],
+                messages: validMessages, // Save only valid messages
                 model: document.getElementById('modelSelect').value,
                 timestamp: new Date().toISOString(),
-                messageCount: messages.length
+                messageCount: validMessages.length
             };
             localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
-            await showMessage('Session Saved', `Session "${name}" has been saved successfully!`, 'success');
+            await showMessage('Session Saved', `Session "${name}" has been saved successfully with ${validMessages.length} messages!`, 'success');
             document.getElementById('sessionName').value = '';
         }
 
@@ -1088,6 +1107,11 @@
             const container = document.getElementById('messages');
             container.innerHTML = '';
             messages.forEach(msg => {
+                // Skip empty assistant messages (incomplete/unsaved streaming responses)
+                if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '')) {
+                    return;
+                }
+                
                 const isUser = msg.role === 'user';
                 const msgDiv = document.createElement('div');
                 msgDiv.id = msg.id;
