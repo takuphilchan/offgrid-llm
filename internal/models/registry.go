@@ -97,6 +97,44 @@ func (r *Registry) ListModels() []api.Model {
 	return models
 }
 
+// DeleteModel removes a model from the registry and deletes the file
+func (r *Registry) DeleteModel(modelID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Find the model
+	meta, exists := r.models[modelID]
+	if !exists {
+		return fmt.Errorf("model %s not found in registry (available: %v)", modelID, r.getModelIDs())
+	}
+
+	// Delete the file
+	fmt.Printf("Attempting to delete file: %s\n", meta.Path)
+	if err := os.Remove(meta.Path); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("File already deleted: %s\n", meta.Path)
+		} else {
+			return fmt.Errorf("failed to delete model file %s: %w", meta.Path, err)
+		}
+	} else {
+		fmt.Printf("Successfully deleted file: %s\n", meta.Path)
+	}
+
+	// Remove from registry
+	delete(r.models, modelID)
+	delete(r.loadedModels, modelID)
+
+	return nil
+}
+
+func (r *Registry) getModelIDs() []string {
+	ids := make([]string, 0, len(r.models))
+	for id := range r.models {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // GetModel retrieves a model by ID
 func (r *Registry) GetModel(id string) (*api.ModelMetadata, error) {
 	r.mu.RLock()

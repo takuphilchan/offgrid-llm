@@ -169,6 +169,92 @@ else
     echo "  No models to install"
 fi
 
+# Setup systemd service (Linux only)
+if [ "$OS" = "linux" ] && command -v systemctl &> /dev/null; then
+    echo
+    echo "🔧 Setting up auto-start service..."
+    
+    # Create startup script
+    SCRIPT_PATH="/usr/local/bin/llama-server-start.sh"
+    
+    sudo tee "$SCRIPT_PATH" > /dev/null << 'SCRIPT_EOF'
+#!/bin/bash
+# Auto-start script for llama-server
+set -e
+
+# Read port from config, default to 48081
+PORT=48081
+if [ -f /etc/offgrid/llama-port ]; then
+    PORT=$(cat /etc/offgrid/llama-port)
+fi
+
+# Find models directory
+MODELS_DIR="${HOME}/.offgrid-llm/models"
+
+if [ ! -d "$MODELS_DIR" ]; then
+    echo "Models directory not found: $MODELS_DIR"
+    exit 1
+fi
+
+# Find first available GGUF model (smallest first)
+MODEL_FILE=$(find "$MODELS_DIR" -name "*.gguf" -type f | sort -h | head -1)
+
+if [ -z "$MODEL_FILE" ]; then
+    echo "No GGUF models found in $MODELS_DIR"
+    exit 1
+fi
+
+echo "Starting llama-server with model: $(basename "$MODEL_FILE")"
+echo "Port: $PORT"
+
+# Start llama-server
+exec llama-server \\
+    --model "$MODEL_FILE" \\
+    --port "$PORT" \\
+    --host 127.0.0.1 \\
+    -c 4096 \\
+    --threads 4 \\
+    --metrics
+SCRIPT_EOF
+    
+    sudo chmod +x "$SCRIPT_PATH"
+    
+    # Create systemd service
+    sudo tee "/etc/systemd/system/llama-server@.service" > /dev/null << 'SERVICE_EOF'
+[Unit]
+Description=Llama.cpp HTTP Server for OffGrid LLM
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+Environment="HOME=/home/%i"
+ExecStart=/usr/local/bin/llama-server-start.sh
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+    
+    # Create port config
+    sudo mkdir -p /etc/offgrid
+    echo "48081" | sudo tee /etc/offgrid/llama-port > /dev/null
+    
+    # Enable service
+    CURRENT_USER=$(whoami)
+    sudo systemctl daemon-reload
+    sudo systemctl enable "llama-server@$CURRENT_USER"
+    
+    echo "  ✅ Auto-start service enabled"
+fi
+
 # Check if binary is in PATH
 if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
     echo
@@ -187,6 +273,13 @@ echo
 echo "Or if not in PATH:"
 echo "  $INSTALL_DIR/offgrid"
 echo
+if [ "$OS" = "linux" ] && command -v systemctl &> /dev/null; then
+    CURRENT_USER=$(whoami)
+    echo "Service commands:"
+    echo "  sudo systemctl start llama-server@$CURRENT_USER    # Start llama-server now"
+    echo "  sudo systemctl status llama-server@$CURRENT_USER   # Check status"
+    echo
+fi
 echo "For help:"
 echo "  offgrid help"
 echo

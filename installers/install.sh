@@ -381,6 +381,112 @@ install_offgrid() {
     fi
 }
 
+# Setup llama-server systemd service (auto-start)
+setup_llama_service() {
+    # Only for Linux with systemd
+    if [ "$OS" != "linux" ] || ! command -v systemctl &> /dev/null; then
+        return 0
+    fi
+    
+    print_step "Setting up llama-server auto-start service..."
+    
+    # Create startup script
+    SCRIPT_DIR="/usr/local/bin"
+    SCRIPT_PATH="$SCRIPT_DIR/llama-server-start.sh"
+    
+    print_step "Creating llama-server startup script..."
+    sudo tee "$SCRIPT_PATH" > /dev/null << 'SCRIPT_EOF'
+#!/bin/bash
+# Auto-start script for llama-server
+set -e
+
+# Read port from config, default to 48081
+PORT=48081
+if [ -f /etc/offgrid/llama-port ]; then
+    PORT=$(cat /etc/offgrid/llama-port)
+fi
+
+# Find models directory
+MODELS_DIR="${HOME}/.offgrid-llm/models"
+
+if [ ! -d "$MODELS_DIR" ]; then
+    echo "Models directory not found: $MODELS_DIR"
+    echo "Please download a model first with: offgrid download <model-id>"
+    exit 1
+fi
+
+# Find first available GGUF model (smallest first)
+MODEL_FILE=$(find "$MODELS_DIR" -name "*.gguf" -type f | sort -h | head -1)
+
+if [ -z "$MODEL_FILE" ]; then
+    echo "No GGUF models found in $MODELS_DIR"
+    echo "Please download a model first with: offgrid download <model-id>"
+    exit 1
+fi
+
+echo "Starting llama-server with model: $(basename "$MODEL_FILE")"
+echo "Port: $PORT"
+
+# Start llama-server
+exec llama-server \
+    --model "$MODEL_FILE" \
+    --port "$PORT" \
+    --host 127.0.0.1 \
+    -c 4096 \
+    --threads 4 \
+    --metrics
+SCRIPT_EOF
+    
+    sudo chmod +x "$SCRIPT_PATH"
+    print_success "Created startup script: $SCRIPT_PATH"
+    
+    # Create systemd service
+    SERVICE_FILE="/etc/systemd/system/llama-server@.service"
+    
+    print_step "Creating systemd service..."
+    sudo tee "$SERVICE_FILE" > /dev/null << 'SERVICE_EOF'
+[Unit]
+Description=Llama.cpp HTTP Server for OffGrid LLM
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+Environment="HOME=/home/%i"
+ExecStart=/usr/local/bin/llama-server-start.sh
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+    
+    print_success "Created systemd service: $SERVICE_FILE"
+    
+    # Create port config directory
+    sudo mkdir -p /etc/offgrid
+    echo "48081" | sudo tee /etc/offgrid/llama-port > /dev/null
+    print_success "Configured llama-server port: 48081"
+    
+    # Enable and start service for current user
+    CURRENT_USER=$(whoami)
+    
+    print_step "Enabling llama-server service for user: $CURRENT_USER"
+    sudo systemctl daemon-reload
+    sudo systemctl enable "llama-server@$CURRENT_USER"
+    
+    print_success "llama-server auto-start enabled!"
+    print_warning "Note: llama-server will start on next boot"
+    print_warning "To start now: sudo systemctl start llama-server@$CURRENT_USER"
+    print_warning "You need to download a model first: offgrid download <model-id>"
+}
+
 # Main
 main() {
     print_banner
@@ -404,11 +510,19 @@ main() {
     
     echo ""
     print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_step "  STEP 3/3: Install OffGrid LLM"
+    print_step "  STEP 3/4: Install OffGrid LLM"
     print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
     install_offgrid
+    
+    echo ""
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_step "  STEP 4/4: Setup Auto-Start Service"
+    print_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    setup_llama_service
     
     echo ""
     echo -e "${GREEN}"
@@ -427,6 +541,9 @@ EOF
     echo "  Installed:"
     echo "    • OffGrid LLM     (/usr/local/bin/offgrid)"
     echo "    • llama.cpp       (/usr/local/bin/llama-server)${GPU_INFO}"
+    if [ "$OS" = "linux" ] && command -v systemctl &> /dev/null; then
+        echo "    • Auto-start      (systemd service enabled)"
+    fi
     echo ""
     
     # Show GPU info if applicable
@@ -448,6 +565,16 @@ EOF
     echo "    offgrid server start      # Start API server"
     echo "    offgrid chat              # Interactive chat"
     echo ""
+    
+    if [ "$OS" = "linux" ] && command -v systemctl &> /dev/null; then
+        CURRENT_USER=$(whoami)
+        echo "  Service Management:"
+        echo "    sudo systemctl start llama-server@$CURRENT_USER    # Start now"
+        echo "    sudo systemctl status llama-server@$CURRENT_USER   # Check status"
+        echo "    sudo journalctl -u llama-server@$CURRENT_USER      # View logs"
+        echo ""
+    fi
+    
     echo "  Documentation:"
     echo "    https://github.com/takuphilchan/offgrid-llm"
     echo ""

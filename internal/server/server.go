@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,15 +26,37 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer      *http.Server
-	config          *config.Config
-	registry        *models.Registry
-	engine          inference.Engine
-	embeddingEngine *inference.EmbeddingEngine
-	monitor         *resource.Monitor
-	statsTracker    *stats.Tracker
-	cache           *cache.ResponseCache
-	startTime       time.Time
+	httpServer       *http.Server
+	config           *config.Config
+	registry         *models.Registry
+	engine           inference.Engine
+	embeddingEngine  *inference.EmbeddingEngine
+	monitor          *resource.Monitor
+	statsTracker     *stats.Tracker
+	cache            *cache.ResponseCache
+	startTime        time.Time
+	downloadProgress map[string]*DownloadProgress
+	downloadMutex    sync.RWMutex
+	exportProgress   map[string]*ExportProgress
+	exportMutex      sync.RWMutex
+}
+
+type DownloadProgress struct {
+	FileName   string  `json:"file_name"`
+	BytesTotal int64   `json:"bytes_total"`
+	BytesDone  int64   `json:"bytes_done"`
+	Percent    float64 `json:"percent"`
+	Status     string  `json:"status"` // "downloading", "complete", "failed"
+	Error      string  `json:"error,omitempty"`
+}
+
+type ExportProgress struct {
+	FileName   string  `json:"file_name"`
+	BytesTotal int64   `json:"bytes_total"`
+	BytesDone  int64   `json:"bytes_done"`
+	Percent    float64 `json:"percent"`
+	Status     string  `json:"status"` // "exporting", "complete", "failed"
+	Error      string  `json:"error,omitempty"`
 }
 
 // New creates a new server instance
@@ -78,14 +103,16 @@ func NewWithConfig(cfg *config.Config) *Server {
 	monitor.Start()
 
 	return &Server{
-		config:          cfg,
-		registry:        registry,
-		engine:          engine,
-		embeddingEngine: embeddingEngine,
-		monitor:         monitor,
-		statsTracker:    statsTracker,
-		cache:           responseCache,
-		startTime:       time.Now(),
+		config:           cfg,
+		registry:         registry,
+		engine:           engine,
+		embeddingEngine:  embeddingEngine,
+		monitor:          monitor,
+		statsTracker:     statsTracker,
+		cache:            responseCache,
+		startTime:        time.Now(),
+		downloadProgress: make(map[string]*DownloadProgress),
+		exportProgress:   make(map[string]*ExportProgress),
 	}
 }
 
@@ -101,6 +128,9 @@ func (s *Server) Start() error {
 
 	// API v1 routes (OpenAI-compatible)
 	mux.HandleFunc("/v1/models", s.handleListModels)
+	mux.HandleFunc("/v1/models/delete", s.handleDeleteModel)
+	mux.HandleFunc("/v1/models/download", s.handleDownloadModel)
+	mux.HandleFunc("/v1/models/download/progress", s.handleDownloadProgress)
 	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("/v1/completions", s.handleCompletions)
 	mux.HandleFunc("/v1/embeddings", s.handleEmbeddings)
@@ -109,6 +139,12 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/search", s.handleModelSearch)
 	mux.HandleFunc("/v1/catalog", s.handleModelCatalog)
 	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
+
+	// USB import/export
+	mux.HandleFunc("/v1/usb/scan", s.handleUSBScan)
+	mux.HandleFunc("/v1/usb/import", s.handleUSBImport)
+	mux.HandleFunc("/v1/usb/export", s.handleUSBExport)
+	mux.HandleFunc("/v1/usb/export/progress", s.handleExportProgress)
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
@@ -157,6 +193,7 @@ func (s *Server) Start() error {
 	fmt.Println("  ──────────────────────────────────────────────────")
 	fmt.Println("    GET  /health")
 	fmt.Println("    GET  /v1/models")
+	fmt.Println("    DELETE /v1/models/delete")
 	fmt.Println("    POST /v1/chat/completions")
 	fmt.Println("    POST /v1/completions")
 	fmt.Println("    POST /v1/embeddings")
@@ -808,6 +845,273 @@ func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleDeleteModel deletes a model from the registry and filesystem
+func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		ModelID string `json:"model_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ModelID == "" {
+		writeError(w, "model_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.registry.DeleteModel(req.ModelID); err != nil {
+		writeError(w, fmt.Sprintf("Failed to delete model: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Model %s deleted successfully", req.ModelID),
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// handleDownloadModel downloads a model from HuggingFace
+func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Repository   string `json:"repository"`
+		FileName     string `json:"file_name"`
+		Quantization string `json:"quantization"` // Optional: just the quant like "Q4_K_M"
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Repository == "" {
+		writeError(w, "repository is required", http.StatusBadRequest)
+		return
+	}
+
+	// If only quantization is provided, fetch the model to find the actual filename
+	if req.FileName == "" && req.Quantization != "" {
+		hf := models.NewHuggingFaceClient()
+		modelInfo, err := hf.GetModelInfo(req.Repository)
+		if err == nil {
+			// Find GGUF file with matching quantization
+			for _, sibling := range modelInfo.Siblings {
+				if strings.HasSuffix(sibling.Filename, ".gguf") &&
+					strings.Contains(strings.ToUpper(sibling.Filename), req.Quantization) {
+					req.FileName = sibling.Filename
+					break
+				}
+			}
+		}
+	}
+
+	if req.FileName == "" {
+		writeError(w, "file_name is required or could not be determined", http.StatusBadRequest)
+		return
+	}
+
+	// Start download in background
+	go s.downloadModelAsync(req.Repository, req.FileName)
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Download started for %s/%s", req.Repository, req.FileName),
+		"status":  "downloading",
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+func (s *Server) downloadModelAsync(repository, fileName string) {
+	// Ensure fileName doesn't have double .gguf extension
+	fileName = strings.TrimSuffix(fileName, ".gguf") + ".gguf"
+
+	log.Printf("Starting download: %s/%s", repository, fileName)
+
+	// Initialize progress tracking
+	s.downloadMutex.Lock()
+	s.downloadProgress[fileName] = &DownloadProgress{
+		FileName: fileName,
+		Status:   "downloading",
+	}
+	s.downloadMutex.Unlock()
+
+	// Try different URL formats (some repos use different naming conventions)
+	urls := []string{
+		// Standard format: repo/resolve/main/filename.gguf
+		fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", repository, fileName),
+	}
+
+	// Get models directory from config
+	modelsDir := s.config.ModelsDir
+
+	// Use just the base filename for the destination
+	destFileName := filepath.Base(fileName)
+	destPath := filepath.Join(modelsDir, destFileName)
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 0, // No timeout for large downloads
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return nil // Follow redirects
+		},
+	}
+
+	var resp *http.Response
+	var err error
+	var successURL string
+
+	// Try each URL
+	for _, url := range urls {
+		log.Printf("Trying URL: %s", url)
+		resp, err = client.Get(url)
+		if err != nil {
+			log.Printf("Failed to fetch %s: %v", url, err)
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			successURL = url
+			break
+		}
+
+		resp.Body.Close()
+		log.Printf("URL returned status %d: %s", resp.StatusCode, url)
+	}
+
+	if resp == nil || resp.StatusCode != http.StatusOK {
+		log.Printf("All download attempts failed for %s/%s", repository, fileName)
+		s.downloadMutex.Lock()
+		s.downloadProgress[fileName].Status = "failed"
+		s.downloadProgress[fileName].Error = "All download URLs failed"
+		s.downloadMutex.Unlock()
+		return
+	}
+	defer resp.Body.Close()
+
+	log.Printf("Successfully connected to: %s", successURL)
+
+	// Update progress with total size
+	total := resp.ContentLength
+	s.downloadMutex.Lock()
+	s.downloadProgress[fileName].BytesTotal = total
+	s.downloadMutex.Unlock()
+
+	// Create destination file
+	out, err := os.Create(destPath)
+	if err != nil {
+		log.Printf("Failed to create file: %v", err)
+		s.downloadMutex.Lock()
+		s.downloadProgress[fileName].Status = "failed"
+		s.downloadProgress[fileName].Error = err.Error()
+		s.downloadMutex.Unlock()
+		return
+	}
+	defer out.Close()
+
+	// Copy with progress logging
+	var downloaded int64
+	buffer := make([]byte, 32*1024) // 32KB buffer
+	lastLog := time.Now()
+
+	for {
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			_, writeErr := out.Write(buffer[:n])
+			if writeErr != nil {
+				log.Printf("Write error: %v", writeErr)
+				s.downloadMutex.Lock()
+				s.downloadProgress[fileName].Status = "failed"
+				s.downloadProgress[fileName].Error = writeErr.Error()
+				s.downloadMutex.Unlock()
+				return
+			}
+			downloaded += int64(n)
+
+			// Update progress
+			s.downloadMutex.Lock()
+			s.downloadProgress[fileName].BytesDone = downloaded
+			if total > 0 {
+				s.downloadProgress[fileName].Percent = float64(downloaded) / float64(total) * 100
+			}
+			s.downloadMutex.Unlock()
+
+			// Log progress every 100MB or every 5 seconds
+			if downloaded%(100*1024*1024) == 0 || time.Since(lastLog) > 5*time.Second {
+				percent := float64(downloaded) / float64(total) * 100
+				log.Printf("Download progress: %.1f%% (%d/%d bytes)", percent, downloaded, total)
+				lastLog = time.Now()
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Read error: %v", err)
+			s.downloadMutex.Lock()
+			s.downloadProgress[fileName].Status = "failed"
+			s.downloadProgress[fileName].Error = err.Error()
+			s.downloadMutex.Unlock()
+			return
+		}
+	}
+
+	log.Printf("Download completed: %s (%d bytes)", fileName, downloaded)
+
+	// Mark as complete
+	s.downloadMutex.Lock()
+	s.downloadProgress[fileName].Status = "complete"
+	s.downloadProgress[fileName].Percent = 100
+	s.downloadMutex.Unlock()
+
+	// Rescan models to pick up the new file
+	if err := s.registry.ScanModels(); err != nil {
+		log.Printf("Failed to rescan models: %v", err)
+	}
+}
+
+// handleDownloadProgress returns download progress for all active downloads
+func (s *Server) handleDownloadProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	s.downloadMutex.RLock()
+	progress := make(map[string]*DownloadProgress)
+	for k, v := range s.downloadProgress {
+		progress[k] = v
+	}
+	s.downloadMutex.RUnlock()
+
+	if err := json.NewEncoder(w).Encode(progress); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
 // handleModelCatalog returns the curated model catalog
 func (s *Server) handleModelCatalog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1063,4 +1367,313 @@ func writeError(w http.ResponseWriter, message string, statusCode int) {
 		},
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+// handleUSBScan scans a USB drive for GGUF models
+func (s *Server) handleUSBScan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		USBPath string `json:"usb_path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.USBPath == "" {
+		writeError(w, "usb_path is required", http.StatusBadRequest)
+		return
+	}
+
+	importer := models.NewUSBImporter(s.config.ModelsDir, s.registry)
+	modelFiles, err := importer.ScanUSBDrive(req.USBPath)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Failed to scan USB drive: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Extract model info
+	type ModelInfo struct {
+		FilePath     string `json:"file_path"`
+		FileName     string `json:"file_name"`
+		Size         int64  `json:"size"`
+		ModelID      string `json:"model_id"`
+		Quantization string `json:"quantization"`
+	}
+
+	var models []ModelInfo
+	for _, path := range modelFiles {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+
+		fileName := filepath.Base(path)
+		modelID, quant := importer.GetModelInfo(fileName)
+
+		models = append(models, ModelInfo{
+			FilePath:     path,
+			FileName:     fileName,
+			Size:         info.Size(),
+			ModelID:      modelID,
+			Quantization: quant,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"usb_path": req.USBPath,
+		"models":   models,
+		"count":    len(models),
+	})
+}
+
+// handleUSBImport imports models from USB
+func (s *Server) handleUSBImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		FilePaths []string `json:"file_paths"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.FilePaths) == 0 {
+		writeError(w, "file_paths is required", http.StatusBadRequest)
+		return
+	}
+
+	importer := models.NewUSBImporter(s.config.ModelsDir, s.registry)
+
+	type ImportResult struct {
+		FileName string `json:"file_name"`
+		Success  bool   `json:"success"`
+		Error    string `json:"error,omitempty"`
+	}
+
+	results := []ImportResult{}
+
+	for _, path := range req.FilePaths {
+		fileName := filepath.Base(path)
+		err := importer.ImportModel(path, nil)
+
+		if err != nil {
+			results = append(results, ImportResult{
+				FileName: fileName,
+				Success:  false,
+				Error:    err.Error(),
+			})
+		} else {
+			results = append(results, ImportResult{
+				FileName: fileName,
+				Success:  true,
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results": results,
+	})
+}
+
+// handleUSBExport exports models to USB
+func (s *Server) handleUSBExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ModelNames []string `json:"model_names"`
+		USBPath    string   `json:"usb_path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.ModelNames) == 0 {
+		writeError(w, "model_names is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.USBPath == "" {
+		writeError(w, "usb_path is required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify USB path exists
+	if _, err := os.Stat(req.USBPath); os.IsNotExist(err) {
+		writeError(w, fmt.Sprintf("USB path does not exist: %s", req.USBPath), http.StatusBadRequest)
+		return
+	}
+
+	// Start export in background
+	go s.exportModelsAsync(req.ModelNames, req.USBPath)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "started",
+		"count":  len(req.ModelNames),
+	})
+}
+
+func (s *Server) exportModelsAsync(modelIDs []string, usbPath string) {
+	for _, modelID := range modelIDs {
+		// Get model metadata from registry to find actual filename
+		metadata, err := s.registry.GetModel(modelID)
+		if err != nil {
+			s.exportMutex.Lock()
+			s.exportProgress[modelID] = &ExportProgress{
+				FileName: modelID,
+				Status:   "failed",
+				Error:    "Model not found in registry",
+			}
+			s.exportMutex.Unlock()
+			continue
+		}
+
+		sourcePath := metadata.Path
+
+		// Check if model file exists
+		info, err := os.Stat(sourcePath)
+		if err != nil {
+			s.exportMutex.Lock()
+			s.exportProgress[modelID] = &ExportProgress{
+				FileName: modelID,
+				Status:   "failed",
+				Error:    "Model file not found",
+			}
+			s.exportMutex.Unlock()
+			continue
+		}
+
+		fileName := filepath.Base(sourcePath)
+
+		// Initialize progress
+		s.exportMutex.Lock()
+		s.exportProgress[modelID] = &ExportProgress{
+			FileName:   fileName,
+			BytesTotal: info.Size(),
+			BytesDone:  0,
+			Percent:    0,
+			Status:     "exporting",
+		}
+		s.exportMutex.Unlock()
+
+		// Copy to USB with original filename
+		destPath := filepath.Join(usbPath, fileName)
+
+		sourceFile, err := os.Open(sourcePath)
+		if err != nil {
+			s.exportMutex.Lock()
+			s.exportProgress[modelID].Status = "failed"
+			s.exportProgress[modelID].Error = fmt.Sprintf("Cannot open source: %v", err)
+			s.exportMutex.Unlock()
+			continue
+		}
+
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			sourceFile.Close()
+			s.exportMutex.Lock()
+			s.exportProgress[modelID].Status = "failed"
+			s.exportProgress[modelID].Error = fmt.Sprintf("Cannot create destination: %v", err)
+			s.exportMutex.Unlock()
+			continue
+		}
+
+		// Copy with progress tracking
+		buffer := make([]byte, 1024*1024) // 1MB buffer
+		var bytesCopied int64
+		lastUpdate := time.Now()
+
+		for {
+			n, err := sourceFile.Read(buffer)
+			if n > 0 {
+				if _, writeErr := destFile.Write(buffer[:n]); writeErr != nil {
+					sourceFile.Close()
+					destFile.Close()
+					os.Remove(destPath)
+					s.exportMutex.Lock()
+					s.exportProgress[modelID].Status = "failed"
+					s.exportProgress[modelID].Error = fmt.Sprintf("Write error: %v", writeErr)
+					s.exportMutex.Unlock()
+					break
+				}
+
+				bytesCopied += int64(n)
+
+				// Update progress every 5 seconds or 100MB
+				if time.Since(lastUpdate) > 5*time.Second || bytesCopied-s.exportProgress[modelID].BytesDone > 100*1024*1024 {
+					s.exportMutex.Lock()
+					s.exportProgress[modelID].BytesDone = bytesCopied
+					s.exportProgress[modelID].Percent = float64(bytesCopied) / float64(info.Size()) * 100
+					s.exportMutex.Unlock()
+					lastUpdate = time.Now()
+				}
+			}
+
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				sourceFile.Close()
+				destFile.Close()
+				os.Remove(destPath)
+				s.exportMutex.Lock()
+				s.exportProgress[modelID].Status = "failed"
+				s.exportProgress[modelID].Error = fmt.Sprintf("Read error: %v", err)
+				s.exportMutex.Unlock()
+				break
+			}
+		}
+
+		sourceFile.Close()
+		destFile.Close()
+
+		// Final update
+		if s.exportProgress[modelID].Status != "failed" {
+			s.exportMutex.Lock()
+			s.exportProgress[modelID].BytesDone = bytesCopied
+			s.exportProgress[modelID].Percent = 100
+			s.exportProgress[modelID].Status = "complete"
+			s.exportMutex.Unlock()
+		}
+	}
+}
+
+// handleExportProgress returns export progress for all active exports
+func (s *Server) handleExportProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	s.exportMutex.RLock()
+	progress := make(map[string]*ExportProgress)
+	for k, v := range s.exportProgress {
+		progress[k] = v
+	}
+	s.exportMutex.RUnlock()
+
+	if err := json.NewEncoder(w).Encode(progress); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }

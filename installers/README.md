@@ -1,100 +1,38 @@
-# OffGrid LLM - Installation Guide
+# OffGrid LLM - Installation Scripts
 
-**Choose your installation method:**
-
----
-
-## 🚀 Production Bundle Install (Recommended)
-
-**Complete, zero-dependency installation with automatic GPU detection:**
-
-```bash
-curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/download/v0.0.1/install-bundle.sh | bash
-```
-
-### What You Get
-
-- ✅ **Both binaries bundled**: `offgrid` + `llama-server` in one package
-- ✅ **Zero external dependencies**: Everything statically compiled
-- ✅ **Auto GPU detection**: Downloads Vulkan (Linux) or Metal (macOS) variant
-- ✅ **Auto-starts servers**: Just run `offgrid run <model>` - everything starts automatically!
-- ✅ **Production ready**: Tested, versioned releases
-- ⚡ **Fast**: Installs in ~10 seconds
-
-### Available Bundles
-
-| Platform | GPU Support | Download Size |
-|----------|-------------|---------------|
-| Linux amd64 | Vulkan | ~50MB |
-| Linux amd64 | CPU-only | ~35MB |
-| macOS arm64 | Metal (built-in) | ~40MB |
-| macOS amd64 | CPU-only | ~38MB |
-
-**Installation time:** 10 seconds  
-**Service type:** Auto-start on demand with `offgrid run`
+**Simple one-line installers for all platforms.**
 
 ---
 
-## Quick Install (Go Binary Only)
+## Quick Install (Recommended)
 
-**Fast install using pre-built Go binaries (requires separate llama-server setup):**
+**Pre-built binaries with auto-detection:**
 
-### Linux / macOS
-
+#### Linux / macOS
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
 ```
 
-### Windows (PowerShell as Administrator)
-
+#### Windows (PowerShell as Administrator)
 ```powershell
 iwr -useb https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.ps1 | iex
 ```
 
-**Installation time:** 10-15 seconds  
-**Service type:** Manual start (not a background service)
+**What gets installed:**
+- Pre-built `offgrid` binary (~10MB)
+- Auto-detection of GPU support
+- PATH configuration for instant use
+- Auto-start service on Linux (systemd)
 
-**Note:** This installer provides the `offgrid` binary only. You'll need to install `llama-server` separately or use the production bundle above.
-
----
-
-## 🔧 Production Install with Systemd (Advanced)
-
-**Build from source with automatic startup on boot:**
-
-See [dev/README.md](../dev/) for systemd service installation.
-
-- ✅ Automatic startup on boot
-- ✅ Security hardening with systemd
-- ✅ Custom build flags and optimizations
-- ✅ Full control over compilation
+**Installation time:** ~1 minute
 
 ---
 
-## Features
+## Production Install
 
-### Automatic GPU Detection (Bundle Installer)
+**For servers with auto-start on boot:**
 
-The production bundle installer automatically detects your hardware:
-
-- **Linux**: Checks for Vulkan support, downloads GPU or CPU variant
-- **macOS Apple Silicon**: Automatically uses Metal-enabled bundle
-- **macOS Intel**: CPU-only variant
-- **Fallback**: Always downloads CPU version if GPU detection fails
-
-### What Gets Installed (Bundle)
-
-- **OffGrid LLM** - Main application binary (~15MB)
-- **llama-server** - Statically compiled inference engine (~35-50MB)
-- **No external dependencies** - Everything bundled and ready to run
-
-### What Gets Installed (Quick Install)
-
-- **OffGrid LLM** - Main application (~10MB)
-- **llama.cpp** - Downloaded separately during first use (~15-50MB depending on variant)
-- **Shared libraries** - GPU acceleration libraries if available
-
-**Important:** Quick installer does NOT create systemd services. Use `offgrid run` to start manually.
+See [../dev/README.md](../dev/README.md) for building from source with systemd services.
 
 ---
 
@@ -106,28 +44,22 @@ The production bundle installer automatically detects your hardware:
 - **RAM**: 4GB
 - **Storage**: 500MB + models
 
-### For GPU Acceleration
+### GPU Acceleration
 
-#### Linux - NVIDIA GPU
-
+#### Linux
 ```bash
+# NVIDIA (Vulkan)
 sudo apt-get install vulkan-tools libvulkan1
-# Then reinstall OffGrid
-```
 
-#### Linux - AMD GPU
-
-```bash
+# AMD
 sudo apt-get install mesa-vulkan-drivers vulkan-tools
 ```
 
-#### Windows - NVIDIA GPU
-
+#### Windows
 Install [CUDA Toolkit 12.4+](https://developer.nvidia.com/cuda-downloads)
 
 #### macOS
-
-- **Apple Silicon**: Metal built-in
+- **Apple Silicon**: Metal built-in ✅
 - **Intel Mac**: CPU-only
 
 ---
@@ -146,7 +78,7 @@ offgrid --version
 # Search for models
 offgrid search llama --limit 5
 
-# Download a model from HuggingFace
+# Download from HuggingFace
 offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
   --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
 ```
@@ -154,88 +86,67 @@ offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
 ### Start Using
 
 ```bash
-# Interactive chat - auto-starts both servers!
+# Interactive chat
 offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 
-# Or start API server manually if needed
-offgrid serve
-
-# Check server status
-curl http://localhost:11611/health
-
-# Access Web UI
+# Or access Web UI
 open http://localhost:11611/ui
 ```
-
-**Note:** The `offgrid run` command automatically starts both the OffGrid API server AND llama-server if they're not running. Everything is zero-setup - just download a model and run!
-
----
-
-## Installation Locations
-
-| Platform | Binary Location | Config Location |
-|----------|----------------|-----------------|
-| Linux | `/usr/local/bin/` | `~/.config/offgrid/` |
-| macOS | `/usr/local/bin/` | `~/Library/Application Support/OffGrid/` |
-| Windows | `%LOCALAPPDATA%\offgrid-llm\bin\` | `%APPDATA%\OffGrid\` |
 
 ---
 
 ## Troubleshooting
 
-### "Command not found" after installation
-
-**Linux/macOS**: Restart terminal or run:
+### Command not found
 
 ```bash
-export PATH="$PATH:/usr/local/bin"
-```
+# Linux/macOS - reload shell
+source ~/.bashrc  # or ~/.zshrc
 
-**Windows**: Restart PowerShell or Command Prompt.
+# Or specify full path
+/usr/local/bin/offgrid --version
+```
 
 ### Permission denied
 
-**Linux/macOS**: The installer requires sudo for system-wide installation.
-
-**Windows**: Run PowerShell as Administrator.
+```bash
+# Make binary executable
+chmod +x /usr/local/bin/offgrid
+```
 
 ### GPU not detected
 
-**Linux**: Install vulkan-tools, then reinstall
+```bash
+# Check GPU support
+offgrid info
 
-**Windows**: Install CUDA Toolkit, then reinstall
-
----
-
-## Updating
-
-Run the installer again - it replaces old binaries while keeping models/config.
-
-The installers will detect and remove previous versions automatically.
+# Reinstall with GPU libraries
+sudo apt-get install vulkan-tools libvulkan1  # Linux
+```
 
 ---
 
 ## Uninstall
 
-### Linux/macOS
-
 ```bash
-sudo rm -f /usr/local/bin/{offgrid,llama-server}
-sudo rm -f /usr/local/lib/libggml*.so* /usr/local/lib/libllama*.so*
-rm -rf ~/.offgrid-llm ~/.config/offgrid  # Optional: models/config
-```
+# Remove binary
+sudo rm /usr/local/bin/offgrid
 
-### Windows
+# Remove systemd service (Linux only)
+sudo systemctl stop llama-server@$USER.service
+sudo systemctl disable llama-server@$USER.service
+sudo rm /etc/systemd/system/llama-server@.service
+sudo rm /usr/local/bin/llama-server-start.sh
 
-```powershell
-Remove-Item -Recurse "$env:LOCALAPPDATA\offgrid-llm"
-Remove-Item -Recurse "$env:USERPROFILE\.offgrid-llm"  # Optional: models
+# Remove models and data (optional)
+rm -rf ~/.offgrid-llm
 ```
 
 ---
 
-## Documentation
+## Next Steps
 
-- **Main README**: [../README.md](../README.md)
-- **API Reference**: [../docs/API.md](../docs/API.md)
-- **Build from Source**: [../dev/](../dev/)
+- 📖 [Documentation](../docs/README.md)
+- 🚀 [Quick Start Guide](../README.md#quick-start)
+- 💻 [CLI Reference](../docs/CLI_REFERENCE.md)
+- 🌐 [API Documentation](../docs/API.md)

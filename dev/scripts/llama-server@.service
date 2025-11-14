@@ -1,0 +1,22 @@
+[Unit]
+Description=Llama.cpp HTTP Server for OffGrid LLM
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+Environment="HOME=/home/%i"
+Environment="LLAMA_SERVER_PORT=8081"
+Environment="LLAMA_SERVER_HOST=127.0.0.1"
+ExecStart=/mnt/d/offgrid-llm/scripts/llama-server-start.sh
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

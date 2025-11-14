@@ -1,0 +1,514 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  # Build complete bundles with offgrid + llama-server
+  build-bundles:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux variants
+          - name: linux-amd64-cpu
+            os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+            variant: cpu
+            gpu_flags: ""
+            
+          - name: linux-amd64-vulkan
+            os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+            variant: vulkan
+            gpu_flags: "-DGGML_VULKAN=ON"
+            
+          - name: linux-arm64-cpu
+            os: ubuntu-22.04
+            platform: linux
+            arch: arm64
+            variant: cpu
+            gpu_flags: ""
+            
+          # macOS variants
+          - name: darwin-arm64-metal
+            os: macos-latest
+            platform: darwin
+            arch: arm64
+            variant: metal
+            gpu_flags: "-DGGML_METAL=ON"
+            
+          - name: darwin-amd64-cpu
+            os: macos-13
+            platform: darwin
+            arch: amd64
+            variant: cpu
+            gpu_flags: ""
+            
+          # Windows variants (CPU only for now)
+          - name: windows-amd64-cpu
+            os: windows-latest
+            platform: windows
+            arch: amd64
+            variant: cpu
+            gpu_flags: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git
+          
+          # Install Vulkan SDK if needed
+          if [ "${{ matrix.variant }}" = "vulkan" ]; then
+            wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+            sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list \
+              https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+            sudo apt-get update
+            sudo apt-get install -y vulkan-sdk
+          fi
+
+      - name: Install dependencies (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          brew install cmake
+
+      - name: Install dependencies (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+          choco install mingw
+
+      - name: Clone llama.cpp
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp /tmp/llama.cpp
+          cd /tmp/llama.cpp
+          echo "LLAMA_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build llama-server
+        shell: bash
+        run: |
+          cd /tmp/llama.cpp
+          mkdir build && cd build
+          
+          cmake .. \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_STATIC=ON \
+            -DLLAMA_CURL=OFF \
+            ${{ matrix.gpu_flags }}
+          
+          cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) --target llama-server
+
+      - name: Build offgrid binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.platform }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          
+          go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+            -o offgrid${{ matrix.platform == 'windows' && '.exe' || '' }} \
+            ./cmd/offgrid
+
+      - name: Create bundle
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUNDLE_NAME="offgrid-${VERSION}-${{ matrix.name }}"
+          
+          mkdir -p "$BUNDLE_NAME"
+          
+          # Copy binaries
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            cp offgrid.exe "$BUNDLE_NAME/"
+            cp /tmp/llama.cpp/build/bin/Release/llama-server.exe "$BUNDLE_NAME/" 2>/dev/null || \
+              cp /tmp/llama.cpp/build/bin/llama-server.exe "$BUNDLE_NAME/"
+          else
+            cp offgrid "$BUNDLE_NAME/"
+            cp /tmp/llama.cpp/build/bin/llama-server "$BUNDLE_NAME/"
+          fi
+          
+          # Create install script
+          if [ "${{ matrix.platform }}" != "windows" ]; then
+            cat > "$BUNDLE_NAME/install.sh" << 'EOF'
+          #!/bin/bash
+          set -e
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          
+          echo "Installing OffGrid LLM..."
+          sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
+          sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
+          sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server
+          
+          echo "✓ Installed to /usr/local/bin"
+          echo ""
+          echo "Get started:"
+          echo "  offgrid --version"
+          echo "  offgrid search llama --limit 5"
+          EOF
+            chmod +x "$BUNDLE_NAME/install.sh"
+          fi
+          
+          # Create README
+          cat > "$BUNDLE_NAME/README.md" << EOF
+          # OffGrid LLM ${VERSION}
+          
+          **Platform:** ${{ matrix.name }}
+          **llama.cpp:** ${{ env.LLAMA_COMMIT }}
+          
+          ## Installation
+          
+          EOF
+          
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            cat >> "$BUNDLE_NAME/README.md" << 'EOF'
+          ### Windows
+          1. Extract this archive
+          2. Add the directory to your PATH, or
+          3. Copy `offgrid.exe` and `llama-server.exe` to a directory in your PATH
+          
+          ```powershell
+          # Example: Copy to a standard location
+          Copy-Item offgrid.exe C:\Windows\System32\
+          Copy-Item llama-server.exe C:\Windows\System32\
+          ```
+          EOF
+          else
+            cat >> "$BUNDLE_NAME/README.md" << 'EOF'
+          ### Linux / macOS
+          ```bash
+          ./install.sh
+          ```
+          
+          Or manually:
+          ```bash
+          sudo cp offgrid /usr/local/bin/
+          sudo cp llama-server /usr/local/bin/
+          sudo chmod +x /usr/local/bin/{offgrid,llama-server}
+          ```
+          EOF
+          fi
+          
+          cat >> "$BUNDLE_NAME/README.md" << 'EOF'
+          
+          ## Getting Started
+          
+          ```bash
+          # Verify installation
+          offgrid --version
+          
+          # Search for models
+          offgrid search llama --limit 5
+          
+          # Download a model
+          offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
+            --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
+          
+          # Start chatting
+          offgrid run Llama-3.2-3B-Instruct-Q4_K_M
+          ```
+          
+          ## Web UI
+          
+          Access at: http://localhost:11611/ui
+          
+          ## Documentation
+          
+          https://github.com/takuphilchan/offgrid-llm
+          EOF
+          
+          # Create checksums
+          cd "$BUNDLE_NAME"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            sha256sum offgrid.exe llama-server.exe > checksums.sha256
+          else
+            sha256sum offgrid llama-server > checksums.sha256
+          fi
+          cd ..
+          
+          # Create archive
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            powershell Compress-Archive -Path "$BUNDLE_NAME" -DestinationPath "${BUNDLE_NAME}.zip"
+            echo "ASSET_PATH=${BUNDLE_NAME}.zip" >> $GITHUB_ENV
+          else
+            tar -czf "${BUNDLE_NAME}.tar.gz" "$BUNDLE_NAME"
+            echo "ASSET_PATH=${BUNDLE_NAME}.tar.gz" >> $GITHUB_ENV
+          fi
+          
+          echo "BUNDLE_NAME=${BUNDLE_NAME}" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BUNDLE_NAME }}
+          path: ${{ env.ASSET_PATH }}
+          retention-days: 7
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: ${{ env.ASSET_PATH }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build desktop app
+  build-desktop:
+    name: Build Desktop App (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-22.04
+            artifact: AppImage
+            
+          - os: macos
+            runner: macos-latest
+            artifact: dmg
+            
+          - os: windows
+            runner: windows-latest
+            artifact: exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install
+
+      - name: Update version in package.json
+        working-directory: desktop
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          VERSION_NUM="${VERSION#v}"  # Remove 'v' prefix
+          npm version $VERSION_NUM --no-git-tag-version
+
+      - name: Build desktop app
+        working-directory: desktop
+        run: npm run dist
+
+      - name: Find built artifact
+        id: artifact
+        shell: bash
+        working-directory: desktop/dist
+        run: |
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            ASSET=$(ls *.AppImage | head -1)
+          elif [ "${{ matrix.os }}" = "macos" ]; then
+            ASSET=$(ls *.dmg | head -1)
+          else
+            ASSET=$(ls *.exe | head -1)
+          fi
+          echo "asset=$ASSET" >> $GITHUB_OUTPUT
+          echo "path=desktop/dist/$ASSET" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: ${{ steps.artifact.outputs.path }}
+          retention-days: 7
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: ${{ steps.artifact.outputs.path }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Create release notes and checksums
+  finalize-release:
+    name: Finalize Release
+    runs-on: ubuntu-latest
+    needs: [build-bundles, build-desktop]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.exe" \) -exec sha256sum {} \; > ../checksums-${{ steps.version.outputs.version }}.sha256
+          cd ..
+
+      - name: Create release notes
+        run: |
+          cat > release-notes.md << EOF
+          # OffGrid LLM ${{ steps.version.outputs.version }}
+          
+          ## Installation
+          
+          ### Quick Install (Recommended)
+          
+          **Linux / macOS:**
+          \`\`\`bash
+          curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+          \`\`\`
+          
+          **Windows:** Download the bundle below and run \`install.bat\`
+          
+          ### Desktop App
+          
+          Download the appropriate installer for your platform:
+          - **Linux**: \`.AppImage\` (make executable and run)
+          - **macOS**: \`.dmg\` (mount and drag to Applications)
+          - **Windows**: \`.exe\` (run installer)
+          
+          ## Bundles
+          
+          Choose your platform and GPU variant:
+          
+          ### Linux
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan.tar.gz\` - Vulkan GPU support (recommended)
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-cpu.tar.gz\` - CPU only
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-arm64-cpu.tar.gz\` - ARM64 (Raspberry Pi, etc.)
+          
+          ### macOS
+          - \`offgrid-${{ steps.version.outputs.version }}-darwin-arm64-metal.tar.gz\` - Apple Silicon (M1/M2/M3)
+          - \`offgrid-${{ steps.version.outputs.version }}-darwin-amd64-cpu.tar.gz\` - Intel Mac
+          
+          ### Windows
+          - \`offgrid-${{ steps.version.outputs.version }}-windows-amd64-cpu.zip\` - CPU only
+          
+          ## What's Included
+          
+          Each bundle contains:
+          - \`offgrid\` - Main CLI application
+          - \`llama-server\` - Inference engine (llama.cpp)
+          - \`install.sh\` - Installation script (Linux/macOS)
+          - \`README.md\` - Getting started guide
+          - \`checksums.sha256\` - File verification
+          
+          ## Verification
+          
+          Verify your download:
+          \`\`\`bash
+          sha256sum -c checksums-${{ steps.version.outputs.version }}.sha256
+          \`\`\`
+          
+          ## Getting Started
+          
+          After installation:
+          \`\`\`bash
+          # Verify
+          offgrid --version
+          
+          # Search for models
+          offgrid search llama --limit 5
+          
+          # Download a model
+          offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \\
+            --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
+          
+          # Start chatting
+          offgrid run Llama-3.2-3B-Instruct-Q4_K_M
+          
+          # Or use Web UI
+          open http://localhost:11611/ui
+          \`\`\`
+          
+          ## Documentation
+          
+          - [Complete Documentation](https://github.com/takuphilchan/offgrid-llm/tree/main/docs)
+          - [CLI Reference](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/CLI_REFERENCE.md)
+          - [API Documentation](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/API.md)
+          
+          ## Changelog
+          
+          See [CHANGELOG.md](https://github.com/takuphilchan/offgrid-llm/blob/main/CHANGELOG.md) for details.
+          EOF
+
+      - name: Upload checksums to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: checksums-${{ steps.version.outputs.version }}.sha256
+          body_path: release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
