@@ -14,13 +14,21 @@
     "appId": "com.offgrid.llm",
     "productName": "OffGrid LLM",
     "directories": {
+      "buildResources": "assets",
       "output": "dist"
     },
     "files": [
       "main.js",
       "preload.js",
       "index.html",
-      "README.md"
+      "styles.css",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../build/${os}/offgrid${ext}",
+        "to": "bin/offgrid${ext}"
+      }
     ],
     "linux": {
       "target": ["AppImage"],
@@ -31,14 +39,12 @@
       "category": "public.app-category.developer-tools"
     },
     "win": {
-      "target": ["nsis"]
+      "target": ["nsis"],
+      "executableName": "OffGrid"
     }
   },
-  "keywords": ["ai", "llm", "offline", "inference"],
-  "author": "OffGrid LLM Contributors",
-  "license": "MIT",
   "devDependencies": {
     "electron": "^27.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.6.4"
   }
 }

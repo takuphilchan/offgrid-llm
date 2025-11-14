@@ -96,26 +96,26 @@ detect_gpu() {
     if [ "$os" = "linux" ]; then
         # Check for Vulkan (most compatible)
         if command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
-            log_info "Vulkan GPU detected"
+            echo "Vulkan GPU detected" >&2
             variant="vulkan"
         # Check for NVIDIA
         elif command -v nvidia-smi >/dev/null 2>&1; then
-            log_info "NVIDIA GPU detected"
+            echo "NVIDIA GPU detected" >&2
             variant="vulkan"  # Use Vulkan even for NVIDIA (more compatible than CUDA)
         # Check for AMD
         elif [ -d "/sys/class/drm" ] && ls /sys/class/drm/card*/device/vendor 2>/dev/null | xargs cat | grep -q "0x1002"; then
-            log_info "AMD GPU detected"
+            echo "AMD GPU detected" >&2
             variant="vulkan"
         else
-            log_warn "No GPU detected, using CPU-only version"
+            echo "No GPU detected, using CPU-only version" >&2
         fi
     elif [ "$os" = "darwin" ]; then
         # macOS: Check if Apple Silicon
         if [ "$(uname -m)" = "arm64" ]; then
-            log_info "Apple Silicon detected - Metal support enabled"
+            echo "Apple Silicon detected - Metal support enabled" >&2
             variant="metal"
         else
-            log_warn "Intel Mac - using CPU-only version"
+            echo "Intel Mac - using CPU-only version" >&2
             variant="cpu"
         fi
     fi

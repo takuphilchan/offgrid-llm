@@ -1,0 +1,6 @@
+# Icon files go here:
+# - icon.png (Linux AppImage)
+# - icon.icns (macOS DMG)
+# - icon.ico (Windows NSIS)
+#
+# For now, electron-builder will use default icons
