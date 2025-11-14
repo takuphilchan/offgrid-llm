@@ -2,6 +2,7 @@
   "name": "offgrid-desktop",
   "version": "1.0.0",
   "description": "OffGrid LLM Desktop Application",
+  "author": "OffGrid LLM Team",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -21,14 +22,7 @@
       "main.js",
       "preload.js",
       "index.html",
-      "styles.css",
-      "assets/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "../build/${os}/offgrid${ext}",
-        "to": "bin/offgrid${ext}"
-      }
+      "README.md"
     ],
     "linux": {
       "target": ["AppImage"],
