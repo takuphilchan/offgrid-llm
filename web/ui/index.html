@@ -902,7 +902,7 @@
                         </svg>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">${isUser ? 'You' : 'Assistant'}</div>
+                        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">${isUser ? 'You' : 'AI'}</div>
                         <div class="rounded-xl p-4 ${isUser ? 'message-user' : 'message-assistant'} shadow-lg">
                             <div class="prose prose-invert prose-sm max-w-none msg-content leading-relaxed">${isUser ? escapeHtml(content) : marked.parse(content || '_Thinking..._')}</div>
                         </div>
@@ -920,6 +920,11 @@
             if (msgDiv) {
                 msgDiv.querySelector('.msg-content').innerHTML = marked.parse(content || '_Thinking..._');
                 document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            }
+            // Update the message in the messages array
+            const messageIndex = messages.findIndex(m => m.id === msgId);
+            if (messageIndex !== -1) {
+                messages[messageIndex].content = content;
             }
         }
         
@@ -1081,18 +1086,30 @@
 
         function displayMessages() {
             const container = document.getElementById('messages');
-            container.innerHTML = messages.map(msg => {
-                return `
-                    <div id="${msg.id}" class="message-${msg.role} rounded-xl p-4">
-                        <div class="flex items-start gap-3">
-                            <div class="flex-shrink-0 w-8 h-8 rounded-lg ${msg.role === 'user' ? 'bg-accent-primary/20' : 'bg-gray-700'} flex items-center justify-center">
-                                <span class="text-sm font-bold">${msg.role === 'user' ? 'U' : 'AI'}</span>
+            container.innerHTML = '';
+            messages.forEach(msg => {
+                const isUser = msg.role === 'user';
+                const msgDiv = document.createElement('div');
+                msgDiv.id = msg.id;
+                msgDiv.className = `message flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`;
+                msgDiv.innerHTML = `
+                    <div class="flex gap-3 max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'}">
+                        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ring-1 ring-white/10 ${isUser ? 'bg-gradient-to-br from-accent-primary to-emerald-600' : 'bg-gradient-to-br from-accent-secondary to-cyan-600'}">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                ${isUser ? '<path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>' : '<path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>'}
+                            </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">${isUser ? 'You' : 'AI'}</div>
+                            <div class="rounded-xl p-4 ${isUser ? 'message-user' : 'message-assistant'} shadow-lg">
+                                <div class="prose prose-invert prose-sm max-w-none msg-content leading-relaxed">${isUser ? escapeHtml(msg.content) : marked.parse(msg.content)}</div>
                             </div>
-                            <div class="flex-1 msg-content prose prose-invert max-w-none">${marked.parse(msg.content)}</div>
                         </div>
                     </div>
                 `;
-            }).join('');
+                container.appendChild(msgDiv);
+            });
+            container.scrollTop = container.scrollHeight;
         }
 
         // ===== Model Download =====

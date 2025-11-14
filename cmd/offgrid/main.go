@@ -239,7 +239,7 @@ func startLlamaServerInBackground(modelPath string) error {
 		threads = 1
 	}
 
-	// Build llama-server command with optimal flags
+	// Build llama-server command with optimal flags for FAST startup
 	args := []string{
 		"-m", modelPath,
 		"--port", "8081",
@@ -247,6 +247,13 @@ func startLlamaServerInBackground(modelPath string) error {
 		"-t", fmt.Sprintf("%d", threads),
 		"-c", "4096", // context size
 		"--n-gpu-layers", "999", // Auto-detect GPU layers
+		"--no-mmap",       // Don't use mmap - load directly to RAM (faster first response)
+		"--mlock",         // Lock model in RAM (prevents swapping for consistent speed)
+		"-fa",             // Enable flash attention (faster inference)
+		"--cont-batching", // Enable continuous batching for better throughput
+		"-b", "512",       // Batch size (lower = less latency on first token)
+		"--cache-type-k", "f16", // Use f16 for KV cache (faster, slightly less precision)
+		"--cache-type-v", "f16",
 	}
 
 	// Start llama-server in background
@@ -353,8 +360,14 @@ func reloadLlamaServerWithModel(modelPath string) error {
 		}
 	}
 
-	// Start llama-server with the model in background using shell
-	cmdStr := fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -c 4096 > /dev/null 2>&1 &",
+	// Start llama-server with the model in background using shell with optimized flags
+	// --no-mmap: Load directly to RAM (faster first inference, requires more RAM)
+	// --mlock: Lock model in RAM (prevents swapping for consistent speed)
+	// -fa: Flash attention (faster inference)
+	// --cont-batching: Continuous batching for better throughput
+	// -b 512: Lower batch size for faster first token
+	// --cache-type-k/v f16: Use f16 for KV cache (faster with minimal quality loss)
+	cmdStr := fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -c 4096 --no-mmap --mlock -fa --cont-batching -b 512 --cache-type-k f16 --cache-type-v f16 > /dev/null 2>&1 &",
 		modelPath, llamaPort)
 
 	cmd = exec.Command("sh", "-c", cmdStr)
@@ -2865,6 +2878,11 @@ func handleRun(args []string) {
 	if err := ensureLlamaServerRunning(); err != nil {
 		fmt.Println()
 		printInfo("Starting llama-server with model...")
+		printInfo("Using optimized flags: --no-mmap --mlock -fa (faster loading)")
+		fmt.Println()
+		printWarning("TIP: For instant responses, keep llama-server running:")
+		fmt.Printf("  %s$%s sudo systemctl enable --now llama-server\n", brandMuted, colorReset)
+		fmt.Println()
 		if err := startLlamaServerInBackground(model.Path); err != nil {
 			fmt.Println()
 			printError("Failed to start llama-server")
@@ -2875,7 +2893,8 @@ func handleRun(args []string) {
 		}
 		// Wait for llama-server to load the model
 		fmt.Println()
-		printInfo("Loading model into llama-server (this may take a few moments)...")
+		printInfo("Loading model into RAM (first-time: 2-4 seconds)...")
+		printInfo("With daemon mode enabled, this happens only once!")
 
 		// Poll llama-server health endpoint until model is ready
 		maxWait := 60 // seconds
