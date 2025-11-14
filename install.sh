@@ -293,12 +293,14 @@ verify_checksums() {
 # Setup systemd service (Linux only)
 setup_systemd() {
     if [ "$(detect_os)" != "linux" ]; then
-        return 0
+        echo "0"
+        return
     fi
     
     if ! command -v systemctl >/dev/null 2>&1; then
         log_warn "systemd not available - you'll need to start services manually"
-        return 0
+        echo "0"
+        return
     fi
     
     log_info "Setting up systemd services for auto-start..."
@@ -442,22 +444,24 @@ EOF
             echo ""
             echo -e "${GREEN}✓${NC} llama-server running on port 48081" >&2
             echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
-            return 1  # Signal that services are running
-        elif systemctl is-active --quiet offgrid@${USER}.service && \
-             systemctl is-active --quiet llama-server@${USER}.service; then
+            echo "1"  # Signal that services are running
+            return
+        elif systemctl is-active --quiet offgrid@${USER}.service 2>/dev/null && \
+             systemctl is-active --quiet llama-server@${USER}.service 2>/dev/null; then
             log_success "Services started!"
             echo ""
             echo -e "${GREEN}✓${NC} llama-server running on port 48081" >&2
             echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
             log_warn "Services may take a moment to fully initialize..."
-            return 1  # Signal that services are running
+            echo "1"  # Signal that services are running
+            return
         else
             log_warn "Services may need a moment to start"
             echo "   Check status with: systemctl status offgrid@${USER}.service" >&2
         fi
     fi
     
-    return 0  # Services not started
+    echo "0"  # Services not started
 }
 
 # Cleanup
@@ -557,12 +561,14 @@ main() {
     # Install binaries
     install_binaries "$BUNDLE_DIR" "$OS"
     
-    # Setup systemd (returns 1 if services started, 0 if not)
-    setup_systemd
-    SERVICES_RUNNING=$?
+    # Setup systemd (outputs "1" if services started, "0" if not)
+    SERVICES_RUNNING=$(setup_systemd)
     
     # Print success
     print_success "$SERVICES_RUNNING"
+    
+    # Exit successfully
+    exit 0
 }
 
 # Run main
