@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -106,6 +107,7 @@ func (s *Server) Start() error {
 
 	// Model search and discovery (OffGrid-specific)
 	mux.HandleFunc("/v1/search", s.handleModelSearch)
+	mux.HandleFunc("/v1/catalog", s.handleModelCatalog)
 	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
 
 	// Statistics endpoint
@@ -159,6 +161,7 @@ func (s *Server) Start() error {
 	fmt.Println("    POST /v1/completions")
 	fmt.Println("    POST /v1/embeddings")
 	fmt.Println("    POST /v1/search")
+	fmt.Println("    GET  /v1/catalog")
 	fmt.Println("    POST /v1/benchmark")
 	fmt.Println()
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -752,8 +755,76 @@ func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"total":   len(results),
-		"results": results,
+		"total":  len(results),
+		"models": results,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// handleModelCatalog returns the curated model catalog
+func (s *Server) handleModelCatalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get the default catalog
+	catalog := models.DefaultCatalog()
+
+	// Transform catalog entries to a simpler format for the UI
+	type SimpleCatalogEntry struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Category    string `json:"category"`
+		Size        string `json:"size"`
+		Repo        string `json:"repo"`
+		File        string `json:"file"`
+		Quant       string `json:"quant"`
+	}
+
+	simpleModels := []SimpleCatalogEntry{}
+	for _, entry := range catalog.Models {
+		if len(entry.Variants) > 0 {
+			// Use the first variant (usually recommended quantization)
+			variant := entry.Variants[0]
+			var repo, file string
+
+			// Extract repo and file from sources
+			if len(variant.Sources) > 0 {
+				for _, source := range variant.Sources {
+					if source.Type == "huggingface" {
+						// Parse HuggingFace URL
+						// Format: huggingface.co/owner/repo/resolve/main/file.gguf
+						parts := strings.Split(source.URL, "/")
+						if len(parts) >= 7 {
+							repo = parts[3] + "/" + parts[4]
+							file = parts[len(parts)-1]
+							break
+						}
+					}
+				}
+			}
+
+			simpleModels = append(simpleModels, SimpleCatalogEntry{
+				Name:        entry.Name,
+				Description: entry.Description,
+				Category:    strings.Join(entry.Tags, ", "),
+				Size:        entry.Parameters,
+				Repo:        repo,
+				File:        file,
+				Quant:       variant.Quantization,
+			})
+		}
+	}
+
+	response := map[string]interface{}{
+		"total":  len(simpleModels),
+		"models": simpleModels,
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
