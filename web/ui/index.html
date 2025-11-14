@@ -240,6 +240,139 @@
             background: rgba(17, 24, 39, 0.8);
             border: 1px solid rgba(55, 65, 81, 0.4);
         }
+        
+        /* Message Window Styles */
+        .message-window-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.2s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .message-window {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(31, 41, 55, 0.95) 100%);
+            border: 1px solid rgba(55, 65, 81, 0.8);
+            border-radius: 16px;
+            padding: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 
+                        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+            animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes slideDown {
+            from { 
+                opacity: 0; 
+                transform: translateY(-20px) scale(0.95);
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .message-window-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .message-window-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .message-window-icon.success {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.3) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .message-window-icon.error {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.3) 100%);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .message-window-icon.info {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.3) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        
+        .message-window-icon.warning {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.3) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        .message-window-content {
+            color: #e5e7eb;
+            font-size: 0.9375rem;
+            line-height: 1.6;
+        }
+        
+        .message-window-title {
+            font-weight: 700;
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+            color: #ffffff;
+        }
+        
+        .message-window-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            justify-content: flex-end;
+        }
+        
+        .message-window-btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+            outline: none;
+        }
+        
+        .message-window-btn.primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .message-window-btn.primary:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            transform: translateY(-1px);
+        }
+        
+        .message-window-btn.secondary {
+            background: rgba(31, 41, 55, 0.8);
+            border: 1px solid rgba(55, 65, 81, 0.8);
+            color: #d1d5db;
+        }
+        
+        .message-window-btn.secondary:hover {
+            background: rgba(55, 65, 81, 0.9);
+            border-color: rgba(75, 85, 99, 0.9);
+        }
     </style>
 </head>
 <body class="text-gray-100 min-h-screen antialiased">
@@ -351,16 +484,16 @@
                         </h3>
                         <select id="templateSelect" onchange="applyTemplate()" class="w-full input-field px-3 py-2 rounded-lg text-sm font-medium cursor-pointer">
                             <option value="">Select template...</option>
-                            <option value="summarize">📝 Summarize</option>
-                            <option value="code-review">💻 Code Review</option>
-                            <option value="translate">🌐 Translate</option>
-                            <option value="explain">💡 Explain</option>
-                            <option value="brainstorm">🧠 Brainstorm</option>
-                            <option value="debug">🐛 Debug</option>
-                            <option value="document">📄 Document</option>
-                            <option value="refactor">🔧 Refactor</option>
-                            <option value="test">✅ Test</option>
-                            <option value="cli">⌨️ CLI Helper</option>
+                            <option value="summarize">Summarize</option>
+                            <option value="code-review">Code Review</option>
+                            <option value="translate">Translate</option>
+                            <option value="explain">Explain</option>
+                            <option value="brainstorm">Brainstorm</option>
+                            <option value="debug">Debug</option>
+                            <option value="document">Document</option>
+                            <option value="refactor">Refactor</option>
+                            <option value="test">Test</option>
+                            <option value="cli">CLI Helper</option>
                         </select>
                     </div>
 
@@ -430,7 +563,7 @@
                     </h2>
                     <div class="flex gap-2">
                         <button onclick="toggleFavorites()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">
-                            <span id="favFilterText">⭐ Show Favorites</span>
+                            <span id="favFilterText">Show Favorites</span>
                         </button>
                     </div>
                 </div>
@@ -524,6 +657,70 @@
         let currentTab = 'chat', messages = [], isStreaming = false;
         const API_BASE = window.location.origin;
         
+        // Message Window System
+        function showMessage(title, message, type = 'info', buttons = null) {
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                overlay.className = 'message-window-overlay';
+                
+                const iconSvgs = {
+                    success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>',
+                    error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>',
+                    warning: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>',
+                    info: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'
+                };
+                
+                const defaultButtons = buttons || [{ text: 'OK', primary: true }];
+                const buttonsHtml = defaultButtons.map((btn, idx) => 
+                    `<button class="message-window-btn ${btn.primary ? 'primary' : 'secondary'}" data-index="${idx}">${btn.text}</button>`
+                ).join('');
+                
+                overlay.innerHTML = `
+                    <div class="message-window">
+                        <div class="message-window-header">
+                            <div class="message-window-icon ${type}">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    ${iconSvgs[type]}
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <div class="message-window-title">${title}</div>
+                            </div>
+                        </div>
+                        <div class="message-window-content">${message}</div>
+                        <div class="message-window-buttons">
+                            ${buttonsHtml}
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(overlay);
+                
+                overlay.querySelectorAll('.message-window-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const index = parseInt(btn.dataset.index);
+                        const result = defaultButtons[index].value !== undefined ? defaultButtons[index].value : true;
+                        overlay.remove();
+                        resolve(result);
+                    });
+                });
+                
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        overlay.remove();
+                        resolve(false);
+                    }
+                });
+            });
+        }
+        
+        function showConfirm(title, message) {
+            return showMessage(title, message, 'warning', [
+                { text: 'Cancel', primary: false, value: false },
+                { text: 'Confirm', primary: true, value: true }
+            ]);
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
             switchTab('chat');
             checkHealth();
@@ -600,8 +797,10 @@
                                     </svg>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button onclick="event.stopPropagation(); toggleFavorite('${model.id}')" class="text-xl hover:scale-110 transition-transform">
-                                        ${isFavorite ? '⭐' : '☆'}
+                                    <button onclick="event.stopPropagation(); toggleFavorite('${model.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent-primary/10 transition-all">
+                                        <svg class="w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-gray-500'}" fill="${isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                                        </svg>
                                     </button>
                                     <span class="badge badge-primary text-xs">Ready</span>
                                 </div>
@@ -627,7 +826,10 @@
             const modelSelect = document.getElementById('modelSelect');
             const message = input.value.trim();
             const model = modelSelect.value;
-            if (!message || !model) { alert('Please select a model and enter a message'); return; }
+            if (!message || !model) { 
+                await showMessage('Missing Information', 'Please select a model and enter a message', 'warning');
+                return; 
+            }
             if (isStreaming) return;
             addMessage('user', message);
             input.value = '';
@@ -789,7 +991,7 @@
         let currentSession = null;
         const sessions = {};
 
-        function saveSession() {
+        async function saveSession() {
             const name = document.getElementById('sessionName').value.trim() || `session-${Date.now()}`;
             sessions[name] = {
                 name: name,
@@ -799,7 +1001,7 @@
                 messageCount: messages.length
             };
             localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
-            alert(`Session "${name}" saved!`);
+            await showMessage('Session Saved', `Session "${name}" has been saved successfully!`, 'success');
             document.getElementById('sessionName').value = '';
         }
 
@@ -868,8 +1070,9 @@
             }
         }
 
-        function deleteSession(name) {
-            if (confirm(`Delete session "${name}"?`)) {
+        async function deleteSession(name) {
+            const confirmed = await showConfirm('Delete Session', `Are you sure you want to delete session "${name}"?`);
+            if (confirmed) {
                 delete sessions[name];
                 localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
                 displaySessions();
@@ -898,7 +1101,7 @@
             const file = document.getElementById('hfFile').value.trim();
             
             if (!repo || !file) {
-                alert('Please enter both repository and file name');
+                await showMessage('Missing Information', 'Please enter both repository and file name', 'warning');
                 return;
             }
 
@@ -907,10 +1110,10 @@
             
             try {
                 // Note: This would need backend support - showing UI only
-                alert(`Download initiated for ${repo}/${file}\nThis feature requires backend API support.`);
+                await showMessage('Download Initiated', `Download initiated for ${repo}/${file}\nThis feature requires backend API support.`, 'info');
                 progressDiv.classList.add('hidden');
             } catch (err) {
-                alert('Download failed: ' + err.message);
+                await showMessage('Download Failed', 'Download failed: ' + err.message, 'error');
                 progressDiv.classList.add('hidden');
             }
         }
@@ -921,7 +1124,7 @@
 
         function toggleFavorites() {
             favoritesOnly = !favoritesOnly;
-            document.getElementById('favFilterText').textContent = favoritesOnly ? '📋 Show All' : '⭐ Show Favorites';
+            document.getElementById('favFilterText').textContent = favoritesOnly ? 'Show All' : 'Show Favorites';
             loadModels();
         }
 
