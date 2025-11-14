@@ -25,7 +25,7 @@
 
 ### One-Line Install ⚡
 
-**Single command for all platforms:**
+**Single command - services start automatically:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
@@ -36,9 +36,23 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 - ✅ Downloads optimized bundle from [GitHub releases](https://github.com/takuphilchan/offgrid-llm/releases)
 - ✅ Installs both `offgrid` and `llama-server` binaries
 - ✅ Verifies checksums for security
-- ✅ Optional: Sets up auto-start services (Linux)
+- ✅ **Starts services immediately** - ready to use!
+- ✅ Enables auto-start on boot (Linux systemd)
 
-**Installation time:** ~30 seconds
+**Installation time:** ~30 seconds  
+**Ready to use:** Immediately after install
+
+**Advanced options:**
+```bash
+# Auto-start services without prompts
+AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
+
+# Install without starting services
+AUTOSTART=no bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
+
+# Install specific version
+VERSION=v0.1.0 bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
+```
 
 ---
 
