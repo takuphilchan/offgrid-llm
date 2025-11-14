@@ -230,11 +230,35 @@ install_binaries() {
         $use_sudo systemctl stop offgrid@$USER 2>/dev/null || true
     fi
     
-    # Kill any running processes using the binaries
+    # Kill any running processes using the binaries and wait for them to exit
     if pgrep -x llama-server >/dev/null 2>&1; then
         log_info "Stopping running llama-server processes..."
         pkill -x llama-server 2>/dev/null || true
-        sleep 1
+        # Wait up to 5 seconds for processes to exit
+        for i in {1..10}; do
+            pgrep -x llama-server >/dev/null 2>&1 || break
+            sleep 0.5
+        done
+        # Force kill if still running
+        if pgrep -x llama-server >/dev/null 2>&1; then
+            log_warn "Force killing llama-server..."
+            pkill -9 -x llama-server 2>/dev/null || true
+            sleep 1
+        fi
+    fi
+    
+    # Same for offgrid
+    if pgrep -x offgrid >/dev/null 2>&1; then
+        log_info "Stopping running offgrid processes..."
+        pkill -x offgrid 2>/dev/null || true
+        for i in {1..10}; do
+            pgrep -x offgrid >/dev/null 2>&1 || break
+            sleep 0.5
+        done
+        if pgrep -x offgrid >/dev/null 2>&1; then
+            pkill -9 -x offgrid 2>/dev/null || true
+            sleep 1
+        fi
     fi
     
     $use_sudo cp "$bundle_dir/offgrid${ext}" "$INSTALL_DIR/"
