@@ -223,10 +223,6 @@ install_binaries() {
     [ "$os" = "windows" ] && ext=".exe"
     
     # Stop services if running (to release file locks)
-    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet llama-server@$USER 2>/dev/null; then
-        log_info "Stopping llama-server service..."
-        $use_sudo systemctl stop llama-server@$USER 2>/dev/null || true
-    fi
     if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet offgrid@$USER 2>/dev/null; then
         log_info "Stopping offgrid service..."
         $use_sudo systemctl stop offgrid@$USER 2>/dev/null || true
@@ -305,29 +301,11 @@ setup_systemd() {
     
     log_info "Setting up systemd services for auto-start..."
     
-    # Create llama-server service
-    sudo tee /etc/systemd/system/llama-server@.service >/dev/null << 'EOF'
-[Unit]
-Description=llama.cpp Inference Server for %i
-After=network.target
-
-[Service]
-Type=simple
-User=%i
-ExecStart=/usr/local/bin/llama-server --port 48081 --host 127.0.0.1
-Restart=on-failure
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    
-    # Create offgrid service
+    # Create offgrid service (offgrid manages llama-server internally)
     sudo tee /etc/systemd/system/offgrid@.service >/dev/null << 'EOF'
 [Unit]
 Description=OffGrid LLM API Server for %i
-After=network.target llama-server@%i.service
-Wants=llama-server@%i.service
+After=network.target
 
 [Service]
 Type=simple
@@ -378,54 +356,19 @@ EOF
     
     # Enable services if requested
     if [ "$enable_services" = "yes" ]; then
-        sudo systemctl enable llama-server@${USER}.service >/dev/null 2>&1
         sudo systemctl enable offgrid@${USER}.service >/dev/null 2>&1
-        log_success "Services enabled for auto-start on boot"
+        log_success "Service enabled for auto-start on boot"
     fi
     
     # Start services if requested
     if [ "$start_services" = "yes" ]; then
-        log_info "Starting services..."
+        log_info "Starting offgrid service..."
         
-        # Start llama-server first
-        sudo systemctl start llama-server@${USER}.service 2>/dev/null
-        
-        # Wait for llama-server to be ready (up to 10 seconds)
-        local retries=20
-        local llama_ready=false
-        for i in $(seq 1 $retries); do
-            if systemctl is-active --quiet llama-server@${USER}.service 2>/dev/null; then
-                # Check if port is listening
-                if command -v netstat >/dev/null 2>&1; then
-                    if netstat -tuln 2>/dev/null | grep -q ":48081 "; then
-                        llama_ready=true
-                        break
-                    fi
-                elif command -v ss >/dev/null 2>&1; then
-                    if ss -tuln 2>/dev/null | grep -q ":48081 "; then
-                        llama_ready=true
-                        break
-                    fi
-                else
-                    # No netstat/ss, just check if service is active
-                    llama_ready=true
-                    break
-                fi
-            fi
-            sleep 0.5
-        done
-        
-        if [ "$llama_ready" = true ]; then
-            echo -e "  ${GREEN}✓${NC} llama-server ready on port 48081" >&2
-        else
-            log_warn "llama-server may still be starting..."
-        fi
-        
-        # Now start offgrid
+        # Start offgrid (it will manage llama-server internally)
         sudo systemctl start offgrid@${USER}.service 2>/dev/null
         
         # Wait for offgrid to be ready (up to 10 seconds)
-        retries=20
+        local retries=20
         local offgrid_ready=false
         for i in $(seq 1 $retries); do
             if systemctl is-active --quiet offgrid@${USER}.service 2>/dev/null; then
@@ -440,23 +383,22 @@ EOF
         
         # Check final status
         if [ "$offgrid_ready" = true ]; then
-            log_success "Services started and ready!"
+            log_success "Service started and ready!"
             echo ""
-            echo -e "${GREEN}✓${NC} llama-server running on port 48081" >&2
             echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
+            echo -e "${CYAN}ℹ${NC} llama-server will start automatically when you run a model" >&2
             echo "1"  # Signal that services are running
             return
-        elif systemctl is-active --quiet offgrid@${USER}.service 2>/dev/null && \
-             systemctl is-active --quiet llama-server@${USER}.service 2>/dev/null; then
-            log_success "Services started!"
+        elif systemctl is-active --quiet offgrid@${USER}.service 2>/dev/null; then
+            log_success "Service started!"
             echo ""
-            echo -e "${GREEN}✓${NC} llama-server running on port 48081" >&2
             echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
-            log_warn "Services may take a moment to fully initialize..."
+            echo -e "${CYAN}ℹ${NC} llama-server will start automatically when you run a model" >&2
+            log_warn "Service may take a moment to fully initialize..."
             echo "1"  # Signal that services are running
             return
         else
-            log_warn "Services may need a moment to start"
+            log_warn "Service may need a moment to start"
             echo "   Check status with: systemctl status offgrid@${USER}.service" >&2
         fi
     fi
@@ -484,7 +426,7 @@ print_success() {
     echo ""
     
     if [ "$services_running" = "1" ]; then
-        echo -e "${GREEN}${BOLD}🚀 Services are running and ready!${NC}"
+        echo -e "${GREEN}${BOLD}🚀 Service is running and ready!${NC}"
         echo ""
         echo -e "  ${GREEN}✓${NC} Web UI:  ${CYAN}http://localhost:11611/ui${NC}"
         echo -e "  ${GREEN}✓${NC} API:     ${CYAN}http://localhost:11611${NC}"
@@ -494,23 +436,21 @@ print_success() {
         echo -e "  ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF --file Llama-3.2-3B-Instruct-Q4_K_M.gguf${NC}"
         echo -e "  ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
         echo ""
-        echo -e "${BOLD}Manage Services:${NC}"
+        echo -e "${BOLD}Manage Service:${NC}"
         echo -e "  ${CYAN}sudo systemctl status offgrid@${USER}${NC}     # Check status"
         echo -e "  ${CYAN}sudo systemctl stop offgrid@${USER}${NC}       # Stop server"
         echo -e "  ${CYAN}sudo systemctl restart offgrid@${USER}${NC}    # Restart server"
     else
-        echo -e "${YELLOW}⚠${NC}  ${BOLD}Services not started - manual setup required${NC}"
+        echo -e "${YELLOW}⚠${NC}  ${BOLD}Service not started - manual setup required${NC}"
         echo ""
-        echo -e "${BOLD}Start services manually:${NC}"
+        echo -e "${BOLD}Start service manually:${NC}"
         
         if command -v systemctl >/dev/null 2>&1; then
-            echo -e "  ${CYAN}sudo systemctl start llama-server@${USER}${NC}"
             echo -e "  ${CYAN}sudo systemctl start offgrid@${USER}${NC}"
             echo ""
             echo -e "${BOLD}Or run directly:${NC}"
         fi
         
-        echo -e "  ${CYAN}llama-server --port 48081 --host 127.0.0.1 &${NC}"
         echo -e "  ${CYAN}offgrid serve &${NC}"
         echo ""
         echo -e "${BOLD}Then try:${NC}"
