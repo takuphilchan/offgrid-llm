@@ -17,10 +17,34 @@ env:
   GO_VERSION: '1.21'
 
 jobs:
+  # Clean up existing release if recreating
+  cleanup-release:
+    name: Cleanup Existing Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Delete existing release
+        continue-on-error: true
+        run: |
+          gh release delete ${{ steps.version.outputs.version }} --yes --repo ${{ github.repository }} || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Build complete bundles with offgrid + llama-server
   build-bundles:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    needs: cleanup-release
     strategy:
       fail-fast: false
       matrix:
@@ -305,6 +329,7 @@ jobs:
   build-desktop:
     name: Build Desktop App (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
+    needs: cleanup-release
     strategy:
       fail-fast: false
       matrix:
