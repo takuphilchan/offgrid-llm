@@ -403,6 +403,7 @@
             <div class="flex gap-1 mt-5 border-b border-dark-border -mb-[1px]">
                 <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Chat</button>
                 <button onclick="switchTab('models')" id="tab-models" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Models</button>
+                <button onclick="switchTab('search')" id="tab-search" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Search</button>
                 <button onclick="switchTab('sessions')" id="tab-sessions" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Sessions</button>
                 <button onclick="switchTab('api')" id="tab-api" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">API</button>
             </div>
@@ -600,6 +601,54 @@
             </div>
         </div>
 
+        <!-- Search Tab -->
+        <div id="view-search" class="view hidden">
+            <!-- Model Search Section -->
+            <div class="card rounded-2xl p-6 shadow-2xl mb-6">
+                <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
+                    <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
+                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Search HuggingFace Models</span>
+                </h2>
+                <div class="grid grid-cols-1 gap-4 mb-4">
+                    <div class="flex gap-4">
+                        <input type="text" id="searchQuery" placeholder="Search for models (e.g., llama, mistral, phi)" class="flex-1 input-field px-4 py-3 rounded-lg text-sm" />
+                        <input type="text" id="searchAuthor" placeholder="Author (optional, e.g., TheBloke)" class="input-field px-4 py-3 rounded-lg text-sm w-64" />
+                        <select id="searchLimit" class="input-field px-4 py-3 rounded-lg text-sm w-32">
+                            <option value="10">10 results</option>
+                            <option value="20" selected>20 results</option>
+                            <option value="50">50 results</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="searchModels()" class="btn-primary px-6 py-3 rounded-xl font-semibold">
+                    <span>Search Models</span>
+                </button>
+                <div id="searchResults" class="mt-6 hidden">
+                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Search Results</h3>
+                    <div id="searchResultsList" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <!-- Model Catalog Section -->
+            <div class="card rounded-2xl p-6 shadow-2xl">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold flex items-center gap-2.5">
+                        <span class="w-1 h-5 bg-gradient-to-b from-purple-400 to-pink-400 rounded-full"></span>
+                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Curated Model Catalog</span>
+                    </h2>
+                    <button onclick="loadCatalog()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">
+                        Refresh Catalog
+                    </button>
+                </div>
+                <div id="catalogList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="text-center text-gray-500 col-span-full py-12">
+                        <div class="spinner mx-auto mb-4"></div>
+                        <p class="text-sm font-medium">Loading catalog...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Sessions Tab -->
         <div id="view-sessions" class="view hidden">
             <div class="card rounded-2xl p-6 shadow-2xl">
@@ -735,6 +784,13 @@
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`tab-${tab}`).classList.add('active');
             if (tab === 'models') loadModels();
+            if (tab === 'search') {
+                // Load catalog when switching to search tab
+                const catalogList = document.getElementById('catalogList');
+                if (catalogList.querySelector('.spinner')) {
+                    loadCatalog();
+                }
+            }
         }
         
         async function checkHealth() {
@@ -1177,6 +1233,124 @@
             }
             localStorage.setItem('favorite-models', JSON.stringify([...favoriteModels]));
             loadModels();
+        }
+
+        // ===== Model Search =====
+        async function searchModels() {
+            const query = document.getElementById('searchQuery').value.trim();
+            const author = document.getElementById('searchAuthor').value.trim();
+            const limit = document.getElementById('searchLimit').value;
+            
+            if (!query) {
+                await showMessage('Search Query Required', 'Please enter a search term to find models.', 'warning');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('searchResults');
+            const resultsList = document.getElementById('searchResultsList');
+            
+            resultsDiv.classList.remove('hidden');
+            resultsList.innerHTML = '<div class="text-center py-8"><div class="spinner mx-auto mb-4"></div><p class="text-sm text-gray-400">Searching models...</p></div>';
+
+            try {
+                // Build query params
+                const params = new URLSearchParams({
+                    query: query,
+                    limit: limit
+                });
+                if (author) {
+                    params.append('author', author);
+                }
+
+                const res = await fetch(`${API_BASE}/v1/search?${params}`);
+                const data = await res.json();
+
+                if (!data.models || data.models.length === 0) {
+                    resultsList.innerHTML = '<div class="text-center py-8 text-gray-400">No models found. Try different search terms.</div>';
+                    return;
+                }
+
+                resultsList.innerHTML = data.models.map(model => `
+                    <div class="card rounded-xl p-4 hover:border-accent-primary/50 transition-all">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-bold text-white mb-1 truncate">${escapeHtml(model.id || model.name)}</h3>
+                                <p class="text-xs text-gray-500 mb-2">${escapeHtml(model.author || 'Unknown Author')}</p>
+                                ${model.description ? `<p class="text-xs text-gray-400 line-clamp-2">${escapeHtml(model.description)}</p>` : ''}
+                                <div class="flex gap-2 mt-2">
+                                    ${model.downloads ? `<span class="text-xs text-gray-500">↓ ${formatNumber(model.downloads)}</span>` : ''}
+                                    ${model.likes ? `<span class="text-xs text-gray-500">♥ ${formatNumber(model.likes)}</span>` : ''}
+                                </div>
+                            </div>
+                            <button onclick="downloadFromSearch('${escapeHtml(model.id || model.name)}')" class="btn-primary px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap">
+                                Download
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Search failed:', err);
+                resultsList.innerHTML = `<div class="text-center py-8 text-red-400">Search failed: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        async function downloadFromSearch(modelId) {
+            // Pre-fill the download form and switch to models tab
+            document.getElementById('hfRepo').value = modelId;
+            await showMessage('Ready to Download', `Model repository "${modelId}" has been added. Please specify the file name (e.g., Q4_K_M.gguf file) in the Models tab.`, 'info');
+            switchTab('models');
+            document.getElementById('hfFile').focus();
+        }
+
+        // ===== Model Catalog =====
+        async function loadCatalog() {
+            const catalogList = document.getElementById('catalogList');
+            catalogList.innerHTML = '<div class="text-center py-12 col-span-full"><div class="spinner mx-auto mb-4"></div><p class="text-sm text-gray-400">Loading catalog...</p></div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/v1/catalog`);
+                const data = await res.json();
+
+                if (!data.models || data.models.length === 0) {
+                    catalogList.innerHTML = '<div class="text-center py-12 text-gray-400 col-span-full">No catalog models available</div>';
+                    return;
+                }
+
+                catalogList.innerHTML = data.models.map(model => `
+                    <div class="card rounded-xl p-5 hover:border-accent-primary/50 transition-all group">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400/20 to-pink-400/20 flex items-center justify-center ring-1 ring-white/5">
+                                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                                </svg>
+                            </div>
+                            <span class="badge badge-primary text-xs">${escapeHtml(model.category || 'Featured')}</span>
+                        </div>
+                        <h3 class="font-bold text-white mb-1.5 group-hover:text-accent-primary transition-colors">${escapeHtml(model.name)}</h3>
+                        <p class="text-xs text-gray-500 font-medium mb-2">${escapeHtml(model.description || '')}</p>
+                        ${model.size ? `<p class="text-xs text-gray-600 mb-3">Size: ${escapeHtml(model.size)}</p>` : ''}
+                        <button onclick="downloadCatalogModel('${escapeHtml(model.repo)}', '${escapeHtml(model.file)}')" class="w-full btn-primary px-4 py-2 rounded-lg text-xs font-medium">
+                            Download ${escapeHtml(model.quant || 'Model')}
+                        </button>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load catalog:', err);
+                catalogList.innerHTML = '<div class="text-center py-12 text-red-400 col-span-full">Failed to load catalog</div>';
+            }
+        }
+
+        async function downloadCatalogModel(repo, file) {
+            document.getElementById('hfRepo').value = repo;
+            document.getElementById('hfFile').value = file;
+            switchTab('models');
+            await showMessage('Ready to Download', `Model details filled. Click "Download Model" to start.`, 'info');
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
         }
 
         // Initialize
