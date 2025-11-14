@@ -220,6 +220,23 @@ install_binaries() {
     local ext=""
     [ "$os" = "windows" ] && ext=".exe"
     
+    # Stop services if running (to release file locks)
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet llama-server@$USER 2>/dev/null; then
+        log_info "Stopping llama-server service..."
+        $use_sudo systemctl stop llama-server@$USER 2>/dev/null || true
+    fi
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet offgrid@$USER 2>/dev/null; then
+        log_info "Stopping offgrid service..."
+        $use_sudo systemctl stop offgrid@$USER 2>/dev/null || true
+    fi
+    
+    # Kill any running processes using the binaries
+    if pgrep -x llama-server >/dev/null 2>&1; then
+        log_info "Stopping running llama-server processes..."
+        pkill -x llama-server 2>/dev/null || true
+        sleep 1
+    fi
+    
     $use_sudo cp "$bundle_dir/offgrid${ext}" "$INSTALL_DIR/"
     $use_sudo cp "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/"
     $use_sudo chmod +x "$INSTALL_DIR/offgrid${ext}" "$INSTALL_DIR/llama-server${ext}"
