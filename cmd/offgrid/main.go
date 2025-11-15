@@ -2309,9 +2309,9 @@ func handleSearch(args []string) {
 		model := result.Model
 
 		// Model name with number
-		fmt.Printf("%s%2d.%s %s%s\n",
+		fmt.Printf("%s%2d.%s %s%s%s\n",
 			brandMuted, i+1, colorReset,
-			colorBold+model.ID+colorReset)
+			colorBold, model.ID, colorReset)
 
 		// Stats line with colors
 		fmt.Printf("     %s%s%s %s",
