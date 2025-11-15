@@ -126,6 +126,69 @@ func printWarning(message string) {
 	fmt.Printf("%s⚠%s %s\n", brandAccent, colorReset, message)
 }
 
+func printHelpfulError(err error, context string) {
+	printError(fmt.Sprintf("%s failed: %v", context, err))
+	fmt.Println()
+
+	// Provide context-specific help
+	errStr := err.Error()
+
+	// Network errors
+	if strings.Contains(errStr, "connection refused") {
+		printInfo("Possible causes:")
+		fmt.Println("  • OffGrid server not running")
+		fmt.Println("  • Port 11611 in use by another application")
+		fmt.Println()
+		printInfo("Solutions:")
+		fmt.Println("  • Start server: offgrid serve")
+		fmt.Println("  • Check server: systemctl status llama-server")
+		fmt.Println("  • Check port: lsof -i :11611")
+	} else if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
+		printInfo("Connection timed out - possible causes:")
+		fmt.Println("  • Slow internet connection")
+		fmt.Println("  • HuggingFace servers overloaded")
+		fmt.Println("  • Model is very large")
+		fmt.Println()
+		printInfo("Solutions:")
+		fmt.Println("  • Try again (temporary network issue)")
+		fmt.Println("  • Check internet: ping huggingface.co")
+		fmt.Println("  • Use smaller model")
+	} else if strings.Contains(errStr, "no such host") || strings.Contains(errStr, "DNS") {
+		printInfo("Cannot reach server - check internet connection:")
+		fmt.Println("  • Test connection: ping 8.8.8.8")
+		fmt.Println("  • Check DNS: ping huggingface.co")
+		fmt.Println("  • Try offline mode: offgrid list (local models)")
+	} else if strings.Contains(errStr, "permission denied") {
+		printInfo("Permission problem:")
+		fmt.Println("  • Check directory permissions")
+		fmt.Println("  • Models directory: ~/.offgrid/models")
+		fmt.Println("  • Fix: chmod 755 ~/.offgrid && chmod 755 ~/.offgrid/models")
+	} else if strings.Contains(errStr, "no space left") {
+		printInfo("Disk full:")
+		fmt.Println("  • Check space: df -h")
+		fmt.Println("  • Free space: delete old models with offgrid remove")
+		fmt.Println("  • Models are typically 2-8GB each")
+	} else if strings.Contains(errStr, "out of memory") || strings.Contains(errStr, "OOM") {
+		printInfo("Not enough RAM:")
+		fmt.Println("  • Check available RAM: offgrid info")
+		fmt.Println("  • Use smaller model: offgrid search --ram 4")
+		fmt.Println("  • Close other applications")
+		fmt.Println("  • See: docs/4GB_RAM.md")
+	} else if strings.Contains(errStr, "model not found") || strings.Contains(errStr, "404") {
+		printInfo("Model not available:")
+		fmt.Println("  • Check model name is correct")
+		fmt.Println("  • Model may be private or removed")
+		fmt.Println("  • Search for alternatives: offgrid search <query>")
+	} else if strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "429") {
+		printInfo("HuggingFace rate limit reached:")
+		fmt.Println("  • Wait a few minutes and try again")
+		fmt.Println("  • Consider using local models: offgrid list")
+		fmt.Println("  • Use fewer concurrent downloads")
+	}
+
+	fmt.Println()
+}
+
 func printItem(label, value string) {
 	fmt.Printf("  %s%-18s%s %s%s%s\n", brandMuted, label+":", colorReset, colorBold, value, colorReset)
 }
@@ -2339,10 +2402,24 @@ func handleSearch(args []string) {
 	for i, result := range results {
 		model := result.Model
 
-		// Model name with number
-		fmt.Printf("%s%2d.%s %s%s%s\n",
+		// Model name with number and badges
+		fmt.Printf("%s%2d.%s %s%s%s",
 			brandMuted, i+1, colorReset,
 			colorBold, model.ID, colorReset)
+
+		// Quality badges
+		if result.IsRecommended {
+			fmt.Printf(" %s★%s", brandSuccess, colorReset) // Recommended
+		}
+		if result.IsTrusted {
+			fmt.Printf(" %s✓%s", brandPrimary, colorReset) // Trusted author
+		}
+		if result.QualityRating == "excellent" {
+			fmt.Printf(" %s[Excellent]%s", brandSuccess, colorReset)
+		} else if result.QualityRating == "good" {
+			fmt.Printf(" %s[Good]%s", brandPrimary, colorReset)
+		}
+		fmt.Println()
 
 		// Stats line with colors
 		fmt.Printf("     %s%s%s %s",
@@ -2456,12 +2533,7 @@ func handleDownloadHF(args []string) {
 
 	model, err := hf.GetModelInfo(modelID)
 	if err != nil {
-		printError(fmt.Sprintf("Failed to fetch model: %v", err))
-		fmt.Println()
-		printInfo("Make sure:")
-		fmt.Println("  • The model ID is correct")
-		fmt.Println("  • You have internet connectivity")
-		fmt.Println()
+		printHelpfulError(err, "Model fetch")
 		os.Exit(1)
 	}
 

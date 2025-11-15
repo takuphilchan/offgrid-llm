@@ -192,6 +192,8 @@ offgrid-llm/
 - [Installation Guide](docs/INSTALLATION.md)
 - [CLI Reference](docs/CLI_REFERENCE.md)
 - [API Reference](docs/API.md)
+- [4GB RAM Guide](docs/4GB_RAM.md) - Run AI on budget hardware
+- [CPU Optimization](docs/CPU_OPTIMIZATION.md) - Best performance without GPU
 
 **User Guides:**
 - [Features Overview](docs/guides/FEATURES_GUIDE.md)

@@ -77,11 +77,15 @@ type SearchFilter struct {
 
 // SearchResult represents a search result with computed metrics
 type SearchResult struct {
-	Model       HFModel
-	GGUFFiles   []GGUFFileInfo
-	TotalSize   int64
-	Score       float64 // Computed relevance score
-	BestVariant *GGUFFileInfo
+	Model         HFModel
+	GGUFFiles     []GGUFFileInfo
+	TotalSize     int64
+	Score         float64 // Computed relevance score
+	BestVariant   *GGUFFileInfo
+	QualityRating string // "excellent", "good", "fair", "unknown"
+	IsPopular     bool   // High download count
+	IsTrusted     bool   // From trusted author
+	IsRecommended bool   // Recommended for beginners
 }
 
 // GGUFFileInfo contains parsed GGUF file information
@@ -248,12 +252,22 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 		// Find best variant (highest quality that fits)
 		bestVariant := hf.selectBestVariant(filteredFiles)
 
+		// Calculate quality rating
+		qualityRating := calculateQualityRating(model)
+		isPopular := model.Downloads > 10000
+		isTrusted := isTrustedAuthor(model.ID)
+		isRecommended := isPopular && isTrusted && (model.Downloads > 50000 || model.Likes > 100)
+
 		results = append(results, SearchResult{
-			Model:       model,
-			GGUFFiles:   filteredFiles,
-			TotalSize:   totalSize,
-			Score:       score,
-			BestVariant: bestVariant,
+			Model:         model,
+			GGUFFiles:     filteredFiles,
+			TotalSize:     totalSize,
+			Score:         score,
+			BestVariant:   bestVariant,
+			QualityRating: qualityRating,
+			IsPopular:     isPopular,
+			IsTrusted:     isTrusted,
+			IsRecommended: isRecommended,
 		})
 	}
 
@@ -496,10 +510,69 @@ func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, on
 		return fmt.Errorf("incomplete download: got %d bytes, expected %d", written, totalSize)
 	}
 
-	// Move from .tmp to final location
+	// Move .tmp to final destination
 	if err := os.Rename(tmpPath, destPath); err != nil {
 		return fmt.Errorf("failed to finalize download: %w", err)
 	}
 
 	return nil
+}
+
+// calculateQualityRating determines quality based on downloads and likes
+func calculateQualityRating(model HFModel) string {
+	downloads := model.Downloads
+	likes := model.Likes
+
+	// Excellent: High community trust
+	if downloads > 100000 && likes > 500 {
+		return "excellent"
+	}
+	if downloads > 50000 && likes > 200 {
+		return "excellent"
+	}
+
+	// Good: Popular and liked
+	if downloads > 10000 && likes > 50 {
+		return "good"
+	}
+	if downloads > 5000 && likes > 20 {
+		return "good"
+	}
+
+	// Fair: Some usage
+	if downloads > 1000 || likes > 5 {
+		return "fair"
+	}
+
+	return "unknown"
+}
+
+// isTrustedAuthor checks if the model is from a well-known author
+func isTrustedAuthor(modelID string) bool {
+	trustedAuthors := []string{
+		"TheBloke",
+		"bartowski",
+		"meta-llama",
+		"mistralai",
+		"microsoft",
+		"google",
+		"HuggingFaceH4",
+		"MaziyarPanahi",
+		"NousResearch",
+		"stabilityai",
+		"EleutherAI",
+		"bigscience",
+		"tiiuae",
+		"teknium",
+		"Qwen",
+		"deepseek-ai",
+	}
+
+	idLower := strings.ToLower(modelID)
+	for _, author := range trustedAuthors {
+		if strings.HasPrefix(idLower, strings.ToLower(author)+"/") {
+			return true
+		}
+	}
+	return false
 }

@@ -1,0 +1,180 @@
+{
+  "version": "1.0",
+  "updated": "2024-11-15",
+  "models": [
+    {
+      "id": "MaziyarPanahi/Llama-3.2-1B-Instruct-GGUF",
+      "name": "Llama 3.2 1B Instruct",
+      "description": "Smallest, fastest Llama model - perfect for 4GB RAM systems",
+      "parameters": "1B",
+      "min_ram_gb": 2,
+      "recommended": true,
+      "quality": "excellent",
+      "trusted": true,
+      "use_cases": ["chat", "basic tasks", "low-resource systems"],
+      "variants": [
+        {"quant": "Q2_K", "size_gb": 0.4, "ram_gb": 1},
+        {"quant": "Q4_K_M", "size_gb": 0.6, "ram_gb": 1},
+        {"quant": "Q5_K_M", "size_gb": 0.7, "ram_gb": 1.5}
+      ]
+    },
+    {
+      "id": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+      "name": "Llama 3.2 3B Instruct",
+      "description": "Best balance of quality and speed for most users",
+      "parameters": "3B",
+      "min_ram_gb": 4,
+      "recommended": true,
+      "quality": "excellent",
+      "trusted": true,
+      "use_cases": ["chat", "writing", "coding", "general purpose"],
+      "variants": [
+        {"quant": "Q3_K_M", "size_gb": 1.3, "ram_gb": 2},
+        {"quant": "Q4_K_M", "size_gb": 1.7, "ram_gb": 2.5},
+        {"quant": "Q5_K_M", "size_gb": 2.0, "ram_gb": 3}
+      ]
+    },
+    {
+      "id": "TheBloke/phi-2-GGUF",
+      "name": "Phi-2",
+      "description": "Microsoft's efficient 2.7B model with excellent quality",
+      "parameters": "2.7B",
+      "min_ram_gb": 4,
+      "recommended": true,
+      "quality": "excellent",
+      "trusted": true,
+      "use_cases": ["chat", "reasoning", "code", "general purpose"],
+      "variants": [
+        {"quant": "Q4_K_M", "size_gb": 1.6, "ram_gb": 2.5},
+        {"quant": "Q5_K_M", "size_gb": 1.9, "ram_gb": 3}
+      ]
+    },
+    {
+      "id": "TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
+      "name": "Mistral 7B Instruct v0.2",
+      "description": "High-quality 7B model - excellent for code and reasoning",
+      "parameters": "7B",
+      "min_ram_gb": 8,
+      "recommended": true,
+      "quality": "excellent",
+      "trusted": true,
+      "use_cases": ["code", "reasoning", "writing", "chat"],
+      "variants": [
+        {"quant": "Q3_K_M", "size_gb": 3.3, "ram_gb": 5},
+        {"quant": "Q4_K_M", "size_gb": 4.1, "ram_gb": 6},
+        {"quant": "Q5_K_M", "size_gb": 4.8, "ram_gb": 7},
+        {"quant": "Q8_0", "size_gb": 7.2, "ram_gb": 10}
+      ]
+    },
+    {
+      "id": "TheBloke/Llama-2-7B-Chat-GGUF",
+      "name": "Llama 2 7B Chat",
+      "description": "Meta's popular chat model - well-tested and reliable",
+      "parameters": "7B",
+      "min_ram_gb": 8,
+      "recommended": true,
+      "quality": "excellent",
+      "trusted": true,
+      "use_cases": ["chat", "general purpose", "assistant"],
+      "variants": [
+        {"quant": "Q3_K_M", "size_gb": 3.1, "ram_gb": 5},
+        {"quant": "Q4_K_M", "size_gb": 3.8, "ram_gb": 6},
+        {"quant": "Q5_K_M", "size_gb": 4.6, "ram_gb": 7}
+      ]
+    },
+    {
+      "id": "TheBloke/CodeLlama-7B-Instruct-GGUF",
+      "name": "CodeLlama 7B Instruct",
+      "description": "Specialized for code generation and programming help",
+      "parameters": "7B",
+      "min_ram_gb": 8,
+      "recommended": false,
+      "quality": "excellent",
+      "trusted": true,
+      "use_cases": ["coding", "programming", "debugging"],
+      "variants": [
+        {"quant": "Q4_K_M", "size_gb": 3.8, "ram_gb": 6},
+        {"quant": "Q5_K_M", "size_gb": 4.6, "ram_gb": 7}
+      ]
+    },
+    {
+      "id": "TheBloke/Llama-2-13B-Chat-GGUF",
+      "name": "Llama 2 13B Chat",
+      "description": "Larger model for better quality - needs 16GB+ RAM",
+      "parameters": "13B",
+      "min_ram_gb": 16,
+      "recommended": false,
+      "quality": "excellent",
+      "trusted": true,
+      "use_cases": ["chat", "writing", "complex reasoning"],
+      "variants": [
+        {"quant": "Q3_K_M", "size_gb": 5.5, "ram_gb": 8},
+        {"quant": "Q4_K_M", "size_gb": 7.3, "ram_gb": 10},
+        {"quant": "Q5_K_M", "size_gb": 8.9, "ram_gb": 12}
+      ]
+    },
+    {
+      "id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+      "name": "TinyLlama 1.1B Chat",
+      "description": "Ultra-compact model for very limited hardware",
+      "parameters": "1.1B",
+      "min_ram_gb": 2,
+      "recommended": false,
+      "quality": "good",
+      "trusted": true,
+      "use_cases": ["basic chat", "low-resource systems", "raspberry pi"],
+      "variants": [
+        {"quant": "Q2_K", "size_gb": 0.4, "ram_gb": 1},
+        {"quant": "Q4_K_M", "size_gb": 0.6, "ram_gb": 1},
+        {"quant": "Q5_K_M", "size_gb": 0.7, "ram_gb": 1.5}
+      ]
+    },
+    {
+      "id": "sentence-transformers/all-MiniLM-L6-v2",
+      "name": "all-MiniLM-L6-v2",
+      "description": "Embedding model for semantic search and similarity",
+      "parameters": "22M",
+      "min_ram_gb": 1,
+      "recommended": false,
+      "quality": "good",
+      "trusted": true,
+      "use_cases": ["embeddings", "semantic search", "similarity"],
+      "variants": [
+        {"quant": "F16", "size_gb": 0.04, "ram_gb": 0.5}
+      ]
+    }
+  ],
+  "categories": {
+    "beginner_friendly": [
+      "bartowski/Llama-3.2-3B-Instruct-GGUF",
+      "TheBloke/phi-2-GGUF",
+      "MaziyarPanahi/Llama-3.2-1B-Instruct-GGUF"
+    ],
+    "low_resource": [
+      "MaziyarPanahi/Llama-3.2-1B-Instruct-GGUF",
+      "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+      "TheBloke/phi-2-GGUF"
+    ],
+    "coding": [
+      "TheBloke/CodeLlama-7B-Instruct-GGUF",
+      "TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
+      "bartowski/Llama-3.2-3B-Instruct-GGUF"
+    ],
+    "high_quality": [
+      "TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
+      "TheBloke/Llama-2-13B-Chat-GGUF",
+      "bartowski/Llama-3.2-3B-Instruct-GGUF"
+    ]
+  },
+  "trusted_authors": [
+    "TheBloke",
+    "bartowski",
+    "meta-llama",
+    "mistralai",
+    "microsoft",
+    "HuggingFaceH4",
+    "MaziyarPanahi",
+    "NousResearch",
+    "stabilityai"
+  ]
+}
