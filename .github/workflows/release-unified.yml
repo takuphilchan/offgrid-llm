@@ -185,18 +185,27 @@ jobs:
           cd /tmp/llama.cpp
           mkdir build && cd build
           
-          # Set CPU-specific compiler flags
-          export CFLAGS="${{ matrix.cpu_flags }}"
-          export CXXFLAGS="${{ matrix.cpu_flags }}"
-          
-          cmake .. \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DGGML_STATIC=ON \
-            -DLLAMA_CURL=OFF \
-            -DCMAKE_C_FLAGS="${{ matrix.cpu_flags }}" \
-            -DCMAKE_CXX_FLAGS="${{ matrix.cpu_flags }}" \
-            ${{ matrix.gpu_flags }}
+          # For Vulkan builds, we need to be more careful with CPU flags
+          # The shader compiler tools run during build and must be compatible with the runner
+          if [ "${{ matrix.variant }}" = "vulkan" ]; then
+            # Use conservative flags for Vulkan build tools
+            cmake .. \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DGGML_STATIC=ON \
+              -DLLAMA_CURL=OFF \
+              ${{ matrix.gpu_flags }}
+          else
+            # Apply CPU-specific optimizations for CPU-only builds
+            cmake .. \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DGGML_STATIC=ON \
+              -DLLAMA_CURL=OFF \
+              -DCMAKE_C_FLAGS="${{ matrix.cpu_flags }}" \
+              -DCMAKE_CXX_FLAGS="${{ matrix.cpu_flags }}" \
+              ${{ matrix.gpu_flags }}
+          fi
           
           cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) --target llama-server
 
