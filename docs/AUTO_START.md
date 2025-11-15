@@ -308,6 +308,6 @@ The systemd service includes:
 ## See Also
 
 - [Installation Guide](INSTALLATION.md)
-- [Quick Start](QUICKSTART_HF.md)
+- [HuggingFace Integration](guides/HUGGINGFACE_INTEGRATION.md)
 - [Model Setup](MODEL_SETUP.md)
 - [Performance Tuning](PERFORMANCE.md)

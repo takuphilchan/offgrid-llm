@@ -1,153 +1,117 @@
 # OffGrid LLM Installation Guide
 
-## Overview
+## Quick Install (Recommended)
 
-OffGrid LLM features a professional, automated installer that handles everything from dependency detection to service configuration. The installation process is designed to be clear, organized, and informative with real-time progress tracking.
+**For most users, use the automated installer:**
 
-## Features
-
-### Professional Installation Experience
-
-- **Progress Tracking** - Visual progress bar with step count and percentage
-- **Time Estimates** - Each step shows estimated completion time
-- **Organized Output** - Clean, color-coded messages with clear sections
-- **Error Handling** - Detailed error messages with troubleshooting hints
-- **Pre-flight Checks** - Verifies system before starting installation
-- **Installation Summary** - Comprehensive report at completion
-
-### Installation Progress Display
-
-```
-╭────────────────────────────────────────────────────────────────────╮
-│ Step 7/14 [████████████░░░░░░░░] 50% │ Elapsed: 05:32
-╰────────────────────────────────────────────────────────────────────╯
-
-◆ Building llama.cpp Inference Engine
-────────────────────────────────────────────────────────
-  Estimated time: ~5-10 minutes
-
-  Configuring build with CMake...
-  Found CUDA toolkit: 12.2 at /usr/local/cuda
-  llama-server built successfully
-  Libraries installed system-wide
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
-## Quick Start
+**What it does:**
+- Builds OffGrid LLM from source
+- Optimized for your CPU and GPU
+- Installs web interface automatically
+- Sets up auto-start service (optional)
+- Takes 5-10 minutes
 
-### Standard Installation
+**Skip prompts (auto-start enabled):**
+```bash
+AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
+```
+
+After installation, open: `http://localhost:11611/ui/`
+
+---
+
+## Advanced Installation
+
+### Full Build from Source (Developers)
+
+**For GPU optimization and development:**
 
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
-sudo ./install.sh
+sudo ./dev/install.sh
 ```
 
-**Estimated Time:** 10-15 minutes
+**This installer:**
+- Builds llama.cpp with full GPU optimization
+- Compiles OffGrid from source
+- Sets up systemd services
+- Installs web interface
+- Takes 10-15 minutes
 
-### Installation Options
+**Installation options:**
 
 ```bash
-# Auto-detect GPU (default)
-sudo ./install.sh
+# Auto-detect GPU (recommended)
+sudo ./dev/install.sh
 
 # Force CPU-only mode
-sudo ./install.sh --cpu-only
+sudo ./dev/install.sh --cpu-only
 
-# Require GPU (fail if not detected)
-sudo ./install.sh --gpu
+# Require GPU (fail if not found)
+sudo ./dev/install.sh --gpu
 
 # Show help
-./install.sh --help
+./dev/install.sh --help
 ```
 
-## Installation Steps
+---
 
-The installer performs these steps automatically:
+## What Gets Installed
 
-### 1. System Checks (30 seconds)
-- Verify required dependencies (curl, git, cmake, etc.)
-- Detect system architecture (x86_64/arm64)
-- Identify operating system and package manager
-- Detect GPU hardware (NVIDIA/AMD/none)
+### Binaries
+- `/usr/local/bin/offgrid` - Main CLI tool
+- `/usr/local/bin/llama-server` - Inference engine (from llama.cpp)
 
-### 2. Build Dependencies (2-3 minutes)
-- Install build tools (gcc, g++, make, cmake)
-- Install GPU-specific packages (CUDA/ROCm if needed)
-- Update package lists
+### Web Interface
+- `/var/lib/offgrid/web/ui/` - Web UI files
 
-### 3. Go Installation (1-2 minutes)
-- Download Go 1.21.13
-- Install to `/usr/local/go`
-- Configure PATH for persistent access
-- Verify installation
+### Models Directory
+- `/var/lib/offgrid/models/` - Downloaded AI models stored here
 
-### 4. GPU Configuration (1 minute)
-- Install/verify NVIDIA drivers (if NVIDIA GPU)
-- Load kernel modules
-- Check CUDA toolkit availability
+### Systemd Services (Linux)
+- `offgrid@<user>.service` - OffGrid API server
+- Auto-starts on boot (if enabled during install)
 
-### 5. llama.cpp Build (5-10 minutes)
-- Clone/update llama.cpp repository
-- Configure CMake with GPU support
+---
+
+## Installation Process
+
+The installer performs these steps:
+
+### 1. System Detection (~1 minute)
+- Check dependencies (curl, git, cmake, gcc, etc.)
+- Detect OS, architecture (x64/arm64)
+- Identify GPU (NVIDIA, AMD, or none)
+- Verify Go installation or install it
+
+### 2. Build llama.cpp (~5-10 minutes)
+- Clone llama.cpp repository
+- Configure with CMake (GPU-optimized if available)
 - Build llama-server binary
-- Install shared libraries system-wide
+- Install system-wide
 
-### 6. OffGrid Build (2-3 minutes)
+### 3. Build OffGrid (~2-3 minutes)
 - Download Go dependencies
-- Build OffGrid binary
-- Run tests
+- Compile OffGrid binary
+- Run basic tests
 
-### 7. System Configuration (1 minute)
-- Create service user `offgrid`
-- Set up directory structure at `/var/lib/offgrid`
-- Configure file permissions
-- Create model directory
+### 4. System Setup (~1 minute)
+- Create `/var/lib/offgrid` directory
+- Install web UI files
+- Set up models directory
+- Configure systemd service
 
-### 8. Service Setup (1 minute)
-- Create systemd service files
-- Configure llama-server (internal, localhost-only)
-- Configure OffGrid LLM (public API on port 11611)
-- Enable auto-start on boot
+### 5. Start Services (~30 seconds)
+- Start OffGrid server
+- Verify health endpoints
+- Display access URLs
 
-### 9. Installation (30 seconds)
-- Install binaries to `/usr/local/bin`
-- Install shell completions
-- Update library cache
-
-### 10. Service Start (30 seconds)
-- Start llama-server
-- Start OffGrid LLM
-- Verify health checks
-
-## Installation Summary
-
-Upon completion, you'll see a comprehensive summary:
-
-```
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║              INSTALLATION COMPLETE                            ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
-
-╭─────────────────────────────────────────────────────────────────╮
-│ SYSTEM INFORMATION
-├─────────────────────────────────────────────────────────────────┤
-│  Architecture     amd64
-│  Operating System Ubuntu 22.04
-│  GPU Type         nvidia
-│  GPU Info         NVIDIA GeForce RTX 3080
-│  Inference Mode   REAL LLM (via llama.cpp)
-│  Install Time     12:34
-╰─────────────────────────────────────────────────────────────────╯
-
-╭─────────────────────────────────────────────────────────────────╮
-│ SERVICE ENDPOINTS
-├─────────────────────────────────────────────────────────────────┤
-│  llama-server     http://127.0.0.1:52341 (internal only)
-│  OffGrid API      http://localhost:11611
-│  Web UI           http://localhost:11611/ui
-╰─────────────────────────────────────────────────────────────────╯
+---
 
 ╭─────────────────────────────────────────────────────────────────╮
 │ SECURITY
@@ -183,20 +147,89 @@ Upon completion, you'll see a comprehensive summary:
 
 ### Directories
 - `/var/lib/offgrid/` - Data directory (owned by `offgrid` user)
-- `/var/lib/offgrid/models/` - Model storage (writable by `offgrid` group)
-- `/var/lib/offgrid/web/ui/` - Web UI files
-- `/etc/offgrid/` - Configuration files
-- `$HOME/llama.cpp/` - llama.cpp source and build
+## After Installation
 
-### Services
-- `llama-server.service` - Internal inference server (localhost-only)
-- `offgrid-llm.service` - Public API service (port 11611)
+### Verify It Works
 
-### Configuration Files
-- `/etc/offgrid/llama-port` - Internal port configuration
-- `/etc/offgrid/active-model` - Currently loaded model
-- `/etc/systemd/system/llama-server.service` - Service definition
-- `/etc/systemd/system/offgrid-llm.service` - Service definition
+```bash
+# Check if offgrid is installed
+offgrid --version
+
+# Check service status (Linux)
+systemctl status offgrid@$USER
+
+# Test health endpoint
+curl http://localhost:11611/health
+```
+
+### Access the Web Interface
+
+Open in your browser: `http://localhost:11611/ui/`
+
+### Download Your First Model
+
+```bash
+# Search for models
+offgrid search llama --limit 5
+
+# Download a small model (~4GB)
+offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
+  --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
+```
+
+---
+
+## Troubleshooting
+
+### Installation Issues
+
+**"Permission denied" error:**
+```bash
+# Run with sudo
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
+```
+
+**"GPU not detected" warning:**
+- This is OK - it will use CPU mode
+- Or install GPU drivers first and reinstall
+
+**Build failed:**
+```bash
+# Check you have enough disk space (need 5GB+)
+df -h
+
+# Make sure you have build tools
+sudo apt-get install build-essential cmake git
+```
+
+### Service Won't Start
+
+```bash
+# Check service status
+systemctl status offgrid@$USER
+
+# View logs
+journalctl -u offgrid@$USER -n 50
+
+# Restart service
+systemctl restart offgrid@$USER
+```
+
+### Web UI Not Working
+
+```bash
+# Make sure service is running
+systemctl status offgrid@$USER
+
+# Check if UI files exist
+ls -la /var/lib/offgrid/web/ui/
+
+# If missing, reinstall or copy manually:
+sudo mkdir -p /var/lib/offgrid/web/ui
+sudo cp -r web/ui/* /var/lib/offgrid/web/ui/
+```
+
+---
 
 ## Verification
 
@@ -215,8 +248,35 @@ sudo systemctl status llama-server
 curl http://localhost:11611/health
 
 # View logs
-sudo journalctl -u offgrid-llm -n 50
-sudo journalctl -u llama-server -n 50
+## Uninstall
+
+**Stop and remove services:**
+```bash
+# Stop service
+systemctl stop offgrid@$USER
+
+# Disable auto-start
+systemctl disable offgrid@$USER
+
+# Remove binaries
+sudo rm /usr/local/bin/offgrid
+sudo rm /usr/local/bin/llama-server
+```
+
+**Remove data (warning: deletes all models):**
+```bash
+sudo rm -rf /var/lib/offgrid
+```
+
+---
+
+## Next Steps
+
+- [Download models](MODEL_SETUP.md)
+- [Learn CLI commands](CLI_REFERENCE.md)
+- [Use the API](API.md)
+- [Read feature guide](guides/FEATURES_GUIDE.md)
+
 ```
 
 ### Test API
@@ -308,82 +368,6 @@ sudo journalctl -u llama-server -n 100 --no-pager
    # Or check model directory
    ls -la /var/lib/offgrid/models/
    ```
-
-3. **Permission issues**
-   ```bash
-   # Fix ownership
-   sudo chown -R offgrid:offgrid /var/lib/offgrid
-   sudo chmod 2775 /var/lib/offgrid/models
-   ```
-
-## Uninstallation
-
-To completely remove OffGrid LLM:
-
-```bash
-# Stop services
-sudo systemctl stop offgrid-llm llama-server
-sudo systemctl disable offgrid-llm llama-server
-
-# Remove service files
-sudo rm /etc/systemd/system/offgrid-llm.service
-sudo rm /etc/systemd/system/llama-server.service
-sudo systemctl daemon-reload
-
-# Remove binaries
-sudo rm /usr/local/bin/offgrid
-sudo rm /usr/local/bin/llama-server
-sudo rm /usr/local/bin/llama-server-start.sh
-
-# Remove data (WARNING: deletes all models and sessions)
-sudo rm -rf /var/lib/offgrid
-sudo rm -rf /etc/offgrid
-
-# Remove user
-sudo userdel -r offgrid
-
-# Remove llama.cpp (optional)
-rm -rf $HOME/llama.cpp
-
-# Remove shell completions (optional)
-rm -f ~/.bash_completion.d/offgrid
-rm -f ~/.local/share/zsh/site-functions/_offgrid
-rm -f ~/.config/fish/completions/offgrid.fish
-```
-
-## Advanced Configuration
-
-### Custom Installation Path
-
-The installer uses standard paths, but you can modify service files after installation:
-
-```bash
-# Edit service files
-sudo systemctl edit offgrid-llm
-sudo systemctl edit llama-server
-
-# Reload
-sudo systemctl daemon-reload
-sudo systemctl restart offgrid-llm llama-server
-```
-
-### Custom Model Directory
-
-```bash
-# Create symlink to different location
-sudo systemctl stop offgrid-llm llama-server
-sudo mv /var/lib/offgrid/models /path/to/large/disk/models
-sudo ln -s /path/to/large/disk/models /var/lib/offgrid/models
-sudo systemctl start offgrid-llm llama-server
-```
-
-### Multiple Instances
-
-To run multiple OffGrid instances:
-
-```bash
-# Copy and modify service file
-sudo cp /etc/systemd/system/offgrid-llm.service \
        /etc/systemd/system/offgrid-llm-2.service
 
 # Edit to use different port

@@ -23,98 +23,81 @@
 
 ## Installation
 
-### One-Line Install
+### Quick Install (Recommended)
 
-**Single command - services start automatically:**
+**Copy and paste this command into your terminal:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
-**What it does:**
-- Auto-detects your OS, architecture, and GPU
-- Downloads optimized bundle from [GitHub releases](https://github.com/takuphilchan/offgrid-llm/releases)
-- Installs both `offgrid` and `llama-server` binaries
-- Verifies checksums for security
-- **Starts services immediately** - ready to use!
-- Enables auto-start on boot (Linux systemd)
+**What happens:**
+1. Automatically detects your computer (OS, CPU, GPU)
+2. Builds and installs OffGrid LLM
+3. Installs the web interface
+4. Asks if you want to start it now
+5. Sets up auto-start on boot (optional)
 
-**Installation time:** ~30 seconds  
-**Ready to use:** Immediately after install
+**Time required:** 5-10 minutes (downloads and builds from source)
 
-**Advanced options:**
+**After installation, open your browser to:** `http://localhost:11611/ui/`
+
+**Start without asking:**
 ```bash
-# Auto-start services without prompts
 AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
-
-# Install without starting services
-AUTOSTART=no bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
-
-# Install specific version
-VERSION=v0.1.0 bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
 ```
 
----
 
-### Desktop App
-
-**Download native installers:**
-
-- **Linux**: [AppImage](https://github.com/takuphilchan/offgrid-llm/releases/latest) - Make executable and run
-- **macOS**: [DMG](https://github.com/takuphilchan/offgrid-llm/releases/latest) - Drag to Applications
-- **Windows**: [Installer](https://github.com/takuphilchan/offgrid-llm/releases/latest) - Run .exe
-
-**Features:**
-- Self-contained with embedded servers
-- Native file pickers for USB import/export
-- No terminal required
 
 ---
 
-### Manual Installation
+### Advanced Installation (For Developers)
 
-**Download bundles from [releases](https://github.com/takuphilchan/offgrid-llm/releases/latest):**
-
-Choose your platform:
-- `offgrid-v0.1.0-linux-amd64-vulkan.tar.gz` (Linux with GPU)
-- `offgrid-v0.1.0-darwin-arm64-metal.tar.gz` (macOS Apple Silicon)
-- `offgrid-v0.1.0-windows-amd64-cpu.zip` (Windows)
-- See [all releases](https://github.com/takuphilchan/offgrid-llm/releases) for more variants
-
-Extract and run `install.sh` (or copy binaries to PATH on Windows).
-
----
-
-### Build from Source (Developers)
+**Build with full GPU optimization:**
 
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
-sudo ./dev/install.sh  # Build with GPU optimization
+sudo ./dev/install.sh
 ```
+
+This builds llama.cpp from source with optimizations for your GPU.
 
 See [dev/CONTRIBUTING.md](dev/CONTRIBUTING.md) for development setup.
 
 ---
 
-## Quick Start
+## Getting Started
+
+### Step 1: Verify Installation
 
 ```bash
-# Verify installation
 offgrid --version
+```
 
-# Search for models on HuggingFace
+### Step 2: Download a Model
+
+**Search for models:**
+```bash
 offgrid search llama --limit 5
+```
 
-# Download a model (example: ~4GB)
+**Download a small model (recommended for first time, ~4GB):**
+```bash
 offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
   --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
+```
 
-# Start chatting
+### Step 3: Start Using
+
+**Option A: Web Interface (Easiest)**
+
+Open in your browser: `http://localhost:11611/ui/`
+
+**Option B: Command Line**
+
+```bash
 offgrid run Llama-3.2-3B-Instruct-Q4_K_M
-
-# Or use the web interface
-firefox http://localhost:11611/ui
 ```
 
 ---
@@ -268,17 +251,20 @@ print(response.choices[0].message.content)
 
 ---
 
-## System Requirements
+## What You Need
 
-**Minimum:**
-- OS: Linux (x64/arm64), macOS (Intel/Apple Silicon), Windows 10+
-- RAM: 8GB (4GB models), 16GB (7B models), 32GB+ (13B+ models)
-- Storage: 10GB+ for models
+**Your Computer:**
+- Works on: Linux, macOS, Windows 10 or newer
+- Memory (RAM): 8GB minimum, 16GB recommended
+- Storage: 10GB+ free space for AI models
+- GPU: Optional but makes it faster (NVIDIA, AMD, or Apple)
 
-**Recommended:**
-- GPU: NVIDIA (CUDA), AMD (ROCm), Apple (Metal), Vulkan-compatible
-- RAM: 16GB+
-- Storage: SSD for better model loading times
+**Model Sizes:**
+- Small models (3B): 8GB RAM needed
+- Medium models (7B): 16GB RAM needed  
+- Large models (13B+): 32GB+ RAM needed
+
+**Tip:** Start with a 3B model if you have 8GB RAM
 
 ---
 
