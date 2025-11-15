@@ -376,6 +376,10 @@ EOF
     # Reload systemd
     sudo systemctl daemon-reload
     
+    # Configure llama-server port
+    sudo mkdir -p /etc/offgrid >/dev/null 2>&1
+    echo "42382" | sudo tee /etc/offgrid/llama-port >/dev/null 2>&1
+    
     # Determine what to do based on AUTOSTART variable
     local enable_services="no"
     local start_services="no"
