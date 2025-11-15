@@ -77,15 +77,23 @@ offgrid --version
 
 ### Step 2: Download a Model
 
-**Search for models:**
+**Search for models that fit your RAM:**
 ```bash
-offgrid search llama --limit 5
+offgrid search llama --ram 4     # 4GB RAM systems
+offgrid search mistral --ram 8   # 8GB RAM systems
 ```
 
-**Download a small model (recommended for first time, ~4GB):**
+**Download a small model (works on 4GB+ RAM, ~2GB download):**
 ```bash
 offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
   --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
+```
+
+**Even smaller for very limited RAM (~1GB download):**
+```bash
+offgrid search "1b llama" --ram 4
+offgrid download-hf MaziyarPanahi/Llama-3.2-1B-Instruct-GGUF \
+  --file Llama-3.2-1B-Instruct.Q4_K_M.gguf
 ```
 
 ### Step 3: Start Using
@@ -113,6 +121,7 @@ offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 - Prompt templates for common tasks
 
 **Model Management**
+- RAM-aware search (--ram 4 shows models for 4GB systems)
 - Search HuggingFace directly from CLI
 - Download GGUF models automatically
 - Import/export models via USB
@@ -255,16 +264,16 @@ print(response.choices[0].message.content)
 
 **Your Computer:**
 - Works on: Linux, macOS, Windows 10 or newer
-- Memory (RAM): 8GB minimum, 16GB recommended
+- Memory (RAM): 4GB minimum (1B-3B models), 8GB+ recommended (7B models)
 - Storage: 10GB+ free space for AI models
 - GPU: Optional but makes it faster (NVIDIA, AMD, or Apple)
 
-**Model Sizes:**
-- Small models (3B): 8GB RAM needed
-- Medium models (7B): 16GB RAM needed  
-- Large models (13B+): 32GB+ RAM needed
+**Runs on modest hardware:**
+- 4GB RAM: Llama 1B-3B models
+- 8GB RAM: Llama 7B-8B models
+- 16GB+ RAM: Llama 13B+ models
 
-**Tip:** Start with a 3B model if you have 8GB RAM
+See [4GB RAM Guide](docs/4GB_RAM.md) for budget hardware recommendations.
 
 ---
 
