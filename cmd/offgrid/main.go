@@ -1474,27 +1474,49 @@ func handleList(args []string) {
 	fmt.Println()
 	fmt.Printf("Found %s%d%s model(s):\n\n", brandPrimary, len(modelList), colorReset)
 
+	// Print table header
+	fmt.Printf("  %s%-45s  %-12s  %-10s%s\n", colorBold, "MODEL", "SIZE", "QUANT", colorReset)
+	fmt.Printf("  %s%s%s\n", brandMuted, strings.Repeat("─", 72), colorReset)
+
 	var totalSize int64
 	for _, model := range modelList {
 		meta, err := registry.GetModel(model.ID)
 		if err == nil {
-			fmt.Printf("  %s◭%s %s", brandSecondary, colorReset, model.ID)
+			modelName := model.ID
+			if len(modelName) > 45 {
+				modelName = modelName[:42] + "..."
+			}
+
+			sizeStr := ""
 			if meta.Size > 0 {
-				fmt.Printf(" %s·%s %s", brandMuted, colorReset, formatBytes(meta.Size))
+				sizeStr = formatBytes(meta.Size)
 				totalSize += meta.Size
+			} else {
+				sizeStr = "-"
 			}
+
+			quantStr := ""
 			if meta.Quantization != "" && meta.Quantization != "unknown" {
-				fmt.Printf(" %s·%s %s", brandMuted, colorReset, meta.Quantization)
+				quantStr = meta.Quantization
+			} else {
+				quantStr = "-"
 			}
-			fmt.Println()
+
+			fmt.Printf("  %s%-45s%s  %s%-12s%s  %s%-10s%s\n",
+				brandPrimary, modelName, colorReset,
+				brandSecondary, sizeStr, colorReset,
+				brandMuted, quantStr, colorReset)
 		} else {
-			fmt.Printf("  %s◭%s %s\n", brandSecondary, colorReset, model.ID)
+			fmt.Printf("  %s%-45s%s  %s%-12s%s  %s%-10s%s\n",
+				brandPrimary, model.ID, colorReset,
+				brandMuted, "-", colorReset,
+				brandMuted, "-", colorReset)
 		}
 	}
 
 	fmt.Println()
 	if totalSize > 0 {
-		fmt.Printf("Total size: %s%s%s\n", brandPrimary, formatBytes(totalSize), colorReset)
+		fmt.Printf("  %sTotal:%s %s%s%s\n", brandMuted, colorReset, brandPrimary, formatBytes(totalSize), colorReset)
 		fmt.Println()
 	}
 
