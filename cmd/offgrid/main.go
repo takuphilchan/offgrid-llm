@@ -239,36 +239,16 @@ func startLlamaServerInBackground(modelPath string) error {
 		threads = 1
 	}
 
-	// Build llama-server command with optimal flags for FAST startup
-	args := []string{
-		"-m", modelPath,
-		"--port", "8081",
-		"--host", "127.0.0.1",
-		"-t", fmt.Sprintf("%d", threads),
-		"-c", "4096", // context size
-		"--n-gpu-layers", "999", // Auto-detect GPU layers
-		"--no-mmap",       // Don't use mmap - load directly to RAM (faster first response)
-		"--mlock",         // Lock model in RAM (prevents swapping for consistent speed)
-		"-fa",             // Enable flash attention (faster inference)
-		"--cont-batching", // Enable continuous batching for better throughput
-		"-b", "512",       // Batch size (lower = less latency on first token)
-		"--cache-type-k", "f16", // Use f16 for KV cache (faster, slightly less precision)
-		"--cache-type-v", "f16",
-	}
+	// Build command line
+	cmdStr := fmt.Sprintf("%s -m %s --port 8081 --host 127.0.0.1 -t %d -c 4096 --n-gpu-layers 0 -b 512",
+		llamaServerPath, modelPath, threads)
 
-	// Start llama-server in background
-	cmd := exec.Command(llamaServerPath, args...)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	// Start llama-server in background using shell with nohup
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("nohup %s > /dev/null 2>&1 &", cmdStr))
 
-	if err := cmd.Start(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to start llama-server: %w", err)
 	}
-
-	// Detach the process so it continues running
-	go func() {
-		cmd.Wait()
-	}()
 
 	return nil
 }
