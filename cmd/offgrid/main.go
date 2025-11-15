@@ -826,18 +826,17 @@ func handleRemove(args []string) {
 	// Check if model exists
 	meta, err := registry.GetModel(modelID)
 	if err != nil {
-		printDivider()
 		fmt.Println()
-		printError(fmt.Sprintf("Model not found: %s", modelID))
+		fmt.Printf("%s✗ Model not found: %s%s\n", brandError, modelID, colorReset)
 		fmt.Println()
 
 		// Show available models
 		modelList := registry.ListModels()
 		if len(modelList) > 0 {
-			printSection("Available Models")
+			fmt.Printf("%s┌─ Available Models%s\n", brandPrimary+colorBold, colorReset)
 			for _, m := range modelList {
 				modelMeta, _ := registry.GetModel(m.ID)
-				fmt.Printf("  ◭ %s", m.ID)
+				fmt.Printf("│  %s", m.ID)
 				if modelMeta != nil && modelMeta.Size > 0 {
 					fmt.Printf(" · %s", formatBytes(modelMeta.Size))
 				}
@@ -846,16 +845,15 @@ func handleRemove(args []string) {
 				}
 				fmt.Println()
 			}
-		} else {
-			printInfo("No models installed")
 			fmt.Println()
-			printInfo("Download models:")
-			printItem("From catalog", "offgrid download <model-id>")
-			printItem("From HuggingFace", "offgrid download-hf <repo> --file <file>.gguf")
+		} else {
+			fmt.Printf("%sℹ No models installed%s\n", colorDim, colorReset)
+			fmt.Println()
+			fmt.Println("Download models:")
+			fmt.Printf("  %sFrom catalog:%s offgrid download <model-id>\n", brandSecondary, colorReset)
+			fmt.Printf("  %sFrom HuggingFace:%s offgrid download-hf <repo> --file <file>.gguf\n", brandSecondary, colorReset)
+			fmt.Println()
 		}
-		fmt.Println()
-		printDivider()
-		fmt.Println()
 		os.Exit(1)
 	}
 
@@ -915,21 +913,18 @@ func handleRemove(args []string) {
 
 func handleExport(args []string) {
 	if len(args) < 2 {
-		printDivider()
 		fmt.Println()
-		printSection("Usage")
-		fmt.Printf("  %soffgrid export%s <model-id> <destination>\n", colorBold, colorReset)
+		fmt.Printf("%s┌─ Export Model%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid export <model-id> <destination>\n", colorDim, colorReset)
+		fmt.Println("│")
+		fmt.Println("│ Export a model to USB/SD card or external storage")
 		fmt.Println()
-		printSection("Description")
-		fmt.Println("  Export a model to USB/SD card or external storage")
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid export tinyllama-1.1b-chat.Q4_K_M /media/usb%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid export llama-2-7b-chat.Q5_K_M D:\\backup%s\n", colorDim, colorReset)
 		fmt.Println()
-		printSection("Examples")
-		fmt.Printf("  %s$%s offgrid export tinyllama-1.1b-chat.Q4_K_M /media/usb\n", brandMuted, colorReset)
-		fmt.Printf("  %s$%s offgrid export llama-2-7b-chat.Q5_K_M D:\\backup\n", brandMuted, colorReset)
-		fmt.Println()
-		printInfo("Use 'offgrid list' to see available models")
-		fmt.Println()
-		printDivider()
+		fmt.Printf("%sℹ Use 'offgrid list' to see available models%s\n", colorDim, colorReset)
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -2081,18 +2076,22 @@ func handleInfo() {
 
 func handleConfig(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: offgrid config <action>")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Actions:")
-		fmt.Fprintln(os.Stderr, "  init [path]      Create a new config file (YAML/JSON)")
-		fmt.Fprintln(os.Stderr, "  show             Display current configuration")
-		fmt.Fprintln(os.Stderr, "  validate [path]  Validate a config file")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Examples:")
-		fmt.Fprintln(os.Stderr, "  offgrid config init                    # Create ~/.offgrid-llm/config.yaml")
-		fmt.Fprintln(os.Stderr, "  offgrid config init custom.json        # Create custom.json")
-		fmt.Fprintln(os.Stderr, "  offgrid config show                    # Show current config")
-		fmt.Fprintln(os.Stderr, "  offgrid config validate config.yaml    # Validate config")
+		fmt.Println()
+		fmt.Printf("%s┌─ Configuration%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid config <action>\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s├─ Actions%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %sinit [path]%s       Create a new config file (YAML/JSON)\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sshow%s              Display current configuration\n", brandSecondary, colorReset)
+		fmt.Printf("│  %svalidate [path]%s   Validate a config file\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid config init                    # Create ~/.offgrid-llm/config.yaml%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid config init custom.json        # Create custom.json%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid config show                    # Show current config%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid config validate config.yaml    # Validate config%s\n", colorDim, colorReset)
+		fmt.Println()
 		os.Exit(1)
 	}
 
@@ -2263,7 +2262,6 @@ func handleSearch(args []string) {
 
 	if !output.JSONMode {
 		fmt.Printf("\n%s%s%s Searching HuggingFace Hub%s\n", brandPrimary, iconSearch, colorBold, colorReset)
-		printDivider()
 		fmt.Println()
 	}
 
@@ -2309,7 +2307,6 @@ func handleSearch(args []string) {
 
 	fmt.Println()
 	fmt.Printf("Found %s%d%s model(s)\n", brandPrimary, len(results), colorReset)
-	printDivider()
 	fmt.Println()
 
 	for i, result := range results {
@@ -2368,8 +2365,6 @@ func handleSearch(args []string) {
 		}
 	}
 
-	fmt.Println()
-	printDivider()
 	fmt.Println()
 	fmt.Println()
 }
@@ -2722,20 +2717,19 @@ func handleRun(args []string) {
 		// Show available models
 		availableModels := registry.ListModels()
 		if len(availableModels) > 0 {
-			printSection("Available Models")
+			fmt.Printf("%s┌─ Available Models%s\n", brandPrimary+colorBold, colorReset)
 			for _, model := range availableModels {
-				fmt.Printf("  %s◭%s %s\n", brandSecondary, colorReset, model.ID)
+				fmt.Printf("│  %s◦%s %s\n", brandSecondary, colorReset, model.ID)
 			}
+			fmt.Println()
 		} else {
-			printSection("Get Started")
-			printItem("Search models", "offgrid search llama --author TheBloke")
-			printItem("Download model", "offgrid download-hf <model-id> --quant Q4_K_M")
+			fmt.Printf("%s┌─ Get Started%s\n", brandPrimary+colorBold, colorReset)
+			fmt.Printf("│  %sSearch models:%s offgrid search llama --author TheBloke\n", brandSecondary, colorReset)
+			fmt.Printf("│  %sDownload model:%s offgrid download-hf <model-id> --quant Q4_K_M\n", brandSecondary, colorReset)
+			fmt.Println()
 		}
-		fmt.Println()
 		os.Exit(1)
-	}
-
-	// Check if this is an embedding model (not designed for chat)
+	} // Check if this is an embedding model (not designed for chat)
 	isEmbeddingModel := strings.Contains(strings.ToLower(modelName), "minilm") ||
 		strings.Contains(strings.ToLower(modelName), "e5-") ||
 		strings.Contains(strings.ToLower(modelName), "bge-") ||
@@ -2886,8 +2880,6 @@ func handleRun(args []string) {
 				}
 			}
 			fmt.Println()
-			printDivider()
-			fmt.Println()
 		}
 	} else if saveSession {
 		currentSession = sessions.NewSession(sessionName, modelName)
@@ -2920,9 +2912,9 @@ func handleRun(args []string) {
 		fmt.Println()
 		printError("Server not running")
 		fmt.Println()
-		printSection("Start Server")
-		printItem("Direct start", "offgrid serve")
-		printItem("System service", "sudo systemctl start offgrid-llm")
+		fmt.Printf("%s┌─ Start Server%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %sDirect start:%s offgrid serve\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sSystem service:%s sudo systemctl start offgrid-llm\n", brandSecondary, colorReset)
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -3209,14 +3201,20 @@ func isServerHealthy(baseURL string) bool {
 
 // handleAlias manages model aliases
 func handleAlias(args []string) {
-	printBanner()
-	printSection("Model Aliases")
-
 	if len(args) == 0 {
-		fmt.Println("Usage:")
-		fmt.Println("  offgrid alias list                    - List all aliases")
-		fmt.Println("  offgrid alias set <alias> <model>    - Create an alias")
-		fmt.Println("  offgrid alias remove <alias>          - Remove an alias")
+		fmt.Println()
+		fmt.Printf("%s┌─ Model Aliases%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid alias <command>\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s├─ Commands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %slist%s                      List all aliases\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sset <alias> <model>%s      Create an alias\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sremove <alias>%s           Remove an alias\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid alias set llama tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid alias list%s\n", colorDim, colorReset)
 		fmt.Println()
 		return
 	}
@@ -3232,13 +3230,18 @@ func handleAlias(args []string) {
 	case "list", "ls":
 		aliases := am.ListAliases()
 		if len(aliases) == 0 {
-			printInfo("No aliases defined")
+			fmt.Println()
+			fmt.Printf("%sℹ No aliases defined%s\n", colorDim, colorReset)
+			fmt.Println()
 			return
 		}
 
+		fmt.Println()
+		fmt.Printf("%s┌─ Aliases%s\n", brandPrimary+colorBold, colorReset)
 		for alias, modelID := range aliases {
-			printItem(alias, modelID)
+			fmt.Printf("│  %s%-20s%s → %s\n", brandSecondary, alias, colorReset, modelID)
 		}
+		fmt.Println()
 
 	case "set", "create", "add":
 		if len(args) < 3 {
@@ -3277,14 +3280,20 @@ func handleAlias(args []string) {
 
 // handleFavorite manages favorite models
 func handleFavorite(args []string) {
-	printBanner()
-	printSection("Favorite Models")
-
 	if len(args) == 0 {
-		fmt.Println("Usage:")
-		fmt.Println("  offgrid favorite list            - List favorite models")
-		fmt.Println("  offgrid favorite add <model>     - Add to favorites")
-		fmt.Println("  offgrid favorite remove <model>  - Remove from favorites")
+		fmt.Println()
+		fmt.Printf("%s┌─ Favorite Models%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid favorite <command>\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s├─ Commands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %slist%s                List favorite models\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sadd <model>%s         Add to favorites\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sremove <model>%s      Remove from favorites\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid favorite add tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid favorite list%s\n", colorDim, colorReset)
 		fmt.Println()
 		return
 	}
@@ -3300,13 +3309,18 @@ func handleFavorite(args []string) {
 	case "list", "ls":
 		favorites := am.ListFavorites()
 		if len(favorites) == 0 {
-			printInfo("No favorite models")
+			fmt.Println()
+			fmt.Printf("%sℹ No favorite models%s\n", colorDim, colorReset)
+			fmt.Println()
 			return
 		}
 
+		fmt.Println()
+		fmt.Printf("%s┌─ Favorites%s\n", brandPrimary+colorBold, colorReset)
 		for _, modelID := range favorites {
-			fmt.Printf("%s %s\n", iconStar, modelID)
+			fmt.Printf("│  %s★%s %s\n", brandSuccess, colorReset, modelID)
 		}
+		fmt.Println()
 
 	case "add", "set":
 		if len(args) < 2 {
@@ -3343,14 +3357,20 @@ func handleFavorite(args []string) {
 
 // handleTemplate manages prompt templates
 func handleTemplate(args []string) {
-	printBanner()
-	printSection("Prompt Templates")
-
 	if len(args) == 0 {
-		fmt.Println("Usage:")
-		fmt.Println("  offgrid template list              - List all templates")
-		fmt.Println("  offgrid template show <name>       - Show template details")
-		fmt.Println("  offgrid template apply <name>      - Apply template (interactive)")
+		fmt.Println()
+		fmt.Printf("%s┌─ Prompt Templates%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid template <command>\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s├─ Commands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %slist%s                List all templates\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sshow <name>%s         Show template details\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sapply <name>%s        Apply template (interactive)\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid template list%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid template show code-review%s\n", colorDim, colorReset)
 		fmt.Println()
 		return
 	}
@@ -3358,10 +3378,11 @@ func handleTemplate(args []string) {
 	switch args[0] {
 	case "list", "ls":
 		fmt.Println()
+		fmt.Printf("%s┌─ Templates%s\n", brandPrimary+colorBold, colorReset)
 		templateList := templates.ListTemplates()
 		for _, name := range templateList {
 			tpl, _ := templates.GetTemplate(name)
-			fmt.Printf("%s %-15s %s %s\n", iconDiamond, name, brandMuted+"|"+colorReset, tpl.Description)
+			fmt.Printf("│  %s%-20s%s %s\n", brandSecondary, name, colorReset, tpl.Description)
 		}
 		fmt.Println()
 
@@ -3436,11 +3457,11 @@ func handleTemplate(args []string) {
 		}
 
 		fmt.Println()
-		printDivider()
-		fmt.Println()
+		fmt.Printf("%s┌─ Generated Prompt%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
 		fmt.Println(prompt)
 		fmt.Println()
-		printDivider()
+		fmt.Printf("%s└─%s\n", brandPrimary, colorReset)
 		fmt.Println()
 
 	default:
@@ -3450,16 +3471,19 @@ func handleTemplate(args []string) {
 
 // handleBatch processes requests in batch mode
 func handleBatch(args []string) {
-	printBanner()
-	printSection("Batch Processing")
-
 	if len(args) == 0 {
-		fmt.Println("Usage:")
-		fmt.Println("  offgrid batch process <input.jsonl> [output.jsonl] [--concurrency N]")
 		fmt.Println()
-		fmt.Println("Input format (JSONL):")
-		fmt.Println(`  {"id": "1", "model": "model.gguf", "prompt": "Hello"}`)
-		fmt.Println(`  {"id": "2", "model": "model.gguf", "prompt": "World"}`)
+		fmt.Printf("%s┌─ Batch Processing%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid batch process <input.jsonl> [output.jsonl] [--concurrency N]\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s├─ Input Format (JSONL)%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %s{\"id\": \"1\", \"model\": \"model.gguf\", \"prompt\": \"Hello\"}%s\n", colorDim, colorReset)
+		fmt.Printf("│  %s{\"id\": \"2\", \"model\": \"model.gguf\", \"prompt\": \"World\"}%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid batch process prompts.jsonl%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid batch process in.jsonl out.jsonl --concurrency 8%s\n", colorDim, colorReset)
 		fmt.Println()
 		return
 	}
@@ -3519,26 +3543,28 @@ func handleBatch(args []string) {
 
 // handleSession handles session commands
 func handleSession(args []string) {
-	printBanner()
-	printSection("Session Management")
-
 	homeDir, _ := os.UserHomeDir()
 	sessionsDir := filepath.Join(homeDir, ".offgrid", "sessions")
 	sessionMgr := sessions.NewSessionManager(sessionsDir)
 
 	if len(args) == 0 {
-		fmt.Println("Usage:")
-		fmt.Printf("  %soffgrid session%s list\n", colorBold, colorReset)
-		fmt.Printf("  %soffgrid session%s show <name>\n", colorBold, colorReset)
-		fmt.Printf("  %soffgrid session%s delete <name>\n", colorBold, colorReset)
-		fmt.Printf("  %soffgrid session%s export <name> [output.md]\n", colorBold, colorReset)
 		fmt.Println()
-		fmt.Println("Manage conversation sessions for persistent chat history")
+		fmt.Printf("%s┌─ Session Management%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid session <command>\n", colorDim, colorReset)
+		fmt.Println("│")
+		fmt.Println("│ Manage conversation sessions for persistent chat history")
 		fmt.Println()
-		fmt.Println("Examples:")
-		fmt.Printf("  %s$%s offgrid session list\n", brandMuted, colorReset)
-		fmt.Printf("  %s$%s offgrid session show my-project\n", brandMuted, colorReset)
-		fmt.Printf("  %s$%s offgrid session export my-project output.md\n", brandMuted, colorReset)
+		fmt.Printf("%s├─ Commands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %slist%s                  List all sessions\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sshow <name>%s           Show session details\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sdelete <name>%s         Delete a session\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sexport <name> [file]%s  Export session to markdown\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid session list%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid session show my-project%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid session export my-project output.md%s\n", colorDim, colorReset)
 		fmt.Println()
 		return
 	}
@@ -3719,20 +3745,20 @@ func handleCompletions(args []string) {
 	// Only show banner/help when no args provided (help mode)
 	// Don't show when generating actual completion scripts
 	if len(args) == 0 {
-		printBanner()
-		printSection("Shell Completions")
-		fmt.Println("Usage:")
-		fmt.Printf("  %soffgrid completions%s <shell>\n", colorBold, colorReset)
 		fmt.Println()
-		fmt.Println("Supported shells:")
-		fmt.Printf("  %sbash%s    Bash completion script\n", brandPrimary, colorReset)
-		fmt.Printf("  %szsh%s     Zsh completion script\n", brandPrimary, colorReset)
-		fmt.Printf("  %sfish%s    Fish completion script\n", brandPrimary, colorReset)
+		fmt.Printf("%s┌─ Shell Completions%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid completions <shell>\n", colorDim, colorReset)
 		fmt.Println()
-		fmt.Println("Examples:")
-		fmt.Printf("  %s$%s offgrid completions bash > /etc/bash_completion.d/offgrid\n", brandMuted, colorReset)
-		fmt.Printf("  %s$%s offgrid completions zsh > ~/.zsh/completions/_offgrid\n", brandMuted, colorReset)
-		fmt.Printf("  %s$%s offgrid completions fish > ~/.config/fish/completions/offgrid.fish\n", brandMuted, colorReset)
+		fmt.Printf("%s├─ Supported Shells%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %sbash%s    Bash completion script\n", brandSecondary, colorReset)
+		fmt.Printf("│  %szsh%s     Zsh completion script\n", brandSecondary, colorReset)
+		fmt.Printf("│  %sfish%s    Fish completion script\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid completions bash > /etc/bash_completion.d/offgrid%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid completions zsh > ~/.zsh/completions/_offgrid%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid completions fish > ~/.config/fish/completions/offgrid.fish%s\n", colorDim, colorReset)
 		fmt.Println()
 		return
 	}
