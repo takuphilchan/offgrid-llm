@@ -392,19 +392,19 @@ EOF
         start_services="no"
     else
         # Interactive mode
-        echo ""
-        echo -e "${CYAN}${BOLD}Service Configuration${NC}"
-        echo ""
+        echo "" >&2
+        echo -e "${CYAN}${BOLD}Service Configuration${NC}" >&2
+        echo "" >&2
         read -t 30 -p "Enable services to start on boot? [Y/n] " -n 1 -r 2>/dev/null || REPLY="Y"
-        echo
+        echo >&2
         
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             enable_services="yes"
         fi
         
-        echo ""
+        echo "" >&2
         read -t 30 -p "Start services now? [Y/n] " -n 1 -r 2>/dev/null || REPLY="Y"
-        echo
+        echo >&2
         
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             start_services="yes"
