@@ -1245,16 +1245,13 @@ func handleBenchmark(args []string) {
 	}
 
 	// Print benchmark header
-	fmt.Printf("\n%s◆ Benchmark Model%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
-
-	fmt.Printf("%sModel Information%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-	fmt.Printf("  Name: %s%s%s\n", colorBold, modelID, colorReset)
-	fmt.Printf("  Path: %s%s%s\n", brandMuted, meta.Path, colorReset)
-	fmt.Printf("  Size: %s%s%s", brandPrimary, formatBytes(meta.Size), colorReset)
+	fmt.Println()
+	fmt.Printf("%s┌─ Benchmark · %s%s\n", brandPrimary+colorBold, modelID, colorReset)
+	fmt.Println("│")
+	fmt.Printf("│ %sPath:%s %s\n", colorDim, colorReset, meta.Path)
+	fmt.Printf("│ %sSize:%s %s", colorDim, colorReset, formatBytes(meta.Size))
 	if meta.Quantization != "" {
-		fmt.Printf(" · %s%s%s", brandMuted, meta.Quantization, colorReset)
+		fmt.Printf(" · %s", meta.Quantization)
 	}
 	fmt.Println()
 	fmt.Println()
@@ -1262,8 +1259,8 @@ func handleBenchmark(args []string) {
 	// Check if server is running
 	serverURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort)
 	if !isServerHealthy(serverURL) {
-		printError("Server is not running or not responding")
-		fmt.Printf("\n%sStart server first:%s offgrid serve %s\n\n", brandMuted, colorReset, modelID)
+		fmt.Printf("%sError: Server not running%s\n", colorRed, colorReset)
+		fmt.Printf("Start server first: %soffgrid serve%s\n\n", brandSecondary, colorReset)
 		os.Exit(1)
 	}
 
@@ -1273,7 +1270,7 @@ func handleBenchmark(args []string) {
 		benchPrompt = customPrompt
 	}
 
-	fmt.Printf("%s→%s Running benchmark with %d iterations...\n\n", brandPrimary, colorReset, iterations)
+	fmt.Printf("Running %d iterations...\n\n", iterations)
 
 	// Run benchmark iterations
 	var (
@@ -1285,7 +1282,7 @@ func handleBenchmark(args []string) {
 	)
 
 	for i := 0; i < iterations; i++ {
-		fmt.Printf("%s  [%d/%d]%s Testing inference... ", brandMuted, i+1, iterations, colorReset)
+		fmt.Printf("%s  [%d/%d]%s Testing... ", colorDim, i+1, iterations, colorReset)
 
 		startTime := time.Now()
 		var firstTokenTime time.Duration
@@ -1344,7 +1341,7 @@ func handleBenchmark(args []string) {
 		tps := float64(tokenCount) / latency.Seconds()
 		tokensPerSec = append(tokensPerSec, tps)
 
-		fmt.Printf("%s✓%s %s (%.1f tok/s)\n", brandSuccess, colorReset, formatDuration(latency), tps)
+		fmt.Printf("%s✓%s %s (%.1f tok/s)\n", colorGreen, colorReset, formatDuration(latency), tps)
 	}
 
 	if len(tokensPerSec) == 0 {
@@ -1378,38 +1375,16 @@ func handleBenchmark(args []string) {
 
 	// Display results
 	fmt.Println()
-	fmt.Printf("%sPerformance Results%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-
-	fmt.Printf("%sInference Speed%s\n", brandSuccess, colorReset)
-	fmt.Printf("  Average:      %s%.1f tok/s%s\n", colorBold, avgTPS, colorReset)
-	fmt.Printf("  Range:        %.1f - %.1f tok/s\n", minTPS, maxTPS)
+	fmt.Printf("%s└─ Results%s\n", brandPrimary+colorBold, colorReset)
 	fmt.Println()
+	fmt.Printf("   %sSpeed:%s        %.1f tok/s (%.1f - %.1f)\n", colorDim, colorReset, avgTPS, minTPS, maxTPS)
+	fmt.Printf("   %sLatency:%s      %s (first token: ~%s)\n", colorDim, colorReset, formatDuration(avgLatency), formatDuration(avgFirstToken))
+	fmt.Printf("   %sTokens:%s       %.0f prompt, %.0f generated (avg)\n", colorDim, colorReset, avgPromptTokens, avgTokens)
+	fmt.Printf("   %sThroughput:%s   ~%d queries/hour\n", colorDim, colorReset, int(3600.0/avgLatency.Seconds()))
 
-	fmt.Printf("%sLatency%s\n", brandSuccess, colorReset)
-	fmt.Printf("  Total:        %s\n", formatDuration(avgLatency))
-	fmt.Printf("  First token:  ~%s\n", formatDuration(avgFirstToken))
-	fmt.Println()
-
-	fmt.Printf("%sTokens%s\n", brandSuccess, colorReset)
-	fmt.Printf("  Prompt:       %.0f tokens (avg)\n", avgPromptTokens)
-	fmt.Printf("  Generated:    %.0f tokens (avg)\n", avgTokens)
-	fmt.Println()
-
-	// Estimate throughput
-	fmt.Printf("%sThroughput Estimate%s\n", brandSuccess, colorReset)
-	fmt.Printf("  Queries/hour: %s~%d%s (at current speed)\n", brandPrimary, int(3600.0/avgLatency.Seconds()), colorReset)
-	fmt.Println()
-
-	// Resource usage estimate
-	fmt.Printf("%sResource Usage%s\n", brandSuccess, colorReset)
-	fmt.Printf("  Model size:   %s\n", formatBytes(meta.Size))
 	memEst := float64(meta.Size) * 1.2 // Rough estimate: model + context
-	fmt.Printf("  Memory est:   ~%.1f GB (model + context)\n", memEst/1e9)
+	fmt.Printf("   %sMemory:%s       %.1f GB estimated\n", colorDim, colorReset, memEst/1e9)
 	fmt.Println()
-
-	fmt.Printf("%s◆ Benchmark Complete%s\n", brandSuccess, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
 }
 
 func handleList(args []string) {
@@ -1530,8 +1505,8 @@ func handleCatalog() {
 	catalog := models.DefaultCatalog()
 
 	fmt.Println()
-	printSection("Model Catalog")
-	fmt.Println()
+	fmt.Printf("%s┌─ Model Catalog%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println("│")
 
 	// Separate LLMs and embeddings
 	var llms []models.CatalogEntry
@@ -1554,22 +1529,21 @@ func handleCatalog() {
 	}
 
 	// Show LLMs
-	fmt.Printf("%sLanguage Models%s (%d)\n", colorBold, colorReset, len(llms))
-	printDivider()
-	fmt.Println()
+	fmt.Printf("│ %sLanguage Models%s · %d available\n", colorBold, colorReset, len(llms))
+	fmt.Println("│")
 
-	for i, entry := range llms {
+	for _, entry := range llms {
 		star := ""
 		if entry.Recommended {
-			star = fmt.Sprintf(" %s★%s", brandSuccess, colorReset)
+			star = fmt.Sprintf(" %s★%s", colorDim, colorReset)
 		}
 
-		fmt.Printf("%s%s%s%s %s· %s · %d GB RAM%s\n",
+		fmt.Printf("│ %s%s%s%s %s%s · %d GB RAM%s\n",
 			brandPrimary, entry.ID, colorReset, star,
-			brandMuted, entry.Parameters, entry.MinRAM, colorReset)
+			colorDim, entry.Parameters, entry.MinRAM, colorReset)
 
 		// Variants on same line
-		fmt.Printf("   %s", brandMuted)
+		fmt.Printf("│   %s", colorDim)
 		for i, v := range entry.Variants {
 			if i > 0 {
 				fmt.Print(", ")
@@ -1577,31 +1551,25 @@ func handleCatalog() {
 			fmt.Printf("%s (%.1f GB)", v.Quantization, float64(v.Size)/(1024*1024*1024))
 		}
 		fmt.Printf("%s\n", colorReset)
-
-		if i < len(llms)-1 {
-			fmt.Println()
-		}
 	}
 
 	// Show embeddings if any
 	if len(embeddings) > 0 {
-		fmt.Println()
-		fmt.Println()
-		fmt.Printf("%sEmbedding Models%s (%d)\n", colorBold, colorReset, len(embeddings))
-		printDivider()
-		fmt.Println()
+		fmt.Println("│")
+		fmt.Printf("│ %sEmbedding Models%s · %d available\n", colorBold, colorReset, len(embeddings))
+		fmt.Println("│")
 
-		for i, entry := range embeddings {
+		for _, entry := range embeddings {
 			star := ""
 			if entry.Recommended {
-				star = fmt.Sprintf(" %s★%s", brandSuccess, colorReset)
+				star = fmt.Sprintf(" %s★%s", colorDim, colorReset)
 			}
 
-			fmt.Printf("%s%s%s%s\n",
+			fmt.Printf("│ %s%s%s%s\n",
 				brandPrimary, entry.ID, colorReset, star)
 
 			// Variants on same line
-			fmt.Printf("   %s", brandMuted)
+			fmt.Printf("│   %s", colorDim)
 			for i, v := range entry.Variants {
 				if i > 0 {
 					fmt.Print(", ")
@@ -1614,19 +1582,14 @@ func handleCatalog() {
 				}
 			}
 			fmt.Printf("%s\n", colorReset)
-
-			if i < len(embeddings)-1 {
-				fmt.Println()
-			}
 		}
 	}
 
 	fmt.Println()
-	fmt.Println()
-	printSection("Usage")
-	printItem("Download model", "offgrid download <model-id> [quantization]")
-	printItem("Search HuggingFace", "offgrid search llama --author TheBloke")
-	printItem("Learn quantization", "offgrid quantization")
+	fmt.Printf("%s└─ Commands%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("   %soffgrid download <id> [quant]%s    Download model\n", brandSecondary, colorReset)
+	fmt.Printf("   %soffgrid search <query>%s           Search HuggingFace\n", brandSecondary, colorReset)
+	fmt.Printf("   %soffgrid quantization%s             Quantization guide\n", brandSecondary, colorReset)
 	fmt.Println()
 }
 
