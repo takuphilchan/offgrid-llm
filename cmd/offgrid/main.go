@@ -2067,62 +2067,65 @@ func handleInfo() {
 
 	// Human-readable output
 	fmt.Println()
-	printSection(fmt.Sprintf("OffGrid LLM %sv0.1.0-alpha%s", brandMuted, colorReset))
-	fmt.Println()
+	fmt.Printf("%s┌─ OffGrid LLM %sv0.1.0-alpha%s\n", brandPrimary+colorBold, colorDim, colorReset)
+	fmt.Println("│")
 
-	// Configuration - more compact
-	fmt.Printf("%sConfiguration%s\n", colorBold, colorReset)
-	printDivider()
-	fmt.Printf("  %sPort:%s %d  %s│%s  %sModels:%s %s\n",
-		brandMuted, colorReset, cfg.ServerPort,
-		brandMuted, colorReset,
-		brandMuted, colorReset, cfg.ModelsDir)
-	fmt.Printf("  %sThreads:%s %d  %s│%s  %sContext:%s %d tokens  %s│%s  %sMemory:%s %d MB\n",
-		brandMuted, colorReset, cfg.NumThreads,
-		brandMuted, colorReset,
-		brandMuted, colorReset, cfg.MaxContextSize,
-		brandMuted, colorReset,
-		brandMuted, colorReset, cfg.MaxMemoryMB)
+	// Configuration
+	fmt.Printf("│ %sConfiguration%s\n", colorBold, colorReset)
+	fmt.Printf("│ %sPort:%s %d  %s│%s  %sModels:%s %s\n",
+		colorDim, colorReset, cfg.ServerPort,
+		colorDim, colorReset,
+		colorDim, colorReset, cfg.ModelsDir)
+	fmt.Printf("│ %sThreads:%s %d  %s│%s  %sContext:%s %d tokens  %s│%s  %sMemory:%s %d MB\n",
+		colorDim, colorReset, cfg.NumThreads,
+		colorDim, colorReset,
+		colorDim, colorReset, cfg.MaxContextSize,
+		colorDim, colorReset,
+		colorDim, colorReset, cfg.MaxMemoryMB)
 	if cfg.EnableP2P {
-		fmt.Printf("  %sP2P:%s enabled (port %d)\n", brandMuted, colorReset, cfg.P2PPort)
+		fmt.Printf("│ %sP2P:%s enabled (port %d)\n", colorDim, colorReset, cfg.P2PPort)
 	}
-	fmt.Println()
+	fmt.Println("│")
 
-	// Installed Models - more visual
+	// Installed Models
 	var totalSize int64
-	fmt.Printf("%sInstalled Models%s (%s%d%s)\n", colorBold, colorReset, brandPrimary, len(modelList), colorReset)
-	printDivider()
+	if len(modelList) == 1 {
+		fmt.Printf("│ %sInstalled Models%s · 1 model\n", colorBold, colorReset)
+	} else {
+		fmt.Printf("│ %sInstalled Models%s · %d models\n", colorBold, colorReset, len(modelList))
+	}
+
 	if len(modelList) > 0 {
 		for _, model := range modelList {
 			meta, err := registry.GetModel(model.ID)
 			if err == nil {
 				statusIcon := "○"
-				statusColor := brandMuted
+				statusColor := colorDim
 				if meta.IsLoaded {
 					statusIcon = "●"
 					statusColor = brandSuccess
 				}
 
-				fmt.Printf("  %s%s%s %s", statusColor, statusIcon, colorReset, model.ID)
+				fmt.Printf("│ %s%s%s %s", statusColor, statusIcon, colorReset, model.ID)
 				if meta.Size > 0 {
-					fmt.Printf(" %s·%s %s", brandMuted, colorReset, formatBytes(meta.Size))
+					fmt.Printf(" %s·%s %s", colorDim, colorReset, formatBytes(meta.Size))
 					totalSize += meta.Size
 				}
 				if meta.Quantization != "" && meta.Quantization != "unknown" {
-					fmt.Printf(" %s·%s %s", brandMuted, colorReset, meta.Quantization)
+					fmt.Printf(" %s·%s %s", colorDim, colorReset, meta.Quantization)
 				}
 				fmt.Println()
 			}
 		}
 		if totalSize > 0 {
-			fmt.Printf("  %sTotal:%s %s\n", brandMuted, colorReset, formatBytes(totalSize))
+			fmt.Printf("│ %sTotal:%s %s\n", colorDim, colorReset, formatBytes(totalSize))
 		}
 	} else {
-		fmt.Printf("  %sNo models installed%s\n", brandMuted, colorReset)
+		fmt.Printf("│ No models installed\n")
 	}
-	fmt.Println()
+	fmt.Println("│")
 
-	// Available Models
+	// Catalog info
 	catalog := models.DefaultCatalog()
 	recommended := 0
 	for _, entry := range catalog.Models {
@@ -2130,24 +2133,21 @@ func handleInfo() {
 			recommended++
 		}
 	}
-	fmt.Printf("%sAvailable in Catalog%s (%s%d%s total, %s%d%s recommended)\n",
-		colorBold, colorReset,
-		brandPrimary, len(catalog.Models), colorReset,
-		brandSuccess, recommended, colorReset)
-	printDivider()
+	fmt.Printf("│ %sCatalog%s · %d models (%d recommended)\n",
+		colorBold, colorReset, len(catalog.Models), recommended)
 	fmt.Println()
 
-	// Quick Start
+	// Commands
 	if len(modelList) == 0 {
-		printSection("Quick Start")
-		printItem("1. Download model", "offgrid download tinyllama-1.1b-chat Q4_K_M")
-		printItem("2. Start server", "offgrid serve")
-		printItem("3. Test endpoint", fmt.Sprintf("curl http://localhost:%d/health", cfg.ServerPort))
+		fmt.Printf("%s└─ Quick Start%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid search llama%s         Search for models\n", brandSecondary, colorReset)
+		fmt.Printf("   %soffgrid download <id>%s        Download from catalog\n", brandSecondary, colorReset)
+		fmt.Printf("   %soffgrid serve%s                Start API server\n", brandSecondary, colorReset)
 	} else {
-		printSection("Server")
-		printItem("Start server", "offgrid serve")
-		printItem("API endpoint", fmt.Sprintf("http://localhost:%d", cfg.ServerPort))
-		printItem("Health check", fmt.Sprintf("http://localhost:%d/health", cfg.ServerPort))
+		fmt.Printf("%s└─ Server%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid serve%s                Start server\n", brandSecondary, colorReset)
+		fmt.Printf("   %shttp://localhost:%d%s      API endpoint\n", brandSecondary, cfg.ServerPort, colorReset)
+		fmt.Printf("   %shttp://localhost:%d/health%s  Health check\n", brandSecondary, cfg.ServerPort, colorReset)
 	}
 	fmt.Println()
 }
@@ -2975,20 +2975,17 @@ func handleRun(args []string) {
 		fmt.Println()
 	}
 
-	printDivider()
 	fmt.Println()
-	printSection(fmt.Sprintf("Interactive Chat · %s", modelName))
-	fmt.Println()
+	fmt.Printf("%s┌─ Chat · %s%s\n", brandPrimary+colorBold, modelName, colorReset)
+	fmt.Println("│")
 	if currentSession != nil {
-		printInfo(fmt.Sprintf("Session: %s (auto-saving)", currentSession.Name))
+		fmt.Printf("│ %sSession:%s %s (auto-saving)\n", colorDim, colorReset, currentSession.Name)
 	}
-	printInfo("Type 'exit' to quit, 'clear' to reset conversation")
-	fmt.Println()
-	printDivider()
+	fmt.Printf("│ Type %sexit%s to quit · %sclear%s to reset\n", brandSecondary, colorReset, brandSecondary, colorReset)
 	fmt.Println()
 
 	// Start chat session
-	fmt.Printf("%s⚡%s Connecting to inference engine...", brandAccent, colorReset)
+	fmt.Print("Connecting...")
 
 	// Import required packages for HTTP client
 	client := &http.Client{
@@ -3066,7 +3063,7 @@ func handleRun(args []string) {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Print("┌─ You\n└─ ")
+		fmt.Printf("\n%s>%s ", brandPrimary, colorReset)
 		input, err := reader.ReadString('\n')
 		if err != nil {
 			break
@@ -3080,10 +3077,7 @@ func handleRun(args []string) {
 
 		if input == "exit" || input == "quit" {
 			fmt.Println()
-			printDivider()
-			fmt.Println()
-			printSuccess("Chat session ended")
-			fmt.Println()
+			fmt.Printf("%sChat session ended%s\n\n", colorDim, colorReset)
 			break
 		}
 
@@ -3093,16 +3087,10 @@ func handleRun(args []string) {
 			if currentSession != nil {
 				currentSession.Messages = []sessions.Message{}
 				if err := sessionMgr.Save(currentSession); err != nil {
-					printWarning(fmt.Sprintf("Failed to save cleared session: %v", err))
+					fmt.Printf("%sWarning: Failed to save cleared session: %v%s\n", colorYellow, err, colorReset)
 				}
 			}
-			fmt.Println()
-			printDivider()
-			fmt.Println()
-			printSuccess("Conversation cleared")
-			fmt.Println()
-			printDivider()
-			fmt.Println()
+			fmt.Printf("\n%sConversation cleared%s\n", colorDim, colorReset)
 			continue
 		}
 
@@ -3146,7 +3134,7 @@ func handleRun(args []string) {
 		}
 
 		// Handle streaming response
-		fmt.Print("┌─ Assistant\n└─ ")
+		fmt.Print("\n")
 		scanner := bufio.NewScanner(resp.Body)
 		var assistantMsg strings.Builder
 		lineLength := 0
