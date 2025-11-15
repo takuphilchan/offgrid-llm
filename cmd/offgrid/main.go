@@ -2195,6 +2195,7 @@ func handleSearch(args []string) {
 	// Parse search query and filters
 	var query string
 	var filters models.SearchFilter
+	var maxRAM int // Maximum RAM in GB (0 = no filter)
 
 	// Default filters
 	filters.OnlyGGUF = true
@@ -2214,6 +2215,11 @@ func handleSearch(args []string) {
 		case arg == "--quant" || arg == "-q":
 			if i+1 < len(args) {
 				filters.Quantization = args[i+1]
+				i++
+			}
+		case arg == "--ram" || arg == "-r":
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%d", &maxRAM)
 				i++
 			}
 		case arg == "--sort" || arg == "-s":
@@ -2237,12 +2243,14 @@ func handleSearch(args []string) {
 			fmt.Printf("%s├─ Options%s\n", brandPrimary+colorBold, colorReset)
 			fmt.Printf("│  %s-a, --author <name>%s   Filter by author (e.g., 'TheBloke')\n", brandSecondary, colorReset)
 			fmt.Printf("│  %s-q, --quant <type>%s    Filter by quantization (e.g., 'Q4_K_M')\n", brandSecondary, colorReset)
+			fmt.Printf("│  %s-r, --ram <GB>%s        Filter by max RAM (e.g., 4, 8, 16)\n", brandSecondary, colorReset)
 			fmt.Printf("│  %s-s, --sort <field>%s    Sort by: downloads, likes, created, modified\n", brandSecondary, colorReset)
 			fmt.Printf("│  %s-l, --limit <n>%s       Limit results (default: 20)\n", brandSecondary, colorReset)
 			fmt.Printf("│  %s--all%s                Include gated models\n", brandSecondary, colorReset)
 			fmt.Println()
 			fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
 			fmt.Printf("   %soffgrid search llama%s\n", colorDim, colorReset)
+			fmt.Printf("   %soffgrid search llama --ram 4%s                    # 4GB RAM\n", colorDim, colorReset)
 			fmt.Printf("   %soffgrid search mistral --author TheBloke --quant Q4_K_M%s\n", colorDim, colorReset)
 			fmt.Printf("   %soffgrid search --sort likes --limit 10%s\n", colorDim, colorReset)
 			fmt.Println()
@@ -2272,7 +2280,30 @@ func handleSearch(args []string) {
 		os.Exit(1)
 	}
 
-	// JSON output mode
+	// Filter by RAM if specified
+	if maxRAM > 0 {
+		var filtered []models.SearchResult
+		for _, result := range results {
+			var estimatedRAM float64
+			if result.BestVariant != nil && result.BestVariant.SizeGB > 0 {
+				// Use actual size if available
+				estimatedRAM = result.BestVariant.SizeGB * 1.3
+			} else if result.BestVariant != nil {
+				// Estimate from model name and quantization
+				estimatedRAM = estimateRAMFromModel(result.Model.ID, result.BestVariant.Quantization)
+			}
+
+			if estimatedRAM > 0 && estimatedRAM <= float64(maxRAM) {
+				filtered = append(filtered, result)
+			}
+		}
+		results = filtered
+
+		if !output.JSONMode && len(filtered) > 0 {
+			fmt.Printf("%s[Filtered for ≤%dGB RAM]%s\n", brandMuted, maxRAM, colorReset)
+			fmt.Println()
+		}
+	} // JSON output mode
 	if output.JSONMode {
 		var jsonResults []output.SearchResult
 		for _, result := range results {
@@ -2321,12 +2352,23 @@ func handleSearch(args []string) {
 			brandError, colorReset,
 			formatNumber(int64(model.Likes)))
 
-		// Recommended variant with color
-		if result.BestVariant != nil && result.BestVariant.SizeGB > 0 {
-			fmt.Printf("  %s│%s %s%s%s (%.1f GB)",
+		// Recommended variant with color and RAM estimate
+		if result.BestVariant != nil {
+			var ramInfo string
+			if result.BestVariant.SizeGB > 0 {
+				estimatedRAM := result.BestVariant.SizeGB * 1.3
+				ramInfo = fmt.Sprintf(" (%.1fGB file, ~%.0fGB RAM)", result.BestVariant.SizeGB, estimatedRAM)
+			} else {
+				// Estimate from model name
+				estimatedRAM := estimateRAMFromModel(result.Model.ID, result.BestVariant.Quantization)
+				if estimatedRAM > 0 {
+					ramInfo = fmt.Sprintf(" (~%.0fGB RAM)", estimatedRAM)
+				}
+			}
+			fmt.Printf("  %s│%s %s%s%s%s",
 				brandMuted, colorReset,
 				brandSuccess, result.BestVariant.Quantization, colorReset,
-				result.BestVariant.SizeGB)
+				ramInfo)
 		}
 		fmt.Println()
 
@@ -3132,6 +3174,56 @@ func formatNumber(n int64) string {
 		return fmt.Sprintf("%.1fK", float64(n)/1000)
 	}
 	return fmt.Sprintf("%d", n)
+}
+
+// estimateRAMFromModel estimates RAM needed based on model name and quantization
+func estimateRAMFromModel(modelID string, quant string) float64 {
+	// Parse parameter size from model name (1B, 3B, 7B, 13B, etc.)
+	var paramSize float64
+	modelLower := strings.ToLower(modelID)
+
+	// Common parameter sizes
+	if strings.Contains(modelLower, "1b") || strings.Contains(modelLower, "1.1b") {
+		paramSize = 1
+	} else if strings.Contains(modelLower, "3b") || strings.Contains(modelLower, "3.2b") {
+		paramSize = 3
+	} else if strings.Contains(modelLower, "7b") {
+		paramSize = 7
+	} else if strings.Contains(modelLower, "8b") {
+		paramSize = 8
+	} else if strings.Contains(modelLower, "13b") {
+		paramSize = 13
+	} else if strings.Contains(modelLower, "70b") {
+		paramSize = 70
+	} else {
+		return 0 // Can't estimate
+	}
+
+	// Estimate based on quantization (rough approximations)
+	var bytesPerParam float64
+	quantUpper := strings.ToUpper(quant)
+	switch {
+	case strings.Contains(quantUpper, "Q2"):
+		bytesPerParam = 0.3 // ~2 bits
+	case strings.Contains(quantUpper, "Q3"):
+		bytesPerParam = 0.4 // ~3 bits
+	case strings.Contains(quantUpper, "Q4"):
+		bytesPerParam = 0.5 // ~4 bits
+	case strings.Contains(quantUpper, "Q5"):
+		bytesPerParam = 0.65 // ~5 bits
+	case strings.Contains(quantUpper, "Q6"):
+		bytesPerParam = 0.75 // ~6 bits
+	case strings.Contains(quantUpper, "Q8"):
+		bytesPerParam = 1.0 // ~8 bits
+	default:
+		bytesPerParam = 0.5 // Default to Q4
+	}
+
+	// Model size in GB = params (in billions) * bytes per param
+	modelSizeGB := paramSize * bytesPerParam
+
+	// RAM needed = model size * 1.3 (overhead for context, KV cache, etc.)
+	return modelSizeGB * 1.3
 }
 
 func formatBytes(bytes int64) string {
