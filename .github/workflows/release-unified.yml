@@ -87,14 +87,15 @@ jobs:
             gpu_flags: "-DGGML_VULKAN=ON"
             cpu_flags: "-march=x86-64-v4"
             
-          - name: linux-arm64-cpu
-            os: ubuntu-22.04
-            platform: linux
-            arch: arm64
-            variant: cpu
-            cpu_features: neon
-            gpu_flags: ""
-            cpu_flags: "-march=armv8-a"
+          # TODO: ARM64 Linux requires cross-compilation or ARM runners
+          # - name: linux-arm64-cpu
+          #   os: ubuntu-22.04
+          #   platform: linux
+          #   arch: arm64
+          #   variant: cpu
+          #   cpu_features: neon
+          #   gpu_flags: ""
+          #   cpu_flags: "-march=armv8-a"
             
           # macOS variants
           - name: darwin-arm64-metal
