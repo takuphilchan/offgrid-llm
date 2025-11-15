@@ -178,32 +178,30 @@ func (s *Server) Start() error {
 	// Graceful shutdown handler
 	go s.handleShutdown()
 
-	// Improved startup message with brand aesthetic
+	// Clean startup message with colors
+	const (
+		colorReset   = "\033[0m"
+		colorCyan    = "\033[36m"
+		colorGreen   = "\033[32m"
+		brandPrimary = "\033[38;5;45m"
+	)
+
 	fmt.Println()
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("%s┌─%s OffGrid LLM Server\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s Server:  http://localhost:%d\n", colorCyan, colorReset, s.config.ServerPort)
+	fmt.Printf("%s│%s Web UI:  http://localhost:%d/ui/\n", colorCyan, colorReset, s.config.ServerPort)
+	fmt.Printf("%s│%s Health:  http://localhost:%d/health\n", colorCyan, colorReset, s.config.ServerPort)
+	fmt.Printf("%s│%s\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s OpenAI-Compatible API Endpoints:\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s   POST /v1/chat/completions\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s   POST /v1/completions\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s   POST /v1/embeddings\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s   GET  /v1/models\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s\n", colorCyan, colorReset)
+	fmt.Printf("%s│%s %s[OK]%s Server ready on port %d\n", colorCyan, colorReset, colorGreen, colorReset, s.config.ServerPort)
+	fmt.Printf("%s└─%s\n", colorCyan, colorReset)
 	fmt.Println()
-	fmt.Printf("  \033[38;5;45m◆\033[0m \033[1mOffGrid LLM Server\033[0m\n")
-	fmt.Println("  ──────────────────────────────────────────────────")
-	fmt.Println()
-	fmt.Printf("  \033[38;5;45m→\033[0m Server:     http://localhost:%d\n", s.config.ServerPort)
-	fmt.Printf("  \033[38;5;45m→\033[0m Web UI:     http://localhost:%d/ui\n", s.config.ServerPort)
-	fmt.Printf("  \033[38;5;45m→\033[0m API Docs:   http://localhost:%d/health\n", s.config.ServerPort)
-	fmt.Println()
-	fmt.Println("  \033[38;5;141m◆\033[0m \033[1mEndpoints\033[0m")
-	fmt.Println("  ──────────────────────────────────────────────────")
-	fmt.Println("    GET  /health")
-	fmt.Println("    GET  /v1/models")
-	fmt.Println("    DELETE /v1/models/delete")
-	fmt.Println("    POST /v1/chat/completions")
-	fmt.Println("    POST /v1/completions")
-	fmt.Println("    POST /v1/embeddings")
-	fmt.Println("    POST /v1/search")
-	fmt.Println("    GET  /v1/catalog")
-	fmt.Println("    POST /v1/benchmark")
-	fmt.Println()
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
-	log.Printf("✓ Server listening on port %d", s.config.ServerPort)
 
 	if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
