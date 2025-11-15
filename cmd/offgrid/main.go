@@ -1452,80 +1452,77 @@ func handleList(args []string) {
 		return
 	}
 
-	// Human-readable output
-	printDivider()
+	// Human-readable output - Clean modern design
 	fmt.Println()
-	printSection("Installed Models")
+	fmt.Printf("%s┌─ Installed Models%s\n", brandPrimary+colorBold, colorReset)
 
 	if len(modelList) == 0 {
-		fmt.Println()
-		printInfo(fmt.Sprintf("No models found in %s", cfg.ModelsDir))
-		fmt.Println()
-		printSection("Get Started")
-		printItem("Search HuggingFace", "offgrid search llama")
-		printItem("Download model", "offgrid download-hf <model-id>")
-		printItem("Browse catalog", "offgrid catalog")
-		fmt.Println()
-		printDivider()
+		fmt.Println("│")
+		fmt.Printf("│ No models installed\n")
+		fmt.Println("│")
+		fmt.Printf("%s└─ Quick Start%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid search llama%s          Search for models\n", brandSecondary, colorReset)
+		fmt.Printf("   %soffgrid download-hf <id>%s     Download from HuggingFace\n", brandSecondary, colorReset)
+		fmt.Printf("   %soffgrid catalog%s              Browse model catalog\n", brandSecondary, colorReset)
 		fmt.Println()
 		return
 	}
 
-	fmt.Println()
-	fmt.Printf("Found %s%d%s model(s):\n\n", brandPrimary, len(modelList), colorReset)
+	fmt.Println("│")
+	if len(modelList) == 1 {
+		fmt.Printf("│ 1 model installed\n\n")
+	} else {
+		fmt.Printf("│ %d models installed\n\n", len(modelList))
+	}
 
-	// Print table header
-	fmt.Printf("  %s%-45s  %-12s  %-10s%s\n", colorBold, "MODEL", "SIZE", "QUANT", colorReset)
-	fmt.Printf("  %s%s%s\n", brandMuted, strings.Repeat("─", 72), colorReset)
+	// Clean table with minimal lines
+	fmt.Printf("%s   %-48s %-14s %-12s%s\n", colorDim, "Model", "Size", "Quantization", colorReset)
+	fmt.Printf("%s   %s%s\n", colorDim, strings.Repeat("─", 78), colorReset)
 
 	var totalSize int64
-	for _, model := range modelList {
+	for i, model := range modelList {
 		meta, err := registry.GetModel(model.ID)
-		if err == nil {
-			modelName := model.ID
-			if len(modelName) > 45 {
-				modelName = modelName[:42] + "..."
-			}
 
-			sizeStr := ""
+		modelName := model.ID
+		if len(modelName) > 48 {
+			modelName = modelName[:45] + "..."
+		}
+
+		sizeStr := "-"
+		quantStr := "-"
+
+		if err == nil {
 			if meta.Size > 0 {
 				sizeStr = formatBytes(meta.Size)
 				totalSize += meta.Size
-			} else {
-				sizeStr = "-"
 			}
-
-			quantStr := ""
 			if meta.Quantization != "" && meta.Quantization != "unknown" {
 				quantStr = meta.Quantization
-			} else {
-				quantStr = "-"
 			}
-
-			fmt.Printf("  %s%-45s%s  %s%-12s%s  %s%-10s%s\n",
-				brandPrimary, modelName, colorReset,
-				brandSecondary, sizeStr, colorReset,
-				brandMuted, quantStr, colorReset)
-		} else {
-			fmt.Printf("  %s%-45s%s  %s%-12s%s  %s%-10s%s\n",
-				brandPrimary, model.ID, colorReset,
-				brandMuted, "-", colorReset,
-				brandMuted, "-", colorReset)
 		}
+
+		// Subtle alternating colors for readability
+		rowColor := brandPrimary
+		if i%2 == 1 {
+			rowColor = colorReset
+		}
+
+		fmt.Printf("   %s%-48s%s %s%-14s%s %s%-12s%s\n",
+			rowColor, modelName, colorReset,
+			brandSecondary, sizeStr, colorReset,
+			brandMuted, quantStr, colorReset)
 	}
 
-	fmt.Println()
 	if totalSize > 0 {
-		fmt.Printf("  %sTotal:%s %s%s%s\n", brandMuted, colorReset, brandPrimary, formatBytes(totalSize), colorReset)
 		fmt.Println()
+		fmt.Printf("%s   Total: %s%s\n", colorDim, formatBytes(totalSize), colorReset)
 	}
 
-	printSection("Next Steps")
-	printItem("Start chat", "offgrid run <model-name>")
-	printItem("Start server", "offgrid serve")
-	printItem("Benchmark model", "offgrid benchmark <model-name>")
 	fmt.Println()
-	printDivider()
+	fmt.Printf("%s└─ Commands%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("   %soffgrid run <model>%s          Start interactive chat\n", brandSecondary, colorReset)
+	fmt.Printf("   %soffgrid serve%s                Start API server\n", brandSecondary, colorReset)
+	fmt.Printf("   %soffgrid benchmark <model>%s    Test performance\n", brandSecondary, colorReset)
 	fmt.Println()
 }
 
@@ -1972,14 +1969,11 @@ func handleVersion() {
 	}
 
 	fmt.Println()
-	printDivider()
-	fmt.Println()
-	printSection("OffGrid LLM Version")
-	fmt.Printf("  Version:      %s%s%s\n", brandPrimary, Version, colorReset)
-	fmt.Printf("  Go Version:   %s\n", runtime.Version())
-	fmt.Printf("  OS/Arch:      %s/%s\n", runtime.GOOS, runtime.GOARCH)
-	fmt.Println()
-	printDivider()
+	fmt.Printf("%s┌─ OffGrid LLM%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println("│")
+	fmt.Printf("│ %sVersion:%s     %s\n", colorDim, colorReset, Version)
+	fmt.Printf("│ %sGo:%s         %s\n", colorDim, colorReset, runtime.Version())
+	fmt.Printf("│ %sPlatform:%s   %s/%s\n", colorDim, colorReset, runtime.GOOS, runtime.GOARCH)
 	fmt.Println()
 }
 

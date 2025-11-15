@@ -31,22 +31,10 @@ log_warn() { echo -e "${YELLOW}⚠${NC} $1" >&2; }
 # Print banner
 print_banner() {
     echo ""
-    echo -e "${CYAN}${BOLD}"
-    cat << 'EOF'
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║    ██████╗ ███████╗███████╗ ██████╗ ██████╗ ██╗██████╗   ║
-║   ██╔═══██╗██╔════╝██╔════╝██╔════╝ ██╔══██╗██║██╔══██╗  ║
-║   ██║   ██║█████╗  █████╗  ██║  ███╗██████╔╝██║██║  ██║  ║
-║   ██║   ██║██╔══╝  ██╔══╝  ██║   ██║██╔══██╗██║██║  ██║  ║
-║   ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝  ║
-║    ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝   ║
-║                                                           ║
-║          U N I V E R S A L   I N S T A L L E R            ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-EOF
-    echo -e "${NC}"
+    echo -e "${CYAN}${BOLD}┌─ OffGrid LLM Installer${NC}"
+    echo -e "${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} Universal installation for Linux, macOS, and Windows"
+    echo ""
 }
 
 # Detect operating system
@@ -477,48 +465,41 @@ print_success() {
     local services_running="$1"
     
     echo ""
-    echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}${BOLD}  ✓ Installation Complete!${NC}"
-    echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
+    echo -e "${GREEN}${BOLD}┌─ Installation Complete${NC}"
+    echo -e "${GREEN}│${NC}"
     
     if [ "$services_running" = "1" ]; then
-        echo -e "${GREEN}${BOLD}🚀 Service is running and ready!${NC}"
+        echo -e "${GREEN}│${NC} ${GREEN}✓${NC} Service running and ready"
+        echo -e "${GREEN}│${NC}"
+        echo -e "${GREEN}│${NC} ${CYAN}Web UI:${NC}  http://localhost:11611/ui"
+        echo -e "${GREEN}│${NC} ${CYAN}API:${NC}     http://localhost:11611"
         echo ""
-        echo -e "  ${GREEN}✓${NC} Web UI:  ${CYAN}http://localhost:11611/ui${NC}"
-        echo -e "  ${GREEN}✓${NC} API:     ${CYAN}http://localhost:11611${NC}"
+        echo -e "${CYAN}${BOLD}└─ Quick Start${NC}"
+        echo -e "   ${CYAN}offgrid search llama --limit 5${NC}"
+        echo -e "   ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF${NC}"
+        echo -e "   ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
         echo ""
-        echo -e "${BOLD}Quick Start:${NC}"
-        echo -e "  ${CYAN}offgrid search llama --limit 5${NC}"
-        echo -e "  ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF --file Llama-3.2-3B-Instruct-Q4_K_M.gguf${NC}"
-        echo -e "  ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
-        echo ""
-        echo -e "${BOLD}Manage Service:${NC}"
-        echo -e "  ${CYAN}sudo systemctl status offgrid@${USER}${NC}     # Check status"
-        echo -e "  ${CYAN}sudo systemctl stop offgrid@${USER}${NC}       # Stop server"
-        echo -e "  ${CYAN}sudo systemctl restart offgrid@${USER}${NC}    # Restart server"
+        echo -e "${CYAN}   Docs:${NC} https://github.com/${REPO}"
     else
-        echo -e "${YELLOW}⚠${NC}  ${BOLD}Service not started - manual setup required${NC}"
-        echo ""
-        echo -e "${BOLD}Start service manually:${NC}"
+        echo -e "${GREEN}│${NC} ${YELLOW}⚠${NC}  Service requires manual start"
+        echo -e "${GREEN}│${NC}"
         
         if command -v systemctl >/dev/null 2>&1; then
-            echo -e "  ${CYAN}sudo systemctl start offgrid@${USER}${NC}"
-            echo ""
-            echo -e "${BOLD}Or run directly:${NC}"
+            echo -e "${GREEN}│${NC} ${CYAN}sudo systemctl start offgrid@${USER}${NC}"
+            echo -e "${GREEN}│${NC} ${CYAN}offgrid serve &${NC}"
+        else
+            echo -e "${GREEN}│${NC} ${CYAN}offgrid serve &${NC}"
         fi
         
-        echo -e "  ${CYAN}offgrid serve &${NC}"
         echo ""
-        echo -e "${BOLD}Then try:${NC}"
-        echo -e "  ${CYAN}offgrid search llama --limit 5${NC}"
-        echo -e "  ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF --file Llama-3.2-3B-Instruct-Q4_K_M.gguf${NC}"
-        echo -e "  ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
+        echo -e "${CYAN}${BOLD}└─ Quick Start${NC}"
+        echo -e "   ${CYAN}offgrid search llama --limit 5${NC}"
+        echo -e "   ${CYAN}offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF${NC}"
+        echo -e "   ${CYAN}offgrid run Llama-3.2-3B-Instruct-Q4_K_M${NC}"
+        echo ""
+        echo -e "${CYAN}   Docs:${NC} https://github.com/${REPO}"
     fi
     
-    echo ""
-    echo -e "${BOLD}Documentation:${NC} ${CYAN}https://github.com/${REPO}${NC}"
-    echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
 
