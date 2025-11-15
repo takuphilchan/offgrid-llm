@@ -87,15 +87,14 @@ jobs:
             gpu_flags: "-DGGML_VULKAN=ON"
             cpu_flags: "-march=x86-64-v4"
             
-          # TODO: ARM64 Linux requires cross-compilation or ARM runners
-          # - name: linux-arm64-cpu
-          #   os: ubuntu-22.04
-          #   platform: linux
-          #   arch: arm64
-          #   variant: cpu
-          #   cpu_features: neon
-          #   gpu_flags: ""
-          #   cpu_flags: "-march=armv8-a"
+          - name: linux-arm64-cpu
+            os: ubuntu-22.04
+            platform: linux
+            arch: arm64
+            variant: cpu
+            cpu_features: neon
+            gpu_flags: ""
+            cpu_flags: "-march=armv8-a"
             
           # macOS variants
           - name: darwin-arm64-metal
@@ -185,27 +184,45 @@ jobs:
           cd /tmp/llama.cpp
           mkdir build && cd build
           
-          # For Vulkan builds, we need to be more careful with CPU flags
-          # The shader compiler tools run during build and must be compatible with the runner
-          if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            # Use conservative flags for Vulkan build tools
-            cmake .. \
-              -DBUILD_SHARED_LIBS=OFF \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DGGML_STATIC=ON \
-              -DLLAMA_CURL=OFF \
-              ${{ matrix.gpu_flags }}
-          else
-            # Apply CPU-specific optimizations for CPU-only builds
-            cmake .. \
-              -DBUILD_SHARED_LIBS=OFF \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DGGML_STATIC=ON \
-              -DLLAMA_CURL=OFF \
-              -DCMAKE_C_FLAGS="${{ matrix.cpu_flags }}" \
-              -DCMAKE_CXX_FLAGS="${{ matrix.cpu_flags }}" \
-              ${{ matrix.gpu_flags }}
+          # Detect host architecture and validate CPU flags compatibility
+          HOST_ARCH="$(uname -m)"
+          CPU_FLAGS="${{ matrix.cpu_flags }}"
+          
+          # Only apply CPU flags if they match the host architecture
+          # This prevents passing ARM flags to x86 compilers and vice versa
+          case "$HOST_ARCH" in
+            x86_64|amd64)
+              # Keep flags only if they're x86-related
+              if ! echo "$CPU_FLAGS" | grep -qE 'x86|march=x86-64|haswell|native'; then
+                CPU_FLAGS=""
+              fi
+              ;;
+            aarch64|arm64)
+              # Keep flags only if they're ARM-related
+              if ! echo "$CPU_FLAGS" | grep -qE 'arm|aarch64|armv|apple'; then
+                CPU_FLAGS=""
+              fi
+              ;;
+            *)
+              # Unknown architecture - don't apply flags
+              CPU_FLAGS=""
+              ;;
+          esac
+          
+          # Build CMake command with validated flags
+          CMAKE_ARGS="-DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DGGML_STATIC=ON -DLLAMA_CURL=OFF"
+          
+          if [ -n "$CPU_FLAGS" ]; then
+            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$CPU_FLAGS\" -DCMAKE_CXX_FLAGS=\"$CPU_FLAGS\""
           fi
+          
+          # Add GPU flags if present
+          if [ -n "${{ matrix.gpu_flags }}" ]; then
+            CMAKE_ARGS="$CMAKE_ARGS ${{ matrix.gpu_flags }}"
+          fi
+          
+          # Run cmake
+          eval cmake .. $CMAKE_ARGS
           
           cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) --target llama-server
 
