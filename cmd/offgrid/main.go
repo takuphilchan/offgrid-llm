@@ -239,9 +239,15 @@ func startLlamaServerInBackground(modelPath string) error {
 		threads = 1
 	}
 
+	// Read port from config file, default to 48081
+	port := "48081"
+	if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
+		port = strings.TrimSpace(string(portBytes))
+	}
+
 	// Build command line
-	cmdStr := fmt.Sprintf("%s -m %s --port 8081 --host 127.0.0.1 -t %d -c 4096 --n-gpu-layers 0 -b 512",
-		llamaServerPath, modelPath, threads)
+	cmdStr := fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c 4096 --n-gpu-layers 0 -b 512",
+		llamaServerPath, modelPath, port, threads)
 
 	// Start llama-server in background using shell with nohup
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("nohup %s > /dev/null 2>&1 &", cmdStr))
@@ -2876,12 +2882,18 @@ func handleRun(args []string) {
 		printInfo("Loading model into RAM (first-time: 2-4 seconds)...")
 		printInfo("With daemon mode enabled, this happens only once!")
 
+		// Read llama-server port from config
+		llamaPort := "48081"
+		if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
+			llamaPort = strings.TrimSpace(string(portBytes))
+		}
+
 		// Poll llama-server health endpoint until model is ready
 		maxWait := 60 // seconds
 		for i := 0; i < maxWait; i++ {
 			time.Sleep(1 * time.Second)
 
-			resp, err := http.Get("http://localhost:8081/health")
+			resp, err := http.Get(fmt.Sprintf("http://localhost:%s/health", llamaPort))
 			if err == nil {
 				defer resp.Body.Close()
 				if resp.StatusCode == 200 {
