@@ -426,16 +426,10 @@ EOF
         # Check final status
         if [ "$offgrid_ready" = true ]; then
             log_success "Service started and ready!"
-            echo ""
-            echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
-            echo -e "${CYAN}ℹ${NC} llama-server will start automatically when you run a model" >&2
             echo "1"  # Signal that services are running
             return
         elif systemctl is-active --quiet offgrid@${USER}.service 2>/dev/null; then
             log_success "Service started!"
-            echo ""
-            echo -e "${GREEN}✓${NC} offgrid server running on port 11611" >&2
-            echo -e "${CYAN}ℹ${NC} llama-server will start automatically when you run a model" >&2
             log_warn "Service may take a moment to fully initialize..."
             echo "1"  # Signal that services are running
             return
