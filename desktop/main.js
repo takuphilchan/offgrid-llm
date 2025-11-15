@@ -97,7 +97,7 @@ function startLlamaServer() {
 
   llamaServerProcess = spawn(llamaServerBinary, [
     '--model', modelPath,
-    '--port', '48081',
+    '--port', '42382',
     '--host', '127.0.0.1',
     '-c', '4096',
     '--threads', '4',

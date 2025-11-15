@@ -28,7 +28,7 @@ func NewLlamaEngine() *LlamaEngine {
 			llamaServerURL = fmt.Sprintf("http://127.0.0.1:%s", port)
 		} else {
 			// Final fallback
-			llamaServerURL = "http://127.0.0.1:8081"
+			llamaServerURL = "http://127.0.0.1:42382"
 		}
 	}
 

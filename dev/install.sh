@@ -1195,7 +1195,7 @@ setup_systemd_service() {
     local SERVICE_FILE="/etc/systemd/system/offgrid-llm.service"
     
     # Read the internal llama-server port
-    local LLAMA_PORT=8081
+    local LLAMA_PORT=42382
     if [ -f "/etc/offgrid/llama-port" ]; then
         LLAMA_PORT=$(cat /etc/offgrid/llama-port)
         print_info "Configuring OffGrid to connect to llama-server on port $LLAMA_PORT"

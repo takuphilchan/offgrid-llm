@@ -239,8 +239,8 @@ func startLlamaServerInBackground(modelPath string) error {
 		threads = 1
 	}
 
-	// Read port from config file, default to 48081
-	port := "48081"
+	// Read port from config file, default to 42382
+	port := "42382"
 	if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
 		port = strings.TrimSpace(string(portBytes))
 	}

@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=%i
 Environment="HOME=/home/%i"
-Environment="LLAMA_SERVER_PORT=8081"
+Environment="LLAMA_SERVER_PORT=42382"
 Environment="LLAMA_SERVER_HOST=127.0.0.1"
 ExecStart=/mnt/d/offgrid-llm/scripts/llama-server-start.sh
 Restart=on-failure

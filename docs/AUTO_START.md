@@ -8,7 +8,7 @@ When you install OffGrid LLM using the installer script, a systemd service is au
 
 1. **Start llama-server on boot** - The inference engine starts automatically when your system boots
 2. **Use the first available model** - Automatically loads the smallest GGUF model from `~/.offgrid-llm/models/`
-3. **Run on a secure port** - Uses port `48081` (uncommon, high port) by default
+3. **Run on a secure port** - Uses port `42382` (uncommon, high port) by default
 4. **Restart on failure** - Automatically restarts if the service crashes
 5. **Run as your user** - Runs with your user permissions for security
 
@@ -35,7 +35,7 @@ Or when installing from a USB package using the `install.sh` script.
    - Security hardening enabled
 
 3. **Port Configuration**: `/etc/offgrid/llama-port`
-   - Default: `48081`
+   - Default: `42382`
    - Can be customized
 
 ## Service Management
@@ -97,7 +97,7 @@ To use a different port:
 
 1. Edit the port configuration:
    ```bash
-   echo "8081" | sudo tee /etc/offgrid/llama-port
+   echo "42382" | sudo tee /etc/offgrid/llama-port
    ```
 
 2. Restart the service:
@@ -241,7 +241,7 @@ If you didn't use the installer but want to set up auto-start:
 3. **Configure port**:
    ```bash
    sudo mkdir -p /etc/offgrid
-   echo "48081" | sudo tee /etc/offgrid/llama-port
+   echo "42382" | sudo tee /etc/offgrid/llama-port
    ```
 
 4. **Enable and start**:
@@ -253,7 +253,7 @@ If you didn't use the installer but want to set up auto-start:
 
 ## Security Considerations
 
-### Why Port 48081?
+### Why Port 42382?
 
 - **Uncommon**: Not typically used by other applications
 - **High port**: Above 1024, doesn't require root

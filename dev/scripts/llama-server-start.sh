@@ -2,7 +2,7 @@
 # Start llama-server with the first available model
 
 MODELS_DIR="${HOME}/.offgrid-llm/models"
-PORT=48081  # Uncommon port in high range to avoid conflicts
+PORT=42382  # Uncommon port in high range to avoid conflicts
 
 # Find first .gguf model
 MODEL=$(find "$MODELS_DIR" -name "*.gguf" -type f | sort -h | head -1)

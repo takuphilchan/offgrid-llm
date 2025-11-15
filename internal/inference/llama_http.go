@@ -30,7 +30,7 @@ type LlamaHTTPEngine struct {
 // NewLlamaHTTPEngine creates an engine that proxies to llama.cpp server
 func NewLlamaHTTPEngine(llamaServerURL string) *LlamaHTTPEngine {
 	if llamaServerURL == "" {
-		llamaServerURL = "http://localhost:8081"
+		llamaServerURL = "http://localhost:42382"
 	}
 
 	return &LlamaHTTPEngine{

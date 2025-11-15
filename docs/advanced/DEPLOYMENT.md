@@ -23,7 +23,7 @@ docker build -t offgrid-llm:latest .
 docker run -d \
   --name offgrid-llm \
   -p 11611:11611 \
-  -p 8081:8081 \
+  -p 42382:42382 \
   -v $(pwd)/models:/root/.offgrid/models \
   offgrid-llm:latest
 ```

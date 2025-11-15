@@ -400,8 +400,8 @@ setup_llama_service() {
 # Auto-start script for llama-server
 set -e
 
-# Read port from config, default to 48081
-PORT=48081
+# Read port from config, default to 42382
+PORT=42382
 if [ -f /etc/offgrid/llama-port ]; then
     PORT=$(cat /etc/offgrid/llama-port)
 fi
@@ -471,8 +471,8 @@ SERVICE_EOF
     
     # Create port config directory
     sudo mkdir -p /etc/offgrid
-    echo "48081" | sudo tee /etc/offgrid/llama-port > /dev/null
-    print_success "Configured llama-server port: 48081"
+    echo "42382" | sudo tee /etc/offgrid/llama-port > /dev/null
+    print_success "Configured llama-server port: 42382"
     
     # Enable and start service for current user
     CURRENT_USER=$(whoami)

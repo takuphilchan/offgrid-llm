@@ -182,8 +182,8 @@ if [ "$OS" = "linux" ] && command -v systemctl &> /dev/null; then
 # Auto-start script for llama-server
 set -e
 
-# Read port from config, default to 48081
-PORT=48081
+# Read port from config, default to 42382
+PORT=42382
 if [ -f /etc/offgrid/llama-port ]; then
     PORT=$(cat /etc/offgrid/llama-port)
 fi
@@ -245,7 +245,7 @@ SERVICE_EOF
     
     # Create port config
     sudo mkdir -p /etc/offgrid
-    echo "48081" | sudo tee /etc/offgrid/llama-port > /dev/null
+    echo "42382" | sudo tee /etc/offgrid/llama-port > /dev/null
     
     # Enable service
     CURRENT_USER=$(whoami)
