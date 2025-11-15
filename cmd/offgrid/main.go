@@ -2762,7 +2762,44 @@ func handleRun(args []string) {
 			fmt.Println()
 		}
 		os.Exit(1)
-	} // Check if this is an embedding model (not designed for chat)
+	}
+
+	// Check available RAM before running the model
+	sysResources, err := resource.DetectResources()
+	if err == nil && sysResources.AvailableRAM > 0 {
+		// Estimate RAM requirement for this model
+		requiredRAM := estimateRAMFromModel(modelName, "")
+
+		// Convert available RAM from MB to GB for comparison
+		availableGB := float64(sysResources.AvailableRAM) / 1024.0
+
+		// Show warning if model requires more RAM than available
+		if requiredRAM > 0 && requiredRAM > availableGB {
+			fmt.Println()
+			printWarning(fmt.Sprintf("This model requires ~%.1fGB RAM, but you have ~%.1fGB available", requiredRAM, availableGB))
+			fmt.Println()
+			printInfo("The model may run slowly or fail to load. Consider:")
+			fmt.Println("  • Closing other applications to free memory")
+			fmt.Println("  • Using a smaller model (1B or 3B parameters)")
+			fmt.Println("  • Using a more aggressive quantization (Q2_K or Q3_K)")
+			fmt.Println()
+			printInfo("See docs/4GB_RAM.md for model recommendations")
+			fmt.Println()
+			fmt.Printf("%sContinue anyway?%s (y/N): ", brandMuted, colorReset)
+
+			var response string
+			fmt.Scanln(&response)
+			if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+				fmt.Println()
+				fmt.Printf("%sℹ%s Aborted. Use 'offgrid search --ram %.0f' to find suitable models\n", brandSecondary, colorReset, availableGB)
+				fmt.Println()
+				os.Exit(0)
+			}
+			fmt.Println()
+		}
+	}
+
+	// Check if this is an embedding model (not designed for chat)
 	isEmbeddingModel := strings.Contains(strings.ToLower(modelName), "minilm") ||
 		strings.Contains(strings.ToLower(modelName), "e5-") ||
 		strings.Contains(strings.ToLower(modelName), "bge-") ||
