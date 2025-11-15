@@ -186,26 +186,36 @@ jobs:
           
           # Detect host architecture and validate CPU flags compatibility
           HOST_ARCH="$(uname -m)"
-          CPU_FLAGS="${{ matrix.cpu_flags }}"
+          MATRIX_CPU_FLAGS="${{ matrix.cpu_flags }}"
+          
+          echo "Host architecture: $HOST_ARCH"
+          echo "Matrix CPU flags: $MATRIX_CPU_FLAGS"
+          
+          # Clear CPU_FLAGS by default, only set if compatible
+          CPU_FLAGS=""
           
           # Only apply CPU flags if they match the host architecture
-          # This prevents passing ARM flags to x86 compilers and vice versa
           case "$HOST_ARCH" in
             x86_64|amd64)
-              # Keep flags only if they're x86-related
-              if ! echo "$CPU_FLAGS" | grep -qE 'x86|march=x86-64|haswell|native'; then
-                CPU_FLAGS=""
+              # Only use flags if they're x86-related
+              if echo "$MATRIX_CPU_FLAGS" | grep -qE 'x86|x86-64|v3|v4|haswell|native'; then
+                CPU_FLAGS="$MATRIX_CPU_FLAGS"
+                echo "Using x86 CPU flags: $CPU_FLAGS"
+              else
+                echo "Skipping incompatible CPU flags for x86_64 host"
               fi
               ;;
             aarch64|arm64)
-              # Keep flags only if they're ARM-related
-              if ! echo "$CPU_FLAGS" | grep -qE 'arm|aarch64|armv|apple'; then
-                CPU_FLAGS=""
+              # Only use flags if they're ARM-related
+              if echo "$MATRIX_CPU_FLAGS" | grep -qE 'arm|aarch64|armv|apple'; then
+                CPU_FLAGS="$MATRIX_CPU_FLAGS"
+                echo "Using ARM CPU flags: $CPU_FLAGS"
+              else
+                echo "Skipping incompatible CPU flags for ARM host"
               fi
               ;;
             *)
-              # Unknown architecture - don't apply flags
-              CPU_FLAGS=""
+              echo "Unknown architecture: $HOST_ARCH - skipping CPU flags"
               ;;
           esac
           
@@ -214,6 +224,9 @@ jobs:
           
           if [ -n "$CPU_FLAGS" ]; then
             CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$CPU_FLAGS\" -DCMAKE_CXX_FLAGS=\"$CPU_FLAGS\""
+            echo "CMake will use CPU optimizations: $CPU_FLAGS"
+          else
+            echo "CMake will use default compiler flags (no CPU-specific optimizations)"
           fi
           
           # Add GPU flags if present
@@ -222,6 +235,7 @@ jobs:
           fi
           
           # Run cmake
+          echo "Running: cmake .. $CMAKE_ARGS"
           eval cmake .. $CMAKE_ARGS
           
           cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) --target llama-server
