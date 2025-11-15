@@ -48,6 +48,7 @@ data/
 Thumbs.db
 
 # Build artifacts
+build/
 dist/
 *.dmg
 *.pkg
