@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/batch"
@@ -1227,19 +1226,13 @@ func handleDoctor(args []string) {
 
 	// 6. Check disk space
 	fmt.Printf("%s├─ Disk Space%s\n", brandPrimary+colorBold, colorReset)
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(cfg.ModelsDir, &stat); err == nil {
-		available := stat.Bavail * uint64(stat.Bsize)
-		total := stat.Blocks * uint64(stat.Bsize)
-		used := total - available
-		usedPercent := float64(used) / float64(total) * 100
-
+	if diskInfo, err := getDiskSpace(cfg.ModelsDir); err == nil {
 		fmt.Printf("│  Available: %s / %s (%.1f%% used)\n",
-			formatBytes(int64(available)),
-			formatBytes(int64(total)),
-			usedPercent)
+			formatBytes(diskInfo.Available),
+			formatBytes(diskInfo.Total),
+			diskInfo.UsedPercent)
 
-		if available < 2*1024*1024*1024 { // Less than 2GB
+		if diskInfo.Available < 2*1024*1024*1024 { // Less than 2GB
 			fmt.Printf("│  %s⚠%s Low disk space (<2GB available)\n", brandAccent, colorReset)
 		} else {
 			fmt.Printf("│  %s✓%s Sufficient disk space\n", brandSuccess, colorReset)
@@ -3662,6 +3655,12 @@ func estimateRAMFromModel(modelID string, quant string) float64 {
 
 	// RAM needed = model size * 1.3 (overhead for context, KV cache, etc.)
 	return modelSizeGB * 1.3
+}
+
+type diskSpaceInfo struct {
+	Total       int64
+	Available   int64
+	UsedPercent float64
 }
 
 func formatBytes(bytes int64) string {

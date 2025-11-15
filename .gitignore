@@ -1,5 +1,5 @@
 # Binaries
-offgrid
+/offgrid
 offgrid-*
 *.exe
 *.dll
