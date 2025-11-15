@@ -380,17 +380,14 @@ EOF
         start_services="no"
     else
         # Interactive mode
-        echo "" >&2
         echo -e "${CYAN}${BOLD}Service Configuration${NC}" >&2
-        echo "" >&2
-        read -t 30 -p "Enable services to start on boot? [Y/n] " -n 1 -r 2>/dev/null || REPLY="Y"
+        read -t 30 -p "Enable auto-start on boot? [Y/n] " -n 1 -r 2>/dev/null || REPLY="Y"
         echo >&2
         
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             enable_services="yes"
         fi
         
-        echo "" >&2
         read -t 30 -p "Start services now? [Y/n] " -n 1 -r 2>/dev/null || REPLY="Y"
         echo >&2
         
@@ -473,6 +470,7 @@ print_success() {
         echo -e "${GREEN}│${NC}"
         echo -e "${GREEN}│${NC} ${CYAN}Web UI:${NC}  http://localhost:11611/ui"
         echo -e "${GREEN}│${NC} ${CYAN}API:${NC}     http://localhost:11611"
+        echo -e "${GREEN}│${NC} ${CYAN}ℹ${NC}       llama-server will start automatically when you run a model"
         echo ""
         echo -e "${CYAN}${BOLD}└─ Quick Start${NC}"
         echo -e "   ${CYAN}offgrid search llama --limit 5${NC}"
@@ -481,7 +479,8 @@ print_success() {
         echo ""
         echo -e "${CYAN}   Docs:${NC} https://github.com/${REPO}"
     else
-        echo -e "${GREEN}│${NC} ${YELLOW}⚠${NC}  Service requires manual start"
+        echo -e "${GREEN}│${NC}"
+        echo -e "${GREEN}│${NC} ${YELLOW}⚠${NC}  Service not started - start manually:"
         echo -e "${GREEN}│${NC}"
         
         if command -v systemctl >/dev/null 2>&1; then
