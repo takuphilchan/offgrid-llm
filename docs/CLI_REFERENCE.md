@@ -150,7 +150,14 @@ Search HuggingFace Hub for GGUF models.
 
 **Example:**
 ```bash
-offgrid search llama --author TheBloke --quantization Q4_K_M --limit 5
+**Example:**
+```bash
+offgrid search "llama 7b chat" --limit 5
+```
+
+**Output:**
+```
+Searching HuggingFace Hub...
 ```
 
 **Output:**
@@ -161,7 +168,7 @@ Found 5 GGUF models:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. TheBloke/Llama-2-7B-Chat-GGUF
-   ⏬ 125.4K downloads · ❤️  2.1K likes · 📅 2023-12-15
+   Downloads: 2.5M
    GGUF: Q4_K_M, Q5_K_M, Q6_K, Q8_0
 
 [Download with: offgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF]

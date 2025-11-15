@@ -281,9 +281,9 @@ The systemd service includes:
 
 ## Platform Support
 
-### Linux with systemd
+**Linux (systemd)**
 
-✅ **Fully supported** - All distributions with systemd (Ubuntu, Debian, Fedora, Arch, etc.)
+**Fully supported** - All distributions with systemd (Ubuntu, Debian, Fedora, Arch, etc.)
 
 ### Linux without systemd
 

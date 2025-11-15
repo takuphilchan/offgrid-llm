@@ -154,7 +154,7 @@ offgrid apply-update october-update.tar.gz
 
 ## Implementation Roadmap
 
-### Phase 1: Foundation (Completed ✅)
+### Phase 1: Foundation (Completed)
 - Model registry
 - Basic file management
 - P2P discovery skeleton

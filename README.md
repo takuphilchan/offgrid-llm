@@ -12,18 +12,18 @@
 
 ## Why OffGrid LLM?
 
-✅ **100% Offline** - No internet required after setup  
-✅ **GPU Accelerated** - CUDA, ROCm, Metal, and Vulkan support  
-✅ **OpenAI Compatible** - Drop-in replacement for local inference  
-✅ **Web UI & Desktop App** - Modern interfaces included  
-✅ **Auto-Start Services** - Systemd integration for servers  
-✅ **USB Transfer** - Portable model deployment  
+**100% Offline** - No internet required after setup  
+**GPU Accelerated** - CUDA, ROCm, Metal, and Vulkan support  
+**OpenAI Compatible** - Drop-in replacement for local inference  
+**Web UI & Desktop App** - Modern interfaces included  
+**Auto-Start Services** - Systemd integration for servers  
+**USB Transfer** - Portable model deployment  
 
 ---
 
 ## Installation
 
-### One-Line Install ⚡
+### One-Line Install
 
 **Single command - services start automatically:**
 
@@ -32,12 +32,12 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 ```
 
 **What it does:**
-- ✅ Auto-detects your OS, architecture, and GPU
-- ✅ Downloads optimized bundle from [GitHub releases](https://github.com/takuphilchan/offgrid-llm/releases)
-- ✅ Installs both `offgrid` and `llama-server` binaries
-- ✅ Verifies checksums for security
-- ✅ **Starts services immediately** - ready to use!
-- ✅ Enables auto-start on boot (Linux systemd)
+- Auto-detects your OS, architecture, and GPU
+- Downloads optimized bundle from [GitHub releases](https://github.com/takuphilchan/offgrid-llm/releases)
+- Installs both `offgrid` and `llama-server` binaries
+- Verifies checksums for security
+- **Starts services immediately** - ready to use!
+- Enables auto-start on boot (Linux systemd)
 
 **Installation time:** ~30 seconds  
 **Ready to use:** Immediately after install
@@ -56,7 +56,7 @@ VERSION=v0.1.0 bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/
 
 ---
 
-### Desktop App 🖥️
+### Desktop App
 
 **Download native installers:**
 
@@ -194,7 +194,7 @@ offgrid-llm/
 
 ## Documentation
 
-📚 **[Complete Documentation](docs/README.md)**
+**[Complete Documentation](docs/README.md)**
 
 **Getting Started:**
 - [Installation Guide](docs/INSTALLATION.md)
@@ -300,9 +300,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- 📖 [Documentation](docs/README.md)
-- 🐛 [Issue Tracker](https://github.com/takuphilchan/offgrid-llm/issues)
-- 💬 [Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)
+- [Documentation](docs/README.md)
+- [Issue Tracker](https://github.com/takuphilchan/offgrid-llm/issues)
+- [Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)
 
 ---
 

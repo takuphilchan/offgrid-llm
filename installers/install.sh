@@ -34,9 +34,9 @@ EOF
 }
 
 print_step() { echo -e "${CYAN}[$(date +%H:%M:%S)]${NC} $1"; }
-print_success() { echo -e "${GREEN}✓${NC} $1"; }
-print_error() { echo -e "${RED}✗${NC} $1" >&2; }
-print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
+print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 # Detect platform
 detect_platform() {

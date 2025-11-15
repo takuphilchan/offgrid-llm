@@ -99,8 +99,8 @@ grep -o -E 'avx512|avx2|sse4_2' /proc/cpuinfo | sort -u
 sysctl machdep.cpu.features machdep.cpu.leaf7_features
 
 # Output example:
-# avx2         ✓ Compatible with AVX2 builds
-# avx512f      ✓ Compatible with AVX-512 builds
+# avx2         [Compatible] Compatible with AVX2 builds
+# avx512f      [Compatible] Compatible with AVX-512 builds
 ```
 
 ### Performance Comparison

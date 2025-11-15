@@ -344,8 +344,8 @@ download_url = file_info['download_url']
 
 | Feature | OffGrid LLM | Ollama |
 |---------|-------------|--------|
-| Model Discovery | ✅ Search HuggingFace directly | ❌ Limited to Ollama registry |
-| Model Availability | ✅ 10,000+ GGUF models | ⚠️ ~100 curated models |
+| Model Discovery | [Yes] Search HuggingFace directly | [No] Limited to Ollama registry |
+| Model Availability | [Yes] 10,000+ GGUF models | [Limited] ~100 curated models |
 | New Model Access | ✅ Instant (day of release) | ❌ Wait for approval/upload |
 | Search Filters | ✅ Size, quant, downloads, likes | ⚠️ Limited filtering |
 | API Access | ✅ Full search API | ❌ No search API |

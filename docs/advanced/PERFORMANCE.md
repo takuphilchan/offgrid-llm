@@ -162,11 +162,11 @@ time offgrid run <model-name> <<< "Hello, how are you?"
 ## Summary
 
 **For fastest experience**:
-1. ✅ Use Q4_K_M quantization (best speed/quality balance)
-2. ✅ Enable systemd service for persistent llama-server
-3. ✅ Use optimized flags (automatic in offgrid v0.1.0+)
-4. ✅ Add GPU support if available
-5. ✅ Ensure enough RAM for --mlock
+1. Use Q4_K_M quantization (best speed/quality balance)
+2. Enable systemd service for persistent llama-server
+3. Use optimized flags (automatic in offgrid v0.1.0+)
+4. Add GPU support if available
+5. Ensure enough RAM for --mlock
 
 **Current defaults provide**:
 - 2-4 second first response (vs 8-15 seconds before)
