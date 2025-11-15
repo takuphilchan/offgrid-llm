@@ -59,7 +59,7 @@ sudo apt-get install mesa-vulkan-drivers vulkan-tools
 Install [CUDA Toolkit 12.4+](https://developer.nvidia.com/cuda-downloads)
 
 #### macOS
-- **Apple Silicon**: Metal built-in ✅
+- **Apple Silicon**: Metal built-in [Done]
 - **Intel Mac**: CPU-only
 
 ---

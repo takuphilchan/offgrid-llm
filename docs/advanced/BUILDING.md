@@ -165,7 +165,7 @@ This automatically:
 #### Method 2: Manual Workflow Dispatch
 
 From GitHub:
-1. Go to Actions → Release Build
+1. Go to Actions --> Release Build
 2. Click "Run workflow"
 3. Enter version (e.g., `v0.1.0`)
 4. Click "Run workflow"

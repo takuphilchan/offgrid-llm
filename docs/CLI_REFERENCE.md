@@ -70,7 +70,7 @@ Shows all installed models with sizes and metadata.
 
 **Output:**
 ```
-📦 Installed Models
+[Package] Installed Models
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Found 1 model(s):
@@ -115,7 +115,7 @@ Interactive chat interface with a model.
 Commands: 'exit' to quit, 'clear' to reset conversation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚡ Connecting to inference engine... ✓
+[Lightning] Connecting to inference engine... [OK]
 
 ┌─ You
 │ Hello!
@@ -193,7 +193,7 @@ offgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --file llama-2-7b-chat.Q4_K_M.
 
 **File Selection UI:**
 ```
-📦 TheBloke/Llama-2-7B-Chat-GGUF
+[Package] TheBloke/Llama-2-7B-Chat-GGUF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Found 4 GGUF files:
@@ -221,12 +221,12 @@ Model:  tinyllama-1.1b-chat.Q4_K_M
 Path:   /home/user/.offgrid-llm/models/tinyllama-1.1b-chat.Q4_K_M.gguf
 Size:   637.8 MB will be freed
 
-⚠️  This action cannot be undone. Continue? (y/N):
+[Warning]  This action cannot be undone. Continue? (y/N):
 ```
 
 **After Deletion:**
 ```
-✓ Removed tinyllama-1.1b-chat.Q4_K_M
+[OK] Removed tinyllama-1.1b-chat.Q4_K_M
 
 2 model(s) remaining
 ```
@@ -258,10 +258,10 @@ Found 2 model file(s):
 
 Importing models...
 
-  ✓ tinyllama-1.1b-chat.Q4_K_M.gguf
-  ✓ llama-2-7b-chat.Q5_K_M.gguf
+  [OK] tinyllama-1.1b-chat.Q4_K_M.gguf
+  [OK] llama-2-7b-chat.Q5_K_M.gguf
 
-✓ Imported 2 model(s) to /home/user/.offgrid-llm/models
+[OK] Imported 2 model(s) to /home/user/.offgrid-llm/models
 ```
 
 **Error (Path Not Found):**
@@ -289,7 +289,7 @@ offgrid export tinyllama-1.1b-chat.Q4_K_M /media/usb
 
 **Output:**
 ```
-📦 Export Model
+[Package] Export Model
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Model:  tinyllama-1.1b-chat.Q4_K_M
@@ -299,7 +299,7 @@ Size:   637.8 MB
 
   Progress: 100.0% · 637.8 MB / 637.8 MB
 
-✓ Export complete
+[OK] Export complete
   Location: /media/usb/tinyllama-1.1b-chat.Q4_K_M.gguf
 ```
 
@@ -311,7 +311,7 @@ Benchmark model performance.
 
 **Output:**
 ```
-⚡ Benchmark Model
+[Lightning] Benchmark Model
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Model Information
@@ -348,12 +348,12 @@ Browse curated model catalog.
 📚 Model Catalog
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-tinyllama-1.1b-chat ★
+tinyllama-1.1b-chat [Star]
   TinyLlama 1.1B Chat · 1.1B parameters · 2 GB RAM minimum
   Compact model for low-resource environments
   Variants: Q4_K_M (0.6 GB), Q5_K_M (0.7 GB)
 
-llama-2-7b-chat ★
+llama-2-7b-chat [Star]
   Llama 2 7B Chat · 7B parameters · 8 GB RAM minimum
   Meta's open-source chat model, good balance of quality and size
   Variants: Q4_K_M (3.8 GB), Q5_K_M (4.5 GB)
@@ -512,10 +512,10 @@ curl http://localhost:11611/v1/chat/completions \
 
 ### Icons Used
 - 🚀 Launch/Start
-- ⚡ Speed/Performance
-- ✓ Success
+- [Lightning] Speed/Performance
+- [OK] Success
 - ✗ Error
-- 📦 Package/Model
+- [Package] Package/Model
 - ⏬ Download
 -  Search
 - 🗑️ Delete

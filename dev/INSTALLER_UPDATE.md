@@ -23,10 +23,10 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 ```
 
 ### What Users Get
-✅ **OffGrid LLM** + **llama.cpp** in one command  
-✅ **No manual steps** - everything automated  
-✅ **Verified working** - checks installation  
-✅ **Pretty output** - professional progress display  
+[Done] **OffGrid LLM** + **llama.cpp** in one command  
+[Done] **No manual steps** - everything automated  
+[Done] **Verified working** - checks installation  
+[Done] **Pretty output** - professional progress display  
 
 ### Files Changed
 - `installers/install.sh` - Completely rewritten with auto llama.cpp installation

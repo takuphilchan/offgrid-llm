@@ -287,15 +287,15 @@ The systemd service includes:
 
 ### Linux without systemd
 
-⚠️ **Manual setup required** - Use init.d or your init system
+[Warning] **Manual setup required** - Use init.d or your init system
 
 ### macOS
 
-⚠️ **Not included** - Use `launchd` or run manually. See [macOS Auto-Start Guide](./MACOS_AUTOSTART.md) (coming soon)
+[Warning] **Not included** - Use `launchd` or run manually. See [macOS Auto-Start Guide](./MACOS_AUTOSTART.md) (coming soon)
 
 ### Windows
 
-⚠️ **Not included** - Use Task Scheduler or Windows Services. See [Windows Auto-Start Guide](./WINDOWS_AUTOSTART.md) (coming soon)
+[Warning] **Not included** - Use Task Scheduler or Windows Services. See [Windows Auto-Start Guide](./WINDOWS_AUTOSTART.md) (coming soon)
 
 ## Benefits
 

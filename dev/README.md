@@ -64,7 +64,7 @@ docker-compose up --build
 3. **Test**: `make test` or `go test ./...`
 4. **Run**: `./offgrid version`
 
-## 📦 Building Releases
+## [Package] Building Releases
 
 The CI/CD pipeline (`.github/workflows/release.yml`) automatically builds releases when you push a tag:
 

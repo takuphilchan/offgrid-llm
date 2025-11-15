@@ -74,12 +74,12 @@ offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
 
 **Progress Display:**
 ```
-📦 Fetching model info: TheBloke/Llama-2-7B-Chat-GGUF
+[Package] Fetching model info: TheBloke/Llama-2-7B-Chat-GGUF
 
 📥 Downloading llama-2-7b-chat.Q4_K_M.gguf (3.8 GB)
   Progress: 47.2% (1.8 / 3.8 GB) · 12.3 MB/s
 
-✓ Download complete!
+[OK] Download complete!
   Model saved to: /var/lib/offgrid/models/llama-2-7b-chat.Q4_K_M.gguf
 
   Run with: offgrid run llama-2-7b-chat.Q4_K_M.gguf
@@ -346,12 +346,12 @@ download_url = file_info['download_url']
 |---------|-------------|--------|
 | Model Discovery | [Yes] Search HuggingFace directly | [No] Limited to Ollama registry |
 | Model Availability | [Yes] 10,000+ GGUF models | [Limited] ~100 curated models |
-| New Model Access | ✅ Instant (day of release) | ❌ Wait for approval/upload |
-| Search Filters | ✅ Size, quant, downloads, likes | ⚠️ Limited filtering |
-| API Access | ✅ Full search API | ❌ No search API |
-| CLI Chat | ✅ Built-in (`offgrid run`) | ✅ (`ollama run`) |
-| Benchmarking | ✅ Automated benchmarks | ❌ Manual only |
-| Custom Models | ✅ Any GGUF from anywhere | ⚠️ Manual Modelfile needed |
+| New Model Access | [Done] Instant (day of release) | [Failed] Wait for approval/upload |
+| Search Filters | [Done] Size, quant, downloads, likes | [Warning] Limited filtering |
+| API Access | [Done] Full search API | [Failed] No search API |
+| CLI Chat | [Done] Built-in (`offgrid run`) | [Done] (`ollama run`) |
+| Benchmarking | [Done] Automated benchmarks | [Failed] Manual only |
+| Custom Models | [Done] Any GGUF from anywhere | [Warning] Manual Modelfile needed |
 
 ## Technical Details
 
