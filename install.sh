@@ -90,6 +90,31 @@ detect_arch() {
     esac
 }
 
+# Detect CPU instruction set support
+detect_cpu_features() {
+    local cpu_variant="avx2"
+    
+    if [ "$(uname -s)" = "Linux" ]; then
+        if grep -q "avx512" /proc/cpuinfo 2>/dev/null; then
+            cpu_variant="avx512"
+        elif grep -q "avx2" /proc/cpuinfo 2>/dev/null; then
+            cpu_variant="avx2"
+        else
+            cpu_variant="basic"
+        fi
+    elif [ "$(uname -s)" = "Darwin" ]; then
+        # macOS - check with sysctl
+        if sysctl machdep.cpu.features machdep.cpu.leaf7_features 2>/dev/null | grep -qi "avx512"; then
+            cpu_variant="avx512"
+        else
+            # Most Macs have at least AVX2
+            cpu_variant="avx2"
+        fi
+    fi
+    
+    echo "$cpu_variant"
+}
+
 # Detect GPU support
 detect_gpu() {
     local os="$1"
@@ -144,9 +169,10 @@ download_bundle() {
     local arch="$2"
     local variant="$3"
     local version="$4"
+    local cpu_features="$5"
     
-    # Construct bundle name
-    local bundle_name="offgrid-${version}-${os}-${arch}-${variant}"
+    # Construct bundle name with CPU features
+    local bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
     local ext=".tar.gz"
     [ "$os" = "windows" ] && ext=".zip"
     
@@ -158,23 +184,50 @@ download_bundle() {
     mkdir -p "$tmp_dir"
     cd "$tmp_dir"
     
-    # Download
+    # Download with fallback logic
     if ! curl -fsSL -o "bundle${ext}" "$download_url"; then
-        log_error "Download failed. URL: $download_url"
+        log_warn "Download failed: ${bundle_name}${ext}"
         
-        # Try CPU fallback if GPU version failed
+        # Try CPU variant fallback if GPU version failed
         if [ "$variant" != "cpu" ]; then
-            log_warn "GPU version not available, trying CPU version..."
+            log_warn "Trying CPU version instead..."
             variant="cpu"
-            bundle_name="offgrid-${version}-${os}-${arch}-${variant}"
+            bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
             download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
             
             if ! curl -fsSL -o "bundle${ext}" "$download_url"; then
-                log_error "CPU version download also failed"
-                exit 1
+                log_warn "CPU-${cpu_features} version not available"
+                
+                # Try AVX2 fallback if AVX-512 failed
+                if [ "$cpu_features" = "avx512" ]; then
+                    log_warn "Trying AVX2 version (compatible with most CPUs)..."
+                    cpu_features="avx2"
+                    bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
+                    download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
+                    
+                    if ! curl -fsSL -o "bundle${ext}" "$download_url"; then
+                        log_error "All download attempts failed"
+                        exit 1
+                    fi
+                else
+                    exit 1
+                fi
             fi
         else
-            exit 1
+            # Try AVX2 fallback for CPU variant too
+            if [ "$cpu_features" = "avx512" ]; then
+                log_warn "Trying AVX2 version (compatible with most CPUs)..."
+                cpu_features="avx2"
+                bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
+                download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
+                
+                if ! curl -fsSL -o "bundle${ext}" "$download_url"; then
+                    log_error "All download attempts failed"
+                    exit 1
+                fi
+            else
+                exit 1
+            fi
         fi
     fi
     
@@ -482,8 +535,9 @@ main() {
     OS=$(detect_os)
     ARCH=$(detect_arch)
     VARIANT=$(detect_gpu "$OS")
+    CPU_FEATURES=$(detect_cpu_features)
     
-    log_success "Platform: $OS-$ARCH-$VARIANT"
+    log_success "Platform: $OS-$ARCH-$VARIANT-$CPU_FEATURES"
     
     # Get version
     if [ "$VERSION" = "latest" ]; then
@@ -493,7 +547,7 @@ main() {
     fi
     
     # Download bundle
-    BUNDLE_DIR=$(download_bundle "$OS" "$ARCH" "$VARIANT" "$VERSION")
+    BUNDLE_DIR=$(download_bundle "$OS" "$ARCH" "$VARIANT" "$VERSION" "$CPU_FEATURES")
     
     # Verify checksums
     verify_checksums "$BUNDLE_DIR"

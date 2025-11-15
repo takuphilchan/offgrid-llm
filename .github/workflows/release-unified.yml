@@ -49,27 +49,52 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux variants
-          - name: linux-amd64-cpu
+          # Linux variants - AVX2 (compatible with most CPUs from 2013+)
+          - name: linux-amd64-cpu-avx2
             os: ubuntu-22.04
             platform: linux
             arch: amd64
             variant: cpu
+            cpu_features: avx2
             gpu_flags: ""
+            cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
-          - name: linux-amd64-vulkan
+          - name: linux-amd64-vulkan-avx2
             os: ubuntu-22.04
             platform: linux
             arch: amd64
             variant: vulkan
+            cpu_features: avx2
             gpu_flags: "-DGGML_VULKAN=ON"
+            cpu_flags: "-march=x86-64-v3 -mno-avx512f"
+            
+          # Linux variants - AVX-512 (newer Intel CPUs)
+          - name: linux-amd64-cpu-avx512
+            os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+            variant: cpu
+            cpu_features: avx512
+            gpu_flags: ""
+            cpu_flags: "-march=x86-64-v4"
+            
+          - name: linux-amd64-vulkan-avx512
+            os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+            variant: vulkan
+            cpu_features: avx512
+            gpu_flags: "-DGGML_VULKAN=ON"
+            cpu_flags: "-march=x86-64-v4"
             
           - name: linux-arm64-cpu
             os: ubuntu-22.04
             platform: linux
             arch: arm64
             variant: cpu
+            cpu_features: neon
             gpu_flags: ""
+            cpu_flags: "-march=armv8-a"
             
           # macOS variants
           - name: darwin-arm64-metal
@@ -77,22 +102,28 @@ jobs:
             platform: darwin
             arch: arm64
             variant: metal
+            cpu_features: apple-silicon
             gpu_flags: "-DGGML_METAL=ON"
+            cpu_flags: "-mcpu=apple-m1"
             
           - name: darwin-amd64-cpu
             os: macos-13
             platform: darwin
             arch: amd64
             variant: cpu
+            cpu_features: avx2
             gpu_flags: ""
+            cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
-          # Windows variants (CPU only for now)
+          # Windows variants
           - name: windows-amd64-cpu
             os: windows-latest
             platform: windows
             arch: amd64
             variant: cpu
+            cpu_features: avx2
             gpu_flags: ""
+            cpu_flags: "-march=x86-64-v3 -mno-avx512f"
 
     steps:
       - name: Checkout code
@@ -153,11 +184,17 @@ jobs:
           cd /tmp/llama.cpp
           mkdir build && cd build
           
+          # Set CPU-specific compiler flags
+          export CFLAGS="${{ matrix.cpu_flags }}"
+          export CXXFLAGS="${{ matrix.cpu_flags }}"
+          
           cmake .. \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
             -DGGML_STATIC=ON \
             -DLLAMA_CURL=OFF \
+            -DCMAKE_C_FLAGS="${{ matrix.cpu_flags }}" \
+            -DCMAKE_CXX_FLAGS="${{ matrix.cpu_flags }}" \
             ${{ matrix.gpu_flags }}
           
           cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) --target llama-server
@@ -181,7 +218,7 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          BUNDLE_NAME="offgrid-${VERSION}-${{ matrix.name }}"
+          BUNDLE_NAME="offgrid-${VERSION}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ matrix.cpu_features }}"
           
           mkdir -p "$BUNDLE_NAME"
           
