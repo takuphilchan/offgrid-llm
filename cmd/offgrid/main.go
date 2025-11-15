@@ -2793,27 +2793,27 @@ func handleRun(args []string) {
 	// Check if llama-server is running and start it if needed
 	if err := ensureLlamaServerRunning(); err != nil {
 		fmt.Println()
-		printInfo("Starting llama-server with model...")
-		printInfo("Using optimized flags: --no-mmap --mlock -fa (faster loading)")
+		fmt.Printf("%s┌─ Starting llama-server%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %sModel:%s %s\n", colorDim, colorReset, filepath.Base(model.Path))
+		fmt.Printf("│  %sFlags:%s --no-mmap --mlock -fa (optimized)\n", colorDim, colorReset)
 		fmt.Println()
-		printWarning("TIP: For instant responses, keep llama-server running:")
-		fmt.Printf("  %s$%s sudo systemctl enable --now llama-server\n", brandMuted, colorReset)
+		fmt.Printf("%sℹ Keep server running for instant responses:%s\n", colorDim, colorReset)
+		fmt.Printf("  %ssudo systemctl enable --now llama-server%s\n", brandSecondary, colorReset)
 		fmt.Println()
 		if err := startLlamaServerInBackground(model.Path); err != nil {
 			fmt.Println()
 			printError("Failed to start llama-server")
-			printInfo("Please start llama-server manually:")
-			printItem("Start llama-server", fmt.Sprintf("llama-server -m %s --port 8081 &", model.Path))
+			fmt.Println()
+			fmt.Printf("%sℹ Start manually:%s\n", colorDim, colorReset)
+			fmt.Printf("  %sllama-server -m %s --port 42382 &%s\n", brandSecondary, model.Path, colorReset)
 			fmt.Println()
 			os.Exit(1)
 		}
 		// Wait for llama-server to load the model
-		fmt.Println()
-		printInfo("Loading model into RAM (first-time: 2-4 seconds)...")
-		printInfo("With daemon mode enabled, this happens only once!")
+		fmt.Printf("%sLoading model...%s ", colorDim, colorReset)
 
 		// Read llama-server port from config
-		llamaPort := "48081"
+		llamaPort := "42382"
 		if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
 			llamaPort = strings.TrimSpace(string(portBytes))
 		}
@@ -2833,14 +2833,15 @@ func handleRun(args []string) {
 			}
 
 			if i == maxWait-1 {
+				fmt.Printf("%s✗%s\n", brandError, colorReset)
 				fmt.Println()
 				printError("Timeout waiting for model to load")
 				fmt.Println()
 				os.Exit(1)
 			}
 		}
+		fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
 		fmt.Println()
-		printInfo("Model loaded successfully!")
 	}
 
 	// Setup session management
