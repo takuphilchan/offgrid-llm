@@ -106,7 +106,7 @@ func printSection(title string) {
 	if output.JSONMode {
 		return
 	}
-	fmt.Printf("%s%s%s %s%s\n", brandPrimary, iconDiamond, colorReset, colorBold, title)
+	fmt.Printf("%s%s%s\n", brandPrimary, colorBold, title)
 	fmt.Printf("%s%s%s\n", brandMuted, strings.Repeat(boxH, 50), colorReset)
 }
 
@@ -119,11 +119,11 @@ func printError(message string) {
 }
 
 func printInfo(message string) {
-	fmt.Printf("%s%s%s %s\n", brandPrimary, iconArrow, colorReset, message)
+	fmt.Printf("%sℹ%s %s\n", brandPrimary, colorReset, message)
 }
 
 func printWarning(message string) {
-	fmt.Printf("%s%s%s %s\n", brandAccent, iconBolt, colorReset, message)
+	fmt.Printf("%s⚠%s %s\n", brandAccent, colorReset, message)
 }
 
 func printItem(label, value string) {
@@ -628,9 +628,9 @@ func handleDownload(args []string) {
 	})
 
 	fmt.Println()
-	fmt.Printf("📦 Downloading %s (%s)\n", modelID, quantization)
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
+	fmt.Printf("%s┌─ Downloading Model%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("│ %s%s%s · %s%s%s\n", brandPrimary, modelID, colorReset, brandMuted, quantization, colorReset)
+	fmt.Println("│")
 
 	if err := downloader.Download(modelID, quantization); err != nil {
 		fmt.Fprintf(os.Stderr, "\n  ✗ Download failed: %v\n", err)
@@ -859,21 +859,21 @@ func handleRemove(args []string) {
 
 	// Confirm deletion
 	fmt.Println()
-	fmt.Printf("%s◆ Remove Model%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+	fmt.Printf("%s┌─ Remove Model%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println("│")
 
-	fmt.Printf("%sModel Information%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-	fmt.Printf("  Name:     %s%s%s\n", colorBold, modelID, colorReset)
+	fmt.Printf("│ %sModel Information%s\n", brandPrimary, colorReset)
+	fmt.Printf("│   Name: %s%s%s\n", colorBold, modelID, colorReset)
 	if meta.Path != "" {
-		fmt.Printf("  Path:     %s%s%s\n", brandMuted, meta.Path, colorReset)
+		fmt.Printf("│   Path: %s%s%s\n", brandMuted, meta.Path, colorReset)
 	}
 	if meta.Size > 0 {
-		fmt.Printf("  Size:     %s%s%s will be freed\n", brandSuccess, formatBytes(meta.Size), colorReset)
+		fmt.Printf("│   Size: %s%s%s will be freed\n", brandSuccess, formatBytes(meta.Size), colorReset)
 	}
-	fmt.Println()
-	fmt.Printf("%s⚠  This action cannot be undone%s\n\n", brandError, colorReset)
-	fmt.Printf("%sContinue?%s (y/N): ", brandMuted, colorReset)
+	fmt.Println("│")
+	fmt.Printf("│ %s⚠  This action cannot be undone%s\n", brandError, colorReset)
+	fmt.Println("│")
+	fmt.Printf("└─ %sContinue?%s (y/N): ", brandMuted, colorReset)
 
 	var response string
 	fmt.Scanln(&response)
@@ -896,9 +896,7 @@ func handleRemove(args []string) {
 	}
 
 	fmt.Println()
-	fmt.Printf("%s◆ Model Removed%s\n", brandSuccess, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
-	fmt.Printf("  %s✓%s Removed %s%s%s\n", brandSuccess, colorReset, brandPrimary, modelID, colorReset)
+	fmt.Printf("%s✓ Model removed: %s%s%s\n", brandSuccess, brandPrimary, modelID, colorReset)
 
 	// Rescan to update registry after file deletion
 	if err := registry.ScanModels(); err != nil {
@@ -908,7 +906,7 @@ func handleRemove(args []string) {
 
 	// Show remaining models
 	remaining := registry.ListModels()
-	fmt.Printf("  %s→%s %d model(s) remaining\n\n", brandMuted, colorReset, len(remaining))
+	fmt.Printf("%s%d model(s) remaining%s\n\n", brandMuted, len(remaining), colorReset)
 }
 
 func handleExport(args []string) {
@@ -979,13 +977,13 @@ func handleExport(args []string) {
 	fileName := filepath.Base(meta.Path)
 	destFile := filepath.Join(destPath, fileName)
 
-	fmt.Println("📦 Export Model")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
-	fmt.Printf("Model:  %s\n", modelID)
-	fmt.Printf("From:   %s\n", meta.Path)
-	fmt.Printf("To:     %s\n", destFile)
-	fmt.Printf("Size:   %s\n\n", formatBytes(meta.Size))
+	fmt.Printf("%s┌─ Export Model%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println("│")
+	fmt.Printf("│ Model: %s%s%s\n", brandPrimary, modelID, colorReset)
+	fmt.Printf("│ From:  %s%s%s\n", brandMuted, meta.Path, colorReset)
+	fmt.Printf("│ To:    %s%s%s\n", brandMuted, destFile, colorReset)
+	fmt.Printf("│ Size:  %s\n", formatBytes(meta.Size))
+	fmt.Println("│")
 
 	// Copy file
 	sourceFile, err := os.Open(meta.Path)
@@ -1730,28 +1728,26 @@ func handleQuantize(args []string) {
 	}
 
 	// Print quantization header
-	fmt.Printf("\n%s◆ Quantize Model%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+	fmt.Printf("\n%s┌─ Quantize Model%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println("│")
 
-	fmt.Printf("%sSource Model%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-	fmt.Printf("  Name:         %s%s%s\n", colorBold, modelID, colorReset)
-	fmt.Printf("  Path:         %s%s%s\n", brandMuted, meta.Path, colorReset)
-	fmt.Printf("  Size:         %s%s%s", brandPrimary, formatBytes(meta.Size), colorReset)
+	fmt.Printf("│ %sSource Model%s\n", brandPrimary, colorReset)
+	fmt.Printf("│   Name: %s%s%s\n", colorBold, modelID, colorReset)
+	fmt.Printf("│   Path: %s%s%s\n", brandMuted, meta.Path, colorReset)
+	fmt.Printf("│   Size: %s%s%s", brandPrimary, formatBytes(meta.Size), colorReset)
 	if meta.Quantization != "" {
 		fmt.Printf(" · %s%s%s", brandMuted, meta.Quantization, colorReset)
 	}
 	fmt.Println()
-	fmt.Println()
+	fmt.Println("│")
 
 	quantInfo := models.GetQuantizationInfo(targetQuant)
-	fmt.Printf("%sTarget Quantization%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-	fmt.Printf("  Type:         %s%s%s\n", brandPrimary, targetQuant, colorReset)
-	fmt.Printf("  Bits:         %.1f bits per weight\n", quantInfo.BitsPerWeight)
-	fmt.Printf("  Quality:      %s\n", quantInfo.Description)
-	fmt.Printf("  Output:       %s%s.gguf%s\n", brandMuted, outputName, colorReset)
-	fmt.Println()
+	fmt.Printf("│ %sTarget Quantization%s\n", brandPrimary, colorReset)
+	fmt.Printf("│   Type:    %s%s%s\n", brandPrimary, targetQuant, colorReset)
+	fmt.Printf("│   Bits:    %.1f bits per weight\n", quantInfo.BitsPerWeight)
+	fmt.Printf("│   Quality: %s\n", quantInfo.Description)
+	fmt.Printf("│   Output:  %s%s.gguf%s\n", brandMuted, outputName, colorReset)
+	fmt.Println("│")
 
 	// Check if llama-quantize is available
 	llamaQuantize := "llama-quantize"
@@ -1766,7 +1762,8 @@ func handleQuantize(args []string) {
 	}
 
 	// Run quantization
-	fmt.Printf("%s→%s Starting quantization...\n\n", brandPrimary, colorReset)
+	fmt.Println("└─ Starting quantization...")
+	fmt.Println()
 
 	cmd := exec.Command(llamaQuantize, meta.Path, outputPath, targetQuant)
 
@@ -1803,26 +1800,25 @@ func handleQuantize(args []string) {
 
 	// Display results
 	fmt.Println()
-	fmt.Printf("%s◆ Quantization Complete%s\n", brandSuccess, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
+	fmt.Printf("%s┌─ Quantization Complete%s\n", brandSuccess+colorBold, colorReset)
+	fmt.Println("│")
 
-	fmt.Printf("%sResults%s\n", brandSuccess, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-	fmt.Printf("  Original:     %s\n", formatBytes(meta.Size))
-	fmt.Printf("  Quantized:    %s%s%s\n", brandSuccess, formatBytes(outputStat.Size()), colorReset)
-	fmt.Printf("  Saved:        %s%s%s (%.1fx smaller)\n", brandPrimary, formatBytes(sizeSaved), colorReset, compressionRatio)
-	fmt.Printf("  Time:         %s\n", formatDuration(duration))
+	fmt.Printf("│ %sResults%s\n", brandSuccess, colorReset)
+	fmt.Printf("│   Original:  %s\n", formatBytes(meta.Size))
+	fmt.Printf("│   Quantized: %s%s%s\n", brandSuccess, formatBytes(outputStat.Size()), colorReset)
+	fmt.Printf("│   Saved:     %s%s%s (%.1fx smaller)\n", brandPrimary, formatBytes(sizeSaved), colorReset, compressionRatio)
+	fmt.Printf("│   Time:      %s\n", formatDuration(duration))
+	fmt.Println("│")
+
+	fmt.Printf("│ %sModel Ready%s\n", brandSuccess, colorReset)
+	fmt.Printf("│   Name:     %s%s%s\n", brandPrimary, outputName, colorReset)
+	fmt.Printf("│   Location: %s%s%s\n", brandMuted, outputPath, colorReset)
+	fmt.Println("└─")
 	fmt.Println()
 
-	fmt.Printf("%sModel Ready%s\n", brandSuccess, colorReset)
-	fmt.Printf("  Name:         %s%s%s\n", brandPrimary, outputName, colorReset)
-	fmt.Printf("  Location:     %s%s%s\n", brandMuted, outputPath, colorReset)
-	fmt.Println()
-
-	fmt.Printf("%s◆ Next Steps%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n", brandMuted, colorReset)
-	fmt.Printf("  Test model:   %soffgrid run %s%s\n", brandMuted, outputName, colorReset)
-	fmt.Printf("  Benchmark:    %soffgrid benchmark %s%s\n", brandMuted, outputName, colorReset)
+	fmt.Printf("%sNext Steps%s\n", brandMuted, colorReset)
+	fmt.Printf("  Test model:  %soffgrid run %s%s\n", brandMuted, outputName, colorReset)
+	fmt.Printf("  Benchmark:   %soffgrid benchmark %s%s\n", brandMuted, outputName, colorReset)
 	fmt.Println()
 }
 
@@ -2313,9 +2309,8 @@ func handleSearch(args []string) {
 		model := result.Model
 
 		// Model name with number
-		fmt.Printf("%s%2d.%s %s%s%s %s\n",
+		fmt.Printf("%s%2d.%s %s%s\n",
 			brandMuted, i+1, colorReset,
-			brandPrimary, iconModel, colorReset,
 			colorBold+model.ID+colorReset)
 
 		// Stats line with colors
@@ -2355,8 +2350,8 @@ func handleSearch(args []string) {
 
 		// Download command with color
 		if result.BestVariant != nil {
-			fmt.Printf("     %s→%s %soffgrid download-hf %s --file %s%s\n",
-				brandPrimary, colorReset,
+			fmt.Printf("     %s$%s %soffgrid download-hf %s --file %s%s\n",
+				brandMuted, colorReset,
 				brandMuted, model.ID, result.BestVariant.Filename, colorReset)
 		}
 
@@ -2413,10 +2408,9 @@ func handleDownloadHF(args []string) {
 	hf := models.NewHuggingFaceClient()
 
 	fmt.Println()
-	fmt.Printf("%s◆ Download from HuggingFace%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
-	fmt.Printf("%s→%s Fetching model info: %s%s%s\n", brandPrimary, colorReset, colorBold, modelID, colorReset)
-	fmt.Println()
+	fmt.Printf("%s┌─ Download from HuggingFace%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("│ Fetching model info: %s%s%s\n", colorBold, modelID, colorReset)
+	fmt.Println("│")
 
 	model, err := hf.GetModelInfo(modelID)
 	if err != nil {
@@ -2477,16 +2471,16 @@ func handleDownloadHF(args []string) {
 	if len(ggufFiles) == 1 {
 		selectedFile = ggufFiles[0]
 	} else {
-		fmt.Printf("%sAvailable Files%s\n", brandPrimary, colorReset)
-		fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sAvailable Files%s\n", brandPrimary, colorReset)
 		for i, file := range ggufFiles {
-			fmt.Printf("  %s%d.%s %s (%s%s%s)\n",
+			fmt.Printf("│   %s%d.%s %s (%s%s%s)\n",
 				brandMuted, i+1, colorReset,
 				file.Filename,
 				brandPrimary, file.Quantization, colorReset)
 		}
-		fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-		fmt.Printf("\n%sSelect file%s (1-%d): ", brandMuted, colorReset, len(ggufFiles))
+		fmt.Println("│")
+		fmt.Printf("└─ %sSelect file%s (1-%d): ", brandMuted, colorReset, len(ggufFiles))
 
 		var choice int
 		fmt.Scanf("%d", &choice)
@@ -2507,17 +2501,16 @@ func handleDownloadHF(args []string) {
 		fmt.Println()
 		printWarning("Model already exists")
 		fmt.Println()
-		fmt.Printf("%sExisting Model%s\n", brandPrimary, colorReset)
-		fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-		fmt.Printf("  Name:     %s%s%s\n", colorBold, selectedFile.Filename, colorReset)
-		fmt.Printf("  Location: %s%s%s\n", brandMuted, destPath, colorReset)
+		fmt.Printf("%s┌─ Existing Model%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│   Name:     %s%s%s\n", colorBold, selectedFile.Filename, colorReset)
+		fmt.Printf("│   Location: %s%s%s\n", brandMuted, destPath, colorReset)
 
 		// Get existing file size
 		if fileInfo, err := os.Stat(destPath); err == nil {
-			fmt.Printf("  Size:     %s\n", formatBytes(fileInfo.Size()))
+			fmt.Printf("│   Size:     %s\n", formatBytes(fileInfo.Size()))
 		}
-		fmt.Println()
-		fmt.Printf("%sRedownload and replace?%s (y/N): ", brandMuted, colorReset)
+		fmt.Println("│")
+		fmt.Printf("└─ %sRedownload and replace?%s (y/N): ", brandMuted, colorReset)
 
 		var response string
 		fmt.Scanln(&response)
@@ -2532,14 +2525,13 @@ func handleDownloadHF(args []string) {
 	}
 
 	fmt.Println()
-	fmt.Printf("%sDownloading%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-	fmt.Printf("  File:         %s%s%s\n", colorBold, selectedFile.Filename, colorReset)
+	fmt.Printf("%s┌─ Downloading%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("│   File:         %s%s%s\n", colorBold, selectedFile.Filename, colorReset)
 	if selectedFile.SizeGB > 0 {
-		fmt.Printf("  Size:         %.1f GB\n", selectedFile.SizeGB)
+		fmt.Printf("│   Size:         %.1f GB\n", selectedFile.SizeGB)
 	}
-	fmt.Printf("  Quantization: %s%s%s\n", brandPrimary, selectedFile.Quantization, colorReset)
-	fmt.Println()
+	fmt.Printf("│   Quantization: %s%s%s\n", brandPrimary, selectedFile.Quantization, colorReset)
+	fmt.Println("│")
 
 	// Download with progress
 	startTime := time.Now()
@@ -2580,8 +2572,7 @@ func handleDownloadHF(args []string) {
 			totalStr = fmt.Sprintf("%.1f GB", float64(total)/(1024*1024*1024))
 		}
 
-		fmt.Printf("\r  %s→%s Progress: %.1f%% (%s / %s) · %.1f MB/s  ",
-			brandPrimary, colorReset,
+		fmt.Printf("\r  Progress: %.1f%% (%s / %s) · %.1f MB/s  ",
 			percent,
 			currentStr,
 			totalStr,
@@ -2597,13 +2588,12 @@ func handleDownloadHF(args []string) {
 
 	fmt.Println()
 	fmt.Println()
-	fmt.Printf("%s◆ Download Complete%s\n", brandSuccess, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n\n", brandMuted, colorReset)
-	fmt.Printf("%sModel Ready%s\n", brandSuccess, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", brandMuted, colorReset)
-	fmt.Printf("  Name:     %s%s%s\n", brandPrimary, selectedFile.Filename, colorReset)
-	fmt.Printf("  Location: %s%s%s\n", brandMuted, destPath, colorReset)
-	fmt.Println()
+	fmt.Printf("%s┌─ Download Complete%s\n", brandSuccess+colorBold, colorReset)
+	fmt.Println("│")
+	fmt.Printf("│ %sModel Ready%s\n", brandSuccess, colorReset)
+	fmt.Printf("│   Name:     %s%s%s\n", brandPrimary, selectedFile.Filename, colorReset)
+	fmt.Printf("│   Location: %s%s%s\n", brandMuted, destPath, colorReset)
+	fmt.Println("│")
 
 	// Reload llama-server with the downloaded model
 	if err := reloadLlamaServerWithModel(destPath); err != nil {
@@ -2620,10 +2610,11 @@ func handleDownloadHF(args []string) {
 		modelName = modelName[:len(modelName)-5]
 	}
 
-	fmt.Printf("%s◆ Next Steps%s\n", brandPrimary, colorReset)
-	fmt.Printf("%s──────────────────────────────────────────────────%s\n", brandMuted, colorReset)
-	fmt.Printf("  Run model:    %soffgrid run %s%s\n", brandMuted, modelName, colorReset)
-	fmt.Printf("  Benchmark:    %soffgrid benchmark %s%s\n", brandMuted, modelName, colorReset)
+	fmt.Println("└─")
+	fmt.Println()
+	fmt.Printf("%sNext Steps%s\n", brandMuted, colorReset)
+	fmt.Printf("  Run model: %soffgrid run %s%s\n", brandMuted, modelName, colorReset)
+	fmt.Printf("  Benchmark: %soffgrid benchmark %s%s\n", brandMuted, modelName, colorReset)
 	fmt.Println()
 }
 
@@ -3240,7 +3231,7 @@ func handleAlias(args []string) {
 		fmt.Println()
 		fmt.Printf("%s┌─ Aliases%s\n", brandPrimary+colorBold, colorReset)
 		for alias, modelID := range aliases {
-			fmt.Printf("│  %s%-20s%s → %s\n", brandSecondary, alias, colorReset, modelID)
+			fmt.Printf("│  %s%-20s%s %s·%s %s\n", brandSecondary, alias, colorReset, brandMuted, colorReset, modelID)
 		}
 		fmt.Println()
 
@@ -3258,7 +3249,7 @@ func handleAlias(args []string) {
 			return
 		}
 
-		printSuccess(fmt.Sprintf("Alias '%s' → '%s' created", alias, modelID))
+		printSuccess(fmt.Sprintf("Alias '%s' created for '%s'", alias, modelID))
 
 	case "remove", "rm", "delete":
 		if len(args) < 2 {
@@ -3515,7 +3506,7 @@ func handleBatch(args []string) {
 		}
 	}
 
-	printInfo(fmt.Sprintf("Processing: %s → %s (concurrency=%d)", inputPath, outputPath, concurrency))
+	printInfo(fmt.Sprintf("Processing: %s to %s (concurrency=%d)", inputPath, outputPath, concurrency))
 	fmt.Println()
 
 	// Load config
