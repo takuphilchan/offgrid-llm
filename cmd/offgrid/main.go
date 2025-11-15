@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/batch"
@@ -547,8 +548,14 @@ func main() {
 		command := os.Args[1]
 
 		switch command {
-		case "auto-select", "autoselect":
+		case "auto-select", "autoselect", "recommend":
 			handleAutoSelect(os.Args[2:])
+			return
+		case "doctor", "check", "diagnose":
+			handleDoctor(os.Args[2:])
+			return
+		case "init", "setup":
+			handleInit(os.Args[2:])
 			return
 		case "download":
 			handleDownload(os.Args[2:])
@@ -582,6 +589,15 @@ func main() {
 			return
 		case "catalog":
 			handleCatalog()
+			return
+		case "verify":
+			handleVerify(os.Args[2:])
+			return
+		case "shell-completion":
+			handleShellCompletion(os.Args[2:])
+			return
+		case "export-session":
+			handleExportSession(os.Args[2:])
 			return
 		case "quantization", "quant":
 			handleQuantization()
@@ -1111,6 +1127,314 @@ func handleChat(args []string) {
 	// 2. Read user input in loop
 	// 3. Send requests and stream responses
 	// 4. Handle conversation history
+}
+
+func handleDoctor(args []string) {
+	fmt.Println()
+	fmt.Printf("%s┌─ System Diagnostics%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println("│")
+	fmt.Printf("│ %sRunning comprehensive system checks...%s\n", colorDim, colorReset)
+	fmt.Println()
+
+	allPassed := true
+
+	// 1. Check system resources
+	fmt.Printf("%s├─ Hardware Detection%s\n", brandPrimary+colorBold, colorReset)
+	res, err := resource.DetectResources()
+	if err != nil {
+		fmt.Printf("│  %s✗%s Failed to detect resources: %v\n", brandError, colorReset, err)
+		allPassed = false
+	} else {
+		fmt.Printf("│  %s✓%s System resources detected\n", brandSuccess, colorReset)
+		fmt.Printf("│    OS:       %s/%s\n", res.OS, res.Arch)
+		fmt.Printf("│    CPU:      %d cores\n", res.CPUCores)
+		fmt.Printf("│    RAM:      %s total, %s available\n",
+			formatBytes(res.TotalRAM*1024*1024),
+			formatBytes(res.AvailableRAM*1024*1024))
+		if res.GPUAvailable {
+			fmt.Printf("│    GPU:      %s (%s VRAM)\n", res.GPUName, formatBytes(res.GPUMemory*1024*1024))
+		} else {
+			fmt.Printf("│    GPU:      None (CPU-only mode)\n")
+		}
+	}
+	fmt.Println("│")
+
+	// 2. Check configuration
+	fmt.Printf("%s├─ Configuration%s\n", brandPrimary+colorBold, colorReset)
+	cfg := config.LoadConfig()
+	configPath := filepath.Join(os.Getenv("HOME"), ".offgrid-llm", "config.json")
+	if _, err := os.Stat(configPath); err == nil {
+		fmt.Printf("│  %s✓%s Config file found: %s\n", brandSuccess, colorReset, configPath)
+		fmt.Printf("│    Server Port: %d\n", cfg.ServerPort)
+		fmt.Printf("│    Models Dir:  %s\n", cfg.ModelsDir)
+	} else {
+		fmt.Printf("│  %s⚠%s Using default config (no custom config file)\n", brandAccent, colorReset)
+	}
+	fmt.Println("│")
+
+	// 3. Check models directory
+	fmt.Printf("%s├─ Models Directory%s\n", brandPrimary+colorBold, colorReset)
+	if _, err := os.Stat(cfg.ModelsDir); err == nil {
+		fmt.Printf("│  %s✓%s Directory exists: %s\n", brandSuccess, colorReset, cfg.ModelsDir)
+
+		// Check permissions
+		testFile := filepath.Join(cfg.ModelsDir, ".test_write")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err == nil {
+			os.Remove(testFile)
+			fmt.Printf("│  %s✓%s Write permissions OK\n", brandSuccess, colorReset)
+		} else {
+			fmt.Printf("│  %s✗%s Write permission denied\n", brandError, colorReset)
+			allPassed = false
+		}
+
+		// Count models
+		registry := models.NewRegistry(cfg.ModelsDir)
+		if err := registry.ScanModels(); err == nil {
+			modelList := registry.ListModels()
+			fmt.Printf("│  %s✓%s Found %d installed model(s)\n", brandSuccess, colorReset, len(modelList))
+		}
+	} else {
+		fmt.Printf("│  %s✗%s Directory missing: %s\n", brandError, colorReset, cfg.ModelsDir)
+		fmt.Printf("│    Run: mkdir -p %s\n", cfg.ModelsDir)
+		allPassed = false
+	}
+	fmt.Println("│")
+
+	// 4. Check network connectivity
+	fmt.Printf("%s├─ Network Connectivity%s\n", brandPrimary+colorBold, colorReset)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://huggingface.co")
+	if err == nil && resp.StatusCode == 200 {
+		fmt.Printf("│  %s✓%s HuggingFace Hub reachable\n", brandSuccess, colorReset)
+		resp.Body.Close()
+	} else {
+		fmt.Printf("│  %s⚠%s HuggingFace Hub unreachable (offline mode only)\n", brandAccent, colorReset)
+	}
+	fmt.Println("│")
+
+	// 5. Check server status
+	fmt.Printf("%s├─ OffGrid Server%s\n", brandPrimary+colorBold, colorReset)
+	healthURL := fmt.Sprintf("http://localhost:%d/health", cfg.ServerPort)
+	resp, err = client.Get(healthURL)
+	if err == nil && resp.StatusCode == 200 {
+		fmt.Printf("│  %s✓%s Server running on port %d\n", brandSuccess, colorReset, cfg.ServerPort)
+		resp.Body.Close()
+	} else {
+		fmt.Printf("│  %s⚠%s Server not running\n", brandAccent, colorReset)
+		fmt.Printf("│    Start with: offgrid serve\n")
+	}
+	fmt.Println("│")
+
+	// 6. Check disk space
+	fmt.Printf("%s├─ Disk Space%s\n", brandPrimary+colorBold, colorReset)
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(cfg.ModelsDir, &stat); err == nil {
+		available := stat.Bavail * uint64(stat.Bsize)
+		total := stat.Blocks * uint64(stat.Bsize)
+		used := total - available
+		usedPercent := float64(used) / float64(total) * 100
+
+		fmt.Printf("│  Available: %s / %s (%.1f%% used)\n",
+			formatBytes(int64(available)),
+			formatBytes(int64(total)),
+			usedPercent)
+
+		if available < 2*1024*1024*1024 { // Less than 2GB
+			fmt.Printf("│  %s⚠%s Low disk space (<2GB available)\n", brandAccent, colorReset)
+		} else {
+			fmt.Printf("│  %s✓%s Sufficient disk space\n", brandSuccess, colorReset)
+		}
+	} else {
+		fmt.Printf("│  %s⚠%s Could not check disk space\n", brandAccent, colorReset)
+	}
+	fmt.Println("│")
+
+	// 7. Performance recommendations
+	fmt.Printf("%s└─ Recommendations%s\n", brandPrimary+colorBold, colorReset)
+	if res != nil {
+		ramGB := res.AvailableRAM / 1024
+		if ramGB < 4 {
+			fmt.Println("   • Limited RAM - use 1B-3B models with Q4_K_M quantization")
+			fmt.Println("   • Guide: docs/4GB_RAM.md")
+		} else if ramGB < 8 {
+			fmt.Println("   • 4-8GB RAM - optimal for 3B-7B models")
+		} else {
+			fmt.Println("   • Plenty of RAM - can use 7B-13B models")
+		}
+
+		if !res.GPUAvailable {
+			fmt.Println("   • No GPU detected - see docs/CPU_OPTIMIZATION.md")
+			fmt.Println("   • CPU-only is fine for 1B-7B models")
+		}
+	}
+	fmt.Println()
+
+	if allPassed {
+		fmt.Printf("%s✓ All critical checks passed!%s\n\n", brandSuccess, colorReset)
+	} else {
+		fmt.Printf("%s⚠ Some issues detected - see recommendations above%s\n\n", brandAccent, colorReset)
+	}
+}
+
+func handleInit(args []string) {
+	fmt.Println()
+	fmt.Printf("%s╔══════════════════════════════════════════════════════════╗%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("%s║              OFFGRID LLM - FIRST-TIME SETUP             ║%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("%s╚══════════════════════════════════════════════════════════╝%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println()
+
+	// Check if already initialized
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+	registry.ScanModels()
+	installedModels := registry.ListModels()
+
+	if len(installedModels) > 0 {
+		fmt.Printf("%s✓ Already initialized%s - Found %d model(s)\n\n", brandSuccess, colorReset, len(installedModels))
+		fmt.Println("Available commands:")
+		fmt.Println("  offgrid list          # Show installed models")
+		fmt.Println("  offgrid search        # Find more models")
+		fmt.Println("  offgrid recommend     # Get model suggestions")
+		fmt.Println("  offgrid doctor        # Check system health")
+		fmt.Println()
+		return
+	}
+
+	// Step 1: Detect system
+	fmt.Printf("%s[1/4]%s Detecting your system...\n", brandPrimary, colorReset)
+	res, err := resource.DetectResources()
+	if err != nil {
+		printError(fmt.Sprintf("Failed to detect system: %v", err))
+		os.Exit(1)
+	}
+
+	fmt.Printf("      OS:  %s/%s\n", res.OS, res.Arch)
+	fmt.Printf("      CPU: %d cores\n", res.CPUCores)
+	fmt.Printf("      RAM: %s\n", formatBytes(res.AvailableRAM*1024*1024))
+	if res.GPUAvailable {
+		fmt.Printf("      GPU: %s\n", res.GPUName)
+	} else {
+		fmt.Printf("      GPU: None (CPU mode)\n")
+	}
+	fmt.Println()
+
+	// Step 2: Get recommendations
+	fmt.Printf("%s[2/4]%s Finding models for your system...\n", brandPrimary, colorReset)
+	recommendations := res.RecommendedModels()
+
+	primary := []resource.ModelRecommendation{}
+	for _, rec := range recommendations {
+		if rec.Priority == 1 {
+			primary = append(primary, rec)
+		}
+	}
+
+	if len(primary) == 0 {
+		fmt.Println()
+		printWarning("Your system has limited resources")
+		fmt.Println("\nMinimum requirements:")
+		fmt.Println("  • 2GB RAM available")
+		fmt.Println("  • 2GB free disk space")
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	fmt.Println()
+	fmt.Println("      Recommended models for your system:")
+	for i, rec := range primary {
+		if i >= 3 {
+			break
+		}
+		fmt.Printf("      %d. %s (%s) - %.1fGB\n", i+1, rec.ModelID, rec.Quantization, rec.SizeGB)
+		fmt.Printf("         %s\n", rec.Reason)
+	}
+	fmt.Println()
+
+	// Step 3: Choose model
+	fmt.Printf("%s[3/4]%s Choose a model to download\n", brandPrimary, colorReset)
+	fmt.Printf("      Enter number (1-%d) or 's' to skip: ", len(primary))
+
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	if input == "s" || input == "S" || input == "" {
+		fmt.Println()
+		fmt.Println("Skipped download. You can search models anytime:")
+		fmt.Println("  offgrid search llama")
+		fmt.Println("  offgrid recommend")
+		fmt.Println()
+		return
+	}
+
+	var choice int
+	fmt.Sscanf(input, "%d", &choice)
+	if choice < 1 || choice > len(primary) {
+		printError("Invalid choice")
+		os.Exit(1)
+	}
+
+	selected := primary[choice-1]
+	fmt.Println()
+
+	// Step 4: Download
+	fmt.Printf("%s[4/4]%s Downloading %s...\n\n", brandPrimary, colorReset, selected.ModelID)
+
+	// Search for the model on HuggingFace
+	hf := models.NewHuggingFaceClient()
+	filters := models.SearchFilter{
+		Query:        selected.ModelID,
+		Quantization: selected.Quantization,
+		OnlyGGUF:     true,
+		Limit:        1,
+	}
+
+	results, err := hf.SearchModels(filters)
+	if err != nil || len(results) == 0 {
+		printError("Failed to find model on HuggingFace")
+		fmt.Println()
+		fmt.Println("Search manually:")
+		fmt.Printf("  offgrid search %s\n", selected.ModelID)
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	result := results[0]
+	if result.BestVariant == nil {
+		printError("No suitable variant found")
+		os.Exit(1)
+	}
+
+	// Download the model
+	destPath := filepath.Join(cfg.ModelsDir, result.BestVariant.Filename)
+
+	fmt.Printf("Downloading from: %s\n", result.Model.ID)
+	fmt.Printf("File: %s (%.1fGB)\n\n", result.BestVariant.Filename, result.BestVariant.SizeGB)
+
+	err = hf.DownloadGGUF(result.Model.ID, result.BestVariant.Filename, destPath, func(current, total int64) {
+		percent := float64(current) / float64(total) * 100
+		fmt.Printf("\r  Progress: %.1f%% (%s / %s)  ",
+			percent,
+			formatBytes(current),
+			formatBytes(total))
+	})
+
+	if err != nil {
+		fmt.Println()
+		printHelpfulError(err, "Download")
+		os.Exit(1)
+	}
+
+	fmt.Println()
+	fmt.Println()
+	fmt.Printf("%s✓ Setup complete!%s\n\n", brandSuccess+colorBold, colorReset)
+
+	modelName := strings.TrimSuffix(result.BestVariant.Filename, ".gguf")
+	fmt.Println("Next steps:")
+	fmt.Printf("  offgrid run %s         # Start chatting\n", modelName)
+	fmt.Printf("  offgrid list                 # View installed models\n")
+	fmt.Printf("  offgrid search llama         # Find more models\n")
+	fmt.Println()
 }
 
 func handleAutoSelect(args []string) {
@@ -1894,7 +2218,7 @@ func printHelp() {
 
 	// Model Management
 	fmt.Printf("%s├─ Model Management%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("│  %sauto-select%s          Auto-detect hardware and recommend models\n", brandSecondary, colorReset)
+	fmt.Printf("│  %srecommend%s           Get model recommendations for your system\n", brandSecondary, colorReset)
 	fmt.Printf("│  %slist%s                List installed models\n", brandSecondary, colorReset)
 	fmt.Printf("│  %scatalog%s             Browse available models\n", brandSecondary, colorReset)
 	fmt.Printf("│  %ssearch%s <query>      Search HuggingFace\n", brandSecondary, colorReset)
@@ -1903,7 +2227,6 @@ func printHelp() {
 	fmt.Printf("│  %simport%s <path>       Import from USB/SD card\n", brandSecondary, colorReset)
 	fmt.Printf("│  %sexport%s <id> <dst>   Export to USB/SD card\n", brandSecondary, colorReset)
 	fmt.Printf("│  %sremove%s <id>         Remove installed model\n", brandSecondary, colorReset)
-	fmt.Printf("│  %squantize%s <id> <q>   Quantize model to reduce size\n", brandSecondary, colorReset)
 	fmt.Println("│")
 
 	// Inference & Chat
@@ -1915,26 +2238,32 @@ func printHelp() {
 	fmt.Printf("│  %sbatch%s <file>        Batch process prompts\n", brandSecondary, colorReset)
 	fmt.Println("│")
 
-	// Configuration
-	fmt.Printf("%s├─ Configuration & Tools%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("│  %sversion%s             Show version information\n", brandSecondary, colorReset)
+	// Configuration & Diagnostics
+	fmt.Printf("%s├─ System & Diagnostics%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("│  %sinit%s                First-time setup wizard\n", brandSecondary, colorReset)
+	fmt.Printf("│  %sdoctor%s              Run system diagnostics\n", brandSecondary, colorReset)
 	fmt.Printf("│  %sinfo%s                System information\n", brandSecondary, colorReset)
+	fmt.Printf("│  %sversion%s             Show version information\n", brandSecondary, colorReset)
 	fmt.Printf("│  %sconfig%s <action>     Manage configuration\n", brandSecondary, colorReset)
+	fmt.Printf("│  %sbenchmark%s <id>      Performance testing\n", brandSecondary, colorReset)
+	fmt.Printf("│  %shelp%s                Show this help\n", brandSecondary, colorReset)
+	fmt.Println("│")
+
+	// Utilities
+	fmt.Printf("%s├─ Utilities%s\n", brandPrimary+colorBold, colorReset)
 	fmt.Printf("│  %squantization%s        Quantization guide\n", brandSecondary, colorReset)
 	fmt.Printf("│  %salias%s <cmd>         Model aliases\n", brandSecondary, colorReset)
 	fmt.Printf("│  %sfavorite%s <cmd>      Favorite models\n", brandSecondary, colorReset)
-	fmt.Printf("│  %sbenchmark%s <id>      Performance testing\n", brandSecondary, colorReset)
 	fmt.Printf("│  %scompletions%s <shell>  Shell completions\n", brandSecondary, colorReset)
-	fmt.Printf("│  %shelp%s                Show this help\n", brandSecondary, colorReset)
 	fmt.Println()
 
 	fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("   %soffgrid search llama --author TheBloke%s\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid download tinyllama-1.1b-chat Q4_K_M%s\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF%s\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid run tinyllama-1.1b-chat.Q4_K_M --save project%s\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid import /media/usb%s\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid session list%s\n", colorDim, colorReset)
+	fmt.Printf("   %soffgrid init%s                              # First-time setup\n", colorDim, colorReset)
+	fmt.Printf("   %soffgrid recommend%s                         # Get model suggestions\n", colorDim, colorReset)
+	fmt.Printf("   %soffgrid search llama --ram 4%s              # Find 4GB-compatible models\n", colorDim, colorReset)
+	fmt.Printf("   %soffgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --quant Q4_K_M%s\n", colorDim, colorReset)
+	fmt.Printf("   %soffgrid run tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
+	fmt.Printf("   %soffgrid doctor%s                            # Check system health\n", colorDim, colorReset)
 	fmt.Println()
 }
 
@@ -4072,4 +4401,223 @@ func handleCompletions(args []string) {
 	}
 
 	fmt.Println(script)
+}
+
+func handleVerify(args []string) {
+	if len(args) < 1 {
+		fmt.Println()
+		fmt.Printf("%s┌─ Verify Model Integrity%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid verify <model-name>\n", colorDim, colorReset)
+		fmt.Println()
+		printInfo("Verifies model file integrity using SHA256 checksum")
+		fmt.Println()
+		return
+	}
+
+	modelName := args[0]
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
+
+	if err := registry.ScanModels(); err != nil {
+		printHelpfulError(err, "Scanning models")
+		return
+	}
+
+	meta, err := registry.GetModel(modelName)
+	if err != nil {
+		printError(fmt.Sprintf("Model not found: %s", modelName))
+		fmt.Println()
+		printInfo("Use 'offgrid list' to see available models")
+		fmt.Println()
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("%s┌─ Verifying Model%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("│   Model: %s%s%s\n", colorBold, meta.ID, colorReset)
+	fmt.Printf("│   Path:  %s%s%s\n", colorDim, meta.Path, colorReset)
+	fmt.Println("│")
+
+	validator := models.NewValidator(cfg.ModelsDir)
+	result, err := validator.ValidateModel(meta.Path)
+	if err != nil {
+		printHelpfulError(err, "Validation")
+		return
+	}
+
+	if result.Valid {
+		fmt.Printf("│   %s✓ Valid GGUF Model%s\n", brandSuccess, colorReset)
+	} else {
+		fmt.Printf("│   %s✗ Invalid Model%s\n", brandError, colorReset)
+	}
+
+	fmt.Printf("│   Size: %s\n", formatBytes(result.FileSize))
+	if result.SHA256Hash != "" {
+		fmt.Printf("│   SHA256: %s%s%s\n", colorDim, result.SHA256Hash, colorReset)
+	}
+
+	if len(result.Errors) > 0 {
+		fmt.Println("│")
+		fmt.Printf("│   %sErrors:%s\n", brandError, colorReset)
+		for _, err := range result.Errors {
+			fmt.Printf("│     • %s\n", err)
+		}
+	}
+
+	if len(result.Warnings) > 0 {
+		fmt.Println("│")
+		fmt.Printf("│   %sWarnings:%s\n", brandAccent, colorReset)
+		for _, warn := range result.Warnings {
+			fmt.Printf("│     • %s\n", warn)
+		}
+	}
+
+	fmt.Println("└─")
+	fmt.Println()
+}
+
+func handleShellCompletion(args []string) {
+	if len(args) < 1 {
+		fmt.Println()
+		fmt.Printf("%s┌─ Shell Completions%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid shell-completion <shell>\n", colorDim, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sSupported shells:%s bash, zsh, fish\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s├─ Installation%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Println("  Bash:")
+		fmt.Printf("   %s$ offgrid shell-completion bash > /etc/bash_completion.d/offgrid%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Println("  Zsh:")
+		fmt.Printf("   %s$ offgrid shell-completion zsh > ~/.zsh/completions/_offgrid%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Println("  Fish:")
+		fmt.Printf("   %s$ offgrid shell-completion fish > ~/.config/fish/completions/offgrid.fish%s\n", colorDim, colorReset)
+		fmt.Println()
+		return
+	}
+
+	shell := strings.ToLower(args[0])
+
+	// Call the existing completions handler
+	handleCompletions([]string{shell})
+}
+
+func handleExportSession(args []string) {
+	if len(args) < 1 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+		fmt.Println()
+		fmt.Printf("%s┌─ Export Session%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid export-session <session-name> [options]\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%s├─ Options%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %s--format <type>%s   Output format: markdown, json, txt (default: markdown)\n", brandSecondary, colorReset)
+		fmt.Printf("│  %s--output <file>%s   Output file (default: stdout)\n", brandSecondary, colorReset)
+		fmt.Println()
+		printInfo("Exports chat session for documentation or research papers")
+		fmt.Println()
+		return
+	}
+
+	sessionName := args[0]
+	format := "markdown"
+	outputFile := ""
+
+	// Parse options
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--format" && i+1 < len(args) {
+			format = args[i+1]
+			i++
+		} else if args[i] == "--output" && i+1 < len(args) {
+			outputFile = args[i+1]
+			i++
+		}
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	sessionsDir := filepath.Join(homeDir, ".offgrid", "sessions")
+	sessionMgr := sessions.NewSessionManager(sessionsDir)
+
+	session, err := sessionMgr.Load(sessionName)
+	if err != nil {
+		printHelpfulError(err, "Loading session")
+		return
+	}
+
+	var output string
+	switch format {
+	case "markdown", "md":
+		output = exportSessionMarkdown(session)
+	case "json":
+		data, err := json.MarshalIndent(session, "", "  ")
+		if err != nil {
+			printHelpfulError(err, "Exporting to JSON")
+			return
+		}
+		output = string(data)
+	case "txt", "text":
+		output = exportSessionText(session)
+	default:
+		printError(fmt.Sprintf("Unknown format: %s", format))
+		fmt.Println()
+		printInfo("Supported formats: markdown, json, txt")
+		fmt.Println()
+		return
+	}
+
+	if outputFile != "" {
+		if err := os.WriteFile(outputFile, []byte(output), 0644); err != nil {
+			printHelpfulError(err, "Writing output file")
+			return
+		}
+		fmt.Println()
+		printSuccess(fmt.Sprintf("Session exported to %s", outputFile))
+		fmt.Println()
+	} else {
+		fmt.Println(output)
+	}
+}
+
+func exportSessionMarkdown(session *sessions.Session) string {
+	var sb strings.Builder
+
+	sb.WriteString("# Chat Session: " + session.Name + "\n\n")
+	sb.WriteString("**Model:** " + session.ModelID + "  \n")
+	sb.WriteString("**Created:** " + session.CreatedAt.Format("2006-01-02 15:04:05") + "  \n")
+	sb.WriteString("**Updated:** " + session.UpdatedAt.Format("2006-01-02 15:04:05") + "  \n")
+	sb.WriteString("\n---\n\n")
+
+	for _, msg := range session.Messages {
+		if msg.Role == "user" {
+			sb.WriteString("### User\n\n")
+		} else {
+			sb.WriteString("### Assistant\n\n")
+		}
+		sb.WriteString(msg.Content + "\n\n")
+	}
+
+	return sb.String()
+}
+
+func exportSessionText(session *sessions.Session) string {
+	var sb strings.Builder
+
+	sb.WriteString("Chat Session: " + session.Name + "\n")
+	sb.WriteString("Model: " + session.ModelID + "\n")
+	sb.WriteString("Created: " + session.CreatedAt.Format("2006-01-02 15:04:05") + "\n")
+	sb.WriteString(strings.Repeat("=", 60) + "\n\n")
+
+	for _, msg := range session.Messages {
+		if msg.Role == "user" {
+			sb.WriteString("[USER]\n")
+		} else {
+			sb.WriteString("[ASSISTANT]\n")
+		}
+		sb.WriteString(msg.Content + "\n\n")
+	}
+
+	return sb.String()
 }
