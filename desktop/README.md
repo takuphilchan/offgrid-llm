@@ -1,52 +1,38 @@
-# OffGrid LLM Desktop Application
+# OffGrid LLM Desktop App
 
-Desktop application for OffGrid LLM using Electron.
+Native desktop application for OffGrid LLM using Tauri.
 
 ## Features
+- Native system tray integration
+- Auto-start with system (optional)
+- Native notifications
+- Lightweight (Rust backend + webview)
+- Cross-platform (Linux, macOS, Windows)
 
-- Native desktop app (Windows, macOS, Linux)
-- Auto-starts OffGrid and llama-server
-- Uses your existing web UI
-- Native file dialogs
-- System tray integration
+## Building
 
-## Development
+### Prerequisites
+```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-### Install
+# Install Tauri CLI
+cargo install tauri-cli
 
+# Install system dependencies (Linux)
+sudo apt install libwebkit2gtk-4.0-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+### Build Desktop App
 ```bash
 cd desktop
-npm install
+npm install  # or pnpm install
+npm run tauri build
 ```
 
-### Run
-
+## Development
 ```bash
-npm start
+npm run tauri dev
 ```
 
-### Build
-
-```bash
-# Package for current platform
-npm run pack
-
-# Build distributable
-npm run dist
-```
-
-## Structure
-
-- `main.js` - Electron main process (starts servers, creates window)
-- `preload.js` - Electron preload (exposes safe APIs to UI)
-- `index.html` - Your existing web UI
-- `package.json` - Config and dependencies
-
-## How It Works
-
-1. Starts llama-server (if available)
-2. Starts OffGrid server
-3. Opens window with your UI
-4. UI connects to http://localhost:11611
-
-Simple and clean - no React overhead!
+The app will connect to the OffGrid server running on localhost:11611.
