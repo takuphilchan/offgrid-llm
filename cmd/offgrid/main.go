@@ -3384,6 +3384,10 @@ func handleRun(args []string) {
 		os.Exit(1)
 	}
 	resp.Body.Close()
+
+	// Give server a moment to be fully ready (especially after model load)
+	time.Sleep(1 * time.Second)
+
 	fmt.Printf(" %s✓%s\n", brandSuccess, colorReset)
 
 	// Check which model is currently loaded in the server
@@ -3445,22 +3449,47 @@ func handleRun(args []string) {
 				}
 
 				maxWait := 60
+				modelReady := false
 				for i := 0; i < maxWait; i++ {
 					time.Sleep(1 * time.Second)
+
+					// Check health endpoint
 					resp, err := http.Get(fmt.Sprintf("http://localhost:%s/health", llamaPort))
-					if err == nil && resp.StatusCode == http.StatusOK {
-						resp.Body.Close()
+					if err != nil {
+						continue
+					}
+					resp.Body.Close()
+
+					if resp.StatusCode != http.StatusOK {
+						continue
+					}
+
+					// Health is OK, now verify model is actually loaded
+					time.Sleep(500 * time.Millisecond) // Brief pause for model to fully initialize
+					modelsResp, err := http.Get(fmt.Sprintf("http://localhost:%s/v1/models", llamaPort))
+					if err == nil && modelsResp.StatusCode == http.StatusOK {
+						modelsResp.Body.Close()
+						modelReady = true
 						fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
+						// Additional wait to ensure model is fully ready to serve requests
+						time.Sleep(2 * time.Second)
 						break
 					}
-					if err != nil {
-						resp.Body.Close()
+					if modelsResp != nil {
+						modelsResp.Body.Close()
 					}
+
 					if i == maxWait-1 {
 						fmt.Printf("%s✗%s\n", brandError, colorReset)
 						printError("Model failed to load in time")
 						os.Exit(1)
 					}
+				}
+
+				if !modelReady {
+					fmt.Printf("%s✗%s\n", brandError, colorReset)
+					printError("Model failed to load")
+					os.Exit(1)
 				}
 				fmt.Println()
 			}
