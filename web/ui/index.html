@@ -258,6 +258,9 @@ offgrid doctor               # System diagnostics</code></pre>
                 });
             } catch (error) {
                 console.error('Failed to load models:', error);
+                console.error('Response:', error);
+                const select = document.getElementById('chatModelSelect');
+                select.innerHTML = '<option value="">⚠ Failed to load models</option>';
             }
         }
 
@@ -474,6 +477,7 @@ offgrid doctor               # System diagnostics</code></pre>
         });
 
         document.getElementById('tab-chat').addEventListener('click', loadModelsForChat);
+        loadModelsForChat();
         loadSystemHealth();
         setInterval(loadSystemHealth, 5000);
     </script>
