@@ -4719,240 +4719,285 @@ func exportSessionText(session *sessions.Session) string {
 }
 
 func handleBenchmarkCompare(args []string) {
-if len(args) < 2 {
-fmt.Println()
-fmt.Printf("%s┌─ Benchmark Compare%s\n", brandPrimary+colorBold, colorReset)
-fmt.Println("│")
-fmt.Printf("│ %sUsage:%s offgrid benchmark-compare <model1> <model2> [model3...] [--iterations N]\n", colorDim, colorReset)
-fmt.Println("│")
-fmt.Println("│ Compare performance across multiple models")
-fmt.Println()
-fmt.Printf("%s├─ Options%s\n", brandPrimary+colorBold, colorReset)
-fmt.Printf("│  %s--iterations N%s     Number of test iterations (default: 3)\n", brandSecondary, colorReset)
-fmt.Printf("│  %s--prompt \"text\"%s   Custom prompt for comparison\n", brandSecondary, colorReset)
-fmt.Println()
-fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
-fmt.Printf("   %soffgrid compare tinyllama-1.1b phi-2%s\n", colorDim, colorReset)
-fmt.Printf("   %soffgrid compare llama-2-7b mistral-7b phi-2 --iterations 5%s\n", colorDim, colorReset)
-fmt.Println()
-os.Exit(1)
-}
+	if len(args) < 2 {
+		fmt.Println()
+		fmt.Printf("%s┌─ Benchmark Compare%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("│")
+		fmt.Printf("│ %sUsage:%s offgrid benchmark-compare <model1> <model2> [model3...] [--iterations N]\n", colorDim, colorReset)
+		fmt.Println("│")
+		fmt.Println("│ Compare performance across multiple models")
+		fmt.Println()
+		fmt.Printf("%s├─ Options%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("│  %s--iterations N%s     Number of test iterations (default: 3)\n", brandSecondary, colorReset)
+		fmt.Printf("│  %s--prompt \"text\"%s   Custom prompt for comparison\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid compare tinyllama-1.1b phi-2%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid compare llama-2-7b mistral-7b phi-2 --iterations 5%s\n", colorDim, colorReset)
+		fmt.Println()
+		os.Exit(1)
+	}
 
-cfg := config.LoadConfig()
-registry := models.NewRegistry(cfg.ModelsDir)
+	cfg := config.LoadConfig()
+	registry := models.NewRegistry(cfg.ModelsDir)
 
-if err := registry.ScanModels(); err != nil {
-fmt.Fprintf(os.Stderr, "✗ Error scanning models: %v\n\n", err)
-os.Exit(1)
-}
+	if err := registry.ScanModels(); err != nil {
+		fmt.Fprintf(os.Stderr, "✗ Error scanning models: %v\n\n", err)
+		os.Exit(1)
+	}
 
-// Parse arguments
-var modelIDs []string
-iterations := 3
-customPrompt := ""
+	// Parse arguments
+	var modelIDs []string
+	iterations := 3
+	customPrompt := ""
 
-for i := 0; i < len(args); i++ {
-if args[i] == "--iterations" && i+1 < len(args) {
-fmt.Sscanf(args[i+1], "%d", &iterations)
-i++
-} else if args[i] == "--prompt" && i+1 < len(args) {
-customPrompt = args[i+1]
-i++
-} else if !strings.HasPrefix(args[i], "--") {
-modelIDs = append(modelIDs, args[i])
-}
-}
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--iterations" && i+1 < len(args) {
+			fmt.Sscanf(args[i+1], "%d", &iterations)
+			i++
+		} else if args[i] == "--prompt" && i+1 < len(args) {
+			customPrompt = args[i+1]
+			i++
+		} else if !strings.HasPrefix(args[i], "--") {
+			modelIDs = append(modelIDs, args[i])
+		}
+	}
 
-if len(modelIDs) < 2 {
-printError("Need at least 2 models to compare")
-os.Exit(1)
-}
+	if len(modelIDs) < 2 {
+		printError("Need at least 2 models to compare")
+		os.Exit(1)
+	}
 
-// Check if server is running
-serverURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort)
-if !isServerHealthy(serverURL) {
-fmt.Printf("%sError: Server not running%s\n", colorRed, colorReset)
-fmt.Printf("Start server first: %soffgrid serve%s\n\n", brandSecondary, colorReset)
-os.Exit(1)
-}
+	// Check if server is running
+	serverURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort)
+	if !isServerHealthy(serverURL) {
+		fmt.Printf("%sError: Server not running%s\n", colorRed, colorReset)
+		fmt.Printf("Start server first: %soffgrid serve%s\n\n", brandSecondary, colorReset)
+		os.Exit(1)
+	}
 
-// Default benchmark prompt
-benchPrompt := "Write a short story about a robot learning to paint."
-if customPrompt != "" {
-benchPrompt = customPrompt
-}
+	// Default benchmark prompt
+	benchPrompt := "Write a short story about a robot learning to paint."
+	if customPrompt != "" {
+		benchPrompt = customPrompt
+	}
 
-fmt.Println()
-fmt.Printf("%s┌─ Benchmark Comparison%s\n", brandPrimary+colorBold, colorReset)
-fmt.Printf("│  Comparing %d models with %d iterations each\n", len(modelIDs), iterations)
-fmt.Println()
+	fmt.Println()
+	fmt.Printf("%s┌─ Benchmark Comparison%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Printf("│  Comparing %d models with %d iterations each\n", len(modelIDs), iterations)
 
-type BenchResult struct {
-ModelID     string
-AvgSpeed    float64
-AvgLatency  time.Duration
-MinSpeed    float64
-MaxSpeed    float64
-Size        int64
-Quant       string
-Failed      bool
-}
+	// Test if inference backend is working with first model
+	testPayload := fmt.Sprintf(`{"model":"%s","prompt":"test","max_tokens":1}`, modelIDs[0])
+	testResp, testErr := http.Post(
+		serverURL+"/v1/completions",
+		"application/json",
+		bytes.NewBuffer([]byte(testPayload)),
+	)
+	if testErr == nil {
+		defer testResp.Body.Close()
+		testBody, _ := io.ReadAll(testResp.Body)
+		var testResult map[string]interface{}
+		if json.Unmarshal(testBody, &testResult) == nil {
+			if errObj, ok := testResult["error"].(map[string]interface{}); ok {
+				if msg, ok := errObj["message"].(string); ok {
+					if strings.Contains(msg, "llama-server") || strings.Contains(msg, "connection refused") {
+						fmt.Println("│")
+						fmt.Printf("│  %s⚠ Warning:%s llama-server backend not running\n", colorYellow, colorReset)
+						fmt.Printf("│  %sBenchmark will show API latency only (no actual inference)%s\n", colorDim, colorReset)
+					}
+				}
+			}
+		}
+	}
+	fmt.Println()
 
-results := make([]BenchResult, 0, len(modelIDs))
+	type BenchResult struct {
+		ModelID    string
+		AvgSpeed   float64
+		AvgLatency time.Duration
+		MinSpeed   float64
+		MaxSpeed   float64
+		Size       int64
+		Quant      string
+		Failed     bool
+	}
 
-for _, modelID := range modelIDs {
-fmt.Printf("%s├─ Testing: %s%s\n", brandPrimary, modelID, colorReset)
+	results := make([]BenchResult, 0, len(modelIDs))
 
-meta, err := registry.GetModel(modelID)
-if err != nil {
-fmt.Printf("│  %s✗ Model not found%s\n", colorRed, colorReset)
-results = append(results, BenchResult{ModelID: modelID, Failed: true})
-continue
-}
+	for _, modelID := range modelIDs {
+		fmt.Printf("%s├─ Testing: %s%s\n", brandPrimary, modelID, colorReset)
 
-var (
-totalLatency time.Duration
-tokensPerSec []float64
-)
+		meta, err := registry.GetModel(modelID)
+		if err != nil {
+			fmt.Printf("│  %s✗ Model not found%s\n", colorRed, colorReset)
+			results = append(results, BenchResult{ModelID: modelID, Failed: true})
+			continue
+		}
 
-for i := 0; i < iterations; i++ {
-fmt.Printf("│  [%d/%d] ", i+1, iterations)
+		var (
+			totalLatency time.Duration
+			tokensPerSec []float64
+		)
 
-startTime := time.Now()
+		for i := 0; i < iterations; i++ {
+			fmt.Printf("│  [%d/%d] ", i+1, iterations)
 
-reqBody := map[string]interface{}{
-"model":       modelID,
-"prompt":      benchPrompt,
-"max_tokens":  100,
-"temperature": 0.7,
-"stream":      false,
-}
+			startTime := time.Now()
 
-jsonData, _ := json.Marshal(reqBody)
-resp, err := http.Post(
-serverURL+"/v1/completions",
-"application/json",
-bytes.NewBuffer(jsonData),
-)
+			reqBody := map[string]interface{}{
+				"model":       modelID,
+				"prompt":      benchPrompt,
+				"max_tokens":  100,
+				"temperature": 0.7,
+				"stream":      false,
+			}
 
-if err != nil {
-fmt.Printf("%s✗%s\n", colorRed, colorReset)
-continue
-}
+			jsonData, _ := json.Marshal(reqBody)
+			resp, err := http.Post(
+				serverURL+"/v1/completions",
+				"application/json",
+				bytes.NewBuffer(jsonData),
+			)
 
-body, _ := io.ReadAll(resp.Body)
-resp.Body.Close()
+			if err != nil {
+				fmt.Printf("%s✗%s\n", colorRed, colorReset)
+				continue
+			}
 
-var result map[string]interface{}
-if err := json.Unmarshal(body, &result); err != nil {
-fmt.Printf("%s✗%s\n", colorRed, colorReset)
-continue
-}
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
 
-latency := time.Since(startTime)
-tokenCount := 0
+			var result map[string]interface{}
+			if err := json.Unmarshal(body, &result); err != nil {
+				fmt.Printf("%s✗%s Parse error\n", colorRed, colorReset)
+				continue
+			}
 
-if usage, ok := result["usage"].(map[string]interface{}); ok {
-if ct, ok := usage["completion_tokens"].(float64); ok {
-tokenCount = int(ct)
-}
-}
+			// Check for API error response
+			if errObj, ok := result["error"].(map[string]interface{}); ok {
+				errMsg := "API error"
+				if msg, ok := errObj["message"].(string); ok {
+					// Shorten error message
+					if len(msg) > 50 {
+						errMsg = msg[:50] + "..."
+					} else {
+						errMsg = msg
+					}
+				}
+				fmt.Printf("%s✗%s %s\n", colorRed, colorReset, errMsg)
+				continue
+			}
 
-totalLatency += latency
-tps := float64(tokenCount) / latency.Seconds()
-tokensPerSec = append(tokensPerSec, tps)
+			latency := time.Since(startTime)
+			tokenCount := 0
 
-fmt.Printf("%s✓%s %.1f tok/s\n", colorGreen, colorReset, tps)
-}
+			if usage, ok := result["usage"].(map[string]interface{}); ok {
+				if ct, ok := usage["completion_tokens"].(float64); ok {
+					tokenCount = int(ct)
+				}
+			}
 
-if len(tokensPerSec) == 0 {
-results = append(results, BenchResult{ModelID: modelID, Failed: true})
-continue
-}
+			// If no tokens were generated, this iteration failed
+			if tokenCount == 0 {
+				fmt.Printf("%s✗%s No tokens generated\n", colorRed, colorReset)
+				continue
+			}
 
-avgLatency := totalLatency / time.Duration(len(tokensPerSec))
-avgTPS := 0.0
-minTPS := tokensPerSec[0]
-maxTPS := tokensPerSec[0]
+			totalLatency += latency
+			tps := float64(tokenCount) / latency.Seconds()
+			tokensPerSec = append(tokensPerSec, tps)
 
-for _, tps := range tokensPerSec {
-avgTPS += tps
-if tps < minTPS {
-minTPS = tps
-}
-if tps > maxTPS {
-maxTPS = tps
-}
-}
-avgTPS /= float64(len(tokensPerSec))
+			fmt.Printf("%s✓%s %.1f tok/s\n", colorGreen, colorReset, tps)
+		}
 
-results = append(results, BenchResult{
-ModelID:    modelID,
-AvgSpeed:   avgTPS,
-AvgLatency: avgLatency,
-MinSpeed:   minTPS,
-MaxSpeed:   maxTPS,
-Size:       meta.Size,
-Quant:      meta.Quantization,
-})
+		if len(tokensPerSec) == 0 {
+			results = append(results, BenchResult{ModelID: modelID, Failed: true})
+			continue
+		}
 
-fmt.Printf("│  %sAverage: %.1f tok/s%s\n", colorDim, avgTPS, colorReset)
-fmt.Println("│")
-}
+		avgLatency := totalLatency / time.Duration(len(tokensPerSec))
+		avgTPS := 0.0
+		minTPS := tokensPerSec[0]
+		maxTPS := tokensPerSec[0]
 
-// Display comparison table
-fmt.Printf("%s└─ Comparison Results%s\n", brandPrimary+colorBold, colorReset)
-fmt.Println()
+		for _, tps := range tokensPerSec {
+			avgTPS += tps
+			if tps < minTPS {
+				minTPS = tps
+			}
+			if tps > maxTPS {
+				maxTPS = tps
+			}
+		}
+		avgTPS /= float64(len(tokensPerSec))
 
-// Sort by speed (descending)
-for i := 0; i < len(results); i++ {
-for j := i + 1; j < len(results); j++ {
-if results[j].AvgSpeed > results[i].AvgSpeed {
-results[i], results[j] = results[j], results[i]
-}
-}
-}
+		results = append(results, BenchResult{
+			ModelID:    modelID,
+			AvgSpeed:   avgTPS,
+			AvgLatency: avgLatency,
+			MinSpeed:   minTPS,
+			MaxSpeed:   maxTPS,
+			Size:       meta.Size,
+			Quant:      meta.Quantization,
+		})
 
-// Print header
-fmt.Printf("   %s%-30s  %10s  %12s  %10s  %8s%s\n", 
-colorDim, "Model", "Speed", "Latency", "Range", "Size", colorReset)
-fmt.Println("   " + strings.Repeat("─", 85))
+		fmt.Printf("│  %sAverage: %.1f tok/s%s\n", colorDim, avgTPS, colorReset)
+		fmt.Println("│")
+	}
 
-fastest := results[0].AvgSpeed
-for i, r := range results {
-if r.Failed {
-fmt.Printf("   %-30s  %s%10s%s\n", r.ModelID, colorRed, "FAILED", colorReset)
-continue
-}
+	// Display comparison table
+	fmt.Printf("%s└─ Comparison Results%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println()
 
-rank := ""
-if i == 0 {
-rank = colorGreen + "★ " + colorReset
-}
+	// Sort by speed (descending)
+	for i := 0; i < len(results); i++ {
+		for j := i + 1; j < len(results); j++ {
+			if results[j].AvgSpeed > results[i].AvgSpeed {
+				results[i], results[j] = results[j], results[i]
+			}
+		}
+	}
 
-speedPct := (r.AvgSpeed / fastest) * 100
-speedColor := colorGreen
-if speedPct < 80 {
-speedColor = colorYellow
-}
-if speedPct < 50 {
-speedColor = colorRed
-}
+	// Print header
+	fmt.Printf("   %s%-30s  %10s  %12s  %10s  %8s%s\n",
+		colorDim, "Model", "Speed", "Latency", "Range", "Size", colorReset)
+	fmt.Println("   " + strings.Repeat("─", 85))
 
-sizeStr := formatBytes(r.Size)
-if r.Quant != "" {
-sizeStr += " " + r.Quant
-}
+	fastest := results[0].AvgSpeed
+	for i, r := range results {
+		if r.Failed {
+			fmt.Printf("   %-30s  %s%10s%s\n", r.ModelID, colorRed, "FAILED", colorReset)
+			continue
+		}
 
-fmt.Printf("   %s%-30s  %s%8.1f%s t/s  %10s  %4.0f-%4.0f  %10s\n",
-rank, r.ModelID,
-speedColor, r.AvgSpeed, colorReset,
-formatDuration(r.AvgLatency),
-r.MinSpeed, r.MaxSpeed,
-sizeStr)
-}
+		rank := ""
+		if i == 0 {
+			rank = colorGreen + "★ " + colorReset
+		}
 
-fmt.Println()
-fmt.Printf("   %s★ = Fastest model%s\n", colorDim, colorReset)
-fmt.Println()
+		speedPct := (r.AvgSpeed / fastest) * 100
+		speedColor := colorGreen
+		if speedPct < 80 {
+			speedColor = colorYellow
+		}
+		if speedPct < 50 {
+			speedColor = colorRed
+		}
+
+		sizeStr := formatBytes(r.Size)
+		if r.Quant != "" {
+			sizeStr += " " + r.Quant
+		}
+
+		fmt.Printf("   %s%-30s  %s%8.1f%s t/s  %10s  %4.0f-%4.0f  %10s\n",
+			rank, r.ModelID,
+			speedColor, r.AvgSpeed, colorReset,
+			formatDuration(r.AvgLatency),
+			r.MinSpeed, r.MaxSpeed,
+			sizeStr)
+	}
+
+	fmt.Println()
+	fmt.Printf("   %s★ = Fastest model%s\n", colorDim, colorReset)
+	fmt.Println()
 }
