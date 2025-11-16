@@ -296,10 +296,11 @@ offgrid doctor               # System diagnostics</code></pre>
             addMessage('user', message);
 
             try {
-                const response = await fetch('http://localhost:42382/v1/chat/completions', {
+                const response = await fetch('/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        model: currentModel,
                         messages: chatMessages,
                         stream: document.getElementById('streamMode').checked,
                         temperature: 0.7,
