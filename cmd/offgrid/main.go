@@ -583,6 +583,9 @@ func main() {
 		case "benchmark", "bench":
 			handleBenchmark(os.Args[2:])
 			return
+		case "benchmark-compare", "compare":
+			handleBenchmarkCompare(os.Args[2:])
+			return
 		case "list":
 			handleList(os.Args[2:])
 			return
@@ -4713,4 +4716,243 @@ func exportSessionText(session *sessions.Session) string {
 	}
 
 	return sb.String()
+}
+
+func handleBenchmarkCompare(args []string) {
+if len(args) < 2 {
+fmt.Println()
+fmt.Printf("%s┌─ Benchmark Compare%s\n", brandPrimary+colorBold, colorReset)
+fmt.Println("│")
+fmt.Printf("│ %sUsage:%s offgrid benchmark-compare <model1> <model2> [model3...] [--iterations N]\n", colorDim, colorReset)
+fmt.Println("│")
+fmt.Println("│ Compare performance across multiple models")
+fmt.Println()
+fmt.Printf("%s├─ Options%s\n", brandPrimary+colorBold, colorReset)
+fmt.Printf("│  %s--iterations N%s     Number of test iterations (default: 3)\n", brandSecondary, colorReset)
+fmt.Printf("│  %s--prompt \"text\"%s   Custom prompt for comparison\n", brandSecondary, colorReset)
+fmt.Println()
+fmt.Printf("%s└─ Examples%s\n", brandPrimary+colorBold, colorReset)
+fmt.Printf("   %soffgrid compare tinyllama-1.1b phi-2%s\n", colorDim, colorReset)
+fmt.Printf("   %soffgrid compare llama-2-7b mistral-7b phi-2 --iterations 5%s\n", colorDim, colorReset)
+fmt.Println()
+os.Exit(1)
+}
+
+cfg := config.LoadConfig()
+registry := models.NewRegistry(cfg.ModelsDir)
+
+if err := registry.ScanModels(); err != nil {
+fmt.Fprintf(os.Stderr, "✗ Error scanning models: %v\n\n", err)
+os.Exit(1)
+}
+
+// Parse arguments
+var modelIDs []string
+iterations := 3
+customPrompt := ""
+
+for i := 0; i < len(args); i++ {
+if args[i] == "--iterations" && i+1 < len(args) {
+fmt.Sscanf(args[i+1], "%d", &iterations)
+i++
+} else if args[i] == "--prompt" && i+1 < len(args) {
+customPrompt = args[i+1]
+i++
+} else if !strings.HasPrefix(args[i], "--") {
+modelIDs = append(modelIDs, args[i])
+}
+}
+
+if len(modelIDs) < 2 {
+printError("Need at least 2 models to compare")
+os.Exit(1)
+}
+
+// Check if server is running
+serverURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort)
+if !isServerHealthy(serverURL) {
+fmt.Printf("%sError: Server not running%s\n", colorRed, colorReset)
+fmt.Printf("Start server first: %soffgrid serve%s\n\n", brandSecondary, colorReset)
+os.Exit(1)
+}
+
+// Default benchmark prompt
+benchPrompt := "Write a short story about a robot learning to paint."
+if customPrompt != "" {
+benchPrompt = customPrompt
+}
+
+fmt.Println()
+fmt.Printf("%s┌─ Benchmark Comparison%s\n", brandPrimary+colorBold, colorReset)
+fmt.Printf("│  Comparing %d models with %d iterations each\n", len(modelIDs), iterations)
+fmt.Println()
+
+type BenchResult struct {
+ModelID     string
+AvgSpeed    float64
+AvgLatency  time.Duration
+MinSpeed    float64
+MaxSpeed    float64
+Size        int64
+Quant       string
+Failed      bool
+}
+
+results := make([]BenchResult, 0, len(modelIDs))
+
+for _, modelID := range modelIDs {
+fmt.Printf("%s├─ Testing: %s%s\n", brandPrimary, modelID, colorReset)
+
+meta, err := registry.GetModel(modelID)
+if err != nil {
+fmt.Printf("│  %s✗ Model not found%s\n", colorRed, colorReset)
+results = append(results, BenchResult{ModelID: modelID, Failed: true})
+continue
+}
+
+var (
+totalLatency time.Duration
+tokensPerSec []float64
+)
+
+for i := 0; i < iterations; i++ {
+fmt.Printf("│  [%d/%d] ", i+1, iterations)
+
+startTime := time.Now()
+
+reqBody := map[string]interface{}{
+"model":       modelID,
+"prompt":      benchPrompt,
+"max_tokens":  100,
+"temperature": 0.7,
+"stream":      false,
+}
+
+jsonData, _ := json.Marshal(reqBody)
+resp, err := http.Post(
+serverURL+"/v1/completions",
+"application/json",
+bytes.NewBuffer(jsonData),
+)
+
+if err != nil {
+fmt.Printf("%s✗%s\n", colorRed, colorReset)
+continue
+}
+
+body, _ := io.ReadAll(resp.Body)
+resp.Body.Close()
+
+var result map[string]interface{}
+if err := json.Unmarshal(body, &result); err != nil {
+fmt.Printf("%s✗%s\n", colorRed, colorReset)
+continue
+}
+
+latency := time.Since(startTime)
+tokenCount := 0
+
+if usage, ok := result["usage"].(map[string]interface{}); ok {
+if ct, ok := usage["completion_tokens"].(float64); ok {
+tokenCount = int(ct)
+}
+}
+
+totalLatency += latency
+tps := float64(tokenCount) / latency.Seconds()
+tokensPerSec = append(tokensPerSec, tps)
+
+fmt.Printf("%s✓%s %.1f tok/s\n", colorGreen, colorReset, tps)
+}
+
+if len(tokensPerSec) == 0 {
+results = append(results, BenchResult{ModelID: modelID, Failed: true})
+continue
+}
+
+avgLatency := totalLatency / time.Duration(len(tokensPerSec))
+avgTPS := 0.0
+minTPS := tokensPerSec[0]
+maxTPS := tokensPerSec[0]
+
+for _, tps := range tokensPerSec {
+avgTPS += tps
+if tps < minTPS {
+minTPS = tps
+}
+if tps > maxTPS {
+maxTPS = tps
+}
+}
+avgTPS /= float64(len(tokensPerSec))
+
+results = append(results, BenchResult{
+ModelID:    modelID,
+AvgSpeed:   avgTPS,
+AvgLatency: avgLatency,
+MinSpeed:   minTPS,
+MaxSpeed:   maxTPS,
+Size:       meta.Size,
+Quant:      meta.Quantization,
+})
+
+fmt.Printf("│  %sAverage: %.1f tok/s%s\n", colorDim, avgTPS, colorReset)
+fmt.Println("│")
+}
+
+// Display comparison table
+fmt.Printf("%s└─ Comparison Results%s\n", brandPrimary+colorBold, colorReset)
+fmt.Println()
+
+// Sort by speed (descending)
+for i := 0; i < len(results); i++ {
+for j := i + 1; j < len(results); j++ {
+if results[j].AvgSpeed > results[i].AvgSpeed {
+results[i], results[j] = results[j], results[i]
+}
+}
+}
+
+// Print header
+fmt.Printf("   %s%-30s  %10s  %12s  %10s  %8s%s\n", 
+colorDim, "Model", "Speed", "Latency", "Range", "Size", colorReset)
+fmt.Println("   " + strings.Repeat("─", 85))
+
+fastest := results[0].AvgSpeed
+for i, r := range results {
+if r.Failed {
+fmt.Printf("   %-30s  %s%10s%s\n", r.ModelID, colorRed, "FAILED", colorReset)
+continue
+}
+
+rank := ""
+if i == 0 {
+rank = colorGreen + "★ " + colorReset
+}
+
+speedPct := (r.AvgSpeed / fastest) * 100
+speedColor := colorGreen
+if speedPct < 80 {
+speedColor = colorYellow
+}
+if speedPct < 50 {
+speedColor = colorRed
+}
+
+sizeStr := formatBytes(r.Size)
+if r.Quant != "" {
+sizeStr += " " + r.Quant
+}
+
+fmt.Printf("   %s%-30s  %s%8.1f%s t/s  %10s  %4.0f-%4.0f  %10s\n",
+rank, r.ModelID,
+speedColor, r.AvgSpeed, colorReset,
+formatDuration(r.AvgLatency),
+r.MinSpeed, r.MaxSpeed,
+sizeStr)
+}
+
+fmt.Println()
+fmt.Printf("   %s★ = Fastest model%s\n", colorDim, colorReset)
+fmt.Println()
 }
