@@ -3411,12 +3411,57 @@ func handleRun(args []string) {
 			if !foundActive && len(modelsResp.Data) > 0 {
 				fmt.Println()
 				printWarning(fmt.Sprintf("Server is currently serving: %s", activeModel))
+				printInfo(fmt.Sprintf("Switching to: %s", modelName))
 				fmt.Println()
-				printInfo("To use a different model, restart llama-server:")
-				fmt.Printf("  %s$%s sudo systemctl stop llama-server\n", brandMuted, colorReset)
-				fmt.Printf("  %s$%s sudo systemctl start llama-server\n", brandMuted, colorReset)
+
+				// Kill existing llama-server process
+				printInfo("Stopping llama-server...")
+				cmd := exec.Command("pkill", "-9", "llama-server")
+				cmd.Run() // Ignore errors
+				time.Sleep(1 * time.Second)
+
+				// Start llama-server with new model
+				fmt.Printf("%s┌─ Starting llama-server%s\n", brandPrimary+colorBold, colorReset)
+				fmt.Printf("│  %sModel:%s %s\n", colorDim, colorReset, filepath.Base(model.Path))
+				fmt.Printf("│  %sFlags:%s --no-mmap --mlock -fa (optimized)\n", colorDim, colorReset)
 				fmt.Println()
-				printInfo("Or continue with the loaded model...")
+
+				if err := startLlamaServerInBackground(model.Path); err != nil {
+					fmt.Println()
+					printError("Failed to start llama-server with new model")
+					fmt.Println()
+					fmt.Printf("%sℹ Start manually:%s\n", colorDim, colorReset)
+					fmt.Printf("  %sllama-server -m %s --port 42382 &%s\n", brandSecondary, model.Path, colorReset)
+					fmt.Println()
+					os.Exit(1)
+				}
+
+				// Wait for llama-server to load the new model
+				fmt.Printf("%sLoading model...%s ", colorDim, colorReset)
+
+				llamaPort := "42382"
+				if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
+					llamaPort = strings.TrimSpace(string(portBytes))
+				}
+
+				maxWait := 60
+				for i := 0; i < maxWait; i++ {
+					time.Sleep(1 * time.Second)
+					resp, err := http.Get(fmt.Sprintf("http://localhost:%s/health", llamaPort))
+					if err == nil && resp.StatusCode == http.StatusOK {
+						resp.Body.Close()
+						fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
+						break
+					}
+					if err != nil {
+						resp.Body.Close()
+					}
+					if i == maxWait-1 {
+						fmt.Printf("%s✗%s\n", brandError, colorReset)
+						printError("Model failed to load in time")
+						os.Exit(1)
+					}
+				}
 				fmt.Println()
 			}
 		}
