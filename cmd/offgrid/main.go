@@ -687,9 +687,29 @@ func handleDownload(args []string) {
 	downloader := models.NewDownloader(cfg.ModelsDir, catalog)
 
 	modelID := args[0]
-	quantization := "Q4_K_M" // Default
+
+	// Find the model in catalog to get available quantizations
+	var modelEntry *models.CatalogEntry
+	for i := range catalog.Models {
+		if catalog.Models[i].ID == modelID {
+			modelEntry = &catalog.Models[i]
+			break
+		}
+	}
+
+	var quantization string
 	if len(args) > 1 {
+		// User specified quantization
 		quantization = args[1]
+	} else {
+		// Auto-select best available quantization
+		if modelEntry != nil && len(modelEntry.Variants) > 0 {
+			// Use first available variant as default
+			quantization = modelEntry.Variants[0].Quantization
+		} else {
+			// Fallback for models not in catalog
+			quantization = "Q4_K_M"
+		}
 	}
 
 	// Set progress callback
