@@ -153,6 +153,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/cache/stats", s.handleCacheStats)
 	mux.HandleFunc("/cache/clear", s.handleCacheClear)
 
+	// Simplified UI endpoints (no /v1 prefix for easier frontend access)
+	mux.HandleFunc("/models", s.handleListModels)
+	mux.HandleFunc("/catalog", s.handleModelCatalog)
+
 	// Web UI - serve HTML/CSS/JS
 	uiPath := "/var/lib/offgrid/web/ui"
 	// Fallback to local development path if installed path doesn't exist
@@ -240,6 +244,18 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 
 // Handler functions (placeholders for now)
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	// Serve the UI at root
+	if r.URL.Path == "/" {
+		uiPath := "/var/lib/offgrid/web/ui/index.html"
+		// Fallback to local development path if installed path doesn't exist
+		if _, err := os.Stat(uiPath); os.IsNotExist(err) {
+			uiPath = "web/ui/index.html"
+		}
+		http.ServeFile(w, r, uiPath)
+		return
+	}
+
+	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.0-alpha","status":"running"}`)
 }
