@@ -246,13 +246,14 @@ offgrid doctor               # System diagnostics</code></pre>
         async function loadModelsForChat() {
             try {
                 const response = await fetch('/models');
-                const models = await response.json();
+                const result = await response.json();
+                const models = result.data || result.models || result;
                 const select = document.getElementById('chatModelSelect');
                 select.innerHTML = '<option value="">Select Model...</option>';
                 models.forEach(m => {
                     const opt = document.createElement('option');
-                    opt.value = m.name || m;
-                    opt.textContent = m.name || m;
+                    opt.value = m.id || m.name || m;
+                    opt.textContent = m.id || m.name || m;
                     select.appendChild(opt);
                 });
             } catch (error) {
