@@ -5,1127 +5,1438 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OffGrid LLM</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        dark: { 
-                            bg: '#0a0e1a',
-                            card: '#111827', 
-                            elevated: '#1f2937',
-                            border: '#374151',
-                        },
-                        accent: {
-                            primary: '#10b981',     // Green (emerald)
-                            secondary: '#06b6d4',   // Cyan
-                            success: '#10b981',
-                            warning: '#f59e0b',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
             margin: 0; 
             padding: 0; 
-            box-sizing: border-box;
+            box-sizing: border-box; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
         }
         
         body { 
-            background: #0a0e1a;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
-                radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%);
-            background-attachment: fixed;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         
-        .card {
-            background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(31, 41, 55, 0.9) 100%);
-            border: 1px solid rgba(55, 65, 81, 0.6);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 
-                        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        .card { 
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(51, 65, 85, 0.9) 100%);
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            backdrop-filter: blur(10px);
         }
         
         .card:hover {
-            border-color: rgba(59, 130, 246, 0.4);
-            box-shadow: 0 20px 70px rgba(0, 0, 0, 0.6),
-                        0 0 0 1px rgba(59, 130, 246, 0.1) inset;
+            border-color: rgba(6, 182, 212, 0.5);
+            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);
         }
         
-        .btn-primary {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3),
-                        0 0 0 1px rgba(16, 185, 129, 0.1) inset;
-            transition: all 0.2s ease;
-        }
-        
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
-            box-shadow: 0 6px 24px rgba(16, 185, 129, 0.4);
-            transform: translateY(-1px);
-        }
-        
-        .btn-primary:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-        }
-        
-        .btn-secondary {
-            background: rgba(31, 41, 55, 0.8);
-            border: 1px solid rgba(55, 65, 81, 0.8);
-            transition: all 0.2s ease;
-        }
-        
-        .btn-secondary:hover {
-            background: rgba(55, 65, 81, 0.9);
-            border-color: rgba(75, 85, 99, 0.9);
-        }
-        
-        .input-field {
-            background: rgba(17, 24, 39, 0.8);
-            border: 1px solid rgba(55, 65, 81, 0.6);
-            transition: all 0.2s ease;
-        }
-        
-        .input-field:focus {
-            background: rgba(17, 24, 39, 0.95);
-            border-color: rgba(16, 185, 129, 0.5);
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
-            outline: none;
-        }
-        
-        .tab-btn {
-            position: relative;
-            color: #9ca3af;
-            transition: all 0.2s ease;
-        }
-        
-        .tab-btn:hover {
-            color: #d1d5db;
-        }
-        
-        .tab-btn.active {
-            color: #10b981;
-            font-weight: 600;
-        }
-        
-        .tab-btn.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, #10b981, #06b6d4);
-            border-radius: 2px;
-        }
-        
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: rgba(17, 24, 39, 0.5); }
-        ::-webkit-scrollbar-thumb { 
-            background: rgba(16, 185, 129, 0.3); 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.5); }
-        
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
-        .message { animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        
-        .spinner { 
-            border: 2px solid rgba(16, 185, 129, 0.2); 
-            border-top-color: #10b981; 
-            border-radius: 50%; 
-            width: 16px; 
-            height: 16px; 
-            animation: spin 0.8s linear infinite; 
-        }
-        
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            position: relative;
-        }
-        
-        .status-dot.online {
-            background: #10b981;
-            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-        }
-        
-        .status-dot.online::after {
-            content: '';
-            position: absolute;
-            inset: -4px;
-            border: 2px solid #10b981;
-            border-radius: 50%;
-            opacity: 0.3;
-            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-        }
-        
-        @keyframes ping {
-            75%, 100% {
-                transform: scale(1.5);
-                opacity: 0;
-            }
-        }
-        
-        pre { 
-            background: rgba(10, 14, 26, 0.9) !important; 
-            border: 1px solid rgba(55, 65, 81, 0.3);
-            border-radius: 8px; 
-            padding: 1rem; 
-            overflow-x: auto;
-            font-size: 0.875rem;
-            line-height: 1.5;
-        }
-        
-        code { 
-            background: rgba(17, 24, 39, 0.8); 
-            padding: 0.2em 0.5em; 
-            border-radius: 4px; 
-            font-size: 0.875em;
-            border: 1px solid rgba(55, 65, 81, 0.3);
-        }
-        
-        pre code { 
-            background: transparent; 
-            padding: 0; 
-            border: none;
-        }
-        
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.375rem;
-            padding: 0.375rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.025em;
-        }
-        
-        .badge-primary {
-            background: rgba(16, 185, 129, 0.15);
-            color: #34d399;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-        
-        .message-user {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.1) 100%);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-        }
-        
-        .message-assistant {
-            background: rgba(17, 24, 39, 0.8);
-            border: 1px solid rgba(55, 65, 81, 0.4);
-        }
-        
-        /* Message Window Styles */
-        .message-window-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            backdrop-filter: blur(4px);
-            animation: fadeIn 0.2s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        .message-window {
-            background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(31, 41, 55, 0.95) 100%);
-            border: 1px solid rgba(55, 65, 81, 0.8);
-            border-radius: 16px;
-            padding: 1.5rem;
-            max-width: 500px;
-            width: 90%;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 
-                        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-            animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        @keyframes slideDown {
-            from { 
-                opacity: 0; 
-                transform: translateY(-20px) scale(0.95);
-            }
-            to { 
-                opacity: 1; 
-                transform: translateY(0) scale(1);
-            }
-        }
-        
-        .message-window-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-        
-        .message-window-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        
-        .message-window-icon.success {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.3) 100%);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-        
-        .message-window-icon.error {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.3) 100%);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-        
-        .message-window-icon.info {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.3) 100%);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-        }
-        
-        .message-window-icon.warning {
-            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.3) 100%);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-        }
-        
-        .message-window-content {
-            color: #e5e7eb;
-            font-size: 0.9375rem;
-            line-height: 1.6;
-        }
-        
-        .message-window-title {
-            font-weight: 700;
-            font-size: 1.125rem;
-            margin-bottom: 0.5rem;
-            color: #ffffff;
-        }
-        
-        .message-window-buttons {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 1.5rem;
-            justify-content: flex-end;
-        }
-        
-        .message-window-btn {
-            padding: 0.625rem 1.25rem;
+        .btn {
+            padding: 10px 18px;
             border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.875rem;
-            transition: all 0.2s ease;
             cursor: pointer;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
             border: none;
+            font-size: 13px;
+            font-weight: 600;
             outline: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
         
-        .message-window-btn.primary {
+        .btn:hover:not(:disabled) {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-sm { 
+            padding: 6px 14px; 
+            font-size: 12px; 
+        }
+        
+        .btn:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed;
+        }
+        
+        .btn-primary { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white; 
+        }
+        
+        .btn-primary:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        }
+        
+        .btn-secondary { 
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            color: white; 
+        }
+        
+        .btn-secondary:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+        }
+        
+        .btn-danger { 
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white; 
+        }
+        
+        .btn-danger:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+        
+        .btn-info { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white; 
+        }
+        
+        .btn-info:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        }
+        
+        .tab { 
+            padding: 14px 24px; 
+            cursor: pointer; 
+            border-bottom: 3px solid transparent; 
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        
+        .tab:hover { 
+            background: rgba(30, 41, 59, 0.5);
+            color: #06b6d4;
+        }
+        
+        .tab.active { 
+            border-bottom-color: #06b6d4;
+            background: rgba(30, 41, 59, 0.8);
+            color: #06b6d4;
+        }
+        
+        .message { 
+            padding: 16px; 
+            border-radius: 10px; 
+            margin-bottom: 12px; 
+            border-left: 4px solid #334155; 
+            word-wrap: break-word;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: box-shadow 0.2s ease;
+        }
+        
+        .message:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .message-user { 
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+            border-left-color: #10b981;
+        }
+        
+        .message-assistant { 
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(8, 145, 178, 0.1) 100%);
+            border-left-color: #06b6d4;
+            white-space: pre-wrap;
+        }
+        
+        .message-actions { 
+            display: flex; 
+            gap: 8px; 
+            margin-top: 12px; 
+        }
+        
+        .terminal { 
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 15px;
+            overflow-y: auto;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+        
+        .terminal-output { 
+            height: 500px;
+            overflow-y: auto; 
+            margin-bottom: 12px; 
+            line-height: 1.6; 
+        }
+        
+        .terminal-line { 
+            color: #c9d1d9; 
+            margin-bottom: 2px; 
+            white-space: pre; 
+            word-break: break-word; 
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+        }
+        
+        /* ANSI color classes */
+        .ansi-cyan { color: #06b6d4; font-weight: 600; }
+        .ansi-green { color: #10b981; font-weight: 600; }
+        .ansi-yellow { color: #f59e0b; font-weight: 600; }
+        .ansi-red { color: #ef4444; font-weight: 600; }
+        .ansi-blue { color: #3b82f6; font-weight: 600; }
+        .ansi-magenta { color: #a855f7; font-weight: 600; }
+        .ansi-gray { color: #6b7280; }
+        .ansi-bold { font-weight: 700; }
+        .ansi-dim { opacity: 0.7; }
+        
+        .terminal-error { 
+            color: #ff6b6b; 
+            font-weight: 600; 
+        }
+        
+        .terminal-success { 
+            color: #06b6d4; 
+            font-weight: 600; 
+        }
+        
+        .terminal-prompt { 
+            color: #06b6d4; 
+            font-weight: 700; 
+        }
+        
+        .terminal-input-line { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            padding-top: 8px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .terminal-input { 
+            background: transparent; 
+            border: none; 
+            color: #06b6d4; 
+            flex: 1; 
+            outline: none; 
+            font-family: inherit; 
+            font-size: 15px; 
+        }
+        
+        .terminal-running { 
+            opacity: 0.6; 
+            pointer-events: none; 
+        }
+        
+        .model-item { 
+            padding: 16px; 
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(51, 65, 85, 0.8) 100%);
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .model-item:hover { 
+            background: linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(71, 85, 105, 0.8) 100%);
+            border-color: rgba(6, 182, 212, 0.5);
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2);
+        }
+        
+        .badge { 
+            display: inline-block; 
+            padding: 4px 12px; 
+            border-radius: 6px; 
+            font-size: 11px; 
+            font-weight: 700;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .badge-success { 
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
+            color: white; 
         }
         
-        .message-window-btn.primary:hover {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
-            transform: translateY(-1px);
+        .badge-warning { 
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white; 
         }
         
-        .message-window-btn.secondary {
-            background: rgba(31, 41, 55, 0.8);
-            border: 1px solid rgba(55, 65, 81, 0.8);
-            color: #d1d5db;
+        .badge-error { 
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white; 
         }
         
-        .message-window-btn.secondary:hover {
-            background: rgba(55, 65, 81, 0.9);
-            border-color: rgba(75, 85, 99, 0.9);
+        .badge-info { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white; 
+        }
+        
+        .hidden { 
+            display: none; 
+        }
+        
+        input:focus, select:focus, textarea:focus { 
+            outline: none; 
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+        }
+        
+        .chat-container { 
+            display: flex; 
+            flex-direction: column; 
+            height: calc(100vh - 220px);
+            min-height: 600px;
+        }
+        
+        .chat-messages { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 16px; 
+        }
+        
+        .chat-input-area { 
+            padding: 16px; 
+            border-top: 1px solid rgba(51, 65, 85, 0.8);
+            background: rgba(15, 23, 42, 0.5);
+        }
+        
+        .scrollable { 
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch; 
+        }
+        
+        .scrollable::-webkit-scrollbar { 
+            width: 10px; 
+        }
+        
+        .scrollable::-webkit-scrollbar-track { 
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 5px;
+        }
+        
+        .scrollable::-webkit-scrollbar-thumb { 
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            border-radius: 5px; 
+        }
+        
+        .scrollable::-webkit-scrollbar-thumb:hover { 
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+        }
+        
+        .settings-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 16px; 
+        }
+        
+        .stat-card { 
+            text-align: center; 
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+            border-radius: 10px;
+            transition: box-shadow 0.2s ease;
+        }
+        
+        .stat-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stat-value { 
+            font-size: 32px; 
+            font-weight: 700; 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .stat-label { 
+            font-size: 13px; 
+            color: #94a3b8; 
+            margin-top: 6px;
+            font-weight: 500;
+        }
+        
+        header {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        nav {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.9) 100%);
+            backdrop-filter: blur(10px);
         }
     </style>
 </head>
-<body class="text-gray-100 min-h-screen antialiased">
-    <header class="card border-b border-dark-border sticky top-0 z-50 backdrop-blur-xl">
-        <div class="max-w-7xl mx-auto px-6 py-5">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-6">
-                    <div class="flex items-center gap-3">
-                        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-accent-primary via-emerald-500 to-accent-secondary flex items-center justify-center shadow-lg shadow-emerald-500/20 ring-1 ring-white/10">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">OffGrid LLM</h1>
-                            <p class="text-xs text-gray-500 font-medium">Local AI • Privacy First</p>
-                        </div>
-                    </div>
-                    <span class="badge badge-primary">v0.2.0</span>
-                </div>
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-2.5 px-4 py-2 card rounded-lg">
-                        <div id="statusIndicator" class="status-dot bg-gray-500"></div>
-                        <span id="statusText" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Connecting</span>
-                    </div>
-                </div>
-            </div>
-            <div class="flex gap-1 mt-5 border-b border-dark-border -mb-[1px]">
-                <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Chat</button>
-                <button onclick="switchTab('models')" id="tab-models" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Models</button>
-                <button onclick="switchTab('search')" id="tab-search" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Search</button>
-                <button onclick="switchTab('usb')" id="tab-usb" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">USB</button>
-                <button onclick="switchTab('sessions')" id="tab-sessions" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">Sessions</button>
-                <button onclick="switchTab('api')" id="tab-api" class="tab-btn px-5 py-2.5 text-sm font-medium transition-all">API</button>
+<body>
+    <header class="bg-slate-900 border-b border-slate-700 px-6 py-4 flex-shrink-0">
+        <div class="flex items-center justify-between">
+            <h1 class="text-xl font-bold text-cyan-400">OffGrid LLM</h1>
+            <div class="flex items-center gap-3">
+                <span id="statusBadge" class="badge badge-success">Ready</span>
+                <span class="text-xs text-slate-400">v0.1.2</span>
             </div>
         </div>
     </header>
-    
-    <main class="max-w-7xl mx-auto px-6 py-8">
-        <div id="view-chat" class="view hidden">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2">
-                    <div class="card rounded-2xl p-6 shadow-2xl h-[calc(100vh-240px)] flex flex-col">
-                        <div class="flex items-center justify-between mb-6">
-                            <h2 class="text-lg font-bold flex items-center gap-2.5">
-                                <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
-                                <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Conversation</span>
-                            </h2>
-                            <div class="flex gap-2">
-                                <select id="modelSelect" onchange="onModelChange()" class="input-field px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
-                                    <option value="">Select Model...</option>
-                                </select>
-                                <button onclick="clearChat()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium hover:text-white transition-all">
-                                    Clear
-                                </button>
-                            </div>
-                        </div>
-                        <div id="messages" class="flex-1 overflow-y-auto mb-4 space-y-3 pr-2">
-                            <div class="text-center text-gray-500 mt-24 animate-slide-up">
-                                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-primary/10 to-accent-secondary/10 flex items-center justify-center ring-1 ring-white/5">
-                                    <svg class="w-8 h-8 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"></path>
-                                    </svg>
-                                </div>
-                                <p class="text-sm font-medium">Select a model and start chatting</p>
-                                <p class="text-xs text-gray-600 mt-1">Your conversations are private and processed locally</p>
-                            </div>
-                        </div>
-                        <div class="border-t border-dark-border pt-4">
-                            <div class="flex gap-3">
-                                <input type="text" id="messageInput" placeholder="Type your message..." class="flex-1 input-field px-4 py-3 rounded-xl text-sm" onkeypress="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }">
-                                <button onclick="sendMessage()" class="btn-primary px-6 py-3 rounded-xl font-semibold text-sm transition-all flex items-center gap-2">
-                                    <span>Send</span>
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
-                                    </svg>
-                                </button>
-                            </div>
-                            <div id="streamingIndicator" class="hidden mt-3 text-xs text-gray-500 flex items-center gap-2 font-medium">
-                                <div class="spinner"></div>
-                                <span>AI is thinking...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="space-y-4">
-                    <!-- Session Controls -->
-                    <div class="card rounded-2xl p-5 shadow-lg">
-                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
-                            </svg>
-                            Session
-                        </h3>
-                        <div class="space-y-3">
-                            <input type="text" id="sessionName" placeholder="Session name (optional)" class="w-full input-field px-3 py-2 rounded-lg text-sm">
-                            <div class="grid grid-cols-2 gap-2">
-                                <button onclick="saveSession()" class="btn-secondary px-3 py-2 rounded-lg text-xs font-medium hover:text-white">Save</button>
-                                <button onclick="showLoadSession()" class="btn-secondary px-3 py-2 rounded-lg text-xs font-medium hover:text-white">Load</button>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Prompt Templates -->
-                    <div class="card rounded-2xl p-5 shadow-lg">
-                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-accent-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            Templates
-                        </h3>
-                        <select id="templateSelect" onchange="applyTemplate()" class="w-full input-field px-3 py-2 rounded-lg text-sm font-medium cursor-pointer">
-                            <option value="">Select template...</option>
-                            <option value="summarize">Summarize</option>
-                            <option value="code-review">Code Review</option>
-                            <option value="translate">Translate</option>
-                            <option value="explain">Explain</option>
-                            <option value="brainstorm">Brainstorm</option>
-                            <option value="debug">Debug</option>
-                            <option value="document">Document</option>
-                            <option value="refactor">Refactor</option>
-                            <option value="test">Test</option>
-                            <option value="cli">CLI Helper</option>
-                        </select>
-                    </div>
-
-                    <!-- Advanced Parameters -->
-                    <div class="card rounded-2xl p-5 shadow-lg">
-                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-accent-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
-                            </svg>
-                            Parameters
-                        </h3>
-                        <div class="space-y-4 text-sm">
-                            <div>
-                                <label class="flex items-center justify-between mb-2">
-                                    <span class="text-gray-400 font-medium">Temperature</span>
-                                    <span class="text-accent-primary font-semibold" id="tempValue">0.7</span>
-                                </label>
-                                <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" oninput="document.getElementById('tempValue').textContent=this.value" class="w-full">
-                            </div>
-                            <div>
-                                <label class="flex items-center justify-between mb-2">
-                                    <span class="text-gray-400 font-medium">Max Tokens</span>
-                                    <span class="text-accent-primary font-semibold" id="tokensValue">500</span>
-                                </label>
-                                <input type="range" id="maxTokens" min="50" max="2000" step="50" value="500" oninput="document.getElementById('tokensValue').textContent=this.value" class="w-full">
-                            </div>
-                            <div>
-                                <label class="flex items-center justify-between mb-2">
-                                    <span class="text-gray-400 font-medium">Top P</span>
-                                    <span class="text-accent-primary font-semibold" id="topPValue">0.9</span>
-                                </label>
-                                <input type="range" id="topP" min="0" max="1" step="0.1" value="0.9" oninput="document.getElementById('topPValue').textContent=this.value" class="w-full">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <nav class="bg-slate-900 border-b border-slate-700 px-6 flex-shrink-0">
+        <div class="flex gap-1">
+            <button onclick="switchTab('chat')" id="tab-chat" class="tab active">Chat</button>
+            <button onclick="switchTab('models')" id="tab-models" class="tab">Models</button>
+            <button onclick="switchTab('terminal')" id="tab-terminal" class="tab">Terminal</button>
         </div>
-        
-        <div id="view-models" class="view hidden">
-            <!-- Model Download Section -->
-            <div class="card rounded-2xl p-6 shadow-2xl mb-6">
-                <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
-                    <span class="w-1 h-5 bg-gradient-to-b from-accent-secondary to-purple-400 rounded-full"></span>
-                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Download from HuggingFace</span>
-                </h2>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <input type="text" id="hfRepo" placeholder="e.g. bartowski/Llama-3.2-3B-Instruct-GGUF" class="input-field px-4 py-3 rounded-lg text-sm" />
-                    <input type="text" id="hfFile" placeholder="e.g. Llama-3.2-3B-Instruct-Q4_K_M.gguf" class="input-field px-4 py-3 rounded-lg text-sm" />
-                </div>
-                <button onclick="downloadModel()" class="btn-primary px-6 py-3 rounded-xl font-semibold mt-4">
-                    <span>Download Model</span>
-                </button>
-                <div id="downloadProgress" class="hidden mt-4">
-                    <div class="text-sm text-gray-400 mb-2">Downloading...</div>
-                    <div class="w-full bg-dark-elevated rounded-full h-2">
-                        <div id="progressBar" class="bg-accent-primary h-2 rounded-full transition-all" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div>
+    </nav>
 
-            <div class="card rounded-2xl p-6 shadow-2xl">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-lg font-bold flex items-center gap-2.5">
-                        <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
-                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Available Models</span>
-                    </h2>
+    <main class="container mx-auto p-6 max-w-7xl flex-1 overflow-hidden">
+        <!-- Chat Tab -->
+        <div id="content-chat" class="h-full flex flex-col gap-4">
+            <div class="card flex-shrink-0">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <select id="chatModel" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+                        <option value="">Loading...</option>
+                    </select>
                     <div class="flex gap-2">
-                        <button onclick="toggleFavorites()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">
-                            <span id="favFilterText">Show Favorites</span>
-                        </button>
+                        <label class="flex items-center gap-2 text-xs">
+                            <input type="checkbox" id="streamToggle" checked class="rounded">
+                            <span>Stream</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs">
+                            <span>Temp:</span>
+                            <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2" 
+                                   class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+                        </label>
+                        <label class="flex items-center gap-2 text-xs">
+                            <span>Max:</span>
+                            <input type="number" id="maxTokens" value="1000" step="100" min="100" max="4000" 
+                                   class="w-20 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+                        </label>
+                        <button onclick="exportChat()" class="btn btn-info btn-sm">Export</button>
+                        <button onclick="clearChat()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
-                </div>
-                <div id="modelsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="text-center text-gray-500 col-span-full py-12 animate-slide-up">
-                        <div class="spinner mx-auto mb-4"></div>
-                        <p class="text-sm font-medium">Loading models...</p>
-                    </div>
-                </div>
-            </div>
-            <div class="card rounded-2xl p-6 mt-6 shadow-lg">
-                <h3 class="text-lg font-bold mb-6 flex items-center gap-2.5">
-                    <span class="w-1 h-5 bg-gradient-to-b from-accent-success to-emerald-400 rounded-full"></span>
-                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">System Stats</span>
-                </h3>
-                <div id="systemStats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="card rounded-xl p-4 hover:border-accent-primary/40 transition-all">
-                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</div>
-                        <div class="text-xl font-semibold" id="sysStatus">-</div>
-                    </div>
-                    <div class="glass rounded-lg p-4">
-                        <div class="text-xs text-gray-400 uppercase mb-1">Models</div>
-                        <div class="text-xl font-semibold" id="sysModels">-</div>
-                    </div>
-                    <div class="glass rounded-lg p-4">
-                        <div class="text-xs text-gray-400 uppercase mb-1">Uptime</div>
-                        <div class="text-xl font-bold text-white" id="sysUptime">-</div>
-                    </div>
-                    <div class="card rounded-xl p-4 hover:border-accent-primary/40 transition-all">
-                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Version</div>
-                        <div class="text-xl font-bold text-white">0.2.0</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Search Tab -->
-        <div id="view-search" class="view hidden">
-            <!-- Model Search Section -->
-            <div class="card rounded-2xl p-6 shadow-2xl mb-6">
-                <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
-                    <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
-                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Search HuggingFace Models</span>
-                </h2>
-                <div class="grid grid-cols-1 gap-4 mb-4">
-                    <div class="flex gap-4">
-                        <input type="text" id="searchQuery" placeholder="Search for models (e.g., llama, mistral, phi)" class="flex-1 input-field px-4 py-3 rounded-lg text-sm" />
-                        <input type="text" id="searchAuthor" placeholder="Author (optional, e.g., TheBloke)" class="input-field px-4 py-3 rounded-lg text-sm w-64" />
-                        <select id="searchLimit" class="input-field px-4 py-3 rounded-lg text-sm w-32">
-                            <option value="10">10 results</option>
-                            <option value="20" selected>20 results</option>
-                            <option value="50">50 results</option>
-                        </select>
-                    </div>
-                </div>
-                <button onclick="searchModels()" class="btn-primary px-6 py-3 rounded-xl font-semibold">
-                    <span>Search Models</span>
-                </button>
-                <div id="searchResults" class="mt-6 hidden">
-                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Search Results</h3>
-                    <div id="searchResultsList" class="space-y-3"></div>
                 </div>
             </div>
 
-            <!-- Model Catalog Section -->
-            <div class="card rounded-2xl p-6 shadow-2xl">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-lg font-bold flex items-center gap-2.5">
-                        <span class="w-1 h-5 bg-gradient-to-b from-purple-400 to-pink-400 rounded-full"></span>
-                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Curated Model Catalog</span>
-                    </h2>
-                    <button onclick="loadCatalog()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">
-                        Refresh Catalog
-                    </button>
-                </div>
-                <div id="catalogList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="text-center text-gray-500 col-span-full py-12">
-                        <div class="spinner mx-auto mb-4"></div>
-                        <p class="text-sm font-medium">Loading catalog...</p>
+            <div class="card flex-1 flex flex-col overflow-hidden">
+                <div id="chatMessages" class="flex-1 scrollable space-y-2 mb-4">
+                    <div class="text-center text-slate-400 py-20">
+                        <p>Start a conversation</p>
+                        <p class="text-xs mt-2 text-slate-500">Select a model and type below</p>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Sessions Tab -->
-        <div id="view-sessions" class="view hidden">
-            <div class="card rounded-2xl p-6 shadow-2xl">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-lg font-bold flex items-center gap-2.5">
-                        <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-accent-secondary rounded-full"></span>
-                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Saved Sessions</span>
-                    </h2>
-                    <button onclick="loadSessions()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">
-                        Refresh
-                    </button>
-                </div>
-                <div id="sessionsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="text-center text-gray-500 col-span-full py-12">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-primary/10 to-accent-secondary/10 flex items-center justify-center ring-1 ring-white/5">
-                            <svg class="w-8 h-8 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
-                            </svg>
+                <div class="flex-shrink-0">
+                    <div class="flex gap-2 mb-2">
+                        <textarea id="chatInput" placeholder="Enter message (Shift+Enter for new line, Enter to send)..." 
+                           onkeydown="handleChatKeydown(event)"
+                           rows="2"
+                           class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-white resize-none"></textarea>
+                        <div class="flex flex-col gap-2">
+                            <button onclick="sendChat()" id="sendBtn" class="btn btn-primary flex-1">Send</button>
+                            <button onclick="stopGeneration()" id="stopBtn" class="btn btn-danger btn-sm hidden">Stop</button>
                         </div>
-                        <p class="text-sm font-medium">No saved sessions</p>
-                        <p class="text-xs text-gray-600 mt-1">Start a chat and save it to create a session</p>
                     </div>
-                </div>
-            </div>
-        </div>
-        
-        <div id="view-api" class="view hidden">
-            <div class="card rounded-2xl p-6 shadow-2xl">
-                <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
-                    <span class="w-1 h-5 bg-gradient-to-b from-accent-warning to-amber-400 rounded-full"></span>
-                    <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">API Playground</span>
-                </h2>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Request</h3>
-                        <select id="apiEndpoint" class="w-full input-field px-4 py-2.5 rounded-lg text-sm font-medium mb-4 cursor-pointer">
-                            <option value="GET /v1/health">GET /v1/health</option>
-                            <option value="GET /v1/models">GET /v1/models</option>
-                            <option value="POST /v1/chat/completions">POST /v1/chat/completions</option>
-                        </select>
-                        <textarea id="apiRequest" class="w-full h-64 input-field px-4 py-3 rounded-xl text-sm font-mono resize-none" placeholder='{"model": "model-name", "messages": [{"role": "user", "content": "Hello"}]}'></textarea>
-                        <button onclick="testAPI()" class="mt-4 btn-primary px-6 py-3 rounded-xl font-semibold transition-all w-full">Send Request</button>
-                    </div>
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Response</h3>
-                        <pre id="apiResponse" class="h-80 overflow-auto text-sm"><code class="text-gray-400">Response will appear here...</code></pre>
+                    <div class="flex gap-2 text-xs text-slate-400">
+                        <span id="tokenCount">0 tokens</span>
+                        <span>|</span>
+                        <span id="messageCount">0 messages</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="view-usb" class="view hidden">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Import from USB -->
-                <div class="card rounded-2xl p-6 shadow-2xl">
-                    <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
-                        <span class="w-1 h-5 bg-gradient-to-b from-accent-secondary to-blue-400 rounded-full"></span>
-                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Import from USB</span>
-                    </h2>
-                    
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-300 mb-2">USB Drive Path</label>
-                        <input type="text" id="usbImportPath" placeholder="/media/usb or /mnt/usb" class="w-full input-field px-4 py-2.5 rounded-lg text-sm">
-                        <p class="text-xs text-gray-500 mt-1">Common paths: /media/usb, /mnt/usb, /Volumes/USB</p>
-                    </div>
-                    
-                    <button onclick="scanUSBDrive()" class="btn-primary px-6 py-2.5 rounded-xl font-semibold transition-all w-full mb-4">
-                        Scan for Models
-                    </button>
-                    
-                    <div id="usbScanResults" class="hidden">
-                        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Found Models</h3>
-                        <div id="usbModelsList" class="space-y-2 mb-4 max-h-80 overflow-y-auto">
-                            <!-- Models will be listed here -->
-                        </div>
-                        <button onclick="importSelectedModels()" class="btn-primary px-6 py-2.5 rounded-xl font-semibold transition-all w-full">
-                            Import Selected Models
-                        </button>
+        <!-- Models Tab -->
+        <div id="content-models" class="hidden space-y-4">
+            <div class="card">
+                <h3 class="text-lg font-semibold mb-4">Model Management</h3>
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="searchQuery" placeholder="Search models (e.g., llama, phi, mistral)..." 
+                           class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                    <button onclick="searchModels()" class="btn btn-primary">Search</button>
+                </div>
+                <div id="searchResults" class="space-y-2"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="text-lg font-semibold mb-4">Installed Models</h3>
+                <div id="installedModels" class="space-y-2">
+                    <p class="text-sm text-slate-400">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Tab -->
+        <div id="content-terminal" class="hidden h-full flex flex-col gap-4">
+            <div class="card flex-1 flex flex-col overflow-hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold">Terminal</h3>
+                    <div class="flex gap-2">
+                        <button onclick="killCommand()" id="killBtn" class="btn btn-danger btn-sm hidden">Kill</button>
+                        <button onclick="clearTerminal()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
                 </div>
-                
-                <!-- Export to USB -->
-                <div class="card rounded-2xl p-6 shadow-2xl">
-                    <h2 class="text-lg font-bold mb-6 flex items-center gap-2.5">
-                        <span class="w-1 h-5 bg-gradient-to-b from-accent-primary to-green-400 rounded-full"></span>
-                        <span class="bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Export to USB</span>
-                    </h2>
-                    
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-300 mb-2">USB Drive Path</label>
-                        <input type="text" id="usbExportPath" placeholder="/media/usb or /mnt/usb" class="w-full input-field px-4 py-2.5 rounded-lg text-sm">
-                        <p class="text-xs text-gray-500 mt-1">Models will be copied to this location</p>
-                    </div>
-                    
-                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Select Models to Export</h3>
-                    <div id="exportModelsList" class="space-y-2 mb-4 max-h-80 overflow-y-auto">
-                        <!-- Models will be listed here -->
-                    </div>
-                    
-                    <button onclick="exportSelectedModels()" class="btn-primary px-6 py-2.5 rounded-xl font-semibold transition-all w-full">
-                        Export Selected Models
-                    </button>
+                <div class="terminal-output scrollable" id="terminalOutput">
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                    <div class="terminal-line">Connected to real offgrid binary</div>
+                    <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
+                </div>
+                <div class="terminal-input-line" id="terminalInputLine">
+                    <span class="terminal-prompt">$</span>
+                    <input type="text" id="terminalInput" placeholder="Enter command..." 
+                           onkeydown="handleTerminalKeydown(event)"
+                           class="terminal-input" autocomplete="off" />
+                </div>
+            </div>
+            
+            <div class="card flex-shrink-0">
+                <h4 class="text-sm font-semibold mb-2">Quick Commands</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <button onclick="runQuickCommand('offgrid list')" class="btn btn-secondary btn-sm">List Models</button>
+                    <button onclick="runQuickCommand('offgrid info')" class="btn btn-secondary btn-sm">Server Info</button>
+                    <button onclick="runQuickCommand('offgrid doctor')" class="btn btn-secondary btn-sm">Run Test</button>
+                    <button onclick="runQuickCommand('offgrid --help')" class="btn btn-secondary btn-sm">Help</button>
                 </div>
             </div>
         </div>
     </main>
-    
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+
     <script>
-        let currentTab = 'chat', messages = [], isStreaming = false;
-        const API_BASE = window.location.origin;
+        let currentModel = '';
+        let messages = [];
+        let isGenerating = false;
+        let abortController = null;
+        let commandHistory = [];
+        let historyIndex = -1;
+        let terminalRunning = false;
+        let currentTerminalAbort = null;
+        let terminalChatMode = false;
+        let terminalChatModel = '';
+        let terminalChatHistory = [];
         
-        // Message Window System
-        function showMessage(title, message, type = 'info', buttons = null) {
-            return new Promise((resolve) => {
-                const overlay = document.createElement('div');
-                overlay.className = 'message-window-overlay';
-                
-                const iconSvgs = {
-                    success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>',
-                    error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>',
-                    warning: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>',
-                    info: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'
-                };
-                
-                const defaultButtons = buttons || [{ text: 'OK', primary: true }];
-                const buttonsHtml = defaultButtons.map((btn, idx) => 
-                    `<button class="message-window-btn ${btn.primary ? 'primary' : 'secondary'}" data-index="${idx}">${btn.text}</button>`
-                ).join('');
-                
-                overlay.innerHTML = `
-                    <div class="message-window">
-                        <div class="message-window-header">
-                            <div class="message-window-icon ${type}">
-                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    ${iconSvgs[type]}
-                                </svg>
-                            </div>
-                            <div class="flex-1">
-                                <div class="message-window-title">${title}</div>
-                            </div>
-                        </div>
-                        <div class="message-window-content">${message}</div>
-                        <div class="message-window-buttons">
-                            ${buttonsHtml}
-                        </div>
-                    </div>
-                `;
-                
-                document.body.appendChild(overlay);
-                
-                overlay.querySelectorAll('.message-window-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const index = parseInt(btn.dataset.index);
-                        const result = defaultButtons[index].value !== undefined ? defaultButtons[index].value : true;
-                        overlay.remove();
-                        resolve(result);
-                    });
-                });
-                
-                overlay.addEventListener('click', (e) => {
-                    if (e.target === overlay) {
-                        overlay.remove();
-                        resolve(false);
-                    }
-                });
-            });
-        }
-        
-        function showConfirm(title, message) {
-            return showMessage(title, message, 'warning', [
-                { text: 'Cancel', primary: false, value: false },
-                { text: 'Confirm', primary: true, value: true }
-            ]);
-        }
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            switchTab('chat');
-            checkHealth();
-            loadModels();
-            setInterval(checkHealth, 5000);
-        });
-        
+        // Request throttling to prevent system overload
+        let lastRequestTime = 0;
+        let requestCooldown = 500; // Minimum 500ms between requests
+        let pendingRequest = false;
+
+        // Tab switching
         function switchTab(tab) {
-            currentTab = tab;
-            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
-            document.getElementById(`view-${tab}`).classList.remove('hidden');
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`tab-${tab}`).classList.add('active');
-            if (tab === 'models') loadModels();
-            if (tab === 'usb') loadExportModelsList();
-            if (tab === 'search') {
-                // Load catalog when switching to search tab
-                const catalogList = document.getElementById('catalogList');
-                if (catalogList.querySelector('.spinner')) {
-                    loadCatalog();
-                }
-            }
-        }
-        
-        async function checkHealth() {
-            try {
-                const res = await fetch(`${API_BASE}/v1/health`);
-                const data = await res.json();
-                const indicator = document.getElementById('statusIndicator');
-                const text = document.getElementById('statusText');
-                if (data.status === 'ok' || data.status === 'running') {
-                    indicator.className = 'status-dot online';
-                    text.textContent = 'Online';
-                    text.className = 'text-xs font-semibold text-accent-success uppercase tracking-wider';
-                } else {
-                    indicator.className = 'status-dot bg-red-500';
-                    text.textContent = 'Error';
-                    text.className = 'text-xs font-semibold text-red-400 uppercase tracking-wider';
-                }
-            } catch (err) {
-                document.getElementById('statusIndicator').className = 'status-dot bg-gray-500';
-                document.getElementById('statusText').textContent = 'Offline';
-                document.getElementById('statusText').className = 'text-xs font-semibold text-gray-400 uppercase tracking-wider';
-            }
-        }
-        
-        async function loadModels() {
-            try {
-                const res = await fetch(`${API_BASE}/v1/models`);
-                const data = await res.json();
-                const select = document.getElementById('modelSelect');
-                const currentSelection = select.value; // Remember current selection
-                select.innerHTML = '<option value="">Select Model...</option>';
-                const modelsList = document.getElementById('modelsList');
-                modelsList.innerHTML = '';
-                if (data.data && data.data.length > 0) {
-                    let modelsToShow = data.data;
-                    
-                    // Filter favorites if enabled
-                    if (favoritesOnly) {
-                        modelsToShow = modelsToShow.filter(m => favoriteModels.has(m.id));
-                    }
-                    
-                    if (modelsToShow.length === 0) {
-                        modelsList.innerHTML = '<div class="text-center text-gray-400 col-span-full py-8">No favorite models yet</div>';
-                        return;
-                    }
-                    
-                    let hasSelection = false;
-                    modelsToShow.forEach((model, index) => {
-                        const option = document.createElement('option');
-                        option.value = model.id;
-                        option.textContent = model.id;
-                        select.appendChild(option);
-                        
-                        // Auto-select first model if no current selection
-                        if (!currentSelection && index === 0) {
-                            select.value = model.id;
-                            hasSelection = true;
-                        } else if (currentSelection === model.id) {
-                            select.value = model.id;
-                            hasSelection = true;
-                        }
-                        
-                        const isFavorite = favoriteModels.has(model.id);
-                        const card = document.createElement('div');
-                        card.className = 'card rounded-xl p-5 hover:border-accent-primary/50 transition-all group';
-                        card.innerHTML = `
-                            <div class="flex items-start justify-between mb-3">
-                                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-primary/20 to-accent-secondary/20 flex items-center justify-center ring-1 ring-white/5 group-hover:ring-accent-primary/30 transition-all">
-                                    <svg class="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
-                                    </svg>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="event.stopPropagation(); toggleFavorite('${model.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent-primary/10 transition-all" title="Toggle favorite">
-                                        <svg class="w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-gray-500'}" fill="${isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-                                        </svg>
-                                    </button>
-                                    <button onclick="event.stopPropagation(); deleteModel('${model.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 transition-all" title="Delete model">
-                                        <svg class="w-5 h-5 text-red-400 hover:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
-                                    <span class="badge badge-primary text-xs">Ready</span>
-                                </div>
-                            </div>
-                            <h3 class="font-bold text-white mb-1.5 group-hover:text-accent-primary transition-colors">${model.id}</h3>
-                            <p class="text-xs text-gray-500 font-medium">Owner: <span class="text-gray-400">${model.owned_by || 'local'}</span></p>
-                        `;
-                        modelsList.appendChild(card);
-                    });
-                    document.getElementById('sysStatus').textContent = 'Online';
-                    document.getElementById('sysStatus').className = 'text-xl font-bold text-accent-success';
-                    document.getElementById('sysModels').textContent = data.data.length;
-                } else {
-                    modelsList.innerHTML = '<div class="text-center text-gray-400 col-span-full py-8">No models available</div>';
-                }
-            } catch (err) {
-                console.error('Failed to load models:', err);
-            }
-        }
-        
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const modelSelect = document.getElementById('modelSelect');
-            const message = input.value.trim();
-            const model = modelSelect.value;
-            if (!message || !model) { 
-                await showMessage('Missing Information', 'Please select a model and enter a message', 'warning');
-                return; 
-            }
-            if (isStreaming) return;
-            addMessage('user', message);
-            input.value = '';
-            document.getElementById('streamingIndicator').classList.remove('hidden');
-            isStreaming = true;
-            const assistantMsgId = addMessage('assistant', '');
-            try {
-                // Get advanced parameters
-                const temperature = parseFloat(document.getElementById('temperature').value);
-                const maxTokens = parseInt(document.getElementById('maxTokens').value);
-                const topP = parseFloat(document.getElementById('topP').value);
-                
-                const res = await fetch(`${API_BASE}/v1/chat/completions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        model: model, 
-                        messages: [{ role: 'user', content: message }], 
-                        stream: true,
-                        temperature: temperature,
-                        max_tokens: maxTokens,
-                        top_p: topP
-                    })
-                });
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let fullResponse = '';
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n').filter(l => l.trim());
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = line.slice(6);
-                            if (data === '[DONE]') continue;
-                            try {
-                                const json = JSON.parse(data);
-                                const content = json.choices?.[0]?.delta?.content;
-                                if (content) {
-                                    fullResponse += content;
-                                    updateMessage(assistantMsgId, fullResponse);
-                                }
-                            } catch (e) {}
-                        }
-                    }
-                }
-            } catch (err) {
-                updateMessage(assistantMsgId, 'Error: Failed to get response');
-                console.error(err);
-            } finally {
-                isStreaming = false;
-                document.getElementById('streamingIndicator').classList.add('hidden');
-            }
-        }
-        
-        async function onModelChange() {
-            const modelSelect = document.getElementById('modelSelect');
-            const selectedModel = modelSelect.value;
+            document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('active');
             
-            if (!selectedModel) return;
+            if (tab === 'models') {
+                loadInstalledModels();
+                // Clear search input
+                document.getElementById('searchQuery').value = '';
+                document.getElementById('searchResults').innerHTML = '';
+            }
+            if (tab === 'chat') {
+                loadChatModels();
+                updateChatStats();
+            }
+        }
+
+        // Chat keyboard handler
+        function handleChatKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChat();
+            }
+        }
+
+        // Terminal keyboard handler
+        function handleTerminalKeydown(event) {
+            const input = event.target;
             
-            // Show loading indicator
-            const originalText = modelSelect.options[modelSelect.selectedIndex].text;
-            modelSelect.options[modelSelect.selectedIndex].text = '⏳ Loading...';
-            modelSelect.disabled = true;
-            
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                runCommand();
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex] || '';
+                }
+            } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex] || '';
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    input.value = '';
+                }
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                autocompleteCommand(input);
+            }
+        }
+
+        function autocompleteCommand(input) {
+            const val = input.value;
+            const commands = [
+                'offgrid list',
+                'offgrid download ',
+                'offgrid remove ',
+                'offgrid search ',
+                'offgrid run ',
+                'offgrid info',
+                'offgrid doctor',
+                'offgrid --help',
+                'offgrid --version',
+                'help',
+                'clear',
+                'history'
+            ];
+            const match = commands.find(cmd => cmd.startsWith(val));
+            if (match) {
+                input.value = match;
+            }
+        }
+
+        function updateChatStats() {
+            document.getElementById('messageCount').textContent = `${messages.length} messages`;
+            const totalTokens = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+            document.getElementById('tokenCount').textContent = `~${Math.ceil(totalTokens / 4)} tokens`;
+        }
+
+        // Load models for chat
+        async function loadChatModels() {
             try {
-                // Check if model is ready by attempting to get models list
-                const res = await fetch(`${API_BASE}/v1/models`);
-                const data = await res.json();
+                const resp = await fetch('/models');
+                const data = await resp.json();
+                const models = data.data || [];
+                const select = document.getElementById('chatModel');
+                select.innerHTML = '';
                 
-                // Verify the selected model is still available
-                const modelExists = data.data && data.data.some(m => m.id === selectedModel);
-                
-                if (!modelExists) {
-                    await showMessage('Model Not Found', `The model "${selectedModel}" is no longer available.`, 'error');
-                    modelSelect.value = '';
-                    await loadModels(); // Reload models
+                if (models.length === 0) {
+                    select.innerHTML = '<option value="">No models available</option>';
                     return;
                 }
                 
-                // Model is ready
-                modelSelect.options[modelSelect.selectedIndex].text = originalText;
+                models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.id;
+                    select.appendChild(opt);
+                });
                 
-            } catch (err) {
-                console.error('Model readiness check failed:', err);
-                await showMessage('Model Check Failed', 'Could not verify model status. Please try again.', 'error');
-                modelSelect.options[modelSelect.selectedIndex].text = originalText;
-            } finally {
-                modelSelect.disabled = false;
+                // Auto-select first model if none selected
+                if (!currentModel && models.length > 0) {
+                    currentModel = models[0].id;
+                    select.value = currentModel;
+                }
+            } catch (e) {
+                console.error('Failed to load models:', e);
+                document.getElementById('chatModel').innerHTML = '<option value="">Error loading models</option>';
             }
         }
-        
-        function addMessage(role, content) {
-            const messagesDiv = document.getElementById('messages');
-            if (messages.length === 0) messagesDiv.innerHTML = '';
-            const msgId = `msg-${Date.now()}`;
-            const isUser = role === 'user';
-            const msgDiv = document.createElement('div');
-            msgDiv.id = msgId;
-            msgDiv.className = `message flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`;
-            msgDiv.innerHTML = `
-                <div class="flex gap-3 max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'}">
-                    <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ring-1 ring-white/10 ${isUser ? 'bg-gradient-to-br from-accent-primary to-emerald-600' : 'bg-gradient-to-br from-accent-secondary to-cyan-600'}">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                            ${isUser ? '<path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>' : '<path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>'}
-                        </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">${isUser ? 'You' : 'AI'}</div>
-                        <div class="rounded-xl p-4 ${isUser ? 'message-user' : 'message-assistant'} shadow-lg">
-                            <div class="prose prose-invert prose-sm max-w-none msg-content leading-relaxed">${isUser ? escapeHtml(content) : marked.parse(content || '_Thinking..._')}</div>
-                        </div>
+
+        // Clear chat
+        function clearChat() {
+            if (messages.length === 0) return;
+            
+            const chatMessages = document.getElementById('chatMessages');
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'card mb-4';
+            confirmDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)';
+            confirmDiv.style.border = '1px solid rgba(239, 68, 68, 0.5)';
+            confirmDiv.innerHTML = `
+                <div class="text-center">
+                    <p class="text-red-400 font-semibold mb-3">⚠ Clear All Messages?</p>
+                    <p class="text-sm mb-4">This will delete all ${messages.length} messages in the conversation.</p>
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="confirmClearChat(true)" class="btn btn-danger btn-sm">Clear Chat</button>
+                        <button onclick="confirmClearChat(false)" class="btn btn-secondary btn-sm">Cancel</button>
                     </div>
                 </div>
             `;
-            messagesDiv.appendChild(msgDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            messages.push({ id: msgId, role, content });
-            return msgId;
+            chatMessages.appendChild(confirmDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-        
-        function updateMessage(msgId, content) {
-            const msgDiv = document.getElementById(msgId);
-            if (msgDiv) {
-                msgDiv.querySelector('.msg-content').innerHTML = marked.parse(content || '_Thinking..._');
-                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+
+        // Export chat
+        function exportChat() {
+            if (messages.length === 0) {
+                const chatMessages = document.getElementById('chatMessages');
+                const notice = document.createElement('div');
+                notice.className = 'text-center text-yellow-400 py-4';
+                notice.textContent = '⚠ No messages to export';
+                chatMessages.appendChild(notice);
+                setTimeout(() => notice.remove(), 3000);
+                return;
             }
-            // Update the message in the messages array
-            const messageIndex = messages.findIndex(m => m.id === msgId);
-            if (messageIndex !== -1) {
-                messages[messageIndex].content = content;
+            const content = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat-${currentModel}-${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Stop generation
+        function stopGeneration() {
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
             }
+            isGenerating = false;
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('stopBtn').classList.add('hidden');
+            document.getElementById('statusBadge').className = 'badge badge-success';
+            document.getElementById('statusBadge').textContent = 'Ready';
         }
-        
-        function clearChat() {
-            messages = [];
-            document.getElementById('messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><div class="text-4xl mb-4">◆</div><p>Select a model and start chatting</p></div>';
-        }
-        
-        async function testAPI() {
-            const endpoint = document.getElementById('apiEndpoint').value;
-            const requestBody = document.getElementById('apiRequest').value;
-            const responseEl = document.getElementById('apiResponse');
-            responseEl.innerHTML = '<code class="text-gray-400">Loading...</code>';
+
+        // Send chat message with streaming
+        async function sendChat() {
+            // Prevent rapid-fire requests
+            if (isGenerating || pendingRequest) {
+                console.log('Request already in progress, ignoring...');
+                return;
+            }
+            
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            // Throttle requests to prevent system overload
+            const now = Date.now();
+            const timeSinceLastRequest = now - lastRequestTime;
+            if (timeSinceLastRequest < requestCooldown) {
+                console.log(`Throttling: Wait ${requestCooldown - timeSinceLastRequest}ms before next request`);
+                return;
+            }
+            
+            lastRequestTime = now;
+            pendingRequest = true;
+
+            const model = document.getElementById('chatModel').value;
+            if (!model) {
+                const statusBadge = document.getElementById('statusBadge');
+                statusBadge.className = 'badge badge-warning';
+                statusBadge.textContent = 'Select Model';
+                setTimeout(() => {
+                    statusBadge.className = 'badge badge-success';
+                    statusBadge.textContent = 'Ready';
+                }, 3000);
+                return;
+            }
+
+            // Check model switch
+            if (currentModel && model !== currentModel) {
+                const chatMessages = document.getElementById('chatMessages');
+                const confirmDiv = document.createElement('div');
+                confirmDiv.className = 'card mb-4';
+                confirmDiv.style.background = 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.2) 100%)';
+                confirmDiv.style.border = '1px solid rgba(245, 158, 11, 0.5)';
+                confirmDiv.innerHTML = `
+                    <div class="text-center">
+                        <p class="text-yellow-400 font-semibold mb-3">⚠ Switch Model?</p>
+                        <p class="text-sm mb-4">Switching from <span class="font-semibold">${currentModel}</span> to <span class="font-semibold">${model}</span> will clear the conversation.</p>
+                        <div class="flex gap-2 justify-center">
+                            <button onclick="confirmModelSwitch(true, '${model}')" class="btn btn-primary btn-sm">Switch Model</button>
+                            <button onclick="confirmModelSwitch(false, '${currentModel}')" class="btn btn-secondary btn-sm">Cancel</button>
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(confirmDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                return;
+            }
+            currentModel = model;
+
+            const sendBtn = document.getElementById('sendBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const streamEnabled = document.getElementById('streamToggle').checked;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const maxTokens = parseInt(document.getElementById('maxTokens').value);
+
+            isGenerating = true;
+            input.disabled = true;
+            sendBtn.disabled = true;
+            stopBtn.classList.remove('hidden');
+
+            messages.push({ role: 'user', content: msg });
+            addChatMessage('user', msg);
+            input.value = '';
+            updateChatStats();
+
+            const statusBadge = document.getElementById('statusBadge');
+            statusBadge.className = 'badge badge-warning';
+            statusBadge.textContent = 'Generating';
+
+            abortController = new AbortController();
+            const startTime = Date.now();
+
             try {
-                // Extract endpoint path (format: "GET /v1/health" -> "/v1/health")
-                const endpointParts = endpoint.split(' ');
-                const method = endpointParts[0] || 'GET';
-                const path = endpointParts[1] || endpoint;
+                const response = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: messages,
+                        stream: streamEnabled,
+                        temperature: temperature,
+                        max_tokens: maxTokens
+                    }),
+                    signal: abortController.signal
+                });
+
+                if (!response.ok) {
+                    let errorDetails = '';
+                    try {
+                        const errorData = await response.json();
+                        errorDetails = errorData.error?.message || JSON.stringify(errorData);
+                    } catch (e) {
+                        errorDetails = response.statusText;
+                    }
+                    throw new Error(`Server error (${response.status}): ${errorDetails}`);
+                }
+
+                if (streamEnabled) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let assistantMsg = '';
+                    let msgDiv = null;
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = line.slice(6);
+                                if (data === '[DONE]') continue;
+
+                                try {
+                                    const json = JSON.parse(data);
+                                    const content = json.choices[0]?.delta?.content || '';
+                                    if (content) {
+                                        assistantMsg += content;
+                                        if (!msgDiv) {
+                                            msgDiv = addChatMessage('assistant', '', startTime);
+                                        }
+                                        msgDiv.querySelector('.message-content').textContent = assistantMsg;
+                                    }
+                                } catch (e) {
+                                    // Skip invalid JSON
+                                }
+                            }
+                        }
+                    }
+
+                    if (assistantMsg) {
+                        messages.push({ role: 'assistant', content: assistantMsg });
+                        const elapsed = Date.now() - startTime;
+                        msgDiv.querySelector('.time-badge').textContent = `${elapsed}ms`;
+                    }
+                } else {
+                    const result = await response.json();
+                    const assistantMsg = result.choices[0]?.message?.content || '';
+                    const elapsed = Date.now() - startTime;
+                    if (assistantMsg) {
+                        messages.push({ role: 'assistant', content: assistantMsg });
+                        addChatMessage('assistant', assistantMsg, startTime);
+                    }
+                }
+
+                updateChatStats();
+                statusBadge.className = 'badge badge-success';
+                statusBadge.textContent = 'Ready';
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    addChatMessage('assistant', '[Generation stopped by user]', startTime);
+                    statusBadge.className = 'badge badge-success';
+                    statusBadge.textContent = 'Ready';
+                } else {
+                    const errorMsg = error.message || 'Unknown error occurred';
+                    console.error('Chat error:', error);
+                    addChatMessage('assistant', `⚠ Error: ${errorMsg}\n\nPlease check if the model is loaded and the server is running properly.`, startTime);
+                    statusBadge.className = 'badge badge-error';
+                    statusBadge.textContent = 'Error - Check Server';
+                }
+            } finally {
+                isGenerating = false;
+                pendingRequest = false;
+                currentAbortController = null;
+                input.disabled = false;
+                sendBtn.disabled = false;
+                stopBtn.classList.add('hidden');
+                input.focus();
+            }
+        }
+
+        function addChatMessage(role, content, startTime) {
+            const container = document.getElementById('chatMessages');
+            if (container.querySelector('.text-center')) {
+                container.innerHTML = '';
+            }
+
+            const div = document.createElement('div');
+            div.className = 'message message-' + role;
+            const timestamp = new Date().toLocaleTimeString();
+            const elapsed = startTime ? `<span class="time-badge badge badge-info">${Date.now() - startTime}ms</span>` : '';
+            
+            div.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs opacity-70">${role === 'user' ? 'You' : 'Assistant'}</span>
+                    <span class="text-xs opacity-50">${timestamp} ${elapsed}</span>
+                </div>
+                <div class="text-sm message-content">${content}</div>
+                ${role === 'assistant' ? `
+                <div class="message-actions">
+                    <button onclick="copyMessage(this)" class="btn btn-secondary btn-sm">Copy</button>
+                    <button onclick="regenerateMessage()" class="btn btn-info btn-sm">Regenerate</button>
+                </div>` : ''}
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return div;
+        }
+
+        function copyMessage(btn) {
+            const content = btn.closest('.message').querySelector('.message-content').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = original, 2000);
+            });
+        }
+
+        function regenerateMessage() {
+            if (messages.length < 2) return;
+            messages.pop(); // Remove last assistant message
+            const lastUserMsg = messages[messages.length - 1];
+            messages.pop(); // Remove last user message
+            document.getElementById('chatInput').value = lastUserMsg.content;
+            sendChat();
+        }
+
+        // Search models
+        async function searchModels() {
+            const query = document.getElementById('searchQuery').value.trim();
+            if (!query) {
+                const results = document.getElementById('searchResults');
+                results.innerHTML = '<p class="text-sm text-yellow-400">⚠ Please enter a search query</p>';
+                return;
+            }
+
+            const results = document.getElementById('searchResults');
+            results.innerHTML = '<p class="text-sm text-slate-400">Searching...</p>';
+
+            try {
+                const resp = await fetch(`/v1/search?query=${encodeURIComponent(query)}`);
                 
-                const options = { 
-                    method: method, 
-                    headers: { 'Content-Type': 'application/json' } 
-                };
-                
-                if (method === 'POST' && requestBody.trim()) {
-                    options.body = requestBody;
+                if (!resp.ok) {
+                    results.innerHTML = `<p class="text-sm text-red-400">Search failed: HTTP ${resp.status}</p>`;
+                    return;
                 }
                 
-                const res = await fetch(`${API_BASE}${path}`, options);
-                const data = await res.json();
-                responseEl.innerHTML = `<code class="text-green-400">${JSON.stringify(data, null, 2)}</code>`;
-            } catch (err) {
-                responseEl.innerHTML = `<code class="text-red-400">Error: ${err.message}</code>`;
+                const data = await resp.json();
+                
+                if (data.error) {
+                    const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+                    results.innerHTML = `<p class="text-sm text-red-400">Search error: ${errorMsg}</p>`;
+                    return;
+                }
+                
+                const models = data.results || [];
+
+                if (models.length === 0) {
+                    results.innerHTML = '<p class="text-sm text-slate-400">No models found. Try different keywords like "llama", "phi", "mistral".</p>';
+                    return;
+                }
+
+                results.innerHTML = '';
+                models.slice(0, 10).forEach(model => {
+                    const div = document.createElement('div');
+                    div.className = 'model-item';
+                    const downloadCmd = model.download_command || `offgrid download-hf ${model.id}`;
+                    const sizeInfo = model.size_gb ? `${model.size_gb} GB` : 'Size unknown';
+                    const quantInfo = model.best_quant ? ` · ${model.best_quant}` : '';
+                    const escapedCmd = downloadCmd.replace(/'/g, "\\'");
+                    
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm text-cyan-400">${model.name || model.id}</div>
+                                <div class="text-xs text-slate-400 mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
+                            </div>
+                            <button onclick="downloadModelWithCommand('${escapedCmd}')" class="btn btn-primary btn-sm">Download</button>
+                        </div>
+                    `;
+                    results.appendChild(div);
+                });
+            } catch (error) {
+                results.innerHTML = `<p class="text-sm text-red-400">Search failed: ${error.message}</p>`;
             }
+        }
+
+        // Download model with specific command
+        async function downloadModelWithCommand(command) {
+            // Switch to terminal tab and execute download command
+            switchTab('terminal');
+            document.getElementById('terminalInput').value = command;
+            runCommand();
+        }
+
+        // Download model (fallback for installed models)
+        async function downloadModel(modelName) {
+            // Switch to terminal tab and execute download command
+            switchTab('terminal');
+            document.getElementById('terminalInput').value = `offgrid download ${modelName}`;
+            runCommand();
+        }
+
+        // Load installed models
+        async function loadInstalledModels() {
+            const container = document.getElementById('installedModels');
+            container.innerHTML = '<p class="text-sm text-slate-400">Loading...</p>';
+
+            try {
+                const resp = await fetch('/models');
+                const data = await resp.json();
+                const models = data.data || [];
+
+                if (models.length === 0) {
+                    container.innerHTML = '<p class="text-sm text-slate-400">No models installed</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                models.forEach(model => {
+                    const div = document.createElement('div');
+                    div.className = 'model-item';
+                    const modelId = (model.id || '').replace(/'/g, "\\'");
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm text-cyan-400">${model.id}</div>
+                            </div>
+                            <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm">Remove</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (error) {
+                container.innerHTML = '<p class="text-sm text-red-400">Failed to load models</p>';
+            }
+        }
+
+        // Remove model
+        async function removeModel(modelId) {
+            const container = document.getElementById('installedModels');
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'card mb-4';
+            confirmDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)';
+            confirmDiv.style.border = '1px solid rgba(239, 68, 68, 0.5)';
+            confirmDiv.innerHTML = `
+                <div class="text-center">
+                    <p class="text-red-400 font-semibold mb-3">⚠ Remove Model?</p>
+                    <p class="text-sm mb-4">Are you sure you want to remove <span class="font-semibold">${modelId}</span>?</p>
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="confirmRemoveModel('${modelId.replace(/'/g, "\\'")}')">Remove</button>
+                        <button onclick="this.closest('.card').remove()" class="btn btn-secondary btn-sm">Cancel</button>
+                    </div>
+                </div>
+            `;
+            container.insertBefore(confirmDiv, container.firstChild);
+        }
+
+        // Terminal commands
+        function clearTerminal() {
+            document.getElementById('terminalOutput').innerHTML = `
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                <div class="terminal-line">Connected to real offgrid binary</div>
+                <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
+            `;
+        }
+
+        function killCommand() {
+            if (currentTerminalAbort) {
+                currentTerminalAbort.abort();
+                currentTerminalAbort = null;
+            }
+            terminalRunning = false;
+            const inputLine = document.getElementById('terminalInputLine');
+            inputLine.classList.remove('terminal-running');
+            document.getElementById('terminalInput').disabled = false;
+            document.getElementById('killBtn').classList.add('hidden');
+            addTerminalOutput('Command killed', 'error');
+        }
+
+        function runQuickCommand(cmd) {
+            document.getElementById('terminalInput').value = cmd;
+            runCommand();
+        }
+
+        function runCommand() {
+            const input = document.getElementById('terminalInput');
+            const cmd = input.value.trim();
+            if (!cmd) return;
+
+            // Handle chat mode
+            if (terminalChatMode) {
+                // Prevent sending while already processing
+                if (terminalRunning || pendingRequest) {
+                    console.log('Terminal chat request already in progress');
+                    return; // Silently ignore, don't show error
+                }
+                
+                // Throttle terminal chat requests
+                const now = Date.now();
+                if (now - lastRequestTime < requestCooldown) {
+                    console.log('Throttling terminal chat request');
+                    return;
+                }
+                lastRequestTime = now;
+                
+                // Throttle terminal chat requests
+                const now = Date.now();
+                if (now - lastRequestTime < requestCooldown) {
+                    console.log('Throttling terminal chat request');
+                    return;
+                }
+                lastRequestTime = now;
+                
+                if (cmd === 'exit' || cmd === 'quit') {
+                    addTerminalOutput(cmd, 'prompt');
+                    addTerminalOutput('Exiting chat mode...', 'success');
+                    terminalChatMode = false;
+                    terminalChatModel = '';
+                    terminalChatHistory = [];
+                    input.value = '';
+                    return;
+                } else if (cmd === 'clear') {
+                    clearTerminal();
+                    addTerminalOutput(`Chat mode with ${terminalChatModel}`, 'success');
+                    addTerminalOutput('Type your message or "exit" to quit');
+                    addTerminalOutput('> ', 'success');
+                    input.value = '';
+                    return;
+                }
+                
+                // Send message in chat mode - disable input while processing
+                addTerminalOutput(cmd, 'prompt');
+                input.value = '';
+                input.disabled = true;
+                terminalRunning = true;
+                pendingRequest = true;
+                sendTerminalChat(cmd);
+                return;
+            }
+
+            if (terminalRunning) {
+                addTerminalOutput('Command already running. Use Kill button to stop it.', 'error');
+                return;
+            }
+            
+            // Add to history
+            if (commandHistory[0] !== cmd) {
+                commandHistory.unshift(cmd);
+                if (commandHistory.length > 50) commandHistory.pop();
+            }
+            historyIndex = -1;
+
+            addTerminalOutput(cmd, 'prompt');
+            input.value = '';
+
+            const parts = cmd.split(' ').filter(p => p);
+            const command = parts[0];
+            const args = parts.slice(1);
+
+            // Set running state
+            terminalRunning = true;
+            const inputLine = document.getElementById('terminalInputLine');
+            inputLine.classList.add('terminal-running');
+            input.disabled = true;
+            document.getElementById('killBtn').classList.remove('hidden');
+
+            switch (command) {
+                case 'offgrid':
+                    handleOffgridCommand(args);
+                    break;
+                case 'clear':
+                    clearTerminal();
+                    resetTerminalState();
+                    break;
+                case 'help':
+                    showHelp();
+                    resetTerminalState();
+                    break;
+                case 'history':
+                    showHistory();
+                    resetTerminalState();
+                    break;
+                default:
+                    addTerminalOutput(`Unknown command: ${command}. Type 'help' for available commands`, 'error');
+                    resetTerminalState();
+            }
+        }
+
+        function resetTerminalState() {
+            terminalRunning = false;
+            const inputLine = document.getElementById('terminalInputLine');
+            inputLine.classList.remove('terminal-running');
+            document.getElementById('terminalInput').disabled = false;
+            document.getElementById('killBtn').classList.add('hidden');
+        }
+
+        function showHelp() {
+            const help = [
+                'Available Commands:',
+                '',
+                'Terminal Commands:',
+                '  clear      - Clear terminal screen',
+                '  history    - Show command history',
+                '  help       - Show this help',
+                '',
+                'OffGrid Commands (runs real offgrid binary):',
+                '  offgrid list                - List installed models',
+                '  offgrid search <query>      - Search for models to download',
+                '  offgrid download <model>    - Download a model',
+                '  offgrid remove <model>      - Remove an installed model',
+                '  offgrid run <model>         - Load model and switch to Chat tab',
+                '  offgrid info                - Show system information',
+                '  offgrid doctor              - Run diagnostics',
+                '  offgrid --help              - Show all offgrid commands',
+                '  offgrid --version           - Show version',
+                '',
+                'Tips:',
+                '  - Use arrow keys (↑/↓) to navigate history',
+                '  - Use Tab for command autocomplete',
+                '  - Press Ctrl+C or click Kill to stop command',
+                '  - For interactive chat, use "offgrid run <model>" or Chat tab'
+            ];
+            help.forEach(line => addTerminalOutput(line));
+        }
+
+        function showHistory() {
+            if (commandHistory.length === 0) {
+                addTerminalOutput('No command history');
+                return;
+            }
+            addTerminalOutput('Command History:');
+            commandHistory.slice(0, 10).forEach((cmd, i) => {
+                addTerminalOutput(`  ${i + 1}. ${cmd}`);
+            });
+        }
+
+        async function handleOffgridCommand(args) {
+            if (args.length === 0) {
+                addTerminalOutput('Usage: offgrid <command>', 'error');
+                addTerminalOutput('Try: offgrid help');
+                resetTerminalState();
+                return;
+            }
+
+            // Create abort controller for this command
+            currentTerminalAbort = new AbortController();
+            
+            try {
+                // Execute real offgrid command via backend
+                const resp = await fetch('/v1/terminal/exec', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        command: 'offgrid',
+                        args: args
+                    }),
+                    signal: currentTerminalAbort?.signal
+                });
+
+                if (!resp.ok) {
+                    addTerminalOutput(`Command failed: HTTP ${resp.status}`, 'error');
+                    return;
+                }
+
+                const data = await resp.json();
+                
+                if (data.error) {
+                    addTerminalOutput(`Error: ${data.error}`, 'error');
+                    return;
+                }
+
+                // Display the actual command output
+                const output = data.output || '';
+                
+                // Special handling for 'run' command - enable terminal chat mode
+                const subcmd = args[0];
+                if (subcmd === 'run' && args.length > 1) {
+                    const modelName = args.slice(1).join(' ');
+                    
+                    // Display output but enable chat mode
+                    if (output) {
+                        const lines = output.split('\n');
+                        lines.forEach(line => {
+                            const cleanLine = stripAnsi(line);
+                            if (line.includes('\u001b[38;5;45m') || cleanLine.includes('┌─') || cleanLine.includes('└─')) {
+                                addTerminalOutput(line, 'success');
+                            } else if (cleanLine.includes('Error') || cleanLine.includes('Failed')) {
+                                addTerminalOutput(line, 'error');
+                            } else if (cleanLine.trim()) {
+                                addTerminalOutput(line);
+                            }
+                        });
+                    }
+                    
+                    // Enable chat mode
+                    terminalChatMode = true;
+                    terminalChatModel = modelName;
+                    terminalChatHistory = [];
+                    addTerminalOutput('', 'normal');
+                    addTerminalOutput('Chat mode enabled. Type your messages below.', 'success');
+                    addTerminalOutput('Commands: "exit" to quit, "clear" to reset screen', 'success');
+                    addTerminalOutput('> ', 'success');
+                    
+                    resetTerminalState();
+                    currentTerminalAbort = null;
+                    return;
+                }
+                
+                if (output) {
+                    // Output exactly as received from server - no modifications
+                    const lines = output.split('\n');
+                    lines.forEach(line => {
+                        addTerminalOutput(line, 'raw');
+                    });
+                }
+
+                if (data.exitCode !== 0 && !output) {
+                    addTerminalOutput(`Command exited with code ${data.exitCode}`, 'error');
+                }
+
+                // Refresh UI after certain commands
+                if (['download', 'remove', 'delete'].includes(subcmd)) {
+                    setTimeout(() => {
+                        loadInstalledModels();
+                        loadChatModels();
+                    }, 1000);
+                }
+
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    addTerminalOutput('Command aborted', 'error');
+                } else {
+                    addTerminalOutput(`Error: ${error.message}`, 'error');
+                }
+            } finally {
+                resetTerminalState();
+                currentTerminalAbort = null;
+            }
+        }
+
+
+
+        // Send chat message in terminal mode
+        async function sendTerminalChat(message) {
+            try {
+                terminalChatHistory.push({ role: 'user', content: message });
+                
+                const resp = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: terminalChatModel,
+                        messages: terminalChatHistory,
+                        stream: false,
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (!resp.ok) {
+                    let errorMsg = `HTTP ${resp.status}`;
+                    try {
+                        const errorData = await resp.json();
+                        errorMsg = errorData.error?.message || errorMsg;
+                    } catch (e) {
+                        // Ignore JSON parse errors
+                    }
+                    addTerminalOutput(`Error: ${errorMsg}`, 'error');
+                    terminalChatHistory.pop(); // Remove failed message
+                    return;
+                }
+
+                const data = await resp.json();
+                const assistantMsg = data.choices?.[0]?.message?.content || 'No response';
+                
+                terminalChatHistory.push({ role: 'assistant', content: assistantMsg });
+                
+                addTerminalOutput('', 'normal');
+                addTerminalOutput(assistantMsg, 'success');
+                addTerminalOutput('', 'normal');
+                addTerminalOutput('> ', 'success');
+                
+            } catch (error) {
+                addTerminalOutput(`Error: ${error.message}`, 'error');
+                if (terminalChatHistory.length > 0 && terminalChatHistory[terminalChatHistory.length - 1].role === 'user') {
+                    terminalChatHistory.pop(); // Remove failed message
+                }
+            } finally {
+                // Re-enable input after processing
+                terminalRunning = false;
+                pendingRequest = false;
+                document.getElementById('terminalInput').disabled = false;
+                document.getElementById('terminalInput').focus();
+            }
+        }
+
+        // Strip ANSI escape codes
+        function stripAnsi(text) {
+            return text.replace(/\u001b\[[0-9;]*m/g, '');
+        }
+
+        // Parse ANSI color codes and convert to HTML with CSS classes
+        function parseAnsiColors(text) {
+            // Map of ANSI codes to CSS classes
+            const colorMap = {
+                '36': 'ansi-cyan',           // Cyan
+                '32': 'ansi-green',          // Green  
+                '33': 'ansi-yellow',         // Yellow
+                '31': 'ansi-red',            // Red
+                '34': 'ansi-blue',           // Blue
+                '35': 'ansi-magenta',        // Magenta
+                '38;5;45': 'ansi-cyan',      // Bright cyan (brand primary)
+                '38;5;78': 'ansi-green',     // Brand success
+                '38;5;226': 'ansi-yellow',   // Brand accent
+                '38;5;196': 'ansi-red',      // Brand error
+                '38;5;240': 'ansi-gray',     // Brand muted
+                '1': 'ansi-bold',            // Bold
+                '2': 'ansi-dim',             // Dim
+            };
+            
+            let html = text;
+            let activeClasses = [];
+            
+            // Process ANSI escape sequences
+            html = html.replace(/\u001b\[([0-9;]+)m/g, (match, code) => {
+                if (code === '0') {
+                    // Reset - close all spans
+                    const closeSpans = '</span>'.repeat(activeClasses.length);
+                    activeClasses = [];
+                    return closeSpans;
+                }
+                
+                const cssClass = colorMap[code];
+                if (cssClass) {
+                    activeClasses.push(cssClass);
+                    return `<span class="${cssClass}">`;
+                }
+                return ''; // Unknown code, ignore
+            });
+            
+            // Close any remaining open spans
+            html += '</span>'.repeat(activeClasses.length);
+            
+            // Escape HTML entities in the text content (but not our spans)
+            html = html.replace(/>([^<]+)</g, (match, text) => {
+                return '>' + escapeHtml(text) + '<';
+            });
+            
+            return html;
         }
         
         function escapeHtml(text) {
@@ -1134,850 +1445,35 @@
             return div.innerHTML;
         }
 
-        // ===== Prompt Templates =====
-        const templates = {
-            'summarize': 'Please summarize the following text concisely:\n\n',
-            'code-review': 'Review the following code and provide feedback on best practices, potential bugs, and improvements:\n\n',
-            'translate': 'Translate the following text to [TARGET_LANGUAGE]:\n\n',
-            'explain': 'Explain the following concept in simple terms:\n\n',
-            'brainstorm': 'Help me brainstorm ideas for:\n\n',
-            'debug': 'Help me debug the following code. Identify issues and suggest fixes:\n\n',
-            'document': 'Generate documentation for the following code:\n\n',
-            'refactor': 'Suggest refactoring improvements for this code:\n\n',
-            'test': 'Generate unit tests for the following code:\n\n',
-            'cli': 'Provide a command-line example for:\n\n'
-        };
-
-        function applyTemplate() {
-            const select = document.getElementById('templateSelect');
-            const template = templates[select.value];
-            if (template) {
-                const input = document.getElementById('messageInput');
-                input.value = template;
-                input.focus();
-                select.value = '';
-            }
-        }
-
-        // ===== Session Management =====
-        let currentSession = null;
-        const sessions = {};
-
-        async function saveSession() {
-            // Warn if currently streaming
-            if (isStreaming) {
-                await showMessage('Please Wait', 'Please wait for the AI response to complete before saving the session.', 'warning');
-                return;
-            }
+        function addTerminalOutput(text, type = 'normal') {
+            const terminal = document.getElementById('terminalOutput');
+            const line = document.createElement('div');
+            line.className = 'terminal-line';
             
-            // Filter out empty assistant messages (incomplete streaming responses)
-            const validMessages = messages.filter(msg => {
-                if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '')) {
-                    return false; // Skip empty AI messages
-                }
-                return true;
-            });
-            
-            if (validMessages.length === 0) {
-                await showMessage('Nothing to Save', 'No messages to save. Start a conversation first!', 'info');
-                return;
-            }
-            
-            const name = document.getElementById('sessionName').value.trim() || `session-${Date.now()}`;
-            sessions[name] = {
-                name: name,
-                messages: validMessages, // Save only valid messages
-                model: document.getElementById('modelSelect').value,
-                timestamp: new Date().toISOString(),
-                messageCount: validMessages.length
-            };
-            localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
-            await showMessage('Session Saved', `Session "${name}" has been saved successfully with ${validMessages.length} messages!`, 'success');
-            document.getElementById('sessionName').value = '';
-        }
-
-        function loadSessions() {
-            const stored = localStorage.getItem('offgrid-sessions');
-            if (stored) {
-                Object.assign(sessions, JSON.parse(stored));
-            }
-            displaySessions();
-        }
-
-        function displaySessions() {
-            const container = document.getElementById('sessionsList');
-            const sessionKeys = Object.keys(sessions);
-            
-            if (sessionKeys.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center text-gray-500 col-span-full py-12">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-primary/10 to-accent-secondary/10 flex items-center justify-center ring-1 ring-white/5">
-                            <svg class="w-8 h-8 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
-                            </svg>
-                        </div>
-                        <p class="text-sm font-medium">No saved sessions</p>
-                        <p class="text-xs text-gray-600 mt-1">Start a chat and save it to create a session</p>
-                    </div>`;
-                return;
-            }
-
-            container.innerHTML = sessionKeys.map(key => {
-                const session = sessions[key];
-                const date = new Date(session.timestamp).toLocaleDateString();
-                return `
-                    <div class="card rounded-xl p-5 hover:border-accent-primary/50 transition-all group">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-primary/20 to-accent-secondary/20 flex items-center justify-center ring-1 ring-white/5">
-                                <svg class="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <h3 class="font-bold text-white mb-2">${escapeHtml(session.name)}</h3>
-                        <p class="text-xs text-gray-500 mb-3">${session.messageCount} messages • ${date}</p>
-                        <div class="flex gap-2">
-                            <button onclick="loadSessionData('${key}')" class="flex-1 btn-primary px-3 py-2 rounded-lg text-xs font-medium">Load</button>
-                            <button onclick="deleteSession('${key}')" class="btn-secondary px-3 py-2 rounded-lg text-xs font-medium hover:text-red-400">Delete</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function showLoadSession() {
-            loadSessions();
-            switchTab('sessions');
-        }
-
-        function loadSessionData(name) {
-            const session = sessions[name];
-            if (session) {
-                messages = [...session.messages];
-                document.getElementById('modelSelect').value = session.model;
-                displayMessages();
-                switchTab('chat');
-                currentSession = name;
-            }
-        }
-
-        async function deleteSession(name) {
-            const confirmed = await showConfirm('Delete Session', `Are you sure you want to delete session "${name}"?`);
-            if (confirmed) {
-                delete sessions[name];
-                localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
-                displaySessions();
-            }
-        }
-
-        function displayMessages() {
-            const container = document.getElementById('messages');
-            container.innerHTML = '';
-            messages.forEach(msg => {
-                // Skip empty assistant messages (incomplete/unsaved streaming responses)
-                if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '')) {
-                    return;
-                }
-                
-                const isUser = msg.role === 'user';
-                const msgDiv = document.createElement('div');
-                msgDiv.id = msg.id;
-                msgDiv.className = `message flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`;
-                msgDiv.innerHTML = `
-                    <div class="flex gap-3 max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'}">
-                        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ring-1 ring-white/10 ${isUser ? 'bg-gradient-to-br from-accent-primary to-emerald-600' : 'bg-gradient-to-br from-accent-secondary to-cyan-600'}">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                ${isUser ? '<path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>' : '<path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>'}
-                            </svg>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">${isUser ? 'You' : 'AI'}</div>
-                            <div class="rounded-xl p-4 ${isUser ? 'message-user' : 'message-assistant'} shadow-lg">
-                                <div class="prose prose-invert prose-sm max-w-none msg-content leading-relaxed">${isUser ? escapeHtml(msg.content) : marked.parse(msg.content)}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(msgDiv);
-            });
-            container.scrollTop = container.scrollHeight;
-        }
-
-        // ===== Model Download =====
-        async function downloadModel() {
-            const repo = document.getElementById('hfRepo').value.trim();
-            const file = document.getElementById('hfFile').value.trim();
-            
-            if (!repo || !file) {
-                const modal = createMessageModal('Missing Information', 'Please enter both repository and file name', 'warning');
-                document.body.appendChild(modal);
-                return;
-            }
-
-            // Use the same download modal as search
-            downloadFromSearchDirect(repo, file);
-        }
-
-        // ===== Favorites & Filters =====
-        let favoritesOnly = false;
-        const favoriteModels = new Set(JSON.parse(localStorage.getItem('favorite-models') || '[]'));
-
-        function toggleFavorites() {
-            favoritesOnly = !favoritesOnly;
-            document.getElementById('favFilterText').textContent = favoritesOnly ? 'Show All' : 'Show Favorites';
-            loadModels();
-        }
-
-        function toggleFavorite(modelId) {
-            if (favoriteModels.has(modelId)) {
-                favoriteModels.delete(modelId);
+            if (type === 'prompt') {
+                line.className = 'terminal-line terminal-prompt';
+                line.textContent = '$ ' + text;
+            } else if (type === 'error') {
+                line.className = 'terminal-line terminal-error';
+                line.textContent = text;
+            } else if (type === 'success') {
+                line.className = 'terminal-line terminal-success';
+                line.textContent = text;
+            } else if (type === 'raw') {
+                // Raw output - parse ANSI colors and render with proper styling
+                line.innerHTML = parseAnsiColors(text);
             } else {
-                favoriteModels.add(modelId);
+                // Normal output - preserve whitespace
+                line.textContent = text;
             }
-            localStorage.setItem('favorite-models', JSON.stringify([...favoriteModels]));
-            loadModels();
-        }
-
-        // ===== Model Search =====
-        async function searchModels() {
-            const query = document.getElementById('searchQuery').value.trim();
-            const author = document.getElementById('searchAuthor').value.trim();
-            const limit = document.getElementById('searchLimit').value;
             
-            if (!query) {
-                await showMessage('Search Query Required', 'Please enter a search term to find models.', 'warning');
-                return;
-            }
-
-            const resultsDiv = document.getElementById('searchResults');
-            const resultsList = document.getElementById('searchResultsList');
-            
-            resultsDiv.classList.remove('hidden');
-            resultsList.innerHTML = '<div class="text-center py-8"><div class="spinner mx-auto mb-4"></div><p class="text-sm text-gray-400">Searching models...</p></div>';
-
-            try {
-                // Build query params
-                const params = new URLSearchParams({
-                    query: query,
-                    limit: limit
-                });
-                if (author) {
-                    params.append('author', author);
-                }
-
-                const res = await fetch(`${API_BASE}/v1/search?${params}`);
-                const data = await res.json();
-
-                if (!data.models || data.models.length === 0) {
-                    resultsList.innerHTML = '<div class="text-center py-8 text-gray-400">No models found. Try different search terms.</div>';
-                    return;
-                }
-
-                resultsList.innerHTML = data.models.map((model, idx) => {
-                    // Use the provided author and name from the API
-                    const author = model.author || 'Unknown Author';
-                    const modelName = model.name || model.id || 'Unknown Model';
-                    
-                    return `
-                    <div class="card rounded-xl p-4 hover:border-accent-primary/50 transition-all">
-                        <div class="flex items-start gap-4">
-                            <div class="flex-1 min-w-0">
-                                <h3 class="font-bold text-white mb-1 truncate">${escapeHtml(modelName)}</h3>
-                                <p class="text-xs text-gray-500 mb-2">${escapeHtml(author)}</p>
-                                ${model.description ? `<p class="text-xs text-gray-400 line-clamp-2 mb-3">${escapeHtml(model.description)}</p>` : ''}
-                                <div class="flex gap-2 mt-2">
-                                    ${model.downloads ? `<span class="text-xs text-gray-500">↓ ${formatNumber(model.downloads)}</span>` : ''}
-                                    ${model.likes ? `<span class="text-xs text-gray-500">♥ ${formatNumber(model.likes)}</span>` : ''}
-                                </div>
-                            </div>
-                            <div class="flex flex-col gap-2 min-w-[180px]">
-                                <select id="quant-${idx}" class="input-field px-3 py-2 rounded-lg text-xs font-medium cursor-pointer">
-                                    <option value="Q4_K_M">Q4_K_M (Recommended)</option>
-                                    <option value="Q4_K_S">Q4_K_S (Faster)</option>
-                                    <option value="Q5_K_M">Q5_K_M (Better Quality)</option>
-                                    <option value="Q8_0">Q8_0 (Best Quality)</option>
-                                </select>
-                                <button onclick="downloadFromSearchDirect('${escapeHtml(model.id)}', document.getElementById('quant-${idx}').value, '${escapeHtml(modelName)}')" class="btn-primary px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap">
-                                    Download
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `}).join('');
-            } catch (err) {
-                console.error('Search failed:', err);
-                resultsList.innerHTML = `<div class="text-center py-8 text-red-400">Search failed: ${escapeHtml(err.message)}</div>`;
-            }
-        }
-
-        async function downloadFromSearchDirect(modelId, quantization, modelName) {
-            try {
-                // Show loading state
-                const modal = createDownloadProgressModal(modelId, quantization);
-                document.body.appendChild(modal);
-                
-                // Call backend to download - let server figure out the exact filename
-                const res = await fetch(`${API_BASE}/v1/models/download`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        repository: modelId, 
-                        quantization: quantization  // Just send the quant, server will find the file
-                    })
-                });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    // Start polling for progress
-                    pollDownloadProgress(modal, modelId);
-                } else {
-                    modal.remove();
-                    const errorModal = createMessageModal('Download Failed', data.error || 'Failed to start download', 'error');
-                    document.body.appendChild(errorModal);
-                }
-            } catch (err) {
-                console.error('Download failed:', err);
-                const errorModal = createMessageModal('Download Failed', `Error: ${err.message}`, 'error');
-                document.body.appendChild(errorModal);
-            }
-        }
-        
-        function createDownloadProgressModal(modelId, quantization) {
-            const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4';
-            modal.innerHTML = `
-                <div class="card rounded-2xl p-6 max-w-md w-full shadow-2xl animate-slide-up">
-                    <h3 class="text-lg font-bold text-white text-center mb-4">Downloading Model</h3>
-                    <div class="space-y-4">
-                        <div class="text-center">
-                            <p class="text-sm text-gray-400 mb-1">${escapeHtml(modelId)}</p>
-                            <p class="text-xs text-gray-500">${escapeHtml(quantization)}</p>
-                        </div>
-                        
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-xs">
-                                <span class="text-gray-400" id="download-status">Initializing...</span>
-                                <span class="text-gray-400" id="download-percent">0%</span>
-                            </div>
-                            <div class="w-full bg-dark-elevated rounded-full h-2">
-                                <div id="download-progress-bar" class="bg-accent-primary h-2 rounded-full transition-all" style="width: 0%"></div>
-                            </div>
-                            <div class="flex justify-between text-xs text-gray-500">
-                                <span id="download-bytes">0 MB / 0 MB</span>
-                                <span id="download-speed"></span>
-                            </div>
-                        </div>
-                        
-                        <div class="flex items-start gap-3 p-3 glass rounded-lg">
-                            <svg class="w-5 h-5 text-accent-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            <div class="text-xs text-gray-400">
-                                Download is running in the background. You can close this dialog and it will continue.
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button onclick="this.closest('.fixed').remove()" class="mt-6 btn-secondary px-6 py-3 rounded-xl font-semibold w-full">
-                        Close (Continue in Background)
-                    </button>
-                </div>
-            `;
-            return modal;
-        }
-        
-        async function pollDownloadProgress(modal, modelId) {
-            let lastBytes = 0;
-            let lastTime = Date.now();
-            
-            const pollInterval = setInterval(async () => {
-                try {
-                    const res = await fetch(`${API_BASE}/v1/models/download/progress`);
-                    const progress = await res.json();
-                    
-                    // Find progress for any active download
-                    const activeDownload = Object.values(progress).find(p => p.status === 'downloading');
-                    
-                    if (activeDownload) {
-                        const percent = activeDownload.percent || 0;
-                        const bytesDone = activeDownload.bytes_done || 0;
-                        const bytesTotal = activeDownload.bytes_total || 0;
-                        
-                        // Update progress bar
-                        const progressBar = modal.querySelector('#download-progress-bar');
-                        const percentText = modal.querySelector('#download-percent');
-                        const bytesText = modal.querySelector('#download-bytes');
-                        const statusText = modal.querySelector('#download-status');
-                        const speedText = modal.querySelector('#download-speed');
-                        
-                        if (progressBar) progressBar.style.width = `${percent}%`;
-                        if (percentText) percentText.textContent = `${percent.toFixed(1)}%`;
-                        if (statusText) statusText.textContent = 'Downloading...';
-                        
-                        // Calculate speed
-                        const now = Date.now();
-                        const timeDiff = (now - lastTime) / 1000; // seconds
-                        const bytesDiff = bytesDone - lastBytes;
-                        if (timeDiff > 0) {
-                            const speed = bytesDiff / timeDiff; // bytes per second
-                            const speedMB = (speed / 1024 / 1024).toFixed(2);
-                            if (speedText && speed > 0) speedText.textContent = `${speedMB} MB/s`;
-                        }
-                        lastBytes = bytesDone;
-                        lastTime = now;
-                        
-                        // Update bytes
-                        const doneMB = (bytesDone / 1024 / 1024).toFixed(1);
-                        const totalMB = (bytesTotal / 1024 / 1024).toFixed(1);
-                        if (bytesText) bytesText.textContent = `${doneMB} MB / ${totalMB} MB`;
-                    } else {
-                        // Check if completed
-                        const completed = Object.values(progress).find(p => p.status === 'complete');
-                        if (completed) {
-                            clearInterval(pollInterval);
-                            
-                            // Show success
-                            modal.innerHTML = `
-                                <div class="card rounded-2xl p-6 max-w-md w-full shadow-2xl animate-slide-up">
-                                    <div class="flex items-center justify-center mb-4">
-                                        <div class="w-16 h-16 rounded-full bg-accent-success/20 flex items-center justify-center">
-                                            <svg class="w-8 h-8 text-accent-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                            </svg>
-                                        </div>
-                                    </div>
-                                    <h3 class="text-lg font-bold text-white text-center mb-2">Download Complete!</h3>
-                                    <p class="text-sm text-gray-400 text-center mb-6">${escapeHtml(completed.file_name)}</p>
-                                    <button onclick="this.closest('.fixed').remove(); loadModels();" class="btn-primary px-6 py-3 rounded-xl font-semibold w-full">
-                                        View Models
-                                    </button>
-                                </div>
-                            `;
-                            
-                            // Auto-close after 3 seconds
-                            setTimeout(() => {
-                                modal.remove();
-                                loadModels();
-                            }, 3000);
-                        } else {
-                            // Check for failures
-                            const failed = Object.values(progress).find(p => p.status === 'failed');
-                            if (failed) {
-                                clearInterval(pollInterval);
-                                modal.remove();
-                                const errorModal = createMessageModal('Download Failed', failed.error || 'Download failed', 'error');
-                                document.body.appendChild(errorModal);
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.error('Failed to fetch progress:', err);
-                }
-            }, 1000); // Poll every second
-            
-            // Stop polling if modal is removed
-            const observer = new MutationObserver(() => {
-                if (!document.body.contains(modal)) {
-                    clearInterval(pollInterval);
-                    observer.disconnect();
-                }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-        }
-
-        async function deleteModel(modelId) {
-            const confirmed = await showConfirm(
-                'Delete Model',
-                `Are you sure you want to delete "${modelId}"? This action cannot be undone.`
-            );
-
-            if (!confirmed) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/v1/models/delete`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model_id: modelId })
-                });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    await showMessage('Model Deleted', `Model "${modelId}" has been deleted successfully.`, 'success');
-                    loadModels(); // Refresh the models list
-                } else {
-                    await showMessage('Delete Failed', data.error || 'Failed to delete model', 'error');
-                }
-            } catch (err) {
-                console.error('Delete failed:', err);
-                await showMessage('Delete Failed', `Error: ${err.message}`, 'error');
-            }
-        }
-
-        // ===== Model Catalog =====
-        async function loadCatalog() {
-            const catalogList = document.getElementById('catalogList');
-            catalogList.innerHTML = '<div class="text-center py-12 col-span-full"><div class="spinner mx-auto mb-4"></div><p class="text-sm text-gray-400">Loading catalog...</p></div>';
-
-            try {
-                const res = await fetch(`${API_BASE}/v1/catalog`);
-                const data = await res.json();
-
-                if (!data.models || data.models.length === 0) {
-                    catalogList.innerHTML = '<div class="text-center py-12 text-gray-400 col-span-full">No catalog models available</div>';
-                    return;
-                }
-
-                catalogList.innerHTML = data.models.map(model => `
-                    <div class="card rounded-xl p-5 hover:border-accent-primary/50 transition-all group">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400/20 to-pink-400/20 flex items-center justify-center ring-1 ring-white/5">
-                                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
-                                </svg>
-                            </div>
-                            <span class="badge badge-primary text-xs">${escapeHtml(model.category || 'Featured')}</span>
-                        </div>
-                        <h3 class="font-bold text-white mb-1.5 group-hover:text-accent-primary transition-colors">${escapeHtml(model.name)}</h3>
-                        <p class="text-xs text-gray-500 font-medium mb-2">${escapeHtml(model.description || '')}</p>
-                        ${model.size ? `<p class="text-xs text-gray-600 mb-3">Size: ${escapeHtml(model.size)}</p>` : ''}
-                        <button onclick="downloadCatalogModel('${escapeHtml(model.repo)}', '${escapeHtml(model.file)}')" class="w-full btn-primary px-4 py-2 rounded-lg text-xs font-medium">
-                            Download ${escapeHtml(model.quant || 'Model')}
-                        </button>
-                    </div>
-                `).join('');
-            } catch (err) {
-                console.error('Failed to load catalog:', err);
-                catalogList.innerHTML = '<div class="text-center py-12 text-red-400 col-span-full">Failed to load catalog</div>';
-            }
-        }
-
-        async function downloadCatalogModel(repo, file) {
-            document.getElementById('hfRepo').value = repo;
-            document.getElementById('hfFile').value = file;
-            switchTab('models');
-            await showMessage('Ready to Download', `Model details filled. Click "Download Model" to start.`, 'info');
-        }
-
-        function formatNumber(num) {
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-            return num.toString();
-        }
-
-        // USB Import/Export Functions
-        let foundUSBModels = [];
-
-        async function scanUSBDrive() {
-            const usbPath = document.getElementById('usbImportPath').value.trim();
-            if (!usbPath) {
-                await showMessage('Error', 'Please enter a USB drive path', 'error');
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API_BASE}/v1/usb/scan`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ usb_path: usbPath })
-                });
-
-                if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.error?.message || 'Scan failed');
-                }
-
-                const data = await res.json();
-                foundUSBModels = data.models || [];
-
-                if (foundUSBModels.length === 0) {
-                    await showMessage('No Models Found', 'No GGUF model files found on the USB drive', 'info');
-                    document.getElementById('usbScanResults').classList.add('hidden');
-                    return;
-                }
-
-                displayFoundModels(foundUSBModels);
-                document.getElementById('usbScanResults').classList.remove('hidden');
-                await showMessage('Success', `Found ${foundUSBModels.length} model(s) on USB drive`, 'success');
-            } catch (err) {
-                console.error('USB scan error:', err);
-                await showMessage('Scan Failed', err.message, 'error');
-            }
-        }
-
-        function displayFoundModels(models) {
-            const list = document.getElementById('usbModelsList');
-            list.innerHTML = models.map((model, idx) => `
-                <div class="card p-3 rounded-lg">
-                    <div class="flex items-start gap-3">
-                        <input type="checkbox" id="usb-model-${idx}" checked class="mt-1 w-4 h-4 rounded border-gray-600 bg-dark-elevated text-accent-primary focus:ring-accent-primary focus:ring-offset-0">
-                        <div class="flex-1 min-w-0">
-                            <div class="font-medium text-sm truncate">${model.file_name}</div>
-                            <div class="text-xs text-gray-400 mt-0.5">
-                                ${model.model_id} · ${model.quantization} · ${formatBytes(model.size)}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function importSelectedModels() {
-            const selected = foundUSBModels.filter((_, idx) => 
-                document.getElementById(`usb-model-${idx}`)?.checked
-            );
-
-            if (selected.length === 0) {
-                await showMessage('No Selection', 'Please select at least one model to import', 'warning');
-                return;
-            }
-
-            const confirmed = await showConfirm(
-                'Import Models',
-                `Import ${selected.length} model(s) to your local models directory?`
-            );
-
-            if (!confirmed) return;
-
-            try {
-                const filePaths = selected.map(m => m.file_path);
-                const res = await fetch(`${API_BASE}/v1/usb/import`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file_paths: filePaths })
-                });
-
-                if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.error?.message || 'Import failed');
-                }
-
-                const data = await res.json();
-                const results = data.results || [];
-                
-                const success = results.filter(r => r.success).length;
-                const failed = results.filter(r => !r.success);
-
-                let message = `Successfully imported ${success} model(s).`;
-                if (failed.length > 0) {
-                    message += `\n\nFailed to import:\n${failed.map(f => `• ${f.file_name}: ${f.error}`).join('\n')}`;
-                }
-
-                await showMessage('Import Complete', message, failed.length > 0 ? 'warning' : 'success');
-                
-                // Refresh models list
-                if (success > 0) {
-                    loadModels();
-                }
-            } catch (err) {
-                console.error('Import error:', err);
-                await showMessage('Import Failed', err.message, 'error');
-            }
-        }
-
-        async function loadExportModelsList() {
-            try {
-                const res = await fetch(`${API_BASE}/v1/models`);
-                const data = await res.json();
-                const models = data.data || [];
-
-                const list = document.getElementById('exportModelsList');
-                if (models.length === 0) {
-                    list.innerHTML = '<div class="text-center py-8 text-gray-400">No models available to export</div>';
-                    return;
-                }
-
-                list.innerHTML = models.map((model, idx) => `
-                    <div class="card p-3 rounded-lg">
-                        <div class="flex items-start gap-3">
-                            <input type="checkbox" id="export-model-${idx}" data-model-id="${model.id}" class="mt-1 w-4 h-4 rounded border-gray-600 bg-dark-elevated text-accent-primary focus:ring-accent-primary focus:ring-offset-0">
-                            <div class="flex-1 min-w-0">
-                                <div class="font-medium text-sm truncate">${model.id}</div>
-                                ${model.size ? `<div class="text-xs text-gray-400 mt-0.5">${formatBytes(model.size)}</div>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (err) {
-                console.error('Failed to load models for export:', err);
-                document.getElementById('exportModelsList').innerHTML = 
-                    '<div class="text-center py-8 text-red-400">Failed to load models</div>';
-            }
-        }
-
-        async function exportSelectedModels() {
-            const usbPath = document.getElementById('usbExportPath').value.trim();
-            if (!usbPath) {
-                await showMessage('Error', 'Please enter a USB drive path', 'error');
-                return;
-            }
-
-            const checkboxes = document.querySelectorAll('#exportModelsList input[type="checkbox"]:checked');
-            if (checkboxes.length === 0) {
-                await showMessage('No Selection', 'Please select at least one model to export', 'warning');
-                return;
-            }
-
-            const modelNames = Array.from(checkboxes).map(cb => cb.dataset.modelId);
-
-            const confirmed = await showConfirm(
-                'Export Models',
-                `Export ${modelNames.length} model(s) to ${usbPath}?`
-            );
-
-            if (!confirmed) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/v1/usb/export`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        model_names: modelNames,
-                        usb_path: usbPath
-                    })
-                });
-
-                if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.error?.message || 'Export failed');
-                }
-
-                const data = await res.json();
-                
-                // Show progress modal
-                await createExportProgressModal(modelNames);
-                
-            } catch (err) {
-                console.error('Export error:', err);
-                await showMessage('Export Failed', err.message, 'error');
-            }
-        }
-
-        async function createExportProgressModal(modelNames) {
-            return new Promise((resolve) => {
-                const overlay = document.createElement('div');
-                overlay.className = 'message-window-overlay';
-                
-                overlay.innerHTML = `
-                    <div class="message-window" style="max-width: 600px;">
-                        <div class="message-window-header">
-                            <div class="message-window-icon info">
-                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                                </svg>
-                            </div>
-                            <div class="flex-1">
-                                <div class="message-window-title">Exporting Models to USB</div>
-                            </div>
-                        </div>
-                        <div class="message-window-content">
-                            <div id="exportProgressContent" class="space-y-3">
-                                ${modelNames.map(name => `
-                                    <div class="card p-3 rounded-lg" id="export-progress-${name.replace(/[^a-zA-Z0-9]/g, '_')}">
-                                        <div class="text-sm font-medium mb-2 truncate">${name}</div>
-                                        <div class="w-full bg-dark-bg rounded-full h-2 mb-1">
-                                            <div class="bg-gradient-to-r from-accent-primary to-accent-secondary h-2 rounded-full transition-all" style="width: 0%"></div>
-                                        </div>
-                                        <div class="flex justify-between text-xs text-gray-400">
-                                            <span class="status">Preparing...</span>
-                                            <span class="percent">0%</span>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        <div class="message-window-buttons">
-                            <button class="message-window-btn secondary" id="closeExportBtn" disabled>Close</button>
-                        </div>
-                    </div>
-                `;
-                
-                document.body.appendChild(overlay);
-                
-                const closeBtn = overlay.querySelector('#closeExportBtn');
-                closeBtn.addEventListener('click', () => {
-                    overlay.remove();
-                    resolve();
-                });
-                
-                // Start polling for progress
-                pollExportProgress(modelNames, closeBtn);
-            });
-        }
-
-        async function pollExportProgress(modelNames, closeBtn) {
-            let allComplete = false;
-            
-            const interval = setInterval(async () => {
-                try {
-                    const res = await fetch(`${API_BASE}/v1/usb/export/progress`);
-                    if (!res.ok) throw new Error('Progress fetch failed');
-                    
-                    const progress = await res.json();
-                    let completedCount = 0;
-                    let hasErrors = false;
-                    
-                    modelNames.forEach(modelName => {
-                        const p = progress[modelName];
-                        if (!p) return;
-                        
-                        const id = modelName.replace(/[^a-zA-Z0-9]/g, '_');
-                        const card = document.getElementById(`export-progress-${id}`);
-                        if (!card) return;
-                        
-                        const progressBar = card.querySelector('.bg-gradient-to-r');
-                        const statusSpan = card.querySelector('.status');
-                        const percentSpan = card.querySelector('.percent');
-                        
-                        progressBar.style.width = `${p.percent || 0}%`;
-                        percentSpan.textContent = `${Math.round(p.percent || 0)}%`;
-                        
-                        if (p.status === 'exporting') {
-                            const speed = p.bytes_done / (1024 * 1024); // MB
-                            statusSpan.textContent = `Exporting... ${formatBytes(p.bytes_done)} / ${formatBytes(p.bytes_total)}`;
-                        } else if (p.status === 'complete') {
-                            statusSpan.textContent = 'Complete ✓';
-                            statusSpan.className = 'status text-green-400';
-                            completedCount++;
-                        } else if (p.status === 'failed') {
-                            statusSpan.textContent = `Failed: ${p.error || 'Unknown error'}`;
-                            statusSpan.className = 'status text-red-400';
-                            hasErrors = true;
-                            completedCount++;
-                        }
-                    });
-                    
-                    if (completedCount === modelNames.length) {
-                        clearInterval(interval);
-                        closeBtn.disabled = false;
-                        closeBtn.classList.remove('secondary');
-                        closeBtn.classList.add('primary');
-                        
-                        if (!hasErrors) {
-                            await showMessage('Export Complete', `Successfully exported ${completedCount} model(s) to USB`, 'success');
-                        }
-                    }
-                } catch (err) {
-                    console.error('Progress poll error:', err);
-                }
-            }, 1000); // Poll every second
-        }
-
-        function formatBytes(bytes) {
-            if (!bytes) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSessions();
-            if (currentTab === 'sessions') {
-                displaySessions();
-            }
+        window.addEventListener('DOMContentLoaded', () => {
+            loadChatModels();
         });
     </script>
 </body>

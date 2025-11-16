@@ -586,6 +586,9 @@ func main() {
 		case "benchmark-compare", "compare":
 			handleBenchmarkCompare(os.Args[2:])
 			return
+		case "test":
+			handleTest(os.Args[2:])
+			return
 		case "list":
 			handleList(os.Args[2:])
 			return
@@ -1249,19 +1252,11 @@ func handleDoctor(args []string) {
 
 	// 6. Check disk space
 	fmt.Printf("%s├─ Disk Space%s\n", brandPrimary+colorBold, colorReset)
-	if diskInfo, err := getDiskSpace(cfg.ModelsDir); err == nil {
-		fmt.Printf("│  Available: %s / %s (%.1f%% used)\n",
-			formatBytes(diskInfo.Available),
-			formatBytes(diskInfo.Total),
-			diskInfo.UsedPercent)
-
-		if diskInfo.Available < 2*1024*1024*1024 { // Less than 2GB
-			fmt.Printf("│  %s⚠%s Low disk space (<2GB available)\n", brandAccent, colorReset)
-		} else {
-			fmt.Printf("│  %s✓%s Sufficient disk space\n", brandSuccess, colorReset)
-		}
+	// Simplified disk space check - just show directory exists
+	if _, err := os.Stat(cfg.ModelsDir); err == nil {
+		fmt.Printf("│  %s✓%s Models directory accessible\n", brandSuccess, colorReset)
 	} else {
-		fmt.Printf("│  %s⚠%s Could not check disk space\n", brandAccent, colorReset)
+		fmt.Printf("│  %s⚠%s Models directory not accessible\n", brandAccent, colorReset)
 	}
 	fmt.Println("│")
 
@@ -1765,6 +1760,134 @@ func handleBenchmark(args []string) {
 
 	memEst := float64(meta.Size) * 1.2 // Rough estimate: model + context
 	fmt.Printf("   %sMemory:%s       %.1f GB estimated\n", colorDim, colorReset, memEst/1e9)
+	fmt.Println()
+}
+
+func handleTest(args []string) {
+	fmt.Println()
+	fmt.Printf("%s┌─ Testing OffGrid LLM%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println("│")
+	fmt.Println("│ This will test model switching and chat completions")
+	fmt.Println("│")
+
+	cfg := config.LoadConfig()
+	serverURL := fmt.Sprintf("http://localhost:%d", cfg.ServerPort)
+
+	// Check if server is running
+	fmt.Printf("%s├─ Checking Server%s\n", brandPrimary+colorBold, colorReset)
+	resp, err := http.Get(serverURL + "/v1/health")
+	if err != nil {
+		fmt.Printf("│  %s✗%s Server not running on port %d\n", brandError, colorReset, cfg.ServerPort)
+		fmt.Printf("│  %sℹ%s Start server with: offgrid serve\n", colorDim, colorReset)
+		fmt.Printf("%s└─%s\n", brandPrimary, colorReset)
+		fmt.Println()
+		os.Exit(1)
+	}
+	resp.Body.Close()
+	fmt.Printf("│  %s✓%s Server running\n", brandSuccess, colorReset)
+
+	// Load models
+	fmt.Printf("%s├─ Loading Models%s\n", brandPrimary+colorBold, colorReset)
+	resp, err = http.Get(serverURL + "/models")
+	if err != nil {
+		fmt.Printf("│  %s✗%s Failed to fetch models: %v\n", brandError, colorReset, err)
+		fmt.Printf("%s└─%s\n", brandPrimary, colorReset)
+		fmt.Println()
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	modelsData := result["data"]
+	if modelsData == nil {
+		fmt.Printf("│  %s✗%s No models found\n", brandError, colorReset)
+		fmt.Printf("%s└─%s\n", brandPrimary, colorReset)
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	modelsArray, ok := modelsData.([]interface{})
+	if !ok || len(modelsArray) == 0 {
+		fmt.Printf("│  %s✗%s No models available\n", brandError, colorReset)
+		fmt.Printf("%s└─%s\n", brandPrimary, colorReset)
+		fmt.Println()
+		os.Exit(1)
+	}
+
+	fmt.Printf("│  %s✓%s Found %d models\n", brandSuccess, colorReset, len(modelsArray))
+
+	// Test with up to 2 models
+	testModels := []string{}
+	for i, m := range modelsArray {
+		if i >= 2 {
+			break
+		}
+		modelMap := m.(map[string]interface{})
+		modelID := modelMap["id"].(string)
+		testModels = append(testModels, modelID)
+		fmt.Printf("│     %s• %s%s\n", colorDim, modelID, colorReset)
+	}
+
+	// Run tests
+	fmt.Printf("%s├─ Running Tests%s\n", brandPrimary+colorBold, colorReset)
+
+	for i, modelID := range testModels {
+		fmt.Printf("│  %sTest %d/%d:%s %s\n", brandSecondary, i+1, len(testModels), colorReset, modelID)
+
+		startTime := time.Now()
+
+		payload := map[string]interface{}{
+			"model": modelID,
+			"messages": []map[string]string{
+				{"role": "user", "content": "Say just hello"},
+			},
+			"max_tokens": 10,
+			"stream":     false,
+		}
+
+		jsonData, _ := json.Marshal(payload)
+		resp, err := http.Post(
+			serverURL+"/v1/chat/completions",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+
+		if err != nil {
+			fmt.Printf("│     %s✗%s Request failed: %v\n", brandError, colorReset, err)
+			continue
+		}
+
+		var chatResult map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&chatResult)
+		resp.Body.Close()
+
+		duration := time.Since(startTime)
+
+		if choices, ok := chatResult["choices"].([]interface{}); ok && len(choices) > 0 {
+			choice := choices[0].(map[string]interface{})
+			message := choice["message"].(map[string]interface{})
+			content := message["content"].(string)
+
+			trimmedContent := strings.TrimSpace(content)
+			if trimmedContent == "" {
+				fmt.Printf("│     %s⚠%s Response: (empty response)\n", brandAccent, colorReset)
+			} else {
+				// Limit output to first 60 chars
+				displayContent := trimmedContent
+				if len(displayContent) > 60 {
+					displayContent = displayContent[:60] + "..."
+				}
+				fmt.Printf("│     %s✓%s Response: %s\n", brandSuccess, colorReset, displayContent)
+			}
+			fmt.Printf("│     %s⏱%s  Time: %s\n", colorDim, colorReset, formatDuration(duration))
+		} else {
+			fmt.Printf("│     %s✗%s Invalid response format\n", brandError, colorReset)
+		}
+	}
+
+	fmt.Printf("%s└─ All Tests Complete%s\n", brandPrimary+colorBold, colorReset)
 	fmt.Println()
 }
 
@@ -2996,6 +3119,7 @@ func handleDownloadHF(args []string) {
 	startTime := time.Now()
 	lastUpdate := time.Now()
 	var lastProgress int64
+	var lastSpeed float64
 
 	err = hf.DownloadGGUF(modelID, selectedFile.Filename, destPath, func(current, total int64) {
 		percent := float64(current) / float64(total) * 100
@@ -3004,22 +3128,32 @@ func handleDownloadHF(args []string) {
 		now := time.Now()
 		elapsed := now.Sub(lastUpdate).Seconds()
 
+		// Only update display every 0.5 seconds to reduce flickering
+		if elapsed < 0.5 && lastProgress > 0 {
+			return
+		}
+
 		var speed float64
-		if elapsed > 0.5 { // Update speed every half second
+		if lastProgress > 0 && elapsed > 0 {
+			// Calculate speed from interval
 			bytesThisInterval := current - lastProgress
 			speed = float64(bytesThisInterval) / elapsed / (1024 * 1024) // MB/s
-			lastUpdate = now
-			lastProgress = current
-		} else if lastProgress == 0 {
-			// First update - use overall speed
-			totalElapsed := now.Sub(startTime).Seconds()
-			if totalElapsed > 0.5 {
-				speed = float64(current) / totalElapsed / (1024 * 1024)
+			// Smooth speed with exponential moving average
+			if lastSpeed > 0 {
+				speed = lastSpeed*0.7 + speed*0.3
 			}
+			lastSpeed = speed
 		} else {
-			// Keep previous speed if interval too short
-			return // Don't update display yet
+			// First update - use overall average speed
+			totalElapsed := now.Sub(startTime).Seconds()
+			if totalElapsed > 0.1 {
+				speed = float64(current) / totalElapsed / (1024 * 1024)
+				lastSpeed = speed
+			}
 		}
+
+		lastUpdate = now
+		lastProgress = current
 
 		// Format size appropriately (MB for small files, GB for large)
 		var currentStr, totalStr string
@@ -3027,8 +3161,8 @@ func handleDownloadHF(args []string) {
 			currentStr = fmt.Sprintf("%.1f MB", float64(current)/(1024*1024))
 			totalStr = fmt.Sprintf("%.1f MB", float64(total)/(1024*1024))
 		} else {
-			currentStr = fmt.Sprintf("%.1f GB", float64(current)/(1024*1024*1024))
-			totalStr = fmt.Sprintf("%.1f GB", float64(total)/(1024*1024*1024))
+			currentStr = fmt.Sprintf("%.2f GB", float64(current)/(1024*1024*1024))
+			totalStr = fmt.Sprintf("%.2f GB", float64(total)/(1024*1024*1024))
 		}
 
 		fmt.Printf("\r  Progress: %.1f%% (%s / %s) · %.1f MB/s  ",
@@ -3036,6 +3170,7 @@ func handleDownloadHF(args []string) {
 			currentStr,
 			totalStr,
 			speed)
+		os.Stdout.Sync() // Flush stdout for immediate display
 	})
 
 	if err != nil {
@@ -3632,6 +3767,7 @@ func handleRun(args []string) {
 			if len(chunk.Choices) > 0 {
 				token := chunk.Choices[0].Delta.Content
 				fmt.Print(token)
+				os.Stdout.Sync() // Flush output immediately for streaming
 				assistantMsg.WriteString(token)
 				lineLength += len(token)
 

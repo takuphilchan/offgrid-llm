@@ -3,483 +3,1470 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OffGrid LLM - v0.1.2</title>
+    <title>OffGrid LLM</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        body { background: #0f172a; color: #e2e8f0; }
-        .tab-active { background: #1e293b; border-bottom: 2px solid #10b981; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; }
-        .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; transition: all 0.2s; border: none; }
-        .btn-primary { background: #10b981; color: white; }
-        .btn-primary:hover { background: #059669; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        .status-online { background: #10b981; }
-        .status-offline { background: #ef4444; }
-        .hidden { display: none; }
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+        }
+        
+        body { 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .card { 
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(51, 65, 85, 0.9) 100%);
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .card:hover {
+            border-color: rgba(6, 182, 212, 0.5);
+            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);
+        }
+        
+        .btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:hover:not(:disabled) {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-sm { 
+            padding: 6px 14px; 
+            font-size: 12px; 
+        }
+        
+        .btn:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed;
+        }
+        
+        .btn-primary { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white; 
+        }
+        
+        .btn-primary:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        }
+        
+        .btn-secondary { 
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            color: white; 
+        }
+        
+        .btn-secondary:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+        }
+        
+        .btn-danger { 
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white; 
+        }
+        
+        .btn-danger:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+        
+        .btn-info { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white; 
+        }
+        
+        .btn-info:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        }
+        
+        .tab { 
+            padding: 14px 24px; 
+            cursor: pointer; 
+            border-bottom: 3px solid transparent; 
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        
+        .tab:hover { 
+            background: rgba(30, 41, 59, 0.5);
+            color: #06b6d4;
+        }
+        
+        .tab.active { 
+            border-bottom-color: #06b6d4;
+            background: rgba(30, 41, 59, 0.8);
+            color: #06b6d4;
+        }
+        
+        .message { 
+            padding: 16px; 
+            border-radius: 10px; 
+            margin-bottom: 12px; 
+            border-left: 4px solid #334155; 
+            word-wrap: break-word;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: box-shadow 0.2s ease;
+        }
+        
+        .message:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .message-user { 
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+            border-left-color: #10b981;
+        }
+        
+        .message-assistant { 
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(8, 145, 178, 0.1) 100%);
+            border-left-color: #06b6d4;
+            white-space: pre-wrap;
+        }
+        
+        .message-actions { 
+            display: flex; 
+            gap: 8px; 
+            margin-top: 12px; 
+        }
+        
+        .terminal { 
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 15px;
+            overflow-y: auto;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+        
+        .terminal-output { 
+            height: 500px;
+            overflow-y: auto; 
+            margin-bottom: 12px; 
+            line-height: 1.6; 
+        }
+        
+        .terminal-line { 
+            color: #c9d1d9; 
+            margin-bottom: 2px; 
+            white-space: pre; 
+            word-break: break-word; 
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+        }
+        
+        /* ANSI color classes */
+        .ansi-cyan { color: #06b6d4; font-weight: 600; }
+        .ansi-green { color: #10b981; font-weight: 600; }
+        .ansi-yellow { color: #f59e0b; font-weight: 600; }
+        .ansi-red { color: #ef4444; font-weight: 600; }
+        .ansi-blue { color: #3b82f6; font-weight: 600; }
+        .ansi-magenta { color: #a855f7; font-weight: 600; }
+        .ansi-gray { color: #6b7280; }
+        .ansi-bold { font-weight: 700; }
+        .ansi-dim { opacity: 0.7; }
+        
+        .terminal-error { 
+            color: #ff6b6b; 
+            font-weight: 600; 
+        }
+        
+        .terminal-success { 
+            color: #06b6d4; 
+            font-weight: 600; 
+        }
+        
+        .terminal-prompt { 
+            color: #06b6d4; 
+            font-weight: 700; 
+        }
+        
+        .terminal-input-line { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            padding-top: 8px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .terminal-input { 
+            background: transparent; 
+            border: none; 
+            color: #06b6d4; 
+            flex: 1; 
+            outline: none; 
+            font-family: inherit; 
+            font-size: 15px; 
+        }
+        
+        .terminal-running { 
+            opacity: 0.6; 
+            pointer-events: none; 
+        }
+        
+        .model-item { 
+            padding: 16px; 
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(51, 65, 85, 0.8) 100%);
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .model-item:hover { 
+            background: linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(71, 85, 105, 0.8) 100%);
+            border-color: rgba(6, 182, 212, 0.5);
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2);
+        }
+        
+        .badge { 
+            display: inline-block; 
+            padding: 4px 12px; 
+            border-radius: 6px; 
+            font-size: 11px; 
+            font-weight: 700;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .badge-success { 
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; 
+        }
+        
+        .badge-warning { 
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white; 
+        }
+        
+        .badge-error { 
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white; 
+        }
+        
+        .badge-info { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white; 
+        }
+        
+        .hidden { 
+            display: none; 
+        }
+        
+        input:focus, select:focus, textarea:focus { 
+            outline: none; 
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+        }
+        
+        .chat-container { 
+            display: flex; 
+            flex-direction: column; 
+            height: calc(100vh - 220px);
+            min-height: 600px;
+        }
+        
+        .chat-messages { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 16px; 
+        }
+        
+        .chat-input-area { 
+            padding: 16px; 
+            border-top: 1px solid rgba(51, 65, 85, 0.8);
+            background: rgba(15, 23, 42, 0.5);
+        }
+        
+        .scrollable { 
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch; 
+        }
+        
+        .scrollable::-webkit-scrollbar { 
+            width: 10px; 
+        }
+        
+        .scrollable::-webkit-scrollbar-track { 
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 5px;
+        }
+        
+        .scrollable::-webkit-scrollbar-thumb { 
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            border-radius: 5px; 
+        }
+        
+        .scrollable::-webkit-scrollbar-thumb:hover { 
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+        }
+        
+        .settings-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 16px; 
+        }
+        
+        .stat-card { 
+            text-align: center; 
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+            border-radius: 10px;
+            transition: box-shadow 0.2s ease;
+        }
+        
+        .stat-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stat-value { 
+            font-size: 32px; 
+            font-weight: 700; 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .stat-label { 
+            font-size: 13px; 
+            color: #94a3b8; 
+            margin-top: 6px;
+            font-weight: 500;
+        }
+        
+        header {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        nav {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.9) 100%);
+            backdrop-filter: blur(10px);
+        }
     </style>
 </head>
-<body class="min-h-screen">
-    <header class="bg-slate-900 border-b border-slate-700 px-6 py-4">
+<body>
+    <header class="bg-slate-900 border-b border-slate-700 px-6 py-4 flex-shrink-0">
         <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold text-emerald-400">OffGrid LLM</h1>
-            <div class="flex items-center gap-4">
-                <span class="text-sm text-slate-400">v0.1.2</span>
-                <div class="flex items-center gap-2">
-                    <span class="status-dot status-online"></span>
-                    <span class="text-sm" id="serverStatus">Server Online</span>
-                </div>
+            <h1 class="text-xl font-bold text-cyan-400">OffGrid LLM</h1>
+            <div class="flex items-center gap-3">
+                <span id="statusBadge" class="badge badge-success">Ready</span>
+                <span class="text-xs text-slate-400">v0.1.2</span>
             </div>
         </div>
     </header>
 
-    <nav class="bg-slate-900 border-b border-slate-700 px-6">
+    <nav class="bg-slate-900 border-b border-slate-700 px-6 flex-shrink-0">
         <div class="flex gap-1">
-            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-active px-4 py-3 text-sm font-medium">Dashboard</button>
-            <button onclick="switchTab('chat')" id="tab-chat" class="px-4 py-3 text-sm font-medium hover:bg-slate-800">Chat</button>
-            <button onclick="switchTab('library')" id="tab-library" class="px-4 py-3 text-sm font-medium hover:bg-slate-800">Library</button>
-            <button onclick="switchTab('sessions')" id="tab-sessions" class="px-4 py-3 text-sm font-medium hover:bg-slate-800">Sessions</button>
-            <button onclick="switchTab('settings')" id="tab-settings" class="px-4 py-3 text-sm font-medium hover:bg-slate-800">Settings</button>
-            <button onclick="switchTab('help')" id="tab-help" class="px-4 py-3 text-sm font-medium hover:bg-slate-800">Help</button>
+            <button onclick="switchTab('chat')" id="tab-chat" class="tab active">Chat</button>
+            <button onclick="switchTab('models')" id="tab-models" class="tab">Models</button>
+            <button onclick="switchTab('terminal')" id="tab-terminal" class="tab">Terminal</button>
         </div>
     </nav>
 
-    <main class="container mx-auto p-6">
-        <div id="content-dashboard" class="space-y-6">
-            <h2 class="text-3xl font-bold mb-6">Dashboard</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div class="card">
-                    <h3 class="text-sm font-semibold text-slate-400 mb-2">CPU & RAM</h3>
-                    <div class="text-2xl font-bold text-emerald-400" id="ramStatus">Loading...</div>
-                    <div class="text-xs text-slate-400 mt-1" id="ramDetails"></div>
-                </div>
-                
-                <div class="card">
-                    <h3 class="text-sm font-semibold text-slate-400 mb-2">GPU</h3>
-                    <div class="text-2xl font-bold text-cyan-400" id="gpuStatus">Checking...</div>
-                    <div class="text-xs text-slate-400 mt-1" id="gpuDetails"></div>
-                </div>
-                
-                <div class="card">
-                    <h3 class="text-sm font-semibold text-slate-400 mb-2">Disk Space</h3>
-                    <div class="text-2xl font-bold text-blue-400" id="diskStatus">Loading...</div>
-                    <div class="text-xs text-slate-400 mt-1" id="diskDetails"></div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3 class="text-lg font-semibold mb-4">Active Model</h3>
-                <div id="activeModelInfo">
-                    <p class="text-slate-400">No model currently loaded</p>
-                    <button onclick="switchTab('library')" class="btn btn-primary mt-4">Load Model</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <button onclick="switchTab('chat')" class="btn btn-primary">Start Chat</button>
-                    <button onclick="switchTab('library')" class="btn bg-slate-700 hover:bg-slate-600 text-white">Browse Models</button>
-                    <button onclick="switchTab('sessions')" class="btn bg-slate-700 hover:bg-slate-600 text-white">View Sessions</button>
-                    <button onclick="loadSystemHealth()" class="btn bg-slate-700 hover:bg-slate-600 text-white">Refresh</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="content-chat" class="hidden">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-3xl font-bold">Chat</h2>
-                <div class="flex items-center gap-4">
-                    <select id="chatModelSelect" class="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
-                        <option value="">Select Model...</option>
+    <main class="container mx-auto p-6 max-w-7xl flex-1 overflow-hidden">
+        <!-- Chat Tab -->
+        <div id="content-chat" class="h-full flex flex-col gap-4">
+            <div class="card flex-shrink-0">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <select id="chatModel" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+                        <option value="">Loading...</option>
                     </select>
-                    <button onclick="clearChat()" class="btn bg-slate-700 hover:bg-slate-600 text-white text-sm">Clear</button>
-                    <button onclick="saveCurrentSession()" class="btn btn-primary text-sm">Save</button>
-                </div>
-            </div>
-
-            <div class="card mb-4" style="height: 500px; overflow-y: auto;" id="chatMessages">
-                <div class="text-center text-slate-400 py-20">
-                    <p class="text-lg mb-2">No messages yet</p>
-                    <p class="text-sm">Select a model and start chatting</p>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="flex gap-4">
-                    <textarea id="chatInput" rows="3" placeholder="Type your message..." 
-                        class="flex-1 bg-slate-900 border border-slate-700 rounded px-4 py-3 resize-none focus:outline-none focus:border-emerald-500"
-                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
-                    <button onclick="sendChatMessage()" class="btn btn-primary px-8">Send</button>
-                </div>
-                <div class="flex items-center gap-4 mt-4 text-sm text-slate-400">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" id="streamMode" checked class="rounded">
-                        <span>Stream</span>
-                    </label>
-                    <span>Press Enter to send, Shift+Enter for new line</span>
-                </div>
-            </div>
-        </div>
-
-        <div id="content-library" class="hidden">
-            <h2 class="text-3xl font-bold mb-6">Model Library</h2>
-            
-            <div class="card mb-6">
-                <div class="flex gap-4 mb-4">
-                    <input type="text" id="librarySearch" placeholder="Search models..." 
-                        class="flex-1 bg-slate-900 border border-slate-700 rounded px-4 py-2 focus:outline-none focus:border-emerald-500"
-                        oninput="filterLibrary()">
-                    <select id="libraryFilter" class="bg-slate-900 border border-slate-700 rounded px-4 py-2" onchange="filterLibrary()">
-                        <option value="all">All Models</option>
-                        <option value="installed">Installed</option>
-                        <option value="catalog">Catalog</option>
-                    </select>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="loadInstalledModels()" class="btn btn-primary text-sm">Installed Models</button>
-                    <button onclick="loadCatalog()" class="btn bg-slate-700 hover:bg-slate-600 text-white text-sm">Browse Catalog</button>
-                </div>
-            </div>
-
-            <div id="libraryContent" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div class="text-center text-slate-400 py-20">
-                    <p class="text-lg mb-2">No models loaded</p>
-                    <p class="text-sm">Click "Installed Models" or "Browse Catalog"</p>
-                </div>
-            </div>
-        </div>
-
-        <div id="content-sessions" class="hidden">
-            <h2 class="text-3xl font-bold mb-6">Sessions</h2>
-            
-            <div class="card mb-4">
-                <button onclick="loadSessions()" class="btn btn-primary mb-4">Load Sessions</button>
-                <div id="sessionsList"></div>
-            </div>
-        </div>
-
-        <div id="content-settings" class="hidden">
-            <h2 class="text-3xl font-bold mb-6">Settings</h2>
-            
-            <div class="space-y-6">
-                <div class="card">
-                    <h3 class="text-lg font-semibold mb-4">Inference Settings</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-2">Temperature: <span id="tempValue">0.7</span></label>
-                            <input type="range" min="0" max="2" step="0.1" value="0.7" id="tempSetting" class="w-full">
-                        </div>
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-2">Max Tokens</label>
-                            <input type="number" value="2000" id="maxTokensSetting" class="bg-slate-900 border border-slate-700 rounded px-4 py-2 w-full">
-                        </div>
+                    <div class="flex gap-2">
+                        <label class="flex items-center gap-2 text-xs">
+                            <input type="checkbox" id="streamToggle" checked class="rounded">
+                            <span>Stream</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs">
+                            <span>Temp:</span>
+                            <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2" 
+                                   class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+                        </label>
+                        <label class="flex items-center gap-2 text-xs">
+                            <span>Max:</span>
+                            <input type="number" id="maxTokens" value="1000" step="100" min="100" max="4000" 
+                                   class="w-20 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+                        </label>
+                        <button onclick="exportChat()" class="btn btn-info btn-sm">Export</button>
+                        <button onclick="clearChat()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
                 </div>
+            </div>
 
-                <div class="card">
-                    <h3 class="text-lg font-semibold mb-4">About</h3>
-                    <p class="text-sm text-slate-400 mb-2">OffGrid LLM v0.1.2</p>
-                    <p class="text-xs text-slate-500">Offline-first LLM inference system</p>
+            <div class="card flex-1 flex flex-col overflow-hidden">
+                <div id="chatMessages" class="flex-1 scrollable space-y-2 mb-4">
+                    <div class="text-center text-slate-400 py-20">
+                        <p>Start a conversation</p>
+                        <p class="text-xs mt-2 text-slate-500">Select a model and type below</p>
+                    </div>
+                </div>
+                <div class="flex-shrink-0">
+                    <div class="flex gap-2 mb-2">
+                        <textarea id="chatInput" placeholder="Enter message (Shift+Enter for new line, Enter to send)..." 
+                           onkeydown="handleChatKeydown(event)"
+                           rows="2"
+                           class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-white resize-none"></textarea>
+                        <div class="flex flex-col gap-2">
+                            <button onclick="sendChat()" id="sendBtn" class="btn btn-primary flex-1">Send</button>
+                            <button onclick="stopGeneration()" id="stopBtn" class="btn btn-danger btn-sm hidden">Stop</button>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 text-xs text-slate-400">
+                        <span id="tokenCount">0 tokens</span>
+                        <span>|</span>
+                        <span id="messageCount">0 messages</span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div id="content-help" class="hidden">
-            <h2 class="text-3xl font-bold mb-6">Help & Documentation</h2>
-            
-            <div class="space-y-4">
-                <div class="card">
-                    <h3 class="text-lg font-semibold mb-3 text-emerald-400">Getting Started</h3>
-                    <ol class="list-decimal list-inside space-y-2 text-sm text-slate-300">
-                        <li>Go to Library and click "Browse Catalog"</li>
-                        <li>Select a model and click "Download"</li>
-                        <li>Once downloaded, click "Run" to load the model</li>
-                        <li>Go to Chat tab to start chatting</li>
-                    </ol>
+        <!-- Models Tab -->
+        <div id="content-models" class="hidden space-y-4">
+            <div class="card">
+                <h3 class="text-lg font-semibold mb-4">Model Management</h3>
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="searchQuery" placeholder="Search models (e.g., llama, phi, mistral)..." 
+                           class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                    <button onclick="searchModels()" class="btn btn-primary">Search</button>
                 </div>
+                <div id="searchResults" class="space-y-2"></div>
+            </div>
 
-                <div class="card">
-                    <h3 class="text-lg font-semibold mb-3 text-cyan-400">CLI Commands</h3>
-                    <pre class="text-xs bg-slate-900 p-3 rounded"><code>offgrid catalog              # List available models
-offgrid download &lt;model&gt;     # Download a model
-offgrid run &lt;model&gt;          # Run a model
-offgrid chat                 # Interactive chat
-offgrid doctor               # System diagnostics</code></pre>
+            <div class="card">
+                <h3 class="text-lg font-semibold mb-4">Installed Models</h3>
+                <div id="installedModels" class="space-y-2">
+                    <p class="text-sm text-slate-400">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Tab -->
+        <div id="content-terminal" class="hidden h-full flex flex-col gap-4">
+            <div class="card flex-1 flex flex-col overflow-hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold">Terminal</h3>
+                    <div class="flex gap-2">
+                        <button onclick="killCommand()" id="killBtn" class="btn btn-danger btn-sm hidden">Kill</button>
+                        <button onclick="clearTerminal()" class="btn btn-secondary btn-sm">Clear</button>
+                    </div>
+                </div>
+                <div class="terminal-output scrollable" id="terminalOutput">
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                    <div class="terminal-line">Connected to real offgrid binary</div>
+                    <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
+                </div>
+                <div class="terminal-input-line" id="terminalInputLine">
+                    <span class="terminal-prompt">$</span>
+                    <input type="text" id="terminalInput" placeholder="Enter command..." 
+                           onkeydown="handleTerminalKeydown(event)"
+                           class="terminal-input" autocomplete="off" />
+                </div>
+            </div>
+            
+            <div class="card flex-shrink-0">
+                <h4 class="text-sm font-semibold mb-2">Quick Commands</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <button onclick="runQuickCommand('offgrid list')" class="btn btn-secondary btn-sm">List Models</button>
+                    <button onclick="runQuickCommand('offgrid info')" class="btn btn-secondary btn-sm">Server Info</button>
+                    <button onclick="runQuickCommand('offgrid doctor')" class="btn btn-secondary btn-sm">Run Test</button>
+                    <button onclick="runQuickCommand('offgrid help')" class="btn btn-secondary btn-sm">Help</button>
                 </div>
             </div>
         </div>
     </main>
 
     <script>
-        function switchTab(tabName) {
-            document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
-            document.getElementById('content-' + tabName).classList.remove('hidden');
-            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('tab-active'));
-            document.getElementById('tab-' + tabName).classList.add('tab-active');
-        }
+        let currentModel = '';
+        let messages = [];
+        let isGenerating = false;
+        let abortController = null;
+        let commandHistory = [];
+        let historyIndex = -1;
+        let terminalRunning = false;
+        let currentTerminalAbort = null;
+        let terminalChatMode = false;
+        let terminalChatModel = '';
+        let terminalChatHistory = [];
+        
+        // Request throttling to prevent system overload
+        let lastRequestTime = 0;
+        let requestCooldown = 500; // Minimum 500ms between requests
+        let pendingRequest = false;
 
-        async function loadSystemHealth() {
-            try {
-                const response = await fetch('/health');
-                const data = await response.json();
-                
-                if (data.system) {
-                    document.getElementById('ramStatus').textContent = Math.round(data.system.memory_percent) + '%';
-                    document.getElementById('ramDetails').textContent = Math.round(data.system.memory_mb) + ' MB used';
-                    document.getElementById('diskStatus').textContent = data.system.disk_free_gb + ' GB';
-                    document.getElementById('diskDetails').textContent = 'Available storage';
-                }
-                
-                if (data.models_loaded > 0) {
-                    document.getElementById('activeModelInfo').innerHTML = '<p class="font-semibold text-emerald-400">Model Active</p><p class="text-sm text-slate-400">' + data.models_loaded + ' model(s) loaded</p><button onclick="switchTab(\'chat\')" class="btn btn-primary mt-4">Chat Now</button>';
-                }
-            } catch (error) {
-                console.error('Failed to load health:', error);
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('active');
+            
+            if (tab === 'models') {
+                loadInstalledModels();
+                // Clear search input
+                document.getElementById('searchQuery').value = '';
+                document.getElementById('searchResults').innerHTML = '';
+            }
+            if (tab === 'chat') {
+                loadChatModels();
+                updateChatStats();
             }
         }
 
-        let chatMessages = [];
-        let currentModel = '';
+        // Chat keyboard handler
+        function handleChatKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChat();
+            }
+        }
 
-        async function loadModelsForChat() {
+        // Terminal keyboard handler
+        function handleTerminalKeydown(event) {
+            const input = event.target;
+            
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                runCommand();
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex] || '';
+                }
+            } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex] || '';
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    input.value = '';
+                }
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                autocompleteCommand(input);
+            }
+        }
+
+        function autocompleteCommand(input) {
+            const val = input.value;
+            const commands = [
+                'offgrid list',
+                'offgrid download ',
+                'offgrid remove ',
+                'offgrid search ',
+                'offgrid run ',
+                'offgrid info',
+                'offgrid doctor',
+                'offgrid --help',
+                'offgrid --version',
+                'help',
+                'clear',
+                'history'
+            ];
+            const match = commands.find(cmd => cmd.startsWith(val));
+            if (match) {
+                input.value = match;
+            }
+        }
+
+        function updateChatStats() {
+            document.getElementById('messageCount').textContent = `${messages.length} messages`;
+            const totalTokens = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+            document.getElementById('tokenCount').textContent = `~${Math.ceil(totalTokens / 4)} tokens`;
+        }
+
+        // Load models for chat
+        async function loadChatModels() {
             try {
-                const response = await fetch('/models');
-                const result = await response.json();
-                const models = result.data || result.models || result;
-                const select = document.getElementById('chatModelSelect');
-                select.innerHTML = '<option value="">Select Model...</option>';
+                const resp = await fetch('/models');
+                const data = await resp.json();
+                const models = data.data || [];
+                const select = document.getElementById('chatModel');
+                select.innerHTML = '';
+                
+                if (models.length === 0) {
+                    select.innerHTML = '<option value="">No models available</option>';
+                    return;
+                }
+                
                 models.forEach(m => {
                     const opt = document.createElement('option');
-                    opt.value = m.id || m.name || m;
-                    opt.textContent = m.id || m.name || m;
+                    opt.value = m.id;
+                    opt.textContent = m.id;
                     select.appendChild(opt);
                 });
-            } catch (error) {
-                console.error('Failed to load models:', error);
-                console.error('Response:', error);
-                const select = document.getElementById('chatModelSelect');
-                select.innerHTML = '<option value="">⚠ Failed to load models</option>';
+                
+                // Auto-select first model if none selected
+                if (!currentModel && models.length > 0) {
+                    currentModel = models[0].id;
+                    select.value = currentModel;
+                }
+            } catch (e) {
+                console.error('Failed to load models:', e);
+                document.getElementById('chatModel').innerHTML = '<option value="">Error loading models</option>';
             }
         }
 
-        document.getElementById('chatModelSelect').addEventListener('change', function() {
-            currentModel = this.value;
-        });
-
+        // Clear chat
         function clearChat() {
-            chatMessages = [];
-            document.getElementById('chatMessages').innerHTML = '<div class="text-center text-slate-400 py-20"><p class="text-lg mb-2">No messages yet</p><p class="text-sm">Select a model and start chatting</p></div>';
-        }
-
-        function addMessage(role, content) {
-            const container = document.getElementById('chatMessages');
-            if (container.querySelector('.text-center')) {
-                container.innerHTML = '';
-            }
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'p-4 rounded-lg mb-4 ' + (role === 'user' ? 'bg-emerald-900/20 border border-emerald-500/30' : 'bg-slate-800/50 border border-slate-700');
-            msgDiv.innerHTML = '<div class="text-xs font-semibold mb-2 ' + (role === 'user' ? 'text-emerald-400' : 'text-cyan-400') + '">' + (role === 'user' ? 'You' : 'Assistant') + '</div><div class="text-sm whitespace-pre-wrap">' + content + '</div>';
-            container.appendChild(msgDiv);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        async function sendChatMessage() {
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
+            if (messages.length === 0) return;
             
-            if (!message) return;
-            if (!currentModel) {
-                alert('Please select a model first');
+            const chatMessages = document.getElementById('chatMessages');
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'card mb-4';
+            confirmDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)';
+            confirmDiv.style.border = '1px solid rgba(239, 68, 68, 0.5)';
+            confirmDiv.innerHTML = `
+                <div class="text-center">
+                    <p class="text-red-400 font-semibold mb-3">⚠ Clear All Messages?</p>
+                    <p class="text-sm mb-4">This will delete all ${messages.length} messages in the conversation.</p>
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="confirmClearChat(true)" class="btn btn-danger btn-sm">Clear Chat</button>
+                        <button onclick="confirmClearChat(false)" class="btn btn-secondary btn-sm">Cancel</button>
+                    </div>
+                </div>
+            `;
+            chatMessages.appendChild(confirmDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Export chat
+        function exportChat() {
+            if (messages.length === 0) {
+                const chatMessages = document.getElementById('chatMessages');
+                const notice = document.createElement('div');
+                notice.className = 'text-center text-yellow-400 py-4';
+                notice.textContent = '⚠ No messages to export';
+                chatMessages.appendChild(notice);
+                setTimeout(() => notice.remove(), 3000);
+                return;
+            }
+            const content = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat-${currentModel}-${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Stop generation
+        function stopGeneration() {
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            isGenerating = false;
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('stopBtn').classList.add('hidden');
+            document.getElementById('statusBadge').className = 'badge badge-success';
+            document.getElementById('statusBadge').textContent = 'Ready';
+        }
+
+        // Send chat message with streaming
+        async function sendChat() {
+            // Prevent rapid-fire requests
+            if (isGenerating || pendingRequest) {
+                console.log('Request already in progress, ignoring...');
+                return;
+            }
+            
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            // Throttle requests to prevent system overload
+            const now = Date.now();
+            const timeSinceLastRequest = now - lastRequestTime;
+            if (timeSinceLastRequest < requestCooldown) {
+                console.log(`Throttling: Wait ${requestCooldown - timeSinceLastRequest}ms before next request`);
+                return;
+            }
+            
+            lastRequestTime = now;
+            pendingRequest = true;
+
+            const model = document.getElementById('chatModel').value;
+            if (!model) {
+                const statusBadge = document.getElementById('statusBadge');
+                statusBadge.className = 'badge badge-warning';
+                statusBadge.textContent = 'Select Model';
+                setTimeout(() => {
+                    statusBadge.className = 'badge badge-success';
+                    statusBadge.textContent = 'Ready';
+                }, 3000);
                 return;
             }
 
+            // Check model switch
+            if (currentModel && model !== currentModel) {
+                const chatMessages = document.getElementById('chatMessages');
+                const confirmDiv = document.createElement('div');
+                confirmDiv.className = 'card mb-4';
+                confirmDiv.style.background = 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.2) 100%)';
+                confirmDiv.style.border = '1px solid rgba(245, 158, 11, 0.5)';
+                confirmDiv.innerHTML = `
+                    <div class="text-center">
+                        <p class="text-yellow-400 font-semibold mb-3">⚠ Switch Model?</p>
+                        <p class="text-sm mb-4">Switching from <span class="font-semibold">${currentModel}</span> to <span class="font-semibold">${model}</span> will clear the conversation.</p>
+                        <div class="flex gap-2 justify-center">
+                            <button onclick="confirmModelSwitch(true, '${model}')" class="btn btn-primary btn-sm">Switch Model</button>
+                            <button onclick="confirmModelSwitch(false, '${currentModel}')" class="btn btn-secondary btn-sm">Cancel</button>
+                        </div>
+                    </div>
+                `;
+                chatMessages.appendChild(confirmDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                return;
+            }
+            currentModel = model;
+
+            const sendBtn = document.getElementById('sendBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const streamEnabled = document.getElementById('streamToggle').checked;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const maxTokens = parseInt(document.getElementById('maxTokens').value);
+
+            isGenerating = true;
+            input.disabled = true;
+            sendBtn.disabled = true;
+            stopBtn.classList.remove('hidden');
+
+            messages.push({ role: 'user', content: msg });
+            addChatMessage('user', msg);
             input.value = '';
-            chatMessages.push({ role: 'user', content: message });
-            addMessage('user', message);
+            updateChatStats();
+
+            const statusBadge = document.getElementById('statusBadge');
+            statusBadge.className = 'badge badge-warning';
+            statusBadge.textContent = 'Generating';
+
+            abortController = new AbortController();
+            const startTime = Date.now();
 
             try {
                 const response = await fetch('/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: currentModel,
-                        messages: chatMessages,
-                        stream: document.getElementById('streamMode').checked,
-                        temperature: 0.7,
-                        max_tokens: 2000
-                    })
+                        model: model,
+                        messages: messages,
+                        stream: streamEnabled,
+                        temperature: temperature,
+                        max_tokens: maxTokens
+                    }),
+                    signal: abortController.signal
                 });
 
-                if (document.getElementById('streamMode').checked) {
+                if (!response.ok) {
+                    let errorDetails = '';
+                    try {
+                        const errorData = await response.json();
+                        errorDetails = errorData.error?.message || JSON.stringify(errorData);
+                    } catch (e) {
+                        errorDetails = response.statusText;
+                    }
+                    throw new Error(`Server error (${response.status}): ${errorDetails}`);
+                }
+
+                if (streamEnabled) {
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
-                    let assistantMessage = '';
-                    const container = document.getElementById('chatMessages');
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'p-4 rounded-lg mb-4 bg-slate-800/50 border border-slate-700';
-                    msgDiv.innerHTML = '<div class="text-xs font-semibold mb-2 text-cyan-400">Assistant</div><div class="text-sm whitespace-pre-wrap"></div>';
-                    container.appendChild(msgDiv);
+                    let assistantMsg = '';
+                    let msgDiv = null;
 
                     while (true) {
-                        const { done, value } = await reader.read();
+                        const { value, done } = await reader.read();
                         if (done) break;
 
                         const chunk = decoder.decode(value);
-                        const lines = chunk.split('\n');
+                        const lines = chunk.split('\n').filter(line => line.trim() !== '');
 
                         for (const line of lines) {
                             if (line.startsWith('data: ')) {
                                 const data = line.slice(6);
                                 if (data === '[DONE]') continue;
+
                                 try {
                                     const json = JSON.parse(data);
-                                    const content = json.choices?.[0]?.delta?.content;
+                                    const content = json.choices[0]?.delta?.content || '';
                                     if (content) {
-                                        assistantMessage += content;
-                                        msgDiv.querySelector('div:last-child').textContent = assistantMessage;
-                                        container.scrollTop = container.scrollHeight;
+                                        assistantMsg += content;
+                                        if (!msgDiv) {
+                                            msgDiv = addChatMessage('assistant', '', startTime);
+                                        }
+                                        msgDiv.querySelector('.message-content').textContent = assistantMsg;
                                     }
-                                } catch (e) {}
+                                } catch (e) {
+                                    // Skip invalid JSON
+                                }
                             }
                         }
                     }
-                    chatMessages.push({ role: 'assistant', content: assistantMessage });
+
+                    if (assistantMsg) {
+                        messages.push({ role: 'assistant', content: assistantMsg });
+                        const elapsed = Date.now() - startTime;
+                        msgDiv.querySelector('.time-badge').textContent = `${elapsed}ms`;
+                    }
                 } else {
-                    const data = await response.json();
-                    const assistantMessage = data.choices[0].message.content;
-                    chatMessages.push({ role: 'assistant', content: assistantMessage });
-                    addMessage('assistant', assistantMessage);
+                    const result = await response.json();
+                    const assistantMsg = result.choices[0]?.message?.content || '';
+                    const elapsed = Date.now() - startTime;
+                    if (assistantMsg) {
+                        messages.push({ role: 'assistant', content: assistantMsg });
+                        addChatMessage('assistant', assistantMsg, startTime);
+                    }
                 }
+
+                updateChatStats();
+                statusBadge.className = 'badge badge-success';
+                statusBadge.textContent = 'Ready';
             } catch (error) {
-                console.error('Chat error:', error);
-                addMessage('system', 'Error: Failed to get response. Make sure a model is loaded.');
+                if (error.name === 'AbortError') {
+                    addChatMessage('assistant', '[Generation stopped by user]', startTime);
+                    statusBadge.className = 'badge badge-success';
+                    statusBadge.textContent = 'Ready';
+                } else {
+                    const errorMsg = error.message || 'Unknown error occurred';
+                    console.error('Chat error:', error);
+                    addChatMessage('assistant', `⚠ Error: ${errorMsg}\n\nPlease check if the model is loaded and the server is running properly.`, startTime);
+                    statusBadge.className = 'badge badge-error';
+                    statusBadge.textContent = 'Error - Check Server';
+                }
+            } finally {
+                isGenerating = false;
+                pendingRequest = false;
+                abortController = null;
+                input.disabled = false;
+                sendBtn.disabled = false;
+                stopBtn.classList.add('hidden');
+                input.focus();
             }
         }
 
-        function saveCurrentSession() {
-            if (chatMessages.length === 0) {
-                alert('No messages to save');
-                return;
+        function addChatMessage(role, content, startTime) {
+            const container = document.getElementById('chatMessages');
+            if (container.querySelector('.text-center')) {
+                container.innerHTML = '';
             }
-            
-            const sessionName = prompt('Enter session name:', 'chat-' + new Date().toISOString().split('T')[0]);
-            if (!sessionName) return;
 
-            const sessions = JSON.parse(localStorage.getItem('offgrid-sessions') || '[]');
-            sessions.push({
-                name: sessionName,
-                model: currentModel,
-                messages: chatMessages,
-                timestamp: new Date().toISOString()
+            const div = document.createElement('div');
+            div.className = 'message message-' + role;
+            const timestamp = new Date().toLocaleTimeString();
+            const elapsed = startTime ? `<span class="time-badge badge badge-info">${Date.now() - startTime}ms</span>` : '';
+            
+            div.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs opacity-70">${role === 'user' ? 'You' : 'Assistant'}</span>
+                    <span class="text-xs opacity-50">${timestamp} ${elapsed}</span>
+                </div>
+                <div class="text-sm message-content">${content}</div>
+                ${role === 'assistant' ? `
+                <div class="message-actions">
+                    <button onclick="copyMessage(this)" class="btn btn-secondary btn-sm">Copy</button>
+                    <button onclick="regenerateMessage()" class="btn btn-info btn-sm">Regenerate</button>
+                </div>` : ''}
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return div;
+        }
+
+        function copyMessage(btn) {
+            const content = btn.closest('.message').querySelector('.message-content').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = original, 2000);
             });
-            localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
-            alert('Session saved!');
         }
 
-        let libraryModels = [];
+        function regenerateMessage() {
+            if (messages.length < 2) return;
+            messages.pop(); // Remove last assistant message
+            const lastUserMsg = messages[messages.length - 1];
+            messages.pop(); // Remove last user message
+            document.getElementById('chatInput').value = lastUserMsg.content;
+            sendChat();
+        }
 
+        // Search models
+        async function searchModels() {
+            const query = document.getElementById('searchQuery').value.trim();
+            if (!query) {
+                const results = document.getElementById('searchResults');
+                results.innerHTML = '<p class="text-sm text-yellow-400">⚠ Please enter a search query</p>';
+                return;
+            }
+
+            const results = document.getElementById('searchResults');
+            results.innerHTML = '<p class="text-sm text-slate-400">Searching...</p>';
+
+            try {
+                const resp = await fetch(`/v1/search?query=${encodeURIComponent(query)}`);
+                
+                if (!resp.ok) {
+                    results.innerHTML = `<p class="text-sm text-red-400">Search failed: HTTP ${resp.status}</p>`;
+                    return;
+                }
+                
+                const data = await resp.json();
+                
+                if (data.error) {
+                    const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+                    results.innerHTML = `<p class="text-sm text-red-400">Search error: ${errorMsg}</p>`;
+                    return;
+                }
+                
+                const models = data.results || [];
+
+                if (models.length === 0) {
+                    results.innerHTML = '<p class="text-sm text-slate-400">No models found. Try different keywords like "llama", "phi", "mistral".</p>';
+                    return;
+                }
+
+                results.innerHTML = '';
+                models.slice(0, 10).forEach(model => {
+                    const div = document.createElement('div');
+                    div.className = 'model-item';
+                    const downloadCmd = model.download_command || `offgrid download-hf ${model.id}`;
+                    const sizeInfo = model.size_gb ? `${model.size_gb} GB` : 'Size unknown';
+                    const quantInfo = model.best_quant ? ` · ${model.best_quant}` : '';
+                    const escapedCmd = downloadCmd.replace(/'/g, "\\'");
+                    
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm text-cyan-400">${model.name || model.id}</div>
+                                <div class="text-xs text-slate-400 mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
+                            </div>
+                            <button onclick="downloadModelWithCommand('${escapedCmd}')" class="btn btn-primary btn-sm">Download</button>
+                        </div>
+                    `;
+                    results.appendChild(div);
+                });
+            } catch (error) {
+                results.innerHTML = `<p class="text-sm text-red-400">Search failed: ${error.message}</p>`;
+            }
+        }
+
+        // Download model with specific command
+        async function downloadModelWithCommand(command) {
+            // Switch to terminal tab and execute download command
+            switchTab('terminal');
+            document.getElementById('terminalInput').value = command;
+            runCommand();
+        }
+
+        // Download model (fallback for installed models)
+        async function downloadModel(modelName) {
+            // Switch to terminal tab and execute download command
+            switchTab('terminal');
+            document.getElementById('terminalInput').value = `offgrid download ${modelName}`;
+            runCommand();
+        }
+
+        // Load installed models
         async function loadInstalledModels() {
+            const container = document.getElementById('installedModels');
+            container.innerHTML = '<p class="text-sm text-slate-400">Loading...</p>';
+
             try {
-                const response = await fetch('/models');
-                const models = await response.json();
-                libraryModels = models.map(m => ({
-                    name: m.name || m,
-                    type: 'installed',
-                    size: m.size || 'Unknown'
-                }));
-                displayLibraryModels(libraryModels);
+                const resp = await fetch('/models');
+                const data = await resp.json();
+                const models = data.data || [];
+
+                if (models.length === 0) {
+                    container.innerHTML = '<p class="text-sm text-slate-400">No models installed</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                models.forEach(model => {
+                    const div = document.createElement('div');
+                    div.className = 'model-item';
+                    const modelId = (model.id || '').replace(/'/g, "\\'");
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm text-cyan-400">${model.id}</div>
+                            </div>
+                            <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm">Remove</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
             } catch (error) {
-                console.error('Failed to load models:', error);
+                container.innerHTML = '<p class="text-sm text-red-400">Failed to load models</p>';
             }
         }
 
-        async function loadCatalog() {
-            try {
-                const response = await fetch('/catalog');
-                const catalog = await response.json();
-                libraryModels = catalog.map(m => ({
-                    name: m.name,
-                    description: m.description || '',
-                    type: 'catalog',
-                    size: m.size || 'Unknown'
-                }));
-                displayLibraryModels(libraryModels);
-            } catch (error) {
-                console.error('Failed to load catalog:', error);
-            }
+        // Remove model
+        async function removeModel(modelId) {
+            const container = document.getElementById('installedModels');
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'card mb-4';
+            confirmDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)';
+            confirmDiv.style.border = '1px solid rgba(239, 68, 68, 0.5)';
+            confirmDiv.innerHTML = `
+                <div class="text-center">
+                    <p class="text-red-400 font-semibold mb-3">⚠ Remove Model?</p>
+                    <p class="text-sm mb-4">Are you sure you want to remove <span class="font-semibold">${modelId}</span>?</p>
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="confirmRemoveModel('${modelId.replace(/'/g, "\\'")}')">Remove</button>
+                        <button onclick="this.closest('.card').remove()" class="btn btn-secondary btn-sm">Cancel</button>
+                    </div>
+                </div>
+            `;
+            container.insertBefore(confirmDiv, container.firstChild);
         }
 
-        function displayLibraryModels(models) {
-            const container = document.getElementById('libraryContent');
-            if (models.length === 0) {
-                container.innerHTML = '<div class="col-span-full text-center text-slate-400 py-20"><p>No models found</p></div>';
+        // Terminal commands
+        function clearTerminal() {
+            document.getElementById('terminalOutput').innerHTML = `
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                <div class="terminal-line">Connected to real offgrid binary</div>
+                <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
+            `;
+        }
+
+        function killCommand() {
+            if (currentTerminalAbort) {
+                currentTerminalAbort.abort();
+                currentTerminalAbort = null;
+            }
+            terminalRunning = false;
+            const inputLine = document.getElementById('terminalInputLine');
+            inputLine.classList.remove('terminal-running');
+            document.getElementById('terminalInput').disabled = false;
+            document.getElementById('killBtn').classList.add('hidden');
+            addTerminalOutput('Command killed', 'error');
+        }
+
+        function runQuickCommand(cmd) {
+            document.getElementById('terminalInput').value = cmd;
+            runCommand();
+        }
+
+        function runCommand() {
+            const input = document.getElementById('terminalInput');
+            const cmd = input.value.trim();
+            if (!cmd) return;
+
+            // Handle chat mode
+            if (terminalChatMode) {
+                // Prevent sending while already processing
+                if (terminalRunning || pendingRequest) {
+                    console.log('Terminal chat request already in progress');
+                    return; // Silently ignore, don't show error
+                }
+                
+                // Throttle terminal chat requests
+                const now = Date.now();
+                if (now - lastRequestTime < requestCooldown) {
+                    console.log('Throttling terminal chat request');
+                    return;
+                }
+                lastRequestTime = now;
+                
+                if (cmd === 'exit' || cmd === 'quit') {
+                    addTerminalOutput(cmd, 'prompt');
+                    addTerminalOutput('Exiting chat mode...', 'success');
+                    terminalChatMode = false;
+                    terminalChatModel = '';
+                    terminalChatHistory = [];
+                    input.value = '';
+                    return;
+                } else if (cmd === 'clear') {
+                    clearTerminal();
+                    addTerminalOutput(`Chat mode with ${terminalChatModel}`, 'success');
+                    addTerminalOutput('Type your message or "exit" to quit');
+                    addTerminalOutput('> ', 'success');
+                    input.value = '';
+                    return;
+                }
+                
+                // Send message in chat mode - disable input while processing
+                addTerminalOutput(cmd, 'prompt');
+                input.value = '';
+                input.disabled = true;
+                terminalRunning = true;
+                pendingRequest = true;
+                sendTerminalChat(cmd);
                 return;
             }
 
-            container.innerHTML = models.map(model => 
-                '<div class="card"><div class="flex items-start justify-between mb-3"><h3 class="font-semibold text-emerald-400">' + model.name + '</h3><span class="text-xs px-2 py-1 rounded ' + (model.type === 'installed' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-slate-700 text-slate-300') + '">' + model.type + '</span></div>' + (model.description ? '<p class="text-xs text-slate-400 mb-3">' + model.description + '</p>' : '') + '<div class="text-xs text-slate-500 mb-3">Size: ' + model.size + '</div><div class="flex gap-2">' + (model.type === 'installed' ? '<button onclick="alert(\'Use CLI: offgrid run ' + model.name + '\')" class="btn btn-primary text-xs flex-1">Run</button>' : '<button onclick="alert(\'Use CLI: offgrid download ' + model.name + '\')" class="btn btn-primary text-xs flex-1">Download</button>') + '</div></div>'
-            ).join('');
-        }
-
-        function filterLibrary() {
-            const search = document.getElementById('librarySearch').value.toLowerCase();
-            const filter = document.getElementById('libraryFilter').value;
-            
-            let filtered = libraryModels;
-            if (filter !== 'all') {
-                filtered = filtered.filter(m => m.type === filter);
-            }
-            if (search) {
-                filtered = filtered.filter(m => m.name.toLowerCase().includes(search));
-            }
-            displayLibraryModels(filtered);
-        }
-
-        function loadSessions() {
-            const sessions = JSON.parse(localStorage.getItem('offgrid-sessions') || '[]');
-            const container = document.getElementById('sessionsList');
-            
-            if (sessions.length === 0) {
-                container.innerHTML = '<p class="text-slate-400">No saved sessions</p>';
+            if (terminalRunning) {
+                addTerminalOutput('Command already running. Use Kill button to stop it.', 'error');
                 return;
             }
             
-            container.innerHTML = sessions.map((session, index) => 
-                '<div class="bg-slate-800/50 border border-slate-700 rounded-lg p-4 mb-3"><div class="flex items-center justify-between mb-2"><h4 class="font-semibold text-emerald-400">' + session.name + '</h4><button onclick="deleteSession(' + index + ')" class="text-red-400 hover:text-red-300 text-xs">Delete</button></div><p class="text-xs text-slate-500 mb-2">Model: ' + (session.model || 'Unknown') + '</p><p class="text-xs text-slate-500 mb-3">' + (session.messages?.length || 0) + ' messages</p><button onclick="restoreSession(' + index + ')" class="btn btn-primary text-xs">Restore</button></div>'
-            ).join('');
+            // Add to history
+            if (commandHistory[0] !== cmd) {
+                commandHistory.unshift(cmd);
+                if (commandHistory.length > 50) commandHistory.pop();
+            }
+            historyIndex = -1;
+
+            addTerminalOutput(cmd, 'prompt');
+            input.value = '';
+
+            const parts = cmd.split(' ').filter(p => p);
+            const command = parts[0];
+            const args = parts.slice(1);
+
+            // Set running state
+            terminalRunning = true;
+            const inputLine = document.getElementById('terminalInputLine');
+            inputLine.classList.add('terminal-running');
+            input.disabled = true;
+            document.getElementById('killBtn').classList.remove('hidden');
+
+            switch (command) {
+                case 'offgrid':
+                    handleOffgridCommand(args);
+                    break;
+                case 'clear':
+                    clearTerminal();
+                    resetTerminalState();
+                    break;
+                case 'help':
+                    showHelp();
+                    resetTerminalState();
+                    break;
+                case 'history':
+                    showHistory();
+                    resetTerminalState();
+                    break;
+                default:
+                    addTerminalOutput(`Unknown command: ${command}. Type 'help' for available commands`, 'error');
+                    resetTerminalState();
+            }
         }
 
-        function restoreSession(index) {
-            const sessions = JSON.parse(localStorage.getItem('offgrid-sessions') || '[]');
-            const session = sessions[index];
-            if (!session) return;
+        function resetTerminalState() {
+            terminalRunning = false;
+            const inputLine = document.getElementById('terminalInputLine');
+            inputLine.classList.remove('terminal-running');
+            document.getElementById('terminalInput').disabled = false;
+            document.getElementById('killBtn').classList.add('hidden');
+        }
+
+        function showHelp() {
+            const help = [
+                'Available Commands:',
+                '',
+                'Terminal Commands:',
+                '  clear      - Clear terminal screen',
+                '  history    - Show command history',
+                '  help       - Show this help',
+                '',
+                'OffGrid Commands (runs real offgrid binary):',
+                '  offgrid list                - List installed models',
+                '  offgrid search <query>      - Search for models to download',
+                '  offgrid download <model>    - Download a model',
+                '  offgrid remove <model>      - Remove an installed model',
+                '  offgrid run <model>         - Load model and switch to Chat tab',
+                '  offgrid info                - Show system information',
+                '  offgrid doctor              - Run diagnostics',
+                '  offgrid --help              - Show all offgrid commands',
+                '  offgrid --version           - Show version',
+                '',
+                'Tips:',
+                '  - Use arrow keys (↑/↓) to navigate history',
+                '  - Use Tab for command autocomplete',
+                '  - Press Ctrl+C or click Kill to stop command',
+                '  - For interactive chat, use "offgrid run <model>" or Chat tab'
+            ];
+            help.forEach(line => addTerminalOutput(line));
+        }
+
+        function showHistory() {
+            if (commandHistory.length === 0) {
+                addTerminalOutput('No command history');
+                return;
+            }
+            addTerminalOutput('Command History:');
+            commandHistory.slice(0, 10).forEach((cmd, i) => {
+                addTerminalOutput(`  ${i + 1}. ${cmd}`);
+            });
+        }
+
+        async function handleOffgridCommand(args) {
+            if (args.length === 0) {
+                addTerminalOutput('Usage: offgrid <command>', 'error');
+                addTerminalOutput('Try: offgrid help');
+                resetTerminalState();
+                return;
+            }
+
+            // Create abort controller for this command
+            currentTerminalAbort = new AbortController();
             
-            chatMessages = session.messages || [];
-            currentModel = session.model || '';
-            document.getElementById('chatModelSelect').value = currentModel;
-            document.getElementById('chatMessages').innerHTML = '';
-            chatMessages.forEach(msg => addMessage(msg.role, msg.content));
-            switchTab('chat');
+            try {
+                // Execute real offgrid command via backend
+                const resp = await fetch('/v1/terminal/exec', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        command: 'offgrid',
+                        args: args
+                    }),
+                    signal: currentTerminalAbort?.signal
+                });
+
+                if (!resp.ok) {
+                    addTerminalOutput(`Command failed: HTTP ${resp.status}`, 'error');
+                    return;
+                }
+
+                const data = await resp.json();
+                
+                if (data.error) {
+                    addTerminalOutput(`Error: ${data.error}`, 'error');
+                    return;
+                }
+
+                // Display the actual command output
+                const output = data.output || '';
+                
+                // Special handling for 'run' command - enable terminal chat mode
+                const subcmd = args[0];
+                if (subcmd === 'run' && args.length > 1) {
+                    const modelName = args.slice(1).join(' ');
+                    
+                    // Display output but enable chat mode
+                    if (output) {
+                        const lines = output.split('\n');
+                        lines.forEach(line => {
+                            const cleanLine = stripAnsi(line);
+                            if (line.includes('\u001b[38;5;45m') || cleanLine.includes('┌─') || cleanLine.includes('└─')) {
+                                addTerminalOutput(line, 'success');
+                            } else if (cleanLine.includes('Error') || cleanLine.includes('Failed')) {
+                                addTerminalOutput(line, 'error');
+                            } else if (cleanLine.trim()) {
+                                addTerminalOutput(line);
+                            }
+                        });
+                    }
+                    
+                    // Enable chat mode
+                    terminalChatMode = true;
+                    terminalChatModel = modelName;
+                    terminalChatHistory = [];
+                    addTerminalOutput('', 'normal');
+                    addTerminalOutput('Chat mode enabled. Type your messages below.', 'success');
+                    addTerminalOutput('Commands: "exit" to quit, "clear" to reset screen', 'success');
+                    addTerminalOutput('> ', 'success');
+                    
+                    resetTerminalState();
+                    currentTerminalAbort = null;
+                    return;
+                }
+                
+                if (output) {
+                    // Output exactly as received from server - no modifications
+                    const lines = output.split('\n');
+                    lines.forEach(line => {
+                        addTerminalOutput(line, 'raw');
+                    });
+                }
+
+                if (data.exitCode !== 0 && !output) {
+                    addTerminalOutput(`Command exited with code ${data.exitCode}`, 'error');
+                }
+
+                // Refresh UI after certain commands
+                if (['download', 'remove', 'delete'].includes(subcmd)) {
+                    setTimeout(() => {
+                        loadInstalledModels();
+                        loadChatModels();
+                    }, 1000);
+                }
+
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    addTerminalOutput('Command aborted', 'error');
+                } else {
+                    addTerminalOutput(`Error: ${error.message}`, 'error');
+                }
+            } finally {
+                resetTerminalState();
+                currentTerminalAbort = null;
+            }
         }
 
-        function deleteSession(index) {
-            if (!confirm('Delete this session?')) return;
-            const sessions = JSON.parse(localStorage.getItem('offgrid-sessions') || '[]');
-            sessions.splice(index, 1);
-            localStorage.setItem('offgrid-sessions', JSON.stringify(sessions));
-            loadSessions();
+
+
+        // Send chat message in terminal mode
+        async function sendTerminalChat(message) {
+            try {
+                terminalChatHistory.push({ role: 'user', content: message });
+                
+                const resp = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: terminalChatModel,
+                        messages: terminalChatHistory,
+                        stream: false,
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (!resp.ok) {
+                    let errorMsg = `HTTP ${resp.status}`;
+                    try {
+                        const errorData = await resp.json();
+                        errorMsg = errorData.error?.message || errorMsg;
+                    } catch (e) {
+                        // Ignore JSON parse errors
+                    }
+                    addTerminalOutput(`Error: ${errorMsg}`, 'error');
+                    terminalChatHistory.pop(); // Remove failed message
+                    return;
+                }
+
+                const data = await resp.json();
+                const assistantMsg = data.choices?.[0]?.message?.content || 'No response';
+                
+                terminalChatHistory.push({ role: 'assistant', content: assistantMsg });
+                
+                addTerminalOutput('', 'normal');
+                addTerminalOutput(assistantMsg, 'success');
+                addTerminalOutput('', 'normal');
+                addTerminalOutput('> ', 'success');
+                
+            } catch (error) {
+                addTerminalOutput(`Error: ${error.message}`, 'error');
+                if (terminalChatHistory.length > 0 && terminalChatHistory[terminalChatHistory.length - 1].role === 'user') {
+                    terminalChatHistory.pop(); // Remove failed message
+                }
+            } finally {
+                // Re-enable input after processing
+                terminalRunning = false;
+                pendingRequest = false;
+                document.getElementById('terminalInput').disabled = false;
+                document.getElementById('terminalInput').focus();
+            }
         }
 
-        document.getElementById('tempSetting').addEventListener('input', function() {
-            document.getElementById('tempValue').textContent = this.value;
+        // Strip ANSI escape codes
+        function stripAnsi(text) {
+            return text.replace(/\u001b\[[0-9;]*m/g, '');
+        }
+
+        // Parse ANSI color codes and convert to HTML with CSS classes
+        function parseAnsiColors(text) {
+            // Map of ANSI codes to CSS classes
+            const colorMap = {
+                '36': 'ansi-cyan',           // Cyan
+                '32': 'ansi-green',          // Green  
+                '33': 'ansi-yellow',         // Yellow
+                '31': 'ansi-red',            // Red
+                '34': 'ansi-blue',           // Blue
+                '35': 'ansi-magenta',        // Magenta
+                '38;5;45': 'ansi-cyan',      // Bright cyan (brand primary)
+                '38;5;78': 'ansi-green',     // Brand success
+                '38;5;226': 'ansi-yellow',   // Brand accent
+                '38;5;196': 'ansi-red',      // Brand error
+                '38;5;240': 'ansi-gray',     // Brand muted
+                '1': 'ansi-bold',            // Bold
+                '2': 'ansi-dim',             // Dim
+            };
+            
+            let html = text;
+            let activeClasses = [];
+            
+            // Process ANSI escape sequences
+            html = html.replace(/\u001b\[([0-9;]+)m/g, (match, code) => {
+                if (code === '0') {
+                    // Reset - close all spans
+                    const closeSpans = '</span>'.repeat(activeClasses.length);
+                    activeClasses = [];
+                    return closeSpans;
+                }
+                
+                const cssClass = colorMap[code];
+                if (cssClass) {
+                    activeClasses.push(cssClass);
+                    return `<span class="${cssClass}">`;
+                }
+                return ''; // Unknown code, ignore
+            });
+            
+            // Close any remaining open spans
+            html += '</span>'.repeat(activeClasses.length);
+            
+            // Escape HTML entities in the text content (but not our spans)
+            html = html.replace(/>([^<]+)</g, (match, text) => {
+                return '>' + escapeHtml(text) + '<';
+            });
+            
+            return html;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function addTerminalOutput(text, type = 'normal') {
+            const terminal = document.getElementById('terminalOutput');
+            const line = document.createElement('div');
+            line.className = 'terminal-line';
+            
+            if (type === 'prompt') {
+                line.className = 'terminal-line terminal-prompt';
+                line.textContent = '$ ' + text;
+            } else if (type === 'error') {
+                line.className = 'terminal-line terminal-error';
+                line.textContent = text;
+            } else if (type === 'success') {
+                line.className = 'terminal-line terminal-success';
+                line.textContent = text;
+            } else if (type === 'raw') {
+                // Raw output - parse ANSI colors and render with proper styling
+                line.innerHTML = parseAnsiColors(text);
+            } else {
+                // Normal output - preserve whitespace
+                line.textContent = text;
+            }
+            
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            loadChatModels();
         });
-
-        document.getElementById('tab-chat').addEventListener('click', loadModelsForChat);
-        loadModelsForChat();
-        loadSystemHealth();
-        setInterval(loadSystemHealth, 5000);
     </script>
 </body>
 </html>

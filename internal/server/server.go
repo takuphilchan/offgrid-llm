@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -26,19 +27,25 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer       *http.Server
-	config           *config.Config
-	registry         *models.Registry
-	engine           inference.Engine
-	embeddingEngine  *inference.EmbeddingEngine
-	monitor          *resource.Monitor
-	statsTracker     *stats.Tracker
-	cache            *cache.ResponseCache
-	startTime        time.Time
-	downloadProgress map[string]*DownloadProgress
-	downloadMutex    sync.RWMutex
-	exportProgress   map[string]*ExportProgress
-	exportMutex      sync.RWMutex
+	httpServer           *http.Server
+	config               *config.Config
+	registry             *models.Registry
+	engine               inference.Engine
+	embeddingEngine      *inference.EmbeddingEngine
+	monitor              *resource.Monitor
+	statsTracker         *stats.Tracker
+	cache                *cache.ResponseCache
+	startTime            time.Time
+	downloadProgress     map[string]*DownloadProgress
+	downloadMutex        sync.RWMutex
+	exportProgress       map[string]*ExportProgress
+	exportMutex          sync.RWMutex
+	llamaServerCmd       *exec.Cmd
+	currentModelID       string
+	modelMutex           sync.Mutex
+	inferenceMutex       sync.Mutex // Ensures only one inference runs at a time
+	rateLimiter          *RateLimiter
+	inferenceRateLimiter *InferenceRateLimiter
 }
 
 type DownloadProgress struct {
@@ -102,18 +109,196 @@ func NewWithConfig(cfg *config.Config) *Server {
 	// Start resource monitor
 	monitor.Start()
 
+	// Initialize rate limiters
+	// General API: 60 requests per minute with burst of 10
+	rateLimiter := NewRateLimiter(60, time.Minute, 10)
+
+	// Inference endpoints: max 2 concurrent per IP, 3 global concurrent
+	inferenceRateLimiter := NewInferenceRateLimiter(2, 3)
+
 	return &Server{
-		config:           cfg,
-		registry:         registry,
-		engine:           engine,
-		embeddingEngine:  embeddingEngine,
-		monitor:          monitor,
-		statsTracker:     statsTracker,
-		cache:            responseCache,
-		startTime:        time.Now(),
-		downloadProgress: make(map[string]*DownloadProgress),
-		exportProgress:   make(map[string]*ExportProgress),
+		config:               cfg,
+		registry:             registry,
+		engine:               engine,
+		embeddingEngine:      embeddingEngine,
+		monitor:              monitor,
+		statsTracker:         statsTracker,
+		cache:                responseCache,
+		startTime:            time.Now(),
+		downloadProgress:     make(map[string]*DownloadProgress),
+		exportProgress:       make(map[string]*ExportProgress),
+		rateLimiter:          rateLimiter,
+		inferenceRateLimiter: inferenceRateLimiter,
 	}
+}
+
+// startLlamaServer starts the llama-server process with a default model
+func (s *Server) startLlamaServer() error {
+	// Check if llama-server is already running
+	resp, err := http.Get("http://localhost:42382/health")
+	if err == nil {
+		resp.Body.Close()
+		log.Println("llama-server already running on port 42382")
+		return nil
+	}
+
+	// Scan for models first
+	if err := s.registry.ScanModels(); err != nil {
+		return fmt.Errorf("failed to scan models: %w", err)
+	}
+
+	// Find a model to use (prefer TinyLlama for fast startup)
+	installedModels := s.registry.ListModels()
+	if len(installedModels) == 0 {
+		return fmt.Errorf("no models installed - run 'offgrid download' first")
+	}
+
+	// Prioritize TinyLlama for fast startup, otherwise use first available
+	var modelID string
+	for _, model := range installedModels {
+		if strings.Contains(strings.ToLower(model.ID), "tinyllama") {
+			modelID = model.ID
+			log.Printf("Using TinyLlama for fast startup: %s", model.ID)
+			break
+		}
+	}
+
+	// Fallback to first model if no TinyLlama found
+	if modelID == "" {
+		modelID = installedModels[0].ID
+		log.Printf("Using model: %s", installedModels[0].ID)
+	}
+
+	// Get model metadata to get the actual path
+	metadata, err := s.registry.GetModel(modelID)
+	if err != nil {
+		return fmt.Errorf("failed to get model metadata: %w", err)
+	}
+
+	// Check if model file exists
+	if _, err := os.Stat(metadata.Path); os.IsNotExist(err) {
+		return fmt.Errorf("model file not found: %s", metadata.Path)
+	}
+
+	// Start llama-server
+	log.Printf("Starting llama-server on port 42382 with model: %s", modelID)
+	cmd := exec.Command("llama-server",
+		"-m", metadata.Path,
+		"--port", "42382",
+		"--host", "127.0.0.1",
+		"-c", "2048",
+		"-ngl", "0", // CPU-only for compatibility
+	)
+
+	// Set environment to bypass proxy
+	cmd.Env = append(os.Environ(), "NO_PROXY=*")
+
+	// Redirect output to logs
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start llama-server: %w", err)
+	}
+
+	s.llamaServerCmd = cmd
+
+	// Wait for llama-server to be ready
+	log.Println("Waiting for llama-server to load model...")
+	for i := 0; i < 60; i++ { // Wait up to 60 seconds
+		time.Sleep(1 * time.Second)
+		resp, err := http.Get("http://localhost:42382/health")
+		if err == nil {
+			var health map[string]interface{}
+			json.NewDecoder(resp.Body).Decode(&health)
+			resp.Body.Close()
+
+			if status, ok := health["status"].(string); ok && status == "ok" {
+				s.currentModelID = modelID
+				log.Printf("llama-server ready (loaded in %d seconds)", i+1)
+				return nil
+			}
+			log.Printf("Model loading... (%d seconds)", i+1)
+		}
+	}
+
+	return fmt.Errorf("llama-server did not become ready within 60 seconds")
+}
+
+// switchModel stops the current llama-server and starts a new one with the requested model.
+// This ensures complete context isolation between models - when switching models, the entire
+// llama-server process is restarted with a fresh context. This prevents any context mixup
+// or conversation leakage between different models. Clients should clear their chat history
+// when switching models to maintain proper conversation boundaries.
+func (s *Server) switchModel(modelID string) error {
+	s.modelMutex.Lock()
+	defer s.modelMutex.Unlock()
+
+	// If already loaded, skip
+	if s.currentModelID == modelID {
+		log.Printf("Model %s already loaded, skipping switch", modelID)
+		return nil
+	}
+
+	log.Printf("Switching from %s to %s...", s.currentModelID, modelID)
+
+	// Stop current llama-server
+	if s.llamaServerCmd != nil && s.llamaServerCmd.Process != nil {
+		log.Println("Stopping current llama-server...")
+		if err := s.llamaServerCmd.Process.Kill(); err != nil {
+			log.Printf("Warning: error killing llama-server: %v", err)
+		}
+		s.llamaServerCmd.Wait()
+		s.llamaServerCmd = nil
+		s.currentModelID = ""
+		time.Sleep(500 * time.Millisecond) // Brief pause for cleanup
+	}
+
+	// Get model metadata
+	metadata, err := s.registry.GetModel(modelID)
+	if err != nil {
+		return fmt.Errorf("model not found: %w", err)
+	}
+
+	// Start llama-server with new model
+	log.Printf("Starting llama-server with model: %s", modelID)
+	cmd := exec.Command("llama-server",
+		"-m", metadata.Path,
+		"--port", "42382",
+		"--host", "127.0.0.1",
+		"-c", "2048",
+		"-ngl", "0",
+	)
+
+	cmd.Env = append(os.Environ(), "NO_PROXY=*")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start llama-server: %w", err)
+	}
+
+	s.llamaServerCmd = cmd
+
+	// Wait for ready
+	log.Println("Waiting for model to load...")
+	for i := 0; i < 60; i++ {
+		time.Sleep(1 * time.Second)
+		resp, err := http.Get("http://localhost:42382/health")
+		if err == nil {
+			var health map[string]interface{}
+			json.NewDecoder(resp.Body).Decode(&health)
+			resp.Body.Close()
+
+			if status, ok := health["status"].(string); ok && status == "ok" {
+				s.currentModelID = modelID
+				log.Printf("Model %s loaded successfully in %d seconds", modelID, i+1)
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("model failed to load within 60 seconds")
 }
 
 // Start starts the HTTP server
@@ -127,18 +312,21 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/readyz", s.handleReadiness) // Kubernetes-style
 
 	// API v1 routes (OpenAI-compatible)
-	mux.HandleFunc("/v1/models", s.handleListModels)
-	mux.HandleFunc("/v1/models/delete", s.handleDeleteModel)
-	mux.HandleFunc("/v1/models/download", s.handleDownloadModel)
+	mux.HandleFunc("/v1/models", s.rateLimiter.Middleware(s.handleListModels))
+	mux.HandleFunc("/v1/models/delete", s.rateLimiter.Middleware(s.handleDeleteModel))
+	mux.HandleFunc("/v1/models/download", s.rateLimiter.Middleware(s.handleDownloadModel))
 	mux.HandleFunc("/v1/models/download/progress", s.handleDownloadProgress)
-	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
-	mux.HandleFunc("/v1/completions", s.handleCompletions)
-	mux.HandleFunc("/v1/embeddings", s.handleEmbeddings)
+
+	// Inference endpoints with strict rate limiting
+	mux.HandleFunc("/v1/chat/completions", s.inferenceRateLimiter.Middleware(s.handleChatCompletions))
+	mux.HandleFunc("/v1/completions", s.inferenceRateLimiter.Middleware(s.handleCompletions))
+	mux.HandleFunc("/v1/embeddings", s.inferenceRateLimiter.Middleware(s.handleEmbeddings))
 
 	// Model search and discovery (OffGrid-specific)
 	mux.HandleFunc("/v1/search", s.handleModelSearch)
 	mux.HandleFunc("/v1/catalog", s.handleModelCatalog)
 	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
+	mux.HandleFunc("/v1/terminal/exec", s.handleTerminalExec)
 
 	// USB import/export
 	mux.HandleFunc("/v1/usb/scan", s.handleUSBScan)
@@ -182,6 +370,12 @@ func (s *Server) Start() error {
 	// Graceful shutdown handler
 	go s.handleShutdown()
 
+	// Auto-start llama-server if using LlamaHTTPEngine
+	if err := s.startLlamaServer(); err != nil {
+		log.Printf("Warning: Failed to auto-start llama-server: %v", err)
+		log.Println("You may need to start llama-server manually")
+	}
+
 	// Clean startup message with colors
 	const (
 		colorReset   = "\033[0m"
@@ -222,6 +416,17 @@ func (s *Server) handleShutdown() {
 	<-sigChan
 	log.Println("\nShutdown signal received...")
 
+	// Stop llama-server if we started it
+	if s.llamaServerCmd != nil && s.llamaServerCmd.Process != nil {
+		log.Println("Stopping llama-server...")
+		if err := s.llamaServerCmd.Process.Kill(); err != nil {
+			log.Printf("Error stopping llama-server: %v", err)
+		} else {
+			s.llamaServerCmd.Wait() // Clean up zombie process
+			log.Println("llama-server stopped")
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -235,6 +440,17 @@ func (s *Server) handleShutdown() {
 // loggingMiddleware logs all HTTP requests
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers for browser access
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		start := time.Now()
 		next.ServeHTTP(w, r)
 		duration := time.Since(start)
@@ -480,10 +696,25 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Acquire inference lock to ensure only one inference runs at a time
+	// Use TryLock to avoid blocking - return error if busy
+	if !s.inferenceMutex.TryLock() {
+		writeError(w, "Server is busy processing another request. Please try again in a moment.", http.StatusServiceUnavailable)
+		log.Println("Rejected chat completion request - inference already in progress")
+		return
+	}
+	defer s.inferenceMutex.Unlock()
+
 	// Get model metadata
 	modelMeta, err := s.registry.GetModel(req.Model)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
+		return
+	}
+
+	// Switch to requested model if different from current
+	if err := s.switchModel(req.Model); err != nil {
+		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -645,6 +876,14 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Acquire inference lock to ensure only one inference runs at a time
+	if !s.inferenceMutex.TryLock() {
+		writeError(w, "Server is busy processing another request. Please try again in a moment.", http.StatusServiceUnavailable)
+		log.Println("Rejected completion request - inference already in progress")
+		return
+	}
+	defer s.inferenceMutex.Unlock()
+
 	// Get model metadata
 	modelMeta, err := s.registry.GetModel(req.Model)
 	if err != nil {
@@ -775,6 +1014,16 @@ func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
 
 	// Parse query parameters
 	query := r.URL.Query().Get("query")
+	if query == "" {
+		// Return empty results instead of error
+		response := map[string]interface{}{
+			"total":   0,
+			"results": []interface{}{},
+		}
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	author := r.URL.Query().Get("author")
 	quant := r.URL.Query().Get("quantization")
 	sortBy := r.URL.Query().Get("sort")
@@ -801,20 +1050,31 @@ func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
 	hf := models.NewHuggingFaceClient()
 	results, err := hf.SearchModels(filter)
 	if err != nil {
-		writeError(w, fmt.Sprintf("Search failed: %v", err), http.StatusInternalServerError)
+		// Return empty results on error instead of 500
+		log.Printf("Search error: %v", err)
+		response := map[string]interface{}{
+			"total":   0,
+			"results": []interface{}{},
+			"error":   err.Error(),
+		}
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	// Transform results to include computed fields for UI
 	type UIModel struct {
-		ID          string   `json:"id"`
-		Author      string   `json:"author"`
-		Name        string   `json:"name"`
-		Description string   `json:"description,omitempty"`
-		Downloads   int64    `json:"downloads"`
-		Likes       int      `json:"likes"`
-		Tags        []string `json:"tags,omitempty"`
-		TotalSize   int64    `json:"total_size,omitempty"`
+		ID              string   `json:"id"`
+		Author          string   `json:"author"`
+		Name            string   `json:"name"`
+		Description     string   `json:"description,omitempty"`
+		Downloads       int64    `json:"downloads"`
+		Likes           int      `json:"likes"`
+		Tags            []string `json:"tags,omitempty"`
+		TotalSize       int64    `json:"total_size,omitempty"`
+		SizeGB          string   `json:"size_gb,omitempty"`
+		BestFile        string   `json:"best_file,omitempty"`
+		BestQuant       string   `json:"best_quant,omitempty"`
+		DownloadCommand string   `json:"download_command,omitempty"`
 	}
 
 	uiModels := make([]UIModel, 0, len(results))
@@ -837,21 +1097,38 @@ func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Calculate size in GB from best variant
+		sizeGB := float64(result.TotalSize) / (1024 * 1024 * 1024)
+		bestFile := ""
+		bestQuant := ""
+		downloadCmd := ""
+
+		if result.BestVariant != nil {
+			sizeGB = result.BestVariant.SizeGB
+			bestFile = result.BestVariant.Filename
+			bestQuant = result.BestVariant.Quantization
+			downloadCmd = fmt.Sprintf("offgrid download-hf %s --file %s", modelID, bestFile)
+		}
+
 		uiModels = append(uiModels, UIModel{
-			ID:          modelID,
-			Author:      author,
-			Name:        name,
-			Description: result.Model.Description,
-			Downloads:   result.Model.Downloads,
-			Likes:       result.Model.Likes,
-			Tags:        result.Model.Tags,
-			TotalSize:   result.TotalSize,
+			ID:              modelID,
+			Author:          author,
+			Name:            name,
+			Description:     result.Model.Description,
+			Downloads:       result.Model.Downloads,
+			Likes:           result.Model.Likes,
+			Tags:            result.Model.Tags,
+			TotalSize:       result.TotalSize,
+			SizeGB:          fmt.Sprintf("%.2f", sizeGB),
+			BestFile:        bestFile,
+			BestQuant:       bestQuant,
+			DownloadCommand: downloadCmd,
 		})
 	}
 
 	response := map[string]interface{}{
-		"total":  len(uiModels),
-		"models": uiModels,
+		"total":   len(uiModels),
+		"results": uiModels,
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -890,6 +1167,66 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"success": true,
 		"message": fmt.Sprintf("Model %s deleted successfully", req.ModelID),
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// handleTerminalExec executes offgrid commands from the browser terminal
+func (s *Server) handleTerminalExec(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Command string   `json:"command"`
+		Args    []string `json:"args"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Security: Only allow offgrid commands
+	if req.Command != "offgrid" {
+		writeError(w, "Only 'offgrid' commands are allowed", http.StatusForbidden)
+		return
+	}
+
+	// Find offgrid binary
+	offgridPath, err := exec.LookPath("offgrid")
+	if err != nil {
+		writeError(w, "offgrid binary not found in PATH", http.StatusInternalServerError)
+		return
+	}
+
+	// Execute command
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, offgridPath, req.Args...)
+
+	// Capture output
+	output, err := cmd.CombinedOutput()
+
+	response := map[string]interface{}{
+		"output":   string(output),
+		"exitCode": 0,
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			response["exitCode"] = exitErr.ExitCode()
+		} else {
+			response["error"] = err.Error()
+			response["exitCode"] = 1
+		}
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
