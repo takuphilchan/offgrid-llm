@@ -595,28 +595,37 @@ jobs:
           echo ""
           echo "Looking for files to upload..."
           
+          # Determine file pattern based on OS
           if [ "${{ matrix.os }}" = "linux" ]; then
-            # Use array to handle filenames with spaces
-            mapfile -t FILES < <(find . -maxdepth 1 \( -name "*.AppImage" -o -name "*.deb" \) -type f)
+            PATTERN="\( -name \"*.AppImage\" -o -name \"*.deb\" \)"
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            mapfile -t FILES < <(find . -maxdepth 1 -name "*.dmg" -type f)
+            PATTERN="-name \"*.dmg\""
           else
-            # Windows - find all .exe files
-            mapfile -t FILES < <(find . -maxdepth 1 -name "*.exe" -type f)
+            PATTERN="-name \"*.exe\""
           fi
           
-          if [ ${#FILES[@]} -eq 0 ]; then
+          # Count files first
+          FILE_COUNT=0
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            FILE_COUNT=$(find . -maxdepth 1 \( -name "*.AppImage" -o -name "*.deb" \) -type f | wc -l)
+          elif [ "${{ matrix.os }}" = "macos" ]; then
+            FILE_COUNT=$(find . -maxdepth 1 -name "*.dmg" -type f | wc -l)
+          else
+            FILE_COUNT=$(find . -maxdepth 1 -name "*.exe" -type f | wc -l)
+          fi
+          
+          if [ "$FILE_COUNT" -eq 0 ]; then
             echo "ERROR: No files found to upload for ${{ matrix.os }}!"
             exit 1
           fi
           
-          echo "Found ${#FILES[@]} file(s) to upload"
+          echo "Found $FILE_COUNT file(s) to upload"
           echo ""
           
-          for file in "${FILES[@]}"; do
-            # Remove ./ prefix
-            file="${file#./}"
-            if [ -f "$file" ]; then
+          # Upload files using while loop (portable across all shells)
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            find . -maxdepth 1 \( -name "*.AppImage" -o -name "*.deb" \) -type f | while IFS= read -r filepath; do
+              file="${filepath#./}"
               echo "Uploading: $file ($(du -h "$file" | cut -f1))"
               if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
                 echo "✓ Successfully uploaded: $file"
@@ -624,10 +633,30 @@ jobs:
                 echo "✗ Failed to upload: $file"
                 exit 1
               fi
-            else
-              echo "WARNING: File not found: $file"
-            fi
-          done
+            done
+          elif [ "${{ matrix.os }}" = "macos" ]; then
+            find . -maxdepth 1 -name "*.dmg" -type f | while IFS= read -r filepath; do
+              file="${filepath#./}"
+              echo "Uploading: $file ($(du -h "$file" | cut -f1))"
+              if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
+                echo "✓ Successfully uploaded: $file"
+              else
+                echo "✗ Failed to upload: $file"
+                exit 1
+              fi
+            done
+          else
+            find . -maxdepth 1 -name "*.exe" -type f | while IFS= read -r filepath; do
+              file="${filepath#./}"
+              echo "Uploading: $file ($(du -h "$file" | cut -f1))"
+              if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
+                echo "✓ Successfully uploaded: $file"
+              else
+                echo "✗ Failed to upload: $file"
+                exit 1
+              fi
+            done
+          fi
           
           echo ""
           echo "All files uploaded successfully!"
