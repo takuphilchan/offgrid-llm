@@ -1,6 +1,6 @@
 {
   "name": "offgrid-llm-desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "OffGrid LLM Desktop - Local AI Platform",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
@@ -34,24 +34,13 @@
       "index.html",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "../build/linux/offgrid",
-        "to": "bin/",
-        "filter": ["**/*"]
-      },
-      {
-        "from": "../build/macos/offgrid",
-        "to": "bin/",
-        "filter": ["**/*"]
-      },
-      {
-        "from": "../build/windows/offgrid.exe",
-        "to": "bin/",
-        "filter": ["**/*"]
-      }
-    ],
     "linux": {
+      "extraResources": [
+        {
+          "from": "../build/linux/offgrid",
+          "to": "bin/offgrid"
+        }
+      ],
       "target": [
         {
           "target": "AppImage",
@@ -76,6 +65,12 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
+      "extraResources": [
+        {
+          "from": "../build/macos/offgrid",
+          "to": "bin/offgrid"
+        }
+      ],
       "target": [
         {
           "target": "dmg",
@@ -105,6 +100,12 @@
       ]
     },
     "win": {
+      "extraResources": [
+        {
+          "from": "../build/windows/offgrid.exe",
+          "to": "bin/offgrid.exe"
+        }
+      ],
       "target": [
         {
           "target": "nsis",
