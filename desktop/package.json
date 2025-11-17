@@ -91,7 +91,9 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "dmg": {
-      "title": "OffGrid LLM Desktop ${version}"
+      "title": "OffGrid LLM Desktop ${version}",
+      "writeUpdateInfo": false,
+      "format": "ULFO"
     },
     "win": {
       "extraResources": [

@@ -480,6 +480,16 @@ jobs:
         working-directory: desktop
         run: npm install
 
+      - name: Clean electron-builder cache
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          # Remove electron-builder cache that might have old DMG settings
+          rm -rf ~/Library/Caches/electron-builder
+          rm -rf ~/.cache/electron-builder
+          rm -rf desktop/node_modules/dmg-builder/.cache
+          echo "Electron-builder cache cleaned"
+
       - name: Prepare architecture-specific binaries (macOS)
         if: matrix.os == 'macos'
         shell: bash
