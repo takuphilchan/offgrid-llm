@@ -4,22 +4,31 @@ This document explains how to build, package, and release OffGrid LLM for all su
 
 ## Quick Start
 
-### Build for Current Platform
+### Build CLI for Current Platform
 
 ```bash
-make build
+# Using Go directly
+go build -o offgrid ./cmd/offgrid
+
+# Or using the build script
+./build-all.sh --cli --platform current
 ```
 
-### Build for All Platforms
+### Build Desktop App
 
 ```bash
-make cross-compile
+# Build for current platform
+cd desktop && npm install && npm run build
+
+# Or use master build script
+./build-all.sh --desktop
 ```
 
-### Create Release Packages
+### Build Everything
 
 ```bash
-make release VERSION=0.1.0
+# Build CLI + Desktop for all platforms
+./build-all.sh --all
 ```
 
 ## Supported Platforms
@@ -39,107 +48,112 @@ make release VERSION=0.1.0
 
 ```
 offgrid-llm/
-├── build/                  # Build scripts and packaging
-│   ├── macos/
-│   │   ├── create-app-bundle.sh
-│   │   └── create-dmg.sh
-│   ├── windows/
-│   │   └── installer.nsi
-│   └── linux/
+├── build/                  # Built CLI binaries (git-ignored)
+│   ├── linux/offgrid
+│   ├── macos/offgrid
+│   └── windows/offgrid.exe
+├── desktop/                # Electron desktop app
+│   ├── package.json        # With electron-builder config
+│   ├── main.js             # Main process
+│   ├── dist/               # Desktop installers (git-ignored)
+│   └── assets/             # Icons and resources
 ├── installers/             # Installation scripts
-│   ├── install.sh          # Universal installer
-│   ├── install-macos.sh
-│   ├── install-windows.ps1
-│   └── (install.sh is the original Linux installer)
-├── dist/                   # Build outputs (generated)
+│   ├── desktop.sh          # Desktop app installer (Linux/macOS)
+│   └── desktop.ps1         # Desktop app installer (Windows)
+├── install.sh              # CLI installer (root level)
+├── build-all.sh            # Master build script
 └── .github/
     └── workflows/
-        └── release.yml     # Automated CI/CD
+        └── release-unified.yml  # Automated CI/CD
 ```
 
 ## Manual Building
 
-### 1. Cross-Compile Binaries
+### 1. Build CLI Binaries
 
 ```bash
-# Build for all platforms
-make cross-compile
+# Using build-all.sh (recommended)
+./build-all.sh --cli --platform all
 
-# Outputs in dist/:
-# - offgrid-linux-amd64
-# - offgrid-linux-arm64
-# - offgrid-darwin-amd64
-# - offgrid-darwin-arm64
-# - offgrid-windows-amd64.exe
-# - offgrid-windows-arm64.exe
+# Or manually with Go
+GOOS=linux GOARCH=amd64 go build -o build/linux/offgrid ./cmd/offgrid
+GOOS=darwin GOARCH=arm64 go build -o build/macos/offgrid ./cmd/offgrid
+GOOS=windows GOARCH=amd64 go build -o build/windows/offgrid.exe ./cmd/offgrid
+
+# Outputs in build/:
+# - build/linux/offgrid
+# - build/macos/offgrid
+# - build/windows/offgrid.exe
 ```
 
-### 2. Create Release Archives
+### 2. Build Desktop Applications
 
 ```bash
-# Create .tar.gz and .zip archives
-make release VERSION=0.1.0
+# Prerequisites
+cd desktop && npm install
 
-# Outputs:
-# - offgrid-0.1.0-linux-amd64.tar.gz
-# - offgrid-0.1.0-darwin-arm64.tar.gz
-# - offgrid-0.1.0-windows-amd64.zip
-# etc.
+# Build for all platforms
+npm run build:all
+
+# Or platform-specific
+npm run build:linux   # Creates .AppImage and .deb
+npm run build:mac     # Creates .dmg
+npm run build:win     # Creates .exe installer
+
+# Outputs in desktop/dist/:
+# Linux:   OffGrid-LLM-Desktop-{version}-x86_64.AppImage
+#          OffGrid-LLM-Desktop-{version}-amd64.deb
+# macOS:   OffGrid-LLM-Desktop-{version}-arm64.dmg
+# Windows: OffGrid-LLM-Desktop-Setup-{version}.exe
 ```
 
 ## Platform-Specific Packaging
 
-### macOS DMG
+### Desktop Application (All Platforms)
+
+The desktop app uses **electron-builder** which automatically creates native installers.
+
+#### Linux
 
 ```bash
-# 1. Build binary
-GOOS=darwin GOARCH=arm64 go build -o offgrid-darwin-arm64 ./cmd/offgrid
+cd desktop
+npm run build:linux
 
-# 2. Download llama-server for macOS (or build from source)
-# Place in same directory as offgrid binary
-
-# 3. Create app bundle
-cd build/macos
-./create-app-bundle.sh ../../offgrid-darwin-arm64 ../../llama-server v0.1.0
-
-# 4. Create DMG
-./create-dmg.sh v0.1.0 arm64
-
-# Output: offgrid-v0.1.0-darwin-arm64.dmg
+# Creates:
+# - AppImage (universal, portable)
+# - .deb package (Debian/Ubuntu)
+# Both x64 and arm64 architectures
 ```
 
-### Windows Installer (NSIS)
-
-Requirements:
-- NSIS installed (`choco install nsis`)
-- EnVar plugin for NSIS
+#### macOS
 
 ```bash
-# 1. Build Windows binary
-GOOS=windows GOARCH=amd64 go build -o dist/offgrid-windows-amd64.exe ./cmd/offgrid
+cd desktop
+npm run build:mac
 
-# 2. Place llama-server.exe in dist/
-
-# 3. Build installer
-cd build/windows
-makensis installer.nsi
-
-# Output: OffGridSetup-0.1.0.exe
+# Creates .dmg installers:
+# - x64 (Intel Macs)
+# - arm64 (Apple Silicon)
+# - universal (both architectures)
 ```
 
-### Linux Packages
-
-#### Debian/Ubuntu (.deb)
+#### Windows
 
 ```bash
-# Coming soon - see build/linux/
+cd desktop
+npm run build:win
+
+# Creates:
+# - NSIS installer (.exe)
+# - Portable version (.exe)
 ```
 
-#### RedHat/Fedora (.rpm)
+### CLI Bundles (with llama.cpp)
 
-```bash
-# Coming soon - see build/linux/
-```
+CLI bundles are created by the GitHub Actions workflow. See `.github/workflows/release-unified.yml` for the complete process which includes:
+1. Building llama.cpp from source with platform-specific optimizations
+2. Bundling with the OffGrid CLI binary
+3. Creating release archives (.tar.gz, .zip)
 
 ## Automated Releases (GitHub Actions)
 

@@ -79,13 +79,16 @@ This creates pre-built binaries for 6 platforms that users can install via the q
 
 ### For End Users (Recommended)
 ```bash
-# Quick install - downloads pre-built binaries
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
+# Quick install - downloads pre-built CLI binaries
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+
+# Or install Desktop App with GUI
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
 ```
 
 ### For Developers (This Directory)
 ```bash
-# Build from source - compiles everything
+# Build from source - compiles everything with GPU optimizations
 cd dev
 sudo ./install.sh
 ```
