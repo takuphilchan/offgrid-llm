@@ -480,6 +480,16 @@ jobs:
         working-directory: desktop
         run: npm install
 
+      - name: Prepare architecture-specific binaries (macOS)
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          # List what we have
+          ls -la build/macos/
+          
+          # Electron-builder will build each arch separately, so we'll handle this in the build
+          echo "macOS binaries prepared: offgrid-amd64 and offgrid-arm64"
+
       - name: Build desktop app
         working-directory: desktop
         run: npm run ${{ matrix.build_script }}

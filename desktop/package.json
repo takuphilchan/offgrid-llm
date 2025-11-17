@@ -65,14 +65,16 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
-      "extraResources": [
+      "extraFiles": [
         {
-          "from": "../build/macos/",
-          "to": "bin/",
-          "filter": ["offgrid-*"]
+          "from": "../build/macos/offgrid-amd64",
+          "to": "Resources/bin/offgrid-amd64"
+        },
+        {
+          "from": "../build/macos/offgrid-arm64",
+          "to": "Resources/bin/offgrid-arm64"
         }
       ],
-      "x64ArchFiles": "Contents/Resources/bin/offgrid-amd64",
       "target": [
         {
           "target": "dmg",
