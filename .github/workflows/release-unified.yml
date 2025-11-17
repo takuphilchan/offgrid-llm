@@ -17,13 +17,16 @@ env:
   GO_VERSION: '1.21'
 
 jobs:
-  # Clean up existing release if recreating
-  cleanup-release:
-    name: Cleanup Existing Release
+  # Create release first
+  create-release:
+    name: Create Release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Get version
         id: version
         run: |
@@ -33,10 +36,26 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
       
-      - name: Delete existing release
+      - name: Delete existing release if present
         continue-on-error: true
         run: |
           gh release delete ${{ steps.version.outputs.version }} --yes --repo ${{ github.repository }} || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create new release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: OffGrid LLM ${{ steps.version.outputs.version }}
+          body: |
+            # OffGrid LLM ${{ steps.version.outputs.version }}
+            
+            Release is being built. Artifacts will appear shortly.
+            
+            Please wait for all build jobs to complete.
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -44,7 +63,7 @@ jobs:
   build-bundles:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: cleanup-release
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -407,7 +426,7 @@ jobs:
   build-desktop:
     name: Build Desktop App (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
-    needs: cleanup-release
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
