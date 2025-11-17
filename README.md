@@ -23,7 +23,32 @@
 
 ## Installation
 
-### Quick Install (Recommended)
+### Desktop Application (Docker Desktop-like Experience)
+
+**The easiest way to get started** - includes system tray integration, automatic server management, and a modern UI.
+
+**Linux/macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install-desktop.sh | bash
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install-desktop.ps1 | iex
+```
+
+**Features:**
+- System tray icon for easy access
+- Automatic server start/stop
+- Minimize to tray (keeps running in background)
+- Bundled CLI binary (no separate installation)
+- Native installers for each platform
+
+See [DESKTOP_INSTALL.md](DESKTOP_INSTALL.md) for detailed desktop app documentation.
+
+---
+
+### CLI Installation (Command Line)
 
 **Copy and paste this command into your terminal:**
 
@@ -46,8 +71,6 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 ```bash
 AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
 ```
-
-
 
 ---
 
