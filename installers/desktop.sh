@@ -22,7 +22,7 @@ print_banner() {
 ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
 ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
 ║                                                               ║
-║               DESKTOP INSTALLER v0.1.3                        ║
+║               DESKTOP INSTALLER v0.1.4                        ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 EOF
@@ -92,24 +92,49 @@ trap "rm -rf $TMP_DIR" EXIT
 if [ "$INSTALL_CLI" = true ]; then
     print_step "Installing CLI..."
     
-    CLI_FILE="offgrid-${OS}-${ARCH}"
+    # Determine the correct bundle file based on OS and architecture
     if [ "$OS" = "darwin" ]; then
-        CLI_FILE="offgrid-macos-${ARCH}"
-    fi
-    
-    print_step "Downloading CLI binary..."
-    if ! curl -fSL "${RELEASE_URL}/${CLI_FILE}" -o "${TMP_DIR}/offgrid"; then
-        print_error "Failed to download CLI binary"
+        if [ "$ARCH" = "arm64" ]; then
+            CLI_BUNDLE="offgrid-v${VERSION}-darwin-arm64-metal-apple-silicon.tar.gz"
+        else
+            CLI_BUNDLE="offgrid-v${VERSION}-darwin-amd64-cpu-avx2.tar.gz"
+        fi
+    elif [ "$OS" = "linux" ]; then
+        if [ "$ARCH" = "arm64" ]; then
+            CLI_BUNDLE="offgrid-v${VERSION}-linux-arm64-cpu-neon.tar.gz"
+        else
+            # Default to AVX2 for most modern CPUs
+            CLI_BUNDLE="offgrid-v${VERSION}-linux-amd64-cpu-avx2.tar.gz"
+        fi
+    else
+        print_error "Unsupported OS: $OS"
         exit 1
     fi
     
-    chmod +x "${TMP_DIR}/offgrid"
+    print_step "Downloading CLI bundle: $CLI_BUNDLE"
+    if ! curl -fSL "${RELEASE_URL}/${CLI_BUNDLE}" -o "${TMP_DIR}/${CLI_BUNDLE}"; then
+        print_error "Failed to download CLI bundle"
+        exit 1
+    fi
+    
+    print_step "Extracting bundle..."
+    cd "${TMP_DIR}"
+    tar -xzf "${CLI_BUNDLE}"
+    
+    # Find the extracted offgrid binary
+    OFFGRID_BIN=$(find . -name "offgrid" -o -name "offgrid.exe" | head -1)
+    if [ -z "$OFFGRID_BIN" ]; then
+        print_error "Could not find offgrid binary in bundle"
+        exit 1
+    fi
+    
+    chmod +x "$OFFGRID_BIN"
     
     print_step "Installing to /usr/local/bin/offgrid..."
     if [ "$EUID" -eq 0 ]; then
-        cp "${TMP_DIR}/offgrid" /usr/local/bin/offgrid
+        cp "$OFFGRID_BIN" /usr/local/bin/offgrid
     else
-        sudo cp "${TMP_DIR}/offgrid" /usr/local/bin/offgrid
+        sudo cp "$OFFGRID_BIN" /usr/local/bin/offgrid
     fi
     
     print_success "CLI installed successfully"
@@ -130,12 +155,21 @@ if [ "$INSTALL_DESKTOP" = true ]; then
         # Check for package manager
         if command -v apt-get &> /dev/null; then
             # Debian/Ubuntu - use .deb
-            DESKTOP_FILE="OffGrid-LLM-Desktop-${VERSION}-${ARCH}.deb"
+            # Map architecture for file naming
+            if [ "$ARCH" = "amd64" ]; then
+                DESKTOP_ARCH="amd64"
+                APPIMAGE_ARCH="x86_64"
+            else
+                DESKTOP_ARCH="arm64"
+                APPIMAGE_ARCH="arm64"
+            fi
+            
+            DESKTOP_FILE="OffGrid.LLM.Desktop-${VERSION}-${DESKTOP_ARCH}.deb"
             print_step "Downloading Debian package..."
             
             if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/offgrid-desktop.deb"; then
                 print_warning "Debian package not available, trying AppImage..."
-                DESKTOP_FILE="OffGrid-LLM-Desktop-${VERSION}-${ARCH}.AppImage"
+                DESKTOP_FILE="OffGrid.LLM.Desktop-${VERSION}-${APPIMAGE_ARCH}.AppImage"
                 
                 if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/OffGrid-LLM-Desktop.AppImage"; then
                     print_error "Failed to download desktop application"
@@ -211,8 +245,14 @@ EOF
         
     elif [ "$OS" = "darwin" ]; then
         # macOS - use .dmg
-        DESKTOP_FILE="OffGrid-LLM-Desktop-${VERSION}-${ARCH}.dmg"
-        print_step "Downloading macOS application..."
+        # Map architecture for DMG naming
+        if [ "$ARCH" = "amd64" ]; then
+            DMG_ARCH="x64"
+        else
+            DMG_ARCH="arm64"
+        fi
+        DESKTOP_FILE="OffGrid LLM Desktop-${VERSION}-${DMG_ARCH}.dmg"
+        print_step "Downloading macOS DMG..."
         
         if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/offgrid-desktop.dmg"; then
             print_error "Failed to download desktop application"

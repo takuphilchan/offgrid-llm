@@ -21,7 +21,7 @@ function Print-Banner {
 ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
 ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
 ║                                                               ║
-║               DESKTOP INSTALLER v0.1.3                        ║
+║               DESKTOP INSTALLER v0.1.4                        ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 "@
@@ -74,7 +74,7 @@ switch ($choice) {
 
 # GitHub release info
 $GITHUB_REPO = "takuphilchan/offgrid-llm"
-$VERSION = "0.1.3"
+$VERSION = "0.1.4"
 $RELEASE_URL = "https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
 
 # Temporary directory
@@ -86,15 +86,25 @@ try {
     if ($INSTALL_CLI) {
         Print-Step "Installing CLI..."
         
-        $CLI_FILE = "offgrid-windows-amd64.exe"
-        $CLI_URL = "${RELEASE_URL}/${CLI_FILE}"
-        $CLI_PATH = Join-Path $TMP_DIR "offgrid.exe"
+        $CLI_BUNDLE = "offgrid-v${VERSION}-windows-amd64-cpu-avx2.zip"
+        $CLI_URL = "${RELEASE_URL}/${CLI_BUNDLE}"
+        $CLI_ZIP = Join-Path $TMP_DIR $CLI_BUNDLE
         
-        Print-Step "Downloading CLI binary..."
+        Print-Step "Downloading CLI bundle..."
         try {
-            Invoke-WebRequest -Uri $CLI_URL -OutFile $CLI_PATH -UseBasicParsing
+            Invoke-WebRequest -Uri $CLI_URL -OutFile $CLI_ZIP -UseBasicParsing
         } catch {
-            Print-Error "Failed to download CLI binary: $_"
+            Print-Error "Failed to download CLI bundle: $_"
+            exit 1
+        }
+        
+        Print-Step "Extracting bundle..."
+        Expand-Archive -Path $CLI_ZIP -DestinationPath $TMP_DIR -Force
+        
+        # Find the offgrid.exe in extracted files
+        $CLI_PATH = Get-ChildItem -Path $TMP_DIR -Filter "offgrid.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+        if (-not $CLI_PATH) {
+            Print-Error "Could not find offgrid.exe in bundle"
             exit 1
         }
         
@@ -132,7 +142,7 @@ try {
     if ($INSTALL_DESKTOP) {
         Print-Step "Installing Desktop application..."
         
-        $DESKTOP_FILE = "OffGrid-LLM-Desktop-Setup-${VERSION}.exe"
+        $DESKTOP_FILE = "OffGrid.LLM.Desktop-Setup-${VERSION}.exe"
         $DESKTOP_URL = "${RELEASE_URL}/${DESKTOP_FILE}"
         $INSTALLER_PATH = Join-Path $TMP_DIR "offgrid-desktop-setup.exe"
         
