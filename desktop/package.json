@@ -93,7 +93,25 @@
     "dmg": {
       "title": "OffGrid LLM Desktop ${version}",
       "writeUpdateInfo": false,
-      "format": "ULFO"
+      "background": null,
+      "icon": "assets/icon.icns",
+      "iconSize": 80,
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "win": {
       "extraResources": [
