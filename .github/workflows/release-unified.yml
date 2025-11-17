@@ -414,19 +414,24 @@ jobs:
         include:
           - os: linux
             runner: ubuntu-22.04
-            artifact: AppImage
+            build_script: build:linux
             
           - os: macos
             runner: macos-latest
-            artifact: dmg
+            build_script: build:mac
             
           - os: windows
             runner: windows-latest
-            artifact: exe
+            build_script: build:win
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -443,7 +448,31 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install dependencies
+      - name: Build CLI binaries for bundling
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          
+          # Build for all platforms that desktop app will need
+          mkdir -p build/linux build/macos build/windows
+          
+          # Linux binary
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+            -o build/linux/offgrid ./cmd/offgrid
+          
+          # macOS binary
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+            -o build/macos/offgrid ./cmd/offgrid
+          
+          # Windows binary
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+            -o build/windows/offgrid.exe ./cmd/offgrid
+
+      - name: Install desktop dependencies
         working-directory: desktop
         run: npm install
 
@@ -457,38 +486,65 @@ jobs:
 
       - name: Build desktop app
         working-directory: desktop
-        run: npm run dist
+        run: npm run ${{ matrix.build_script }}
 
-      - name: Find built artifact
-        id: artifact
+      - name: Find and upload artifacts
+        id: artifacts
         shell: bash
         working-directory: desktop/dist
         run: |
           if [ "${{ matrix.os }}" = "linux" ]; then
-            ASSET=$(ls *.AppImage | head -1)
+            # Upload all Linux artifacts (AppImage and .deb)
+            for file in *.AppImage *.deb; do
+              if [ -f "$file" ]; then
+                echo "Found: $file"
+                echo "$file" >> ../../artifacts-list.txt
+              fi
+            done
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            ASSET=$(ls *.dmg | head -1)
+            # Upload all macOS artifacts (.dmg files)
+            for file in *.dmg; do
+              if [ -f "$file" ]; then
+                echo "Found: $file"
+                echo "$file" >> ../../artifacts-list.txt
+              fi
+            done
           else
-            ASSET=$(ls *.exe | head -1)
+            # Upload all Windows artifacts (.exe installers)
+            for file in *Setup*.exe *.exe; do
+              if [ -f "$file" ]; then
+                echo "Found: $file"
+                echo "$file" >> ../../artifacts-list.txt
+              fi
+            done
           fi
-          echo "asset=$ASSET" >> $GITHUB_OUTPUT
-          echo "path=desktop/dist/$ASSET" >> $GITHUB_OUTPUT
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.os }}
-          path: ${{ steps.artifact.outputs.path }}
+          path: desktop/dist/*
           retention-days: 7
 
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          files: ${{ steps.artifact.outputs.path }}
-          draft: false
-          prerelease: false
+        shell: bash
+        working-directory: desktop/dist
+        run: |
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            FILES=$(ls *.AppImage *.deb 2>/dev/null || true)
+          elif [ "${{ matrix.os }}" = "macos" ]; then
+            FILES=$(ls *.dmg 2>/dev/null || true)
+          else
+            FILES=$(ls *Setup*.exe *.exe 2>/dev/null | grep -v Portable || true)
+          fi
+          
+          for file in $FILES; do
+            if [ -f "$file" ]; then
+              echo "Uploading: $file"
+              gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber || true
+            fi
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -528,60 +584,108 @@ jobs:
           cat > release-notes.md << EOF
           # OffGrid LLM ${{ steps.version.outputs.version }}
           
-          **First official release with unified installation system!**
+          **Complete release with CLI bundles and Desktop applications!**
           
           ## Installation
           
-          ### Quick Install (Recommended)
+          ### 🖥️ Desktop Application (Recommended for Most Users)
+          
+          **Easy installation with system tray integration:**
+          
+          **Linux:**
+          - Download `.AppImage` - Make executable and run: \`chmod +x *.AppImage && ./OffGrid*.AppImage\`
+          - Or download \`.deb\` - Install: \`sudo dpkg -i *.deb\`
+          
+          **macOS:**
+          - Download \`.dmg\` - Mount and drag to Applications folder
+          
+          **Windows:**
+          - Download \`*Setup*.exe\` - Run installer
+          
+          **One-line install:**
+          \`\`\`bash
+          # Linux/macOS
+          curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
+          
+          # Windows (PowerShell as Admin)
+          irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
+          \`\`\`
+          
+          ### 💻 CLI Installation (For Servers & Advanced Users)
           
           **Linux / macOS:**
           \`\`\`bash
           curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
           \`\`\`
           
-          **Windows:** Download the bundle below and run \`install.bat\`
+          **Or download bundles below and extract**
           
-          ### Desktop App
+          ## 📦 Desktop Applications
           
-          Download the appropriate installer for your platform:
-          - **Linux**: \`.AppImage\` (make executable and run)
-          - **macOS**: \`.dmg\` (mount and drag to Applications)
-          - **Windows**: \`.exe\` (run installer)
+          ### Linux
+          - \`OffGrid-LLM-Desktop-{version}-x86_64.AppImage\` - Universal Linux (recommended)
+          - \`OffGrid-LLM-Desktop-{version}-amd64.deb\` - Debian/Ubuntu
+          - \`OffGrid-LLM-Desktop-{version}-arm64.AppImage\` - ARM64 Linux
+          - \`OffGrid-LLM-Desktop-{version}-arm64.deb\` - ARM64 Debian/Ubuntu
           
-          ## Bundles
+          ### macOS  
+          - \`OffGrid-LLM-Desktop-{version}-arm64.dmg\` - Apple Silicon (M1/M2/M3)
+          - \`OffGrid-LLM-Desktop-{version}-x64.dmg\` - Intel Mac
+          - \`OffGrid-LLM-Desktop-{version}-universal.dmg\` - Universal (both architectures)
+          
+          ### Windows
+          - \`OffGrid-LLM-Desktop-Setup-{version}.exe\` - Windows Installer (recommended)
+          - \`OffGrid-LLM-Desktop-{version}-Portable.exe\` - Portable version (no install)
+          
+          ## 🔧 CLI Bundles
           
           Choose your platform and GPU variant:
           
           ### Linux
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan.tar.gz\` - Vulkan GPU (recommended)
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-cpu.tar.gz\` - CPU only
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-arm64-cpu.tar.gz\` - ARM64
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan-avx2.tar.gz\` - Vulkan GPU (recommended, Intel/AMD 2013+)
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan-avx512.tar.gz\` - Vulkan GPU (newer Intel)
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-cpu-avx2.tar.gz\` - CPU only
+          - \`offgrid-${{ steps.version.outputs.version }}-linux-arm64-cpu-neon.tar.gz\` - ARM64
           
           ### macOS
-          - \`offgrid-${{ steps.version.outputs.version }}-darwin-arm64-metal.tar.gz\` - Apple Silicon (M1/M2/M3) with Metal
-          - \`offgrid-${{ steps.version.outputs.version }}-darwin-amd64-cpu.tar.gz\` - Intel Mac
+          - \`offgrid-${{ steps.version.outputs.version }}-darwin-arm64-metal-apple-silicon.tar.gz\` - Apple Silicon with Metal GPU
+          - \`offgrid-${{ steps.version.outputs.version }}-darwin-amd64-cpu-avx2.tar.gz\` - Intel Mac (CPU only)
           
           ### Windows
-          - \`offgrid-${{ steps.version.outputs.version }}-windows-amd64-cpu.zip\` - CPU only
+          - \`offgrid-${{ steps.version.outputs.version }}-windows-amd64-cpu-avx2.zip\` - CPU only
           
-          ## What's Included
+          ## 📋 What's Included
           
-          Each bundle contains:
+          ### Desktop App Includes:
+          - Beautiful UI with system tray
+          - Automatic server management  
+          - Built-in CLI binary
+          - Model management interface
+          - Chat interface
+          
+          ### CLI Bundle Includes:
           - \`offgrid\` - Main CLI application
           - \`llama-server\` - Inference engine (llama.cpp)
           - \`install.sh\` - Installation script (Linux/macOS)
           - \`README.md\` - Getting started guide
           - \`checksums.sha256\` - File verification
           
-          ## Verification
+          ## ✅ Verification
           
           Verify your download:
           \`\`\`bash
           sha256sum -c checksums-${{ steps.version.outputs.version }}.sha256
           \`\`\`
           
-          ## Getting Started
+          ## 🚀 Getting Started
           
+          ### Desktop App
+          1. Install using one of the methods above
+          2. Launch "OffGrid LLM Desktop" from your applications
+          3. Use the Models tab to download models
+          4. Start chatting!
+          
+          ### CLI
           After installation:
           \`\`\`bash
           # Verify
@@ -601,15 +705,12 @@ jobs:
           open http://localhost:11611/ui
           \`\`\`
           
-          ## Documentation
+          ## 📚 Documentation
           
           - [Complete Documentation](https://github.com/takuphilchan/offgrid-llm/tree/main/docs)
+          - [Desktop App Guide](https://github.com/takuphilchan/offgrid-llm/blob/main/DESKTOP_INSTALL.md)
           - [CLI Reference](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/CLI_REFERENCE.md)
           - [API Documentation](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/API.md)
-          
-          ## Changelog
-          
-          See [CHANGELOG.md](https://github.com/takuphilchan/offgrid-llm/blob/main/CHANGELOG.md) for details.
           EOF
 
       - name: Upload checksums to release

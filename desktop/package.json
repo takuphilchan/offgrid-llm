@@ -17,6 +17,7 @@
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:all": "electron-builder -mwl",
+    "dist": "electron-builder",
     "package": "npm run build:all"
   },
   "build": {
