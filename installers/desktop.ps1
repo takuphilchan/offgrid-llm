@@ -21,7 +21,7 @@ function Print-Banner {
 ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
 ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
 ║                                                               ║
-║               DESKTOP INSTALLER v0.1.4                        ║
+║               DESKTOP INSTALLER                               ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 "@
@@ -74,7 +74,21 @@ switch ($choice) {
 
 # GitHub release info
 $GITHUB_REPO = "takuphilchan/offgrid-llm"
-$VERSION = "0.1.4"
+
+# Fetch latest release version from GitHub API
+Print-Step "Fetching latest release version..."
+try {
+    $apiResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" -UseBasicParsing
+    $VERSION = $apiResponse.tag_name -replace '^v', ''
+    if ([string]::IsNullOrEmpty($VERSION)) {
+        throw "Version is empty"
+    }
+    Print-Success "Latest version: v${VERSION}"
+} catch {
+    Print-Error "Failed to fetch latest version from GitHub: $_"
+    exit 1
+}
+
 $RELEASE_URL = "https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
 
 # Temporary directory

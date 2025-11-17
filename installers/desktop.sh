@@ -22,7 +22,7 @@ print_banner() {
 ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝     ║
 ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝      ║
 ║                                                               ║
-║               DESKTOP INSTALLER v0.1.4                        ║
+║               DESKTOP INSTALLER                               ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 EOF
@@ -81,7 +81,19 @@ esac
 
 # GitHub release info
 GITHUB_REPO="takuphilchan/offgrid-llm"
-VERSION="0.1.4"
+
+# Fetch latest release version from GitHub API
+print_step "Fetching latest release version..."
+VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" | \
+    grep '"tag_name":' | \
+    sed -E 's/.*"tag_name": "v?([^"]+)".*/\1/')
+
+if [ -z "$VERSION" ]; then
+    print_error "Failed to fetch latest version from GitHub"
+    exit 1
+fi
+
+print_success "Latest version: v${VERSION}"
 RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
 
 # Temporary directory
