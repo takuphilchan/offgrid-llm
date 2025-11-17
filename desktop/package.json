@@ -38,7 +38,8 @@
       "extraResources": [
         {
           "from": "../build/linux/offgrid",
-          "to": "bin/offgrid"
+          "to": "bin/offgrid",
+          "filter": ["**/*"]
         }
       ],
       "target": [
@@ -65,14 +66,16 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
-      "extraFiles": [
+      "extraResources": [
         {
           "from": "../build/macos/offgrid-amd64",
-          "to": "Resources/bin/offgrid-amd64"
+          "to": "bin/offgrid-amd64",
+          "filter": ["**/*"]
         },
         {
           "from": "../build/macos/offgrid-arm64",
-          "to": "Resources/bin/offgrid-arm64"
+          "to": "bin/offgrid-arm64",
+          "filter": ["**/*"]
         }
       ],
       "target": [
@@ -107,7 +110,8 @@
       "extraResources": [
         {
           "from": "../build/windows/offgrid.exe",
-          "to": "bin/offgrid.exe"
+          "to": "bin/offgrid.exe",
+          "filter": ["**/*"]
         }
       ],
       "target": [

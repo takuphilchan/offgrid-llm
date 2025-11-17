@@ -492,7 +492,35 @@ jobs:
 
       - name: Build desktop app
         working-directory: desktop
-        run: npm run ${{ matrix.build_script }}
+        run: |
+          echo "Building desktop app for ${{ matrix.os }}..."
+          npm run ${{ matrix.build_script }}
+          echo "Build completed. Listing dist directory:"
+          ls -lah dist/ || echo "dist/ directory not found!"
+          
+      - name: Verify build artifacts
+        working-directory: desktop/dist
+        run: |
+          echo "Checking for build artifacts..."
+          ls -la
+          
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            if ! ls *.AppImage *.deb 2>/dev/null | grep -q .; then
+              echo "ERROR: No Linux desktop artifacts found!"
+              exit 1
+            fi
+          elif [ "${{ matrix.os }}" = "macos" ]; then
+            if ! ls *.dmg 2>/dev/null | grep -q .; then
+              echo "ERROR: No macOS desktop artifacts found!"
+              exit 1
+            fi
+          elif [ "${{ matrix.os }}" = "windows" ]; then
+            if ! ls *.exe 2>/dev/null | grep -q .; then
+              echo "ERROR: No Windows desktop artifacts found!"
+              exit 1
+            fi
+          fi
+          echo "Build artifacts verified successfully!"
 
       - name: Find and upload artifacts
         id: artifacts
