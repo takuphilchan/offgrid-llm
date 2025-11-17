@@ -67,14 +67,16 @@
     "mac": {
       "extraResources": [
         {
-          "from": "../build/macos/offgrid",
-          "to": "bin/offgrid"
+          "from": "../build/macos/",
+          "to": "bin/",
+          "filter": ["offgrid-*"]
         }
       ],
+      "x64ArchFiles": "Contents/Resources/bin/offgrid-amd64",
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64", "universal"]
+          "arch": ["x64", "arm64"]
         }
       ],
       "category": "public.app-category.developer-tools",

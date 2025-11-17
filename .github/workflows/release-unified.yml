@@ -462,10 +462,14 @@ jobs:
             -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
             -o build/linux/offgrid ./cmd/offgrid
           
-          # macOS binary
+          # macOS binaries (both architectures)
           GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build \
             -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
-            -o build/macos/offgrid ./cmd/offgrid
+            -o build/macos/offgrid-amd64 ./cmd/offgrid
+          
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+            -o build/macos/offgrid-arm64 ./cmd/offgrid
           
           # Windows binary
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \

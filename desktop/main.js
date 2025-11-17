@@ -17,8 +17,15 @@ const SERVER_URL = `http://localhost:${SERVER_PORT}`;
 const paths = {
   getOffgridBinary() {
     if (app.isPackaged) {
-      const ext = process.platform === 'win32' ? '.exe' : '';
-      return path.join(process.resourcesPath, 'bin', `offgrid${ext}`);
+      if (process.platform === 'win32') {
+        return path.join(process.resourcesPath, 'bin', 'offgrid.exe');
+      } else if (process.platform === 'darwin') {
+        // Use architecture-specific binary for macOS
+        const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+        return path.join(process.resourcesPath, 'bin', `offgrid-${arch}`);
+      } else {
+        return path.join(process.resourcesPath, 'bin', 'offgrid');
+      }
     } else {
       // Development mode
       const platform = process.platform;
@@ -27,7 +34,8 @@ const paths = {
       if (platform === 'win32') {
         return path.join(basePath, 'windows/offgrid.exe');
       } else if (platform === 'darwin') {
-        return path.join(basePath, 'macos/offgrid');
+        const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+        return path.join(basePath, `macos/offgrid-${arch}`);
       } else {
         return path.join(basePath, 'linux/offgrid');
       }
