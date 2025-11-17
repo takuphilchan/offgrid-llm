@@ -586,23 +586,26 @@ jobs:
           echo "Looking for files to upload..."
           
           if [ "${{ matrix.os }}" = "linux" ]; then
-            FILES=$(ls *.AppImage *.deb 2>/dev/null || true)
+            # Use array to handle filenames with spaces
+            mapfile -t FILES < <(find . -maxdepth 1 \( -name "*.AppImage" -o -name "*.deb" \) -type f)
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            FILES=$(ls *.dmg 2>/dev/null || true)
+            mapfile -t FILES < <(find . -maxdepth 1 -name "*.dmg" -type f)
           else
-            # Upload both Setup and Portable exe files
-            FILES=$(ls *.exe 2>/dev/null || true)
+            # Windows - find all .exe files
+            mapfile -t FILES < <(find . -maxdepth 1 -name "*.exe" -type f)
           fi
           
-          if [ -z "$FILES" ]; then
+          if [ ${#FILES[@]} -eq 0 ]; then
             echo "ERROR: No files found to upload for ${{ matrix.os }}!"
             exit 1
           fi
           
-          echo "Files to upload: $FILES"
+          echo "Found ${#FILES[@]} file(s) to upload"
           echo ""
           
-          for file in $FILES; do
+          for file in "${FILES[@]}"; do
+            # Remove ./ prefix
+            file="${file#./}"
             if [ -f "$file" ]; then
               echo "Uploading: $file ($(du -h "$file" | cut -f1))"
               if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
