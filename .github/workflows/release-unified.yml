@@ -476,14 +476,6 @@ jobs:
         working-directory: desktop
         run: npm install
 
-      - name: Update version in package.json
-        working-directory: desktop
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          VERSION_NUM="${VERSION#v}"  # Remove 'v' prefix
-          npm version $VERSION_NUM --no-git-tag-version
-
       - name: Build desktop app
         working-directory: desktop
         run: npm run ${{ matrix.build_script }}
