@@ -580,6 +580,11 @@ jobs:
         shell: bash
         working-directory: desktop/dist
         run: |
+          echo "Current directory contents:"
+          ls -lah
+          echo ""
+          echo "Looking for files to upload..."
+          
           if [ "${{ matrix.os }}" = "linux" ]; then
             FILES=$(ls *.AppImage *.deb 2>/dev/null || true)
           elif [ "${{ matrix.os }}" = "macos" ]; then
@@ -589,12 +594,30 @@ jobs:
             FILES=$(ls *.exe 2>/dev/null || true)
           fi
           
+          if [ -z "$FILES" ]; then
+            echo "ERROR: No files found to upload for ${{ matrix.os }}!"
+            exit 1
+          fi
+          
+          echo "Files to upload: $FILES"
+          echo ""
+          
           for file in $FILES; do
             if [ -f "$file" ]; then
-              echo "Uploading: $file"
-              gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber || true
+              echo "Uploading: $file ($(du -h "$file" | cut -f1))"
+              if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
+                echo "✓ Successfully uploaded: $file"
+              else
+                echo "✗ Failed to upload: $file"
+                exit 1
+              fi
+            else
+              echo "WARNING: File not found: $file"
             fi
           done
+          
+          echo ""
+          echo "All files uploaded successfully!"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
