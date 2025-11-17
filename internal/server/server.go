@@ -22,6 +22,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/stats"
+	"github.com/takuphilchan/offgrid-llm/internal/templates"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -180,6 +181,15 @@ func (s *Server) startLlamaServer() error {
 		return fmt.Errorf("model file not found: %s", metadata.Path)
 	}
 
+	// Kill any existing llama-server processes to prevent duplicates
+	if s.llamaServerCmd != nil && s.llamaServerCmd.Process != nil {
+		log.Println("Stopping existing llama-server process...")
+		s.llamaServerCmd.Process.Kill()
+		s.llamaServerCmd.Wait()
+		s.llamaServerCmd = nil
+		time.Sleep(1 * time.Second) // Give it time to clean up
+	}
+
 	// Start llama-server
 	log.Printf("Starting llama-server on port 42382 with model: %s", modelID)
 	cmd := exec.Command("llama-server",
@@ -328,6 +338,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
 	mux.HandleFunc("/v1/terminal/exec", s.handleTerminalExec)
 
+	// Templates endpoints
+	mux.HandleFunc("/v1/templates", s.handleTemplates)
+	mux.HandleFunc("/v1/templates/", s.handleTemplateDetails)
+
 	// USB import/export
 	mux.HandleFunc("/v1/usb/scan", s.handleUSBScan)
 	mux.HandleFunc("/v1/usb/import", s.handleUSBImport)
@@ -473,7 +487,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.0-alpha","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.5","status":"running"}`)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -2025,6 +2039,109 @@ func (s *Server) handleExportProgress(w http.ResponseWriter, r *http.Request) {
 	s.exportMutex.RUnlock()
 
 	if err := json.NewEncoder(w).Encode(progress); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// handleTemplates returns all available prompt templates
+func (s *Server) handleTemplates(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	templateList := templates.ListTemplates()
+	result := make([]map[string]interface{}, 0, len(templateList))
+
+	for _, name := range templateList {
+		tpl, err := templates.GetTemplate(name)
+		if err != nil {
+			continue
+		}
+
+		result = append(result, map[string]interface{}{
+			"name":        tpl.Name,
+			"description": tpl.Description,
+			"system":      tpl.System,
+			"variables":   tpl.Variables,
+			"examples":    tpl.Examples,
+		})
+	}
+
+	response := map[string]interface{}{
+		"total":     len(result),
+		"templates": result,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// handleTemplateDetails returns details for a specific template
+func (s *Server) handleTemplateDetails(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract template name from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/v1/templates/")
+	templateName := strings.TrimSpace(path)
+
+	if templateName == "" {
+		writeError(w, "Template name required", http.StatusBadRequest)
+		return
+	}
+
+	tpl, err := templates.GetTemplate(templateName)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Template not found: %s", templateName), http.StatusNotFound)
+		return
+	}
+
+	// If POST, apply variables
+	if r.Method == http.MethodPost {
+		var request struct {
+			Variables map[string]string `json:"variables"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			writeError(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		prompt, err := tpl.Apply(request.Variables)
+		if err != nil {
+			writeError(w, fmt.Sprintf("Failed to apply template: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		response := map[string]interface{}{
+			"template": tpl.Name,
+			"prompt":   prompt,
+			"system":   tpl.System,
+		}
+
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// GET request - return template details
+	response := map[string]interface{}{
+		"name":        tpl.Name,
+		"description": tpl.Description,
+		"system":      tpl.System,
+		"template":    tpl.Template,
+		"variables":   tpl.Variables,
+		"examples":    tpl.Examples,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
 }

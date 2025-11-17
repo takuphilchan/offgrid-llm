@@ -188,7 +188,7 @@ func (d *Discovery) broadcast() {
 		NodeID:  d.nodeID,
 		Port:    d.localPort,
 		Models:  d.localModels,
-		Version: "0.1.0",
+		Version: "0.1.5",
 	}
 	d.mu.RUnlock()
 

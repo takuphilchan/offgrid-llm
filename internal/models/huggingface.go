@@ -291,10 +291,21 @@ func (hf *HuggingFaceClient) parseGGUFFiles(model HFModel) []GGUFFileInfo {
 			continue
 		}
 
+		size := sibling.Size
+		sizeGB := float64(size) / (1024 * 1024 * 1024)
+
+		// If size is 0 or not available, estimate based on quantization and parameters
+		if size == 0 {
+			quant := extractQuantization(filename)
+			params := extractParameterSize(filename)
+			size = estimateModelSize(params, quant)
+			sizeGB = float64(size) / (1024 * 1024 * 1024)
+		}
+
 		info := GGUFFileInfo{
 			Filename:      filename,
-			Size:          sibling.Size,
-			SizeGB:        float64(sibling.Size) / (1024 * 1024 * 1024),
+			Size:          size,
+			SizeGB:        sizeGB,
 			Quantization:  extractQuantization(filename),
 			ParameterSize: extractParameterSize(filename),
 			IsChat: strings.Contains(strings.ToLower(filename), "chat") ||
@@ -331,17 +342,99 @@ func extractQuantization(filename string) string {
 
 // extractParameterSize extracts parameter count from filename or model ID
 func extractParameterSize(filename string) string {
-	// Common parameter sizes
-	patterns := []string{"1.1B", "3B", "7B", "8B", "13B", "30B", "34B", "70B", "405B"}
-
 	upper := strings.ToUpper(filename)
-	for _, pattern := range patterns {
-		if strings.Contains(upper, pattern) {
-			return pattern
+
+	// More comprehensive patterns - check specific sizes first (most specific to least specific)
+	patterns := []struct {
+		pattern string
+		size    string
+	}{
+		{"405B", "405B"},
+		{"70B", "70B"},
+		{"34B", "34B"},
+		{"30B", "30B"},
+		{"13B", "13B"},
+		{"8B", "8B"},
+		{"7B", "7B"},
+		{"3B", "3B"},
+		{"1.1B", "1.1B"},
+		{"1B", "1B"},
+		// Also check for patterns with hyphen
+		{"-405B-", "405B"},
+		{"-70B-", "70B"},
+		{"-34B-", "34B"},
+		{"-30B-", "30B"},
+		{"-13B-", "13B"},
+		{"-8B-", "8B"},
+		{"-7B-", "7B"},
+		{"-3.2-3B-", "3B"},
+		{"-3.2-1B-", "1B"},
+		{"-3B-", "3B"},
+		{"-1.1B-", "1.1B"},
+		{"-1B-", "1B"},
+	}
+
+	for _, p := range patterns {
+		if strings.Contains(upper, p.pattern) {
+			return p.size
 		}
 	}
 
 	return "unknown"
+}
+
+// estimateModelSize estimates file size based on parameter count and quantization
+func estimateModelSize(paramSize, quantization string) int64 {
+	// Base parameter counts in billions
+	paramMap := map[string]float64{
+		"1B":   1.0,
+		"1.1B": 1.1,
+		"3B":   3.0,
+		"7B":   7.0,
+		"8B":   8.0,
+		"13B":  13.0,
+		"30B":  30.0,
+		"34B":  34.0,
+		"70B":  70.0,
+		"405B": 405.0,
+	}
+
+	// Bits per parameter for different quantization levels
+	// These are approximate effective bits after quantization
+	bitsPerParam := map[string]float64{
+		"Q2_K":   2.5,
+		"Q3_K_S": 3.25,
+		"Q3_K_M": 3.5,
+		"Q3_K_L": 3.75,
+		"Q4_0":   4.0,
+		"Q4_1":   4.5,
+		"Q4_K_S": 4.25,
+		"Q4_K_M": 4.5,
+		"Q5_0":   5.0,
+		"Q5_1":   5.5,
+		"Q5_K_S": 5.25,
+		"Q5_K_M": 5.5,
+		"Q6_K":   6.5,
+		"Q8_0":   8.5,
+		"F16":    16.0,
+		"F32":    32.0,
+	}
+
+	params, ok := paramMap[paramSize]
+	if !ok {
+		params = 7.0 // Default to 7B if unknown
+	}
+
+	bits, ok := bitsPerParam[quantization]
+	if !ok {
+		bits = 4.5 // Default to Q4_K_M equivalent
+	}
+
+	// Calculate size: (parameters in billions * bits per param * 1 billion / 8 bytes per bit) * overhead
+	// Overhead is approximately 1.05-1.10 for metadata, embeddings, etc.
+	sizeBytes := int64(params * bits * 1e9 / 8 * 1.08)
+
+	return sizeBytes
 }
 
 // calculateScore computes a relevance score for ranking

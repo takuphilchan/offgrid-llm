@@ -39,7 +39,7 @@ Get basic server information.
 ```json
 {
   "name": "OffGrid LLM",
-  "version": "0.1.0-alpha",
+  "version": "0.1.5-alpha",
   "status": "running"
 }
 ```

@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OffGrid LLM</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { 
             margin: 0; 
@@ -16,9 +26,10 @@
         body { 
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: #e2e8f0;
-            min-height: 100vh;
+            height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
         
         .card { 
@@ -118,28 +129,67 @@
         }
         
         .message { 
-            padding: 16px; 
-            border-radius: 10px; 
-            margin-bottom: 12px; 
-            border-left: 4px solid #334155; 
+            padding: 20px 0;
+            margin-bottom: 0;
             word-wrap: break-word;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            transition: box-shadow 0.2s ease;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.3);
         }
         
-        .message:hover {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        .message:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        
+        .message-wrapper {
+            max-width: 56rem;
+            margin: 0 auto;
         }
         
         .message-user { 
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-            border-left-color: #10b981;
+            background: transparent;
+        }
+        
+        .message-user .message-wrapper {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
         }
         
         .message-assistant { 
-            background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(8, 145, 178, 0.1) 100%);
-            border-left-color: #06b6d4;
-            white-space: pre-wrap;
+            background: rgba(30, 41, 59, 0.3);
+        }
+        
+        .message-assistant .message-wrapper {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+        
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .message-user .message-avatar {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .message-assistant .message-avatar {
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: white;
+        }
+        
+        .message-body {
+            flex: 1;
+            min-width: 0;
         }
         
         .message-actions { 
@@ -148,9 +198,99 @@
             margin-top: 12px; 
         }
         
+        /* Modal Overlay Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.2s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-dialog {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.98) 0%, rgba(51, 65, 85, 0.98) 100%);
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .modal-dialog.warning {
+            border-color: rgba(245, 158, 11, 0.6);
+            box-shadow: 0 20px 60px rgba(245, 158, 11, 0.2);
+        }
+        
+        .modal-dialog.error {
+            border-color: rgba(239, 68, 68, 0.6);
+            box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);
+        }
+        
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .modal-icon {
+            font-size: 32px;
+            line-height: 1;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #e5e7eb;
+        }
+        
+        .modal-body {
+            margin-bottom: 24px;
+            color: #d1d5db;
+            line-height: 1.6;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .terminal-card {
+            background: #1e1e1e !important;
+            background-image: none !important;
+            border: 1px solid #3e3e42 !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+            backdrop-filter: none !important;
+        }
+        
+        .terminal-card:hover {
+            border-color: #3e3e42 !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+        }
+        
         .terminal { 
-            background: #0d1117;
-            border: 1px solid #30363d;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
             border-radius: 8px;
             padding: 16px;
             font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
@@ -163,27 +303,32 @@
             height: 500px;
             overflow-y: auto; 
             margin-bottom: 12px; 
-            line-height: 1.6; 
+            line-height: 1.6;
+            background: #1e1e1e;
         }
         
         .terminal-line { 
-            color: #c9d1d9; 
+            color: #d4d4d4; 
             margin-bottom: 2px; 
             white-space: pre; 
             word-break: break-word; 
             font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
         }
         
-        /* ANSI color classes */
-        .ansi-cyan { color: #06b6d4; font-weight: 600; }
-        .ansi-green { color: #10b981; font-weight: 600; }
-        .ansi-yellow { color: #f59e0b; font-weight: 600; }
-        .ansi-red { color: #ef4444; font-weight: 600; }
-        .ansi-blue { color: #3b82f6; font-weight: 600; }
-        .ansi-magenta { color: #a855f7; font-weight: 600; }
-        .ansi-gray { color: #6b7280; }
+        /* ANSI color classes - optimized for readability on dark background */
+        .ansi-black { color: #555555; }
+        .ansi-cyan { color: #4FC1FF; font-weight: 500; }
+        .ansi-green { color: #4EC9B0; font-weight: 500; }
+        .ansi-yellow { color: #DCDCAA; font-weight: 500; }
+        .ansi-red { color: #F48771; font-weight: 500; }
+        .ansi-blue { color: #569CD6; font-weight: 500; }
+        .ansi-magenta { color: #C586C0; font-weight: 500; }
+        .ansi-purple { color: #C586C0; font-weight: 500; }
+        .ansi-gray { color: #9d9d9d; }
+        .ansi-white { color: #e5e5e5; }
         .ansi-bold { font-weight: 700; }
-        .ansi-dim { opacity: 0.7; }
+        .ansi-dim { color: #999999; font-weight: 400; }
+        .ansi-normal { font-weight: 400; opacity: 1; }
         
         .terminal-error { 
             color: #ff6b6b; 
@@ -299,7 +444,10 @@
         
         .scrollable { 
             overflow-y: auto; 
-            -webkit-overflow-scrolling: touch; 
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            display: flex;
+            flex-direction: column;
         }
         
         .scrollable::-webkit-scrollbar { 
@@ -364,6 +512,109 @@
             background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.9) 100%);
             backdrop-filter: blur(10px);
         }
+        
+        /* Code block styling */
+        .message-content pre {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            overflow-x: auto;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .message-content code {
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .message-content pre code {
+            display: block;
+            padding: 0;
+            background: transparent;
+            border: none;
+        }
+        
+        .message-content :not(pre) > code {
+            background: rgba(110, 118, 129, 0.4);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #e2e8f0;
+        }
+        
+        /* Prose styling for markdown content */
+        .message-content.prose {
+            max-width: none;
+        }
+        
+        .message-content.prose p {
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+        
+        .message-content.prose ul, 
+        .message-content.prose ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+        
+        .message-content.prose li {
+            margin: 4px 0;
+        }
+        
+        .message-content.prose h1,
+        .message-content.prose h2,
+        .message-content.prose h3,
+        .message-content.prose h4 {
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+            color: #06b6d4;
+        }
+        
+        .message-content.prose h1 { font-size: 1.5em; }
+        .message-content.prose h2 { font-size: 1.3em; }
+        .message-content.prose h3 { font-size: 1.1em; }
+        
+        .message-content.prose blockquote {
+            border-left: 4px solid #06b6d4;
+            padding-left: 16px;
+            margin: 12px 0;
+            color: #94a3b8;
+            font-style: italic;
+        }
+        
+        .message-content.prose a {
+            color: #06b6d4;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+        
+        .message-content.prose a:hover {
+            border-bottom-color: #06b6d4;
+        }
+        
+        .message-content.prose table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12px 0;
+        }
+        
+        .message-content.prose th,
+        .message-content.prose td {
+            border: 1px solid #334155;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        .message-content.prose th {
+            background: rgba(6, 182, 212, 0.1);
+            font-weight: 600;
+            color: #06b6d4;
+        }
     </style>
 </head>
 <body>
@@ -372,7 +623,7 @@
             <h1 class="text-xl font-bold text-cyan-400">OffGrid LLM</h1>
             <div class="flex items-center gap-3">
                 <span id="statusBadge" class="badge badge-success">Ready</span>
-                <span class="text-xs text-slate-400">v0.1.2</span>
+                <span class="text-xs text-slate-400">v0.1.5</span>
             </div>
         </div>
     </header>
@@ -380,20 +631,31 @@
     <nav class="bg-slate-900 border-b border-slate-700 px-6 flex-shrink-0">
         <div class="flex gap-1">
             <button onclick="switchTab('chat')" id="tab-chat" class="tab active">Chat</button>
+            <button onclick="switchTab('sessions')" id="tab-sessions" class="tab">Sessions</button>
             <button onclick="switchTab('models')" id="tab-models" class="tab">Models</button>
             <button onclick="switchTab('terminal')" id="tab-terminal" class="tab">Terminal</button>
         </div>
     </nav>
 
-    <main class="container mx-auto p-6 max-w-7xl flex-1 overflow-hidden">
+    <main class="flex-1 flex flex-col overflow-hidden">
         <!-- Chat Tab -->
-        <div id="content-chat" class="h-full flex flex-col gap-4">
+        <div id="content-chat" class="h-full flex flex-col overflow-hidden">
             <div class="card flex-shrink-0">
-                <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-3 flex-wrap mb-3">
                     <select id="chatModel" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
                         <option value="">Loading...</option>
                     </select>
-                    <div class="flex gap-2">
+                    <select id="systemPrompt" onchange="applySystemPrompt()" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+                        <option value="">No System Prompt</option>
+                        <option value="research">Research Assistant</option>
+                        <option value="tutor">Study Tutor</option>
+                        <option value="coder">Code Reviewer</option>
+                        <option value="writer">Academic Writer</option>
+                        <option value="custom">Custom Prompt...</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <div class="flex gap-2 flex-wrap">
                         <label class="flex items-center gap-2 text-xs">
                             <input type="checkbox" id="streamToggle" checked class="rounded">
                             <span>Stream</span>
@@ -408,43 +670,110 @@
                             <input type="number" id="maxTokens" value="1000" step="100" min="100" max="4000" 
                                    class="w-20 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
                         </label>
-                        <button onclick="exportChat()" class="btn btn-info btn-sm">Export</button>
+                    </div>
+                    <div class="flex gap-2 ml-auto">
+                        <button onclick="saveCurrentSession()" class="btn btn-info btn-sm">Save Session</button>
+                        <button onclick="showExportOptions()" class="btn btn-info btn-sm">Export</button>
                         <button onclick="clearChat()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
                 </div>
             </div>
 
-            <div class="card flex-1 flex flex-col overflow-hidden">
-                <div id="chatMessages" class="flex-1 scrollable space-y-2 mb-4">
-                    <div class="text-center text-slate-400 py-20">
-                        <p>Start a conversation</p>
-                        <p class="text-xs mt-2 text-slate-500">Select a model and type below</p>
+            <div class="flex-1 flex flex-col overflow-hidden" style="background: #0f172a;">
+                <div id="chatMessages" class="flex-1 scrollable px-4 py-4">
+                    <div class="text-center text-slate-400 py-32">
+                        <p class="text-xl font-medium">Start a conversation</p>
+                        <p class="text-sm mt-2 text-slate-500">Select a model and type your message below</p>
                     </div>
                 </div>
-                <div class="flex-shrink-0">
-                    <div class="flex gap-2 mb-2">
-                        <textarea id="chatInput" placeholder="Enter message (Shift+Enter for new line, Enter to send)..." 
-                           onkeydown="handleChatKeydown(event)"
-                           rows="2"
-                           class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-white resize-none"></textarea>
-                        <div class="flex flex-col gap-2">
-                            <button onclick="sendChat()" id="sendBtn" class="btn btn-primary flex-1">Send</button>
-                            <button onclick="stopGeneration()" id="stopBtn" class="btn btn-danger btn-sm hidden">Stop</button>
+                <div class="flex-shrink-0" style="background: #0f172a; border-top: 1px solid rgba(51, 65, 85, 0.5);">
+                    <div class="max-w-3xl mx-auto py-4 px-4">
+                        <div class="relative bg-slate-800 rounded-xl border border-slate-600 focus-within:border-cyan-500 transition-colors shadow-lg">
+                            <textarea id="chatInput" placeholder="Message OffGrid LLM..." 
+                               onkeydown="handleChatKeydown(event)"
+                               oninput="autoResizeTextarea(this)"
+                               rows="1"
+                               style="max-height: 200px; min-height: 52px;"
+                               class="w-full bg-transparent border-none px-4 py-3 pr-12 text-sm text-white resize-none focus:outline-none"></textarea>
+                            <button onclick="sendChat()" id="sendBtn" 
+                                    class="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="text-white">
+                                    <path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            <button onclick="stopGeneration()" id="stopBtn" 
+                                    class="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 transition-colors items-center justify-center hidden">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="text-white">
+                                    <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/>
+                                </svg>
+                            </button>
                         </div>
-                    </div>
-                    <div class="flex gap-2 text-xs text-slate-400">
-                        <span id="tokenCount">0 tokens</span>
-                        <span>|</span>
-                        <span id="messageCount">0 messages</span>
+                        <div class="flex items-center justify-between mt-2 text-xs text-slate-500 px-1">
+                            <div class="flex gap-3">
+                                <span id="tokenCount">0 tokens</span>
+                                <span>•</span>
+                                <span id="messageCount">0 messages</span>
+                            </div>
+                            <span id="statusBadge" class="text-xs font-medium">Ready</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Sessions Tab -->
+        <div id="content-sessions" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="card max-w-5xl mx-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">Saved Sessions</h3>
+                    <button onclick="createNewSession()" class="btn btn-primary btn-sm">New Session</button>
+                </div>
+                <div class="mb-4">
+                    <input type="text" id="sessionSearch" placeholder="Search sessions..." 
+                           onkeyup="filterSessions()"
+                           class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                </div>
+                <div id="sessionsList" class="space-y-2">
+                    <p class="text-sm text-slate-400 text-center py-8">No saved sessions yet. Start chatting and click 'Save' to preserve your conversations.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Models Tab -->
-        <div id="content-models" class="hidden space-y-4">
+        <div id="content-models" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto space-y-4">
+            
+            <!-- USB Import/Export Section -->
             <div class="card">
-                <h3 class="text-lg font-semibold mb-4">Model Management</h3>
+                <h3 class="text-lg font-semibold mb-4">USB Model Transfer</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h4 class="text-sm font-medium mb-2 text-cyan-400">Import from USB</h4>
+                        <p class="text-xs text-slate-400 mb-3">Load models from a USB drive prepared with OffGrid bundles</p>
+                        <div class="flex gap-2">
+                            <input type="text" id="usbImportPath" placeholder="/media/usb or /mnt/usb" 
+                                   value="/media/usb"
+                                   class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                            <button onclick="importFromUSB()" class="btn btn-primary">Import</button>
+                        </div>
+                        <div id="usbImportStatus" class="mt-2 text-xs"></div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium mb-2 text-cyan-400">Export to USB</h4>
+                        <p class="text-xs text-slate-400 mb-3">Create a portable bundle of your models on USB</p>
+                        <div class="flex gap-2">
+                            <input type="text" id="usbExportPath" placeholder="/media/usb or /mnt/usb" 
+                                   value="/media/usb"
+                                   class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                            <button onclick="exportToUSB()" class="btn btn-primary">Export</button>
+                        </div>
+                        <div id="usbExportStatus" class="mt-2 text-xs"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3 class="text-lg font-semibold mb-4">Search & Download Models</h3>
                 <div class="flex gap-2 mb-4">
                     <input type="text" id="searchQuery" placeholder="Search models (e.g., llama, phi, mistral)..." 
                            class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
@@ -459,11 +788,13 @@
                     <p class="text-sm text-slate-400">Loading...</p>
                 </div>
             </div>
+            </div>
         </div>
 
         <!-- Terminal Tab -->
-        <div id="content-terminal" class="hidden h-full flex flex-col gap-4">
-            <div class="card flex-1 flex flex-col overflow-hidden">
+        <div id="content-terminal" class="hidden h-full flex flex-col px-6 py-4">
+            <div class="max-w-5xl mx-auto flex-1 flex flex-col gap-4 w-full">
+            <div class="card terminal-card flex-1 flex flex-col overflow-hidden">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-lg font-semibold">Terminal</h3>
                     <div class="flex gap-2">
@@ -490,8 +821,9 @@
                     <button onclick="runQuickCommand('offgrid list')" class="btn btn-secondary btn-sm">List Models</button>
                     <button onclick="runQuickCommand('offgrid info')" class="btn btn-secondary btn-sm">Server Info</button>
                     <button onclick="runQuickCommand('offgrid doctor')" class="btn btn-secondary btn-sm">Run Test</button>
-                    <button onclick="runQuickCommand('offgrid --help')" class="btn btn-secondary btn-sm">Help</button>
+                    <button onclick="runQuickCommand('offgrid help')" class="btn btn-secondary btn-sm">Help</button>
                 </div>
+            </div>
             </div>
         </div>
     </main>
@@ -509,9 +841,22 @@
         let terminalChatModel = '';
         let terminalChatHistory = [];
         
+        // Session management
+        let sessions = JSON.parse(localStorage.getItem('offgrid_sessions') || '[]');
+        let currentSessionId = null;
+        let currentSystemPrompt = '';
+        
+        // System prompts for different use cases
+        const systemPrompts = {
+            research: "You are a knowledgeable research assistant. Help users understand complex topics, find relevant information, and think critically about academic questions. Provide detailed, well-sourced responses with references when possible.",
+            tutor: "You are a patient and encouraging tutor. Break down complex concepts into simple explanations, use analogies and examples, ask questions to check understanding, and adapt your teaching style to the student's level.",
+            coder: "You are an expert code reviewer and programming mentor. Provide detailed code reviews, suggest improvements for readability and performance, explain best practices, and help debug issues. Format all code with proper syntax highlighting.",
+            writer: "You are an academic writing assistant. Help with essay structure, grammar, clarity, citation formats, and academic tone. Provide constructive feedback and suggestions for improvement.",
+        };
+        
         // Request throttling to prevent system overload
         let lastRequestTime = 0;
-        let requestCooldown = 500; // Minimum 500ms between requests
+        let requestCooldown = 300; // Minimum 300ms between requests
         let pendingRequest = false;
 
         // Tab switching
@@ -527,6 +872,9 @@
                 document.getElementById('searchQuery').value = '';
                 document.getElementById('searchResults').innerHTML = '';
             }
+            if (tab === 'sessions') {
+                renderSessions();
+            }
             if (tab === 'chat') {
                 loadChatModels();
                 updateChatStats();
@@ -539,6 +887,12 @@
                 event.preventDefault();
                 sendChat();
             }
+        }
+        
+        // Auto-resize textarea
+        function autoResizeTextarea(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
         }
 
         // Terminal keyboard handler
@@ -629,48 +983,353 @@
             }
         }
 
+        // Modal dialog system
+        function showModal({ type = 'info', title, message, confirmText = 'OK', cancelText = 'Cancel', onConfirm, onCancel }) {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            
+            const iconMap = {
+                warning: '⚠️',
+                error: '❌',
+                info: 'ℹ️',
+                success: '✓'
+            };
+            
+            overlay.innerHTML = `
+                <div class="modal-dialog ${type}">
+                    <div class="modal-header">
+                        <span class="modal-icon">${iconMap[type] || iconMap.info}</span>
+                        <h3 class="modal-title">${title}</h3>
+                    </div>
+                    <div class="modal-body">
+                        ${message}
+                    </div>
+                    <div class="modal-actions">
+                        ${cancelText ? `<button class="btn btn-secondary" data-action="cancel">${cancelText}</button>` : ''}
+                        <button class="btn ${type === 'error' ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmText}</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            // Handle clicks
+            overlay.addEventListener('click', (e) => {
+                if (e.target.classList.contains('modal-overlay')) {
+                    overlay.remove();
+                    if (onCancel) onCancel();
+                }
+            });
+            
+            overlay.querySelector('[data-action="confirm"]')?.addEventListener('click', () => {
+                overlay.remove();
+                if (onConfirm) onConfirm();
+            });
+            
+            overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
+                overlay.remove();
+                if (onCancel) onCancel();
+            });
+        }
+
         // Clear chat
         function clearChat() {
             if (messages.length === 0) return;
             
-            const chatMessages = document.getElementById('chatMessages');
-            const confirmDiv = document.createElement('div');
-            confirmDiv.className = 'card mb-4';
-            confirmDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)';
-            confirmDiv.style.border = '1px solid rgba(239, 68, 68, 0.5)';
-            confirmDiv.innerHTML = `
-                <div class="text-center">
-                    <p class="text-red-400 font-semibold mb-3">⚠ Clear All Messages?</p>
-                    <p class="text-sm mb-4">This will delete all ${messages.length} messages in the conversation.</p>
-                    <div class="flex gap-2 justify-center">
-                        <button onclick="confirmClearChat(true)" class="btn btn-danger btn-sm">Clear Chat</button>
-                        <button onclick="confirmClearChat(false)" class="btn btn-secondary btn-sm">Cancel</button>
-                    </div>
-                </div>
-            `;
-            chatMessages.appendChild(confirmDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            showModal({
+                type: 'error',
+                title: 'Clear All Messages?',
+                message: `This will delete all <strong>${messages.length} messages</strong> in the conversation.`,
+                confirmText: 'Clear Chat',
+                cancelText: 'Cancel',
+                onConfirm: () => {
+                    messages = [];
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.innerHTML = '';
+                    updateChatStats();
+                }
+            });
         }
 
-        // Export chat
-        function exportChat() {
+        // Export chat with enhanced options
+        function showExportOptions() {
             if (messages.length === 0) {
-                const chatMessages = document.getElementById('chatMessages');
-                const notice = document.createElement('div');
-                notice.className = 'text-center text-yellow-400 py-4';
-                notice.textContent = '⚠ No messages to export';
-                chatMessages.appendChild(notice);
-                setTimeout(() => notice.remove(), 3000);
+                showModal({
+                    type: 'warning',
+                    title: 'No Messages',
+                    message: 'There are no messages to export yet.',
+                    confirmText: 'OK',
+                    cancelText: null
+                });
                 return;
             }
-            const content = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-            const blob = new Blob([content], { type: 'text/plain' });
+            const format = prompt('Export format:\n1. Markdown (recommended for research)\n2. Plain text\n3. JSON\n\nEnter 1, 2, or 3:', '1');
+            if (!format) return;
+            
+            let content, mimeType, extension;
+            const timestamp = new Date().toISOString().split('T')[0];
+            const filename = `chat-${currentModel}-${timestamp}`;
+            
+            if (format === '1') {
+                // Markdown format with code blocks
+                content = `# Chat with ${currentModel}\n**Date:** ${new Date().toLocaleString()}\n**Messages:** ${messages.length}\n\n---\n\n`;
+                messages.forEach(m => {
+                    content += `## ${m.role === 'user' ? 'User' : 'Assistant'}\n\n`;
+                    // Detect and format code blocks
+                    const hasCode = m.content.includes('```');
+                    content += hasCode ? m.content : m.content.replace(/`([^`]+)`/g, '`$1`');
+                    content += '\n\n---\n\n';
+                });
+                mimeType = 'text/markdown';
+                extension = 'md';
+            } else if (format === '3') {
+                // JSON format for programmatic access
+                content = JSON.stringify({
+                    model: currentModel,
+                    timestamp: new Date().toISOString(),
+                    messageCount: messages.length,
+                    messages: messages
+                }, null, 2);
+                mimeType = 'application/json';
+                extension = 'json';
+            } else {
+                // Plain text
+                content = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+                mimeType = 'text/plain';
+                extension = 'txt';
+            }
+            
+            const blob = new Blob([content], { type: mimeType });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `chat-${currentModel}-${Date.now()}.txt`;
+            a.download = `${filename}.${extension}`;
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        // System prompt functions
+        function applySystemPrompt() {
+            const select = document.getElementById('systemPrompt');
+            const value = select.value;
+            
+            if (value === 'custom') {
+                const custom = prompt('Enter your custom system prompt:');
+                if (custom) {
+                    currentSystemPrompt = custom;
+                    showModal({
+                        type: 'success',
+                        title: 'Success',
+                        message: 'Custom prompt applied',
+                        confirmText: 'OK'
+                    });
+                }
+            } else if (value) {
+                currentSystemPrompt = systemPrompts[value];
+                showModal({
+                    type: 'success',
+                    title: 'Success',
+                    message: `${select.options[select.selectedIndex].text} mode activated`,
+                    confirmText: 'OK'
+                });
+            } else {
+                currentSystemPrompt = '';
+            }
+        }
+
+        // Session Management Functions
+        function saveCurrentSession() {
+            if (messages.length === 0) {
+                showModal({
+                    type: 'error',
+                    title: 'Cannot Save',
+                    message: 'No messages to save',
+                    confirmText: 'OK'
+                });
+                return;
+            }
+            
+            const title = prompt('Enter a title for this session:', `Chat ${new Date().toLocaleDateString()}`);
+            if (!title) return;
+            
+            const session = {
+                id: currentSessionId || Date.now(),
+                title: title,
+                model: currentModel,
+                messages: [...messages],
+                systemPrompt: currentSystemPrompt,
+                timestamp: new Date().toISOString(),
+                messageCount: messages.length
+            };
+            
+            const existingIndex = sessions.findIndex(s => s.id === session.id);
+            if (existingIndex >= 0) {
+                sessions[existingIndex] = session;
+            } else {
+                sessions.unshift(session);
+                currentSessionId = session.id;
+            }
+            
+            localStorage.setItem('offgrid_sessions', JSON.stringify(sessions));
+            showModal({
+                type: 'success',
+                title: 'Saved',
+                message: `Session saved: "${title}"`,
+                confirmText: 'OK'
+            });
+        }
+
+        function renderSessions() {
+            const container = document.getElementById('sessionsList');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">No saved sessions yet. Start chatting and click \'Save\' to preserve your conversations.</p>';
+                return;
+            }
+            
+            container.innerHTML = sessions.map(session => `
+                <div class="card hover:border-cyan-500 cursor-pointer" data-session-id="${session.id}">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1" onclick="loadSession(${session.id})">
+                            <h4 class="font-semibold text-cyan-400 mb-1">${session.title}</h4>
+                            <p class="text-xs text-slate-400 mb-2">
+                                ${session.model} • ${session.messageCount} messages • ${new Date(session.timestamp).toLocaleString()}
+                            </p>
+                            <p class="text-xs text-slate-500 line-clamp-2">${session.messages[0]?.content.substring(0, 100)}...</p>
+                        </div>
+                        <button onclick="deleteSession(${session.id}); event.stopPropagation();" class="btn btn-danger btn-sm ml-2">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadSession(id) {
+            const session = sessions.find(s => s.id === id);
+            if (!session) return;
+            
+            if (messages.length > 0) {
+                showModal({
+                    type: 'warning',
+                    title: 'Load Session?',
+                    message: 'Current chat will be replaced. Continue?',
+                    confirmText: 'Load Session',
+                    cancelText: 'Cancel',
+                    onConfirm: () => {
+                        messages = [...session.messages];
+                        currentModel = session.model;
+                        currentSessionId = session.id;
+                        currentSystemPrompt = session.systemPrompt || '';
+                        
+                        // Update UI
+                        document.getElementById('chatModel').value = currentModel;
+                        const chatMessages = document.getElementById('chatMessages');
+                        chatMessages.innerHTML = '';
+                        messages.forEach(m => {
+                            addChatMessage(m.role, m.content);
+                        });
+                        
+                        switchTab('chat');
+                        showModal({
+                            type: 'success',
+                            title: 'Loaded',
+                            message: `Session loaded: "${session.title}"`,
+                            confirmText: 'OK'
+                        });
+                    }
+                });
+                return;
+            }
+            
+            messages = [...session.messages];
+            currentModel = session.model;
+            currentSessionId = session.id;
+            currentSystemPrompt = session.systemPrompt || '';
+            
+            // Update UI
+            document.getElementById('chatModel').value = currentModel;
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+            messages.forEach(m => {
+                addChatMessage(m.role, m.content);
+            });
+            
+            switchTab('chat');
+        }
+
+        function deleteSession(id) {
+            showModal({
+                type: 'error',
+                title: 'Delete Session?',
+                message: 'This action cannot be undone.',
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                onConfirm: () => {
+                    sessions = sessions.filter(s => s.id !== id);
+                    localStorage.setItem('offgrid_sessions', JSON.stringify(sessions));
+                    
+                    if (currentSessionId === id) {
+                        currentSessionId = null;
+                    }
+                    
+                    renderSessions();
+                }
+            });
+        }
+
+        function createNewSession() {
+            if (messages.length > 0) {
+                showModal({
+                    type: 'warning',
+                    title: 'Start New Session?',
+                    message: 'Current chat will be cleared.',
+                    confirmText: 'New Session',
+                    cancelText: 'Cancel',
+                    onConfirm: () => {
+                        clearChatSilent();
+                        currentSessionId = null;
+                        switchTab('chat');
+                        showModal({
+                            type: 'success',
+                            title: 'New Session',
+                            message: 'New session started',
+                            confirmText: 'OK'
+                        });
+                    }
+                });
+                return;
+            }
+            
+            clearChatSilent();
+            currentSessionId = null;
+            switchTab('chat');
+            showModal({
+                type: 'success',
+                title: 'New Session',
+                message: 'New session started',
+                confirmText: 'OK'
+            });
+        }
+
+        function filterSessions() {
+            const query = document.getElementById('sessionSearch').value.toLowerCase();
+            const sessionCards = document.querySelectorAll('[data-session-id]');
+            
+            sessionCards.forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        }
+
+        function clearChatSilent() {
+            messages = [];
+            document.getElementById('chatMessages').innerHTML = `
+                <div class="text-center text-slate-400 py-20">
+                    <p>Start a conversation</p>
+                    <p class="text-xs mt-2 text-slate-500">Select a model and type below</p>
+                </div>
+            `;
+            document.getElementById('chatInput').value = '';
+            updateChatStats();
         }
 
         // Stop generation
@@ -711,6 +1370,7 @@
 
             const model = document.getElementById('chatModel').value;
             if (!model) {
+                pendingRequest = false; // Clear flag
                 const statusBadge = document.getElementById('statusBadge');
                 statusBadge.className = 'badge badge-warning';
                 statusBadge.textContent = 'Select Model';
@@ -723,24 +1383,13 @@
 
             // Check model switch
             if (currentModel && model !== currentModel) {
+                // Switch model and clear conversation
+                currentModel = model;
+                messages = [];
                 const chatMessages = document.getElementById('chatMessages');
-                const confirmDiv = document.createElement('div');
-                confirmDiv.className = 'card mb-4';
-                confirmDiv.style.background = 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.2) 100%)';
-                confirmDiv.style.border = '1px solid rgba(245, 158, 11, 0.5)';
-                confirmDiv.innerHTML = `
-                    <div class="text-center">
-                        <p class="text-yellow-400 font-semibold mb-3">⚠ Switch Model?</p>
-                        <p class="text-sm mb-4">Switching from <span class="font-semibold">${currentModel}</span> to <span class="font-semibold">${model}</span> will clear the conversation.</p>
-                        <div class="flex gap-2 justify-center">
-                            <button onclick="confirmModelSwitch(true, '${model}')" class="btn btn-primary btn-sm">Switch Model</button>
-                            <button onclick="confirmModelSwitch(false, '${currentModel}')" class="btn btn-secondary btn-sm">Cancel</button>
-                        </div>
-                    </div>
-                `;
-                chatMessages.appendChild(confirmDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                return;
+                chatMessages.innerHTML = '';
+                updateChatStats();
+                return; // Don't send a message on model switch
             }
             currentModel = model;
 
@@ -761,11 +1410,20 @@
             updateChatStats();
 
             const statusBadge = document.getElementById('statusBadge');
-            statusBadge.className = 'badge badge-warning';
-            statusBadge.textContent = 'Generating';
+            statusBadge.className = 'text-xs font-medium text-yellow-400';
+            statusBadge.textContent = 'Generating...';
 
             abortController = new AbortController();
             const startTime = Date.now();
+
+            // Prepare messages with system prompt if present
+            let apiMessages = [...messages];
+            if (currentSystemPrompt && currentSystemPrompt.trim()) {
+                // Check if first message is already a system message
+                if (apiMessages.length === 0 || apiMessages[0].role !== 'system') {
+                    apiMessages = [{ role: 'system', content: currentSystemPrompt }, ...apiMessages];
+                }
+            }
 
             try {
                 const response = await fetch('/v1/chat/completions', {
@@ -773,7 +1431,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: model,
-                        messages: messages,
+                        messages: apiMessages,
                         stream: streamEnabled,
                         temperature: temperature,
                         max_tokens: maxTokens
@@ -818,7 +1476,13 @@
                                         if (!msgDiv) {
                                             msgDiv = addChatMessage('assistant', '', startTime);
                                         }
-                                        msgDiv.querySelector('.message-content').textContent = assistantMsg;
+                                        // Update streaming content with markdown rendering
+                                        const contentDiv = msgDiv.querySelector('.message-content');
+                                        contentDiv.innerHTML = marked.parse(assistantMsg);
+                                        // Apply syntax highlighting to any new code blocks
+                                        contentDiv.querySelectorAll('pre code').forEach((block) => {
+                                            hljs.highlightElement(block);
+                                        });
                                     }
                                 } catch (e) {
                                     // Skip invalid JSON
@@ -843,24 +1507,24 @@
                 }
 
                 updateChatStats();
-                statusBadge.className = 'badge badge-success';
+                statusBadge.className = 'text-xs font-medium text-green-400';
                 statusBadge.textContent = 'Ready';
             } catch (error) {
                 if (error.name === 'AbortError') {
                     addChatMessage('assistant', '[Generation stopped by user]', startTime);
-                    statusBadge.className = 'badge badge-success';
+                    statusBadge.className = 'text-xs font-medium text-green-400';
                     statusBadge.textContent = 'Ready';
                 } else {
                     const errorMsg = error.message || 'Unknown error occurred';
                     console.error('Chat error:', error);
                     addChatMessage('assistant', `⚠ Error: ${errorMsg}\n\nPlease check if the model is loaded and the server is running properly.`, startTime);
-                    statusBadge.className = 'badge badge-error';
-                    statusBadge.textContent = 'Error - Check Server';
+                    statusBadge.className = 'text-xs font-medium text-red-400';
+                    statusBadge.textContent = 'Error';
                 }
             } finally {
                 isGenerating = false;
                 pendingRequest = false;
-                currentAbortController = null;
+                abortController = null;
                 input.disabled = false;
                 sendBtn.disabled = false;
                 stopBtn.classList.add('hidden');
@@ -876,23 +1540,55 @@
 
             const div = document.createElement('div');
             div.className = 'message message-' + role;
-            const timestamp = new Date().toLocaleTimeString();
-            const elapsed = startTime ? `<span class="time-badge badge badge-info">${Date.now() - startTime}ms</span>` : '';
+            
+            // Configure marked.js with syntax highlighting
+            marked.setOptions({
+                highlight: function(code, lang) {
+                    if (lang && hljs.getLanguage(lang)) {
+                        try {
+                            return hljs.highlight(code, { language: lang }).value;
+                        } catch (e) {
+                            console.error('Highlight error:', e);
+                        }
+                    }
+                    return hljs.highlightAuto(code).value;
+                },
+                breaks: true,
+                gfm: true
+            });
+
+            // Parse markdown content
+            const formattedContent = marked.parse(content);
+            const avatar = role === 'user' ? 'U' : 'AI';
+            const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const elapsed = startTime ? `${Date.now() - startTime}ms` : '';
             
             div.innerHTML = `
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs opacity-70">${role === 'user' ? 'You' : 'Assistant'}</span>
-                    <span class="text-xs opacity-50">${timestamp} ${elapsed}</span>
+                <div class="message-wrapper">
+                    <div class="message-avatar">${avatar}</div>
+                    <div class="message-body">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-medium text-slate-400">${role === 'user' ? 'You' : 'Assistant'}</span>
+                            <span class="text-xs text-slate-500">${timestamp}</span>
+                            ${elapsed ? `<span class="time-badge text-xs text-cyan-400">${elapsed}</span>` : ''}
+                        </div>
+                        <div class="text-sm message-content prose prose-invert max-w-none">${formattedContent}</div>
+                        ${role === 'assistant' ? `
+                        <div class="message-actions mt-3">
+                            <button onclick="copyMessage(this)" class="btn btn-secondary btn-sm">Copy</button>
+                            <button onclick="regenerateMessage()" class="btn btn-info btn-sm">Regenerate</button>
+                        </div>` : ''}
+                    </div>
                 </div>
-                <div class="text-sm message-content">${content}</div>
-                ${role === 'assistant' ? `
-                <div class="message-actions">
-                    <button onclick="copyMessage(this)" class="btn btn-secondary btn-sm">Copy</button>
-                    <button onclick="regenerateMessage()" class="btn btn-info btn-sm">Regenerate</button>
-                </div>` : ''}
             `;
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
+            
+            // Apply highlighting to all code blocks in this message
+            div.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+            
             return div;
         }
 
@@ -1045,6 +1741,73 @@
             container.insertBefore(confirmDiv, container.firstChild);
         }
 
+        // USB Import/Export Functions
+        async function importFromUSB() {
+            const usbPath = document.getElementById('usbImportPath').value.trim();
+            const statusDiv = document.getElementById('usbImportStatus');
+            
+            if (!usbPath) {
+                statusDiv.innerHTML = '<span class="text-yellow-400">⚠ Please enter a USB path</span>';
+                return;
+            }
+            
+            statusDiv.innerHTML = '<span class="text-cyan-400">⏳ Importing models from USB...</span>';
+            
+            try {
+                const response = await fetch('/v1/usb/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: usbPath })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const count = data.imported_count || 0;
+                    statusDiv.innerHTML = `<span class="text-green-400">✓ Successfully imported ${count} model(s)</span>`;
+                    loadInstalledModels(); // Refresh the models list
+                } else {
+                    const error = data.error || 'Import failed';
+                    statusDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
+            }
+        }
+        
+        async function exportToUSB() {
+            const usbPath = document.getElementById('usbExportPath').value.trim();
+            const statusDiv = document.getElementById('usbExportStatus');
+            
+            if (!usbPath) {
+                statusDiv.innerHTML = '<span class="text-yellow-400">⚠ Please enter a USB path</span>';
+                return;
+            }
+            
+            statusDiv.innerHTML = '<span class="text-cyan-400">⏳ Exporting models to USB...</span>';
+            
+            try {
+                const response = await fetch('/v1/usb/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: usbPath })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const count = data.exported_count || 0;
+                    const size = data.total_size_gb || 0;
+                    statusDiv.innerHTML = `<span class="text-green-400">✓ Exported ${count} model(s) (${size.toFixed(2)} GB)</span>`;
+                } else {
+                    const error = data.error || 'Export failed';
+                    statusDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
+            }
+        }
+
         // Terminal commands
         function clearTerminal() {
             document.getElementById('terminalOutput').innerHTML = `
@@ -1084,14 +1847,6 @@
                     console.log('Terminal chat request already in progress');
                     return; // Silently ignore, don't show error
                 }
-                
-                // Throttle terminal chat requests
-                const now = Date.now();
-                if (now - lastRequestTime < requestCooldown) {
-                    console.log('Throttling terminal chat request');
-                    return;
-                }
-                lastRequestTime = now;
                 
                 // Throttle terminal chat requests
                 const now = Date.now();
@@ -1267,17 +2022,12 @@
                 if (subcmd === 'run' && args.length > 1) {
                     const modelName = args.slice(1).join(' ');
                     
-                    // Display output but enable chat mode
+                    // Display output with ANSI parsing
                     if (output) {
                         const lines = output.split('\n');
                         lines.forEach(line => {
-                            const cleanLine = stripAnsi(line);
-                            if (line.includes('\u001b[38;5;45m') || cleanLine.includes('┌─') || cleanLine.includes('└─')) {
-                                addTerminalOutput(line, 'success');
-                            } else if (cleanLine.includes('Error') || cleanLine.includes('Failed')) {
-                                addTerminalOutput(line, 'error');
-                            } else if (cleanLine.trim()) {
-                                addTerminalOutput(line);
+                            if (line.trim()) {
+                                addTerminalOutput(line, 'raw');
                             }
                         });
                     }
@@ -1362,8 +2112,14 @@
 
                 const data = await resp.json();
                 const assistantMsg = data.choices?.[0]?.message?.content || 'No response';
+                const actualModel = data.model || terminalChatModel;
                 
                 terminalChatHistory.push({ role: 'assistant', content: assistantMsg });
+                
+                // Show model info if different from expected
+                if (actualModel !== terminalChatModel) {
+                    addTerminalOutput(`[Using model: ${actualModel}]`, 'error');
+                }
                 
                 addTerminalOutput('', 'normal');
                 addTerminalOutput(assistantMsg, 'success');
@@ -1386,63 +2142,93 @@
 
         // Strip ANSI escape codes
         function stripAnsi(text) {
-            return text.replace(/\u001b\[[0-9;]*m/g, '');
+            // Strip all ANSI escape codes (colors, cursor movement, etc.)
+            return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
         }
 
         // Parse ANSI color codes and convert to HTML with CSS classes
         function parseAnsiColors(text) {
             // Map of ANSI codes to CSS classes
             const colorMap = {
-                '36': 'ansi-cyan',           // Cyan
-                '32': 'ansi-green',          // Green  
-                '33': 'ansi-yellow',         // Yellow
-                '31': 'ansi-red',            // Red
-                '34': 'ansi-blue',           // Blue
-                '35': 'ansi-magenta',        // Magenta
-                '38;5;45': 'ansi-cyan',      // Bright cyan (brand primary)
-                '38;5;78': 'ansi-green',     // Brand success
-                '38;5;226': 'ansi-yellow',   // Brand accent
-                '38;5;196': 'ansi-red',      // Brand error
-                '38;5;240': 'ansi-gray',     // Brand muted
+                // Basic 16 colors
+                '30': 'ansi-black',
+                '31': 'ansi-red',
+                '32': 'ansi-green',
+                '33': 'ansi-yellow',
+                '34': 'ansi-blue',
+                '35': 'ansi-magenta',
+                '36': 'ansi-cyan',
+                '37': 'ansi-white',
+                '90': 'ansi-gray',
+                
+                // 256-color palette (extended colors used in offgrid)
+                '38;5;45': 'ansi-cyan',      // Bright cyan - headers
+                '38;5;78': 'ansi-green',     // Bright green
+                '38;5;141': 'ansi-purple',   // Purple - command names
+                '38;5;196': 'ansi-red',      // Bright red - errors
+                '38;5;226': 'ansi-yellow',   // Bright yellow
+                '38;5;240': 'ansi-gray',     // Gray - dim text
+                
+                // Text styles
                 '1': 'ansi-bold',            // Bold
-                '2': 'ansi-dim',             // Dim
+                '2': 'ansi-dim',             // Dim/faint
+                '22': 'ansi-normal',         // Normal intensity
             };
             
-            let html = text;
-            let activeClasses = [];
+            let result = '';
+            let currentClasses = new Set();
+            let lastIndex = 0;
             
-            // Process ANSI escape sequences
-            html = html.replace(/\u001b\[([0-9;]+)m/g, (match, code) => {
-                if (code === '0') {
-                    // Reset - close all spans
-                    const closeSpans = '</span>'.repeat(activeClasses.length);
-                    activeClasses = [];
-                    return closeSpans;
-                }
+            // Match ANSI escape sequences: ESC [ <codes> m
+            const ansiRegex = /\x1b\[([0-9;]+)m/g;
+            let match;
+            
+            while ((match = ansiRegex.exec(text)) !== null) {
+                // Add text before this escape code (escape HTML entities but preserve UTF-8)
+                const textChunk = text.substring(lastIndex, match.index);
+                result += textChunk
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                lastIndex = match.index + match[0].length;
                 
-                const cssClass = colorMap[code];
-                if (cssClass) {
-                    activeClasses.push(cssClass);
-                    return `<span class="${cssClass}">`;
+                const codes = match[1].split(';');
+                
+                for (const code of codes) {
+                    if (code === '0') {
+                        // Reset - close all open spans and clear classes
+                        if (currentClasses.size > 0) {
+                            result += '</span>';
+                            currentClasses.clear();
+                        }
+                    } else {
+                        const cssClass = colorMap[code] || colorMap[codes.join(';')];
+                        if (cssClass) {
+                            // Close previous span if exists
+                            if (currentClasses.size > 0) {
+                                result += '</span>';
+                            }
+                            // Add new class and open new span
+                            currentClasses.add(cssClass);
+                            result += `<span class="${Array.from(currentClasses).join(' ')}">`;
+                        }
+                    }
                 }
-                return ''; // Unknown code, ignore
-            });
+            }
+            
+            // Add remaining text (escape HTML but preserve UTF-8)
+            const remainingText = text.substring(lastIndex);
+            result += remainingText
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
             
             // Close any remaining open spans
-            html += '</span>'.repeat(activeClasses.length);
+            if (currentClasses.size > 0) {
+                result += '</span>';
+            }
             
-            // Escape HTML entities in the text content (but not our spans)
-            html = html.replace(/>([^<]+)</g, (match, text) => {
-                return '>' + escapeHtml(text) + '<';
-            });
-            
-            return html;
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            return result;
         }
 
         function addTerminalOutput(text, type = 'normal') {

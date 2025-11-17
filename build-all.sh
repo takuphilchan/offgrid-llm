@@ -4,7 +4,8 @@
 
 set -e
 
-VERSION="0.1.3"
+# Build script for all platforms
+VERSION="0.1.5"
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 CYAN='\033[0;36m'

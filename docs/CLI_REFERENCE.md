@@ -425,7 +425,7 @@ Available models:
 ### Missing Arguments
 Usage help is shown automatically:
 ```
-OFFGRID-LLM v0.1.0α
+OFFGRID-LLM v0.1.5α
 Edge Inference Orchestrator
 
 Usage: offgrid run <model-name>
