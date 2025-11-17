@@ -81,7 +81,7 @@ esac
 
 # GitHub release info
 GITHUB_REPO="takuphilchan/offgrid-llm"
-VERSION="0.1.3"
+VERSION="0.1.4"
 RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
 
 # Temporary directory
