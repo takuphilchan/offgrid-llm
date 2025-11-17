@@ -215,7 +215,7 @@ func (s *Server) startLlamaServer() error {
 
 	// Wait for llama-server to be ready
 	log.Println("Waiting for llama-server to load model...")
-	for i := 0; i < 60; i++ { // Wait up to 60 seconds
+	for i := 0; i < 120; i++ { // Wait up to 120 seconds
 		time.Sleep(1 * time.Second)
 		resp, err := http.Get("http://localhost:42382/health")
 		if err == nil {
@@ -232,7 +232,7 @@ func (s *Server) startLlamaServer() error {
 		}
 	}
 
-	return fmt.Errorf("llama-server did not become ready within 60 seconds")
+	return fmt.Errorf("llama-server did not become ready within 120 seconds")
 }
 
 // switchModel stops the current llama-server and starts a new one with the requested model.
@@ -292,7 +292,7 @@ func (s *Server) switchModel(modelID string) error {
 
 	// Wait for ready
 	log.Println("Waiting for model to load...")
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 120; i++ {
 		time.Sleep(1 * time.Second)
 		resp, err := http.Get("http://localhost:42382/health")
 		if err == nil {
@@ -308,7 +308,7 @@ func (s *Server) switchModel(modelID string) error {
 		}
 	}
 
-	return fmt.Errorf("model failed to load within 60 seconds")
+	return fmt.Errorf("model failed to load within 120 seconds")
 }
 
 // Start starts the HTTP server
@@ -1221,7 +1221,7 @@ func (s *Server) handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute command
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, offgridPath, req.Args...)
