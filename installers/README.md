@@ -4,27 +4,61 @@
 
 ---
 
-## Quick Install (Recommended)
+## CLI Installation (Command Line)
 
 **Pre-built binaries with auto-detection:**
 
 #### Linux / macOS
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+```
+
+#### Windows (PowerShell as Administrator)
+*Coming soon - use Linux installer via WSL for now*
+
+---
+
+## Desktop Application Installation
+
+**Docker Desktop-like experience with system tray:**
+
+#### Linux / macOS
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
 ```
 
 #### Windows (PowerShell as Administrator)
 ```powershell
-iwr -useb https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.ps1 | iex
+irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
 ```
 
-**What gets installed:**
+**Features:**
+- System tray icon for easy access
+- Automatic server start/stop
+- Minimize to tray (keeps running in background)
+- Bundled CLI binary (no separate installation)
+- Native installers (.deb, .dmg, .exe)
+
+See [../DESKTOP_INSTALL.md](../DESKTOP_INSTALL.md) for detailed desktop app documentation.
+
+---
+
+## What Gets Installed
+
+### CLI Installation
 - Pre-built `offgrid` binary (~10MB)
 - Auto-detection of GPU support
 - PATH configuration for instant use
-- Auto-start service on Linux (systemd)
+- Auto-start service on Linux (systemd - optional)
 
-**Installation time:** ~1 minute
+### Desktop Installation  
+- Desktop application with UI
+- System tray integration
+- Bundled CLI binary
+- Automatic server management
+- Models stored in `~/.offgrid-llm/`
+
+**Installation time:** ~1 minute for CLI, ~2-3 minutes for Desktop
 
 ---
 

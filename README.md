@@ -29,12 +29,12 @@
 
 **Linux/macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install-desktop.sh | bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
 ```
 
 **Windows (PowerShell as Administrator):**
 ```powershell
-irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install-desktop.ps1 | iex
+irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
 ```
 
 **Features:**

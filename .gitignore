@@ -5,7 +5,12 @@ offgrid-*
 *.dll
 *.so
 *.dylib
+
+# Build outputs
 dist/
+desktop/dist/
+desktop/node_modules/
+node_modules/
 
 # Temporary notes
 DEMO_COMMANDS.md
