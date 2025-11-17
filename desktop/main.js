@@ -55,9 +55,26 @@ const paths = {
   }
 };
 
+// Wait for server to be ready (helper function)
+function waitForServer(callback, maxAttempts = 60) {
+  let attempts = 0;
+  const check = async () => {
+    const ready = await checkServer();
+    if (ready) {
+      callback();
+    } else if (attempts < maxAttempts) {
+      attempts++;
+      setTimeout(check, 500);
+    }
+  };
+  setTimeout(check, 1000); // Start checking after 1 second
+}
+
 // Ensure directories exist
 function ensureDirectories() {
   const dirs = [
+
+
     paths.getConfigDir(),
     paths.getModelsDir(),
     paths.getDataDir()
@@ -211,13 +228,19 @@ function createWindow() {
     autoHideMenuBar: true
   });
 
-  // Load the UI
+  // Load the web UI from the server once it's ready
+  // Show loading page first
   mainWindow.loadFile('index.html');
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus();
+    
+    // Once server is ready, load the actual web UI
+    waitForServer(() => {
+      mainWindow.loadURL(`${SERVER_URL}/ui/`);
+    });
   });
 
   // Prevent close, minimize to tray instead
