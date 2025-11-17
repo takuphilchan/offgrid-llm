@@ -496,10 +496,22 @@ jobs:
           echo "Building desktop app for ${{ matrix.os }}..."
           npm run ${{ matrix.build_script }}
           echo "Build completed. Listing dist directory:"
-          ls -lah dist/ || echo "dist/ directory not found!"
+        shell: bash
+          
+      - name: List build output
+        working-directory: desktop
+        shell: bash
+        run: |
+          if [ -d "dist" ]; then
+            echo "Contents of dist/ directory:"
+            ls -lah dist/
+          else
+            echo "dist/ directory not found!"
+          fi
           
       - name: Verify build artifacts
         working-directory: desktop/dist
+        shell: bash
         run: |
           echo "Checking for build artifacts..."
           ls -la
