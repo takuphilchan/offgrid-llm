@@ -131,11 +131,37 @@ if [ "$INSTALL_CLI" = true ]; then
     chmod +x "$OFFGRID_BIN"
     
     print_step "Installing to /usr/local/bin/offgrid..."
-    if [ "$EUID" -eq 0 ]; then
-        cp "$OFFGRID_BIN" /usr/local/bin/offgrid
-    else
-        sudo cp "$OFFGRID_BIN" /usr/local/bin/offgrid
+    
+    # Check if offgrid is currently running
+    if pgrep -x offgrid > /dev/null; then
+        print_warning "OffGrid is currently running. Stopping it first..."
+        pkill -x offgrid 2>/dev/null || true
+        sleep 1
     fi
+    
+    # Try to install, retry if file is busy
+    MAX_RETRIES=3
+    RETRY_COUNT=0
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if [ "$EUID" -eq 0 ]; then
+            if cp "$OFFGRID_BIN" /usr/local/bin/offgrid 2>/dev/null; then
+                break
+            fi
+        else
+            if sudo cp "$OFFGRID_BIN" /usr/local/bin/offgrid 2>/dev/null; then
+                break
+            fi
+        fi
+        
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            print_warning "File is busy, retrying in 2 seconds... (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+            sleep 2
+        else
+            print_error "Failed to install after $MAX_RETRIES attempts. Please close any running instances of offgrid and try again."
+            exit 1
+        fi
+    done
     
     print_success "CLI installed successfully"
     
