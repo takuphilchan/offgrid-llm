@@ -91,25 +91,7 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "dmg": {
-      "title": "OffGrid LLM Desktop ${version}",
-      "icon": "assets/icon.icns",
-      "background": null,
-      "window": {
-        "width": 540,
-        "height": 380
-      },
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
+      "title": "OffGrid LLM Desktop ${version}"
     },
     "win": {
       "extraResources": [
