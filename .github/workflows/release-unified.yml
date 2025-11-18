@@ -171,6 +171,9 @@ jobs:
           
           # Install Vulkan SDK if needed (using Ubuntu's native packages)
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
+            # Enable universe repository for libshaderc-dev
+            sudo add-apt-repository universe -y
+            sudo apt-get update
             sudo apt-get install -y libvulkan1 libvulkan-dev vulkan-tools libshaderc-dev glslang-tools
           fi
 
