@@ -211,16 +211,16 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 			continue
 		}
 
-		// For GGUF models, fetch file details
+		// For GGUF models, fetch file details with sizes
 		var ggufFiles []GGUFFileInfo
 		if isGGUF {
-			// Fetch detailed model info to get files
-			detailedModel, err := hf.GetModelInfo(model.ID)
+			// Use tree API to get actual file sizes
+			files, err := hf.GetModelFiles(model.ID)
 			if err != nil {
-				// Skip models we can't fetch details for
+				// Skip models we can't fetch files for
 				continue
 			}
-			ggufFiles = hf.parseGGUFFiles(*detailedModel)
+			ggufFiles = hf.parseGGUFFilesFromTree(model.ID, files)
 		}
 
 		if filter.OnlyGGUF && len(ggufFiles) == 0 {
@@ -289,7 +289,42 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 	return results, nil
 }
 
-// parseGGUFFiles extracts and parses GGUF files from model siblings
+// parseGGUFFilesFromTree parses GGUF files from tree API response with actual sizes
+func (hf *HuggingFaceClient) parseGGUFFilesFromTree(modelID string, files []HFFile) []GGUFFileInfo {
+	ggufFiles := make([]GGUFFileInfo, 0)
+
+	for _, file := range files {
+		filename := file.Filename
+		size := file.Size
+		sizeGB := float64(size) / (1024 * 1024 * 1024)
+
+		// If size is 0, estimate (shouldn't happen with tree API but just in case)
+		if size == 0 {
+			quant := extractQuantization(filename)
+			params := extractParameterSize(filename)
+			size = estimateModelSize(params, quant)
+			sizeGB = float64(size) / (1024 * 1024 * 1024)
+		}
+
+		info := GGUFFileInfo{
+			Filename:      filename,
+			Size:          size,
+			SizeGB:        sizeGB,
+			Quantization:  extractQuantization(filename),
+			ParameterSize: extractParameterSize(filename),
+			IsChat: strings.Contains(strings.ToLower(filename), "chat") ||
+				strings.Contains(strings.ToLower(filename), "instruct"),
+			DownloadURL: fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s",
+				modelID, filename),
+		}
+
+		ggufFiles = append(ggufFiles, info)
+	}
+
+	return ggufFiles
+}
+
+// parseGGUFFiles extracts and parses GGUF files from model siblings (legacy method)
 func (hf *HuggingFaceClient) parseGGUFFiles(model HFModel) []GGUFFileInfo {
 	files := make([]GGUFFileInfo, 0)
 
@@ -525,6 +560,54 @@ func (hf *HuggingFaceClient) GetModelInfo(modelID string) (*HFModel, error) {
 	}
 
 	return &model, nil
+}
+
+// GetModelFiles fetches file list with sizes using the tree API
+func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
+	// Use the tree API which includes file sizes
+	apiURL := fmt.Sprintf("%s/models/%s/tree/main", hf.baseURL, url.PathEscape(modelID))
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("User-Agent", "OffGrid-LLM/0.1.0")
+
+	resp, err := hf.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch model files: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse tree response
+	var treeFiles []struct {
+		Type string `json:"type"`
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&treeFiles); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Convert to HFFile format
+	files := make([]HFFile, 0)
+	for _, tf := range treeFiles {
+		if tf.Type == "file" && strings.HasSuffix(strings.ToLower(tf.Path), ".gguf") {
+			files = append(files, HFFile{
+				Filename: tf.Path,
+				Size:     tf.Size,
+			})
+		}
+	}
+
+	return files, nil
 }
 
 // DownloadGGUF downloads a GGUF file from HuggingFace
