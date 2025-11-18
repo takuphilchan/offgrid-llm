@@ -1389,6 +1389,7 @@
                 const chatMessages = document.getElementById('chatMessages');
                 chatMessages.innerHTML = '';
                 updateChatStats();
+                pendingRequest = false; // Reset the flag so user can send messages
                 return; // Don't send a message on model switch
             }
             currentModel = model;
