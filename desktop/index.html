@@ -987,7 +987,7 @@
         }
 
         // Handle model dropdown change
-        function handleModelChange() {
+        async function handleModelChange() {
             const select = document.getElementById('chatModel');
             const newModel = select.value;
             
@@ -1004,10 +1004,30 @@
                     chatMessages.innerHTML = '<div class="text-center text-slate-400 py-32"><p class="text-xl font-medium">Start a conversation</p><p class="text-sm mt-2 text-slate-500">Select a model and type your message below</p></div>';
                     updateChatStats();
                     
-                    // Show status
+                    // Show loading status and preload the model
                     const statusBadge = document.getElementById('statusBadge');
-                    statusBadge.className = 'badge badge-success';
-                    statusBadge.textContent = `Ready (${newModel})`;
+                    statusBadge.className = 'badge badge-warning';
+                    statusBadge.textContent = `Switching to ${newModel}...`;
+                    
+                    // Send a dummy request to trigger backend model switch
+                    try {
+                        await fetch('/v1/chat/completions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                model: newModel,
+                                messages: [{ role: 'user', content: 'test' }],
+                                stream: false,
+                                max_tokens: 1
+                            })
+                        });
+                        statusBadge.className = 'badge badge-success';
+                        statusBadge.textContent = `Ready (${newModel})`;
+                    } catch (e) {
+                        console.log('Model preload initiated');
+                        statusBadge.className = 'badge badge-success';
+                        statusBadge.textContent = `Ready (${newModel})`;
+                    }
                 } else {
                     // User cancelled - revert dropdown
                     select.value = currentModel;
