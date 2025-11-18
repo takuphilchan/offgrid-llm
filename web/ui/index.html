@@ -977,9 +977,43 @@
                     currentModel = models[0].id;
                     select.value = currentModel;
                 }
+
+                // Add change handler
+                select.onchange = handleModelChange;
             } catch (e) {
                 console.error('Failed to load models:', e);
                 document.getElementById('chatModel').innerHTML = '<option value="">Error loading models</option>';
+            }
+        }
+
+        // Handle model dropdown change
+        function handleModelChange() {
+            const select = document.getElementById('chatModel');
+            const newModel = select.value;
+            
+            if (!newModel) return;
+            
+            // If model changed, update and optionally clear chat
+            if (currentModel && newModel !== currentModel) {
+                const shouldClear = confirm(`Switch to ${newModel}?\n\nThis will clear the current conversation.`);
+                
+                if (shouldClear) {
+                    currentModel = newModel;
+                    messages = [];
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.innerHTML = '<div class="text-center text-slate-400 py-32"><p class="text-xl font-medium">Start a conversation</p><p class="text-sm mt-2 text-slate-500">Select a model and type your message below</p></div>';
+                    updateChatStats();
+                    
+                    // Show status
+                    const statusBadge = document.getElementById('statusBadge');
+                    statusBadge.className = 'badge badge-success';
+                    statusBadge.textContent = `Ready (${newModel})`;
+                } else {
+                    // User cancelled - revert dropdown
+                    select.value = currentModel;
+                }
+            } else {
+                currentModel = newModel;
             }
         }
 
