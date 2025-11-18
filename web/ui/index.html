@@ -991,13 +991,21 @@
             const select = document.getElementById('chatModel');
             const newModel = select.value;
             
-            if (!newModel) return;
+            console.log('[MODEL CHANGE] Dropdown changed to:', newModel);
+            console.log('[MODEL CHANGE] Current model:', currentModel);
+            
+            if (!newModel) {
+                console.log('[MODEL CHANGE] No model selected, ignoring');
+                return;
+            }
             
             // If model changed, update and optionally clear chat
             if (currentModel && newModel !== currentModel) {
+                console.log('[MODEL CHANGE] Model is different, showing confirmation');
                 const shouldClear = confirm(`Switch to ${newModel}?\n\nThis will clear the current conversation.`);
                 
                 if (shouldClear) {
+                    console.log('[MODEL CHANGE] User confirmed switch');
                     currentModel = newModel;
                     messages = [];
                     const chatMessages = document.getElementById('chatMessages');
@@ -1009,9 +1017,10 @@
                     statusBadge.className = 'badge badge-warning';
                     statusBadge.textContent = `Switching to ${newModel}...`;
                     
+                    console.log('[MODEL CHANGE] Sending preload request to backend...');
                     // Send a dummy request to trigger backend model switch
                     try {
-                        await fetch('/v1/chat/completions', {
+                        const response = await fetch('/v1/chat/completions', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1021,18 +1030,22 @@
                                 max_tokens: 1
                             })
                         });
+                        console.log('[MODEL CHANGE] Preload response status:', response.status);
                         statusBadge.className = 'badge badge-success';
                         statusBadge.textContent = `Ready (${newModel})`;
+                        console.log('[MODEL CHANGE] Model switch complete');
                     } catch (e) {
-                        console.log('Model preload initiated');
+                        console.log('[MODEL CHANGE] Preload error:', e);
                         statusBadge.className = 'badge badge-success';
                         statusBadge.textContent = `Ready (${newModel})`;
                     }
                 } else {
                     // User cancelled - revert dropdown
+                    console.log('[MODEL CHANGE] User cancelled, reverting to:', currentModel);
                     select.value = currentModel;
                 }
             } else {
+                console.log('[MODEL CHANGE] First time selecting model or same model');
                 currentModel = newModel;
             }
         }
@@ -1401,29 +1414,36 @@
 
         // Send chat message with streaming
         async function sendChat() {
+            console.log('[SEND CHAT] Function called');
             // Prevent rapid-fire requests
             if (isGenerating || pendingRequest) {
-                console.log('Request already in progress, ignoring...');
+                console.log('[SEND CHAT] Request already in progress, ignoring... isGenerating:', isGenerating, 'pendingRequest:', pendingRequest);
                 return;
             }
             
             const input = document.getElementById('chatInput');
             const msg = input.value.trim();
+            console.log('[SEND CHAT] Message:', msg);
             if (!msg) return;
             
             // Throttle requests to prevent system overload
             const now = Date.now();
             const timeSinceLastRequest = now - lastRequestTime;
             if (timeSinceLastRequest < requestCooldown) {
-                console.log(`Throttling: Wait ${requestCooldown - timeSinceLastRequest}ms before next request`);
+                console.log(`[SEND CHAT] Throttling: Wait ${requestCooldown - timeSinceLastRequest}ms before next request`);
                 return;
             }
             
             lastRequestTime = now;
             pendingRequest = true;
+            console.log('[SEND CHAT] Set pendingRequest = true');
 
             const model = document.getElementById('chatModel').value;
+            console.log('[SEND CHAT] Selected model from dropdown:', model);
+            console.log('[SEND CHAT] Current model:', currentModel);
+            
             if (!model) {
+                console.log('[SEND CHAT] No model selected!');
                 pendingRequest = false; // Clear flag
                 const statusBadge = document.getElementById('statusBadge');
                 statusBadge.className = 'badge badge-warning';
@@ -1437,6 +1457,7 @@
 
             // Update current model (allow switching without blocking message send)
             currentModel = model;
+            console.log('[SEND CHAT] Updated currentModel to:', currentModel);
 
             const sendBtn = document.getElementById('sendBtn');
             const stopBtn = document.getElementById('stopBtn');
