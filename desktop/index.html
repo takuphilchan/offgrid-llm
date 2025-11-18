@@ -969,6 +969,10 @@
                     return;
                 }
                 
+                // Sort models alphabetically by ID
+                models.sort((a, b) => a.id.localeCompare(b.id));
+                console.log('[LOAD MODELS] Sorted models:', models.map(m => m.id));
+                
                 models.forEach(m => {
                     const opt = document.createElement('option');
                     opt.value = m.id;
@@ -1000,6 +1004,58 @@
                 console.error('Failed to load models:', e);
                 document.getElementById('chatModel').innerHTML = '<option value="">Error loading models</option>';
             }
+        }
+
+        // Wait for model to be fully loaded and ready
+        async function waitForModelReady(modelName) {
+            console.log('[HEALTH CHECK] Waiting for model to be ready:', modelName);
+            const maxAttempts = 30; // 30 seconds max wait
+            const pollInterval = 1000; // Check every second
+            
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    console.log(`[HEALTH CHECK] Attempt ${attempt}/${maxAttempts}`);
+                    
+                    // Send a minimal test completion request to verify model is loaded
+                    const testResponse = await fetch('/api/v1/completions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: modelName,
+                            messages: [{ role: 'user', content: 'test' }],
+                            stream: false,
+                            max_tokens: 1,
+                            temperature: 0.1
+                        }),
+                        signal: AbortSignal.timeout(5000) // 5 second timeout per attempt
+                    });
+                    
+                    console.log('[HEALTH CHECK] Response status:', testResponse.status);
+                    
+                    // If we get 200, model is ready
+                    if (testResponse.ok) {
+                        console.log('[HEALTH CHECK] Model is ready!');
+                        return true;
+                    }
+                    
+                    // If we get 503 or 500, model is still loading
+                    if (testResponse.status === 503 || testResponse.status === 500) {
+                        const errorData = await testResponse.json().catch(() => ({}));
+                        console.log('[HEALTH CHECK] Model loading:', errorData.error || 'Still initializing...');
+                    }
+                    
+                    console.log(`[HEALTH CHECK] Not ready yet, waiting ${pollInterval}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, pollInterval));
+                    
+                } catch (error) {
+                    console.log(`[HEALTH CHECK] Error on attempt ${attempt}:`, error.message);
+                    // Network errors or timeouts are expected while loading
+                    await new Promise(resolve => setTimeout(resolve, pollInterval));
+                }
+            }
+            
+            console.warn('[HEALTH CHECK] Timeout after 30s - proceeding anyway');
+            return true; // Proceed anyway after timeout, user can retry if issues
         }
 
         // Handle model dropdown change
@@ -1047,11 +1103,47 @@
             currentModel = newModel;
             console.log('[MODEL CHANGE] Switching from', oldModel, 'to', newModel);
             
-            // Update status badge - don't preload, let first message load the model
+            // Disable UI while loading model
+            const chatInput = document.getElementById('chatInput');
+            const sendBtn = document.getElementById('sendBtn');
             const statusBadge = document.getElementById('statusBadge');
-            statusBadge.className = 'badge badge-success';
-            statusBadge.textContent = `Ready (${newModel})`;
-            console.log('[MODEL CHANGE] Model switch complete - ready for first message');
+            
+            chatInput.disabled = true;
+            sendBtn.disabled = true;
+            statusBadge.className = 'text-xs font-medium text-yellow-400';
+            
+            // Show loading progress
+            let loadingSeconds = 0;
+            statusBadge.textContent = `Loading ${newModel}...`;
+            const loadingInterval = setInterval(() => {
+                loadingSeconds++;
+                statusBadge.textContent = `Loading ${newModel}... ${loadingSeconds}s`;
+            }, 1000);
+            
+            console.log('[MODEL CHANGE] Starting health check for', newModel);
+            
+            // Wait for model to be ready before allowing messages
+            const isReady = await waitForModelReady(newModel);
+            
+            // Clear loading interval
+            clearInterval(loadingInterval);
+            
+            if (isReady) {
+                console.log('[MODEL CHANGE] Model ready - enabling UI');
+                statusBadge.className = 'badge badge-success';
+                statusBadge.textContent = `Ready (${newModel})`;
+            } else {
+                console.warn('[MODEL CHANGE] Model not confirmed ready - may have issues');
+                statusBadge.className = 'badge badge-warning';
+                statusBadge.textContent = `${newModel} (not confirmed)`;
+            }
+            
+            // Re-enable UI
+            chatInput.disabled = false;
+            sendBtn.disabled = false;
+            chatInput.focus();
+            
+            console.log('[MODEL CHANGE] Model switch complete - ready for messages');
         }
 
         // Modal dialog system
