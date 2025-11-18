@@ -178,9 +178,9 @@ jobs:
             cd /tmp/shaderc
             ./utils/git-sync-deps
             mkdir build && cd build
-            cmake -DCMAKE_BUILD_TYPE=Release -DSHADERC_SKIP_TESTS=ON ..
-            make -j$(nproc) glslc
-            sudo cp glslc/glslc /usr/local/bin/
+            cmake -DCMAKE_BUILD_TYPE=Release -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_INSTALL=OFF ..
+            make -j$(nproc)
+            sudo make install
             cd / && rm -rf /tmp/shaderc
           fi
 
