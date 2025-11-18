@@ -642,7 +642,7 @@
         <div id="content-chat" class="h-full flex flex-col overflow-hidden">
             <div class="card flex-shrink-0">
                 <div class="flex items-center gap-3 flex-wrap mb-3">
-                    <select id="chatModel" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+                    <select id="chatModel" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" onchange="console.log('[INLINE] Dropdown changed to:', this.value); handleModelChange();">
                         <option value="">Loading...</option>
                     </select>
                     <select id="systemPrompt" onchange="applySystemPrompt()" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
@@ -958,6 +958,10 @@
                 const data = await resp.json();
                 const models = data.data || [];
                 const select = document.getElementById('chatModel');
+                
+                // Remember the current selection before clearing
+                const previousSelection = select.value || currentModel;
+                
                 select.innerHTML = '';
                 
                 if (models.length === 0) {
@@ -972,14 +976,26 @@
                     select.appendChild(opt);
                 });
                 
-                // Auto-select first model if none selected
-                if (!currentModel && models.length > 0) {
+                // Restore previous selection, or auto-select first model if none selected
+                if (previousSelection && models.some(m => m.id === previousSelection)) {
+                    // Restore the previous selection
+                    currentModel = previousSelection;
+                    select.value = previousSelection;
+                    console.log('[LOAD MODELS] Restored previous selection:', previousSelection);
+                } else if (!currentModel && models.length > 0) {
+                    // First time - select first model
                     currentModel = models[0].id;
                     select.value = currentModel;
+                    console.log('[LOAD MODELS] Auto-selected first model:', currentModel);
                 }
 
-                // Add change handler
-                select.onchange = handleModelChange;
+                // Add change handler after models are loaded
+                select.onchange = null; // Clear any existing handler
+                select.onchange = function(e) {
+                    console.log('[DROPDOWN] Change event fired! Value:', e.target.value);
+                    handleModelChange();
+                };
+                console.log('[LOAD MODELS] Event listener attached to dropdown via onchange');
             } catch (e) {
                 console.error('Failed to load models:', e);
                 document.getElementById('chatModel').innerHTML = '<option value="">Error loading models</option>';
@@ -987,7 +1003,7 @@
         }
 
         // Handle model dropdown change
-        function handleModelChange() {
+        async function handleModelChange() {
             const select = document.getElementById('chatModel');
             const newModel = select.value;
             
@@ -999,17 +1015,43 @@
                 return;
             }
             
-            // Just update the current model - don't clear chat or show confirmation
-            // The backend will switch models automatically on next message
+            // Don't switch if already on this model
+            if (currentModel === newModel) {
+                console.log('[MODEL CHANGE] Already using this model');
+                return;
+            }
+            
             const oldModel = currentModel;
+            
+            // If there are existing messages, ask user what to do
+            console.log('[MODEL CHANGE] Current message count:', messages.length);
+            if (messages.length > 0) {
+                console.log('[MODEL CHANGE] Showing confirmation dialog...');
+                const shouldClear = confirm(
+                    `Switching from ${oldModel || 'no model'} to ${newModel}.\n\n` +
+                    `Clear chat history? The new model won't have context from previous messages.\n\n` +
+                    `Click OK to start fresh, or Cancel to keep history.`
+                );
+                
+                console.log('[MODEL CHANGE] User response:', shouldClear ? 'CLEAR' : 'KEEP');
+                if (shouldClear) {
+                    console.log('[MODEL CHANGE] Clearing chat history');
+                    clearChatSilent();
+                } else {
+                    console.log('[MODEL CHANGE] Keeping chat history');
+                }
+            } else {
+                console.log('[MODEL CHANGE] No messages, skipping confirmation');
+            }
+            
             currentModel = newModel;
+            console.log('[MODEL CHANGE] Switching from', oldModel, 'to', newModel);
             
-            console.log('[MODEL CHANGE] Switched from', oldModel, 'to', newModel);
-            
-            // Update status badge
+            // Update status badge - don't preload, let first message load the model
             const statusBadge = document.getElementById('statusBadge');
             statusBadge.className = 'badge badge-success';
             statusBadge.textContent = `Ready (${newModel})`;
+            console.log('[MODEL CHANGE] Model switch complete - ready for first message');
         }
 
         // Modal dialog system
@@ -1363,24 +1405,64 @@
 
         // Stop generation
         function stopGeneration() {
+            console.log('[STOP] Stopping generation...');
             if (abortController) {
                 abortController.abort();
                 abortController = null;
             }
-            isGenerating = false;
-            document.getElementById('sendBtn').disabled = false;
-            document.getElementById('stopBtn').classList.add('hidden');
-            document.getElementById('statusBadge').className = 'badge badge-success';
-            document.getElementById('statusBadge').textContent = 'Ready';
+            resetChatState();
         }
+        
+        // Reset chat state (useful for debugging stuck states)
+        function resetChatState() {
+            console.log('[RESET STATE] Resetting all chat state flags');
+            isGenerating = false;
+            pendingRequest = false;
+            const sendBtn = document.getElementById('sendBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const chatInput = document.getElementById('chatInput');
+            const statusBadge = document.getElementById('statusBadge');
+            
+            if (sendBtn) sendBtn.disabled = false;
+            if (stopBtn) stopBtn.classList.add('hidden');
+            if (chatInput) chatInput.disabled = false;
+            if (statusBadge) {
+                statusBadge.className = 'badge badge-success';
+                statusBadge.textContent = currentModel ? `Ready (${currentModel})` : 'Ready';
+            }
+            
+            console.log('[RESET STATE] State reset complete');
+        }
+        
+        // Make resetChatState globally accessible for debugging
+        window.resetChatState = resetChatState;
+        
+        // Make handleModelChange globally accessible for manual testing
+        window.handleModelChange = handleModelChange;
+        window.testModelSwitch = function(modelName) {
+            console.log('[TEST] Manually switching to:', modelName);
+            const select = document.getElementById('chatModel');
+            select.value = modelName;
+            handleModelChange();
+        };
 
         // Send chat message with streaming
         async function sendChat() {
             console.log('[SEND CHAT] Function called');
+            console.log('[SEND CHAT] Flags - isGenerating:', isGenerating, 'pendingRequest:', pendingRequest);
+            
             // Prevent rapid-fire requests
             if (isGenerating || pendingRequest) {
-                console.log('[SEND CHAT] Request already in progress, ignoring... isGenerating:', isGenerating, 'pendingRequest:', pendingRequest);
-                return;
+                console.warn('[SEND CHAT] Request already in progress, ignoring...');
+                // If stuck, reset after 30 seconds
+                const now = Date.now();
+                if (lastRequestTime && (now - lastRequestTime) > 30000) {
+                    console.warn('[SEND CHAT] Flags stuck for >30s, force resetting...');
+                    isGenerating = false;
+                    pendingRequest = false;
+                } else {
+                    return;
+                }
             }
             
             const input = document.getElementById('chatInput');
@@ -1402,7 +1484,8 @@
 
             const model = document.getElementById('chatModel').value;
             console.log('[SEND CHAT] Selected model from dropdown:', model);
-            console.log('[SEND CHAT] Current model:', currentModel);
+            console.log('[SEND CHAT] Current model variable:', currentModel);
+            console.log('[SEND CHAT] Dropdown element value:', document.getElementById('chatModel').value);
             
             if (!model) {
                 console.log('[SEND CHAT] No model selected!');
@@ -1417,9 +1500,9 @@
                 return;
             }
 
-            // Update current model (allow switching without blocking message send)
+            // ALWAYS sync currentModel with dropdown before sending
             currentModel = model;
-            console.log('[SEND CHAT] Updated currentModel to:', currentModel);
+            console.log('[SEND CHAT] Synced currentModel to:', currentModel);
 
             const sendBtn = document.getElementById('sendBtn');
             const stopBtn = document.getElementById('stopBtn');
@@ -1468,16 +1551,21 @@
             }
 
             try {
+                const requestPayload = {
+                    model: model,
+                    messages: apiMessages,
+                    stream: streamEnabled,
+                    temperature: temperature,
+                    max_tokens: maxTokens
+                };
+                
+                console.log('[SEND CHAT] REQUEST PAYLOAD:', JSON.stringify(requestPayload, null, 2));
+                console.log('[SEND CHAT] Model being sent:', model);
+                
                 const response = await fetch('/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: apiMessages,
-                        stream: streamEnabled,
-                        temperature: temperature,
-                        max_tokens: maxTokens
-                    }),
+                    body: JSON.stringify(requestPayload),
                     signal: abortController.signal
                 });
 
@@ -1601,6 +1689,7 @@
                 }
                 isGenerating = false;
                 pendingRequest = false;
+                console.log('[SEND CHAT] Cleaned up - pendingRequest = false, isGenerating = false');
                 abortController = null;
                 input.disabled = false;
                 sendBtn.disabled = false;
