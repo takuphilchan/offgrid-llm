@@ -987,7 +987,7 @@
         }
 
         // Handle model dropdown change
-        async function handleModelChange() {
+        function handleModelChange() {
             const select = document.getElementById('chatModel');
             const newModel = select.value;
             
@@ -999,33 +999,17 @@
                 return;
             }
             
-            // If model changed, update and optionally clear chat
-            if (currentModel && newModel !== currentModel) {
-                console.log('[MODEL CHANGE] Model is different, showing confirmation');
-                const shouldClear = confirm(`Switch to ${newModel}?\n\nThis will clear the current conversation.`);
-                
-                if (shouldClear) {
-                    console.log('[MODEL CHANGE] User confirmed switch');
-                    currentModel = newModel;
-                    messages = [];
-                    const chatMessages = document.getElementById('chatMessages');
-                    chatMessages.innerHTML = '<div class="text-center text-slate-400 py-32"><p class="text-xl font-medium">Start a conversation</p><p class="text-sm mt-2 text-slate-500">Type your message to start using ' + newModel + '</p></div>';
-                    updateChatStats();
-                    
-                    // Update status - model will load on first message
-                    const statusBadge = document.getElementById('statusBadge');
-                    statusBadge.className = 'badge badge-success';
-                    statusBadge.textContent = `Ready (${newModel})`;
-                    console.log('[MODEL CHANGE] Model switch complete - will load on first message');
-                } else {
-                    // User cancelled - revert dropdown
-                    console.log('[MODEL CHANGE] User cancelled, reverting to:', currentModel);
-                    select.value = currentModel;
-                }
-            } else {
-                console.log('[MODEL CHANGE] First time selecting model or same model');
-                currentModel = newModel;
-            }
+            // Just update the current model - don't clear chat or show confirmation
+            // The backend will switch models automatically on next message
+            const oldModel = currentModel;
+            currentModel = newModel;
+            
+            console.log('[MODEL CHANGE] Switched from', oldModel, 'to', newModel);
+            
+            // Update status badge
+            const statusBadge = document.getElementById('statusBadge');
+            statusBadge.className = 'badge badge-success';
+            statusBadge.textContent = `Ready (${newModel})`;
         }
 
         // Modal dialog system
