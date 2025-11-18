@@ -126,7 +126,7 @@ jobs:
             cpu_flags: "-mcpu=apple-m1"
             
           - name: darwin-amd64-cpu
-            os: macos-15-large
+            os: macos-15
             platform: darwin
             arch: amd64
             variant: cpu
