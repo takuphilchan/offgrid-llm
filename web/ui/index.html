@@ -1878,22 +1878,26 @@
             }
 
             const results = document.getElementById('searchResults');
-            results.innerHTML = '<p class="text-sm text-slate-400">Searching...</p>';
+            results.innerHTML = '<p class="text-sm text-slate-400">🔍 Searching HuggingFace...</p>';
 
             try {
-                const resp = await fetch(`/v1/search?query=${encodeURIComponent(query)}`);
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                
+                const resp = await fetch(`/v1/search?query=${encodeURIComponent(query)}`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
                 
                 if (!resp.ok) {
-                    results.innerHTML = `<p class="text-sm text-red-400">Search failed: HTTP ${resp.status}</p>`;
-                    return;
+                    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
                 }
                 
                 const data = await resp.json();
                 
                 if (data.error) {
-                    const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-                    results.innerHTML = `<p class="text-sm text-red-400">Search error: ${errorMsg}</p>`;
-                    return;
+                    throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
                 }
                 
                 const models = data.results || [];
@@ -1924,7 +1928,33 @@
                     results.appendChild(div);
                 });
             } catch (error) {
-                results.innerHTML = `<p class="text-sm text-red-400">Search failed: ${error.message}</p>`;
+                console.error('Search error:', error);
+                
+                // Provide helpful error message based on error type
+                let errorHtml = '';
+                if (error.name === 'AbortError' || error.message.includes('Timeout') || error.message.includes('exceeded')) {
+                    errorHtml = `
+                        <div class="text-sm">
+                            <p class="text-red-400 mb-2">⚠ Search timeout: HuggingFace API not responding</p>
+                            <p class="text-slate-400 mb-3">This usually means no internet connection or HuggingFace is slow.</p>
+                            <div class="text-xs text-slate-500">
+                                <p class="font-semibold text-cyan-400 mb-2">Try instead:</p>
+                                <p class="mb-1">• Use the terminal: <span class="font-mono bg-slate-800 px-2 py-1 rounded">offgrid search llama</span></p>
+                                <p class="mb-1">• Download directly: <span class="font-mono bg-slate-800 px-2 py-1 rounded">offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF</span></p>
+                                <p>• Check offline catalog: <span class="font-mono bg-slate-800 px-2 py-1 rounded">offgrid catalog</span></p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    errorHtml = `
+                        <div class="text-sm">
+                            <p class="text-red-400 mb-2">Search error: ${error.message}</p>
+                            <p class="text-slate-400 mb-2">Use the Terminal tab to search instead:</p>
+                            <p class="text-xs font-mono bg-slate-800 px-2 py-1 rounded inline-block">offgrid search ${query}</p>
+                        </div>
+                    `;
+                }
+                results.innerHTML = errorHtml;
             }
         }
 
