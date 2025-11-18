@@ -1,6 +1,7 @@
 package inference
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net/http"
@@ -192,22 +193,54 @@ func (mc *ModelCache) getNextAvailablePort() int {
 	return mc.basePort
 }
 
-// waitForReady waits for llama-server to start (not for model to load)
-// Model loading happens asynchronously - the inference engine handles retries
+// waitForReady waits for llama-server to start AND for the model to fully load
+// This prevents blank responses when switching models too quickly
 func (mc *ModelCache) waitForReady(port int) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
-
-	// Just wait for server process to start and respond
+	
+	// Phase 1: Wait for server process to start (up to 7.5 seconds)
+	serverStarted := false
 	for i := 0; i < 15; i++ {
 		time.Sleep(500 * time.Millisecond)
 		resp, err := httpClient.Get(healthURL)
 		if err == nil {
 			resp.Body.Close()
-			return nil // Server is up, model will load in background
+			serverStarted = true
+			log.Printf("llama-server on port %d started, waiting for model to load...", port)
+			break
 		}
 	}
-
-	return fmt.Errorf("llama-server on port %d did not start within 7.5 seconds", port)
+	
+	if !serverStarted {
+		return fmt.Errorf("llama-server on port %d did not start within 7.5 seconds", port)
+	}
+	
+	// Phase 2: Wait for model to actually load (up to 60 seconds total)
+	// Model loading is the slow part, especially on low-end hardware
+	completionURL := fmt.Sprintf("http://localhost:%d/v1/chat/completions", port)
+	testPayload := []byte(`{"messages":[{"role":"user","content":"test"}],"max_tokens":1,"stream":false}`)
+	
+	maxAttempts := 60 // 60 seconds for model loading
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		time.Sleep(1 * time.Second)
+		
+		resp, err := http.Post(completionURL, "application/json", bytes.NewReader(testPayload))
+		if err == nil {
+			resp.Body.Close()
+			// 200 = model ready, 503 = still loading, 500 = error
+			if resp.StatusCode == http.StatusOK {
+				log.Printf("Model on port %d is fully loaded and ready", port)
+				return nil
+			}
+			if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusInternalServerError {
+				// Model still loading, continue waiting
+				continue
+			}
+		}
+	}
+	
+	// If we get here, model didn't load in time
+	return fmt.Errorf("model on port %d did not load within 60 seconds", port)
 }
 
 // GetStats returns cache statistics
