@@ -171,7 +171,7 @@ jobs:
           
           # Install Vulkan SDK if needed
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            sudo apt-get install -y libvulkan1 libvulkan-dev vulkan-tools glslang-tools shaderc
+            sudo apt-get install -y libvulkan1 libvulkan-dev vulkan-tools glslang-tools glslc
           fi
 
       - name: Install dependencies (macOS)
