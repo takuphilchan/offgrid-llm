@@ -803,7 +803,7 @@
                     </div>
                 </div>
                 <div class="terminal-output scrollable" id="terminalOutput">
-                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.5</div>
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
                     <div class="terminal-line">Connected to real offgrid binary</div>
                     <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
                 </div>
@@ -1411,7 +1411,21 @@
 
             const statusBadge = document.getElementById('statusBadge');
             statusBadge.className = 'text-xs font-medium text-yellow-400';
-            statusBadge.textContent = 'Generating...';
+            
+            // Show loading indicator with elapsed time
+            let loadingInterval;
+            let elapsedSeconds = 0;
+            statusBadge.textContent = 'Loading model...';
+            loadingInterval = setInterval(() => {
+                elapsedSeconds++;
+                if (elapsedSeconds < 60) {
+                    statusBadge.textContent = `Loading model... ${elapsedSeconds}s`;
+                } else {
+                    const mins = Math.floor(elapsedSeconds / 60);
+                    const secs = elapsedSeconds % 60;
+                    statusBadge.textContent = `Loading model... ${mins}m ${secs}s`;
+                }
+            }, 1000);
 
             abortController = new AbortController();
             const startTime = Date.now();
@@ -1472,6 +1486,13 @@
                                     const json = JSON.parse(data);
                                     const content = json.choices[0]?.delta?.content || '';
                                     if (content) {
+                                        // First token received - model is loaded and generating
+                                        if (loadingInterval) {
+                                            clearInterval(loadingInterval);
+                                            loadingInterval = null;
+                                            statusBadge.textContent = 'Generating...';
+                                        }
+                                        
                                         assistantMsg += content;
                                         if (!msgDiv) {
                                             msgDiv = addChatMessage('assistant', '', startTime);
@@ -1497,6 +1518,13 @@
                         msgDiv.querySelector('.time-badge').textContent = `${elapsed}ms`;
                     }
                 } else {
+                    // Non-streaming mode - model is loaded when we get response
+                    if (loadingInterval) {
+                        clearInterval(loadingInterval);
+                        loadingInterval = null;
+                        statusBadge.textContent = 'Generating...';
+                    }
+                    
                     const result = await response.json();
                     const assistantMsg = result.choices[0]?.message?.content || '';
                     const elapsed = Date.now() - startTime;
@@ -1507,9 +1535,18 @@
                 }
 
                 updateChatStats();
+                if (loadingInterval) {
+                    clearInterval(loadingInterval);
+                    loadingInterval = null;
+                }
                 statusBadge.className = 'text-xs font-medium text-green-400';
                 statusBadge.textContent = 'Ready';
             } catch (error) {
+                if (loadingInterval) {
+                    clearInterval(loadingInterval);
+                    loadingInterval = null;
+                }
+                
                 if (error.name === 'AbortError') {
                     addChatMessage('assistant', '[Generation stopped by user]', startTime);
                     statusBadge.className = 'text-xs font-medium text-green-400';
@@ -1522,6 +1559,9 @@
                     statusBadge.textContent = 'Error';
                 }
             } finally {
+                if (loadingInterval) {
+                    clearInterval(loadingInterval);
+                }
                 isGenerating = false;
                 pendingRequest = false;
                 abortController = null;
@@ -1811,7 +1851,7 @@
         // Terminal commands
         function clearTerminal() {
             document.getElementById('terminalOutput').innerHTML = `
-                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.5</div>
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
                 <div class="terminal-line">Connected to real offgrid binary</div>
                 <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
             `;
