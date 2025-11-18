@@ -173,12 +173,15 @@ jobs:
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
             sudo apt-get install -y libvulkan1 libvulkan-dev vulkan-tools glslang-tools
             
-            # Download glslc binary (not available in Ubuntu 22.04 repos)
-            wget -q https://storage.googleapis.com/shaderc/artifacts/prod/graphics_shader_compiler/shaderc/linux/continuous_clang_release/407/20240930-110051/install.tgz
-            tar -xzf install.tgz
-            sudo cp install/bin/glslc /usr/local/bin/
-            sudo chmod +x /usr/local/bin/glslc
-            rm -rf install.tgz install
+            # Build glslc from source (not available in Ubuntu 22.04 repos)
+            git clone --depth 1 --branch v2024.3 https://github.com/google/shaderc.git /tmp/shaderc
+            cd /tmp/shaderc
+            ./utils/git-sync-deps
+            mkdir build && cd build
+            cmake -DCMAKE_BUILD_TYPE=Release -DSHADERC_SKIP_TESTS=ON ..
+            make -j$(nproc) glslc
+            sudo cp glslc/glslc /usr/local/bin/
+            cd / && rm -rf /tmp/shaderc
           fi
 
       - name: Install dependencies (macOS)
