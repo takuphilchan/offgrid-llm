@@ -302,16 +302,20 @@
         .terminal-output { 
             height: 500px;
             overflow-y: auto; 
+            overflow-x: hidden;
             margin-bottom: 12px; 
             line-height: 1.6;
             background: #1e1e1e;
+            word-wrap: break-word;
         }
         
         .terminal-line { 
             color: #d4d4d4; 
             margin-bottom: 2px; 
-            white-space: pre; 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
             word-break: break-word; 
+            overflow-wrap: break-word;
             font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
         }
         
