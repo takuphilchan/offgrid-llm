@@ -1009,36 +1009,14 @@
                     currentModel = newModel;
                     messages = [];
                     const chatMessages = document.getElementById('chatMessages');
-                    chatMessages.innerHTML = '<div class="text-center text-slate-400 py-32"><p class="text-xl font-medium">Start a conversation</p><p class="text-sm mt-2 text-slate-500">Select a model and type your message below</p></div>';
+                    chatMessages.innerHTML = '<div class="text-center text-slate-400 py-32"><p class="text-xl font-medium">Start a conversation</p><p class="text-sm mt-2 text-slate-500">Type your message to start using ' + newModel + '</p></div>';
                     updateChatStats();
                     
-                    // Show loading status and preload the model
+                    // Update status - model will load on first message
                     const statusBadge = document.getElementById('statusBadge');
-                    statusBadge.className = 'badge badge-warning';
-                    statusBadge.textContent = `Switching to ${newModel}...`;
-                    
-                    console.log('[MODEL CHANGE] Sending preload request to backend...');
-                    // Send a dummy request to trigger backend model switch
-                    try {
-                        const response = await fetch('/v1/chat/completions', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                model: newModel,
-                                messages: [{ role: 'user', content: 'test' }],
-                                stream: false,
-                                max_tokens: 1
-                            })
-                        });
-                        console.log('[MODEL CHANGE] Preload response status:', response.status);
-                        statusBadge.className = 'badge badge-success';
-                        statusBadge.textContent = `Ready (${newModel})`;
-                        console.log('[MODEL CHANGE] Model switch complete');
-                    } catch (e) {
-                        console.log('[MODEL CHANGE] Preload error:', e);
-                        statusBadge.className = 'badge badge-success';
-                        statusBadge.textContent = `Ready (${newModel})`;
-                    }
+                    statusBadge.className = 'badge badge-success';
+                    statusBadge.textContent = `Ready (${newModel})`;
+                    console.log('[MODEL CHANGE] Model switch complete - will load on first message');
                 } else {
                     // User cancelled - revert dropdown
                     console.log('[MODEL CHANGE] User cancelled, reverting to:', currentModel);
