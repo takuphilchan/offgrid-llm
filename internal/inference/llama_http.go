@@ -71,6 +71,11 @@ func (e *LlamaHTTPEngine) Load(ctx context.Context, modelPath string, opts LoadO
 	return nil
 }
 
+// SetPort updates the llama-server port for this engine
+func (e *LlamaHTTPEngine) SetPort(port int) {
+	e.baseURL = fmt.Sprintf("http://localhost:%d", port)
+}
+
 // Unload is a no-op
 func (e *LlamaHTTPEngine) Unload() error {
 	e.loaded = false

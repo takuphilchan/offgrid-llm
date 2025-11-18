@@ -41,8 +41,9 @@ type Server struct {
 	downloadMutex        sync.RWMutex
 	exportProgress       map[string]*ExportProgress
 	exportMutex          sync.RWMutex
-	llamaServerCmd       *exec.Cmd
+	modelCache           *inference.ModelCache
 	currentModelID       string
+	currentPort          int
 	modelMutex           sync.Mutex
 	inferenceMutex       sync.Mutex // Ensures only one inference runs at a time
 	rateLimiter          *RateLimiter
@@ -128,141 +129,38 @@ func NewWithConfig(cfg *config.Config) *Server {
 		startTime:            time.Now(),
 		downloadProgress:     make(map[string]*DownloadProgress),
 		exportProgress:       make(map[string]*ExportProgress),
+		modelCache:           inference.NewModelCache(3), // Cache up to 3 models by default
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
 	}
 }
 
-// startLlamaServer starts the llama-server process with a default model
+// startLlamaServer is deprecated - models are now loaded on-demand via cache
 func (s *Server) startLlamaServer() error {
-	// Check if llama-server is already running
+	// Check if any llama-server instances are running
 	resp, err := http.Get("http://localhost:42382/health")
 	if err == nil {
 		resp.Body.Close()
 		log.Println("llama-server already running on port 42382")
-		return nil
+	} else {
+		log.Println("No pre-existing llama-server found - will load models on first request")
 	}
-
-	// Scan for models first
-	if err := s.registry.ScanModels(); err != nil {
-		return fmt.Errorf("failed to scan models: %w", err)
-	}
-
-	// Find a model to use (prefer TinyLlama for fast startup)
-	installedModels := s.registry.ListModels()
-	if len(installedModels) == 0 {
-		return fmt.Errorf("no models installed - run 'offgrid download' first")
-	}
-
-	// Prioritize TinyLlama for fast startup, otherwise use first available
-	var modelID string
-	for _, model := range installedModels {
-		if strings.Contains(strings.ToLower(model.ID), "tinyllama") {
-			modelID = model.ID
-			log.Printf("Using TinyLlama for fast startup: %s", model.ID)
-			break
-		}
-	}
-
-	// Fallback to first model if no TinyLlama found
-	if modelID == "" {
-		modelID = installedModels[0].ID
-		log.Printf("Using model: %s", installedModels[0].ID)
-	}
-
-	// Get model metadata to get the actual path
-	metadata, err := s.registry.GetModel(modelID)
-	if err != nil {
-		return fmt.Errorf("failed to get model metadata: %w", err)
-	}
-
-	// Check if model file exists
-	if _, err := os.Stat(metadata.Path); os.IsNotExist(err) {
-		return fmt.Errorf("model file not found: %s", metadata.Path)
-	}
-
-	// Kill any existing llama-server processes to prevent duplicates
-	if s.llamaServerCmd != nil && s.llamaServerCmd.Process != nil {
-		log.Println("Stopping existing llama-server process...")
-		s.llamaServerCmd.Process.Kill()
-		s.llamaServerCmd.Wait()
-		s.llamaServerCmd = nil
-		time.Sleep(1 * time.Second) // Give it time to clean up
-	}
-
-	// Start llama-server
-	log.Printf("Starting llama-server on port 42382 with model: %s", modelID)
-	cmd := exec.Command("llama-server",
-		"-m", metadata.Path,
-		"--port", "42382",
-		"--host", "127.0.0.1",
-		"-c", "2048",
-		"-ngl", "0", // CPU-only for compatibility
-	)
-
-	// Set environment to bypass proxy
-	cmd.Env = append(os.Environ(), "NO_PROXY=*")
-
-	// Redirect output to logs
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start llama-server: %w", err)
-	}
-
-	s.llamaServerCmd = cmd
-
-	// Wait for llama-server to be ready
-	log.Println("Waiting for llama-server to load model...")
-	for i := 0; i < 120; i++ { // Wait up to 120 seconds
-		time.Sleep(1 * time.Second)
-		resp, err := http.Get("http://localhost:42382/health")
-		if err == nil {
-			var health map[string]interface{}
-			json.NewDecoder(resp.Body).Decode(&health)
-			resp.Body.Close()
-
-			if status, ok := health["status"].(string); ok && status == "ok" {
-				s.currentModelID = modelID
-				log.Printf("llama-server ready (loaded in %d seconds)", i+1)
-				return nil
-			}
-			log.Printf("Model loading... (%d seconds)", i+1)
-		}
-	}
-
-	return fmt.Errorf("llama-server did not become ready within 120 seconds")
+	return nil
 }
 
-// switchModel stops the current llama-server and starts a new one with the requested model.
-// This ensures complete context isolation between models - when switching models, the entire
-// llama-server process is restarted with a fresh context. This prevents any context mixup
-// or conversation leakage between different models. Clients should clear their chat history
-// when switching models to maintain proper conversation boundaries.
+// switchModel uses the model cache to load or switch to a model
+// Returns the port of the llama-server instance running this model
 func (s *Server) switchModel(modelID string) error {
 	s.modelMutex.Lock()
 	defer s.modelMutex.Unlock()
 
-	// If already loaded, skip
+	// Check if we're already using this model
 	if s.currentModelID == modelID {
-		log.Printf("Model %s already loaded, skipping switch", modelID)
+		log.Printf("Model %s already active", modelID)
 		return nil
 	}
 
-	log.Printf("Switching from %s to %s...", s.currentModelID, modelID)
-
-	// Stop current llama-server
-	if s.llamaServerCmd != nil && s.llamaServerCmd.Process != nil {
-		log.Println("Stopping current llama-server...")
-		if err := s.llamaServerCmd.Process.Kill(); err != nil {
-			log.Printf("Warning: error killing llama-server: %v", err)
-		}
-		s.llamaServerCmd.Wait()
-		s.llamaServerCmd = nil
-		s.currentModelID = ""
-		time.Sleep(500 * time.Millisecond) // Brief pause for cleanup
-	}
+	log.Printf("Switching to model: %s", modelID)
 
 	// Get model metadata
 	metadata, err := s.registry.GetModel(modelID)
@@ -270,45 +168,23 @@ func (s *Server) switchModel(modelID string) error {
 		return fmt.Errorf("model not found: %w", err)
 	}
 
-	// Start llama-server with new model
-	log.Printf("Starting llama-server with model: %s", modelID)
-	cmd := exec.Command("llama-server",
-		"-m", metadata.Path,
-		"--port", "42382",
-		"--host", "127.0.0.1",
-		"-c", "2048",
-		"-ngl", "0",
-	)
-
-	cmd.Env = append(os.Environ(), "NO_PROXY=*")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start llama-server: %w", err)
+	// Load or get cached model instance
+	instance, err := s.modelCache.GetOrLoad(modelID, metadata.Path)
+	if err != nil {
+		return fmt.Errorf("failed to load model: %w", err)
 	}
 
-	s.llamaServerCmd = cmd
+	// Update current model tracking
+	s.currentModelID = modelID
+	s.currentPort = instance.Port
 
-	// Wait for ready
-	log.Println("Waiting for model to load...")
-	for i := 0; i < 120; i++ {
-		time.Sleep(1 * time.Second)
-		resp, err := http.Get("http://localhost:42382/health")
-		if err == nil {
-			var health map[string]interface{}
-			json.NewDecoder(resp.Body).Decode(&health)
-			resp.Body.Close()
-
-			if status, ok := health["status"].(string); ok && status == "ok" {
-				s.currentModelID = modelID
-				log.Printf("Model %s loaded successfully in %d seconds", modelID, i+1)
-				return nil
-			}
-		}
+	// Update engine to point to the correct port
+	if llamaEngine, ok := s.engine.(*inference.LlamaHTTPEngine); ok {
+		llamaEngine.SetPort(instance.Port)
 	}
 
-	return fmt.Errorf("model failed to load within 120 seconds")
+	log.Printf("Now using model %s on port %d", modelID, instance.Port)
+	return nil
 }
 
 // Start starts the HTTP server
@@ -350,6 +226,9 @@ func (s *Server) Start() error {
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
+
+	// Model cache statistics
+	mux.HandleFunc("/v1/cache/stats", s.handleCacheStats)
 
 	// Cache management endpoints
 	mux.HandleFunc("/cache/stats", s.handleCacheStats)
@@ -430,16 +309,10 @@ func (s *Server) handleShutdown() {
 	<-sigChan
 	log.Println("\nShutdown signal received...")
 
-	// Stop llama-server if we started it
-	if s.llamaServerCmd != nil && s.llamaServerCmd.Process != nil {
-		log.Println("Stopping llama-server...")
-		if err := s.llamaServerCmd.Process.Kill(); err != nil {
-			log.Printf("Error stopping llama-server: %v", err)
-		} else {
-			s.llamaServerCmd.Wait() // Clean up zombie process
-			log.Println("llama-server stopped")
-		}
-	}
+	// Stop all cached llama-server instances
+	log.Println("Stopping all llama-server instances...")
+	s.modelCache.UnloadAll()
+	log.Println("All llama-server instances stopped")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -641,7 +514,16 @@ func (s *Server) getAggregateStats() map[string]interface{} {
 func (s *Server) handleCacheStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	stats := s.cache.Stats()
+	// Model cache stats
+	modelCacheStats := s.modelCache.GetStats()
+
+	// Response cache stats
+	responseCacheStats := s.cache.Stats()
+
+	stats := map[string]interface{}{
+		"model_cache":    modelCacheStats,
+		"response_cache": responseCacheStats,
+	}
 
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
 		log.Printf("Error encoding cache stats: %v", err)
