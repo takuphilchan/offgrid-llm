@@ -78,6 +78,15 @@ jobs:
             gpu_flags: ""
             cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
+          - name: linux-amd64-vulkan-avx2
+            os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+            variant: vulkan
+            cpu_features: avx2
+            gpu_flags: "-DGGML_VULKAN=ON"
+            cpu_flags: "-march=x86-64-v3 -mno-avx512f"
+            
           # Linux variants - AVX-512 (newer Intel CPUs)
           - name: linux-amd64-cpu-avx512
             os: ubuntu-22.04
@@ -86,6 +95,15 @@ jobs:
             variant: cpu
             cpu_features: avx512
             gpu_flags: ""
+            cpu_flags: "-march=x86-64-v4"
+            
+          - name: linux-amd64-vulkan-avx512
+            os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+            variant: vulkan
+            cpu_features: avx512
+            gpu_flags: "-DGGML_VULKAN=ON"
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-arm64-cpu
