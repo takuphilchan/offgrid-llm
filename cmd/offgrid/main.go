@@ -3440,16 +3440,22 @@ func handleRun(args []string) {
 			llamaPort = strings.TrimSpace(string(portBytes))
 		}
 
-		// Poll llama-server health endpoint until model is ready
+		// Poll llama-server with test completion until model is actually ready
+		// Health endpoint returns 200 immediately, but model may still be loading
 		maxWait := 60 // seconds
+		completionURL := fmt.Sprintf("http://localhost:%s/v1/chat/completions", llamaPort)
+		testPayload := []byte(`{"messages":[{"role":"user","content":"test"}],"max_tokens":1,"stream":false}`)
+
 		for i := 0; i < maxWait; i++ {
 			time.Sleep(1 * time.Second)
 
-			resp, err := http.Get(fmt.Sprintf("http://localhost:%s/health", llamaPort))
+			// Send test completion to verify model is actually loaded
+			resp, err := http.Post(completionURL, "application/json", bytes.NewReader(testPayload))
 			if err == nil {
-				defer resp.Body.Close()
+				resp.Body.Close()
+				// 200 = model ready, 503 = still loading, 500 = error during load
 				if resp.StatusCode == 200 {
-					// Model is loaded and ready
+					// Model is fully loaded and ready
 					break
 				}
 			}
@@ -3458,6 +3464,11 @@ func handleRun(args []string) {
 				fmt.Printf("%s✗%s\n", brandError, colorReset)
 				fmt.Println()
 				printError("Timeout waiting for model to load")
+				fmt.Println()
+				printInfo("This can happen if:")
+				fmt.Println("  • Model file is corrupted (run 'offgrid verify')")
+				fmt.Println("  • Insufficient RAM for this model")
+				fmt.Println("  • llama-server crashed during loading")
 				fmt.Println()
 				os.Exit(1)
 			}
