@@ -1,7 +1,6 @@
 package inference
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -193,27 +192,22 @@ func (mc *ModelCache) getNextAvailablePort() int {
 	return mc.basePort
 }
 
-// waitForReady waits for llama-server to be ready on specified port
+// waitForReady waits for llama-server to start (not for model to load)
+// Model loading happens asynchronously - the inference engine handles retries
 func (mc *ModelCache) waitForReady(port int) error {
-	url := fmt.Sprintf("http://localhost:%d/health", port)
+	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
-	for i := 0; i < 120; i++ {
-		time.Sleep(1 * time.Second)
-
-		resp, err := httpClient.Get(url)
+	// Just wait for server process to start and respond
+	for i := 0; i < 15; i++ {
+		time.Sleep(500 * time.Millisecond)
+		resp, err := httpClient.Get(healthURL)
 		if err == nil {
-			var health map[string]interface{}
-			if json.NewDecoder(resp.Body).Decode(&health) == nil {
-				resp.Body.Close()
-				if status, ok := health["status"].(string); ok && status == "ok" {
-					return nil
-				}
-			}
 			resp.Body.Close()
+			return nil // Server is up, model will load in background
 		}
 	}
 
-	return fmt.Errorf("llama-server on port %d did not become ready within 120 seconds", port)
+	return fmt.Errorf("llama-server on port %d did not start within 7.5 seconds", port)
 }
 
 // GetStats returns cache statistics

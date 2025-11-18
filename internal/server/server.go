@@ -137,14 +137,10 @@ func NewWithConfig(cfg *config.Config) *Server {
 
 // startLlamaServer is deprecated - models are now loaded on-demand via cache
 func (s *Server) startLlamaServer() error {
-	// Check if any llama-server instances are running
-	resp, err := http.Get("http://localhost:42382/health")
-	if err == nil {
-		resp.Body.Close()
-		log.Println("llama-server already running on port 42382")
-	} else {
-		log.Println("No pre-existing llama-server found - will load models on first request")
-	}
+	// Kill any pre-existing llama-server instances to avoid port conflicts
+	// The model cache will start fresh instances on demand
+	exec.Command("pkill", "-9", "llama-server").Run()
+	log.Println("Cleared any pre-existing llama-server instances - will load models on first request")
 	return nil
 }
 

@@ -1381,17 +1381,7 @@
                 return;
             }
 
-            // Check model switch
-            if (currentModel && model !== currentModel) {
-                // Switch model and clear conversation
-                currentModel = model;
-                messages = [];
-                const chatMessages = document.getElementById('chatMessages');
-                chatMessages.innerHTML = '';
-                updateChatStats();
-                pendingRequest = false; // Reset the flag so user can send messages
-                return; // Don't send a message on model switch
-            }
+            // Update current model (allow switching without blocking message send)
             currentModel = model;
 
             const sendBtn = document.getElementById('sendBtn');
