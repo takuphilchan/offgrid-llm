@@ -300,13 +300,14 @@
         }
         
         .terminal-output { 
-            height: 500px;
             overflow-y: auto; 
             overflow-x: hidden;
-            margin-bottom: 12px; 
+            padding: 12px;
             line-height: 1.6;
             background: #1e1e1e;
             word-wrap: break-word;
+            flex: 1;
+            min-height: 0;
         }
         
         .terminal-line { 
@@ -352,9 +353,11 @@
         .terminal-input-line { 
             display: flex; 
             align-items: center; 
-            gap: 10px; 
-            padding-top: 8px;
+            gap: 12px; 
+            padding: 16px;
             border-top: 1px solid #30363d;
+            background: #0f1419;
+            min-height: 60px;
         }
         
         .terminal-input { 
@@ -364,7 +367,7 @@
             flex: 1; 
             outline: none; 
             font-family: inherit; 
-            font-size: 15px; 
+            font-size: 18px; 
         }
         
         .terminal-running { 
@@ -797,35 +800,47 @@
 
         <!-- Terminal Tab -->
         <div id="content-terminal" class="hidden h-full flex flex-col px-6 py-4">
-            <div class="max-w-5xl mx-auto flex-1 flex flex-col gap-4 w-full">
-            <div class="card terminal-card flex-1 flex flex-col overflow-hidden">
-                <div class="flex items-center justify-between mb-3">
+            <div class="max-w-5xl mx-auto flex-1 flex flex-col gap-4 w-full min-h-0">
+            <div class="flex-shrink-0">
+                <div class="flex items-center justify-between gap-2 px-4 py-2 bg-slate-900/40 rounded-lg border border-slate-700/50">
+                    <span class="text-xs font-mono text-slate-500 mr-2">$</span>
+                    <button onclick="runQuickCommand('offgrid list')" 
+                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
+                        list
+                    </button>
+                    <button onclick="runQuickCommand('offgrid info')" 
+                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
+                        info
+                    </button>
+                    <button onclick="runQuickCommand('offgrid doctor')" 
+                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
+                        doctor
+                    </button>
+                    <button onclick="runQuickCommand('offgrid help')" 
+                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
+                        help
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card terminal-card flex-1 flex flex-col min-h-0">
+                <div class="flex items-center justify-between mb-3 flex-shrink-0">
                     <h3 class="text-lg font-semibold">Terminal</h3>
                     <div class="flex gap-2">
                         <button onclick="killCommand()" id="killBtn" class="btn btn-danger btn-sm hidden">Kill</button>
                         <button onclick="clearTerminal()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
                 </div>
-                <div class="terminal-output scrollable" id="terminalOutput">
-                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                <div class="terminal-output scrollable flex-1 overflow-y-auto" id="terminalOutput">
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.5</div>
                     <div class="terminal-line">Connected to real offgrid binary</div>
                     <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
                 </div>
-                <div class="terminal-input-line" id="terminalInputLine">
+                <div class="terminal-input-line flex-shrink-0" id="terminalInputLine">
                     <span class="terminal-prompt">$</span>
                     <input type="text" id="terminalInput" placeholder="Enter command..." 
                            onkeydown="handleTerminalKeydown(event)"
                            class="terminal-input" autocomplete="off" />
-                </div>
-            </div>
-            
-            <div class="card flex-shrink-0">
-                <h4 class="text-sm font-semibold mb-2">Quick Commands</h4>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <button onclick="runQuickCommand('offgrid list')" class="btn btn-secondary btn-sm">List Models</button>
-                    <button onclick="runQuickCommand('offgrid info')" class="btn btn-secondary btn-sm">Server Info</button>
-                    <button onclick="runQuickCommand('offgrid doctor')" class="btn btn-secondary btn-sm">Run Test</button>
-                    <button onclick="runQuickCommand('offgrid help')" class="btn btn-secondary btn-sm">Help</button>
                 </div>
             </div>
             </div>
@@ -863,12 +878,50 @@
         let requestCooldown = 300; // Minimum 300ms between requests
         let pendingRequest = false;
 
+        // Save messages to localStorage
+        function saveMessages() {
+            try {
+                localStorage.setItem('offgrid_messages', JSON.stringify(messages));
+                localStorage.setItem('offgrid_current_model', currentModel);
+            } catch (e) {
+                console.error('Failed to save messages:', e);
+            }
+        }
+
+        // Load messages from localStorage
+        function loadMessages() {
+            try {
+                const saved = localStorage.getItem('offgrid_messages');
+                const savedModel = localStorage.getItem('offgrid_current_model');
+                if (saved) {
+                    messages = JSON.parse(saved);
+                    if (savedModel) {
+                        currentModel = savedModel;
+                    }
+                    // Restore messages to UI
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.innerHTML = '';
+                    messages.forEach(msg => {
+                        if (msg.role === 'user' || msg.role === 'assistant') {
+                            addChatMessage(msg.role, msg.content);
+                        }
+                    });
+                    updateChatStats();
+                }
+            } catch (e) {
+                console.error('Failed to load messages:', e);
+            }
+        }
+
         // Tab switching
         function switchTab(tab) {
             document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
             document.getElementById('content-' + tab).classList.remove('hidden');
             document.getElementById('tab-' + tab).classList.add('active');
+            
+            // Save current tab to localStorage
+            localStorage.setItem('offgrid_active_tab', tab);
             
             if (tab === 'models') {
                 loadInstalledModels();
@@ -958,6 +1011,13 @@
         // Load models for chat
         async function loadChatModels() {
             try {
+                // Force refresh models from filesystem
+                try {
+                    await fetch('/models/refresh', { method: 'POST' });
+                } catch (e) {
+                    console.warn('Failed to refresh models, using cached list:', e);
+                }
+                
                 const resp = await fetch('/models');
                 const data = await resp.json();
                 const models = data.data || [];
@@ -980,7 +1040,10 @@
                 models.forEach(m => {
                     const opt = document.createElement('option');
                     opt.value = m.id;
-                    opt.textContent = m.id;
+                    // Format display name: replace underscores and hyphens with spaces for readability
+                    const displayName = m.id.replace(/_/g, ' ').replace(/-/g, ' ');
+                    opt.textContent = displayName;
+                    opt.title = m.id; // Show original name on hover
                     select.appendChild(opt);
                 });
                 
@@ -1013,7 +1076,7 @@
         // Wait for model to be fully loaded and ready
         async function waitForModelReady(modelName) {
             console.log('[HEALTH CHECK] Waiting for model to be ready:', modelName);
-            const maxAttempts = 30; // 30 seconds max wait
+            const maxAttempts = 60; // 60 seconds max wait
             const pollInterval = 1000; // Check every second
             
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -1021,7 +1084,7 @@
                     console.log(`[HEALTH CHECK] Attempt ${attempt}/${maxAttempts}`);
                     
                     // Send a minimal test completion request to verify model is loaded
-                    const testResponse = await fetch('/api/v1/completions', {
+                    const testResponse = await fetch('/v1/chat/completions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1058,8 +1121,8 @@
                 }
             }
             
-            console.warn('[HEALTH CHECK] Timeout after 30s - proceeding anyway');
-            return true; // Proceed anyway after timeout, user can retry if issues
+            console.warn('[HEALTH CHECK] Timeout after 60s - model may not be ready');
+            return false; // Return false if timeout
         }
 
         // Handle model dropdown change
@@ -1087,19 +1150,22 @@
             console.log('[MODEL CHANGE] Current message count:', messages.length);
             if (messages.length > 0) {
                 console.log('[MODEL CHANGE] Showing confirmation dialog...');
-                const shouldClear = confirm(
-                    `Switching from ${oldModel || 'no model'} to ${newModel}.\n\n` +
-                    `Clear chat history? The new model won't have context from previous messages.\n\n` +
-                    `Click OK to start fresh, or Cancel to keep history.`
-                );
-                
-                console.log('[MODEL CHANGE] User response:', shouldClear ? 'CLEAR' : 'KEEP');
-                if (shouldClear) {
-                    console.log('[MODEL CHANGE] Clearing chat history');
-                    clearChatSilent();
-                } else {
-                    console.log('[MODEL CHANGE] Keeping chat history');
-                }
+                showModal({
+                    type: 'warning',
+                    title: 'Clear Chat History?',
+                    message: `Switching from <strong>${oldModel || 'no model'}</strong> to <strong>${newModel}</strong>.<br><br>Clear chat history? The new model won't have context from previous messages.`,
+                    confirmText: 'Start Fresh',
+                    cancelText: 'Keep History',
+                    onConfirm: () => {
+                        console.log('[MODEL CHANGE] User response: CLEAR');
+                        console.log('[MODEL CHANGE] Clearing chat history');
+                        clearChatSilent();
+                    },
+                    onCancel: () => {
+                        console.log('[MODEL CHANGE] User response: KEEP');
+                        console.log('[MODEL CHANGE] Keeping chat history');
+                    }
+                });
             } else {
                 console.log('[MODEL CHANGE] No messages, skipping confirmation');
             }
@@ -1214,6 +1280,7 @@
                     const chatMessages = document.getElementById('chatMessages');
                     chatMessages.innerHTML = '';
                     updateChatStats();
+                    saveMessages();
                 }
             });
         }
@@ -1497,6 +1564,7 @@
             `;
             document.getElementById('chatInput').value = '';
             updateChatStats();
+            saveMessages();
         }
 
         // Stop generation
@@ -1615,6 +1683,7 @@
             addChatMessage('user', msg);
             input.value = '';
             updateChatStats();
+            saveMessages();
 
             const statusBadge = document.getElementById('statusBadge');
             statusBadge.className = 'text-xs font-medium text-yellow-400';
@@ -1728,6 +1797,7 @@
                         messages.push({ role: 'assistant', content: assistantMsg });
                         const elapsed = Date.now() - startTime;
                         msgDiv.querySelector('.time-badge').textContent = `${elapsed}ms`;
+                        saveMessages();
                     }
                 } else {
                     // Non-streaming mode - model is loaded when we get response
@@ -1743,6 +1813,7 @@
                     if (assistantMsg) {
                         messages.push({ role: 'assistant', content: assistantMsg });
                         addChatMessage('assistant', assistantMsg, startTime);
+                        saveMessages();
                     }
                 }
 
@@ -1984,6 +2055,13 @@
             container.innerHTML = '<p class="text-sm text-slate-400">Loading...</p>';
 
             try {
+                // Force refresh models from filesystem
+                try {
+                    await fetch('/models/refresh', { method: 'POST' });
+                } catch (e) {
+                    console.warn('Failed to refresh models, using cached list:', e);
+                }
+                
                 const resp = await fetch('/models');
                 const data = await resp.json();
                 const models = data.data || [];
@@ -1998,12 +2076,15 @@
                     const div = document.createElement('div');
                     div.className = 'model-item';
                     const modelId = (model.id || '').replace(/'/g, "\\'");
+                    // Format model name for better readability
+                    const displayName = model.id.replace(/_/g, ' ').replace(/-/g, ' ');
                     div.innerHTML = `
-                        <div class="flex justify-between items-center">
-                            <div class="flex-1">
-                                <div class="font-semibold text-sm text-cyan-400">${model.id}</div>
+                        <div class="flex justify-between items-center gap-3">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-semibold text-sm text-cyan-400 break-words" title="${model.id}">${displayName}</div>
+                                <div class="text-xs text-slate-500 font-mono mt-1">${model.id}</div>
                             </div>
-                            <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm">Remove</button>
+                            <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm flex-shrink-0">Remove</button>
                         </div>
                     `;
                     container.appendChild(div);
@@ -2015,22 +2096,47 @@
 
         // Remove model
         async function removeModel(modelId) {
-            const container = document.getElementById('installedModels');
-            const confirmDiv = document.createElement('div');
-            confirmDiv.className = 'card mb-4';
-            confirmDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)';
-            confirmDiv.style.border = '1px solid rgba(239, 68, 68, 0.5)';
-            confirmDiv.innerHTML = `
-                <div class="text-center">
-                    <p class="text-red-400 font-semibold mb-3">⚠ Remove Model?</p>
-                    <p class="text-sm mb-4">Are you sure you want to remove <span class="font-semibold">${modelId}</span>?</p>
-                    <div class="flex gap-2 justify-center">
-                        <button onclick="confirmRemoveModel('${modelId.replace(/'/g, "\\'")}')">Remove</button>
-                        <button onclick="this.closest('.card').remove()" class="btn btn-secondary btn-sm">Cancel</button>
-                    </div>
-                </div>
-            `;
-            container.insertBefore(confirmDiv, container.firstChild);
+            showModal({
+                type: 'error',
+                title: 'Remove Model?',
+                message: `Are you sure you want to remove <strong>${modelId}</strong>?<br><br>This will delete the model file from your system.`,
+                confirmText: 'Remove',
+                cancelText: 'Cancel',
+                onConfirm: () => {
+                    confirmRemoveModel(modelId);
+                }
+            });
+        }
+
+        // Execute the actual removal via terminal
+        async function confirmRemoveModel(modelId) {
+            try {
+                // Clear saved model if it's the one being deleted
+                if (currentModel === modelId) {
+                    currentModel = '';
+                    localStorage.removeItem('offgrid_current_model');
+                }
+                
+                // Switch to terminal tab to show progress
+                switchTab('terminal');
+                
+                // Execute remove command
+                const input = document.getElementById('terminalInput');
+                input.value = `offgrid remove ${modelId} --yes`;
+                
+                // Trigger the command
+                const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13 });
+                input.dispatchEvent(event);
+                
+                // Note: Model list refresh happens in handleOffgridCommand after command completes
+            } catch (error) {
+                showModal({
+                    type: 'error',
+                    title: 'Remove Failed',
+                    message: `Failed to remove model: ${error.message}`,
+                    confirmText: 'OK'
+                });
+            }
         }
 
         // USB Import/Export Functions
@@ -2102,8 +2208,9 @@
 
         // Terminal commands
         function clearTerminal() {
+            terminalOutputBuffer = ''; // Clear any buffered output
             document.getElementById('terminalOutput').innerHTML = `
-                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.5</div>
                 <div class="terminal-line">Connected to real offgrid binary</div>
                 <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
             `;
@@ -2283,8 +2390,8 @@
             currentTerminalAbort = new AbortController();
             
             try {
-                // Execute real offgrid command via backend
-                const resp = await fetch('/v1/terminal/exec', {
+                // Execute real offgrid command via streaming endpoint for real-time output
+                const resp = await fetch('/v1/terminal/exec/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2296,33 +2403,61 @@
 
                 if (!resp.ok) {
                     addTerminalOutput(`Command failed: HTTP ${resp.status}`, 'error');
+                    resetTerminalState();
                     return;
                 }
 
-                const data = await resp.json();
-                
-                if (data.error) {
-                    addTerminalOutput(`Error: ${data.error}`, 'error');
-                    return;
-                }
+                // Read streaming response
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let exitCode = 0;
 
-                // Display the actual command output
-                const output = data.output || '';
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, {stream: true});
+                    
+                    // Process complete SSE events
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // Keep incomplete event in buffer
+
+                    for (const event of lines) {
+                        if (!event.trim()) continue;
+                        
+                        // Parse SSE format: "event: type\ndata: line1\ndata: line2\n..."
+                        const eventLines = event.split('\n');
+                        let eventType = '';
+                        const dataLines = [];
+                        
+                        for (const eLine of eventLines) {
+                            if (eLine.startsWith('event:')) {
+                                eventType = eLine.substring(6).trim();
+                            } else if (eLine.startsWith('data:')) {
+                                dataLines.push(eLine.substring(5).trim());
+                            }
+                        }
+                        
+                        if (!eventType) continue;
+                        
+                        const data = dataLines.join('\n');
+                        
+                        if (eventType === 'output') {
+                            // Display output in real-time
+                            if (data) addTerminalRawOutput(data);
+                        } else if (eventType === 'exit') {
+                            exitCode = parseInt(data);
+                        } else if (eventType === 'error') {
+                            addTerminalOutput(`Error: ${data}`, 'error');
+                        }
+                    }
+                }
                 
                 // Special handling for 'run' command - enable terminal chat mode
                 const subcmd = args[0];
-                if (subcmd === 'run' && args.length > 1) {
+                if (subcmd === 'run' && args.length > 1 && exitCode === 0) {
                     const modelName = args.slice(1).join(' ');
-                    
-                    // Display output with ANSI parsing
-                    if (output) {
-                        const lines = output.split('\n');
-                        lines.forEach(line => {
-                            if (line.trim()) {
-                                addTerminalOutput(line, 'raw');
-                            }
-                        });
-                    }
                     
                     // Enable chat mode
                     terminalChatMode = true;
@@ -2332,30 +2467,19 @@
                     addTerminalOutput('Chat mode enabled. Type your messages below.', 'success');
                     addTerminalOutput('Commands: "exit" to quit, "clear" to reset screen', 'success');
                     addTerminalOutput('> ', 'success');
-                    
-                    resetTerminalState();
-                    currentTerminalAbort = null;
-                    return;
-                }
-                
-                if (output) {
-                    // Output exactly as received from server - no modifications
-                    const lines = output.split('\n');
-                    lines.forEach(line => {
-                        addTerminalOutput(line, 'raw');
-                    });
                 }
 
-                if (data.exitCode !== 0 && !output) {
-                    addTerminalOutput(`Command exited with code ${data.exitCode}`, 'error');
+                if (exitCode !== 0) {
+                    addTerminalOutput(`Command exited with code ${exitCode}`, 'error');
                 }
 
-                // Refresh UI after certain commands
-                if (['download', 'remove', 'delete'].includes(subcmd)) {
+                // Refresh UI after certain commands (only on success)
+                if (['download', 'remove', 'delete'].includes(subcmd) && exitCode === 0) {
+                    // Wait longer to ensure backend has updated
                     setTimeout(() => {
                         loadInstalledModels();
                         loadChatModels();
-                    }, 1000);
+                    }, 2500);
                 }
 
             } catch (error) {
@@ -2365,6 +2489,7 @@
                     addTerminalOutput(`Error: ${error.message}`, 'error');
                 }
             } finally {
+                flushTerminalBuffer(); // Flush any remaining buffered output
                 resetTerminalState();
                 currentTerminalAbort = null;
             }
@@ -2471,6 +2596,10 @@
             let currentClasses = new Set();
             let lastIndex = 0;
             
+            // First, clean up any malformed ANSI sequences (missing escape char)
+            // Replace [<codes>m with proper \x1b[<codes>m if not already escaped
+            text = text.replace(/(?<!\x1b)\[([0-9;]+)m/g, '\x1b[$1m');
+            
             // Match ANSI escape sequences: ESC [ <codes> m
             const ansiRegex = /\x1b\[([0-9;]+)m/g;
             let match;
@@ -2538,7 +2667,7 @@
                 line.className = 'terminal-line terminal-success';
                 line.textContent = text;
             } else if (type === 'raw') {
-                // Raw output - parse ANSI colors and render with proper styling
+                // Raw output with ANSI colors
                 line.innerHTML = parseAnsiColors(text);
             } else {
                 // Normal output - preserve whitespace
@@ -2549,8 +2678,59 @@
             terminal.scrollTop = terminal.scrollHeight;
         }
 
+        // Buffer for incomplete ANSI sequences across chunks
+        let terminalOutputBuffer = '';
+
+        function addTerminalRawOutput(text) {
+            const terminal = document.getElementById('terminalOutput');
+            
+            // Combine with any buffered text from previous chunk
+            text = terminalOutputBuffer + text;
+            
+            // Split by newlines
+            const lines = text.split('\n');
+            
+            // Keep the last line (might be incomplete) in buffer
+            terminalOutputBuffer = lines.pop() || '';
+            
+            // Process complete lines
+            lines.forEach((lineText) => {
+                const line = document.createElement('div');
+                line.className = 'terminal-line';
+                line.innerHTML = parseAnsiColors(lineText);
+                terminal.appendChild(line);
+            });
+            
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        // Flush any remaining buffer content (call this when command completes)
+        function flushTerminalBuffer() {
+            if (terminalOutputBuffer) {
+                const terminal = document.getElementById('terminalOutput');
+                const line = document.createElement('div');
+                line.className = 'terminal-line';
+                line.innerHTML = parseAnsiColors(terminalOutputBuffer);
+                terminal.appendChild(line);
+                terminalOutputBuffer = '';
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
         // Initialize
         window.addEventListener('DOMContentLoaded', () => {
+            // Restore active tab
+            const savedTab = localStorage.getItem('offgrid_active_tab');
+            if (savedTab && document.getElementById('tab-' + savedTab)) {
+                switchTab(savedTab);
+            } else {
+                switchTab('chat');
+            }
+            
+            // Load saved messages
+            loadMessages();
+            
+            // Load chat models
             loadChatModels();
         });
     </script>

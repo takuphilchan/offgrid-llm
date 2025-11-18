@@ -209,6 +209,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/catalog", s.handleModelCatalog)
 	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
 	mux.HandleFunc("/v1/terminal/exec", s.handleTerminalExec)
+	mux.HandleFunc("/v1/terminal/exec/stream", s.handleTerminalExecStream)
 
 	// Templates endpoints
 	mux.HandleFunc("/v1/templates", s.handleTemplates)
@@ -232,6 +233,7 @@ func (s *Server) Start() error {
 
 	// Simplified UI endpoints (no /v1 prefix for easier frontend access)
 	mux.HandleFunc("/models", s.handleListModels)
+	mux.HandleFunc("/models/refresh", s.handleRefreshModels)
 	mux.HandleFunc("/catalog", s.handleModelCatalog)
 
 	// Web UI - serve HTML/CSS/JS
@@ -274,20 +276,19 @@ func (s *Server) Start() error {
 	)
 
 	fmt.Println()
-	fmt.Printf("%s┌─%s OffGrid LLM Server\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s Server:  http://localhost:%d\n", colorCyan, colorReset, s.config.ServerPort)
-	fmt.Printf("%s│%s Web UI:  http://localhost:%d/ui/\n", colorCyan, colorReset, s.config.ServerPort)
-	fmt.Printf("%s│%s Health:  http://localhost:%d/health\n", colorCyan, colorReset, s.config.ServerPort)
-	fmt.Printf("%s│%s\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s OpenAI-Compatible API Endpoints:\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s   POST /v1/chat/completions\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s   POST /v1/completions\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s   POST /v1/embeddings\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s   GET  /v1/models\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s\n", colorCyan, colorReset)
-	fmt.Printf("%s│%s %s[OK]%s Server ready on port %d\n", colorCyan, colorReset, colorGreen, colorReset, s.config.ServerPort)
-	fmt.Printf("%s└─%s\n", colorCyan, colorReset)
+	fmt.Printf("%sOffGrid LLM Server%s\n", colorCyan, colorReset)
+	fmt.Println()
+	fmt.Printf("Server:  http://localhost:%d\n", s.config.ServerPort)
+	fmt.Printf("Web UI:  http://localhost:%d/ui/\n", s.config.ServerPort)
+	fmt.Printf("Health:  http://localhost:%d/health\n", s.config.ServerPort)
+	fmt.Println()
+	fmt.Printf("OpenAI-Compatible API Endpoints:\n")
+	fmt.Printf("  POST /v1/chat/completions\n")
+	fmt.Printf("  POST /v1/completions\n")
+	fmt.Printf("  POST /v1/embeddings\n")
+	fmt.Printf("  GET  /v1/models\n")
+	fmt.Println()
+	fmt.Printf("%s[OK]%s Server ready on port %d\n", colorGreen, colorReset, s.config.ServerPort)
 	fmt.Println()
 
 	if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
@@ -550,6 +551,34 @@ func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	models := s.registry.ListModels()
+	response := api.ModelListResponse{
+		Object: "list",
+		Data:   models,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleRefreshModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Rescan models directory
+	if err := s.registry.ScanModels(); err != nil {
+		log.Printf("Error scanning models: %v", err)
+		http.Error(w, "Failed to refresh models", http.StatusInternalServerError)
+		return
+	}
+
+	// Return updated model list
 	models := s.registry.ListModels()
 	response := api.ModelListResponse{
 		Object: "list",
@@ -1124,6 +1153,142 @@ func (s *Server) handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+}
+
+// handleTerminalExecStream executes offgrid commands with real-time streaming output
+func (s *Server) handleTerminalExecStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Command string   `json:"command"`
+		Args    []string `json:"args"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Security: Only allow offgrid commands
+	if req.Command != "offgrid" {
+		http.Error(w, "Only 'offgrid' commands are allowed", http.StatusForbidden)
+		return
+	}
+
+	// Find offgrid binary
+	offgridPath, err := exec.LookPath("offgrid")
+	if err != nil {
+		http.Error(w, "offgrid binary not found in PATH", http.StatusInternalServerError)
+		return
+	}
+
+	// Set up Server-Sent Events
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	// Execute command
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, offgridPath, req.Args...)
+
+	// Create pipes for stdout and stderr
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		sendSSE(w, flusher, "error", fmt.Sprintf("Failed to create stdout pipe: %v", err))
+		return
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		sendSSE(w, flusher, "error", fmt.Sprintf("Failed to create stderr pipe: %v", err))
+		return
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		sendSSE(w, flusher, "error", fmt.Sprintf("Failed to start command: %v", err))
+		return
+	}
+
+	// Channel to signal completion
+	done := make(chan bool)
+
+	// Stream stdout
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdoutPipe.Read(buf)
+			if n > 0 {
+				sendSSE(w, flusher, "output", string(buf[:n]))
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// Stream stderr
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderrPipe.Read(buf)
+			if n > 0 {
+				sendSSE(w, flusher, "output", string(buf[:n]))
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// Wait for command to complete
+	go func() {
+		defer close(done)
+		err := cmd.Wait()
+		exitCode := 0
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				exitCode = exitErr.ExitCode()
+			} else {
+				exitCode = 1
+			}
+		}
+		sendSSE(w, flusher, "exit", fmt.Sprintf("%d", exitCode))
+	}()
+
+	// Wait for completion or client disconnect
+	select {
+	case <-done:
+		// Command finished
+	case <-r.Context().Done():
+		// Client disconnected
+		cmd.Process.Kill()
+	}
+}
+
+// sendSSE sends a Server-Sent Event with the given event type and data
+func sendSSE(w http.ResponseWriter, flusher http.Flusher, eventType, data string) {
+	// SSE format: multi-line data must have each line prefixed with "data: "
+	// Split by newlines and prefix each line
+	fmt.Fprintf(w, "event: %s\n", eventType)
+	lines := strings.Split(data, "\n")
+	for _, line := range lines {
+		fmt.Fprintf(w, "data: %s\n", line)
+	}
+	fmt.Fprintf(w, "\n")
+	flusher.Flush()
 }
 
 // handleDownloadModel downloads a model from HuggingFace

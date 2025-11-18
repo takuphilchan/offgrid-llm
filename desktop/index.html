@@ -807,7 +807,7 @@
                     </div>
                 </div>
                 <div class="terminal-output scrollable" id="terminalOutput">
-                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.2.0</div>
                     <div class="terminal-line">Connected to real offgrid binary</div>
                     <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
                 </div>
@@ -1087,19 +1087,22 @@
             console.log('[MODEL CHANGE] Current message count:', messages.length);
             if (messages.length > 0) {
                 console.log('[MODEL CHANGE] Showing confirmation dialog...');
-                const shouldClear = confirm(
-                    `Switching from ${oldModel || 'no model'} to ${newModel}.\n\n` +
-                    `Clear chat history? The new model won't have context from previous messages.\n\n` +
-                    `Click OK to start fresh, or Cancel to keep history.`
-                );
-                
-                console.log('[MODEL CHANGE] User response:', shouldClear ? 'CLEAR' : 'KEEP');
-                if (shouldClear) {
-                    console.log('[MODEL CHANGE] Clearing chat history');
-                    clearChatSilent();
-                } else {
-                    console.log('[MODEL CHANGE] Keeping chat history');
-                }
+                showModal({
+                    type: 'warning',
+                    title: 'Clear Chat History?',
+                    message: `Switching from <strong>${oldModel || 'no model'}</strong> to <strong>${newModel}</strong>.<br><br>Clear chat history? The new model won't have context from previous messages.`,
+                    confirmText: 'Start Fresh',
+                    cancelText: 'Keep History',
+                    onConfirm: () => {
+                        console.log('[MODEL CHANGE] User response: CLEAR');
+                        console.log('[MODEL CHANGE] Clearing chat history');
+                        clearChatSilent();
+                    },
+                    onCancel: () => {
+                        console.log('[MODEL CHANGE] User response: KEEP');
+                        console.log('[MODEL CHANGE] Keeping chat history');
+                    }
+                });
             } else {
                 console.log('[MODEL CHANGE] No messages, skipping confirmation');
             }
@@ -2015,22 +2018,45 @@
 
         // Remove model
         async function removeModel(modelId) {
-            const container = document.getElementById('installedModels');
-            const confirmDiv = document.createElement('div');
-            confirmDiv.className = 'card mb-4';
-            confirmDiv.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)';
-            confirmDiv.style.border = '1px solid rgba(239, 68, 68, 0.5)';
-            confirmDiv.innerHTML = `
-                <div class="text-center">
-                    <p class="text-red-400 font-semibold mb-3">⚠ Remove Model?</p>
-                    <p class="text-sm mb-4">Are you sure you want to remove <span class="font-semibold">${modelId}</span>?</p>
-                    <div class="flex gap-2 justify-center">
-                        <button onclick="confirmRemoveModel('${modelId.replace(/'/g, "\\'")}')">Remove</button>
-                        <button onclick="this.closest('.card').remove()" class="btn btn-secondary btn-sm">Cancel</button>
-                    </div>
-                </div>
-            `;
-            container.insertBefore(confirmDiv, container.firstChild);
+            showModal({
+                type: 'error',
+                title: 'Remove Model?',
+                message: `Are you sure you want to remove <strong>${modelId}</strong>?<br><br>This will delete the model file from your system.`,
+                confirmText: 'Remove',
+                cancelText: 'Cancel',
+                onConfirm: () => {
+                    confirmRemoveModel(modelId);
+                }
+            });
+        }
+
+        // Execute the actual removal via terminal
+        async function confirmRemoveModel(modelId) {
+            try {
+                // Switch to terminal tab to show progress
+                switchTab('terminal');
+                
+                // Execute remove command
+                const input = document.getElementById('terminalInput');
+                input.value = `offgrid remove ${modelId} --yes`;
+                
+                // Trigger the command
+                const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13 });
+                input.dispatchEvent(event);
+                
+                // Refresh models list after a delay
+                setTimeout(() => {
+                    loadInstalledModels();
+                    loadChatModels();
+                }, 2000);
+            } catch (error) {
+                showModal({
+                    type: 'error',
+                    title: 'Remove Failed',
+                    message: `Failed to remove model: ${error.message}`,
+                    confirmText: 'OK'
+                });
+            }
         }
 
         // USB Import/Export Functions
@@ -2103,7 +2129,7 @@
         // Terminal commands
         function clearTerminal() {
             document.getElementById('terminalOutput').innerHTML = `
-                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.2</div>
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.2.0</div>
                 <div class="terminal-line">Connected to real offgrid binary</div>
                 <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
             `;
@@ -2283,8 +2309,8 @@
             currentTerminalAbort = new AbortController();
             
             try {
-                // Execute real offgrid command via backend
-                const resp = await fetch('/v1/terminal/exec', {
+                // Execute real offgrid command via streaming endpoint for real-time output
+                const resp = await fetch('/v1/terminal/exec/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2296,33 +2322,61 @@
 
                 if (!resp.ok) {
                     addTerminalOutput(`Command failed: HTTP ${resp.status}`, 'error');
+                    resetTerminalState();
                     return;
                 }
 
-                const data = await resp.json();
-                
-                if (data.error) {
-                    addTerminalOutput(`Error: ${data.error}`, 'error');
-                    return;
-                }
+                // Read streaming response
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let exitCode = 0;
 
-                // Display the actual command output
-                const output = data.output || '';
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, {stream: true});
+                    
+                    // Process complete SSE events
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // Keep incomplete event in buffer
+
+                    for (const event of lines) {
+                        if (!event.trim()) continue;
+                        
+                        // Parse SSE format: "event: type\ndata: line1\ndata: line2\n..."
+                        const eventLines = event.split('\n');
+                        let eventType = '';
+                        const dataLines = [];
+                        
+                        for (const eLine of eventLines) {
+                            if (eLine.startsWith('event:')) {
+                                eventType = eLine.substring(6).trim();
+                            } else if (eLine.startsWith('data:')) {
+                                dataLines.push(eLine.substring(5).trim());
+                            }
+                        }
+                        
+                        if (!eventType) continue;
+                        
+                        const data = dataLines.join('\n');
+                        
+                        if (eventType === 'output') {
+                            // Display output in real-time
+                            if (data) addTerminalRawOutput(data);
+                        } else if (eventType === 'exit') {
+                            exitCode = parseInt(data);
+                        } else if (eventType === 'error') {
+                            addTerminalOutput(`Error: ${data}`, 'error');
+                        }
+                    }
+                }
                 
                 // Special handling for 'run' command - enable terminal chat mode
                 const subcmd = args[0];
-                if (subcmd === 'run' && args.length > 1) {
+                if (subcmd === 'run' && args.length > 1 && exitCode === 0) {
                     const modelName = args.slice(1).join(' ');
-                    
-                    // Display output with ANSI parsing
-                    if (output) {
-                        const lines = output.split('\n');
-                        lines.forEach(line => {
-                            if (line.trim()) {
-                                addTerminalOutput(line, 'raw');
-                            }
-                        });
-                    }
                     
                     // Enable chat mode
                     terminalChatMode = true;
@@ -2332,22 +2386,10 @@
                     addTerminalOutput('Chat mode enabled. Type your messages below.', 'success');
                     addTerminalOutput('Commands: "exit" to quit, "clear" to reset screen', 'success');
                     addTerminalOutput('> ', 'success');
-                    
-                    resetTerminalState();
-                    currentTerminalAbort = null;
-                    return;
-                }
-                
-                if (output) {
-                    // Output exactly as received from server - no modifications
-                    const lines = output.split('\n');
-                    lines.forEach(line => {
-                        addTerminalOutput(line, 'raw');
-                    });
                 }
 
-                if (data.exitCode !== 0 && !output) {
-                    addTerminalOutput(`Command exited with code ${data.exitCode}`, 'error');
+                if (exitCode !== 0) {
+                    addTerminalOutput(`Command exited with code ${exitCode}`, 'error');
                 }
 
                 // Refresh UI after certain commands
@@ -2538,7 +2580,7 @@
                 line.className = 'terminal-line terminal-success';
                 line.textContent = text;
             } else if (type === 'raw') {
-                // Raw output - parse ANSI colors and render with proper styling
+                // Raw output with ANSI colors
                 line.innerHTML = parseAnsiColors(text);
             } else {
                 // Normal output - preserve whitespace
@@ -2546,6 +2588,24 @@
             }
             
             terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function addTerminalRawOutput(text) {
+            const terminal = document.getElementById('terminalOutput');
+            
+            // Split by newlines and add each as a separate line with ANSI color parsing
+            const lines = text.split('\n');
+            lines.forEach((lineText, index) => {
+                // Skip empty lines at the end (but keep empty lines in the middle)
+                if (index === lines.length - 1 && lineText === '') return;
+                
+                const line = document.createElement('div');
+                line.className = 'terminal-line';
+                line.innerHTML = parseAnsiColors(lineText);
+                terminal.appendChild(line);
+            });
+            
             terminal.scrollTop = terminal.scrollHeight;
         }
 
