@@ -101,9 +101,13 @@ type GGUFFileInfo struct {
 
 // NewHuggingFaceClient creates a new HuggingFace API client
 func NewHuggingFaceClient() *HuggingFaceClient {
+	// Use default transport which respects HTTP_PROXY, HTTPS_PROXY, NO_PROXY env vars
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+
 	return &HuggingFaceClient{
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 		baseURL: "https://huggingface.co/api",
 	}
