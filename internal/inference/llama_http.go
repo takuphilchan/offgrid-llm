@@ -51,22 +51,9 @@ func NewLlamaHTTPEngine(llamaServerURL string) *LlamaHTTPEngine {
 func (e *LlamaHTTPEngine) Load(ctx context.Context, modelPath string, opts LoadOptions) error {
 	e.modelPath = modelPath
 
-	// Check if llama-server is healthy
-	req, err := http.NewRequestWithContext(ctx, "GET", e.baseURL+"/health", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create health check request: %w", err)
-	}
-
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("llama-server not responding at %s: %w (make sure llama-server is running)", e.baseURL, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("llama-server health check failed with status %d", resp.StatusCode)
-	}
-
+	// Don't check health here - let the actual chat request handle retries
+	// The model cache already waits for server to start, and chat requests
+	// have retry logic for 503 errors during model loading
 	e.loaded = true
 	return nil
 }

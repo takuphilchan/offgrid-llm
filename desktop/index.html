@@ -1598,7 +1598,16 @@
                 } else {
                     const errorMsg = error.message || 'Unknown error occurred';
                     console.error('Chat error:', error);
-                    addChatMessage('assistant', `⚠ Error: ${errorMsg}\n\nPlease check if the model is loaded and the server is running properly.`, startTime);
+                    
+                    // Better error messages for common issues
+                    let userMessage = `⚠ Error: ${errorMsg}`;
+                    if (errorMsg.includes('503') || errorMsg.includes('Failed to load model')) {
+                        userMessage = `⚠ Model is taking longer than expected to load.\n\nThis can happen on slower systems. Please try again in a few moments.`;
+                    } else if (errorMsg.includes('500')) {
+                        userMessage = `⚠ Server error occurred.\n\nThe model may still be loading. Please wait a moment and try again.`;
+                    }
+                    
+                    addChatMessage('assistant', userMessage, startTime);
                     statusBadge.className = 'text-xs font-medium text-red-400';
                     statusBadge.textContent = 'Error';
                 }
