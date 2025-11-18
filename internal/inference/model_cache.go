@@ -25,11 +25,11 @@ type ModelInstance struct {
 // ModelCache manages multiple llama-server instances for fast model switching
 type ModelCache struct {
 	instances    map[string]*ModelInstance // modelID -> instance
-	portPool     []int                     // available ports
+	portToModel  map[int]string            // port -> modelID for reverse lookup
+	usedPorts    map[int]bool              // track which ports are in use
 	maxInstances int
 	mu           sync.RWMutex
 	basePort     int
-	nextPortIdx  int
 }
 
 // NewModelCache creates a new model cache with specified capacity
@@ -41,18 +41,12 @@ func NewModelCache(maxInstances int) *ModelCache {
 		maxInstances = 10 // Safety limit
 	}
 
-	// Create port pool starting from 42382
-	portPool := make([]int, maxInstances)
-	for i := 0; i < maxInstances; i++ {
-		portPool[i] = 42382 + i
-	}
-
 	return &ModelCache{
 		instances:    make(map[string]*ModelInstance),
-		portPool:     portPool,
+		portToModel:  make(map[int]string),
+		usedPorts:    make(map[int]bool),
 		maxInstances: maxInstances,
 		basePort:     42382,
-		nextPortIdx:  0,
 	}
 }
 
@@ -77,7 +71,11 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, erro
 	}
 
 	// Get next available port
-	port := mc.getNextPort()
+	port := mc.getNextAvailablePort()
+
+	// Mark port as used
+	mc.usedPorts[port] = true
+	mc.portToModel[port] = modelID
 
 	// Start llama-server with this model
 	log.Printf("Loading model %s on port %d (cache: %d/%d)", modelID, port, len(mc.instances)+1, mc.maxInstances)
@@ -90,6 +88,10 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, erro
 	)
 
 	cmd.Env = append(cmd.Env, "NO_PROXY=*")
+
+	// Suppress output to reduce noise
+	cmd.Stdout = nil
+	cmd.Stderr = nil
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start llama-server: %w", err)
@@ -107,8 +109,13 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, erro
 	// Wait for model to be ready
 	if err := mc.waitForReady(port); err != nil {
 		// Cleanup on failure
-		cmd.Process.Kill()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}
 		delete(mc.instances, modelID)
+		delete(mc.portToModel, port)
+		delete(mc.usedPorts, port)
 		return nil, err
 	}
 
@@ -149,11 +156,18 @@ func (mc *ModelCache) Unload(modelID string) error {
 		if err := instance.Cmd.Process.Kill(); err != nil {
 			log.Printf("Warning: error killing llama-server for %s: %v", modelID, err)
 		}
+		// Wait for process to fully terminate
 		instance.Cmd.Wait()
+		// Give port time to be released
+		time.Sleep(500 * time.Millisecond)
 	}
 
+	// Clean up tracking maps
 	delete(mc.instances, modelID)
-	log.Printf("Model %s unloaded from cache", modelID)
+	delete(mc.portToModel, instance.Port)
+	delete(mc.usedPorts, instance.Port)
+
+	log.Printf("Model %s unloaded from cache (port %d released)", modelID, instance.Port)
 	return nil
 }
 
@@ -167,11 +181,16 @@ func (mc *ModelCache) UnloadAll() {
 	}
 }
 
-// getNextPort returns the next available port from the pool
-func (mc *ModelCache) getNextPort() int {
-	port := mc.portPool[mc.nextPortIdx]
-	mc.nextPortIdx = (mc.nextPortIdx + 1) % len(mc.portPool)
-	return port
+// getNextAvailablePort finds an available port that's not currently in use
+func (mc *ModelCache) getNextAvailablePort() int {
+	for i := 0; i < mc.maxInstances; i++ {
+		port := mc.basePort + i
+		if !mc.usedPorts[port] {
+			return port
+		}
+	}
+	// Fallback - reuse first port (shouldn't happen if eviction works)
+	return mc.basePort
 }
 
 // waitForReady waits for llama-server to be ready on specified port
