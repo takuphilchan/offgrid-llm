@@ -228,10 +228,8 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 		}
 
 		// Apply size filters
-		totalSize := int64(0)
 		filteredFiles := make([]GGUFFileInfo, 0)
 		for _, file := range ggufFiles {
-			totalSize += file.Size
 			if filter.MaxSize > 0 && file.Size > filter.MaxSize {
 				continue
 			}
@@ -248,6 +246,12 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 
 		if len(filteredFiles) == 0 {
 			continue
+		}
+
+		// Calculate total size AFTER filtering
+		totalSize := int64(0)
+		for _, file := range filteredFiles {
+			totalSize += file.Size
 		}
 
 		// Calculate relevance score
