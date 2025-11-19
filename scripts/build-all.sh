@@ -5,8 +5,14 @@
 set -e
 
 # Build script for all platforms
-VERSION="0.1.6"
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Read version from VERSION file
+VERSION=$(cat "$PROJECT_ROOT/VERSION" | tr -d '\n\r ')
+if [ -z "$VERSION" ]; then
+    VERSION="dev"
+fi
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'

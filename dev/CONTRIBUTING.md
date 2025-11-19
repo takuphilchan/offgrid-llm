@@ -129,8 +129,8 @@ The project uses GitHub Actions to automatically build releases:
 
 ```bash
 # Create a new release
-git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin v0.2.0
+git tag -a v0.1.6 -m "Release v0.1.6"
+git push origin v0.1.6
 ```
 
 This triggers `.github/workflows/release.yml` which:

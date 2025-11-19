@@ -1,0 +1,92 @@
+# Nginx Configuration for OffGrid LLM
+# Place this file as: nginx.conf
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # Logging
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    # Upstream OffGrid server
+    upstream offgrid {
+        server offgrid:11611;
+    }
+
+    # HTTP to HTTPS redirect
+    server {
+        listen 80;
+        server_name your-domain.com;
+        
+        location / {
+            return 301 https://$server_name$request_uri;
+        }
+    }
+
+    # HTTPS server
+    server {
+        listen 443 ssl http2;
+        server_name your-domain.com;
+
+        # SSL certificates (use Let's Encrypt or self-signed)
+        ssl_certificate /etc/nginx/certs/cert.pem;
+        ssl_certificate_key /etc/nginx/certs/key.pem;
+
+        # SSL configuration
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
+
+        # Security headers
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        # Client max body size (for large model uploads)
+        client_max_body_size 10G;
+
+        # Timeouts for long-running LLM requests
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+
+        # Proxy to OffGrid backend
+        location / {
+            proxy_pass http://offgrid;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # WebSocket support for streaming responses
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+
+            # Disable buffering for streaming
+            proxy_buffering off;
+            proxy_cache off;
+        }
+
+        # Health check endpoint (no auth required)
+        location /health {
+            proxy_pass http://offgrid/health;
+            access_log off;
+        }
+
+        # Optional: Rate limiting
+        # limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+        # location /v1/ {
+        #     limit_req zone=api_limit burst=20 nodelay;
+        #     proxy_pass http://offgrid;
+        # }
+    }
+}

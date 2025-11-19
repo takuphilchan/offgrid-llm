@@ -1,0 +1,48 @@
+# Docker Compose - GPU Optimized Configuration
+# For systems with NVIDIA GPUs
+
+version: '3.8'
+
+services:
+  offgrid-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: offgrid-llm:latest
+    container_name: offgrid-llm-gpu
+    restart: unless-stopped
+    ports:
+      - "11611:11611"
+    volumes:
+      - offgrid-models:/var/lib/offgrid/models
+      - offgrid-data:/var/lib/offgrid/data
+    environment:
+      - OFFGRID_PORT=11611
+      - OFFGRID_HOST=0.0.0.0
+      - OFFGRID_MODELS_DIR=/var/lib/offgrid/models
+      - OFFGRID_GPU_LAYERS=35  # Adjust based on your GPU VRAM
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 16G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11611/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  offgrid-models:
+    driver: local
+  offgrid-data:
+    driver: local
+
+networks:
+  default:
+    name: offgrid-network

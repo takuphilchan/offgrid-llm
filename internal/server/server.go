@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -226,6 +227,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/usb/import", s.handleUSBImport)
 	mux.HandleFunc("/v1/usb/export", s.handleUSBExport)
 	mux.HandleFunc("/v1/usb/export/progress", s.handleExportProgress)
+	mux.HandleFunc("/v1/filesystem/browse", s.handleFilesystemBrowse)
+	mux.HandleFunc("/v1/filesystem/common-paths", s.handleCommonPaths)
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
@@ -369,7 +372,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.6","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.7","status":"running"}`)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -1884,7 +1887,7 @@ func (s *Server) handleUSBImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		FilePaths []string `json:"file_paths"`
+		Path string `json:"path"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1892,42 +1895,35 @@ func (s *Server) handleUSBImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.FilePaths) == 0 {
-		writeError(w, "file_paths is required", http.StatusBadRequest)
+	if req.Path == "" {
+		writeError(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify path exists
+	if _, err := os.Stat(req.Path); os.IsNotExist(err) {
+		writeError(w, fmt.Sprintf("Path does not exist: %s", req.Path), http.StatusBadRequest)
 		return
 	}
 
 	importer := models.NewUSBImporter(s.config.ModelsDir, s.registry)
 
-	type ImportResult struct {
-		FileName string `json:"file_name"`
-		Success  bool   `json:"success"`
-		Error    string `json:"error,omitempty"`
+	// Import all models from the USB path
+	imported, err := importer.ImportAll(req.Path, nil)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Import failed: %v", err), http.StatusInternalServerError)
+		return
 	}
 
-	results := []ImportResult{}
-
-	for _, path := range req.FilePaths {
-		fileName := filepath.Base(path)
-		err := importer.ImportModel(path, nil)
-
-		if err != nil {
-			results = append(results, ImportResult{
-				FileName: fileName,
-				Success:  false,
-				Error:    err.Error(),
-			})
-		} else {
-			results = append(results, ImportResult{
-				FileName: fileName,
-				Success:  true,
-			})
-		}
+	// Rescan models to update registry
+	if err := s.registry.ScanModels(); err != nil {
+		fmt.Printf("Warning: failed to rescan models: %v\n", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"results": results,
+		"imported_count": imported,
+		"status":         "success",
 	})
 }
 
@@ -1939,8 +1935,7 @@ func (s *Server) handleUSBExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		ModelNames []string `json:"model_names"`
-		USBPath    string   `json:"usb_path"`
+		Path string `json:"path"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1948,29 +1943,41 @@ func (s *Server) handleUSBExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.ModelNames) == 0 {
-		writeError(w, "model_names is required", http.StatusBadRequest)
-		return
-	}
-
-	if req.USBPath == "" {
-		writeError(w, "usb_path is required", http.StatusBadRequest)
+	if req.Path == "" {
+		writeError(w, "path is required", http.StatusBadRequest)
 		return
 	}
 
 	// Verify USB path exists
-	if _, err := os.Stat(req.USBPath); os.IsNotExist(err) {
-		writeError(w, fmt.Sprintf("USB path does not exist: %s", req.USBPath), http.StatusBadRequest)
+	if _, err := os.Stat(req.Path); os.IsNotExist(err) {
+		writeError(w, fmt.Sprintf("Path does not exist: %s", req.Path), http.StatusBadRequest)
 		return
 	}
 
-	// Start export in background
-	go s.exportModelsAsync(req.ModelNames, req.USBPath)
+	exporter := models.NewUSBExporter(s.config.ModelsDir, s.registry)
+
+	// Export all models
+	exported, err := exporter.ExportAll(req.Path, nil)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Export failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate total size
+	var totalSize int64
+	models := s.registry.ListModels()
+	for _, model := range models {
+		meta, err := s.registry.GetModel(model.ID)
+		if err == nil && meta != nil {
+			totalSize += meta.Size
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "started",
-		"count":  len(req.ModelNames),
+		"exported_count": exported,
+		"total_size_gb":  float64(totalSize) / (1024 * 1024 * 1024),
+		"status":         "success",
 	})
 }
 
@@ -2222,4 +2229,233 @@ func (s *Server) handleTemplateDetails(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+}
+
+// handleFilesystemBrowse allows browsing the filesystem for path selection
+func (s *Server) handleFilesystemBrowse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Default to user's home directory if no path provided
+	browsePath := req.Path
+	if browsePath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			browsePath = "/"
+		} else {
+			browsePath = homeDir
+		}
+	}
+
+	// Clean the path
+	browsePath = filepath.Clean(browsePath)
+
+	// Check if path exists
+	info, err := os.Stat(browsePath)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Path does not exist: %s", browsePath), http.StatusBadRequest)
+		return
+	}
+
+	// If it's a file, use its directory
+	if !info.IsDir() {
+		browsePath = filepath.Dir(browsePath)
+	}
+
+	// Read directory contents
+	entries, err := os.ReadDir(browsePath)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Cannot read directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	type FileEntry struct {
+		Name        string `json:"name"`
+		Path        string `json:"path"`
+		IsDirectory bool   `json:"is_directory"`
+		Size        int64  `json:"size,omitempty"`
+		ModTime     string `json:"mod_time,omitempty"`
+		IsHidden    bool   `json:"is_hidden"`
+	}
+
+	var files []FileEntry
+	var dirs []FileEntry
+
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		name := entry.Name()
+		fullPath := filepath.Join(browsePath, name)
+		isHidden := strings.HasPrefix(name, ".")
+
+		fileEntry := FileEntry{
+			Name:        name,
+			Path:        fullPath,
+			IsDirectory: entry.IsDir(),
+			Size:        info.Size(),
+			ModTime:     info.ModTime().Format("2006-01-02 15:04:05"),
+			IsHidden:    isHidden,
+		}
+
+		if entry.IsDir() {
+			dirs = append(dirs, fileEntry)
+		} else {
+			files = append(files, fileEntry)
+		}
+	}
+
+	// Get parent directory
+	parentDir := filepath.Dir(browsePath)
+	if parentDir == browsePath {
+		parentDir = "" // At root
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"current_path": browsePath,
+		"parent_path":  parentDir,
+		"directories":  dirs,
+		"files":        files,
+	})
+}
+
+// handleCommonPaths returns common mount points and paths for the current OS
+func (s *Server) handleCommonPaths(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type PathEntry struct {
+		Path        string `json:"path"`
+		Label       string `json:"label"`
+		Description string `json:"description"`
+		Exists      bool   `json:"exists"`
+	}
+
+	var commonPaths []PathEntry
+
+	// Add home directory
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		commonPaths = append(commonPaths, PathEntry{
+			Path:        homeDir,
+			Label:       "Home",
+			Description: "User home directory",
+			Exists:      true,
+		})
+	}
+
+	// Add models directory
+	modelsDir := s.config.ModelsDir
+	_, err := os.Stat(modelsDir)
+	commonPaths = append(commonPaths, PathEntry{
+		Path:        modelsDir,
+		Label:       "Models Directory",
+		Description: "OffGrid models storage",
+		Exists:      err == nil,
+	})
+
+	// Platform-specific common paths
+	if runtime.GOOS == "linux" {
+		// Linux USB mount points
+		mediaPaths := []string{"/media", "/mnt", "/run/media"}
+		for _, basePath := range mediaPaths {
+			entries, err := os.ReadDir(basePath)
+			if err == nil {
+				for _, entry := range entries {
+					if entry.IsDir() {
+						fullPath := filepath.Join(basePath, entry.Name())
+						commonPaths = append(commonPaths, PathEntry{
+							Path:        fullPath,
+							Label:       fmt.Sprintf("USB: %s", entry.Name()),
+							Description: fmt.Sprintf("Removable storage at %s", fullPath),
+							Exists:      true,
+						})
+					}
+				}
+			}
+		}
+		// Add common base paths even if empty
+		commonPaths = append(commonPaths, PathEntry{
+			Path:        "/media",
+			Label:       "/media",
+			Description: "Linux media mount point",
+			Exists:      true,
+		})
+		commonPaths = append(commonPaths, PathEntry{
+			Path:        "/mnt",
+			Label:       "/mnt",
+			Description: "Linux mount point",
+			Exists:      true,
+		})
+	} else if runtime.GOOS == "darwin" {
+		// macOS Volumes
+		volumesPath := "/Volumes"
+		entries, err := os.ReadDir(volumesPath)
+		if err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() && entry.Name() != "Macintosh HD" {
+					fullPath := filepath.Join(volumesPath, entry.Name())
+					commonPaths = append(commonPaths, PathEntry{
+						Path:        fullPath,
+						Label:       fmt.Sprintf("Volume: %s", entry.Name()),
+						Description: fmt.Sprintf("Mounted volume at %s", fullPath),
+						Exists:      true,
+					})
+				}
+			}
+		}
+		commonPaths = append(commonPaths, PathEntry{
+			Path:        "/Volumes",
+			Label:       "/Volumes",
+			Description: "macOS volumes directory",
+			Exists:      true,
+		})
+	} else if runtime.GOOS == "windows" {
+		// Windows drive letters
+		for drive := 'C'; drive <= 'Z'; drive++ {
+			drivePath := fmt.Sprintf("%c:\\", drive)
+			if _, err := os.Stat(drivePath); err == nil {
+				label := fmt.Sprintf("Drive %c:", drive)
+				desc := "Local drive"
+				if drive > 'C' {
+					desc = "Removable/External drive"
+				}
+				commonPaths = append(commonPaths, PathEntry{
+					Path:        drivePath,
+					Label:       label,
+					Description: desc,
+					Exists:      true,
+				})
+			}
+		}
+	}
+
+	// Add root
+	commonPaths = append(commonPaths, PathEntry{
+		Path:        "/",
+		Label:       "Root",
+		Description: "System root directory",
+		Exists:      true,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"os":    runtime.GOOS,
+		"paths": commonPaths,
+	})
 }

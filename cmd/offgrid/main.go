@@ -2515,7 +2515,7 @@ func handleInfo() {
 
 	// Human-readable output
 	fmt.Println()
-	fmt.Printf("%sOffGrid LLM %sv0.1.0-alpha%s\n", brandPrimary+colorBold, colorDim, colorReset)
+	fmt.Printf("%sOffGrid LLM %sv0.1.6-alpha%s\n", brandPrimary+colorBold, colorDim, colorReset)
 	fmt.Println("")
 
 	// Configuration

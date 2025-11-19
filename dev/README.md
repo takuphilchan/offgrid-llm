@@ -69,8 +69,8 @@ docker-compose up --build
 The CI/CD pipeline (`.github/workflows/release.yml`) automatically builds releases when you push a tag:
 
 ```bash
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.6
+git push origin v0.1.6
 ```
 
 This creates pre-built binaries for 6 platforms that users can install via the quick installer.

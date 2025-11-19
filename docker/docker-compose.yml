@@ -1,0 +1,69 @@
+# OffGrid LLM - Docker Compose Configuration
+# Quick Start: docker-compose up -d
+# Documentation: See DOCKER_README.md and docs/DOCKER.md
+
+version: '3.8'
+
+services:
+  offgrid:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: offgrid-llm:latest
+    container_name: offgrid-llm
+    restart: unless-stopped
+    ports:
+      - "11611:11611"
+    volumes:
+      # Persist models between container restarts
+      - offgrid-models:/var/lib/offgrid/models
+      # Persist session data
+      - offgrid-data:/var/lib/offgrid/data
+      # Optional: Mount local models directory
+      # - ./models:/var/lib/offgrid/models
+    environment:
+      - OFFGRID_PORT=11611
+      - OFFGRID_HOST=0.0.0.0
+      - OFFGRID_MODELS_DIR=/var/lib/offgrid/models
+      # Optional: Configure GPU layers (0 = CPU only)
+      - OFFGRID_GPU_LAYERS=0
+      # Optional: Enable mock engine for testing
+      # - OFFGRID_MOCK_ENGINE=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11611/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # For GPU support (NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Optional: Add a reverse proxy with SSL
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: offgrid-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "443:443"
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./certs:/etc/nginx/certs:ro
+  #   depends_on:
+  #     - offgrid
+
+volumes:
+  offgrid-models:
+    driver: local
+  offgrid-data:
+    driver: local
+
+networks:
+  default:
+    name: offgrid-network

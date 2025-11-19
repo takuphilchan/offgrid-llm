@@ -23,9 +23,45 @@
 
 ## Installation
 
-### Desktop Application (Docker Desktop-like Experience)
+Choose the method that best fits your needs:
 
-**The easiest way to get started** - includes system tray integration, automatic server management, and a modern UI.
+### Docker (Recommended - 2 minutes)
+
+**Fastest and easiest way to get started** - isolated, production-ready deployment.
+
+```bash
+# Quick start
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm
+cd docker && docker-compose up -d
+
+# Access UI
+open http://localhost:11611/ui/
+```
+
+**With NVIDIA GPU:**
+```bash
+cd docker && docker-compose -f docker-compose.gpu.yml up -d
+```
+
+**Production deployment with SSL and monitoring:**
+```bash
+cd docker && docker-compose -f docker-compose.prod.yml up -d
+```
+
+**Why Docker?**
+- No dependency conflicts
+- Easy updates and rollbacks
+- Portable across systems
+- Production-ready in minutes
+
+**See [docs/DOCKER.md](docs/DOCKER.md) for complete Docker documentation.**
+
+---
+
+### Desktop App (Best UI Experience)
+
+**Best for non-technical users** - includes system tray integration, automatic server management, and modern UI.
 
 **Linux/macOS:**
 ```bash
@@ -44,16 +80,16 @@ irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/d
 - Bundled CLI binary (no separate installation)
 - Native installers for each platform
 
-See [DESKTOP_INSTALL.md](DESKTOP_INSTALL.md) for detailed desktop app documentation.
+See [desktop/DESKTOP_INSTALL.md](desktop/DESKTOP_INSTALL.md) for detailed desktop app documentation.
 
 ---
 
-### CLI Installation (Command Line)
+### CLI Installation (Full Control)
 
 **Copy and paste this command into your terminal:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
 ```
 
 **What happens:**
@@ -69,7 +105,9 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 
 **Start without asking:**
 ```bash
-AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
+**Install with auto-start enabled:**
+```bash
+AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh)
 ```
 
 ---
@@ -209,23 +247,31 @@ offgrid-llm/
 
 ## Documentation
 
-**[Complete Documentation](docs/README.md)**
+**[📚 Complete Documentation](docs/README.md)**
 
 **Getting Started:**
-- [Installation Guide](docs/INSTALLATION.md)
-- [CLI Reference](docs/CLI_REFERENCE.md)
-- [API Reference](docs/API.md)
-- [4GB RAM Guide](docs/4GB_RAM.md) - Run AI on budget hardware
-- [CPU Optimization](docs/CPU_OPTIMIZATION.md) - Best performance without GPU
+- [Quick Start Guide](docs/QUICKSTART.md) - Get running in 5 minutes
+- [Docker Deployment](docs/DOCKER.md) - Complete Docker guide  
+- [📥 Installation Guide](docs/INSTALLATION.md) - Detailed installation
+- [🎯 Model Setup](docs/guides/MODEL_SETUP.md) - Choosing and downloading models
 
 **User Guides:**
-- [Features Overview](docs/guides/FEATURES_GUIDE.md)
-- [Model Setup](docs/guides/MODEL_SETUP.md)
-- [Embeddings](docs/guides/EMBEDDINGS_GUIDE.md)
+- [🔌 API Reference](docs/API.md) - OpenAI-compatible endpoints
+- [💾 Features Guide](docs/guides/FEATURES_GUIDE.md) - All features explained (includes USB transfer)
 - [HuggingFace Integration](docs/guides/HUGGINGFACE_INTEGRATION.md)
+- [Embeddings Guide](docs/guides/EMBEDDINGS_GUIDE.md)
+- [CLI Reference](docs/CLI_REFERENCE.md)
 
-**Advanced:**
-- [Architecture](docs/advanced/ARCHITECTURE.md)
+**System Configuration:**
+- [💻 4GB RAM Guide](docs/4GB_RAM.md) - Run AI on budget hardware
+- [CPU Optimization](docs/CPU_OPTIMIZATION.md) - Best performance without GPU
+- [Auto-Start Setup](docs/AUTO_START.md) - Systemd service
+
+**Advanced Topics:**
+- [Architecture](docs/advanced/ARCHITECTURE.md) - System design
+- [Performance Tuning](docs/advanced/PERFORMANCE.md) - Optimize speed
+- [Production Deployment](docs/advanced/DEPLOYMENT.md) - Scale and monitor
+- [🔨 Building from Source](docs/advanced/BUILDING.md) - Compile with GPU support
 - [Building from Source](docs/advanced/BUILDING.md)
 - [Deployment](docs/advanced/DEPLOYMENT.md)
 - [Performance Tuning](docs/advanced/PERFORMANCE.md)

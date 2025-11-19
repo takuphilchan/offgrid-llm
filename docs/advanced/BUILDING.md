@@ -163,10 +163,10 @@ CLI bundles are created by the GitHub Actions workflow. See `.github/workflows/r
 
 ```bash
 # Tag the release
-git tag -a v0.1.0 -m "Release v0.1.0"
+git tag -a v0.1.6 -m "Release v0.1.6"
 
 # Push tag to trigger workflow
-git push origin v0.1.0
+git push origin v0.1.6
 ```
 
 This automatically:
@@ -181,7 +181,7 @@ This automatically:
 From GitHub:
 1. Go to Actions --> Release Build
 2. Click "Run workflow"
-3. Enter version (e.g., `v0.1.0`)
+3. Enter version (e.g., `v0.1.6`)
 4. Click "Run workflow"
 
 ### What Gets Built
@@ -189,8 +189,8 @@ From GitHub:
 The workflow creates these artifacts:
 
 #### Linux
-- `offgrid-v0.1.0-linux-amd64.tar.gz`
-- `offgrid-v0.1.0-linux-arm64.tar.gz`
+- `offgrid-v0.1.6-linux-amd64.tar.gz`
+- `offgrid-v0.1.6-linux-arm64.tar.gz`
 
 Each contains:
 - `bin/offgrid`
@@ -200,8 +200,8 @@ Each contains:
 - `LICENSE`
 
 #### macOS
-- `offgrid-v0.1.0-darwin-amd64.dmg`
-- `offgrid-v0.1.0-darwin-arm64.dmg`
+- `offgrid-v0.1.6-darwin-amd64.dmg`
+- `offgrid-v0.1.6-darwin-arm64.dmg`
 
 Each DMG contains:
 - `OffGrid.app` (application bundle)
@@ -209,8 +209,8 @@ Each DMG contains:
 - `README.txt`
 
 #### Windows
-- `offgrid-v0.1.0-windows-amd64.zip`
-- `offgrid-v0.1.0-windows-arm64.zip`
+- `offgrid-v0.1.6-windows-amd64.zip`
+- `offgrid-v0.1.6-windows-arm64.zip`
 
 Each contains:
 - `offgrid.exe`
@@ -237,9 +237,9 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 ##### Linux/macOS
 ```bash
 # Download and extract
-wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.0/offgrid-v0.1.0-linux-amd64.tar.gz
-tar -xzf offgrid-v0.1.0-linux-amd64.tar.gz
-cd offgrid-v0.1.0-linux-amd64
+wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/offgrid-v0.1.6-linux-amd64.tar.gz
+tar -xzf offgrid-v0.1.6-linux-amd64.tar.gz
+cd offgrid-v0.1.6-linux-amd64
 
 # Install
 sudo ./install.sh
@@ -248,10 +248,10 @@ sudo ./install.sh
 ##### macOS
 ```bash
 # Download DMG
-curl -LO https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.0/offgrid-v0.1.0-darwin-arm64.dmg
+curl -LO https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/offgrid-v0.1.6-darwin-arm64.dmg
 
 # Open and drag to Applications
-open offgrid-v0.1.0-darwin-arm64.dmg
+open offgrid-v0.1.6-darwin-arm64.dmg
 
 # Or run the install script
 /Volumes/OffGrid\ LLM/OffGrid.app/Contents/Resources/install.sh
@@ -260,7 +260,7 @@ open offgrid-v0.1.0-darwin-arm64.dmg
 ##### Windows
 ```powershell
 # Download and extract
-Invoke-WebRequest -Uri "https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.0/offgrid-v0.1.0-windows-amd64.zip" -OutFile offgrid.zip
+Invoke-WebRequest -Uri "https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/offgrid-v0.1.6-windows-amd64.zip" -OutFile offgrid.zip
 Expand-Archive offgrid.zip -DestinationPath offgrid
 cd offgrid
 
@@ -279,7 +279,7 @@ codesign --deep --force --verify --verbose \
   OffGrid.app
 
 # Notarize with Apple
-xcrun notarytool submit offgrid-v0.1.0-darwin-arm64.dmg \
+xcrun notarytool submit offgrid-v0.1.6-darwin-arm64.dmg \
   --apple-id "your@email.com" \
   --team-id "TEAM_ID" \
   --password "app-specific-password"
@@ -406,10 +406,10 @@ We use Semantic Versioning (semver):
 - `vX.Y.Z-rc.N` - Release candidate
 
 Examples:
-- `v0.1.0-alpha` - First alpha
-- `v0.1.0-beta.1` - First beta
-- `v0.1.0-rc.1` - First release candidate
-- `v0.1.0` - Stable release
+- `v0.1.6-alpha` - First alpha
+- `v0.1.6-beta.1` - First beta
+- `v0.1.6-rc.1` - First release candidate
+- `v0.1.6` - Stable release
 
 ## Support
 

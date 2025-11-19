@@ -1,0 +1,108 @@
+# Docker Compose - Production Configuration
+# With SSL, monitoring, and high availability
+
+version: '3.8'
+
+services:
+  offgrid:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: offgrid-llm:latest
+    container_name: offgrid-llm
+    restart: unless-stopped
+    expose:
+      - "11611"
+    volumes:
+      - offgrid-models:/var/lib/offgrid/models
+      - offgrid-data:/var/lib/offgrid/data
+    environment:
+      - OFFGRID_PORT=11611
+      - OFFGRID_HOST=0.0.0.0
+      - OFFGRID_MODELS_DIR=/var/lib/offgrid/models
+      - OFFGRID_GPU_LAYERS=0
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11611/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+
+  nginx:
+    image: nginx:alpine
+    container_name: offgrid-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - offgrid
+    networks:
+      - backend
+      - frontend
+
+  # Optional: Prometheus monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: offgrid-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - monitoring
+
+  # Optional: Grafana dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: offgrid-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=changeme
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring
+      - frontend
+
+volumes:
+  offgrid-models:
+    driver: local
+  offgrid-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
+  monitoring:
+    driver: bridge

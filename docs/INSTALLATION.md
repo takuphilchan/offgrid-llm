@@ -4,9 +4,10 @@
 
 **For most users, use the automated installer:**
 
+The installation script (`scripts/install.sh`) automatically:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
-```
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
 
 **What it does:**
 - Builds OffGrid LLM from source
@@ -16,9 +17,10 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 - Takes 5-10 minutes
 
 **Skip prompts (auto-start enabled):**
+### Install with Auto-Start Enabled
+
 ```bash
-AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
-```
+AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh)
 
 After installation, open: `http://localhost:11611/ui/`
 

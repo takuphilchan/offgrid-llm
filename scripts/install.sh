@@ -11,7 +11,7 @@ set -e
 REPO="takuphilchan/offgrid-llm"
 GITHUB_URL="https://github.com/${REPO}"
 INSTALL_DIR="/usr/local/bin"
-VERSION="${VERSION:-latest}"  # Can be overridden with VERSION=v0.1.0 ./install.sh
+VERSION="${VERSION:-latest}"  # Can be overridden with VERSION=v0.1.6 ./install.sh
 AUTOSTART="${AUTOSTART:-ask}"  # Options: yes, no, ask
 
 # Colors

@@ -801,7 +801,7 @@
             <h1 class="text-xl font-bold text-accent">OffGrid LLM</h1>
             <div class="flex items-center gap-3">
                 <span id="statusBadge" class="badge badge-success">Ready</span>
-                <span class="text-xs text-secondary">v0.1.6</span>
+                <span class="text-xs text-secondary">v0.1.7</span>
             </div>
         </div>
     </header>
@@ -924,28 +924,93 @@
             <!-- USB Import/Export Section -->
             <div class="card">
                 <h3 class="text-lg font-semibold mb-4">USB Model Transfer</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <h4 class="text-sm font-medium mb-2 text-accent">Import from USB</h4>
-                        <p class="text-xs text-secondary mb-3">Load models from a USB drive prepared with OffGrid bundles</p>
-                        <div class="flex gap-2">
-                            <input type="text" id="usbImportPath" placeholder="/media/usb or /mnt/usb" 
-                                   value="/media/usb"
-                                   class="flex-1 input-theme rounded px-3 py-2 text-sm" />
-                            <button onclick="importFromUSB()" class="btn btn-primary">Import</button>
+                <p class="text-xs text-secondary mb-4">Transfer models to/from USB drives for offline deployment</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Import Section -->
+                    <div class="border border-theme rounded-lg p-4">
+                        <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
+                            Import from USB
+                        </h4>
+                        <p class="text-xs text-secondary mb-3">Load models from a USB drive with OffGrid packages</p>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs text-secondary block mb-1">USB Path:</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="usbImportPath" 
+                                           placeholder="/media/usb or D:\"
+                                           value="/media/usb"
+                                           class="flex-1 input-theme rounded px-3 py-2 text-sm font-mono" />
+                                    <button onclick="browseForPath('import')" class="btn btn-secondary px-3" title="Browse for folder">
+                                        Browse
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex gap-2">
+                                <button onclick="scanUSB()" class="btn btn-secondary flex-1">
+                                    Scan
+                                </button>
+                                <button onclick="importFromUSB()" class="btn btn-primary flex-1">
+                                    Import All
+                                </button>
+                            </div>
+                            
+                            <div id="usbScanResults" class="text-xs"></div>
+                            <div id="usbImportStatus" class="text-xs"></div>
+                            <div id="usbImportProgress" class="hidden">
+                                <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
+                                    <div id="usbImportProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <div id="usbImportProgressText" class="text-xs text-secondary"></div>
+                            </div>
                         </div>
-                        <div id="usbImportStatus" class="mt-2 text-xs"></div>
                     </div>
-                    <div>
-                        <h4 class="text-sm font-medium mb-2 text-accent">Export to USB</h4>
-                        <p class="text-xs text-secondary mb-3">Create a portable bundle of your models on USB</p>
-                        <div class="flex gap-2">
-                            <input type="text" id="usbExportPath" placeholder="/media/usb or /mnt/usb" 
-                                   value="/media/usb"
-                                   class="flex-1 input-theme rounded px-3 py-2 text-sm" />
-                            <button onclick="exportToUSB()" class="btn btn-primary">Export</button>
+                    
+                    <!-- Export Section -->
+                    <div class="border border-theme rounded-lg p-4">
+                        <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
+                            Export to USB
+                        </h4>
+                        <p class="text-xs text-secondary mb-3">Create a portable bundle of all your models</p>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs text-secondary block mb-1">USB Path:</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="usbExportPath" 
+                                           placeholder="/media/usb or D:\"
+                                           value="/media/usb"
+                                           class="flex-1 input-theme rounded px-3 py-2 text-sm font-mono" />
+                                    <button onclick="browseForPath('export')" class="btn btn-secondary px-3" title="Browse for folder">
+                                        Browse
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <button onclick="exportToUSB()" class="btn btn-primary w-full">
+                                Export All Models
+                            </button>
+                            
+                            <div id="usbExportStatus" class="text-xs"></div>
+                            <div id="usbExportProgress" class="hidden">
+                                <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
+                                    <div id="usbExportProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <div id="usbExportProgressText" class="text-xs text-secondary"></div>
+                            </div>
                         </div>
-                        <div id="usbExportStatus" class="mt-2 text-xs"></div>
+                    </div>
+                </div>
+                
+                <!-- Common USB Paths Helper -->
+                <div class="mt-4 p-3 bg-secondary rounded text-xs">
+                    <span class="font-medium text-accent">Common USB mount points:</span>
+                    <div class="mt-1 space-y-1 text-secondary">
+                        <div><span class="font-mono">Linux:</span> /media/username/device or /mnt/usb</div>
+                        <div><span class="font-mono">macOS:</span> /Volumes/device</div>
+                        <div><span class="font-mono">Windows:</span> D:\\ E:\\ F:\\</div>
                     </div>
                 </div>
             </div>
@@ -1005,7 +1070,7 @@
                     </div>
                 </div>
                 <div class="terminal-output scrollable flex-1 overflow-y-auto" id="terminalOutput">
-                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.6</div>
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.7</div>
                     <div class="terminal-line">Connected to real offgrid binary</div>
                     <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
                 </div>
@@ -1859,6 +1924,7 @@
             input.value = '';
             updateChatStats();
             saveMessages();
+            scrollToBottom();
 
             const statusBadge = document.getElementById('statusBadge');
             statusBadge.className = 'text-xs font-medium text-yellow-400';
@@ -1960,6 +2026,8 @@
                                         contentDiv.querySelectorAll('pre code').forEach((block) => {
                                             hljs.highlightElement(block);
                                         });
+                                        // Auto-scroll as new content arrives
+                                        scrollToBottom();
                                     }
                                 } catch (e) {
                                     // Skip invalid JSON
@@ -1989,6 +2057,7 @@
                         messages.push({ role: 'assistant', content: assistantMsg });
                         addChatMessage('assistant', assistantMsg, startTime);
                         saveMessages();
+                        scrollToBottom();
                     }
                 }
 
@@ -2037,6 +2106,14 @@
                 sendBtn.disabled = false;
                 stopBtn.classList.add('hidden');
                 input.focus();
+            }
+        }
+
+        // Helper function to smoothly scroll chat to bottom
+        function scrollToBottom() {
+            const container = document.getElementById('chatMessages');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
             }
         }
 
@@ -2090,7 +2167,7 @@
                 </div>
             `;
             container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
+            scrollToBottom();
             
             // Apply highlighting to all code blocks in this message
             div.querySelectorAll('pre code').forEach((block) => {
@@ -2315,8 +2392,11 @@
         }
 
         // USB Import/Export Functions
-        async function importFromUSB() {
+        
+        // Scan USB drive for models
+        async function scanUSB() {
             const usbPath = document.getElementById('usbImportPath').value.trim();
+            const resultsDiv = document.getElementById('usbScanResults');
             const statusDiv = document.getElementById('usbImportStatus');
             
             if (!usbPath) {
@@ -2324,7 +2404,65 @@
                 return;
             }
             
-            statusDiv.innerHTML = '<span class="text-accent">⏳ Importing models from USB...</span>';
+            statusDiv.innerHTML = '';
+            resultsDiv.innerHTML = '<span class="text-accent">🔍 Scanning USB drive...</span>';
+            
+            try {
+                const response = await fetch('/v1/usb/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ usb_path: usbPath })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const count = data.count || 0;
+                    if (count > 0) {
+                        const totalSize = data.models.reduce((sum, m) => sum + m.size, 0);
+                        const totalGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2);
+                        
+                        resultsDiv.innerHTML = `
+                            <div class="p-2 bg-secondary rounded border border-accent">
+                                <div class="font-medium text-accent mb-2">Found ${count} model(s) - ${totalGB} GB</div>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    ${data.models.map(m => `
+                                        <div class="text-xs flex justify-between">
+                                            <span class="font-mono">${m.file_name}</span>
+                                            <span class="text-secondary">${(m.size / (1024*1024*1024)).toFixed(2)} GB</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        resultsDiv.innerHTML = '<span class="text-secondary">No GGUF models found</span>';
+                    }
+                } else {
+                    const error = data.error || 'Scan failed';
+                    resultsDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
+            }
+        }
+        
+        async function importFromUSB() {
+            const usbPath = document.getElementById('usbImportPath').value.trim();
+            const statusDiv = document.getElementById('usbImportStatus');
+            const progressDiv = document.getElementById('usbImportProgress');
+            const progressBar = document.getElementById('usbImportProgressBar');
+            const progressText = document.getElementById('usbImportProgressText');
+            
+            if (!usbPath) {
+                statusDiv.innerHTML = '<span class="text-yellow-400">⚠ Please enter a USB path</span>';
+                return;
+            }
+            
+            statusDiv.innerHTML = '';
+            progressDiv.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressText.innerHTML = 'Starting import...';
             
             try {
                 const response = await fetch('/v1/usb/import', {
@@ -2337,13 +2475,20 @@
                 
                 if (response.ok) {
                     const count = data.imported_count || 0;
-                    statusDiv.innerHTML = `<span class="text-green-400">✓ Successfully imported ${count} model(s)</span>`;
+                    progressBar.style.width = '100%';
+                    progressText.innerHTML = `✓ Successfully imported ${count} model(s)`;
+                    setTimeout(() => {
+                        progressDiv.classList.add('hidden');
+                        statusDiv.innerHTML = `<span class="text-green-400">✓ Import complete - ${count} model(s) added</span>`;
+                    }, 2000);
                     loadInstalledModels(); // Refresh the models list
                 } else {
                     const error = data.error || 'Import failed';
+                    progressDiv.classList.add('hidden');
                     statusDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
                 }
             } catch (error) {
+                progressDiv.classList.add('hidden');
                 statusDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
             }
         }
@@ -2351,13 +2496,19 @@
         async function exportToUSB() {
             const usbPath = document.getElementById('usbExportPath').value.trim();
             const statusDiv = document.getElementById('usbExportStatus');
+            const progressDiv = document.getElementById('usbExportProgress');
+            const progressBar = document.getElementById('usbExportProgressBar');
+            const progressText = document.getElementById('usbExportProgressText');
             
             if (!usbPath) {
                 statusDiv.innerHTML = '<span class="text-yellow-400">⚠ Please enter a USB path</span>';
                 return;
             }
             
-            statusDiv.innerHTML = '<span class="text-accent">⏳ Exporting models to USB...</span>';
+            statusDiv.innerHTML = '';
+            progressDiv.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressText.innerHTML = 'Starting export...';
             
             try {
                 const response = await fetch('/v1/usb/export', {
@@ -2371,12 +2522,28 @@
                 if (response.ok) {
                     const count = data.exported_count || 0;
                     const size = data.total_size_gb || 0;
-                    statusDiv.innerHTML = `<span class="text-green-400">✓ Exported ${count} model(s) (${size.toFixed(2)} GB)</span>`;
+                    progressBar.style.width = '100%';
+                    progressText.innerHTML = `✓ Exported ${count} model(s) (${size.toFixed(2)} GB)`;
+                    setTimeout(() => {
+                        progressDiv.classList.add('hidden');
+                        statusDiv.innerHTML = `
+                            <div class="p-2 bg-secondary rounded border border-green-500">
+                                <div class="text-green-400 font-medium">✓ Export Complete</div>
+                                <div class="text-xs text-secondary mt-1">
+                                    ${count} model(s) exported (${size.toFixed(2)} GB)<br>
+                                    Location: ${usbPath}/offgrid-models/<br>
+                                    Manifest and README included
+                                </div>
+                            </div>
+                        `;
+                    }, 2000);
                 } else {
                     const error = data.error || 'Export failed';
+                    progressDiv.classList.add('hidden');
                     statusDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
                 }
             } catch (error) {
+                progressDiv.classList.add('hidden');
                 statusDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
             }
         }
@@ -2385,7 +2552,7 @@
         function clearTerminal() {
             terminalOutputBuffer = ''; // Clear any buffered output
             document.getElementById('terminalOutput').innerHTML = `
-                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.6</div>
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.7</div>
                 <div class="terminal-line">Connected to real offgrid binary</div>
                 <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
             `;
@@ -2934,5 +3101,217 @@
             }
         });
     </script>
+
+    <!-- File Browser Modal -->
+    <div id="fileBrowserModal" class="modal-overlay" style="display: none;">
+        <div class="modal-dialog" style="max-width: 700px; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <span class="modal-icon"></span>
+                <h3 class="modal-title">Select Folder</h3>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                <!-- Common Paths -->
+                <div class="mb-3">
+                    <div class="text-xs text-secondary mb-2">Quick Access:</div>
+                    <div id="commonPathsList" class="flex flex-wrap gap-2"></div>
+                </div>
+                
+                <!-- Current Path and Navigation -->
+                <div class="mb-3">
+                    <div class="text-xs text-secondary mb-1">Current Path:</div>
+                    <div class="flex gap-2">
+                        <input type="text" id="browserCurrentPath" readonly 
+                               class="flex-1 input-theme rounded px-3 py-2 text-xs font-mono bg-secondary" />
+                        <button onclick="browseParentDir()" class="btn btn-secondary px-3" title="Go up one level">
+                            Up
+                        </button>
+                        <button onclick="refreshBrowser()" class="btn btn-secondary px-3" title="Refresh">
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- File List -->
+                <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+                    <div id="browserFileList" class="text-sm"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeFileBrowser()">Cancel</button>
+                <button class="btn btn-primary" onclick="selectCurrentPath()">Select Current Folder</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // File Browser functionality
+        let currentBrowserPath = '';
+        let fileBrowserTarget = ''; // 'import' or 'export'
+        
+        async function browseForPath(target) {
+            fileBrowserTarget = target;
+            const modal = document.getElementById('fileBrowserModal');
+            modal.style.display = 'flex';
+            
+            // Load common paths
+            await loadCommonPaths();
+            
+            // Browse to default path
+            const currentPath = target === 'import' 
+                ? document.getElementById('usbImportPath').value 
+                : document.getElementById('usbExportPath').value;
+            
+            await browseTo(currentPath || '/media');
+        }
+        
+        async function loadCommonPaths() {
+            const container = document.getElementById('commonPathsList');
+            container.innerHTML = '<span class="text-xs text-secondary">Loading...</span>';
+            
+            try {
+                const response = await fetch('/v1/filesystem/common-paths');
+                const data = await response.json();
+                
+                if (response.ok && data.paths) {
+                    container.innerHTML = data.paths
+                        .filter(p => p.exists)
+                        .map(p => `
+                            <button onclick="browseTo('${p.path.replace(/'/g, "\\'")}')" 
+                                    class="px-3 py-1 text-xs bg-secondary hover:bg-accent hover:text-white rounded border border-theme transition-colors"
+                                    title="${p.description}">
+                                ${p.label}
+                            </button>
+                        `).join('');
+                } else {
+                    container.innerHTML = '<span class="text-xs text-red-400">Failed to load paths</span>';
+                }
+            } catch (error) {
+                container.innerHTML = '<span class="text-xs text-red-400">Error loading paths</span>';
+            }
+        }
+        
+        async function browseTo(path) {
+            const listContainer = document.getElementById('browserFileList');
+            const pathInput = document.getElementById('browserCurrentPath');
+            
+            listContainer.innerHTML = '<div class="p-4 text-center text-secondary text-sm">Loading...</div>';
+            
+            try {
+                const response = await fetch('/v1/filesystem/browse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentBrowserPath = data.current_path;
+                    pathInput.value = currentBrowserPath;
+                    
+                    let html = '';
+                    
+                    // Add directories
+                    if (data.directories && data.directories.length > 0) {
+                        const visibleDirs = data.directories.filter(d => !d.is_hidden);
+                        visibleDirs.forEach(dir => {
+                            html += `
+                                <div class="file-entry directory" onclick="browseTo('${dir.path.replace(/'/g, "\\'")}')">
+                                    <span class="file-icon">▸</span>
+                                    <span class="file-name">${dir.name}</span>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    // Show message if no directories
+                    if (!html) {
+                        html = '<div class="p-4 text-center text-secondary text-sm">No subdirectories</div>';
+                    }
+                    
+                    listContainer.innerHTML = html;
+                } else {
+                    listContainer.innerHTML = `<div class="p-4 text-center text-red-400 text-sm">${data.error || 'Failed to browse'}</div>`;
+                }
+            } catch (error) {
+                listContainer.innerHTML = `<div class="p-4 text-center text-red-400 text-sm">Error: ${error.message}</div>`;
+            }
+        }
+        
+        function browseParentDir() {
+            const pathInput = document.getElementById('browserCurrentPath');
+            const currentPath = pathInput.value;
+            
+            // Extract parent path
+            const parts = currentPath.split('/').filter(p => p);
+            if (parts.length > 0) {
+                parts.pop();
+                const parentPath = '/' + parts.join('/');
+                browseTo(parentPath || '/');
+            }
+        }
+        
+        function refreshBrowser() {
+            const pathInput = document.getElementById('browserCurrentPath');
+            browseTo(pathInput.value);
+        }
+        
+        function selectCurrentPath() {
+            const pathInput = document.getElementById('browserCurrentPath');
+            const selectedPath = pathInput.value;
+            
+            if (fileBrowserTarget === 'import') {
+                document.getElementById('usbImportPath').value = selectedPath;
+            } else {
+                document.getElementById('usbExportPath').value = selectedPath;
+            }
+            
+            closeFileBrowser();
+        }
+        
+        function closeFileBrowser() {
+            const modal = document.getElementById('fileBrowserModal');
+            modal.style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        document.getElementById('fileBrowserModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'fileBrowserModal') {
+                closeFileBrowser();
+            }
+        });
+    </script>
+
+    <style>
+        .file-entry {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.15s;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .file-entry:hover {
+            background-color: var(--bg-secondary);
+        }
+        
+        .file-entry.directory {
+            font-weight: 500;
+        }
+        
+        .file-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .file-name {
+            flex: 1;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+    </style>
 </body>
 </html>

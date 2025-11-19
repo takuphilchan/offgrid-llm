@@ -70,13 +70,9 @@ fi
 If you need to force a specific CPU variant:
 
 ```bash
-# Force AVX2 (maximum compatibility)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | \
-  bash -s -- --cpu-features avx2
-
-# Force AVX-512 (maximum performance on newer CPUs)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | \
-  bash -s -- --cpu-features avx512
+**Standard Installation:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
 ```
 
 ## Troubleshooting

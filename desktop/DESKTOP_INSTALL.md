@@ -40,21 +40,21 @@ irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/d
 
 #### Ubuntu/Debian (recommended)
 ```bash
-wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.3/OffGrid-LLM-Desktop-0.1.3-amd64.deb
+wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/OffGrid-LLM-Desktop-0.1.3-amd64.deb
 sudo dpkg -i OffGrid-LLM-Desktop-0.1.3-amd64.deb
 sudo apt-get install -f  # Install dependencies if needed
 ```
 
 #### AppImage (universal)
 ```bash
-wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.3/OffGrid-LLM-Desktop-0.1.3-x86_64.AppImage
+wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/OffGrid-LLM-Desktop-0.1.3-x86_64.AppImage
 chmod +x OffGrid-LLM-Desktop-0.1.3-x86_64.AppImage
 ./OffGrid-LLM-Desktop-0.1.3-x86_64.AppImage
 ```
 
 #### Fedora/RHEL/CentOS
 ```bash
-wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.3/OffGrid-LLM-Desktop-0.1.3-x86_64.rpm
+wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/OffGrid-LLM-Desktop-0.1.3-x86_64.rpm
 sudo rpm -i OffGrid-LLM-Desktop-0.1.3-x86_64.rpm
 ```
 

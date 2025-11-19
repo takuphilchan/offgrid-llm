@@ -1,0 +1,24 @@
+# Line endings
+* text=auto
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Docker files
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+
+# Documentation
+*.md text eol=lf
+
+# Go files
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+# Binary files
+*.gguf binary
+*.bin binary
+*.so binary
+*.dll binary
+*.dylib binary
+*.exe binary

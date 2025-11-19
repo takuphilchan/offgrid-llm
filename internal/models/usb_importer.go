@@ -3,6 +3,7 @@ package models
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -33,8 +34,9 @@ type ImportProgress struct {
 	BytesTotal int64
 	BytesDone  int64
 	Percent    float64
-	Status     string // "copying", "verifying", "complete", "failed"
+	Status     string // "copying", "verifying", "complete", "failed", "skipped"
 	Error      error
+	Message    string // Additional status message
 }
 
 // ScanUSBDrive scans a USB drive for GGUF model files
@@ -99,13 +101,14 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 
 		destHash, err := u.calculateFileHash(destPath)
 		if err == nil && sourceHash == destHash {
-			progress.Status = "complete"
+			progress.Status = "skipped"
 			progress.Percent = 100
 			progress.BytesDone = sourceInfo.Size()
+			progress.Message = "File already exists with matching checksum"
 			if onProgress != nil {
 				onProgress(progress)
 			}
-			return nil // File already exists and matches
+			return fmt.Errorf("model already exists: %s", fileName)
 		}
 
 		// Different file, remove old one
@@ -237,6 +240,13 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 
 // ImportAll imports all GGUF files from a USB drive
 func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress)) (int, error) {
+	// Try to load manifest first
+	manifest, manifestErr := u.LoadManifest(usbPath)
+	if manifestErr == nil && manifest != nil {
+		fmt.Printf("Found package manifest: %d models, %.2f GB total\n",
+			manifest.TotalModels, manifest.TotalSizeGB)
+	}
+
 	modelFiles, err := u.ScanUSBDrive(usbPath)
 	if err != nil {
 		return 0, err
@@ -246,13 +256,40 @@ func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress))
 		return 0, fmt.Errorf("no GGUF model files found in %s", usbPath)
 	}
 
+	// Check available disk space
+	var totalSize int64
+	for _, file := range modelFiles {
+		info, err := os.Stat(file)
+		if err == nil {
+			totalSize += info.Size()
+		}
+	}
+
+	availableSpace, err := getDiskSpace(u.modelsDir)
+	if err == nil && availableSpace < totalSize {
+		return 0, fmt.Errorf("insufficient disk space: need %s, available %s",
+			formatBytes(totalSize), formatBytes(availableSpace))
+	}
+
 	imported := 0
+	skipped := 0
+
 	for _, modelFile := range modelFiles {
-		if err := u.ImportModel(modelFile, onProgress); err != nil {
-			fmt.Printf("Failed to import %s: %v\n", modelFile, err)
+		err := u.ImportModel(modelFile, onProgress)
+		if err != nil {
+			// Check if it was skipped (already exists)
+			if strings.Contains(err.Error(), "already exists") {
+				skipped++
+			} else {
+				fmt.Printf("Failed to import %s: %v\n", modelFile, err)
+			}
 			continue
 		}
 		imported++
+	}
+
+	if skipped > 0 {
+		fmt.Printf("Skipped %d model(s) (already imported)\n", skipped)
 	}
 
 	return imported, nil
@@ -296,4 +333,31 @@ func (u *USBImporter) GetModelInfo(filename string) (modelID string, quantizatio
 	modelID = name
 	quantization = "unknown"
 	return
+}
+
+// LoadManifest loads a package manifest from USB if available
+func (u *USBImporter) LoadManifest(usbPath string) (*PackageManifest, error) {
+	// Try common manifest locations
+	manifestPaths := []string{
+		filepath.Join(usbPath, "manifest.json"),
+		filepath.Join(usbPath, "offgrid-models", "manifest.json"),
+	}
+
+	for _, manifestPath := range manifestPaths {
+		if _, err := os.Stat(manifestPath); err == nil {
+			file, err := os.Open(manifestPath)
+			if err != nil {
+				continue
+			}
+			defer file.Close()
+
+			var manifest PackageManifest
+			if err := json.NewDecoder(file).Decode(&manifest); err != nil {
+				continue
+			}
+			return &manifest, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no manifest found")
 }
