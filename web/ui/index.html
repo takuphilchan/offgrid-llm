@@ -15,7 +15,78 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Terminal Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            /* Light Theme (VS Code Default Light) */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f3f3; /* Sidebar/Activity Bar */
+            --bg-tertiary: #e5e5e5; /* Borders/Inputs */
+            --text-primary: #333333;
+            --text-secondary: #616161;
+            --accent-primary: #00bcd4; /* Cyan */
+            --accent-hover: #00acc1;
+            --border-color: #e5e5e5;
+            --card-bg: #ffffff;
+            --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --input-bg: #ffffff;
+            --input-border: #cecece;
+            --code-bg: #f3f3f3;
+            --code-inline-bg: rgba(27, 31, 35, 0.05);
+            --header-bg: #f3f3f3;
+            --nav-bg: #f3f3f3;
+            --message-user-bg: transparent;
+            --message-assistant-bg: #f8f8f8;
+            --scrollbar-track: #f3f3f3;
+            --scrollbar-thumb: #c1c1c1;
+            --scrollbar-thumb-hover: #a8a8a8;
+            --terminal-bg: #1e1e1e; /* Terminal always dark usually */
+            --terminal-text: #d4d4d4;
+            --success-color: #00bcd4;
+            
+            /* ANSI Colors - Modified for White/Cyan/Gray theme */
+            --ansi-black: #555555;
+            --ansi-cyan: #00bcd4; /* Cyan */
+            --ansi-green: #00bcd4; /* Map Green to Cyan */
+            --ansi-yellow: #e5e5e5; /* Map Yellow to White */
+            --ansi-red: #e5e5e5; /* Map Red to White */
+            --ansi-blue: #00bcd4; /* Map Blue to Cyan */
+            --ansi-magenta: #00bcd4; /* Map Magenta to Cyan */
+            --ansi-white: #ffffff;
+            --ansi-gray: #9d9d9d; /* Visible Gray */
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme (VS Code Default Dark) */
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252526; /* Sidebar */
+            --bg-tertiary: #333333; /* Activity Bar/Inputs */
+            --text-primary: #cccccc;
+            --text-secondary: #969696;
+            --accent-primary: #00bcd4; /* Cyan */
+            --accent-hover: #00acc1;
+            --border-color: #454545;
+            --card-bg: #252526;
+            --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --input-bg: #3c3c3c;
+            --input-border: #3c3c3c;
+            --code-bg: #1e1e1e;
+            --code-inline-bg: rgba(110, 118, 129, 0.4);
+            --header-bg: #1e1e1e;
+            --nav-bg: #252526;
+            --message-user-bg: transparent;
+            --message-assistant-bg: #252526;
+            --scrollbar-track: #1e1e1e;
+            --scrollbar-thumb: #424242;
+            --scrollbar-thumb-hover: #4f4f4f;
+            --terminal-bg: #1e1e1e;
+            --terminal-text: #d4d4d4;
+            --success-color: #00bcd4;
+        }
+
         * { 
             margin: 0; 
             padding: 0; 
@@ -24,47 +95,78 @@
         }
         
         body { 
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #e2e8f0;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        /* Utility Classes for Theme */
+        .app-header {
+            background: var(--header-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            flex-shrink: 0;
         }
         
+        .app-nav {
+            background: var(--nav-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            flex-shrink: 0;
+        }
+
+        .text-accent { color: var(--accent-primary); }
+        .text-secondary { color: var(--text-secondary); }
+        .bg-primary { background: var(--bg-primary); }
+        .bg-secondary { background: var(--bg-secondary); }
+        .border-theme { border-color: var(--border-color); }
+        
+        .input-theme {
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-primary);
+        }
+        
+        .input-theme:focus {
+            border-color: var(--accent-primary);
+            outline: none;
+        }
+
         .card { 
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(51, 65, 85, 0.9) 100%);
-            border: 1px solid rgba(51, 65, 85, 0.8);
-            border-radius: 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
             padding: 24px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-            backdrop-filter: blur(10px);
+            box-shadow: var(--card-shadow);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.3s ease;
         }
         
         .card:hover {
-            border-color: rgba(6, 182, 212, 0.5);
-            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);
+            border-color: var(--accent-primary);
         }
         
         .btn {
-            padding: 10px 18px;
-            border-radius: 8px;
+            padding: 6px 14px;
+            border-radius: 2px;
             cursor: pointer;
-            transition: background 0.2s ease, box-shadow 0.2s ease;
+            transition: background 0.2s ease;
             border: none;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 400;
             outline: none;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            color: white;
         }
         
         .btn:hover:not(:disabled) {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            opacity: 0.9;
         }
         
         .btn-sm { 
-            padding: 6px 14px; 
+            padding: 4px 10px; 
             font-size: 12px; 
         }
         
@@ -74,65 +176,65 @@
         }
         
         .btn-primary { 
-            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            background: var(--accent-primary);
             color: white; 
         }
         
         .btn-primary:hover:not(:disabled) { 
-            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+            background: var(--accent-hover);
         }
         
         .btn-secondary { 
-            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-            color: white; 
+            background: var(--bg-tertiary);
+            color: var(--text-primary); 
+            border: 1px solid var(--border-color);
         }
         
         .btn-secondary:hover:not(:disabled) { 
-            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+            background: var(--bg-secondary);
         }
         
         .btn-danger { 
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: #f14c4c;
             color: white; 
         }
         
         .btn-danger:hover:not(:disabled) { 
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            background: #d63b3b;
         }
         
         .btn-info { 
-            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            background: var(--accent-primary);
             color: white; 
         }
         
         .btn-info:hover:not(:disabled) { 
-            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+            background: var(--accent-hover);
         }
         
         .tab { 
-            padding: 14px 24px; 
+            padding: 10px 16px; 
             cursor: pointer; 
-            border-bottom: 3px solid transparent; 
+            border-bottom: 1px solid transparent; 
             transition: all 0.2s ease;
-            font-weight: 500;
+            font-weight: 400;
+            color: var(--text-secondary);
         }
         
         .tab:hover { 
-            background: rgba(30, 41, 59, 0.5);
-            color: #06b6d4;
+            color: var(--text-primary);
         }
         
         .tab.active { 
-            border-bottom-color: #06b6d4;
-            background: rgba(30, 41, 59, 0.8);
-            color: #06b6d4;
+            border-bottom-color: var(--accent-primary);
+            color: var(--text-primary);
         }
         
         .message { 
             padding: 20px 0;
             margin-bottom: 0;
             word-wrap: break-word;
-            border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+            border-bottom: 1px solid var(--border-color);
         }
         
         .message:last-child {
@@ -146,7 +248,7 @@
         }
         
         .message-user { 
-            background: transparent;
+            background: var(--message-user-bg);
         }
         
         .message-user .message-wrapper {
@@ -156,7 +258,7 @@
         }
         
         .message-assistant { 
-            background: rgba(30, 41, 59, 0.3);
+            background: var(--message-assistant-bg);
         }
         
         .message-assistant .message-wrapper {
@@ -166,24 +268,24 @@
         }
         
         .message-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 4px;
+            width: 24px;
+            height: 24px;
+            border-radius: 2px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 12px;
         }
         
         .message-user .message-avatar {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: var(--accent-primary);
             color: white;
         }
         
         .message-assistant .message-avatar {
-            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            background: #4ec9b0;
             color: white;
         }
         
@@ -205,8 +307,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(4px);
+            background: rgba(0, 0, 0, 0.5);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -220,13 +321,13 @@
         }
         
         .modal-dialog {
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.98) 0%, rgba(51, 65, 85, 0.98) 100%);
-            border: 1px solid rgba(51, 65, 85, 0.8);
-            border-radius: 16px;
-            padding: 32px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 24px;
             max-width: 500px;
             width: 90%;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
             animation: slideIn 0.3s ease;
         }
         
@@ -236,13 +337,11 @@
         }
         
         .modal-dialog.warning {
-            border-color: rgba(245, 158, 11, 0.6);
-            box-shadow: 0 20px 60px rgba(245, 158, 11, 0.2);
+            border-top: 4px solid #cca700;
         }
         
         .modal-dialog.error {
-            border-color: rgba(239, 68, 68, 0.6);
-            box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);
+            border-top: 4px solid #f14c4c;
         }
         
         .modal-header {
@@ -253,19 +352,19 @@
         }
         
         .modal-icon {
-            font-size: 32px;
+            font-size: 24px;
             line-height: 1;
         }
         
         .modal-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: #e5e7eb;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
         }
         
         .modal-body {
             margin-bottom: 24px;
-            color: #d1d5db;
+            color: var(--text-primary);
             line-height: 1.6;
         }
         
@@ -276,78 +375,86 @@
         }
         
         .terminal-card {
-            background: #1e1e1e !important;
-            background-image: none !important;
-            border: 1px solid #3e3e42 !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
-            backdrop-filter: none !important;
+            background: var(--terminal-bg) !important;
+            border: 1px solid var(--border-color) !important;
+            box-shadow: none !important;
         }
         
         .terminal-card:hover {
-            border-color: #3e3e42 !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+            border-color: var(--border-color) !important;
+            box-shadow: none !important;
         }
         
         .terminal { 
-            background: #1e1e1e;
-            border: 1px solid #3e3e42;
-            border-radius: 8px;
+            background: var(--terminal-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0;
             padding: 16px;
-            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
-            font-size: 15px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
             overflow-y: auto;
-            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+            color: var(--terminal-text);
         }
+
         
         .terminal-output { 
             overflow-y: auto; 
             overflow-x: hidden;
-            padding: 12px;
+            padding: 32px;
             line-height: 1.6;
+            font-size: 14px;
             background: #1e1e1e;
             word-wrap: break-word;
             flex: 1;
             min-height: 0;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
         }
         
         .terminal-line { 
-            color: #d4d4d4; 
+            color: #e0e0e0; 
             margin-bottom: 2px; 
             white-space: pre-wrap; 
             word-wrap: break-word; 
             word-break: break-word; 
             overflow-wrap: break-word;
-            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            line-height: 1.6;
+            padding-left: 16px; /* Indent output for better hierarchy */
         }
         
         /* ANSI color classes - optimized for readability on dark background */
-        .ansi-black { color: #555555; }
-        .ansi-cyan { color: #4FC1FF; font-weight: 500; }
-        .ansi-green { color: #4EC9B0; font-weight: 500; }
-        .ansi-yellow { color: #DCDCAA; font-weight: 500; }
-        .ansi-red { color: #F48771; font-weight: 500; }
-        .ansi-blue { color: #569CD6; font-weight: 500; }
-        .ansi-magenta { color: #C586C0; font-weight: 500; }
-        .ansi-purple { color: #C586C0; font-weight: 500; }
-        .ansi-gray { color: #9d9d9d; }
-        .ansi-white { color: #e5e5e5; }
+        .ansi-black { color: var(--ansi-black); }
+        .ansi-cyan { color: var(--ansi-cyan); font-weight: 500; }
+        .ansi-green { color: var(--ansi-green); font-weight: 500; }
+        .ansi-yellow { color: var(--ansi-yellow); font-weight: 500; }
+        .ansi-red { color: var(--ansi-red); font-weight: 500; }
+        .ansi-blue { color: var(--ansi-blue); font-weight: 500; }
+        .ansi-magenta { color: var(--ansi-magenta); font-weight: 500; }
+        .ansi-purple { color: var(--ansi-magenta); font-weight: 500; }
+        .ansi-gray { color: var(--ansi-gray); }
+        .ansi-white { color: var(--ansi-white); }
         .ansi-bold { font-weight: 700; }
-        .ansi-dim { color: #999999; font-weight: 400; }
+        .ansi-dim { color: var(--ansi-gray); font-weight: 400; }
         .ansi-normal { font-weight: 400; opacity: 1; }
         
         .terminal-error { 
-            color: #ff6b6b; 
-            font-weight: 600; 
+            color: var(--ansi-white); 
+            font-weight: 700; 
         }
         
         .terminal-success { 
-            color: #06b6d4; 
+            color: var(--ansi-cyan); 
             font-weight: 600; 
         }
         
         .terminal-prompt { 
-            color: #06b6d4; 
-            font-weight: 700; 
+            color: var(--ansi-cyan); 
+            font-weight: 700;
+            margin-top: 24px;
+            display: block;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 24px;
+            padding-left: 0; /* Reset indent for prompt */
         }
         
         .terminal-input-line { 
@@ -377,18 +484,18 @@
         
         .model-item { 
             padding: 16px; 
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(51, 65, 85, 0.8) 100%);
-            border: 1px solid rgba(51, 65, 85, 0.8);
-            border-radius: 10px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
             margin-bottom: 10px;
             transition: all 0.2s ease;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: var(--card-shadow);
         }
         
         .model-item:hover { 
-            background: linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(71, 85, 105, 0.8) 100%);
-            border-color: rgba(6, 182, 212, 0.5);
-            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2);
+            background: var(--bg-secondary);
+            border-color: var(--accent-primary);
+            box-shadow: 0 2px 8px rgba(0, 188, 212, 0.15);
         }
         
         .badge { 
@@ -622,20 +729,75 @@
             font-weight: 600;
             color: #06b6d4;
         }
+
+        /* Theme toggle button */
+        .theme-toggle {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            z-index: 10000;
+        }
+        
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+        
+        .theme-toggle svg {
+            width: 20px;
+            height: 20px;
+            stroke: #333;
+        }
+        
+        [data-theme="dark"] .theme-toggle svg {
+            stroke: #ccc;
+        }
+
+        .border-accent-hover:hover {
+            border-color: var(--accent-primary) !important;
+        }
+        
+        .app-nav {
+            background: var(--nav-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            flex-shrink: 0;
+        }
+
     </style>
 </head>
-<body>
-    <header class="bg-slate-900 border-b border-slate-700 px-6 py-4 flex-shrink-0">
+<body class="antialiased">
+    <button id="theme-toggle" class="theme-toggle" title="Toggle Theme">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+    </button>
+
+    <header class="app-header">
         <div class="flex items-center justify-between">
-            <h1 class="text-xl font-bold text-cyan-400">OffGrid LLM</h1>
+            <h1 class="text-xl font-bold text-accent">OffGrid LLM</h1>
             <div class="flex items-center gap-3">
                 <span id="statusBadge" class="badge badge-success">Ready</span>
-                <span class="text-xs text-slate-400">v0.1.5</span>
+                <span class="text-xs text-secondary">v0.1.6</span>
             </div>
         </div>
     </header>
 
-    <nav class="bg-slate-900 border-b border-slate-700 px-6 flex-shrink-0">
+    <nav class="app-nav">
         <div class="flex gap-1">
             <button onclick="switchTab('chat')" id="tab-chat" class="tab active">Chat</button>
             <button onclick="switchTab('sessions')" id="tab-sessions" class="tab">Sessions</button>
@@ -649,10 +811,10 @@
         <div id="content-chat" class="h-full flex flex-col overflow-hidden">
             <div class="card flex-shrink-0">
                 <div class="flex items-center gap-3 flex-wrap mb-3">
-                    <select id="chatModel" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" onchange="console.log('[INLINE] Dropdown changed to:', this.value); handleModelChange();">
+                    <select id="chatModel" class="flex-1 min-w-[200px] input-theme rounded px-3 py-2 text-sm" onchange="console.log('[INLINE] Dropdown changed to:', this.value); handleModelChange();">
                         <option value="">Loading...</option>
                     </select>
-                    <select id="systemPrompt" onchange="applySystemPrompt()" class="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+                    <select id="systemPrompt" onchange="applySystemPrompt()" class="flex-1 min-w-[200px] input-theme rounded px-3 py-2 text-sm">
                         <option value="">No System Prompt</option>
                         <option value="research">Research Assistant</option>
                         <option value="tutor">Study Tutor</option>
@@ -670,12 +832,12 @@
                         <label class="flex items-center gap-2 text-xs">
                             <span>Temp:</span>
                             <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2" 
-                                   class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+                                   class="w-16 input-theme rounded px-2 py-1 text-xs">
                         </label>
                         <label class="flex items-center gap-2 text-xs">
                             <span>Max:</span>
                             <input type="number" id="maxTokens" value="1000" step="100" min="100" max="4000" 
-                                   class="w-20 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+                                   class="w-20 input-theme rounded px-2 py-1 text-xs">
                         </label>
                     </div>
                     <div class="flex gap-2 ml-auto">
@@ -686,24 +848,24 @@
                 </div>
             </div>
 
-            <div class="flex-1 flex flex-col overflow-hidden" style="background: #0f172a;">
+            <div class="flex-1 flex flex-col overflow-hidden bg-primary">
                 <div id="chatMessages" class="flex-1 scrollable px-4 py-4">
-                    <div class="text-center text-slate-400 py-32">
+                    <div class="text-center text-secondary py-32">
                         <p class="text-xl font-medium">Start a conversation</p>
-                        <p class="text-sm mt-2 text-slate-500">Select a model and type your message below</p>
+                        <p class="text-sm mt-2">Select a model and type your message below</p>
                     </div>
                 </div>
-                <div class="flex-shrink-0" style="background: #0f172a; border-top: 1px solid rgba(51, 65, 85, 0.5);">
+                <div class="flex-shrink-0 bg-primary border-t border-theme">
                     <div class="max-w-3xl mx-auto py-4 px-4">
-                        <div class="relative bg-slate-800 rounded-xl border border-slate-600 focus-within:border-cyan-500 transition-colors shadow-lg">
+                        <div class="relative input-theme rounded-xl focus-within:border-theme transition-colors shadow-lg">
                             <textarea id="chatInput" placeholder="Message OffGrid LLM..." 
                                onkeydown="handleChatKeydown(event)"
                                oninput="autoResizeTextarea(this)"
                                rows="1"
                                style="max-height: 200px; min-height: 52px;"
-                               class="w-full bg-transparent border-none px-4 py-3 pr-12 text-sm text-white resize-none focus:outline-none"></textarea>
+                               class="w-full bg-transparent border-none px-4 py-3 pr-12 text-sm text-primary resize-none focus:outline-none"></textarea>
                             <button onclick="sendChat()" id="sendBtn" 
-                                    class="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
+                                    class="absolute right-2 bottom-2 w-8 h-8 rounded-lg btn-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="text-white">
                                     <path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z" fill="currentColor"/>
                                 </svg>
@@ -715,7 +877,7 @@
                                 </svg>
                             </button>
                         </div>
-                        <div class="flex items-center justify-between mt-2 text-xs text-slate-500 px-1">
+                        <div class="flex items-center justify-between mt-2 text-xs text-secondary px-1">
                             <div class="flex gap-3">
                                 <span id="tokenCount">0 tokens</span>
                                 <span>•</span>
@@ -738,10 +900,10 @@
                 <div class="mb-4">
                     <input type="text" id="sessionSearch" placeholder="Search sessions..." 
                            onkeyup="filterSessions()"
-                           class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                           class="w-full input-theme rounded px-3 py-2 text-sm" />
                 </div>
                 <div id="sessionsList" class="space-y-2">
-                    <p class="text-sm text-slate-400 text-center py-8">No saved sessions yet. Start chatting and click 'Save' to preserve your conversations.</p>
+                    <p class="text-sm text-secondary text-center py-8">No saved sessions yet. Start chatting and click 'Save' to preserve your conversations.</p>
                 </div>
             </div>
         </div>
@@ -755,23 +917,23 @@
                 <h3 class="text-lg font-semibold mb-4">USB Model Transfer</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <h4 class="text-sm font-medium mb-2 text-cyan-400">Import from USB</h4>
-                        <p class="text-xs text-slate-400 mb-3">Load models from a USB drive prepared with OffGrid bundles</p>
+                        <h4 class="text-sm font-medium mb-2 text-accent">Import from USB</h4>
+                        <p class="text-xs text-secondary mb-3">Load models from a USB drive prepared with OffGrid bundles</p>
                         <div class="flex gap-2">
                             <input type="text" id="usbImportPath" placeholder="/media/usb or /mnt/usb" 
                                    value="/media/usb"
-                                   class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                                   class="flex-1 input-theme rounded px-3 py-2 text-sm" />
                             <button onclick="importFromUSB()" class="btn btn-primary">Import</button>
                         </div>
                         <div id="usbImportStatus" class="mt-2 text-xs"></div>
                     </div>
                     <div>
-                        <h4 class="text-sm font-medium mb-2 text-cyan-400">Export to USB</h4>
-                        <p class="text-xs text-slate-400 mb-3">Create a portable bundle of your models on USB</p>
+                        <h4 class="text-sm font-medium mb-2 text-accent">Export to USB</h4>
+                        <p class="text-xs text-secondary mb-3">Create a portable bundle of your models on USB</p>
                         <div class="flex gap-2">
                             <input type="text" id="usbExportPath" placeholder="/media/usb or /mnt/usb" 
                                    value="/media/usb"
-                                   class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                                   class="flex-1 input-theme rounded px-3 py-2 text-sm" />
                             <button onclick="exportToUSB()" class="btn btn-primary">Export</button>
                         </div>
                         <div id="usbExportStatus" class="mt-2 text-xs"></div>
@@ -783,7 +945,7 @@
                 <h3 class="text-lg font-semibold mb-4">Search & Download Models</h3>
                 <div class="flex gap-2 mb-4">
                     <input type="text" id="searchQuery" placeholder="Search models (e.g., llama, phi, mistral)..." 
-                           class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" />
+                           class="flex-1 input-theme rounded px-3 py-2 text-sm" />
                     <button onclick="searchModels()" class="btn btn-primary">Search</button>
                 </div>
                 <div id="searchResults" class="space-y-2"></div>
@@ -792,7 +954,7 @@
             <div class="card">
                 <h3 class="text-lg font-semibold mb-4">Installed Models</h3>
                 <div id="installedModels" class="space-y-2">
-                    <p class="text-sm text-slate-400">Loading...</p>
+                    <p class="text-sm text-secondary">Loading...</p>
                 </div>
             </div>
             </div>
@@ -802,24 +964,26 @@
         <div id="content-terminal" class="hidden h-full flex flex-col px-6 py-4">
             <div class="max-w-5xl mx-auto flex-1 flex flex-col gap-4 w-full min-h-0">
             <div class="flex-shrink-0">
-                <div class="flex items-center justify-between gap-2 px-4 py-2 bg-slate-900/40 rounded-lg border border-slate-700/50">
-                    <span class="text-xs font-mono text-slate-500 mr-2">$</span>
-                    <button onclick="runQuickCommand('offgrid list')" 
-                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
-                        list
-                    </button>
-                    <button onclick="runQuickCommand('offgrid info')" 
-                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
-                        info
-                    </button>
-                    <button onclick="runQuickCommand('offgrid doctor')" 
-                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
-                        doctor
-                    </button>
-                    <button onclick="runQuickCommand('offgrid help')" 
-                            class="flex-1 px-3 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-300 hover:text-cyan-400 rounded border border-slate-700/50 hover:border-cyan-500/50 font-mono text-xs transition-all duration-150">
-                        help
-                    </button>
+                <div class="flex items-center gap-3 px-4 py-3 bg-secondary rounded-lg border border-theme">
+                    <span class="text-xs font-bold text-secondary uppercase tracking-wider">Quick Commands:</span>
+                    <div class="flex gap-2 flex-1">
+                        <button onclick="runQuickCommand('offgrid list')" 
+                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
+                            list
+                        </button>
+                        <button onclick="runQuickCommand('offgrid recommend')" 
+                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
+                            recommend
+                        </button>
+                        <button onclick="runQuickCommand('offgrid catalog')" 
+                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
+                            catalog
+                        </button>
+                        <button onclick="runQuickCommand('offgrid help')" 
+                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
+                            help
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -832,7 +996,7 @@
                     </div>
                 </div>
                 <div class="terminal-output scrollable flex-1 overflow-y-auto" id="terminalOutput">
-                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.5</div>
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.6</div>
                     <div class="terminal-line">Connected to real offgrid binary</div>
                     <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
                 </div>
@@ -984,12 +1148,14 @@
             const val = input.value;
             const commands = [
                 'offgrid list',
+                'offgrid recommend',
+                'offgrid catalog',
                 'offgrid download ',
+                'offgrid download-hf ',
                 'offgrid remove ',
                 'offgrid search ',
                 'offgrid run ',
-                'offgrid info',
-                'offgrid doctor',
+                'offgrid serve',
                 'offgrid --help',
                 'offgrid --version',
                 'help',
@@ -1417,19 +1583,19 @@
             const container = document.getElementById('sessionsList');
             
             if (sessions.length === 0) {
-                container.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">No saved sessions yet. Start chatting and click \'Save\' to preserve your conversations.</p>';
+                container.innerHTML = '<p class="text-sm text-secondary text-center py-8">No saved sessions yet. Start chatting and click \'Save\' to preserve your conversations.</p>';
                 return;
             }
             
             container.innerHTML = sessions.map(session => `
-                <div class="card hover:border-cyan-500 cursor-pointer" data-session-id="${session.id}">
+                <div class="card border-accent-hover cursor-pointer" data-session-id="${session.id}">
                     <div class="flex items-start justify-between">
                         <div class="flex-1" onclick="loadSession(${session.id})">
-                            <h4 class="font-semibold text-cyan-400 mb-1">${session.title}</h4>
-                            <p class="text-xs text-slate-400 mb-2">
+                            <h4 class="font-semibold text-accent mb-1">${session.title}</h4>
+                            <p class="text-xs text-secondary mb-2">
                                 ${session.model} • ${session.messageCount} messages • ${new Date(session.timestamp).toLocaleString()}
                             </p>
-                            <p class="text-xs text-slate-500 line-clamp-2">${session.messages[0]?.content.substring(0, 100)}...</p>
+                            <p class="text-xs text-secondary line-clamp-2">${session.messages[0]?.content.substring(0, 100)}...</p>
                         </div>
                         <button onclick="deleteSession(${session.id}); event.stopPropagation();" class="btn btn-danger btn-sm ml-2">Delete</button>
                     </div>
@@ -1557,9 +1723,9 @@
         function clearChatSilent() {
             messages = [];
             document.getElementById('chatMessages').innerHTML = `
-                <div class="text-center text-slate-400 py-20">
+                <div class="text-center text-secondary py-20">
                     <p>Start a conversation</p>
-                    <p class="text-xs mt-2 text-slate-500">Select a model and type below</p>
+                    <p class="text-xs mt-2 text-secondary">Select a model and type below</p>
                 </div>
             `;
             document.getElementById('chatInput').value = '';
@@ -1901,9 +2067,9 @@
                     <div class="message-avatar">${avatar}</div>
                     <div class="message-body">
                         <div class="flex items-center gap-2 mb-2">
-                            <span class="text-xs font-medium text-slate-400">${role === 'user' ? 'You' : 'Assistant'}</span>
-                            <span class="text-xs text-slate-500">${timestamp}</span>
-                            ${elapsed ? `<span class="time-badge text-xs text-cyan-400">${elapsed}</span>` : ''}
+                            <span class="text-xs font-medium text-secondary">${role === 'user' ? 'You' : 'Assistant'}</span>
+                            <span class="text-xs text-secondary">${timestamp}</span>
+                            ${elapsed ? `<span class="time-badge text-xs text-accent">${elapsed}</span>` : ''}
                         </div>
                         <div class="text-sm message-content prose prose-invert max-w-none">${formattedContent}</div>
                         ${role === 'assistant' ? `
@@ -1953,7 +2119,7 @@
             }
 
             const results = document.getElementById('searchResults');
-            results.innerHTML = '<p class="text-sm text-slate-400">🔍 Searching HuggingFace...</p>';
+            results.innerHTML = '<p class="text-sm text-secondary">🔍 Searching HuggingFace...</p>';
 
             try {
                 // Add timeout to prevent hanging
@@ -1978,7 +2144,7 @@
                 const models = data.results || [];
 
                 if (models.length === 0) {
-                    results.innerHTML = '<p class="text-sm text-slate-400">No models found. Try different keywords like "llama", "phi", "mistral".</p>';
+                    results.innerHTML = '<p class="text-sm text-secondary">No models found. Try different keywords like "llama", "phi", "mistral".</p>';
                     return;
                 }
 
@@ -1994,8 +2160,8 @@
                     div.innerHTML = `
                         <div class="flex justify-between items-center">
                             <div class="flex-1">
-                                <div class="font-semibold text-sm text-cyan-400">${model.name || model.id}</div>
-                                <div class="text-xs text-slate-400 mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
+                                <div class="font-semibold text-sm text-accent">${model.name || model.id}</div>
+                                <div class="text-xs text-secondary mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
                             </div>
                             <button onclick="downloadModelWithCommand('${escapedCmd}')" class="btn btn-primary btn-sm">Download</button>
                         </div>
@@ -2011,12 +2177,12 @@
                     errorHtml = `
                         <div class="text-sm">
                             <p class="text-red-400 mb-2">⚠ Search timeout: HuggingFace API not responding</p>
-                            <p class="text-slate-400 mb-3">This usually means no internet connection or HuggingFace is slow.</p>
-                            <div class="text-xs text-slate-500">
-                                <p class="font-semibold text-cyan-400 mb-2">Try instead:</p>
-                                <p class="mb-1">• Use the terminal: <span class="font-mono bg-slate-800 px-2 py-1 rounded">offgrid search llama</span></p>
-                                <p class="mb-1">• Download directly: <span class="font-mono bg-slate-800 px-2 py-1 rounded">offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF</span></p>
-                                <p>• Check offline catalog: <span class="font-mono bg-slate-800 px-2 py-1 rounded">offgrid catalog</span></p>
+                            <p class="text-secondary mb-3">This usually means no internet connection or HuggingFace is slow.</p>
+                            <div class="text-xs text-secondary">
+                                <p class="font-semibold text-accent mb-2">Try instead:</p>
+                                <p class="mb-1">• Use the terminal: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid search llama</span></p>
+                                <p class="mb-1">• Download directly: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF</span></p>
+                                <p>• Check offline catalog: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid catalog</span></p>
                             </div>
                         </div>
                     `;
@@ -2024,8 +2190,8 @@
                     errorHtml = `
                         <div class="text-sm">
                             <p class="text-red-400 mb-2">Search error: ${error.message}</p>
-                            <p class="text-slate-400 mb-2">Use the Terminal tab to search instead:</p>
-                            <p class="text-xs font-mono bg-slate-800 px-2 py-1 rounded inline-block">offgrid search ${query}</p>
+                            <p class="text-secondary mb-2">Use the Terminal tab to search instead:</p>
+                            <p class="text-xs font-mono bg-secondary px-2 py-1 rounded inline-block">offgrid search ${query}</p>
                         </div>
                     `;
                 }
@@ -2052,7 +2218,7 @@
         // Load installed models
         async function loadInstalledModels() {
             const container = document.getElementById('installedModels');
-            container.innerHTML = '<p class="text-sm text-slate-400">Loading...</p>';
+            container.innerHTML = '<p class="text-sm text-secondary">Loading...</p>';
 
             try {
                 // Force refresh models from filesystem
@@ -2067,7 +2233,7 @@
                 const models = data.data || [];
 
                 if (models.length === 0) {
-                    container.innerHTML = '<p class="text-sm text-slate-400">No models installed</p>';
+                    container.innerHTML = '<p class="text-sm text-secondary">No models installed</p>';
                     return;
                 }
 
@@ -2081,8 +2247,8 @@
                     div.innerHTML = `
                         <div class="flex justify-between items-center gap-3">
                             <div class="flex-1 min-w-0">
-                                <div class="font-semibold text-sm text-cyan-400 break-words" title="${model.id}">${displayName}</div>
-                                <div class="text-xs text-slate-500 font-mono mt-1">${model.id}</div>
+                                <div class="font-semibold text-sm text-accent break-words" title="${model.id}">${displayName}</div>
+                                <div class="text-xs text-secondary font-mono mt-1">${model.id}</div>
                             </div>
                             <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm flex-shrink-0">Remove</button>
                         </div>
@@ -2149,7 +2315,7 @@
                 return;
             }
             
-            statusDiv.innerHTML = '<span class="text-cyan-400">⏳ Importing models from USB...</span>';
+            statusDiv.innerHTML = '<span class="text-accent">⏳ Importing models from USB...</span>';
             
             try {
                 const response = await fetch('/v1/usb/import', {
@@ -2182,7 +2348,7 @@
                 return;
             }
             
-            statusDiv.innerHTML = '<span class="text-cyan-400">⏳ Exporting models to USB...</span>';
+            statusDiv.innerHTML = '<span class="text-accent">⏳ Exporting models to USB...</span>';
             
             try {
                 const response = await fetch('/v1/usb/export', {
@@ -2210,7 +2376,7 @@
         function clearTerminal() {
             terminalOutputBuffer = ''; // Clear any buffered output
             document.getElementById('terminalOutput').innerHTML = `
-                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.5</div>
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.6</div>
                 <div class="terminal-line">Connected to real offgrid binary</div>
                 <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
             `;
@@ -2732,6 +2898,31 @@
             
             // Load chat models
             loadChatModels();
+        });
+
+        // Theme Toggle Logic
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const htmlElement = document.documentElement;
+        
+        // Check for saved theme preference or system preference
+        const savedTheme = localStorage.getItem('theme');
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        
+        // Set initial theme
+        if (savedTheme === 'dark' || (!savedTheme && systemTheme === 'dark')) {
+            htmlElement.setAttribute('data-theme', 'dark');
+        } else {
+            htmlElement.removeAttribute('data-theme');
+        }
+        
+        themeToggleBtn.addEventListener('click', () => {
+            if (htmlElement.getAttribute('data-theme') === 'dark') {
+                htmlElement.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+            } else {
+                htmlElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
         });
     </script>
 </body>

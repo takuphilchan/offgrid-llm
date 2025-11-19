@@ -89,7 +89,7 @@ func (e *LlamaEngine) ChatCompletion(ctx context.Context, req *api.ChatCompletio
 	}
 
 	// Build prompt from messages
-	prompt := e.buildChatPrompt(req.Messages)
+	prompt := e.buildChatPrompt(req.Model, req.Messages)
 
 	// Set up prediction options
 	predictOpts := []llama.PredictOption{
@@ -99,8 +99,19 @@ func (e *LlamaEngine) ChatCompletion(ctx context.Context, req *api.ChatCompletio
 		llama.SetTokens(req.MaxTokens),
 	}
 
-	if len(req.Stop) > 0 {
-		predictOpts = append(predictOpts, llama.SetStopWords(req.Stop...))
+	// Add default stop tokens if not provided
+	stopTokens := req.Stop
+	if len(stopTokens) == 0 {
+		if strings.Contains(strings.ToLower(req.Model), "llama-3") || strings.Contains(strings.ToLower(req.Model), "llama3") {
+			stopTokens = []string{"<|eot_id|>", "<|end_of_text|>"}
+		} else {
+			// Default ChatML stop tokens
+			stopTokens = []string{"<|im_end|>"}
+		}
+	}
+
+	if len(stopTokens) > 0 {
+		predictOpts = append(predictOpts, llama.SetStopWords(stopTokens...))
 	}
 
 	// Generate response
@@ -143,7 +154,7 @@ func (e *LlamaEngine) ChatCompletionStream(ctx context.Context, req *api.ChatCom
 	}
 
 	// Build prompt from messages
-	prompt := e.buildChatPrompt(req.Messages)
+	prompt := e.buildChatPrompt(req.Model, req.Messages)
 
 	// Set up prediction options
 	predictOpts := []llama.PredictOption{
@@ -153,8 +164,19 @@ func (e *LlamaEngine) ChatCompletionStream(ctx context.Context, req *api.ChatCom
 		llama.SetTokens(req.MaxTokens),
 	}
 
-	if len(req.Stop) > 0 {
-		predictOpts = append(predictOpts, llama.SetStopWords(req.Stop...))
+	// Add default stop tokens if not provided
+	stopTokens := req.Stop
+	if len(stopTokens) == 0 {
+		if strings.Contains(strings.ToLower(req.Model), "llama-3") || strings.Contains(strings.ToLower(req.Model), "llama3") {
+			stopTokens = []string{"<|eot_id|>", "<|end_of_text|>"}
+		} else {
+			// Default ChatML stop tokens
+			stopTokens = []string{"<|im_end|>"}
+		}
+	}
+
+	if len(stopTokens) > 0 {
+		predictOpts = append(predictOpts, llama.SetStopWords(stopTokens...))
 	}
 
 	// Create a channel for tokens
@@ -271,11 +293,34 @@ func (e *LlamaEngine) GetModelInfo() (*ModelInfo, error) {
 }
 
 // buildChatPrompt constructs a prompt from chat messages
-// This uses a common chat template format
-func (e *LlamaEngine) buildChatPrompt(messages []api.ChatMessage) string {
+func (e *LlamaEngine) buildChatPrompt(model string, messages []api.ChatMessage) string {
+	// Check for Llama 3
+	if strings.Contains(strings.ToLower(model), "llama-3") || strings.Contains(strings.ToLower(model), "llama3") {
+		return e.buildLlama3Prompt(messages)
+	}
+
+	// Default to ChatML
+	return e.buildChatMLPrompt(messages)
+}
+
+func (e *LlamaEngine) buildLlama3Prompt(messages []api.ChatMessage) string {
 	var builder strings.Builder
 
-	// Use ChatML format (common for instruction-tuned models)
+	builder.WriteString("<|begin_of_text|>")
+
+	for _, msg := range messages {
+		builder.WriteString(fmt.Sprintf("<|start_header_id|>%s<|end_header_id|>\n\n", msg.Role))
+		builder.WriteString(strings.TrimSpace(msg.Content))
+		builder.WriteString("<|eot_id|>")
+	}
+
+	builder.WriteString("<|start_header_id|>assistant<|end_header_id|>\n\n")
+	return builder.String()
+}
+
+func (e *LlamaEngine) buildChatMLPrompt(messages []api.ChatMessage) string {
+	var builder strings.Builder
+
 	for _, msg := range messages {
 		switch msg.Role {
 		case "system":
@@ -293,8 +338,6 @@ func (e *LlamaEngine) buildChatPrompt(messages []api.ChatMessage) string {
 		}
 	}
 
-	// Add the assistant prefix to prompt continuation
 	builder.WriteString("<|im_start|>assistant\n")
-
 	return builder.String()
 }

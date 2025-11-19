@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -129,7 +130,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		startTime:            time.Now(),
 		downloadProgress:     make(map[string]*DownloadProgress),
 		exportProgress:       make(map[string]*ExportProgress),
-		modelCache:           inference.NewModelCache(3), // Cache up to 3 models by default
+		modelCache:           inference.NewModelCache(3, cfg.NumGPULayers), // Cache up to 3 models, use configured GPU layers
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
 	}
@@ -150,12 +151,8 @@ func (s *Server) switchModel(modelID string) error {
 	s.modelMutex.Lock()
 	defer s.modelMutex.Unlock()
 
-	// Check if we're already using this model
-	if s.currentModelID == modelID {
-		log.Printf("Model %s already active", modelID)
-		return nil
-	}
-
+	// Always check model status via cache to ensure process is still alive
+	// The cache will handle liveness checks and reloading if needed
 	log.Printf("Switching to model: %s", modelID)
 
 	// Get model metadata
@@ -175,8 +172,17 @@ func (s *Server) switchModel(modelID string) error {
 	s.currentPort = instance.Port
 
 	// Update engine to point to the correct port
-	if llamaEngine, ok := s.engine.(*inference.LlamaHTTPEngine); ok {
-		llamaEngine.SetPort(instance.Port)
+	type PortSetter interface {
+		SetPort(int)
+	}
+
+	if ps, ok := s.engine.(PortSetter); ok {
+		ps.SetPort(instance.Port)
+	} else {
+		// Fallback for direct LlamaHTTPEngine usage (if not wrapped)
+		if llamaEngine, ok := s.engine.(*inference.LlamaHTTPEngine); ok {
+			llamaEngine.SetPort(instance.Port)
+		}
 	}
 
 	log.Printf("Now using model %s on port %d", modelID, instance.Port)
@@ -267,6 +273,12 @@ func (s *Server) Start() error {
 		log.Println("You may need to start llama-server manually")
 	}
 
+	// Create listener first to ensure port is available
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.ServerPort))
+	if err != nil {
+		return fmt.Errorf("failed to bind to port %d: %w", s.config.ServerPort, err)
+	}
+
 	// Clean startup message with colors
 	const (
 		colorReset   = "\033[0m"
@@ -291,7 +303,7 @@ func (s *Server) Start() error {
 	fmt.Printf("%s[OK]%s Server ready on port %d\n", colorGreen, colorReset, s.config.ServerPort)
 	fmt.Println()
 
-	if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
+	if err := s.httpServer.Serve(listener); err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)
 	}
 
@@ -357,7 +369,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.5","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.6","status":"running"}`)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -618,12 +630,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Acquire inference lock to ensure only one inference runs at a time
-	// Use TryLock to avoid blocking - return error if busy
-	if !s.inferenceMutex.TryLock() {
-		writeError(w, "Server is busy processing another request. Please try again in a moment.", http.StatusServiceUnavailable)
-		log.Println("Rejected chat completion request - inference already in progress")
-		return
-	}
+	// Use Lock to queue requests instead of rejecting them
+	s.inferenceMutex.Lock()
 	defer s.inferenceMutex.Unlock()
 
 	// Get model metadata
@@ -665,7 +673,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Perform inference
-	ctx := context.Background()
+	ctx := r.Context()
 	startTime := time.Now()
 	response, err := s.engine.ChatCompletion(ctx, &req)
 	duration := time.Since(startTime)
@@ -699,12 +707,12 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ctx := context.Background()
+	ctx := r.Context()
 	chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 	tokenIndex := 0
 
-	// Send tokens as they arrive
-	err := s.engine.ChatCompletionStream(ctx, req, func(token string) error {
+	// Define callback to reuse
+	callback := func(token string) error {
 		chunk := api.ChatCompletionChunk{
 			ID:      chunkID,
 			Object:  "chat.completion.chunk",
@@ -732,7 +740,31 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		flusher.Flush()
 		tokenIndex++
 		return nil
-	})
+	}
+
+	// Send tokens as they arrive
+	err := s.engine.ChatCompletionStream(ctx, req, callback)
+
+	// Retry logic: If we haven't sent any tokens yet and encountered a network error,
+	// it likely means the llama-server process crashed or was dead.
+	// We should try to reload the model and retry the request once.
+	if err != nil && tokenIndex == 0 {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "EOF") || strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "connection reset") {
+			log.Printf("Inference failed before generation started: %v. Attempting to reload model and retry...", err)
+
+			// Force unload to kill any zombie process
+			s.modelCache.Unload(req.Model)
+
+			// Switch model (reloads it)
+			if reloadErr := s.switchModel(req.Model); reloadErr == nil {
+				log.Printf("Model reloaded successfully. Retrying inference...")
+				err = s.engine.ChatCompletionStream(ctx, req, callback)
+			} else {
+				log.Printf("Failed to reload model during retry: %v", reloadErr)
+			}
+		}
+	}
 
 	if err != nil {
 		log.Printf("Streaming error: %v", err)
@@ -798,12 +830,14 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Acquire inference lock to ensure only one inference runs at a time
-	if !s.inferenceMutex.TryLock() {
-		writeError(w, "Server is busy processing another request. Please try again in a moment.", http.StatusServiceUnavailable)
-		log.Println("Rejected completion request - inference already in progress")
+	s.inferenceMutex.Lock()
+	defer s.inferenceMutex.Unlock()
+
+	// Switch to requested model if different from current
+	if err := s.switchModel(req.Model); err != nil {
+		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
 		return
 	}
-	defer s.inferenceMutex.Unlock()
 
 	// Get model metadata
 	modelMeta, err := s.registry.GetModel(req.Model)
@@ -832,7 +866,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Perform inference
-	ctx := context.Background()
+	ctx := r.Context()
 	response, err := s.engine.Completion(ctx, &req)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Inference failed: %v", err), http.StatusInternalServerError)
@@ -906,7 +940,7 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate embeddings
-	ctx := context.Background()
+	ctx := r.Context()
 	startTime := time.Now()
 	response, err := s.embeddingEngine.GenerateEmbeddings(ctx, &req)
 	if err != nil {
@@ -1767,6 +1801,7 @@ func (s *Server) handleWebUI(w http.ResponseWriter, r *http.Request) {
 
 // writeError writes an error response
 func writeError(w http.ResponseWriter, message string, statusCode int) {
+	log.Printf("API Error: %s (Status: %d)", message, statusCode)
 	w.WriteHeader(statusCode)
 	response := api.ErrorResponse{
 		Error: api.ErrorDetail{

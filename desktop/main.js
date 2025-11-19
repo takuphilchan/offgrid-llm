@@ -223,7 +223,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     icon: path.join(__dirname, 'assets/icon.png'),
-    backgroundColor: '#0f172a',
+    backgroundColor: '#1e1e1e',
     show: false,
     autoHideMenuBar: true
   });

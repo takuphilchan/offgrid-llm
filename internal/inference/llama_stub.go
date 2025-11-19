@@ -81,3 +81,8 @@ func (e *LlamaEngine) IsLoaded() bool {
 func (e *LlamaEngine) GetModelInfo() (*ModelInfo, error) {
 	return e.httpEngine.GetModelInfo()
 }
+
+// SetPort updates the llama-server port for this engine
+func (e *LlamaEngine) SetPort(port int) {
+	e.httpEngine.SetPort(port)
+}

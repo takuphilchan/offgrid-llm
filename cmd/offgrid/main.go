@@ -52,12 +52,12 @@ var (
 	colorMagenta = "\033[35m"
 
 	// Brand colors
-	brandPrimary   = "\033[38;5;45m"  // Bright cyan
-	brandSecondary = "\033[38;5;141m" // Purple
-	brandAccent    = "\033[38;5;226m" // Yellow
-	brandSuccess   = "\033[38;5;78m"  // Green
-	brandError     = "\033[38;5;196m" // Red
-	brandMuted     = "\033[38;5;240m" // Gray
+	brandPrimary   = "\033[36m"   // Cyan
+	brandSecondary = "\033[37m"   // White
+	brandAccent    = "\033[36m"   // Cyan
+	brandSuccess   = "\033[36m"   // Cyan
+	brandError     = "\033[1;37m" // White Bold
+	brandMuted     = "\033[90m"   // Gray (Bright Black)
 )
 
 const (
@@ -117,15 +117,8 @@ func printBanner() {
 		return
 	}
 	fmt.Println()
-	fmt.Printf("%s%s", brandPrimary, colorBold)
-	fmt.Println("    ╔═══════════════════════════════════╗")
-	fmt.Println("    ║                                   ║")
-	fmt.Printf("    ║      OFFGRID LLM  %-15s ║\n", Version)
-	fmt.Println("    ║                                   ║")
-	fmt.Println("    ║   Edge Inference Orchestrator    ║")
-	fmt.Println("    ║                                   ║")
-	fmt.Println("    ╚═══════════════════════════════════╝")
-	fmt.Printf("%s", colorReset)
+	fmt.Printf("%sOffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, colorReset, colorDim, Version, colorReset)
+	fmt.Printf("%sEdge Inference Orchestrator%s\n", colorDim, colorReset)
 	fmt.Println()
 }
 
@@ -1210,57 +1203,40 @@ func handleDoctor(args []string) {
 	fmt.Println()
 	fmt.Printf("%sSystem Diagnostics%s\n", brandPrimary+colorBold, colorReset)
 	fmt.Println("")
-	fmt.Printf("%sRunning comprehensive system checks...%s\n", colorDim, colorReset)
-	fmt.Println()
 
 	allPassed := true
 
 	// 1. Check system resources
-	fmt.Printf("%sHardware Detection%s\n", brandPrimary+colorBold, colorReset)
 	res, err := resource.DetectResources()
 	if err != nil {
-		fmt.Printf("%s✗%s Failed to detect resources: %v\n", brandError, colorReset, err)
+		fmt.Printf("  %s✗%s Resources: Failed (%v)\n", brandError, colorReset, err)
 		allPassed = false
 	} else {
-		fmt.Printf("%s✓%s System resources detected\n", brandSuccess, colorReset)
-		fmt.Printf("OS:       %s/%s\n", res.OS, res.Arch)
-		fmt.Printf("CPU:      %d cores\n", res.CPUCores)
-		fmt.Printf("RAM:      %s total, %s available\n",
-			formatBytes(res.TotalRAM*1024*1024),
-			formatBytes(res.AvailableRAM*1024*1024))
+		fmt.Printf("  %s✓%s Resources: %s/%s, %d cores, %s RAM\n",
+			brandSuccess, colorReset, res.OS, res.Arch, res.CPUCores, formatBytes(res.TotalRAM*1024*1024))
 		if res.GPUAvailable {
-			fmt.Printf("GPU:      %s (%s VRAM)\n", res.GPUName, formatBytes(res.GPUMemory*1024*1024))
-		} else {
-			fmt.Printf("GPU:      None (CPU-only mode)\n")
+			fmt.Printf("      GPU: %s (%s)\n", res.GPUName, formatBytes(res.GPUMemory*1024*1024))
 		}
 	}
-	fmt.Println("")
 
 	// 2. Check configuration
-	fmt.Printf("%sConfiguration%s\n", brandPrimary+colorBold, colorReset)
 	cfg := config.LoadConfig()
 	configPath := filepath.Join(os.Getenv("HOME"), ".offgrid-llm", "config.json")
 	if _, err := os.Stat(configPath); err == nil {
-		fmt.Printf("%s✓%s Config file found: %s\n", brandSuccess, colorReset, configPath)
-		fmt.Printf("Server Port: %d\n", cfg.ServerPort)
-		fmt.Printf("Models Dir:  %s\n", cfg.ModelsDir)
+		fmt.Printf("  %s✓%s Config:    %s\n", brandSuccess, colorReset, configPath)
 	} else {
-		fmt.Printf("%s⚠%s Using default config (no custom config file)\n", brandAccent, colorReset)
+		fmt.Printf("  %s⚠%s Config:    Using defaults\n", brandAccent, colorReset)
 	}
-	fmt.Println("")
 
 	// 3. Check models directory
-	fmt.Printf("%sModels Directory%s\n", brandPrimary+colorBold, colorReset)
 	if _, err := os.Stat(cfg.ModelsDir); err == nil {
-		fmt.Printf("%s✓%s Directory exists: %s\n", brandSuccess, colorReset, cfg.ModelsDir)
-
 		// Check permissions
 		testFile := filepath.Join(cfg.ModelsDir, ".test_write")
 		if err := os.WriteFile(testFile, []byte("test"), 0644); err == nil {
 			os.Remove(testFile)
-			fmt.Printf("%s✓%s Write permissions OK\n", brandSuccess, colorReset)
+			fmt.Printf("  %s✓%s Storage:   %s (Writable)\n", brandSuccess, colorReset, cfg.ModelsDir)
 		} else {
-			fmt.Printf("%s✗%s Write permission denied\n", brandError, colorReset)
+			fmt.Printf("  %s✗%s Storage:   %s (Read-only)\n", brandError, colorReset, cfg.ModelsDir)
 			allPassed = false
 		}
 
@@ -1268,75 +1244,40 @@ func handleDoctor(args []string) {
 		registry := models.NewRegistry(cfg.ModelsDir)
 		if err := registry.ScanModels(); err == nil {
 			modelList := registry.ListModels()
-			fmt.Printf("%s✓%s Found %d installed model(s)\n", brandSuccess, colorReset, len(modelList))
+			fmt.Printf("      Models:  %d installed\n", len(modelList))
 		}
 	} else {
-		fmt.Printf("%s✗%s Directory missing: %s\n", brandError, colorReset, cfg.ModelsDir)
-		fmt.Printf("Run: mkdir -p %s\n", cfg.ModelsDir)
+		fmt.Printf("  %s✗%s Storage:   Missing %s\n", brandError, colorReset, cfg.ModelsDir)
 		allPassed = false
 	}
-	fmt.Println("")
 
 	// 4. Check network connectivity
-	fmt.Printf("%sNetwork Connectivity%s\n", brandPrimary+colorBold, colorReset)
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get("https://huggingface.co")
 	if err == nil && resp.StatusCode == 200 {
-		fmt.Printf("%s✓%s HuggingFace Hub reachable\n", brandSuccess, colorReset)
+		fmt.Printf("  %s✓%s Network:   Online (HuggingFace reachable)\n", brandSuccess, colorReset)
 		resp.Body.Close()
 	} else {
-		fmt.Printf("%s⚠%s HuggingFace Hub unreachable (offline mode only)\n", brandAccent, colorReset)
+		fmt.Printf("  %s⚠%s Network:   Offline (HuggingFace unreachable)\n", brandAccent, colorReset)
 	}
-	fmt.Println("")
 
 	// 5. Check server status
-	fmt.Printf("%sOffGrid Server%s\n", brandPrimary+colorBold, colorReset)
 	healthURL := fmt.Sprintf("http://localhost:%d/health", cfg.ServerPort)
 	resp, err = client.Get(healthURL)
 	if err == nil && resp.StatusCode == 200 {
-		fmt.Printf("%s✓%s Server running on port %d\n", brandSuccess, colorReset, cfg.ServerPort)
+		fmt.Printf("  %s✓%s Server:    Running (Port %d)\n", brandSuccess, colorReset, cfg.ServerPort)
 		resp.Body.Close()
 	} else {
-		fmt.Printf("%s⚠%s Server not running\n", brandAccent, colorReset)
-		fmt.Printf("Start with: offgrid serve\n")
-	}
-	fmt.Println("")
-
-	// 6. Check disk space
-	fmt.Printf("%sDisk Space%s\n", brandPrimary+colorBold, colorReset)
-	// Simplified disk space check - just show directory exists
-	if _, err := os.Stat(cfg.ModelsDir); err == nil {
-		fmt.Printf("%s✓%s Models directory accessible\n", brandSuccess, colorReset)
-	} else {
-		fmt.Printf("%s⚠%s Models directory not accessible\n", brandAccent, colorReset)
-	}
-	fmt.Println("")
-
-	// 7. Performance recommendations
-	fmt.Printf("%sRecommendations%s\n", brandPrimary+colorBold, colorReset)
-	if res != nil {
-		ramGB := res.AvailableRAM / 1024
-		if ramGB < 4 {
-			fmt.Println("   • Limited RAM - use 1B-3B models with Q4_K_M quantization")
-			fmt.Println("   • Guide: docs/4GB_RAM.md")
-		} else if ramGB < 8 {
-			fmt.Println("   • 4-8GB RAM - optimal for 3B-7B models")
-		} else {
-			fmt.Println("   • Plenty of RAM - can use 7B-13B models")
-		}
-
-		if !res.GPUAvailable {
-			fmt.Println("   • No GPU detected - see docs/CPU_OPTIMIZATION.md")
-			fmt.Println("   • CPU-only is fine for 1B-7B models")
-		}
+		fmt.Printf("  %s⚠%s Server:    Stopped\n", brandAccent, colorReset)
 	}
 	fmt.Println()
 
 	if allPassed {
-		fmt.Printf("%s✓ All critical checks passed!%s\n\n", brandSuccess, colorReset)
+		fmt.Printf("  %s✓ System ready for inference%s\n", brandSuccess, colorReset)
 	} else {
-		fmt.Printf("%s⚠ Some issues detected - see recommendations above%s\n\n", brandAccent, colorReset)
+		fmt.Printf("  %s⚠ Some checks failed%s\n", brandAccent, colorReset)
 	}
+	fmt.Println()
 }
 
 func handleInit(args []string) {
@@ -1991,11 +1932,6 @@ func handleList(args []string) {
 		fmt.Println()
 		fmt.Printf("  No models installed\n")
 		fmt.Println()
-		fmt.Printf("%sQuick Start%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid search llama%s          Search for models\n", brandSecondary, colorReset)
-		fmt.Printf("   %soffgrid download-hf <id>%s     Download from HuggingFace\n", brandSecondary, colorReset)
-		fmt.Printf("   %soffgrid catalog%s              Browse model catalog\n", brandSecondary, colorReset)
-		fmt.Println()
 		return
 	}
 
@@ -2007,15 +1943,15 @@ func handleList(args []string) {
 	}
 
 	// Clean table with minimal lines
-	fmt.Printf("%s   %-48s %-14s %-12s%s\n", colorDim, "Model", "Size", "Quantization", colorReset)
+	fmt.Printf("%s   %-40s %-12s %-12s%s\n", colorDim, "Model", "Size", "Quantization", colorReset)
 
 	var totalSize int64
 	for i, model := range modelList {
 		meta, err := registry.GetModel(model.ID)
 
 		modelName := model.ID
-		if len(modelName) > 48 {
-			modelName = modelName[:45] + "..."
+		if len(modelName) > 40 {
+			modelName = modelName[:37] + "..."
 		}
 
 		sizeStr := "-"
@@ -2037,7 +1973,7 @@ func handleList(args []string) {
 			rowColor = colorReset
 		}
 
-		fmt.Printf("   %s%-48s%s %s%-14s%s %s%-12s%s\n",
+		fmt.Printf("   %s%-40s%s %s%-12s%s %s%-12s%s\n",
 			rowColor, modelName, colorReset,
 			brandSecondary, sizeStr, colorReset,
 			brandMuted, quantStr, colorReset)
@@ -2047,12 +1983,6 @@ func handleList(args []string) {
 		fmt.Println()
 		fmt.Printf("%s   Total: %s%s\n", colorDim, formatBytes(totalSize), colorReset)
 	}
-
-	fmt.Println()
-	fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("   %soffgrid run <model>%s          Start interactive chat\n", brandSecondary, colorReset)
-	fmt.Printf("   %soffgrid serve%s                Start API server\n", brandSecondary, colorReset)
-	fmt.Printf("   %soffgrid benchmark <model>%s    Test performance\n", brandSecondary, colorReset)
 	fmt.Println()
 }
 
@@ -2406,45 +2336,50 @@ func printHelp() {
 	fmt.Printf("%sUsage:%s offgrid [command] [options]\n", colorDim, colorReset)
 	fmt.Println()
 
+	// Helper for consistent formatting
+	printCmd := func(cmd, desc string) {
+		fmt.Printf("  %s%-32s%s %s\n", brandSecondary, cmd, colorReset, desc)
+	}
+
 	// Model Management
 	fmt.Printf("%sModel Management%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("%srecommend%s           Get model recommendations for your system\n", brandSecondary, colorReset)
-	fmt.Printf("%slist%s                List installed models\n", brandSecondary, colorReset)
-	fmt.Printf("%scatalog%s             Browse available models\n", brandSecondary, colorReset)
-	fmt.Printf("%ssearch%s <query>      Search HuggingFace\n", brandSecondary, colorReset)
-	fmt.Printf("%sdownload%s <id>       Download from catalog\n", brandSecondary, colorReset)
-	fmt.Printf("%sdownload-hf%s <id>    Download from HuggingFace\n", brandSecondary, colorReset)
-	fmt.Printf("%simport%s <path>       Import from USB/SD card\n", brandSecondary, colorReset)
-	fmt.Printf("%sexport%s <id> <dst>   Export to USB/SD card\n", brandSecondary, colorReset)
-	fmt.Printf("%sremove%s <id>         Remove installed model\n", brandSecondary, colorReset)
+	printCmd("recommend", "Get model recommendations for your system")
+	printCmd("list", "List installed models")
+	printCmd("catalog", "Browse available models")
+	printCmd("search <query>", "Search HuggingFace")
+	printCmd("download <id>", "Download from catalog")
+	printCmd("download-hf <id>", "Download from HuggingFace")
+	printCmd("import <path>", "Import from USB/SD card")
+	printCmd("export <id> <dst>", "Export to USB/SD card")
+	printCmd("remove <id>", "Remove installed model")
 	fmt.Println("")
 
 	// Inference & Chat
 	fmt.Printf("%sInference & Chat%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("%sserve%s               Start API server (default)\n", brandSecondary, colorReset)
-	fmt.Printf("%srun%s <model>         Interactive chat session\n", brandSecondary, colorReset)
-	fmt.Printf("%ssession%s <cmd>       Manage chat sessions\n", brandSecondary, colorReset)
-	fmt.Printf("%stemplate%s <cmd>      Manage prompt templates\n", brandSecondary, colorReset)
-	fmt.Printf("%sbatch%s <file>        Batch process prompts\n", brandSecondary, colorReset)
+	printCmd("serve", "Start API server (default)")
+	printCmd("run <model>", "Interactive chat session")
+	printCmd("session <cmd>", "Manage chat sessions")
+	printCmd("template <cmd>", "Manage prompt templates")
+	printCmd("batch <file>", "Batch process prompts")
 	fmt.Println("")
 
 	// Configuration & Diagnostics
 	fmt.Printf("%sSystem & Diagnostics%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("%sinit%s                First-time setup wizard\n", brandSecondary, colorReset)
-	fmt.Printf("%sdoctor%s              Run system diagnostics\n", brandSecondary, colorReset)
-	fmt.Printf("%sinfo%s                System information\n", brandSecondary, colorReset)
-	fmt.Printf("%sversion%s             Show version information\n", brandSecondary, colorReset)
-	fmt.Printf("%sconfig%s <action>     Manage configuration\n", brandSecondary, colorReset)
-	fmt.Printf("%sbenchmark%s <id>      Performance testing\n", brandSecondary, colorReset)
-	fmt.Printf("%shelp%s                Show this help\n", brandSecondary, colorReset)
+	printCmd("init", "First-time setup wizard")
+	printCmd("doctor", "Run system diagnostics")
+	printCmd("info", "System information")
+	printCmd("version", "Show version information")
+	printCmd("config <action>", "Manage configuration")
+	printCmd("benchmark <id>", "Performance testing")
+	printCmd("help", "Show this help")
 	fmt.Println("")
 
 	// Utilities
 	fmt.Printf("%sUtilities%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("%squantization%s        Quantization guide\n", brandSecondary, colorReset)
-	fmt.Printf("%salias%s <cmd>         Model aliases\n", brandSecondary, colorReset)
-	fmt.Printf("%sfavorite%s <cmd>      Favorite models\n", brandSecondary, colorReset)
-	fmt.Printf("%scompletions%s <shell>  Shell completions\n", brandSecondary, colorReset)
+	printCmd("quantization", "Quantization guide")
+	printCmd("alias <cmd>", "Model aliases")
+	printCmd("favorite <cmd>", "Favorite models")
+	printCmd("completions <shell>", "Shell completions")
 	fmt.Println()
 
 	fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
@@ -2547,7 +2482,7 @@ func handleInfo() {
 		}
 
 		output.PrintJSON(map[string]interface{}{
-			"version": "0.1.0-alpha",
+			"version": "0.1.6",
 			"config": map[string]interface{}{
 				"port":        cfg.ServerPort,
 				"models_dir":  cfg.ModelsDir,
@@ -2572,18 +2507,13 @@ func handleInfo() {
 
 	// Configuration
 	fmt.Printf("%sConfiguration%s\n", colorBold, colorReset)
-	fmt.Printf("%sPort:%s %d  %s%s  %sModels:%s %s\n",
-		colorDim, colorReset, cfg.ServerPort,
-		colorDim, colorReset,
-		colorDim, colorReset, cfg.ModelsDir)
-	fmt.Printf("%sThreads:%s %d  %s%s  %sContext:%s %d tokens  %s%s  %sMemory:%s %d MB\n",
-		colorDim, colorReset, cfg.NumThreads,
-		colorDim, colorReset,
-		colorDim, colorReset, cfg.MaxContextSize,
-		colorDim, colorReset,
-		colorDim, colorReset, cfg.MaxMemoryMB)
+	fmt.Printf("  Port:    %d\n", cfg.ServerPort)
+	fmt.Printf("  Models:  %s\n", cfg.ModelsDir)
+	fmt.Printf("  Threads: %d\n", cfg.NumThreads)
+	fmt.Printf("  Context: %d tokens\n", cfg.MaxContextSize)
+	fmt.Printf("  Memory:  %d MB\n", cfg.MaxMemoryMB)
 	if cfg.EnableP2P {
-		fmt.Printf("%sP2P:%s enabled (port %d)\n", colorDim, colorReset, cfg.P2PPort)
+		fmt.Printf("  P2P:     enabled (port %d)\n", cfg.P2PPort)
 	}
 	fmt.Println("")
 
@@ -2606,7 +2536,7 @@ func handleInfo() {
 					statusColor = brandSuccess
 				}
 
-				fmt.Printf("%s%s%s %s", statusColor, statusIcon, colorReset, model.ID)
+				fmt.Printf("  %s%s%s %s", statusColor, statusIcon, colorReset, model.ID)
 				if meta.Size > 0 {
 					fmt.Printf(" %s·%s %s", colorDim, colorReset, formatBytes(meta.Size))
 					totalSize += meta.Size
@@ -2618,10 +2548,11 @@ func handleInfo() {
 			}
 		}
 		if totalSize > 0 {
-			fmt.Printf("%sTotal:%s %s\n", colorDim, colorReset, formatBytes(totalSize))
+			fmt.Println()
+			fmt.Printf("  Total: %s\n", formatBytes(totalSize))
 		}
 	} else {
-		fmt.Printf("No models installed\n")
+		fmt.Printf("  No models installed\n")
 	}
 	fmt.Println("")
 
@@ -2635,20 +2566,6 @@ func handleInfo() {
 	}
 	fmt.Printf("%sCatalog%s · %d models (%d recommended)\n",
 		colorBold, colorReset, len(catalog.Models), recommended)
-	fmt.Println()
-
-	// Commands
-	if len(modelList) == 0 {
-		fmt.Printf("%sQuick Start%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid search llama%s         Search for models\n", brandSecondary, colorReset)
-		fmt.Printf("   %soffgrid download <id>%s        Download from catalog\n", brandSecondary, colorReset)
-		fmt.Printf("   %soffgrid serve%s                Start API server\n", brandSecondary, colorReset)
-	} else {
-		fmt.Printf("%sServer%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid serve%s                Start server\n", brandSecondary, colorReset)
-		fmt.Printf("   %shttp://localhost:%d%s      API endpoint\n", brandSecondary, cfg.ServerPort, colorReset)
-		fmt.Printf("   %shttp://localhost:%d/health%s  Health check\n", brandSecondary, cfg.ServerPort, colorReset)
-	}
 	fmt.Println()
 }
 

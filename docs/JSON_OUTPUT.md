@@ -88,7 +88,7 @@ offgrid info --json
 **Output:**
 ```json
 {
-  "version": "0.1.5-alpha",
+  "version": "0.1.6",
   "config": {
     "port": 11611,
     "models_dir": "/var/lib/offgrid/models",

@@ -5,7 +5,7 @@
 set -e
 
 # Build script for all platforms
-VERSION="0.1.5"
+VERSION="0.1.6"
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 CYAN='\033[0;36m'
@@ -111,7 +111,7 @@ if [ "$BUILD_CLI" = true ]; then
   
   cd "$PROJECT_ROOT"
   
-  if [ "$TARGET_PLATFORM" = "current" ] || [ "$TARGET_PLATFORM" = "linux" ]; then
+  if [ "$TARGET_PLATFORM" = "current" ] || [ "$TARGET_PLATFORM" = "linux" ] || [ "$TARGET_PLATFORM" = "all" ]; then
     print_step "Building Linux binary..."
     GOOS=linux GOARCH=$CURRENT_ARCH go build -ldflags "-X main.Version=$VERSION" -o "build/linux/offgrid" ./cmd/offgrid
     print_success "Linux binary built: build/linux/offgrid"

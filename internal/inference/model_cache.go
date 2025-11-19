@@ -1,12 +1,13 @@
 package inference
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -28,12 +29,13 @@ type ModelCache struct {
 	portToModel  map[int]string            // port -> modelID for reverse lookup
 	usedPorts    map[int]bool              // track which ports are in use
 	maxInstances int
+	gpuLayers    int // Number of GPU layers to offload
 	mu           sync.RWMutex
 	basePort     int
 }
 
 // NewModelCache creates a new model cache with specified capacity
-func NewModelCache(maxInstances int) *ModelCache {
+func NewModelCache(maxInstances int, gpuLayers int) *ModelCache {
 	if maxInstances < 1 {
 		maxInstances = 1
 	}
@@ -46,6 +48,7 @@ func NewModelCache(maxInstances int) *ModelCache {
 		portToModel:  make(map[int]string),
 		usedPorts:    make(map[int]bool),
 		maxInstances: maxInstances,
+		gpuLayers:    gpuLayers,
 		basePort:     42382,
 	}
 }
@@ -57,9 +60,36 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, erro
 
 	// Check if model is already loaded
 	if instance, exists := mc.instances[modelID]; exists {
-		instance.LastAccess = time.Now()
-		log.Printf("Model %s already cached on port %d", modelID, instance.Port)
-		return instance, nil
+		// Check if process is still alive AND healthy
+		isHealthy := false
+		if instance.Cmd.Process != nil {
+			// First check if process exists
+			if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err == nil {
+				// Process exists, check if it's responding
+				if err := mc.checkHealth(instance.Port); err == nil {
+					isHealthy = true
+				} else {
+					log.Printf("Model %s instance on port %d is unresponsive: %v", modelID, instance.Port, err)
+				}
+			}
+		}
+
+		if isHealthy {
+			instance.LastAccess = time.Now()
+			log.Printf("Model %s already cached on port %d", modelID, instance.Port)
+			return instance, nil
+		}
+
+		log.Printf("Model %s instance on port %d is dead or unhealthy. Reloading...", modelID, instance.Port)
+		// Clean up dead instance
+		// We manually cleanup instead of calling Unload to avoid lock issues if Unload were to change
+		if instance.Cmd != nil && instance.Cmd.Process != nil {
+			instance.Cmd.Process.Kill()
+			instance.Cmd.Wait()
+		}
+		delete(mc.instances, modelID)
+		delete(mc.portToModel, instance.Port)
+		delete(mc.usedPorts, instance.Port)
 	}
 
 	// Need to load new model
@@ -79,19 +109,29 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, erro
 
 	// Start llama-server with this model
 	log.Printf("Loading model %s on port %d (cache: %d/%d)", modelID, port, len(mc.instances)+1, mc.maxInstances)
-	cmd := exec.Command("llama-server",
+
+	args := []string{
 		"-m", modelPath,
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
-		"-c", "2048",
-		"-ngl", "0",
-	)
+		"-c", "4096", // Increased context size
+		"-np", "1", // Limit to 1 parallel sequence to improve stability
+	}
+
+	// Add GPU layers if configured
+	if mc.gpuLayers > 0 {
+		args = append(args, "-ngl", fmt.Sprintf("%d", mc.gpuLayers))
+	} else {
+		args = append(args, "-ngl", "0")
+	}
+
+	cmd := exec.Command("llama-server", args...)
 
 	cmd.Env = append(cmd.Env, "NO_PROXY=*")
 
-	// Suppress output to reduce noise
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	// Redirect output to parent process for debugging
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start llama-server: %w", err)
@@ -197,7 +237,7 @@ func (mc *ModelCache) getNextAvailablePort() int {
 // This prevents blank responses when switching models too quickly
 func (mc *ModelCache) waitForReady(port int) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
-	
+
 	// Phase 1: Wait for server process to start (up to 7.5 seconds)
 	serverStarted := false
 	for i := 0; i < 15; i++ {
@@ -210,37 +250,59 @@ func (mc *ModelCache) waitForReady(port int) error {
 			break
 		}
 	}
-	
+
 	if !serverStarted {
 		return fmt.Errorf("llama-server on port %d did not start within 7.5 seconds", port)
 	}
-	
-	// Phase 2: Wait for model to actually load (up to 60 seconds total)
-	// Model loading is the slow part, especially on low-end hardware
-	completionURL := fmt.Sprintf("http://localhost:%d/v1/chat/completions", port)
-	testPayload := []byte(`{"messages":[{"role":"user","content":"test"}],"max_tokens":1,"stream":false}`)
-	
-	maxAttempts := 60 // 60 seconds for model loading
+
+	// Phase 2: Wait for model to actually load (up to 120 seconds total)
+	// Check /v1/models endpoint which returns 200 only when model is loaded
+	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", port)
+
+	maxAttempts := 120 // 120 seconds for model loading (increased for CPU/slow disks)
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		time.Sleep(1 * time.Second)
-		
-		resp, err := http.Post(completionURL, "application/json", bytes.NewReader(testPayload))
+
+		// Check if process is still running
+		instance, exists := mc.instances[mc.portToModel[port]]
+		if exists && instance.Cmd.ProcessState != nil && instance.Cmd.ProcessState.Exited() {
+			return fmt.Errorf("llama-server on port %d exited unexpectedly", port)
+		}
+
+		resp, err := httpClient.Get(modelsURL)
 		if err == nil {
 			resp.Body.Close()
-			// 200 = model ready, 503 = still loading, 500 = error
 			if resp.StatusCode == http.StatusOK {
 				log.Printf("Model on port %d is fully loaded and ready", port)
 				return nil
 			}
-			if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusInternalServerError {
-				// Model still loading, continue waiting
-				continue
-			}
 		}
 	}
-	
+
 	// If we get here, model didn't load in time
-	return fmt.Errorf("model on port %d did not load within 60 seconds", port)
+	return fmt.Errorf("model on port %d did not load within 120 seconds", port)
+}
+
+// checkHealth performs a quick health check on the llama-server instance
+func (mc *ModelCache) checkHealth(port int) error {
+	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
+
+	// Create a client with a very short timeout for health checks
+	client := &http.Client{
+		Timeout: 500 * time.Millisecond,
+	}
+
+	resp, err := client.Get(healthURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("health check failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // GetStats returns cache statistics
