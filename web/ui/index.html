@@ -407,7 +407,7 @@
             word-wrap: break-word;
             flex: 1;
             min-height: 0;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
         }
         
         .terminal-line { 
@@ -417,7 +417,7 @@
             word-wrap: break-word; 
             word-break: break-word; 
             overflow-wrap: break-word;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
             line-height: 1.6;
             padding-left: 16px; /* Indent output for better hierarchy */
         }
@@ -455,16 +455,24 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             padding-top: 24px;
             padding-left: 0; /* Reset indent for prompt */
+            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
         }
         
         .terminal-input-line { 
             display: flex; 
             align-items: center; 
             gap: 12px; 
-            padding: 16px;
-            border-top: 1px solid #30363d;
-            background: #0f1419;
-            min-height: 60px;
+            padding: 0 32px 32px 32px;
+            border-top: none;
+            background: var(--terminal-bg);
+            min-height: auto;
+        }
+
+        .terminal-input-line .terminal-prompt {
+            margin: 0;
+            padding: 0;
+            border: none;
+            font-size: 14px;
         }
         
         .terminal-input { 
@@ -473,8 +481,9 @@
             color: #06b6d4; 
             flex: 1; 
             outline: none; 
-            font-family: inherit; 
-            font-size: 18px; 
+            box-shadow: none !important;
+            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
+            font-size: 14px; 
         }
         
         .terminal-running { 

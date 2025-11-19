@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/batch"
@@ -1350,7 +1351,9 @@ func handleInit(args []string) {
 			break
 		}
 		fmt.Printf("      %d. %s (%s) - %.1fGB\n", i+1, rec.ModelID, rec.Quantization, rec.SizeGB)
-		fmt.Printf("         %s\n", rec.Reason)
+		fmt.Printf("         %s%s%s · %s\n",
+			brandMuted, formatModelSize(rec.SizeGB), colorReset,
+			rec.Reason)
 	}
 	fmt.Println()
 
@@ -1417,10 +1420,11 @@ func handleInit(args []string) {
 
 	err = hf.DownloadGGUF(result.Model.ID, result.BestVariant.Filename, destPath, func(current, total int64) {
 		percent := float64(current) / float64(total) * 100
-		fmt.Printf("\r  Progress: %.1f%% (%s / %s)  ",
+		fmt.Printf("\r  Progress: %.1f%% (%s / %s) · %.1f MB/s\n",
 			percent,
 			formatBytes(current),
-			formatBytes(total))
+			formatBytes(total),
+			float64(current)/1024/1024)
 	})
 
 	if err != nil {
@@ -1609,6 +1613,9 @@ func handleBenchmark(args []string) {
 				fmt.Fprintf(os.Stderr, "  • %s\n", m.ID)
 			}
 			fmt.Fprintln(os.Stderr, "")
+		} else {
+			fmt.Fprintln(os.Stderr, "No models installed. Use 'offgrid download' to add models.")
+			fmt.Fprintln(os.Stderr, "")
 		}
 		os.Exit(1)
 	}
@@ -1674,7 +1681,7 @@ func handleBenchmark(args []string) {
 		)
 
 		if err != nil {
-			fmt.Printf("%s✗%s Failed: %v\n", brandError, colorReset, err)
+			fmt.Printf("%s✗%s\n", colorRed, colorReset)
 			continue
 		}
 
@@ -2072,9 +2079,9 @@ func handleCatalog() {
 
 	fmt.Println()
 	fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("   %soffgrid download <id> [quant]%s    Download model\n", brandSecondary, colorReset)
-	fmt.Printf("   %soffgrid search <query>%s           Search HuggingFace\n", brandSecondary, colorReset)
-	fmt.Printf("   %soffgrid quantization%s             Quantization guide\n", brandSecondary, colorReset)
+	fmt.Printf("   %sdownload <id> [quant]%s    Download model\n", brandSecondary, colorReset)
+	fmt.Printf("   %ssearch <query>%s           Search HuggingFace\n", brandSecondary, colorReset)
+	fmt.Printf("   %squantization%s             Quantization guide\n", brandSecondary, colorReset)
 	fmt.Println()
 }
 
@@ -2336,9 +2343,11 @@ func printHelp() {
 	fmt.Printf("%sUsage:%s offgrid [command] [options]\n", colorDim, colorReset)
 	fmt.Println()
 
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+
 	// Helper for consistent formatting
 	printCmd := func(cmd, desc string) {
-		fmt.Printf("  %s%-32s%s %s\n", brandSecondary, cmd, colorReset, desc)
+		fmt.Fprintf(w, "  %s%s%s\t%s\n", brandSecondary, cmd, colorReset, desc)
 	}
 
 	// Model Management
@@ -2352,6 +2361,7 @@ func printHelp() {
 	printCmd("import <path>", "Import from USB/SD card")
 	printCmd("export <id> <dst>", "Export to USB/SD card")
 	printCmd("remove <id>", "Remove installed model")
+	w.Flush()
 	fmt.Println("")
 
 	// Inference & Chat
@@ -2361,6 +2371,7 @@ func printHelp() {
 	printCmd("session <cmd>", "Manage chat sessions")
 	printCmd("template <cmd>", "Manage prompt templates")
 	printCmd("batch <file>", "Batch process prompts")
+	w.Flush()
 	fmt.Println("")
 
 	// Configuration & Diagnostics
@@ -2372,6 +2383,7 @@ func printHelp() {
 	printCmd("config <action>", "Manage configuration")
 	printCmd("benchmark <id>", "Performance testing")
 	printCmd("help", "Show this help")
+	w.Flush()
 	fmt.Println("")
 
 	// Utilities
@@ -2380,6 +2392,7 @@ func printHelp() {
 	printCmd("alias <cmd>", "Model aliases")
 	printCmd("favorite <cmd>", "Favorite models")
 	printCmd("completions <shell>", "Shell completions")
+	w.Flush()
 	fmt.Println()
 
 	fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
@@ -3321,6 +3334,7 @@ func handleRun(args []string) {
 			fmt.Println("  • Closing other applications to free memory")
 			fmt.Println("  • Using a smaller model (1B or 3B parameters)")
 			fmt.Println("  • Using a more aggressive quantization (Q2_K or Q3_K)")
+			fmt.Println("  • Upgrading your RAM")
 			fmt.Println()
 			printInfo("See docs/4GB_RAM.md for model recommendations")
 			fmt.Println()
@@ -3427,40 +3441,49 @@ func handleRun(args []string) {
 			llamaPort = strings.TrimSpace(string(portBytes))
 		}
 
-		// Poll llama-server with test completion until model is actually ready
-		// Health endpoint returns 200 immediately, but model may still be loading
-		maxWait := 60 // seconds
-		completionURL := fmt.Sprintf("http://localhost:%s/v1/chat/completions", llamaPort)
-		testPayload := []byte(`{"messages":[{"role":"user","content":"test"}],"max_tokens":1,"stream":false}`)
-
+		maxWait := 60
+		modelReady := false
 		for i := 0; i < maxWait; i++ {
 			time.Sleep(1 * time.Second)
 
-			// Send test completion to verify model is actually loaded
-			resp, err := http.Post(completionURL, "application/json", bytes.NewReader(testPayload))
-			if err == nil {
-				resp.Body.Close()
-				// 200 = model ready, 503 = still loading, 500 = error during load
-				if resp.StatusCode == 200 {
-					// Model is fully loaded and ready
-					break
-				}
+			// Check health endpoint
+			resp, err := http.Get(fmt.Sprintf("http://localhost:%s/health", llamaPort))
+			if err != nil {
+				continue
+			}
+			resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				continue
+			}
+
+			// Health is OK, now verify model is actually loaded
+			time.Sleep(500 * time.Millisecond) // Brief pause for model to fully initialize
+			modelsResp, err := http.Get(fmt.Sprintf("http://localhost:%s/v1/models", llamaPort))
+			if err == nil && modelsResp.StatusCode == http.StatusOK {
+				modelsResp.Body.Close()
+				modelReady = true
+				fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
+				// Additional wait to ensure model is fully ready to serve requests
+				time.Sleep(2 * time.Second)
+				break
+			}
+			if modelsResp != nil {
+				modelsResp.Body.Close()
 			}
 
 			if i == maxWait-1 {
 				fmt.Printf("%s✗%s\n", brandError, colorReset)
-				fmt.Println()
-				printError("Timeout waiting for model to load")
-				fmt.Println()
-				printInfo("This can happen if:")
-				fmt.Println("  • Model file is corrupted (run 'offgrid verify')")
-				fmt.Println("  • Insufficient RAM for this model")
-				fmt.Println("  • llama-server crashed during loading")
-				fmt.Println()
+				printError("Model failed to load in time")
 				os.Exit(1)
 			}
 		}
-		fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
+
+		if !modelReady {
+			fmt.Printf("%s✗%s\n", brandError, colorReset)
+			printError("Model failed to load")
+			os.Exit(1)
+		}
 		fmt.Println()
 	}
 
@@ -3588,7 +3611,7 @@ func handleRun(args []string) {
 
 				if err := startLlamaServerInBackground(model.Path); err != nil {
 					fmt.Println()
-					printError("Failed to start llama-server with new model")
+					printError("Failed to start llama-server")
 					fmt.Println()
 					fmt.Printf("%sℹ Start manually:%s\n", colorDim, colorReset)
 					fmt.Printf("  %sllama-server -m %s --port 42382 &%s\n", brandSecondary, model.Path, colorReset)
@@ -5089,7 +5112,7 @@ func handleBenchmarkCompare(args []string) {
 	}
 
 	// Print header
-	fmt.Printf("   %s%-30s  %10s  %12s  %10s  %8s%s\n",
+	fmt.Printf("   %s%-30s  %s%10s  %s%12s  %s%10s  %s%8s%s\n",
 		colorDim, "Model", "Speed", "Latency", "Range", "Size", colorReset)
 
 	fastest := results[0].AvgSpeed
@@ -5118,7 +5141,7 @@ func handleBenchmarkCompare(args []string) {
 			sizeStr += " " + r.Quant
 		}
 
-		fmt.Printf("   %s%-30s  %s%8.1f%s t/s  %10s  %4.0f-%4.0f  %10s\n",
+		fmt.Printf("   %s%-30s  %s%8.1f%s t/s  %s%10s%s  %s%4.0f-%4.0f  %s%10s\n",
 			rank, r.ModelID,
 			speedColor, r.AvgSpeed, colorReset,
 			formatDuration(r.AvgLatency),
