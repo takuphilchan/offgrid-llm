@@ -4,7 +4,7 @@ Welcome to OffGrid LLM! This is your complete guide to running AI language model
 
 ---
 
-## Getting Started (Pick One)
+## 🚀 Getting Started (Pick One)
 
 ### For Beginners
 - **[Quick Start Guide](QUICKSTART.md)** - 5-minute setup walkthrough
@@ -31,7 +31,7 @@ Welcome to OffGrid LLM! This is your complete guide to running AI language model
 
 ---
 
-## Docker Deployment
+## 🐳 Docker Deployment
 
 ### Docker Guides
 - **[Docker Quick Start](../DOCKER_README.md)** - 2-minute setup
@@ -48,7 +48,7 @@ nginx.conf.example          # Reverse proxy config
 
 ---
 
-## Configuration & Optimization
+## ⚙️ Configuration & Optimization
 
 ### Performance
 - **[Performance Tuning](advanced/PERFORMANCE.md)** - Speed optimization
@@ -62,12 +62,13 @@ nginx.conf.example          # Reverse proxy config
 
 ---
 
-## Architecture & Development
+## 🏗️ Architecture & Development
 
 ### System Design
 - **[Architecture](advanced/ARCHITECTURE.md)** - System overview
 - **[llama.cpp Setup](advanced/LLAMA_CPP_SETUP.md)** - Backend integration
 - **[Contributing Guide](../dev/CONTRIBUTING.md)** - Development workflow
+- **[Version Management](VERSION_MANAGEMENT.md)** - Centralized versioning system
 
 ### Deployment
 - **[Production Deployment](advanced/DEPLOYMENT.md)** - Scale and monitor

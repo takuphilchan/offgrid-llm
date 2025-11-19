@@ -271,10 +271,8 @@ offgrid-llm/
 - [Architecture](docs/advanced/ARCHITECTURE.md) - System design
 - [Performance Tuning](docs/advanced/PERFORMANCE.md) - Optimize speed
 - [Production Deployment](docs/advanced/DEPLOYMENT.md) - Scale and monitor
-- [🔨 Building from Source](docs/advanced/BUILDING.md) - Compile with GPU support
-- [Building from Source](docs/advanced/BUILDING.md)
-- [Deployment](docs/advanced/DEPLOYMENT.md)
-- [Performance Tuning](docs/advanced/PERFORMANCE.md)
+- [Building from Source](docs/advanced/BUILDING.md) - Compile with GPU support
+- [Version Management](docs/VERSION_MANAGEMENT.md) - How versioning works
 
 ---
 
