@@ -94,7 +94,6 @@
       "title": "OffGrid LLM Desktop ${version}",
       "writeUpdateInfo": false,
       "sign": false,
-      "background": null,
       "contents": [
         {
           "x": 130,
