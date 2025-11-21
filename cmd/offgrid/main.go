@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +15,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/batch"
@@ -613,9 +613,6 @@ func main() {
 		case "list":
 			handleList(os.Args[2:])
 			return
-		case "catalog":
-			handleCatalog()
-			return
 		case "verify":
 			handleVerify(os.Args[2:])
 			return
@@ -704,7 +701,7 @@ func handleDownload(args []string) {
 		fmt.Printf("   %soffgrid download tinyllama-1.1b-chat Q4_K_M%s\n", colorDim, colorReset)
 		fmt.Printf("   %soffgrid download llama-2-7b-chat%s\n", colorDim, colorReset)
 		fmt.Println()
-		fmt.Printf("%sℹ Use 'offgrid catalog' to see available models%s\n", colorDim, colorReset)
+		fmt.Printf("%sℹ Use 'offgrid download-hf' to download from HuggingFace%s\n", colorDim, colorReset)
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -994,7 +991,6 @@ func handleRemove(args []string) {
 			fmt.Printf("%sℹ No models installed%s\n", colorDim, colorReset)
 			fmt.Println()
 			fmt.Println("Download models:")
-			fmt.Printf("  %sFrom catalog:%s offgrid download <model-id>\n", brandSecondary, colorReset)
 			fmt.Printf("  %sFrom HuggingFace:%s offgrid download-hf <repo> --file <file>.gguf\n", brandSecondary, colorReset)
 			fmt.Println()
 		}
@@ -1412,6 +1408,31 @@ func handleInit(args []string) {
 		os.Exit(1)
 	}
 
+	var wizardProjector *models.ProjectorSource
+	if projector, err := hf.ResolveProjectorSource(result.Model.ID, nil, result.BestVariant.Filename); err != nil {
+		fmt.Println()
+		printWarning(fmt.Sprintf("Vision adapter lookup failed: %v", err))
+		fmt.Println()
+	} else {
+		wizardProjector = projector
+	}
+	if wizardProjector != nil {
+		sourceLabel := wizardProjector.ModelID
+		if wizardProjector.Source == "fallback" {
+			sourceLabel = fmt.Sprintf("%s (fallback)", sourceLabel)
+		}
+		fmt.Printf("Vision adapter detected: %s%s%s", brandPrimary, wizardProjector.File.Filename, colorReset)
+		if wizardProjector.File.Size > 0 {
+			fmt.Printf(" · %s", formatBytes(wizardProjector.File.Size))
+		}
+		fmt.Println()
+		fmt.Printf("Source: %s%s%s\n", brandMuted, sourceLabel, colorReset)
+		if wizardProjector.Reason != "" {
+			fmt.Printf("  %s%s%s\n", brandMuted, wizardProjector.Reason, colorReset)
+		}
+		fmt.Printf("%sIt will download automatically after the main model.%s\n\n", brandMuted, colorReset)
+	}
+
 	// Download the model
 	destPath := filepath.Join(cfg.ModelsDir, result.BestVariant.Filename)
 
@@ -1420,7 +1441,7 @@ func handleInit(args []string) {
 
 	err = hf.DownloadGGUF(result.Model.ID, result.BestVariant.Filename, destPath, func(current, total int64) {
 		percent := float64(current) / float64(total) * 100
-		fmt.Printf("\r  Progress: %.1f%% (%s / %s) · %.1f MB/s\n",
+		fmt.Printf("\r  Progress: %.1f%% (%s / %s) · %.1f MB/s",
 			percent,
 			formatBytes(current),
 			formatBytes(total),
@@ -1443,6 +1464,15 @@ func handleInit(args []string) {
 	fmt.Printf("  offgrid list                 # View installed models\n")
 	fmt.Printf("  offgrid search llama         # Find more models\n")
 	fmt.Println()
+
+	if wizardProjector != nil {
+		fmt.Printf("%sVision Adapter%s\n", brandPrimary+colorBold, colorReset)
+		if err := downloadVisionProjector(hf, cfg.ModelsDir, wizardProjector); err != nil {
+			printError(fmt.Sprintf("Vision adapter download failed: %v", err))
+			os.Exit(1)
+		}
+		fmt.Println()
+	}
 }
 
 func handleAutoSelect(args []string) {
@@ -1547,10 +1577,9 @@ func handleAutoSelect(args []string) {
 
 	fmt.Printf("%sNext Steps%s\n", brandPrimary+colorBold, colorReset)
 	if len(primary) > 0 {
-		fmt.Printf("   %soffgrid download %s %s%s\n", colorDim, primary[0].ModelID, primary[0].Quantization, colorReset)
+		fmt.Printf("   %soffgrid download-hf %s --file %s%s\n", colorDim, "TheBloke/"+primary[0].ModelID, primary[0].ModelID+".gguf", colorReset)
 		fmt.Printf("   %soffgrid search llama --author TheBloke%s\n", colorDim, colorReset)
 	}
-	fmt.Printf("   %soffgrid catalog%s\n", colorDim, colorReset)
 	fmt.Println()
 }
 
@@ -1949,16 +1978,30 @@ func handleList(args []string) {
 		fmt.Printf("  %d models installed\n\n", len(modelList))
 	}
 
+	// Calculate max width for model name
+	maxNameLen := 5 // Minimum width for "Model" header
+	for _, model := range modelList {
+		if len(model.ID) > maxNameLen {
+			maxNameLen = len(model.ID)
+		}
+	}
+	// Cap at 60 chars to prevent extreme width
+	if maxNameLen > 60 {
+		maxNameLen = 60
+	}
+
 	// Clean table with minimal lines
-	fmt.Printf("%s   %-40s %-12s %-12s%s\n", colorDim, "Model", "Size", "Quantization", colorReset)
+	// Dynamic format string based on max name length
+	headerFmt := fmt.Sprintf("%%s   %%-%ds %%-12s %%-12s%%s\n", maxNameLen)
+	fmt.Printf(headerFmt, colorDim, "Model", "Size", "Quantization", colorReset)
 
 	var totalSize int64
 	for i, model := range modelList {
 		meta, err := registry.GetModel(model.ID)
 
 		modelName := model.ID
-		if len(modelName) > 40 {
-			modelName = modelName[:37] + "..."
+		if len(modelName) > maxNameLen {
+			modelName = modelName[:maxNameLen-3] + "..."
 		}
 
 		sizeStr := "-"
@@ -1980,7 +2023,8 @@ func handleList(args []string) {
 			rowColor = colorReset
 		}
 
-		fmt.Printf("   %s%-40s%s %s%-12s%s %s%-12s%s\n",
+		rowFmt := fmt.Sprintf("   %%s%%-%ds%%s %%s%%-12s%%s %%s%%-12s%%s\n", maxNameLen)
+		fmt.Printf(rowFmt,
 			rowColor, modelName, colorReset,
 			brandSecondary, sizeStr, colorReset,
 			brandMuted, quantStr, colorReset)
@@ -1990,98 +2034,6 @@ func handleList(args []string) {
 		fmt.Println()
 		fmt.Printf("%s   Total: %s%s\n", colorDim, formatBytes(totalSize), colorReset)
 	}
-	fmt.Println()
-}
-
-func handleCatalog() {
-	catalog := models.DefaultCatalog()
-
-	fmt.Println()
-	fmt.Printf("%sModel Catalog%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Println("")
-
-	// Separate LLMs and embeddings
-	var llms []models.CatalogEntry
-	var embeddings []models.CatalogEntry
-
-	for _, entry := range catalog.Models {
-		// Simple heuristic: embeddings are typically small (<1GB) and have "embed" in name
-		isEmbedding := false
-		for _, v := range entry.Variants {
-			if v.Size < 500*1024*1024 { // < 500MB
-				isEmbedding = true
-				break
-			}
-		}
-		if isEmbedding {
-			embeddings = append(embeddings, entry)
-		} else {
-			llms = append(llms, entry)
-		}
-	}
-
-	// Show LLMs
-	fmt.Printf("%sLanguage Models%s · %d available\n", colorBold, colorReset, len(llms))
-	fmt.Println("")
-
-	for _, entry := range llms {
-		star := ""
-		if entry.Recommended {
-			star = fmt.Sprintf(" %s★%s", colorDim, colorReset)
-		}
-
-		fmt.Printf("%s%s%s%s %s%s · %d GB RAM%s\n",
-			brandPrimary, entry.ID, colorReset, star,
-			colorDim, entry.Parameters, entry.MinRAM, colorReset)
-
-		// Variants on same line
-		fmt.Printf("%s", colorDim)
-		for i, v := range entry.Variants {
-			if i > 0 {
-				fmt.Print(", ")
-			}
-			fmt.Printf("%s (%.1f GB)", v.Quantization, float64(v.Size)/(1024*1024*1024))
-		}
-		fmt.Printf("%s\n", colorReset)
-	}
-
-	// Show embeddings if any
-	if len(embeddings) > 0 {
-		fmt.Println("")
-		fmt.Printf("%sEmbedding Models%s · %d available\n", colorBold, colorReset, len(embeddings))
-		fmt.Println("")
-
-		for _, entry := range embeddings {
-			star := ""
-			if entry.Recommended {
-				star = fmt.Sprintf(" %s★%s", colorDim, colorReset)
-			}
-
-			fmt.Printf("%s%s%s%s\n",
-				brandPrimary, entry.ID, colorReset, star)
-
-			// Variants on same line
-			fmt.Printf("%s", colorDim)
-			for i, v := range entry.Variants {
-				if i > 0 {
-					fmt.Print(", ")
-				}
-				sizeGB := float64(v.Size) / (1024 * 1024 * 1024)
-				if sizeGB < 0.1 {
-					fmt.Printf("%s (%d MB)", v.Quantization, v.Size/(1024*1024))
-				} else {
-					fmt.Printf("%s (%.1f GB)", v.Quantization, sizeGB)
-				}
-			}
-			fmt.Printf("%s\n", colorReset)
-		}
-	}
-
-	fmt.Println()
-	fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("   %sdownload <id> [quant]%s    Download model\n", brandSecondary, colorReset)
-	fmt.Printf("   %ssearch <query>%s           Search HuggingFace\n", brandSecondary, colorReset)
-	fmt.Printf("   %squantization%s             Quantization guide\n", brandSecondary, colorReset)
 	fmt.Println()
 }
 
@@ -2343,57 +2295,97 @@ func printHelp() {
 	fmt.Printf("%sUsage:%s offgrid [command] [options]\n", colorDim, colorReset)
 	fmt.Println()
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-
-	// Helper for consistent formatting
-	printCmd := func(cmd, desc string) {
-		fmt.Fprintf(w, "  %s%s%s\t%s\n", brandSecondary, cmd, colorReset, desc)
+	// Define structure for commands to ensure global alignment
+	type cmdEntry struct {
+		name string
+		desc string
 	}
 
-	// Model Management
-	fmt.Printf("%sModel Management%s\n", brandPrimary+colorBold, colorReset)
-	printCmd("recommend", "Get model recommendations for your system")
-	printCmd("list", "List installed models")
-	printCmd("catalog", "Browse available models")
-	printCmd("search <query>", "Search HuggingFace")
-	printCmd("download <id>", "Download from catalog")
-	printCmd("download-hf <id>", "Download from HuggingFace")
-	printCmd("import <path>", "Import from USB/SD card")
-	printCmd("export <id> <dst>", "Export to USB/SD card")
-	printCmd("remove <id>", "Remove installed model")
-	w.Flush()
-	fmt.Println("")
+	type section struct {
+		title string
+		cmds  []cmdEntry
+	}
 
-	// Inference & Chat
-	fmt.Printf("%sInference & Chat%s\n", brandPrimary+colorBold, colorReset)
-	printCmd("serve", "Start API server (default)")
-	printCmd("run <model>", "Interactive chat session")
-	printCmd("session <cmd>", "Manage chat sessions")
-	printCmd("template <cmd>", "Manage prompt templates")
-	printCmd("batch <file>", "Batch process prompts")
-	w.Flush()
-	fmt.Println("")
+	sections := []section{
+		{
+			title: "Model Management",
+			cmds: []cmdEntry{
+				{"recommend", "Get model recommendations for your system"},
+				{"list", "List installed models"},
+				{"search <query>", "Search HuggingFace"},
+				{"download <id>", "Download from catalog"},
+				{"download-hf <id>", "Download from HuggingFace"},
+				{"import <path>", "Import from USB/SD card"},
+				{"export <id> <dst>", "Export to USB/SD card"},
+				{"remove <id>", "Remove installed model"},
+			},
+		},
+		{
+			title: "Inference & Chat",
+			cmds: []cmdEntry{
+				{"serve", "Start API server (default)"},
+				{"run <model> [opts]", "Interactive chat (supports --image for VLMs)"},
+				{"session <cmd>", "Manage chat sessions"},
+				{"template <cmd>", "Manage prompt templates"},
+				{"batch <file>", "Batch process prompts"},
+			},
+		},
+		{
+			title: "System & Diagnostics",
+			cmds: []cmdEntry{
+				{"init", "First-time setup wizard"},
+				{"doctor", "Run system diagnostics"},
+				{"info", "System information"},
+				{"version", "Show version information"},
+				{"config <action>", "Manage configuration"},
+				{"benchmark <id>", "Performance testing"},
+				{"help", "Show this help"},
+			},
+		},
+		{
+			title: "Utilities",
+			cmds: []cmdEntry{
+				{"quantization", "Quantization guide"},
+				{"alias <cmd>", "Model aliases"},
+				{"favorite <cmd>", "Favorite models"},
+				{"completions <shell>", "Shell completions"},
+			},
+		},
+	}
 
-	// Configuration & Diagnostics
-	fmt.Printf("%sSystem & Diagnostics%s\n", brandPrimary+colorBold, colorReset)
-	printCmd("init", "First-time setup wizard")
-	printCmd("doctor", "Run system diagnostics")
-	printCmd("info", "System information")
-	printCmd("version", "Show version information")
-	printCmd("config <action>", "Manage configuration")
-	printCmd("benchmark <id>", "Performance testing")
-	printCmd("help", "Show this help")
-	w.Flush()
-	fmt.Println("")
+	// Calculate max command length for consistent padding
+	maxLen := 0
+	for _, s := range sections {
+		for _, c := range s.cmds {
+			if len(c.name) > maxLen {
+				maxLen = len(c.name)
+			}
+		}
+	}
 
-	// Utilities
-	fmt.Printf("%sUtilities%s\n", brandPrimary+colorBold, colorReset)
-	printCmd("quantization", "Quantization guide")
-	printCmd("alias <cmd>", "Model aliases")
-	printCmd("favorite <cmd>", "Favorite models")
-	printCmd("completions <shell>", "Shell completions")
-	w.Flush()
-	fmt.Println()
+	// Add padding (minimum 2 spaces, align to 4-space boundary)
+	pad := maxLen + 4
+
+	// Format string: "  " + Command + Padding + Description
+	// We construct the padding manually to ensure it's always spaces
+
+	for _, s := range sections {
+		fmt.Printf("%s%s%s\n", brandPrimary+colorBold, s.title, colorReset)
+		for _, c := range s.cmds {
+			// Calculate padding needed
+			paddingNeeded := pad - len(c.name)
+			if paddingNeeded < 1 {
+				paddingNeeded = 1
+			}
+			padding := strings.Repeat(" ", paddingNeeded)
+
+			fmt.Printf("  %s%s%s%s%s\n",
+				brandSecondary, c.name, colorReset,
+				padding,
+				c.desc)
+		}
+		fmt.Println()
+	}
 
 	fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
 	fmt.Printf("   %soffgrid init%s                              # First-time setup\n", colorDim, colorReset)
@@ -2401,6 +2393,7 @@ func printHelp() {
 	fmt.Printf("   %soffgrid search llama --ram 4%s              # Find 4GB-compatible models\n", colorDim, colorReset)
 	fmt.Printf("   %soffgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --quant Q4_K_M%s\n", colorDim, colorReset)
 	fmt.Printf("   %soffgrid run tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
+	fmt.Printf("   %soffgrid run llava-v1.6 --image photo.jpg%s  # Run VLM with image\n", colorDim, colorReset)
 	fmt.Printf("   %soffgrid doctor%s                            # Check system health\n", colorDim, colorReset)
 	fmt.Println()
 }
@@ -2990,8 +2983,18 @@ func handleDownloadHF(args []string) {
 		os.Exit(1)
 	}
 
-	// Parse GGUF files
+	// Parse GGUF files (model card siblings first, then tree API fallback)
 	ggufFiles := []models.GGUFFileInfo{}
+	appendFiltered := func(candidate models.GGUFFileInfo) {
+		if filename != "" && candidate.Filename != filename {
+			return
+		}
+		if quantFilter != "" && !strings.EqualFold(candidate.Quantization, quantFilter) {
+			return
+		}
+		ggufFiles = append(ggufFiles, candidate)
+	}
+
 	for _, sibling := range model.Siblings {
 		if !strings.HasSuffix(strings.ToLower(sibling.Filename), ".gguf") {
 			continue
@@ -3004,16 +3007,19 @@ func handleDownloadHF(args []string) {
 			Quantization: extractQuantFromFilename(sibling.Filename),
 			DownloadURL:  fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelID, sibling.Filename),
 		}
+		appendFiltered(info)
+	}
 
-		// Apply filters
-		if filename != "" && sibling.Filename != filename {
-			continue
+	if len(ggufFiles) == 0 {
+		if treeFiles, err := hf.ListGGUFFiles(modelID); err == nil {
+			for _, info := range treeFiles {
+				appendFiltered(info)
+			}
+		} else {
+			fmt.Println()
+			printWarning(fmt.Sprintf("Could not enumerate files via tree API: %v", err))
+			fmt.Println()
 		}
-		if quantFilter != "" && !strings.EqualFold(info.Quantization, quantFilter) {
-			continue
-		}
-
-		ggufFiles = append(ggufFiles, info)
 	}
 
 	if len(ggufFiles) == 0 {
@@ -3065,6 +3071,34 @@ func handleDownloadHF(args []string) {
 			os.Exit(1)
 		}
 		selectedFile = ggufFiles[choice-1]
+	}
+
+	// Try to find matching vision adapter (mmproj) file
+	var projectorSource *models.ProjectorSource
+	if source, err := hf.ResolveProjectorSource(modelID, model.Siblings, selectedFile.Filename); err != nil {
+		fmt.Println()
+		printWarning(fmt.Sprintf("Vision adapter lookup failed: %v", err))
+		fmt.Println()
+	} else {
+		projectorSource = source
+	}
+	if projectorSource != nil {
+		fmt.Println()
+		fmt.Printf("%sVision Support%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("Adapter: %s%s%s", brandPrimary, projectorSource.File.Filename, colorReset)
+		if projectorSource.File.Size > 0 {
+			fmt.Printf(" · %s", formatBytes(projectorSource.File.Size))
+		}
+		fmt.Println()
+		sourceLabel := projectorSource.ModelID
+		if projectorSource.Source == "fallback" {
+			sourceLabel = fmt.Sprintf("%s (fallback)", sourceLabel)
+		}
+		fmt.Printf("Source: %s%s%s\n", brandMuted, sourceLabel, colorReset)
+		if projectorSource.Reason != "" {
+			fmt.Printf("  %s%s%s\n", brandMuted, projectorSource.Reason, colorReset)
+		}
+		fmt.Printf("%sWill download automatically after the model.%s\n", brandMuted, colorReset)
 	}
 
 	// Create destination path
@@ -3164,8 +3198,8 @@ func handleDownloadHF(args []string) {
 			totalStr = fmt.Sprintf("%.2f GB", float64(total)/(1024*1024*1024))
 		}
 
-		// Use newline instead of carriage return for proper streaming output
-		fmt.Printf("  Progress: %.1f%% (%s / %s) · %.1f MB/s\n",
+		// Use carriage return for proper streaming output
+		fmt.Printf("\r  Progress: %.1f%% (%s / %s) · %.1f MB/s",
 			percent,
 			currentStr,
 			totalStr,
@@ -3189,6 +3223,16 @@ func handleDownloadHF(args []string) {
 	fmt.Printf("Location: %s%s%s\n", brandMuted, destPath, colorReset)
 	fmt.Println("")
 
+	if projectorSource != nil {
+		fmt.Printf("%sVision Adapter%s\n", brandPrimary+colorBold, colorReset)
+		if err := downloadVisionProjector(hf, cfg.ModelsDir, projectorSource); err != nil {
+			fmt.Println()
+			printError(fmt.Sprintf("Vision adapter download failed: %v", err))
+			os.Exit(1)
+		}
+		fmt.Println()
+	}
+
 	// Reload llama-server with the downloaded model
 	if err := reloadLlamaServerWithModel(destPath); err != nil {
 		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
@@ -3199,10 +3243,7 @@ func handleDownloadHF(args []string) {
 	}
 
 	// Extract model name (filename without .gguf extension for CLI)
-	modelName := selectedFile.Filename
-	if strings.HasSuffix(modelName, ".gguf") {
-		modelName = modelName[:len(modelName)-5]
-	}
+	modelName := strings.TrimSuffix(selectedFile.Filename, ".gguf")
 
 	fmt.Println("")
 	fmt.Println()
@@ -3210,6 +3251,81 @@ func handleDownloadHF(args []string) {
 	fmt.Printf("  Run model: %soffgrid run %s%s\n", brandMuted, modelName, colorReset)
 	fmt.Printf("  Benchmark: %soffgrid benchmark %s%s\n", brandMuted, modelName, colorReset)
 	fmt.Println()
+}
+func downloadVisionProjector(hf *models.HuggingFaceClient, modelsDir string, projector *models.ProjectorSource) error {
+	if projector == nil || projector.File.Filename == "" {
+		return nil
+	}
+
+	remotePath := projector.File.Filename
+	localName := filepath.Base(remotePath)
+	destPath := filepath.Join(modelsDir, localName)
+	if _, err := os.Stat(destPath); err == nil {
+		fmt.Printf("  ✓ Vision adapter already present at %s%s%s\n", brandMuted, destPath, colorReset)
+		return nil
+	}
+
+	sourceLabel := projector.ModelID
+	if projector.Source == "fallback" {
+		sourceLabel = fmt.Sprintf("%s (fallback)", sourceLabel)
+	}
+	fmt.Printf("  Source: %s%s%s\n", brandMuted, sourceLabel, colorReset)
+	if projector.Reason != "" {
+		fmt.Printf("  %s%s%s\n", brandMuted, projector.Reason, colorReset)
+	}
+	fmt.Printf("  ⧉ Downloading %s%s%s\n", brandPrimary, remotePath, colorReset)
+	startTime := time.Now()
+	lastUpdate := startTime
+	var lastProgress int64
+	var emaSpeed float64
+
+	err := hf.DownloadGGUF(projector.ModelID, remotePath, destPath, func(current, total int64) {
+		now := time.Now()
+		if now.Sub(lastUpdate) < 500*time.Millisecond && lastProgress > 0 {
+			return
+		}
+
+		percent := 0.0
+		if total > 0 {
+			percent = float64(current) / float64(total) * 100
+		}
+
+		var speed float64
+		if lastProgress > 0 {
+			elapsed := now.Sub(lastUpdate).Seconds()
+			if elapsed > 0 {
+				speed = float64(current-lastProgress) / elapsed / (1024 * 1024)
+			}
+		} else {
+			totalElapsed := now.Sub(startTime).Seconds()
+			if totalElapsed > 0 {
+				speed = float64(current) / totalElapsed / (1024 * 1024)
+			}
+		}
+
+		if emaSpeed == 0 {
+			emaSpeed = speed
+		} else {
+			emaSpeed = emaSpeed*0.6 + speed*0.4
+		}
+
+		fmt.Printf("\r      %.1f%% (%s / %s) · %.1f MB/s",
+			percent,
+			formatBytes(current),
+			formatBytes(total),
+			emaSpeed)
+
+		lastUpdate = now
+		lastProgress = current
+	})
+
+	fmt.Println()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("  ✓ Vision adapter saved to %s%s%s\n", brandMuted, destPath, colorReset)
+	return nil
 }
 
 func extractQuantFromFilename(filename string) string {
@@ -3240,16 +3356,18 @@ func handleRun(args []string) {
 		fmt.Println()
 		fmt.Printf("%sRun Chat Session%s\n", brandPrimary+colorBold, colorReset)
 		fmt.Println("")
-		fmt.Printf("%sUsage:%s offgrid run <model-name> [--save <name>] [--load <name>]\n", colorDim, colorReset)
+		fmt.Printf("%sUsage:%s offgrid run <model-name> [--save <name>] [--load <name>] [--image <path>]\n", colorDim, colorReset)
 		fmt.Println("")
 		fmt.Println("Start an interactive chat session with a model")
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
 		fmt.Printf("%s--save <name>%s    Save conversation to session\n", brandSecondary, colorReset)
 		fmt.Printf("%s--load <name>%s    Load and continue existing session\n", brandSecondary, colorReset)
+		fmt.Printf("%s--image <path>%s   Attach an image (for VLM models)\n", brandSecondary, colorReset)
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
 		fmt.Printf("   %soffgrid run tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid run llava-v1.6 --image ./photo.jpg%s\n", colorDim, colorReset)
 		fmt.Printf("   %soffgrid run llama --save my-project%s\n", colorDim, colorReset)
 		fmt.Printf("   %soffgrid run llama --load my-project%s\n", colorDim, colorReset)
 		fmt.Println()
@@ -3263,6 +3381,7 @@ func handleRun(args []string) {
 	var sessionName string
 	var loadSession bool
 	var saveSession bool
+	var imagePath string
 
 	// Parse flags
 	for i := 1; i < len(args); i++ {
@@ -3273,6 +3392,9 @@ func handleRun(args []string) {
 		} else if args[i] == "--load" && i+1 < len(args) {
 			sessionName = args[i+1]
 			loadSession = true
+			i++
+		} else if args[i] == "--image" && i+1 < len(args) {
+			imagePath = args[i+1]
 			i++
 		}
 	}
@@ -3690,6 +3812,21 @@ func handleRun(args []string) {
 		}
 	}
 
+	// Handle initial image if provided
+	if imagePath != "" {
+		// Verify image file exists and is readable
+		_, err := os.ReadFile(imagePath)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to read image file: %v", err))
+			os.Exit(1)
+		}
+
+		fmt.Printf("%sImage attached:%s %s\n", brandSuccess, colorReset, filepath.Base(imagePath))
+		fmt.Println()
+
+		// We'll attach this to the first user message
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -3720,17 +3857,59 @@ func handleRun(args []string) {
 					fmt.Printf("%sWarning: Failed to save cleared session: %v%s\n", colorYellow, err, colorReset)
 				}
 			}
+			// Clear image path so it doesn't get re-attached
+			imagePath = ""
 			fmt.Printf("\n%sConversation cleared%s\n", colorDim, colorReset)
 			continue
 		}
 
 		// Add user message
+		var userContent interface{} = input
+
+		// If we have an image pending, attach it to this message
+		if imagePath != "" {
+			// Read image file again (or we could have cached the dataURI)
+			imageData, err := os.ReadFile(imagePath)
+			if err == nil {
+				base64Image := base64.StdEncoding.EncodeToString(imageData)
+				mimeType := "image/jpeg"
+				if strings.HasSuffix(strings.ToLower(imagePath), ".png") {
+					mimeType = "image/png"
+				} else if strings.HasSuffix(strings.ToLower(imagePath), ".webp") {
+					mimeType = "image/webp"
+				} else if strings.HasSuffix(strings.ToLower(imagePath), ".gif") {
+					mimeType = "image/gif"
+				}
+
+				dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image)
+
+				// Create multimodal content
+				userContent = []map[string]interface{}{
+					{
+						"type": "text",
+						"text": input,
+					},
+					{
+						"type": "image_url",
+						"image_url": map[string]string{
+							"url": dataURI,
+						},
+					},
+				}
+
+				// Clear image path so it's only sent once
+				imagePath = ""
+			} else {
+				printError(fmt.Sprintf("Failed to read image file: %v", err))
+			}
+		}
+
 		messages = append(messages, ChatMessage{
 			Role:    "user",
-			Content: input,
+			Content: userContent,
 		})
 
-		// Save user message to session
+		// Save user message to session (store as text for simplicity in session file for now)
 		if currentSession != nil {
 			currentSession.AddMessage("user", input)
 		}
@@ -3786,7 +3965,11 @@ func handleRun(args []string) {
 			}
 
 			if len(chunk.Choices) > 0 {
-				token := chunk.Choices[0].Delta.Content
+				tokenInterface := chunk.Choices[0].Delta.Content
+				var token string
+				if str, ok := tokenInterface.(string); ok {
+					token = str
+				}
 				fmt.Print(token)
 				os.Stdout.Sync() // Flush output immediately for streaming
 				assistantMsg.WriteString(token)
@@ -3834,8 +4017,31 @@ func handleRun(args []string) {
 
 // Helper types for handleRun
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"`
+}
+
+func (m ChatMessage) StringContent() string {
+	if m.Content == nil {
+		return ""
+	}
+	if str, ok := m.Content.(string); ok {
+		return str
+	}
+	if parts, ok := m.Content.([]interface{}); ok {
+		var text string
+		for _, part := range parts {
+			if p, ok := part.(map[string]interface{}); ok {
+				if t, ok := p["type"].(string); ok && t == "text" {
+					if val, ok := p["text"].(string); ok {
+						text += val
+					}
+				}
+			}
+		}
+		return text
+	}
+	return ""
 }
 
 type ChatCompletionRequest struct {
@@ -3847,7 +4053,7 @@ type ChatCompletionRequest struct {
 type ChatCompletionChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content interface{} `json:"content"`
 		} `json:"delta"`
 	} `json:"choices"`
 }
@@ -5112,7 +5318,7 @@ func handleBenchmarkCompare(args []string) {
 	}
 
 	// Print header
-	fmt.Printf("   %s%-30s  %s%10s  %s%12s  %s%10s  %s%8s%s\n",
+	fmt.Printf("   %s%-30s  %10s  %12s  %10s  %8s%s\n",
 		colorDim, "Model", "Speed", "Latency", "Range", "Size", colorReset)
 
 	fastest := results[0].AvgSpeed
@@ -5141,7 +5347,7 @@ func handleBenchmarkCompare(args []string) {
 			sizeStr += " " + r.Quant
 		}
 
-		fmt.Printf("   %s%-30s  %s%8.1f%s t/s  %s%10s%s  %s%4.0f-%4.0f  %s%10s\n",
+		fmt.Printf("   %s%-30s  %s%8.1f%s t/s  %10s  %4.0f-%4.0f  %10s\n",
 			rank, r.ModelID,
 			speedColor, r.AvgSpeed, colorReset,
 			formatDuration(r.AvgLatency),

@@ -129,7 +129,7 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			return nil, fmt.Errorf("llama-server returned status %d: %s", resp.StatusCode, string(body))
+			return nil, classifyLlamaServerError(resp.StatusCode, body)
 		}
 
 		defer resp.Body.Close()
@@ -204,7 +204,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			return fmt.Errorf("llama-server returned status %d: %s", resp.StatusCode, string(body))
+			return classifyLlamaServerError(resp.StatusCode, body)
 		}
 
 		defer resp.Body.Close()
@@ -273,7 +273,7 @@ func (e *LlamaHTTPEngine) Completion(ctx context.Context, req *api.CompletionReq
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("llama-server returned status %d: %s", resp.StatusCode, string(body))
+		return nil, classifyLlamaServerError(resp.StatusCode, body)
 	}
 
 	var completionResp api.CompletionResponse
@@ -287,6 +287,36 @@ func (e *LlamaHTTPEngine) Completion(ctx context.Context, req *api.CompletionReq
 // IsLoaded returns whether the engine is connected to llama-server
 func (e *LlamaHTTPEngine) IsLoaded() bool {
 	return e.loaded
+}
+
+func classifyLlamaServerError(status int, body []byte) error {
+	var backendErr struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	message := strings.TrimSpace(string(body))
+	if err := json.Unmarshal(body, &backendErr); err == nil {
+		if backendErr.Error.Message != "" {
+			message = backendErr.Error.Message
+		}
+	}
+
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "mmproj") || strings.Contains(lower, "image input is not supported") {
+		return &EngineError{
+			Code:    ErrCodeMissingMmproj,
+			Message: "Image input is not supported because the model's mmproj adapter is missing. Download the matching .mmproj file, place it next to the GGUF, and reload the model.",
+			Details: message,
+		}
+	}
+
+	if message == "" {
+		message = string(body)
+	}
+
+	return fmt.Errorf("llama-server returned status %d: %s", status, message)
 }
 
 // GetModelInfo returns information about the model from llama-server

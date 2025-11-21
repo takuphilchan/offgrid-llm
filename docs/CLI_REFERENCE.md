@@ -185,6 +185,15 @@ Download GGUF models directly from HuggingFace.
 - File selection UI for multiple files
 - Progress tracking
 - Resume support (partial)
+- Automatically fetches matching vision projectors (mmproj) from the source repo or a curated fallback catalog (e.g., koboldcpp/mmproj) so VLM downloads stay single-step
+
+**Vision fallback coverage:**
+- Qwen2.5-VL (3B/7B, including VLM-R1 builds)
+- Qwen2-VL (2B/7B) and Qwen2.5-VL vision variants
+- LLaMA 3 vision checkpoints (8B) and legacy LLaVA 7B/13B adapters
+- Gemma 3 (4B/12B/27B), MiniCPM, Pixtral 12B, Mistral Small 24B, Yi 34B, Obsidian 3B
+
+To add more adapters, edit `internal/models/projector_fallbacks.go` (no rebuild of docs required) and list the model-id/filename substrings that should map to a particular projector file.
 
 **Example:**
 ```bash

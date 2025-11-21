@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>OffGrid LLM</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Code syntax highlighting -->
@@ -390,7 +393,7 @@
             border: 1px solid var(--border-color);
             border-radius: 0;
             padding: 16px;
-            font-family: 'Consolas', 'Courier New', monospace;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Ubuntu Mono', 'DejaVu Sans Mono', 'Liberation Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 14px;
             overflow-y: auto;
             color: var(--terminal-text);
@@ -399,28 +402,38 @@
         
         .terminal-output { 
             overflow-y: auto; 
-            overflow-x: hidden;
+            overflow-x: auto;
             padding: 32px;
             line-height: 1.6;
             font-size: 14px;
             background: #1e1e1e;
-            word-wrap: break-word;
+            word-wrap: normal;
             flex: 1;
             min-height: 0;
-            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Ubuntu Mono', 'DejaVu Sans Mono', 'Liberation Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
         }
         
         .terminal-line { 
             color: #e0e0e0; 
-            margin-bottom: 2px; 
-            white-space: pre-wrap; 
-            word-wrap: break-word; 
-            word-break: break-word; 
-            overflow-wrap: break-word;
-            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
-            line-height: 1.6;
-            padding-left: 16px; /* Indent output for better hierarchy */
+            margin-bottom: 1px; 
+            white-space: pre-wrap;       /* Wrap text normally like a terminal */
+            word-break: break-all;       /* Break long words if needed */
+            font-family: 'JetBrains Mono', 'Fira Code', 'Ubuntu Mono', monospace;
+            line-height: 1.5;
+            padding-left: 16px;
+            overflow: visible;           /* Never show scrollbars on lines */
         }
+
+        /* Markdown styles for terminal */
+        .terminal-line p { margin-bottom: 0.5em; }
+        .terminal-line p:last-child { margin-bottom: 0; }
+        .terminal-line pre { background: #2d2d2d; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 0.5em 0; }
+        .terminal-line code { background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; font-family: inherit; }
+        .terminal-line pre code { background: transparent; padding: 0; }
+        .terminal-line ul, .terminal-line ol { margin-left: 1.5em; margin-bottom: 0.5em; }
+        .terminal-line li { margin-bottom: 0.2em; }
+        .terminal-line h1, .terminal-line h2, .terminal-line h3 { font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: var(--ansi-cyan); }
+        .terminal-line a { color: var(--ansi-blue); text-decoration: underline; }
         
         /* ANSI color classes - optimized for readability on dark background */
         .ansi-black { color: var(--ansi-black); }
@@ -801,7 +814,7 @@
             <h1 class="text-xl font-bold text-accent">OffGrid LLM</h1>
             <div class="flex items-center gap-3">
                 <span id="statusBadge" class="badge badge-success">Ready</span>
-                <span class="text-xs text-secondary">v0.1.7</span>
+                <span class="text-xs text-secondary">v0.1.8</span>
             </div>
         </div>
     </header>
@@ -809,6 +822,7 @@
     <nav class="app-nav">
         <div class="flex gap-1">
             <button onclick="switchTab('chat')" id="tab-chat" class="tab active">Chat</button>
+            <button onclick="switchTab('embeddings')" id="tab-embeddings" class="tab">Embeddings</button>
             <button onclick="switchTab('sessions')" id="tab-sessions" class="tab">Sessions</button>
             <button onclick="switchTab('models')" id="tab-models" class="tab">Models</button>
             <button onclick="switchTab('terminal')" id="tab-terminal" class="tab">Terminal</button>
@@ -866,25 +880,51 @@
                 </div>
                 <div class="flex-shrink-0 bg-primary border-t border-theme">
                     <div class="max-w-3xl mx-auto py-4 px-4">
-                        <div class="relative input-theme rounded-xl focus-within:border-theme transition-colors shadow-lg">
-                            <textarea id="chatInput" placeholder="Message OffGrid LLM..." 
-                               onkeydown="handleChatKeydown(event)"
-                               oninput="autoResizeTextarea(this)"
-                               rows="1"
-                               style="max-height: 200px; min-height: 52px;"
-                               class="w-full bg-transparent border-none px-4 py-3 pr-12 text-sm text-primary resize-none focus:outline-none"></textarea>
-                            <button onclick="sendChat()" id="sendBtn" 
-                                    class="absolute right-2 bottom-2 w-8 h-8 rounded-lg btn-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="text-white">
-                                    <path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z" fill="currentColor"/>
-                                </svg>
-                            </button>
-                            <button onclick="stopGeneration()" id="stopBtn" 
-                                    class="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 transition-colors items-center justify-center hidden">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="text-white">
-                                    <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/>
-                                </svg>
-                            </button>
+                        <div class="relative input-theme rounded-xl focus-within:border-theme transition-colors shadow-lg flex flex-col">
+                            <!-- Image Preview Area -->
+                            <div id="imagePreview" class="hidden px-4 pt-3 pb-1 border-b border-white/5">
+                                <div class="flex items-center justify-between mb-2 text-xs text-secondary">
+                                    <span id="imageAttachmentCount">0 attachments</span>
+                                    <button type="button" onclick="clearAllImages()" class="text-red-300 hover:text-red-200">Clear all</button>
+                                </div>
+                                <div id="imagePreviewList" class="flex flex-wrap gap-3"></div>
+                            </div>
+
+                            <div class="flex items-end w-full">
+                                <!-- Image Upload Button -->
+                                <button id="imageUploadBtn" onclick="document.getElementById('imageInput').click()" 
+                                        class="ml-3 mb-3 w-8 h-8 rounded-lg text-secondary hover:text-primary hover:bg-white/10 transition-colors flex items-center justify-center hidden"
+                                        title="Upload Image">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                                        <polyline points="21 15 16 10 5 21"/>
+                                    </svg>
+                                </button>
+                                <input type="file" id="imageInput" accept="image/*" multiple class="hidden" onchange="handleImageUpload(event)">
+
+                                <div class="flex-1 relative">
+                                    <textarea id="chatInput" placeholder="Message OffGrid LLM..." 
+                                    onkeydown="handleChatKeydown(event)"
+                                    oninput="autoResizeTextarea(this)"
+                                    rows="1"
+                                    style="max-height: 200px; min-height: 52px;"
+                                    class="w-full bg-transparent border-none px-4 py-3 pr-12 text-sm text-primary resize-none focus:outline-none"></textarea>
+                                    
+                                    <button onclick="sendChat()" id="sendBtn" 
+                                            class="absolute right-2 bottom-2 w-8 h-8 rounded-lg btn-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="text-white">
+                                            <path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z" fill="currentColor"/>
+                                        </svg>
+                                    </button>
+                                    <button onclick="stopGeneration()" id="stopBtn" 
+                                            class="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 transition-colors items-center justify-center hidden">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="text-white">
+                                            <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div class="flex items-center justify-between mt-2 text-xs text-secondary px-1">
                             <div class="flex gap-3">
@@ -893,6 +933,90 @@
                                 <span id="messageCount">0 messages</span>
                             </div>
                             <span id="statusBadge" class="text-xs font-medium">Ready</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Embeddings Tab -->
+        <div id="content-embeddings" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto space-y-4">
+                <div class="card">
+                    <h3 class="text-lg font-semibold mb-4">Text Embeddings</h3>
+                    <p class="text-xs text-secondary mb-4">Generate vector embeddings from text for semantic search, RAG, and similarity comparison</p>
+                    
+                    <div class="space-y-4">
+                        <!-- Model Selection -->
+                        <div>
+                            <label class="text-sm font-medium block mb-2">Embedding Model</label>
+                            <select id="embeddingModel" class="w-full input-theme rounded px-3 py-2 text-sm">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Text Input -->
+                        <div>
+                            <label class="text-sm font-medium block mb-2">Input Text</label>
+                            <textarea id="embeddingInput" 
+                                      placeholder="Enter text to generate embeddings (e.g., 'The quick brown fox jumps over the lazy dog')"
+                                      rows="4"
+                                      class="w-full input-theme rounded px-3 py-2 text-sm font-mono resize-y"></textarea>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="flex gap-2">
+                            <button onclick="generateEmbedding()" id="generateEmbeddingBtn" class="btn btn-primary">
+                                Generate Embedding
+                            </button>
+                            <button onclick="clearEmbedding()" class="btn btn-secondary">Clear</button>
+                        </div>
+                        
+                        <!-- Results -->
+                        <div id="embeddingResults" class="hidden">
+                            <div class="border-t border-theme pt-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-medium">Embedding Output</h4>
+                                    <button onclick="copyEmbedding()" class="btn btn-secondary btn-sm">Copy Vector</button>
+                                </div>
+                                
+                                <!-- Stats -->
+                                <div class="grid grid-cols-3 gap-4 mb-3 text-xs">
+                                    <div class="bg-secondary rounded px-3 py-2">
+                                        <div class="text-secondary">Dimensions</div>
+                                        <div id="embeddingDimensions" class="text-lg font-semibold text-accent">-</div>
+                                    </div>
+                                    <div class="bg-secondary rounded px-3 py-2">
+                                        <div class="text-secondary">Tokens</div>
+                                        <div id="embeddingTokens" class="text-lg font-semibold text-accent">-</div>
+                                    </div>
+                                    <div class="bg-secondary rounded px-3 py-2">
+                                        <div class="text-secondary">Time</div>
+                                        <div id="embeddingTime" class="text-lg font-semibold text-accent">-</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Vector Output -->
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">Vector (first 100 values):</label>
+                                    <div id="embeddingVector" 
+                                         class="bg-tertiary rounded px-3 py-2 text-xs font-mono overflow-x-auto max-h-32 overflow-y-auto"
+                                         style="white-space: pre-wrap; word-break: break-all;"></div>
+                                </div>
+                                
+                                <!-- Full Vector (hidden) -->
+                                <div class="mt-2">
+                                    <button onclick="toggleFullVector()" id="toggleVectorBtn" class="btn btn-secondary btn-sm">
+                                        Show Full Vector
+                                    </button>
+                                </div>
+                                <div id="fullVectorContainer" class="hidden mt-2">
+                                    <label class="text-xs text-secondary block mb-1">Full Vector:</label>
+                                    <div id="embeddingVectorFull" 
+                                         class="bg-tertiary rounded px-3 py-2 text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto"
+                                         style="white-space: pre-wrap; word-break: break-all;"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1049,10 +1173,6 @@
                                 class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
                             recommend
                         </button>
-                        <button onclick="runQuickCommand('offgrid catalog')" 
-                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
-                            catalog
-                        </button>
                         <button onclick="runQuickCommand('offgrid help')" 
                                 class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
                             help
@@ -1070,7 +1190,7 @@
                     </div>
                 </div>
                 <div class="terminal-output scrollable flex-1 overflow-y-auto" id="terminalOutput">
-                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.7</div>
+                    <div class="terminal-line terminal-success">OffGrid Terminal v0.1.8</div>
                     <div class="terminal-line">Connected to real offgrid binary</div>
                     <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
                 </div>
@@ -1126,6 +1246,70 @@
             }
         }
 
+        function normalizeMessageContent(rawContent) {
+            if (Array.isArray(rawContent)) {
+                const textParts = rawContent
+                    .filter(part => part?.type === 'text')
+                    .map(part => part.text || '');
+                const imageParts = rawContent
+                    .filter(part => part?.type === 'image_url' && part.image_url?.url)
+                    .map(part => part.image_url.url);
+                return {
+                    text: textParts.join('\n\n').trim(),
+                    images: imageParts
+                };
+            }
+
+            if (typeof rawContent === 'string') {
+                return { text: rawContent, images: [] };
+            }
+
+            if (rawContent && typeof rawContent === 'object') {
+                if (typeof rawContent.text === 'string') {
+                    return { text: rawContent.text, images: [] };
+                }
+            }
+
+            return { text: rawContent ? String(rawContent) : '', images: [] };
+        }
+
+        function escapeAttribute(value) {
+            return (value || '').replace(/"/g, '&quot;');
+        }
+
+        function modelSupportsVision(modelInfo, fallbackId = '') {
+            const hasCapability = Array.isArray(modelInfo?.capabilities) && modelInfo.capabilities.includes('vision');
+            if (hasCapability || modelInfo?.type === 'vlm') {
+                return true;
+            }
+
+            const tags = Array.isArray(modelInfo?.tags) ? modelInfo.tags : [];
+            if (tags.some(tag => ['vision', 'vlm', 'multimodal', 'image'].includes(tag?.toLowerCase?.() || tag))) {
+                return true;
+            }
+
+            const identifier = (fallbackId || modelInfo?.id || '').toLowerCase();
+            const keywords = ['llava', 'bakllava', 'vision', 'yi-vl', 'vlm', 'qwen', 'moondream', 'minicpm', 'minicpm-v', 'pixtral'];
+            return keywords.some(keyword => identifier.includes(keyword));
+        }
+
+        async function buildAPIError(response) {
+            let payload = null;
+            try {
+                payload = await response.json();
+            } catch (e) {
+                // Ignore JSON parse errors
+            }
+
+            const message = payload?.error?.message || `Server error (${response.status})`;
+            const code = payload?.error?.code || null;
+            const err = new Error(message);
+            err.code = code;
+            err.status = response.status;
+            err.payload = payload;
+            return err;
+        }
+
         // Load messages from localStorage
         function loadMessages() {
             try {
@@ -1141,7 +1325,8 @@
                     chatMessages.innerHTML = '';
                     messages.forEach(msg => {
                         if (msg.role === 'user' || msg.role === 'assistant') {
-                            addChatMessage(msg.role, msg.content);
+                            const { text, images } = normalizeMessageContent(msg.content);
+                            addChatMessage(msg.role, text, images);
                         }
                     });
                     updateChatStats();
@@ -1173,6 +1358,9 @@
             if (tab === 'chat') {
                 loadChatModels();
                 updateChatStats();
+            }
+            if (tab === 'embeddings') {
+                loadEmbeddingModels();
             }
         }
 
@@ -1223,7 +1411,6 @@
             const commands = [
                 'offgrid list',
                 'offgrid recommend',
-                'offgrid catalog',
                 'offgrid download ',
                 'offgrid download-hf ',
                 'offgrid remove ',
@@ -1261,6 +1448,10 @@
                 const resp = await fetch('/models');
                 const data = await resp.json();
                 const models = data.data || [];
+                
+                // Load all models - both LLM and embedding models
+                // We'll detect type and route to correct API when sending
+                
                 const select = document.getElementById('chatModel');
                 
                 // Remember the current selection before clearing
@@ -1269,13 +1460,13 @@
                 select.innerHTML = '';
                 
                 if (models.length === 0) {
-                    select.innerHTML = '<option value="">No models available</option>';
+                    select.innerHTML = '<option value="">No LLM models available</option>';
                     return;
                 }
                 
                 // Sort models alphabetically by ID
                 models.sort((a, b) => a.id.localeCompare(b.id));
-                console.log('[LOAD MODELS] Sorted models:', models.map(m => m.id));
+                console.log('[LOAD MODELS] Sorted LLM models:', models.map(m => m.id));
                 
                 models.forEach(m => {
                     const opt = document.createElement('option');
@@ -1313,29 +1504,229 @@
             }
         }
 
+        // Load embedding models
+        async function loadEmbeddingModels() {
+            try {
+                // Force refresh models from filesystem
+                try {
+                    await fetch('/models/refresh', { method: 'POST' });
+                } catch (e) {
+                    console.warn('Failed to refresh models, using cached list:', e);
+                }
+                
+                const resp = await fetch('/models');
+                const data = await resp.json();
+                const allModels = data.data || [];
+                
+                // Filter only embedding models
+                const models = allModels.filter(m => {
+                    return m.type === 'embedding' || m.tags?.includes('embedding');
+                });
+                
+                const select = document.getElementById('embeddingModel');
+                select.innerHTML = '';
+                
+                if (models.length === 0) {
+                    select.innerHTML = '<option value="">No embedding models available</option>';
+                    return;
+                }
+                
+                // Sort models alphabetically by ID
+                models.sort((a, b) => a.id.localeCompare(b.id));
+                console.log('[LOAD EMBEDDING MODELS] Sorted models:', models.map(m => m.id));
+                
+                models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    const displayName = m.id.replace(/_/g, ' ').replace(/-/g, ' ');
+                    opt.textContent = displayName;
+                    opt.title = m.id;
+                    select.appendChild(opt);
+                });
+                
+                // Auto-select first model
+                if (models.length > 0) {
+                    select.value = models[0].id;
+                }
+            } catch (e) {
+                console.error('Failed to load embedding models:', e);
+                document.getElementById('embeddingModel').innerHTML = '<option value="">Error loading models</option>';
+            }
+        }
+
+        // Generate embedding
+        let currentEmbeddingData = null;
+        
+        async function generateEmbedding() {
+            const model = document.getElementById('embeddingModel').value;
+            const input = document.getElementById('embeddingInput').value.trim();
+            const btn = document.getElementById('generateEmbeddingBtn');
+            
+            if (!model) {
+                alert('Please select an embedding model');
+                return;
+            }
+            
+            if (!input) {
+                alert('Please enter text to embed');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch('/v1/embeddings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: model,
+                        input: input
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to generate embedding');
+                }
+                
+                const data = await response.json();
+                const endTime = Date.now();
+                const timeMs = endTime - startTime;
+                
+                // Store the full embedding data
+                currentEmbeddingData = data.data[0].embedding;
+                
+                // Display results
+                displayEmbeddingResults(data, timeMs);
+                
+            } catch (error) {
+                console.error('Embedding error:', error);
+                alert('Failed to generate embedding: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Embedding';
+            }
+        }
+        
+        function displayEmbeddingResults(data, timeMs) {
+            const resultsDiv = document.getElementById('embeddingResults');
+            const embedding = data.data[0].embedding;
+            const dimensions = embedding.length;
+            
+            // Show results section
+            resultsDiv.classList.remove('hidden');
+            
+            // Update stats
+            document.getElementById('embeddingDimensions').textContent = dimensions;
+            document.getElementById('embeddingTokens').textContent = data.usage?.prompt_tokens || '-';
+            document.getElementById('embeddingTime').textContent = timeMs + 'ms';
+            
+            // Display first 100 values
+            const preview = embedding.slice(0, 100);
+            const previewText = '[' + preview.map(v => v.toFixed(6)).join(', ') + 
+                              (dimensions > 100 ? ', ...' : '') + ']';
+            document.getElementById('embeddingVector').textContent = previewText;
+            
+            // Store full vector for later display
+            const fullText = '[' + embedding.map(v => v.toFixed(6)).join(', ') + ']';
+            document.getElementById('embeddingVectorFull').textContent = fullText;
+            
+            // Reset toggle button
+            document.getElementById('toggleVectorBtn').textContent = 'Show Full Vector';
+            document.getElementById('fullVectorContainer').classList.add('hidden');
+        }
+        
+        function toggleFullVector() {
+            const container = document.getElementById('fullVectorContainer');
+            const btn = document.getElementById('toggleVectorBtn');
+            
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                btn.textContent = 'Hide Full Vector';
+            } else {
+                container.classList.add('hidden');
+                btn.textContent = 'Show Full Vector';
+            }
+        }
+        
+        function copyEmbedding() {
+            if (!currentEmbeddingData) {
+                alert('No embedding to copy');
+                return;
+            }
+            
+            const text = '[' + currentEmbeddingData.map(v => v.toFixed(6)).join(', ') + ']';
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+        
+        function clearEmbedding() {
+            document.getElementById('embeddingInput').value = '';
+            document.getElementById('embeddingResults').classList.add('hidden');
+            currentEmbeddingData = null;
+        }
+
         // Wait for model to be fully loaded and ready
         async function waitForModelReady(modelName) {
             console.log('[HEALTH CHECK] Waiting for model to be ready:', modelName);
             const maxAttempts = 60; // 60 seconds max wait
             const pollInterval = 1000; // Check every second
             
+            // Check if this is an embedding model
+            const resp = await fetch('/models');
+            const data = await resp.json();
+            const modelInfo = data.data.find(m => m.id === modelName);
+            // Check type from metadata, or fallback to name heuristics if metadata missing
+            const isEmbeddingModel = modelInfo?.type === 'embedding' || 
+                                   modelName.toLowerCase().includes('embed') || 
+                                   modelName.toLowerCase().includes('bge') ||
+                                   modelName.toLowerCase().includes('nomic');
+            console.log('[HEALTH CHECK] Model type:', modelInfo?.type, 'Is embedding:', isEmbeddingModel);
+            
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
                     console.log(`[HEALTH CHECK] Attempt ${attempt}/${maxAttempts}`);
                     
-                    // Send a minimal test completion request to verify model is loaded
-                    const testResponse = await fetch('/v1/chat/completions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            model: modelName,
-                            messages: [{ role: 'user', content: 'test' }],
-                            stream: false,
-                            max_tokens: 1,
-                            temperature: 0.1
-                        }),
-                        signal: AbortSignal.timeout(5000) // 5 second timeout per attempt
-                    });
+                    let testResponse;
+                    if (isEmbeddingModel) {
+                        // For embedding models, use embeddings endpoint
+                        testResponse = await fetch('/v1/embeddings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                model: modelName,
+                                input: 'test'
+                            }),
+                            signal: AbortSignal.timeout(5000)
+                        });
+                    } else {
+                        // For LLM models, use chat completions endpoint
+                        testResponse = await fetch('/v1/chat/completions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                model: modelName,
+                                messages: [{ role: 'user', content: 'test' }],
+                                stream: false,
+                                max_tokens: 1,
+                                temperature: 0.1
+                            }),
+                            signal: AbortSignal.timeout(5000)
+                        });
+                    }
                     
                     console.log('[HEALTH CHECK] Response status:', testResponse.status);
                     
@@ -1412,6 +1803,26 @@
             
             currentModel = newModel;
             console.log('[MODEL CHANGE] Switching from', oldModel, 'to', newModel);
+
+            // Check if VLM and toggle upload button
+            try {
+                const resp = await fetch('/models');
+                const data = await resp.json();
+                const modelInfo = data.data.find(m => m.id === newModel);
+                const isVLM = modelSupportsVision(modelInfo, newModel);
+                
+                const imageUploadBtn = document.getElementById('imageUploadBtn');
+                if (imageUploadBtn) {
+                    if (isVLM) {
+                        imageUploadBtn.classList.remove('hidden');
+                    } else {
+                        imageUploadBtn.classList.add('hidden');
+                        clearAllImages(); // Clear any pending image if switching away from VLM
+                    }
+                }
+            } catch (e) {
+                console.error('Error checking model type:', e);
+            }
             
             // Disable UI while loading model
             const chatInput = document.getElementById('chatInput');
@@ -1457,27 +1868,22 @@
         }
 
         // Modal dialog system
-        function showModal({ type = 'info', title, message, confirmText = 'OK', cancelText = 'Cancel', onConfirm, onCancel }) {
+        function showModal({ type = 'info', title, message, confirmText = 'OK', cancelText, onConfirm, onCancel }) {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
             
-            const iconMap = {
-                warning: '⚠️',
-                error: '❌',
-                info: 'ℹ️',
-                success: '✓'
-            };
-            
+            const icon = type === 'error' ? 
+                '<div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mb-4"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></div>' :
+                type === 'warning' ?
+                '<div class="w-12 h-12 rounded-full bg-yellow-100 text-yellow-500 flex items-center justify-center mb-4"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>' :
+                '<div class="w-12 h-12 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center mb-4"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></div>';
+
             overlay.innerHTML = `
-                <div class="modal-dialog ${type}">
-                    <div class="modal-header">
-                        <span class="modal-icon">${iconMap[type] || iconMap.info}</span>
-                        <h3 class="modal-title">${title}</h3>
-                    </div>
-                    <div class="modal-body">
-                        ${message}
-                    </div>
-                    <div class="modal-actions">
+                <div class="modal-content">
+                    ${icon}
+                    <h3 class="text-lg font-bold mb-2 text-primary">${title}</h3>
+                    <p class="text-secondary mb-6">${message}</p>
+                    <div class="flex justify-end gap-3">
                         ${cancelText ? `<button class="btn btn-secondary" data-action="cancel">${cancelText}</button>` : ''}
                         <button class="btn ${type === 'error' ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmText}</button>
                     </div>
@@ -1699,7 +2105,8 @@
                         const chatMessages = document.getElementById('chatMessages');
                         chatMessages.innerHTML = '';
                         messages.forEach(m => {
-                            addChatMessage(m.role, m.content);
+                            const { text, images } = normalizeMessageContent(m.content);
+                            addChatMessage(m.role, text, images);
                         });
                         
                         switchTab('chat');
@@ -1724,7 +2131,8 @@
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '';
             messages.forEach(m => {
-                addChatMessage(m.role, m.content);
+                const { text, images } = normalizeMessageContent(m.content);
+                addChatMessage(m.role, text, images);
             });
             
             switchTab('chat');
@@ -1850,6 +2258,91 @@
             handleModelChange();
         };
 
+        // Image handling
+        const MAX_IMAGE_ATTACHMENTS = 5;
+        let imageAttachments = [];
+        let nextImageAttachmentId = 1;
+
+        function handleImageUpload(event) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+
+            const remainingSlots = MAX_IMAGE_ATTACHMENTS - imageAttachments.length;
+            if (remainingSlots <= 0) {
+                showToast(`Maximum of ${MAX_IMAGE_ATTACHMENTS} images reached`, 'error');
+                event.target.value = '';
+                return;
+            }
+
+            const filesToProcess = files.slice(0, remainingSlots);
+            if (files.length > filesToProcess.length) {
+                showToast(`Only ${remainingSlots} more image${remainingSlots === 1 ? '' : 's'} allowed`, 'warning');
+            }
+
+            filesToProcess.forEach(file => {
+                if (file.size > 10 * 1024 * 1024) {
+                    showToast(`${file.name} is larger than 10MB`, 'error');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imageAttachments.push({
+                        id: nextImageAttachmentId++,
+                        name: file.name,
+                        url: e.target.result
+                    });
+                    updateImagePreview();
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // Reset input so same files can be selected again
+            event.target.value = '';
+        }
+
+        function updateImagePreview() {
+            const preview = document.getElementById('imagePreview');
+            const list = document.getElementById('imagePreviewList');
+            const countLabel = document.getElementById('imageAttachmentCount');
+
+            if (!preview || !list || !countLabel) return;
+
+            list.innerHTML = '';
+
+            if (imageAttachments.length === 0) {
+                preview.classList.add('hidden');
+                countLabel.textContent = '0 attachments';
+                return;
+            }
+
+            preview.classList.remove('hidden');
+            countLabel.textContent = `${imageAttachments.length} attachment${imageAttachments.length === 1 ? '' : 's'}`;
+
+            imageAttachments.forEach(att => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'relative group';
+                const altText = escapeAttribute(att.name || 'Attachment');
+                const imageUrl = escapeAttribute(att.url);
+                wrapper.innerHTML = `
+                    <img src="${imageUrl}" alt="${altText}" class="h-24 w-24 object-cover rounded-lg border border-white/10 shadow-sm">
+                    <button type="button" onclick="removeImageAttachment(${att.id})" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>`;
+                list.appendChild(wrapper);
+            });
+        }
+
+        function removeImageAttachment(id) {
+            imageAttachments = imageAttachments.filter(att => att.id !== id);
+            updateImagePreview();
+        }
+
+        function clearAllImages() {
+            imageAttachments = [];
+            updateImagePreview();
+        }
+
         // Send chat message with streaming
         async function sendChat() {
             console.log('[SEND CHAT] Function called');
@@ -1891,6 +2384,21 @@
             console.log('[SEND CHAT] Current model variable:', currentModel);
             console.log('[SEND CHAT] Dropdown element value:', document.getElementById('chatModel').value);
             
+            // Check if this is an embedding model
+            const resp = await fetch('/models');
+            const data = await resp.json();
+            console.log('[SEND CHAT] ALL MODELS DATA:', JSON.stringify(data.data, null, 2));
+            const modelInfo = data.data.find(m => m.id === model);
+            console.log('[SEND CHAT] Found model info:', JSON.stringify(modelInfo, null, 2));
+            // Check type from metadata, or fallback to name heuristics if metadata missing
+            const isEmbeddingModel = modelInfo?.type === 'embedding' || 
+                                   model.toLowerCase().includes('embed') || 
+                                   model.toLowerCase().includes('bge') ||
+                                   model.toLowerCase().includes('nomic');
+            console.log('[SEND CHAT] Model type:', modelInfo?.type, 'Is embedding:', isEmbeddingModel);
+            const supportsVision = modelSupportsVision(modelInfo, model);
+            console.log('[SEND CHAT] Supports vision:', supportsVision);
+            
             if (!model) {
                 console.log('[SEND CHAT] No model selected!');
                 pendingRequest = false; // Clear flag
@@ -1919,8 +2427,35 @@
             sendBtn.disabled = true;
             stopBtn.classList.remove('hidden');
 
-            messages.push({ role: 'user', content: msg });
-            addChatMessage('user', msg);
+            // Handle VLM content
+            let messageContent = msg;
+            let inlineImages = [];
+            if (imageAttachments.length > 0) {
+                if (!supportsVision) {
+                    showToast('Selected model does not support image input', 'error');
+                    pendingRequest = false;
+                    isGenerating = false;
+                    input.disabled = false;
+                    sendBtn.disabled = false;
+                    stopBtn.classList.add('hidden');
+                    return;
+                }
+                inlineImages = imageAttachments.map(att => att.url);
+                messageContent = [
+                    { type: "text", text: msg },
+                    ...inlineImages.map(url => ({
+                        type: "image_url",
+                        image_url: { url }
+                    }))
+                ];
+            }
+
+            messages.push({ role: 'user', content: messageContent });
+            addChatMessage('user', msg, inlineImages);
+            
+            // Clear image attachments after adding to chat
+            clearAllImages();
+            
             input.value = '';
             updateChatStats();
             saveMessages();
@@ -1957,6 +2492,53 @@
             }
 
             try {
+                // If it's an embedding model, use embeddings API
+                if (isEmbeddingModel) {
+                    console.log('[SEND CHAT] Routing to embeddings API for embedding model');
+                    const embeddingResponse = await fetch('/v1/embeddings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: model, input: msg }),
+                        signal: abortController.signal
+                    });
+                    
+                    if (!embeddingResponse.ok) {
+                        let errorDetails = '';
+                        try {
+                            const errorData = await embeddingResponse.json();
+                            errorDetails = errorData.error?.message || JSON.stringify(errorData);
+                        } catch (e) {
+                            errorDetails = embeddingResponse.statusText;
+                        }
+                        throw new Error(`Server error (${embeddingResponse.status}): ${errorDetails}`);
+                    }
+                    
+                    const embeddingData = await embeddingResponse.json();
+                    const embedding = embeddingData.data[0].embedding;
+                    const dimensions = embedding.length;
+                    
+                    // Display embedding result as a message
+                    const embeddingText = `**Embedding Generated**\n\n` +
+                        `**Dimensions:** ${dimensions}\n` +
+                        `**First 10 values:** [${embedding.slice(0, 10).map(v => v.toFixed(4)).join(', ')}...]\n\n` +
+                        `<details>\n<summary>View full embedding vector (${dimensions} dimensions)</summary>\n\n\`\`\`json\n${JSON.stringify(embedding, null, 2)}\n\`\`\`\n</details>`;
+                    
+                    addChatMessage('assistant', embeddingText, null, startTime);
+                    updateChatStats();
+                    saveMessages();
+                    
+                    if (loadingInterval) clearInterval(loadingInterval);
+                    statusBadge.className = 'text-xs font-medium text-green-400';
+                    statusBadge.textContent = 'Ready';
+                    isGenerating = false;
+                    pendingRequest = false;
+                    input.disabled = false;
+                    sendBtn.disabled = false;
+                    stopBtn.classList.add('hidden');
+                    scrollToBottom();
+                    return;
+                }
+                
                 const requestPayload = {
                     model: model,
                     messages: apiMessages,
@@ -1976,14 +2558,7 @@
                 });
 
                 if (!response.ok) {
-                    let errorDetails = '';
-                    try {
-                        const errorData = await response.json();
-                        errorDetails = errorData.error?.message || JSON.stringify(errorData);
-                    } catch (e) {
-                        errorDetails = response.statusText;
-                    }
-                    throw new Error(`Server error (${response.status}): ${errorDetails}`);
+                    throw await buildAPIError(response);
                 }
 
                 if (streamEnabled) {
@@ -2000,38 +2575,43 @@
                         const lines = chunk.split('\n').filter(line => line.trim() !== '');
 
                         for (const line of lines) {
-                            if (line.startsWith('data: ')) {
-                                const data = line.slice(6);
-                                if (data === '[DONE]') continue;
+                            if (!line.startsWith('data: ')) continue;
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
 
-                                try {
-                                    const json = JSON.parse(data);
-                                    const content = json.choices[0]?.delta?.content || '';
-                                    if (content) {
-                                        // First token received - model is loaded and generating
-                                        if (loadingInterval) {
-                                            clearInterval(loadingInterval);
-                                            loadingInterval = null;
-                                            statusBadge.textContent = 'Generating...';
-                                        }
-                                        
-                                        assistantMsg += content;
-                                        if (!msgDiv) {
-                                            msgDiv = addChatMessage('assistant', '', startTime);
-                                        }
-                                        // Update streaming content with markdown rendering
-                                        const contentDiv = msgDiv.querySelector('.message-content');
-                                        contentDiv.innerHTML = marked.parse(assistantMsg);
-                                        // Apply syntax highlighting to any new code blocks
-                                        contentDiv.querySelectorAll('pre code').forEach((block) => {
-                                            hljs.highlightElement(block);
-                                        });
-                                        // Auto-scroll as new content arrives
-                                        scrollToBottom();
-                                    }
-                                } catch (e) {
-                                    // Skip invalid JSON
+                            try {
+                                const json = JSON.parse(data);
+
+                                if (json.error) {
+                                    const streamError = new Error(json.error.message || 'Stream error');
+                                    streamError.code = json.error.code || json.error.type || null;
+                                    throw streamError;
                                 }
+
+                                const content = json.choices?.[0]?.delta?.content || '';
+                                if (content) {
+                                    if (loadingInterval) {
+                                        clearInterval(loadingInterval);
+                                        loadingInterval = null;
+                                        statusBadge.textContent = 'Generating...';
+                                    }
+                                    
+                                    assistantMsg += content;
+                                    if (!msgDiv) {
+                                        msgDiv = addChatMessage('assistant', '', null, startTime);
+                                    }
+                                    const contentDiv = msgDiv.querySelector('.message-content');
+                                    contentDiv.innerHTML = marked.parse(assistantMsg);
+                                    contentDiv.querySelectorAll('pre code').forEach((block) => {
+                                        hljs.highlightElement(block);
+                                    });
+                                    scrollToBottom();
+                                }
+                            } catch (streamErr) {
+                                if (streamErr instanceof SyntaxError) {
+                                    continue; // Wait for more data
+                                }
+                                throw streamErr;
                             }
                         }
                     }
@@ -2055,7 +2635,7 @@
                     const elapsed = Date.now() - startTime;
                     if (assistantMsg) {
                         messages.push({ role: 'assistant', content: assistantMsg });
-                        addChatMessage('assistant', assistantMsg, startTime);
+                        addChatMessage('assistant', assistantMsg, null, startTime);
                         saveMessages();
                         scrollToBottom();
                     }
@@ -2075,22 +2655,25 @@
                 }
                 
                 if (error.name === 'AbortError') {
-                    addChatMessage('assistant', '[Generation stopped by user]', startTime);
+                    addChatMessage('assistant', '[Generation stopped by user]', null, startTime);
                     statusBadge.className = 'text-xs font-medium text-green-400';
                     statusBadge.textContent = 'Ready';
                 } else {
                     const errorMsg = error.message || 'Unknown error occurred';
+                    const errorCode = error.code || '';
                     console.error('Chat error:', error);
                     
                     // Better error messages for common issues
                     let userMessage = `⚠ Error: ${errorMsg}`;
-                    if (errorMsg.includes('503') || errorMsg.includes('Failed to load model')) {
+                    if (errorCode === 'missing_mmproj') {
+                        userMessage = '⚠ This vision model is missing its mmproj adapter. Download the matching .mmproj file, place it next to the GGUF, reload the model, and try again.';
+                    } else if (errorMsg.includes('503') || errorMsg.includes('Failed to load model')) {
                         userMessage = `⚠ Model is taking longer than expected to load.\n\nThis can happen on slower systems. Please try again in a few moments.`;
                     } else if (errorMsg.includes('500')) {
                         userMessage = `⚠ Server error occurred.\n\nThe model may still be loading. Please wait a moment and try again.`;
                     }
                     
-                    addChatMessage('assistant', userMessage, startTime);
+                    addChatMessage('assistant', userMessage, null, startTime);
                     statusBadge.className = 'text-xs font-medium text-red-400';
                     statusBadge.textContent = 'Error';
                 }
@@ -2117,7 +2700,7 @@
             }
         }
 
-        function addChatMessage(role, content, startTime) {
+        function addChatMessage(role, content, images = null, startTime = null) {
             const container = document.getElementById('chatMessages');
             if (container.querySelector('.text-center')) {
                 container.innerHTML = '';
@@ -2148,6 +2731,16 @@
             const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             const elapsed = startTime ? `${Date.now() - startTime}ms` : '';
             
+            const attachmentList = Array.isArray(images) ? images : (images ? [images] : []);
+            let imageHtml = '';
+            if (attachmentList.length) {
+                const imageItems = attachmentList.map(url => {
+                    const safeUrl = escapeAttribute(url);
+                    return `<img src="${safeUrl}" class="max-h-64 rounded-lg border border-theme shadow-md object-cover">`;
+                }).join('');
+                imageHtml = `<div class="flex flex-wrap gap-3 mb-3">${imageItems}</div>`;
+            }
+            
             div.innerHTML = `
                 <div class="message-wrapper">
                     <div class="message-avatar">${avatar}</div>
@@ -2157,6 +2750,7 @@
                             <span class="text-xs text-secondary">${timestamp}</span>
                             ${elapsed ? `<span class="time-badge text-xs text-accent">${elapsed}</span>` : ''}
                         </div>
+                        ${imageHtml}
                         <div class="text-sm message-content prose prose-invert max-w-none">${formattedContent}</div>
                         ${role === 'assistant' ? `
                         <div class="message-actions mt-3">
@@ -2268,7 +2862,6 @@
                                 <p class="font-semibold text-accent mb-2">Try instead:</p>
                                 <p class="mb-1">• Use the terminal: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid search llama</span></p>
                                 <p class="mb-1">• Download directly: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF</span></p>
-                                <p>• Check offline catalog: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid catalog</span></p>
                             </div>
                         </div>
                     `;
@@ -2328,15 +2921,23 @@
                     const div = document.createElement('div');
                     div.className = 'model-item';
                     const modelId = (model.id || '').replace(/'/g, "\\'");
-                    // Format model name for better readability
-                    const displayName = model.id.replace(/_/g, ' ').replace(/-/g, ' ');
+                    
+                    // Format size if available (assuming it might be in metadata)
+                    // Since the API might not return size directly in the root object, we check
+                    // But for now we'll just show the ID cleanly
+                    
                     div.innerHTML = `
                         <div class="flex justify-between items-center gap-3">
                             <div class="flex-1 min-w-0">
-                                <div class="font-semibold text-sm text-accent break-words" title="${model.id}">${displayName}</div>
-                                <div class="text-xs text-secondary font-mono mt-1">${model.id}</div>
+                                <div class="font-semibold text-sm text-accent truncate" title="${model.id}">${model.id}</div>
+                                <div class="flex gap-2 mt-1">
+                                    <span class="text-xs bg-secondary px-1.5 py-0.5 rounded text-secondary font-mono">GGUF</span>
+                                </div>
                             </div>
-                            <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm flex-shrink-0">Remove</button>
+                            <div class="flex gap-2">
+                                <button onclick="runQuickCommand('offgrid run ${modelId}')" class="btn btn-primary btn-sm flex-shrink-0">Run</button>
+                                <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm flex-shrink-0">Remove</button>
+                            </div>
                         </div>
                     `;
                     container.appendChild(div);
@@ -2552,7 +3153,7 @@
         function clearTerminal() {
             terminalOutputBuffer = ''; // Clear any buffered output
             document.getElementById('terminalOutput').innerHTML = `
-                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.7</div>
+                <div class="terminal-line terminal-success">OffGrid Terminal v0.1.8</div>
                 <div class="terminal-line">Connected to real offgrid binary</div>
                 <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
             `;
@@ -2685,20 +3286,20 @@
                 'Available Commands:',
                 '',
                 'Terminal Commands:',
-                '  clear      - Clear terminal screen',
-                '  history    - Show command history',
-                '  help       - Show this help',
+                '  clear                         Clear terminal screen',
+                '  history                       Show command history',
+                '  help                          Show this help',
                 '',
                 'OffGrid Commands (runs real offgrid binary):',
-                '  offgrid list                - List installed models',
-                '  offgrid search <query>      - Search for models to download',
-                '  offgrid download <model>    - Download a model',
-                '  offgrid remove <model>      - Remove an installed model',
-                '  offgrid run <model>         - Load model and switch to Chat tab',
-                '  offgrid info                - Show system information',
-                '  offgrid doctor              - Run diagnostics',
-                '  offgrid --help              - Show all offgrid commands',
-                '  offgrid --version           - Show version',
+                '  offgrid list                  List installed models',
+                '  offgrid search <query>        Search for models to download',
+                '  offgrid download <model>      Download a model',
+                '  offgrid remove <model>        Remove an installed model',
+                '  offgrid run <model>           Load model and switch to Chat tab',
+                '  offgrid info                  Show system information',
+                '  offgrid doctor                Run diagnostics',
+                '  offgrid --help                Show all offgrid commands',
+                '  offgrid --version             Show version',
                 '',
                 'Tips:',
                 '  - Use arrow keys (↑/↓) to navigate history',
@@ -2799,7 +3400,9 @@
                 // Special handling for 'run' command - enable terminal chat mode
                 const subcmd = args[0];
                 if (subcmd === 'run' && args.length > 1 && exitCode === 0) {
-                    const modelName = args.slice(1).join(' ');
+                    // Extract just the model name (first argument after run), ignoring flags
+                    // We assume the syntax is: offgrid run <model_id> [flags]
+                    const modelName = args[1];
                     
                     // Enable chat mode
                     terminalChatMode = true;
@@ -3007,7 +3610,12 @@
                 line.textContent = text;
             } else if (type === 'success') {
                 line.className = 'terminal-line terminal-success';
-                line.textContent = text;
+                // Use marked for markdown rendering
+                try {
+                    line.innerHTML = marked.parse(text);
+                } catch (e) {
+                    line.textContent = text;
+                }
             } else if (type === 'raw') {
                 // Raw output with ANSI colors
                 line.innerHTML = parseAnsiColors(text);
@@ -3027,22 +3635,86 @@
             const terminal = document.getElementById('terminalOutput');
             
             // Combine with any buffered text from previous chunk
-            text = terminalOutputBuffer + text;
+            let currentText = terminalOutputBuffer + text;
             
             // Split by newlines
-            const lines = text.split('\n');
+            const lines = currentText.split('\n');
             
-            // Keep the last line (might be incomplete) in buffer
-            terminalOutputBuffer = lines.pop() || '';
+            // The last part is the new buffer (incomplete line)
+            const newBuffer = lines.pop();
+            
+            // Remove the last line if it was dynamic (incomplete/progress)
+            // so we can replace it or finalize it
+            const lastLine = terminal.lastElementChild;
+            if (lastLine && lastLine.dataset.dynamic === "true") {
+                lastLine.remove();
+            }
             
             // Process complete lines
             lines.forEach((lineText) => {
+                // Handle \r (carriage return) - take the last part
+                if (lineText.includes('\r')) {
+                    const parts = lineText.split('\r');
+                    lineText = parts[parts.length - 1];
+                }
+                
+                // Check if this is a progress line (strip ANSI first to be safe)
+                const cleanText = stripAnsi(lineText).trim();
+                const isProgress = cleanText.startsWith('Progress:');
+                
+                if (isProgress) {
+                    // Check if the last line in terminal is also a progress line
+                    const lastTermLine = terminal.lastElementChild;
+                    if (lastTermLine) {
+                        const lastClean = lastTermLine.textContent.trim();
+                        if (lastClean.startsWith('Progress:')) {
+                            // Update existing line
+                            lastTermLine.innerHTML = parseAnsiColors(lineText);
+                            return; // Skip appending new line
+                        }
+                    }
+                }
+                
                 const line = document.createElement('div');
                 line.className = 'terminal-line';
                 line.innerHTML = parseAnsiColors(lineText);
                 terminal.appendChild(line);
             });
             
+            // Process new buffer (incomplete line)
+            if (newBuffer !== undefined && newBuffer !== '') {
+                let content = newBuffer;
+                // Handle \r
+                if (content.includes('\r')) {
+                    const parts = content.split('\r');
+                    content = parts[parts.length - 1];
+                }
+                
+                const cleanContent = stripAnsi(content).trim();
+                const isProgress = cleanContent.startsWith('Progress:');
+
+                if (isProgress) {
+                    const lastTermLine = terminal.lastElementChild;
+                    if (lastTermLine) {
+                        const lastClean = lastTermLine.textContent.trim();
+                        if (lastClean.startsWith('Progress:')) {
+                            lastTermLine.innerHTML = parseAnsiColors(content);
+                            lastTermLine.dataset.dynamic = "true";
+                            terminalOutputBuffer = newBuffer || '';
+                            terminal.scrollTop = terminal.scrollHeight;
+                            return;
+                        }
+                    }
+                }
+                
+                const line = document.createElement('div');
+                line.className = 'terminal-line';
+                line.dataset.dynamic = "true"; // Mark as dynamic/incomplete
+                line.innerHTML = parseAnsiColors(content);
+                terminal.appendChild(line);
+            }
+            
+            terminalOutputBuffer = newBuffer || '';
             terminal.scrollTop = terminal.scrollHeight;
         }
         

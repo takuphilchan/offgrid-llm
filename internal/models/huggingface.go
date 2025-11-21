@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -563,6 +565,7 @@ func (hf *HuggingFaceClient) GetModelInfo(modelID string) (*HFModel, error) {
 }
 
 // GetModelFiles fetches file list with sizes using the tree API
+
 func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
 	// Use the tree API which includes file sizes
 	apiURL := fmt.Sprintf("%s/models/%s/tree/main", hf.baseURL, url.PathEscape(modelID))
@@ -596,26 +599,32 @@ func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Convert to HFFile format
+	// Convert to HFFile format (keep all files so we can detect projectors)
 	files := make([]HFFile, 0)
 	for _, tf := range treeFiles {
-		if tf.Type == "file" && strings.HasSuffix(strings.ToLower(tf.Path), ".gguf") {
-			files = append(files, HFFile{
-				Filename: tf.Path,
-				Size:     tf.Size,
-			})
+		if tf.Type != "file" {
+			continue
 		}
+		files = append(files, HFFile{
+			Filename: tf.Path,
+			Size:     tf.Size,
+		})
 	}
 
 	return files, nil
 }
 
 // DownloadGGUF downloads a GGUF file from HuggingFace
+
 func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, onProgress func(int64, int64)) error {
 	downloadURL := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelID, filename)
 
 	// Use .tmp file during download
 	tmpPath := destPath + ".tmp"
+
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
 
 	// Check if partially downloaded
 	var written int64
@@ -700,6 +709,159 @@ func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, on
 	}
 
 	return nil
+}
+
+// DetectProjectorFile returns the best matching projector/mmproj companion for a GGUF
+func DetectProjectorFile(files []HFFile, modelFilename string) *HFFile {
+	if len(files) == 0 || modelFilename == "" {
+		return nil
+	}
+
+	targetLower := strings.ToLower(modelFilename)
+	targetStem := normalizedProjectorStem(modelFilename)
+	bestIdx := -1
+	bestScore := -1
+
+	for i := range files {
+		candidate := files[i]
+		if !isProjectorFilename(candidate.Filename) {
+			continue
+		}
+
+		score := scoreProjectorCandidate(targetLower, strings.ToLower(candidate.Filename), targetStem)
+		if bestIdx == -1 || score > bestScore {
+			bestIdx = i
+			bestScore = score
+		}
+	}
+
+	if bestIdx == -1 {
+		return nil
+	}
+
+	file := files[bestIdx]
+	return &file
+}
+
+func isProjectorFilename(filename string) bool {
+	lower := strings.ToLower(filename)
+	if !(strings.Contains(lower, "mmproj") || strings.Contains(lower, "projector")) {
+		return false
+	}
+
+	if !(strings.HasSuffix(lower, ".gguf") || strings.HasSuffix(lower, ".ggml") || strings.HasSuffix(lower, ".bin") || strings.HasSuffix(lower, ".mmproj")) {
+		return false
+	}
+
+	return true
+}
+
+func scoreProjectorCandidate(target, candidate, stem string) int {
+	score := longestCommonPrefixLength(target, candidate)
+	if stem != "" && strings.Contains(candidate, stem) {
+		score += len(stem)
+	}
+	if strings.Contains(candidate, "mmproj") {
+		score += 50
+	}
+	if strings.Contains(candidate, "projector") {
+		score += 25
+	}
+	return score
+}
+
+func longestCommonPrefixLength(a, b string) int {
+	limit := len(a)
+	if len(b) < limit {
+		limit = len(b)
+	}
+	count := 0
+	for i := 0; i < limit; i++ {
+		if a[i] != b[i] {
+			break
+		}
+		count++
+	}
+	return count
+}
+
+func normalizedProjectorStem(filename string) string {
+	base := strings.TrimSuffix(filename, path.Ext(filename))
+	lower := strings.ToLower(base)
+	quant := strings.ToLower(extractQuantization(filename))
+	if quant == "" || quant == "unknown" {
+		return lower
+	}
+
+	for _, sep := range []string{"-", "_", "."} {
+		token := sep + quant
+		if strings.HasSuffix(lower, token) {
+			trimmed := strings.TrimSuffix(lower, token)
+			trimmed = strings.TrimSuffix(trimmed, sep)
+			return trimmed
+		}
+	}
+
+	return lower
+}
+
+// ListGGUFFiles returns GGUF file metadata for a repo using the tree API so sizes are accurate.
+func (hf *HuggingFaceClient) ListGGUFFiles(modelID string) ([]GGUFFileInfo, error) {
+	files, err := hf.GetModelFiles(modelID)
+	if err != nil {
+		return nil, err
+	}
+	return hf.parseGGUFFilesFromTree(modelID, files), nil
+}
+
+// ResolveProjectorSource locates the best projector/mmproj companion for a GGUF file.
+// It first searches the model's own repository; if none is present, it checks known
+// fallback mappings (e.g. koboldcpp/mmproj) so users do not have to fetch adapters manually.
+func (hf *HuggingFaceClient) ResolveProjectorSource(modelID string, knownFiles []HFFile, modelFilename string) (*ProjectorSource, error) {
+	var files []HFFile
+	if len(knownFiles) > 0 {
+		files = knownFiles
+	} else if hf != nil {
+		if fetched, err := hf.GetModelFiles(modelID); err == nil {
+			files = fetched
+		}
+	}
+
+	if len(files) > 0 && modelFilename != "" {
+		if candidate := DetectProjectorFile(files, modelFilename); candidate != nil {
+			fileCopy := *candidate
+			return &ProjectorSource{
+				ModelID: modelID,
+				File:    fileCopy,
+				Source:  "companion",
+				Reason:  "Found in model repository",
+			}, nil
+		}
+	}
+
+	fallback := findProjectorFallback(modelID, modelFilename)
+	if fallback == nil {
+		return nil, nil
+	}
+
+	fileMeta := HFFile{Filename: fallback.Filename}
+	if hf != nil {
+		if fallbackFiles, err := hf.GetModelFiles(fallback.Repository); err == nil {
+			for _, f := range fallbackFiles {
+				if f.Filename == fallback.Filename {
+					fileMeta.Size = f.Size
+					break
+				}
+			}
+		}
+	}
+
+	return &ProjectorSource{
+		ModelID: fallback.Repository,
+		File:    fileMeta,
+		Source:  "fallback",
+		Reason:  fallback.Reason,
+	}, nil
 }
 
 // calculateQualityRating determines quality based on downloads and likes

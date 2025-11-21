@@ -15,6 +15,7 @@ type CatalogEntry struct {
 	Parameters  string         `json:"parameters"` // "7B", "13B", etc.
 	License     string         `json:"license"`
 	Provider    string         `json:"provider"` // "meta", "mistral", etc.
+	Type        string         `json:"type"`     // "llm" or "embedding"
 	Variants    []ModelVariant `json:"variants"`
 	Tags        []string       `json:"tags"`
 	MinRAM      int            `json:"min_ram_gb"`
@@ -49,6 +50,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "1.1B",
 				License:     "Apache 2.0",
 				Provider:    "TinyLlama",
+				Type:        "llm",
 				MinRAM:      2,
 				Recommended: true,
 				Tags:        []string{"chat", "lightweight", "beginner"},
@@ -88,6 +90,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "7B",
 				License:     "Llama 2 Community",
 				Provider:    "Meta",
+				Type:        "llm",
 				MinRAM:      8,
 				Recommended: true,
 				Tags:        []string{"chat", "general", "popular"},
@@ -127,6 +130,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "7B",
 				License:     "Apache 2.0",
 				Provider:    "Mistral AI",
+				Type:        "llm",
 				MinRAM:      8,
 				Recommended: true,
 				Tags:        []string{"instruct", "code", "general"},
@@ -153,6 +157,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "2.7B",
 				License:     "MIT",
 				Provider:    "Microsoft",
+				Type:        "llm",
 				MinRAM:      4,
 				Recommended: true,
 				Tags:        []string{"efficient", "code", "reasoning"},
@@ -179,6 +184,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "8B",
 				License:     "Llama 3 Community",
 				Provider:    "Meta",
+				Type:        "llm",
 				MinRAM:      8,
 				Recommended: true,
 				Tags:        []string{"instruct", "general", "latest"},
@@ -205,6 +211,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "7B",
 				License:     "Llama 2 Community",
 				Provider:    "Meta",
+				Type:        "llm",
 				MinRAM:      8,
 				Recommended: false,
 				Tags:        []string{"code", "programming", "specialized"},
@@ -231,6 +238,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "7B",
 				License:     "Apache 2.0",
 				Provider:    "Intel",
+				Type:        "llm",
 				MinRAM:      8,
 				Recommended: false,
 				Tags:        []string{"chat", "conversation", "general"},
@@ -284,6 +292,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "22M",
 				License:     "Apache 2.0",
 				Provider:    "sentence-transformers",
+				Type:        "embedding",
 				MinRAM:      1,
 				Recommended: true,
 				Tags:        []string{"embedding", "semantic-search", "lightweight", "beginner"},
@@ -323,6 +332,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "33M",
 				License:     "MIT",
 				Provider:    "BAAI",
+				Type:        "embedding",
 				MinRAM:      1,
 				Recommended: true,
 				Tags:        []string{"embedding", "semantic-search", "retrieval", "rag"},
@@ -349,6 +359,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "33M",
 				License:     "MIT",
 				Provider:    "Microsoft",
+				Type:        "embedding",
 				MinRAM:      1,
 				Recommended: false,
 				Tags:        []string{"embedding", "multilingual", "semantic-search"},
@@ -375,6 +386,7 @@ func DefaultCatalog() *ModelCatalog {
 				Parameters:  "137M",
 				License:     "Apache 2.0",
 				Provider:    "Nomic AI",
+				Type:        "embedding",
 				MinRAM:      2,
 				Recommended: true,
 				Tags:        []string{"embedding", "rag", "long-context", "open-source"},
@@ -388,6 +400,33 @@ func DefaultCatalog() *ModelCatalog {
 							{
 								Type:     "huggingface",
 								URL:      "https://huggingface.co/nomic-ai/nomic-embed-text-v1/resolve/main/ggml-model-f16.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "bge-m3-Q4_K_M",
+				Name:        "BGE M3",
+				Description: "Multilingual embedding model from BAAI, 1024 dimensions, supports long context",
+				Parameters:  "567M",
+				License:     "MIT",
+				Provider:    "BAAI",
+				Type:        "embedding",
+				MinRAM:      2,
+				Recommended: true,
+				Tags:        []string{"embedding", "multilingual", "long-context", "rag"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         430800000, // ~411MB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/BAAI/bge-m3/resolve/main/ggml-model-q4_k_m.gguf",
 								Priority: 1,
 							},
 						},

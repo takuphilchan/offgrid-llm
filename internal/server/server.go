@@ -682,6 +682,9 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	duration := time.Since(startTime)
 
 	if err != nil {
+		if handleEngineError(w, err) {
+			return
+		}
 		writeError(w, fmt.Sprintf("Inference failed: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -771,11 +774,24 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 
 	if err != nil {
 		log.Printf("Streaming error: %v", err)
+		streamType := "stream_error"
+		code := ""
+		message := err.Error()
+		if engineErr := inference.AsEngineError(err); engineErr != nil {
+			if engineErr.Code != "" {
+				streamType = engineErr.Code
+				code = engineErr.Code
+			}
+			if engineErr.Message != "" {
+				message = engineErr.Message
+			}
+		}
 		// Send error as final chunk
 		errChunk := map[string]interface{}{
 			"error": map[string]string{
-				"message": err.Error(),
-				"type":    "stream_error",
+				"message": message,
+				"type":    streamType,
+				"code":    code,
 			},
 		}
 		data, _ := json.Marshal(errChunk)
@@ -872,6 +888,9 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	response, err := s.engine.Completion(ctx, &req)
 	if err != nil {
+		if handleEngineError(w, err) {
+			return
+		}
 		writeError(w, fmt.Sprintf("Inference failed: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -1235,7 +1254,13 @@ func (s *Server) handleTerminalExecStream(w http.ResponseWriter, r *http.Request
 	}
 
 	// Execute command
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Use a very long timeout for downloads (1 hour), shorter for others
+	timeout := 120 * time.Second
+	if len(req.Args) > 0 && (req.Args[0] == "download" || req.Args[0] == "download-hf") {
+		timeout = 1 * time.Hour
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, offgridPath, req.Args...)
@@ -1804,15 +1829,32 @@ func (s *Server) handleWebUI(w http.ResponseWriter, r *http.Request) {
 
 // writeError writes an error response
 func writeError(w http.ResponseWriter, message string, statusCode int) {
-	log.Printf("API Error: %s (Status: %d)", message, statusCode)
+	writeErrorWithCode(w, message, statusCode, "")
+}
+
+func writeErrorWithCode(w http.ResponseWriter, message string, statusCode int, code string) {
+	log.Printf("API Error: %s (Status: %d, Code: %s)", message, statusCode, code)
 	w.WriteHeader(statusCode)
 	response := api.ErrorResponse{
 		Error: api.ErrorDetail{
 			Message: message,
 			Type:    "api_error",
+			Code:    code,
 		},
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+func handleEngineError(w http.ResponseWriter, err error) bool {
+	engineErr := inference.AsEngineError(err)
+	if engineErr == nil {
+		return false
+	}
+
+	status := http.StatusBadRequest
+	log.Printf("Engine error (%s): %s", engineErr.Code, engineErr.Details)
+	writeErrorWithCode(w, engineErr.Message, status, engineErr.Code)
+	return true
 }
 
 // handleUSBScan scans a USB drive for GGUF models

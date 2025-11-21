@@ -44,7 +44,7 @@ func (e *MockEngine) ChatCompletion(ctx context.Context, req *api.ChatCompletion
 	// Build conversation context
 	var promptBuilder strings.Builder
 	for _, msg := range req.Messages {
-		promptBuilder.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.Content))
+		promptBuilder.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.StringContent()))
 	}
 
 	// Mock response

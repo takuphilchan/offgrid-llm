@@ -310,7 +310,7 @@ func (e *LlamaEngine) buildLlama3Prompt(messages []api.ChatMessage) string {
 
 	for _, msg := range messages {
 		builder.WriteString(fmt.Sprintf("<|start_header_id|>%s<|end_header_id|>\n\n", msg.Role))
-		builder.WriteString(strings.TrimSpace(msg.Content))
+		builder.WriteString(strings.TrimSpace(msg.StringContent()))
 		builder.WriteString("<|eot_id|>")
 	}
 
@@ -325,15 +325,15 @@ func (e *LlamaEngine) buildChatMLPrompt(messages []api.ChatMessage) string {
 		switch msg.Role {
 		case "system":
 			builder.WriteString("<|im_start|>system\n")
-			builder.WriteString(msg.Content)
+			builder.WriteString(msg.StringContent())
 			builder.WriteString("<|im_end|>\n")
 		case "user":
 			builder.WriteString("<|im_start|>user\n")
-			builder.WriteString(msg.Content)
+			builder.WriteString(msg.StringContent())
 			builder.WriteString("<|im_end|>\n")
 		case "assistant":
 			builder.WriteString("<|im_start|>assistant\n")
-			builder.WriteString(msg.Content)
+			builder.WriteString(msg.StringContent())
 			builder.WriteString("<|im_end|>\n")
 		}
 	}

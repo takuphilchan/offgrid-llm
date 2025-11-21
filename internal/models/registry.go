@@ -61,6 +61,7 @@ func (r *Registry) ScanModels() error {
 		ext := filepath.Ext(path)
 		if ext == ".gguf" || ext == ".ggml" || ext == ".bin" {
 			modelID := r.generateModelID(path)
+			modelType := r.detectModelType(modelID, path)
 			metadata := &api.ModelMetadata{
 				ID:           modelID,
 				Name:         filepath.Base(path),
@@ -70,6 +71,7 @@ func (r *Registry) ScanModels() error {
 				Quantization: r.detectQuantization(path),
 				ContextSize:  4096, // Default, will be updated when loaded
 				Parameters:   r.detectParameters(path),
+				Type:         modelType,
 				IsLoaded:     false,
 			}
 			r.models[modelID] = metadata
@@ -91,6 +93,7 @@ func (r *Registry) ListModels() []api.Model {
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "offgrid-llm",
+			Type:    meta.Type,
 		})
 	}
 
@@ -284,6 +287,40 @@ func (r *Registry) detectParameters(path string) string {
 	}
 
 	return "unknown"
+}
+
+func (r *Registry) detectModelType(modelID, path string) string {
+	name := strings.ToLower(filepath.Base(path))
+	modelIDLower := strings.ToLower(modelID)
+
+	// Check against catalog first
+	catalog := DefaultCatalog()
+	for _, entry := range catalog.Models {
+		if strings.ToLower(entry.ID) == modelIDLower {
+			if entry.Type != "" {
+				return entry.Type
+			}
+		}
+	}
+
+	// Detect based on filename patterns
+	embeddingKeywords := []string{"embed", "bge", "e5", "minilm", "nomic", "sentence", "gte"}
+	for _, keyword := range embeddingKeywords {
+		if strings.Contains(name, keyword) {
+			return "embedding"
+		}
+	}
+
+	// Detect VLM (Vision Language Models)
+	vlmKeywords := []string{"llava", "bakllava", "yi-vl", "moondream", "vision", "minicpm-v", "qwen-vl", "mmproj"}
+	for _, keyword := range vlmKeywords {
+		if strings.Contains(name, keyword) {
+			return "vlm"
+		}
+	}
+
+	// Default to LLM
+	return "llm"
 }
 
 func contains(s, substr string) bool {

@@ -19,9 +19,34 @@ type ChatCompletionRequest struct {
 
 // ChatMessage represents a single message in a chat
 type ChatMessage struct {
-	Role    string `json:"role"` // "system", "user", "assistant"
-	Content string `json:"content"`
-	Name    string `json:"name,omitempty"`
+	Role    string      `json:"role"` // "system", "user", "assistant"
+	Content interface{} `json:"content"`
+	Name    string      `json:"name,omitempty"`
+}
+
+// StringContent returns the string representation of the content
+func (m ChatMessage) StringContent() string {
+	if m.Content == nil {
+		return ""
+	}
+	if str, ok := m.Content.(string); ok {
+		return str
+	}
+	// Handle array of content parts (for VLM)
+	if parts, ok := m.Content.([]interface{}); ok {
+		var text string
+		for _, part := range parts {
+			if p, ok := part.(map[string]interface{}); ok {
+				if t, ok := p["type"].(string); ok && t == "text" {
+					if val, ok := p["text"].(string); ok {
+						text += val
+					}
+				}
+			}
+		}
+		return text
+	}
+	return ""
 }
 
 // ChatCompletionResponse represents an OpenAI-compatible chat completion response
@@ -106,6 +131,7 @@ type Model struct {
 	Permission []string `json:"permission,omitempty"`
 	Root       string   `json:"root,omitempty"`
 	Parent     string   `json:"parent,omitempty"`
+	Type       string   `json:"type,omitempty"` // "llm" or "embedding"
 }
 
 // ModelListResponse represents the response for listing models
@@ -136,6 +162,7 @@ type ModelMetadata struct {
 	Quantization string    `json:"quantization"` // "Q4_0", "Q5_K_M", etc.
 	ContextSize  int       `json:"context_size"` // Max context window
 	Parameters   string    `json:"parameters"`   // "7B", "13B", etc.
+	Type         string    `json:"type"`         // "llm" or "embedding"
 	LoadedAt     time.Time `json:"loaded_at,omitempty"`
 	IsLoaded     bool      `json:"is_loaded"`
 }
