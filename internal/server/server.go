@@ -163,7 +163,7 @@ func (s *Server) switchModel(modelID string) error {
 	}
 
 	// Load or get cached model instance
-	instance, err := s.modelCache.GetOrLoad(modelID, metadata.Path)
+	instance, err := s.modelCache.GetOrLoad(modelID, metadata.Path, metadata.ProjectorPath)
 	if err != nil {
 		return fmt.Errorf("failed to load model: %w", err)
 	}
@@ -250,6 +250,14 @@ func (s *Server) Start() error {
 	// Fallback to local development path if installed path doesn't exist
 	if _, err := os.Stat(uiPath); os.IsNotExist(err) {
 		uiPath = "web/ui"
+	}
+
+	// Force local path if running from source (check for go.mod)
+	if _, err := os.Stat("go.mod"); err == nil {
+		if _, err := os.Stat("web/ui"); err == nil {
+			uiPath = "web/ui"
+			log.Println("Running from source, using local web/ui directory")
+		}
 	}
 
 	// Serve static files
@@ -1177,10 +1185,14 @@ func (s *Server) handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find offgrid binary
-	offgridPath, err := exec.LookPath("offgrid")
+	offgridPath, err := os.Executable()
 	if err != nil {
-		writeError(w, "offgrid binary not found in PATH", http.StatusInternalServerError)
-		return
+		// Fallback to PATH
+		offgridPath, err = exec.LookPath("offgrid")
+		if err != nil {
+			writeError(w, "offgrid binary not found", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Execute command
@@ -1235,10 +1247,14 @@ func (s *Server) handleTerminalExecStream(w http.ResponseWriter, r *http.Request
 	}
 
 	// Find offgrid binary
-	offgridPath, err := exec.LookPath("offgrid")
+	offgridPath, err := os.Executable()
 	if err != nil {
-		http.Error(w, "offgrid binary not found in PATH", http.StatusInternalServerError)
-		return
+		// Fallback to PATH
+		offgridPath, err = exec.LookPath("offgrid")
+		if err != nil {
+			http.Error(w, "offgrid binary not found", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Set up Server-Sent Events

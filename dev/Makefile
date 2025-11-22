@@ -3,7 +3,7 @@
 # Binary name
 BINARY=offgrid
 MAIN_PATH=./cmd/offgrid
-VERSION?=0.1.0-alpha
+VERSION?=0.1.9
 LDFLAGS=-ldflags "-X main.Version=$(VERSION)"
 BUILD_TAGS_LLAMA=-tags llama
 

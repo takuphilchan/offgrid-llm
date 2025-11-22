@@ -1,6 +1,9 @@
 package models
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // ProjectorSource describes where to fetch a projector/mmproj adapter
 // associated with a given VLM.
@@ -204,4 +207,13 @@ func findProjectorFallback(modelID, filename string) *projectorFallback {
 		}
 	}
 	return nil
+}
+
+// GetProjectorFilename returns the expected local filename for a projector associated with the given model
+func GetProjectorFilename(modelID, modelFilename string) string {
+	fb := findProjectorFallback(modelID, modelFilename)
+	if fb != nil {
+		return filepath.Base(fb.Filename)
+	}
+	return ""
 }

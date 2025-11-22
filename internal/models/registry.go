@@ -74,6 +74,16 @@ func (r *Registry) ScanModels() error {
 				Type:         modelType,
 				IsLoaded:     false,
 			}
+
+			// Check for projector
+			projectorFilename := GetProjectorFilename(modelID, filepath.Base(path))
+			if projectorFilename != "" {
+				projectorPath := filepath.Join(filepath.Dir(path), projectorFilename)
+				if _, err := os.Stat(projectorPath); err == nil {
+					metadata.ProjectorPath = projectorPath
+				}
+			}
+
 			r.models[modelID] = metadata
 		}
 

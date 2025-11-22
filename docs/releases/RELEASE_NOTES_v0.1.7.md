@@ -1,4 +1,4 @@
-# OffGrid LLM v0.1.8 Release Notes
+# OffGrid LLM v0.1.9 Release Notes
 
 **Release Date:** November 19, 2025
 
@@ -342,7 +342,7 @@ Thank you to everyone who contributed to this release!
 
 ## Full Changelog
 
-https://github.com/takuphilchan/offgrid-llm/compare/v0.1.6...v0.1.8
+https://github.com/takuphilchan/offgrid-llm/compare/v0.1.6...v0.1.9
 
 ---
 

@@ -54,7 +54,7 @@ func NewModelCache(maxInstances int, gpuLayers int) *ModelCache {
 }
 
 // GetOrLoad returns an existing model instance or loads a new one
-func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, error) {
+func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*ModelInstance, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
@@ -114,8 +114,15 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, erro
 		"-m", modelPath,
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
-		"-c", "4096", // Increased context size
+		"-c", "2048", // Reduced context size for stability
 		"-np", "1", // Limit to 1 parallel sequence to improve stability
+		"--no-warmup", // Disable warmup to save memory/time
+		"-b", "256",   // Reduced batch size
+		"-nr", // Disable weight repacking to save memory
+	}
+
+	if projectorPath != "" {
+		args = append(args, "--mmproj", projectorPath)
 	}
 
 	// Add GPU layers if configured
@@ -124,6 +131,8 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath string) (*ModelInstance, erro
 	} else {
 		args = append(args, "-ngl", "0")
 	}
+
+	log.Printf("Starting llama-server with args: %v", args)
 
 	cmd := exec.Command("llama-server", args...)
 
@@ -238,9 +247,9 @@ func (mc *ModelCache) getNextAvailablePort() int {
 func (mc *ModelCache) waitForReady(port int) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
-	// Phase 1: Wait for server process to start (up to 7.5 seconds)
+	// Phase 1: Wait for server process to start (up to 30 seconds for VLM models)
 	serverStarted := false
-	for i := 0; i < 15; i++ {
+	for i := 0; i < 60; i++ {
 		time.Sleep(500 * time.Millisecond)
 		resp, err := httpClient.Get(healthURL)
 		if err == nil {
@@ -252,7 +261,7 @@ func (mc *ModelCache) waitForReady(port int) error {
 	}
 
 	if !serverStarted {
-		return fmt.Errorf("llama-server on port %d did not start within 7.5 seconds", port)
+		return fmt.Errorf("llama-server on port %d did not start within 30 seconds", port)
 	}
 
 	// Phase 2: Wait for model to actually load (up to 120 seconds total)
