@@ -3265,7 +3265,7 @@
                     
                     div.innerHTML = `
                         <div class="flex justify-between items-center">
-                            <div class="flex-1" onclick="loadSession(${session.id})">
+                            <div class="flex-1">
                                 <div class="font-semibold text-sm text-accent truncate" title="${model.id}">${model.id}</div>
                                 <div class="text-xs text-secondary mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
                             </div>
@@ -4192,7 +4192,7 @@
                 ? document.getElementById('usbImportPath').value 
                 : document.getElementById('usbExportPath').value;
             
-            await browseTo(currentPath || '/media');
+            await browseTo(currentPath || '');
         }
         
         async function loadCommonPaths() {
