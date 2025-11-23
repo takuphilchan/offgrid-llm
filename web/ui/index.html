@@ -2464,7 +2464,7 @@
             showModal({
                 type: 'error',
                 title: 'Delete Session?',
-                message: 'This action cannot be undone.',
+                message: `This action cannot be undone.`,
                 confirmText: 'Delete',
                 cancelText: 'Cancel',
                 onConfirm: () => {
@@ -2687,6 +2687,13 @@
             console.log('[SEND CHAT] Function called');
             console.log('[SEND CHAT] Flags - isGenerating:', isGenerating, 'pendingRequest:', pendingRequest);
             
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+
+            if (!msg && imageAttachments.length === 0) {
+                return;
+            }
+
             // Prevent rapid-fire requests
             if (isGenerating || pendingRequest) {
                 console.warn('[SEND CHAT] Request already in progress, ignoring...');
