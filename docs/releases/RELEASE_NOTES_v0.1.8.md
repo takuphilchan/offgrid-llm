@@ -8,7 +8,7 @@ This release brings comprehensive vision model support with automatic projector 
 
 ### Key Features
 
-#### 🎯 Automatic Vision Projector Downloads
+####  Automatic Vision Projector Downloads
 - **Smart Fallback Catalog**: When downloading VLMs, OffGrid now automatically fetches matching `.mmproj` adapter files from a curated catalog (powered by `koboldcpp/mmproj`)
 - **Zero Manual Steps**: No more hunting for compatible projectors—everything downloads in one command
 - **Broad Model Coverage**: Pre-wired support for:
@@ -18,7 +18,7 @@ This release brings comprehensive vision model support with automatic projector 
   - Pixtral 12B, Mistral Small 24B Vision
   - Yi 34B, MiniCPM, Obsidian 3B
 
-#### 🔧 Enhanced Download Engine
+####  Enhanced Download Engine
 - **Tree API Fallback**: `offgrid download-hf` now uses Hugging Face's tree API when model cards don't list file siblings, fixing downloads for repositories like `mradermacher/*-GGUF`
 - **Accurate File Sizes**: All GGUF listings now show real file sizes instead of estimates
 - **Better Error Messages**: Vision-specific errors (`missing_mmproj`) now surface through the API with actionable guidance

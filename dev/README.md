@@ -2,7 +2,7 @@
 
 This directory contains tools and resources for **developers** who want to build, modify, or contribute to OffGrid LLM.
 
-## 📁 What's Here
+##  What's Here
 
 | File/Folder | Purpose |
 |-------------|---------|
@@ -16,7 +16,7 @@ This directory contains tools and resources for **developers** who want to build
 | `build/` | Build artifacts (gitignored) |
 | `dist/` | Distribution packages (gitignored) |
 
-## 🚀 Quick Start for Developers
+##  Quick Start for Developers
 
 ### Option 1: Build from Source (with GPU)
 
@@ -57,7 +57,7 @@ go build -o offgrid ./cmd/offgrid
 docker-compose up --build
 ```
 
-## 🛠️ Development Workflow
+##  Development Workflow
 
 1. **Make changes** to source code in `cmd/`, `internal/`, or `pkg/`
 2. **Build**: `make build` or `go build`
@@ -93,7 +93,7 @@ cd dev
 sudo ./install.sh
 ```
 
-## 📚 More Information
+##  More Information
 
 - **User Documentation**: `../docs/`
 - **API Reference**: `../docs/API.md`

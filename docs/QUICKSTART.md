@@ -9,11 +9,11 @@ Get OffGrid LLM running in under 5 minutes.
 **Run powerful AI language models completely offline** - no internet required after setup.
 
 Perfect for:
-- 🔒 Privacy-conscious users
+-  Privacy-conscious users
 - 🏔️ Remote/offline environments
 - 🏢 Air-gapped enterprise systems
 - 🎓 Educational institutions
-- 💻 Local development
+-  Local development
 
 **Features:**
 - 100% offline operation
@@ -29,7 +29,7 @@ Perfect for:
 
 Choose the method that fits your needs:
 
-### 🚀 Option 1: Docker (Recommended - Easiest)
+###  Option 1: Docker (Recommended - Easiest)
 
 **Best for:** Quick setup, isolated environment, production deployment
 
@@ -50,7 +50,7 @@ open http://localhost:11611/ui/
 
 ---
 
-### 🖥️ Option 2: Desktop App (Best UI Experience)
+###  Option 2: Desktop App (Best UI Experience)
 
 **Best for:** Non-technical users, system tray integration, drag-and-drop
 
@@ -335,10 +335,10 @@ export OFFGRID_PORT=8080
 ## Next Steps
 
 ### Learn More
-- 📖 [Full Documentation](README.md)
+-  [Full Documentation](README.md)
 - 🐳 [Docker Deployment](DOCKER.md)
-- 🔧 [API Reference](API.md)
-- ⚡ [Performance Tuning](docs/advanced/PERFORMANCE.md)
+-  [API Reference](API.md)
+-  [Performance Tuning](docs/advanced/PERFORMANCE.md)
 
 ### Advanced Topics
 - [Custom Model Setup](docs/guides/MODEL_SETUP.md)
@@ -347,9 +347,9 @@ export OFFGRID_PORT=8080
 - [Building from Source](docs/advanced/BUILDING.md)
 
 ### Get Help
-- 💬 [GitHub Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)
-- 🐛 [Report Issues](https://github.com/takuphilchan/offgrid-llm/issues)
-- 📚 [Documentation](https://github.com/takuphilchan/offgrid-llm/tree/main/docs)
+-  [GitHub Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)
+-  [Report Issues](https://github.com/takuphilchan/offgrid-llm/issues)
+-  [Documentation](https://github.com/takuphilchan/offgrid-llm/tree/main/docs)
 
 ---
 
@@ -395,4 +395,4 @@ offgrid download phi3:3.8b-instruct-q4_k_m            # Efficient
 
 ---
 
-**Ready to get started?** Pick an installation method above and you'll be running your own AI in minutes! 🚀
+**Ready to get started?** Pick an installation method above and you'll be running your own AI in minutes! 

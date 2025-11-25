@@ -71,7 +71,7 @@ for i, embedding_data in enumerate(response.json()["data"]):
 
 ---
 
-## 📋 Available Embedding Models
+##  Available Embedding Models
 
 ### all-MiniLM-L6-v2 (Recommended for beginners)
 - **Size**: 42MB (F16), 23MB (Q8_0)

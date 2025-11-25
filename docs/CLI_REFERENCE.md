@@ -51,7 +51,7 @@ offgrid help          # Command help
 ### 🛡️ Error Handling
 Every command validates inputs and provides:
 - ✗ Clear error explanation
-- 📋 Available options when applicable
+-  Available options when applicable
 -  Helpful tips and next steps
 -  Suggestions for fix
 
@@ -110,7 +110,7 @@ Interactive chat interface with a model.
 
 **Chat Interface:**
 ```
-🚀 Starting interactive chat with tinyllama-1.1b-chat.Q4_K_M
+ Starting interactive chat with tinyllama-1.1b-chat.Q4_K_M
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Commands: 'exit' to quit, 'clear' to reset conversation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -162,7 +162,7 @@ Searching HuggingFace Hub...
 
 **Output:**
 ```
-🔍 Searching HuggingFace Hub...
+ Searching HuggingFace Hub...
 
 Found 5 GGUF models:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -354,7 +354,7 @@ Browse curated model catalog.
 
 **Output:**
 ```
-📚 Model Catalog
+ Model Catalog
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 tinyllama-1.1b-chat [Star]
@@ -520,7 +520,7 @@ curl http://localhost:11611/v1/chat/completions \
 ## Visual Design Guide
 
 ### Icons Used
-- 🚀 Launch/Start
+-  Launch/Start
 - [Lightning] Speed/Performance
 - [OK] Success
 - ✗ Error
@@ -528,7 +528,7 @@ curl http://localhost:11611/v1/chat/completions \
 - ⏬ Download
 -  Search
 - 🗑️ Delete
-- 📚 Catalog
+-  Catalog
 - ⏳ In Progress
 - ️ Warning
 - ❤️ Likes

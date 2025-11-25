@@ -76,7 +76,7 @@ offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
 ```
 [Package] Fetching model info: TheBloke/Llama-2-7B-Chat-GGUF
 
-📥 Downloading llama-2-7b-chat.Q4_K_M.gguf (3.8 GB)
+ Downloading llama-2-7b-chat.Q4_K_M.gguf (3.8 GB)
   Progress: 47.2% (1.8 / 3.8 GB) · 12.3 MB/s
 
 [OK] Download complete!
@@ -105,7 +105,7 @@ offgrid run tinyllama-1.1b-chat
 
 **Example Session:**
 ```
-🚀 Starting interactive chat with llama-2-7b-chat.Q4_K_M.gguf
+ Starting interactive chat with llama-2-7b-chat.Q4_K_M.gguf
 Type 'exit' to quit, 'clear' to reset conversation
 
 Connecting to inference engine...

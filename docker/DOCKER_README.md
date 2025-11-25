@@ -134,7 +134,7 @@ docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
 
 For advanced configuration, production deployment, SSL setup, monitoring, and more:
 
-📖 **[docs/DOCKER.md](docs/DOCKER.md)** - Complete Docker guide
+ **[docs/DOCKER.md](docs/DOCKER.md)** - Complete Docker guide
 
 ---
 

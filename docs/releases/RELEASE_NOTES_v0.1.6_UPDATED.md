@@ -4,7 +4,7 @@
 
 This update to v0.1.6 brings significant visual improvements to the Terminal UI and fixes CLI output formatting.
 
-## 🎨 What's Changed
+##  What's Changed
 
 ### Terminal UI Improvements
 *   **Authentic Terminal Look**: Updated the terminal font stack to use `Consolas`, `Monaco`, and `Courier New` for a true terminal feel, replacing the previous coding font.
@@ -18,7 +18,7 @@ This update to v0.1.6 brings significant visual improvements to the Terminal UI 
 
 ## Installation
 
-### 🖥️ Desktop Application (Recommended for Most Users)
+###  Desktop Application (Recommended for Most Users)
 Easy installation with system tray integration:
 
 **Linux:**
@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
 ```
 
-### 💻 CLI Installation (For Servers & Advanced Users)
+###  CLI Installation (For Servers & Advanced Users)
 **Linux / macOS:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
@@ -49,7 +49,7 @@ Or download bundles below and extract.
 
 ---
 
-## 📦 Desktop Applications
+##  Desktop Applications
 
 **Linux**
 *   `OffGrid-LLM-Desktop-{version}-x86_64.AppImage` - Universal Linux (recommended)
@@ -66,7 +66,7 @@ Or download bundles below and extract.
 *   `OffGrid-LLM-Desktop-Setup-{version}.exe` - Windows Installer (recommended)
 *   `OffGrid-LLM-Desktop-{version}-Portable.exe` - Portable version (no install)
 
-## 🔧 CLI Bundles
+##  CLI Bundles
 Choose your platform and GPU variant:
 
 **Linux**
@@ -84,7 +84,7 @@ Choose your platform and GPU variant:
 
 ---
 
-## 📋 What's Included
+##  What's Included
 
 **Desktop App Includes:**
 *   Beautiful UI with system tray
@@ -100,13 +100,13 @@ Choose your platform and GPU variant:
 *   `README.md` - Getting started guide
 *   `checksums.sha256` - File verification
 
-## ✅ Verification
+##  Verification
 Verify your download:
 ```bash
 sha256sum -c checksums-v0.1.6.sha256
 ```
 
-## 🚀 Getting Started
+##  Getting Started
 
 **Desktop App**
 1.  Install using one of the methods above
@@ -134,7 +134,7 @@ offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 open http://localhost:11611/ui
 ```
 
-## 📚 Documentation
+##  Documentation
 *   [Complete Documentation](docs/README.md)
 *   [Desktop App Guide](docs/guides/FEATURES_GUIDE.md)
 *   [CLI Reference](docs/CLI_REFERENCE.md)

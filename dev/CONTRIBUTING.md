@@ -140,7 +140,7 @@ This triggers `.github/workflows/release.yml` which:
 
 ## Questions?
 
-- 📖 Read the [docs/](docs/) folder
-- 🐛 Open an issue
-- 💬 Start a discussion
+-  Read the [docs/](docs/) folder
+-  Open an issue
+-  Start a discussion
 

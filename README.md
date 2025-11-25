@@ -247,23 +247,23 @@ offgrid-llm/
 
 ## Documentation
 
-**[📚 Complete Documentation](docs/README.md)**
+**[ Complete Documentation](docs/README.md)**
 
 **Getting Started:**
 - [Quick Start Guide](docs/QUICKSTART.md) - Get running in 5 minutes
 - [Docker Deployment](docs/DOCKER.md) - Complete Docker guide  
-- [📥 Installation Guide](docs/INSTALLATION.md) - Detailed installation
-- [🎯 Model Setup](docs/guides/MODEL_SETUP.md) - Choosing and downloading models
+- [ Installation Guide](docs/INSTALLATION.md) - Detailed installation
+- [ Model Setup](docs/guides/MODEL_SETUP.md) - Choosing and downloading models
 
 **User Guides:**
-- [🔌 API Reference](docs/API.md) - OpenAI-compatible endpoints
-- [💾 Features Guide](docs/guides/FEATURES_GUIDE.md) - All features explained (includes USB transfer)
+- [ API Reference](docs/API.md) - OpenAI-compatible endpoints
+- [ Features Guide](docs/guides/FEATURES_GUIDE.md) - All features explained (includes USB transfer)
 - [HuggingFace Integration](docs/guides/HUGGINGFACE_INTEGRATION.md)
 - [Embeddings Guide](docs/guides/EMBEDDINGS_GUIDE.md)
 - [CLI Reference](docs/CLI_REFERENCE.md)
 
 **System Configuration:**
-- [💻 4GB RAM Guide](docs/4GB_RAM.md) - Run AI on budget hardware
+- [ 4GB RAM Guide](docs/4GB_RAM.md) - Run AI on budget hardware
 - [CPU Optimization](docs/CPU_OPTIMIZATION.md) - Best performance without GPU
 - [Auto-Start Setup](docs/AUTO_START.md) - Systemd service
 

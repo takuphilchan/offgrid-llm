@@ -180,7 +180,7 @@ rm -rf ~/.offgrid-llm
 
 ## Next Steps
 
-- 📖 [Documentation](../docs/README.md)
-- 🚀 [Quick Start Guide](../README.md#quick-start)
-- 💻 [CLI Reference](../docs/CLI_REFERENCE.md)
-- 🌐 [API Documentation](../docs/API.md)
+-  [Documentation](../docs/README.md)
+-  [Quick Start Guide](../README.md#quick-start)
+-  [CLI Reference](../docs/CLI_REFERENCE.md)
+-  [API Documentation](../docs/API.md)

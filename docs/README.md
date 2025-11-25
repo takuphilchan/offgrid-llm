@@ -4,7 +4,7 @@ Welcome to OffGrid LLM! This is your complete guide to running AI language model
 
 ---
 
-## 🚀 Getting Started (Pick One)
+##  Getting Started (Pick One)
 
 ### For Beginners
 - **[Quick Start Guide](QUICKSTART.md)** - 5-minute setup walkthrough
@@ -16,7 +16,7 @@ Welcome to OffGrid LLM! This is your complete guide to running AI language model
 
 ---
 
-## 📖 User Guides
+##  User Guides
 
 ### Essential Guides
 - **[Model Setup](guides/MODEL_SETUP.md)** - Choosing and downloading models
@@ -76,18 +76,18 @@ nginx.conf.example          # Reverse proxy config
 
 ---
 
-## 📦 Installation Methods Comparison
+##  Installation Methods Comparison
 
 | Method | Best For | Setup Time | Complexity |
 |--------|----------|------------|------------|
-| **Docker** | Quick start, production | 2 min | ⭐ Easy |
-| **Desktop App** | Non-technical users | 5 min | ⭐ Easy |
-| **One-line Install** | CLI users | 5-10 min | ⭐⭐ Moderate |
-| **Build from Source** | Developers, custom builds | 15-30 min | ⭐⭐⭐ Advanced |
+| **Docker** | Quick start, production | 2 min |  Easy |
+| **Desktop App** | Non-technical users | 5 min |  Easy |
+| **One-line Install** | CLI users | 5-10 min |  Moderate |
+| **Build from Source** | Developers, custom builds | 15-30 min |  Advanced |
 
 ---
 
-## 🎯 Common Use Cases
+##  Common Use Cases
 
 ### By Scenario
 
@@ -124,7 +124,7 @@ sudo ./dev/install.sh
 
 ---
 
-## 🔍 Finding Information
+##  Finding Information
 
 ### By Task
 

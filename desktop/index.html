@@ -482,50 +482,65 @@
         }
         
         .terminal-card {
-            background: var(--terminal-bg) !important;
-            border: 1px solid var(--border-color) !important;
+            background: #0d1117 !important;
+            border: 1px solid #21262d !important;
             box-shadow: none !important;
+            border-radius: 8px;
         }
         
         .terminal-card:hover {
-            border-color: var(--border-color) !important;
+            border-color: #30363d !important;
             box-shadow: none !important;
         }
         
         .terminal { 
-            background: var(--terminal-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 0;
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
             padding: 16px;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Ubuntu Mono', 'DejaVu Sans Mono', 'Liberation Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 14px;
+            font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+            font-size: 13px;
             overflow-y: auto;
-            color: var(--terminal-text);
+            color: #c9d1d9;
         }
 
         
         .terminal-output { 
             overflow-y: auto; 
-            overflow-x: auto;
-            padding: 32px;
-            line-height: 1.6;
+            overflow-x: hidden;
+            padding: 20px 24px;
+            line-height: 1.5;
             font-size: 14px;
-            background: #1e1e1e;
-            word-wrap: normal;
+            background: #0d1117;
             flex: 1;
             min-height: 0;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Ubuntu Mono', 'DejaVu Sans Mono', 'Liberation Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-family: Consolas, Monaco, 'Courier New', monospace;
         }
         
         .terminal-line { 
-            color: #e0e0e0; 
-            margin-bottom: 1px; 
-            white-space: pre-wrap;       /* Wrap text normally like a terminal */
-            word-break: break-all;       /* Break long words if needed */
-            font-family: 'JetBrains Mono', 'Fira Code', 'Ubuntu Mono', monospace;
+            color: #c9d1d9; 
+            margin-bottom: 0; 
+            white-space: pre;
+            font-family: Consolas, Monaco, 'Courier New', monospace;
+            font-size: 14px;
             line-height: 1.5;
-            padding-left: 16px;
-            overflow: visible;           /* Never show scrollbars on lines */
+            padding: 0;
+        }
+        
+        .terminal-line:empty {
+            height: 0.5em;
+        }
+        
+        /* Command output grouping */
+        .terminal-command-group {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        
+        .terminal-command-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
         }
 
         /* Markdown styles for terminal */
@@ -539,49 +554,101 @@
         .terminal-line h1, .terminal-line h2, .terminal-line h3 { font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: var(--ansi-cyan); }
         .terminal-line a { color: var(--ansi-blue); text-decoration: underline; }
         
-        /* ANSI color classes - optimized for readability on dark background */
-        .ansi-black { color: var(--ansi-black); }
-        .ansi-cyan { color: var(--ansi-cyan); font-weight: 500; }
-        .ansi-green { color: var(--ansi-green); font-weight: 500; }
-        .ansi-yellow { color: var(--ansi-yellow); font-weight: 500; }
-        .ansi-red { color: var(--ansi-red); font-weight: 500; }
-        .ansi-blue { color: var(--ansi-blue); font-weight: 500; }
-        .ansi-magenta { color: var(--ansi-magenta); font-weight: 500; }
-        .ansi-purple { color: var(--ansi-magenta); font-weight: 500; }
-        .ansi-gray { color: var(--ansi-gray); }
-        .ansi-white { color: var(--ansi-white); }
-        .ansi-bold { font-weight: 700; }
-        .ansi-dim { color: var(--ansi-gray); font-weight: 400; }
-        .ansi-normal { font-weight: 400; opacity: 1; }
+        /* ANSI color classes - GitHub dark theme inspired */
+        .ansi-black { color: #484f58; }
+        .ansi-cyan { color: #56d4dd; }
+        .ansi-green { color: #7ee787; }
+        .ansi-yellow { color: #e3b341; }
+        .ansi-red { color: #f85149; }
+        .ansi-blue { color: #58a6ff; }
+        .ansi-magenta { color: #bc8cff; }
+        .ansi-purple { color: #bc8cff; }
+        .ansi-gray { color: #8b949e; }
+        .ansi-white { color: #c9d1d9; }
+        .ansi-bold { font-weight: bold; }
+        .ansi-dim { color: #6e7681; }
+        .ansi-normal { font-weight: normal; }
         
         .terminal-error { 
-            color: var(--ansi-white); 
-            font-weight: 700; 
+            color: #f85149;
+            font-weight: 500; 
         }
         
         .terminal-success { 
-            color: var(--ansi-cyan); 
-            font-weight: 600; 
+            color: #58a6ff; 
+            font-weight: 500; 
         }
         
         .terminal-prompt { 
-            color: var(--ansi-cyan); 
-            font-weight: 700;
-            margin-top: 24px;
+            color: #7ee787;
+            font-weight: 600;
+            margin-top: 16px;
+            margin-bottom: 4px;
             display: block;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding-top: 24px;
-            padding-left: 0; /* Reset indent for prompt */
-            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
+            padding-left: 0;
+            font-family: inherit;
+        }
+        
+        .terminal-prompt::before {
+            content: '❯ ';
+            color: #7ee787;
+        }
+        
+        /* Section headers in output */
+        .terminal-section-header {
+            color: #58a6ff;
+            font-weight: 600;
+            margin-top: 12px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(88, 166, 255, 0.2);
+            padding-bottom: 4px;
+        }
+        
+        /* Table-like output formatting */
+        .terminal-table-row {
+            display: flex;
+            gap: 16px;
+            padding: 2px 0;
+        }
+        
+        .terminal-table-row .label {
+            color: #8b949e;
+            min-width: 120px;
+        }
+        
+        .terminal-table-row .value {
+            color: #c9d1d9;
+        }
+        
+        /* Progress bar styling */
+        .terminal-progress {
+            background: #21262d;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin: 4px 0;
+        }
+        
+        .terminal-progress-bar {
+            height: 4px;
+            background: #30363d;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+        
+        .terminal-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #238636, #2ea043);
+            transition: width 0.2s ease;
         }
         
         .terminal-input-line { 
             display: flex; 
             align-items: center; 
-            gap: 12px; 
-            padding: 0 32px 32px 32px;
-            border-top: none;
-            background: var(--terminal-bg);
+            gap: 8px; 
+            padding: 12px 24px 20px 24px;
+            border-top: 1px solid #21262d;
+            background: #0d1117;
             min-height: auto;
         }
 
@@ -589,13 +656,18 @@
             margin: 0;
             padding: 0;
             border: none;
-            font-size: 14px;
+            font-size: 13px;
+            color: #7ee787;
+        }
+        
+        .terminal-input-line .terminal-prompt::before {
+            content: '';
         }
         
         .terminal-input { 
             background: transparent; 
             border: none; 
-            color: #06b6d4; 
+            color: #c9d1d9; 
             flex: 1; 
             outline: none; 
             box-shadow: none !important;
@@ -3861,6 +3933,34 @@
             }
         }
 
+        // Format progress line with visual progress bar
+        function formatProgressLine(text) {
+            const cleanText = stripAnsi(text);
+            
+            // Extract percentage if present
+            const percentMatch = cleanText.match(/(\d+(?:\.\d+)?)\s*%/);
+            const percent = percentMatch ? parseFloat(percentMatch[1]) : null;
+            
+            // Clean up the text and format nicely
+            let formattedText = parseAnsiColors(text);
+            
+            if (percent !== null) {
+                // Create visual progress bar
+                const progressBar = `
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="min-width: 50px; text-align: right; color: #7ee787;">${percent.toFixed(1)}%</span>
+                        <div style="flex: 1; max-width: 200px; height: 6px; background: #21262d; border-radius: 3px; overflow: hidden;">
+                            <div style="width: ${Math.min(percent, 100)}%; height: 100%; background: linear-gradient(90deg, #238636, #2ea043); transition: width 0.15s ease;"></div>
+                        </div>
+                        <span style="color: #8b949e; font-size: 12px;">${cleanText.replace(/\d+(?:\.\d+)?\s*%/, '').trim()}</span>
+                    </div>
+                `;
+                return progressBar;
+            }
+            
+            return formattedText;
+        }
+
         // Strip ANSI escape codes
         function stripAnsi(text) {
             // Strip all ANSI escape codes (colors, cursor movement, etc.)
@@ -3896,6 +3996,15 @@
                 '22': 'ansi-normal',         // Normal intensity
             };
             
+            // Escape HTML and convert ALL spaces to &nbsp; for guaranteed alignment
+            function escapeHtml(str) {
+                return str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/ /g, '\u00A0'); // Convert every space to non-breaking space
+            }
+            
             let result = '';
             let currentClasses = new Set();
             let lastIndex = 0;
@@ -3909,12 +4018,9 @@
             let match;
             
             while ((match = ansiRegex.exec(text)) !== null) {
-                // Add text before this escape code (escape HTML entities but preserve UTF-8)
+                // Add text before this escape code (escape HTML entities)
                 const textChunk = text.substring(lastIndex, match.index);
-                result += textChunk
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;');
+                result += escapeHtml(textChunk);
                 lastIndex = match.index + match[0].length;
                 
                 const codes = match[1].split(';');
@@ -3941,12 +4047,9 @@
                 }
             }
             
-            // Add remaining text (escape HTML but preserve UTF-8)
+            // Add remaining text (escape HTML)
             const remainingText = text.substring(lastIndex);
-            result += remainingText
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
+            result += escapeHtml(remainingText);
             
             // Close any remaining open spans
             if (currentClasses.size > 0) {
@@ -3963,7 +4066,7 @@
             
             if (type === 'prompt') {
                 line.className = 'terminal-line terminal-prompt';
-                line.textContent = '$ ' + text;
+                line.textContent = text;
             } else if (type === 'error') {
                 line.className = 'terminal-line terminal-error';
                 line.textContent = text;
@@ -4003,7 +4106,6 @@
             const newBuffer = lines.pop();
             
             // Remove the last line if it was dynamic (incomplete/progress)
-            // so we can replace it or finalize it
             const lastLine = terminal.lastElementChild;
             if (lastLine && lastLine.dataset.dynamic === "true") {
                 lastLine.remove();
@@ -4017,25 +4119,51 @@
                     lineText = parts[parts.length - 1];
                 }
                 
-                // Check if this is a progress line (strip ANSI first to be safe)
+                // Skip completely empty lines (reduce visual clutter)
                 const cleanText = stripAnsi(lineText).trim();
-                const isProgress = cleanText.startsWith('Progress:');
+                if (!cleanText) {
+                    // Add small spacing element instead of empty line
+                    const spacer = document.createElement('div');
+                    spacer.className = 'terminal-line';
+                    spacer.innerHTML = '&nbsp;';
+                    spacer.style.height = '4px';
+                    spacer.style.margin = '0';
+                    terminal.appendChild(spacer);
+                    return;
+                }
+                
+                // Check if this is a progress line
+                const isProgress = cleanText.startsWith('Progress:') || 
+                                   cleanText.includes('%') && (cleanText.includes('Downloading') || cleanText.includes('MB'));
                 
                 if (isProgress) {
                     // Check if the last line in terminal is also a progress line
                     const lastTermLine = terminal.lastElementChild;
-                    if (lastTermLine) {
-                        const lastClean = lastTermLine.textContent.trim();
-                        if (lastClean.startsWith('Progress:')) {
-                            // Update existing line
-                            lastTermLine.innerHTML = parseAnsiColors(lineText);
-                            return; // Skip appending new line
-                        }
+                    if (lastTermLine && lastTermLine.dataset.progress === "true") {
+                        // Update existing progress line
+                        lastTermLine.innerHTML = formatProgressLine(lineText);
+                        return; // Skip appending new line
                     }
+                    
+                    // Create new progress line
+                    const line = document.createElement('div');
+                    line.className = 'terminal-line terminal-progress';
+                    line.dataset.progress = "true";
+                    line.innerHTML = formatProgressLine(lineText);
+                    terminal.appendChild(line);
+                    return;
                 }
                 
+                // Check if this is a section header (all caps or ends with colon)
+                const isSectionHeader = /^[A-Z][A-Z\s]+:?$/.test(cleanText) || 
+                                        (cleanText.endsWith(':') && cleanText.length < 40 && !cleanText.includes('  '));
+                
                 const line = document.createElement('div');
-                line.className = 'terminal-line';
+                if (isSectionHeader) {
+                    line.className = 'terminal-line terminal-section-header';
+                } else {
+                    line.className = 'terminal-line';
+                }
                 line.innerHTML = parseAnsiColors(lineText);
                 terminal.appendChild(line);
             });
@@ -4050,20 +4178,29 @@
                 }
                 
                 const cleanContent = stripAnsi(content).trim();
-                const isProgress = cleanContent.startsWith('Progress:');
+                const isProgress = cleanContent.startsWith('Progress:') || 
+                                   cleanContent.includes('%') && (cleanContent.includes('Downloading') || cleanContent.includes('MB'));
 
                 if (isProgress) {
                     const lastTermLine = terminal.lastElementChild;
-                    if (lastTermLine) {
-                        const lastClean = lastTermLine.textContent.trim();
-                        if (lastClean.startsWith('Progress:')) {
-                            lastTermLine.innerHTML = parseAnsiColors(content);
-                            lastTermLine.dataset.dynamic = "true";
-                            terminalOutputBuffer = newBuffer || '';
-                            terminal.scrollTop = terminal.scrollHeight;
-                            return;
-                        }
+                    if (lastTermLine && lastTermLine.dataset.progress === "true") {
+                        lastTermLine.innerHTML = formatProgressLine(content);
+                        lastTermLine.dataset.dynamic = "true";
+                        terminalOutputBuffer = newBuffer || '';
+                        terminal.scrollTop = terminal.scrollHeight;
+                        return;
                     }
+                    
+                    // Create new progress line
+                    const line = document.createElement('div');
+                    line.className = 'terminal-line terminal-progress';
+                    line.dataset.progress = "true";
+                    line.dataset.dynamic = "true";
+                    line.innerHTML = formatProgressLine(content);
+                    terminal.appendChild(line);
+                    terminalOutputBuffer = newBuffer || '';
+                    terminal.scrollTop = terminal.scrollHeight;
+                    return;
                 }
                 
                 const line = document.createElement('div');

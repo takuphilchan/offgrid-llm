@@ -210,8 +210,26 @@ func printHelpfulError(err error, context string) {
 	fmt.Println()
 }
 
+// Consistent formatting constants for terminal output
+const (
+	labelWidth   = 20 // Width for labels in key-value pairs
+	optionWidth  = 26 // Width for option/command names
+	exampleWidth = 34 // Width for example commands
+	tableCol1    = 40 // Width for first table column (model names)
+	tableCol2    = 12 // Width for second table column (size)
+	tableCol3    = 12 // Width for third table column (quant)
+)
+
 func printItem(label, value string) {
-	fmt.Printf("  %s%-18s%s %s%s%s\n", brandMuted, label+":", colorReset, colorBold, value, colorReset)
+	fmt.Printf("  %s%-*s%s %s%s%s\n", brandMuted, labelWidth, label+":", colorReset, colorBold, value, colorReset)
+}
+
+func printOption(option, description string) {
+	fmt.Printf("  %s%-*s%s %s\n", brandSecondary, optionWidth, option, colorReset, description)
+}
+
+func printExample(cmd string) {
+	fmt.Printf("  %s%s%s\n", colorDim, cmd, colorReset)
 }
 
 func printDivider() {
@@ -935,11 +953,11 @@ func handleRemove(args []string) {
 		fmt.Println("Remove an installed model from your system")
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%s--yes, -y%s  Skip confirmation prompt\n", brandSecondary, colorReset)
+		printOption("--yes, -y", "Skip confirmation prompt")
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid remove tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
-		fmt.Printf("   %soffgrid remove llama-2-7b-chat.Q5_K_M --yes%s\n", colorDim, colorReset)
+		printExample("offgrid remove tinyllama-1.1b-chat.Q4_K_M")
+		printExample("offgrid remove llama-2-7b-chat.Q5_K_M --yes")
 		fmt.Println()
 		fmt.Printf("%sℹ Use 'offgrid list' to see installed models%s\n", colorDim, colorReset)
 		fmt.Println()
@@ -1491,20 +1509,16 @@ func handleAutoSelect(args []string) {
 
 	// Display system info
 	fmt.Printf("%sSystem Information%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("  %sOS:%s %s/%s\n", brandMuted, colorReset, res.OS, res.Arch)
-	fmt.Printf("  %sCPU:%s %d cores\n", brandMuted, colorReset, res.CPUCores)
-	fmt.Printf("  %sRAM:%s %s total · %s available\n",
-		brandMuted, colorReset,
+	printItem("OS", fmt.Sprintf("%s/%s", res.OS, res.Arch))
+	printItem("CPU", fmt.Sprintf("%d cores", res.CPUCores))
+	printItem("RAM", fmt.Sprintf("%s total · %s available",
 		formatBytes(res.TotalRAM*1024*1024),
-		formatBytes(res.AvailableRAM*1024*1024))
+		formatBytes(res.AvailableRAM*1024*1024)))
 
 	if res.GPUAvailable {
-		fmt.Printf("  %sGPU:%s %s · %s VRAM\n",
-			brandSuccess, colorReset,
-			res.GPUName,
-			formatBytes(res.GPUMemory*1024*1024))
+		printItem("GPU", fmt.Sprintf("%s · %s VRAM", res.GPUName, formatBytes(res.GPUMemory*1024*1024)))
 	} else {
-		fmt.Printf("  %sGPU:%s Not detected (CPU-only mode)\n", brandMuted, colorReset)
+		fmt.Printf("  %s%-*s%s Not detected (CPU-only mode)\n", brandMuted, labelWidth, "GPU:", colorReset)
 	}
 	fmt.Println()
 
@@ -1593,11 +1607,11 @@ func handleBenchmark(args []string) {
 		fmt.Println("Benchmark model performance and resource usage")
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%s--iterations N%s     Number of test iterations (default: 3)\n", brandSecondary, colorReset)
-		fmt.Printf("%s--prompt \"text\"%s   Custom prompt to benchmark (default: sample prompt)\n", brandSecondary, colorReset)
+		printOption("--iterations N", "Number of test iterations (default: 3)")
+		printOption("--prompt \"text\"", "Custom prompt to benchmark (default: sample prompt)")
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid benchmark tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
+		printExample("offgrid benchmark tinyllama-1.1b-chat.Q4_K_M")
 		fmt.Printf("   %soffgrid benchmark llama-2-7b-chat.Q5_K_M --iterations 5%s\n", colorDim, colorReset)
 		fmt.Printf("   %soffgrid benchmark phi-2.Q4_K_M --prompt \"Explain quantum computing\"%s\n", colorDim, colorReset)
 		fmt.Println()
@@ -1978,30 +1992,16 @@ func handleList(args []string) {
 		fmt.Printf("  %d models installed\n\n", len(modelList))
 	}
 
-	// Calculate max width for model name
-	maxNameLen := 5 // Minimum width for "Model" header
-	for _, model := range modelList {
-		if len(model.ID) > maxNameLen {
-			maxNameLen = len(model.ID)
-		}
-	}
-	// Cap at 60 chars to prevent extreme width
-	if maxNameLen > 60 {
-		maxNameLen = 60
-	}
-
-	// Clean table with minimal lines
-	// Dynamic format string based on max name length
-	headerFmt := fmt.Sprintf("%%s   %%-%ds %%-12s %%-12s%%s\n", maxNameLen)
-	fmt.Printf(headerFmt, colorDim, "Model", "Size", "Quantization", colorReset)
+	// Clean table with fixed column widths
+	fmt.Printf("%s   %-*s %-*s %-*s%s\n", colorDim, tableCol1, "Model", tableCol2, "Size", tableCol3, "Quantization", colorReset)
 
 	var totalSize int64
 	for i, model := range modelList {
 		meta, err := registry.GetModel(model.ID)
 
 		modelName := model.ID
-		if len(modelName) > maxNameLen {
-			modelName = modelName[:maxNameLen-3] + "..."
+		if len(modelName) > tableCol1 {
+			modelName = modelName[:tableCol1-3] + "..."
 		}
 
 		sizeStr := "-"
@@ -2023,11 +2023,10 @@ func handleList(args []string) {
 			rowColor = colorReset
 		}
 
-		rowFmt := fmt.Sprintf("   %%s%%-%ds%%s %%s%%-12s%%s %%s%%-12s%%s\n", maxNameLen)
-		fmt.Printf(rowFmt,
-			rowColor, modelName, colorReset,
-			brandSecondary, sizeStr, colorReset,
-			brandMuted, quantStr, colorReset)
+		fmt.Printf("   %s%-*s%s %s%-*s%s %s%-*s%s\n",
+			rowColor, tableCol1, modelName, colorReset,
+			brandSecondary, tableCol2, sizeStr, colorReset,
+			brandMuted, tableCol3, quantStr, colorReset)
 	}
 
 	if totalSize > 0 {
@@ -2076,10 +2075,10 @@ func handleQuantization() {
 	}
 
 	fmt.Printf("%sQuick Recommendations%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("   %s★%s %sQ4_K_M%s  Best for most users (4.0 GB for 7B model)\n", brandSuccess, colorReset, brandSecondary, colorReset)
-	fmt.Printf("   %s★%s %sQ5_K_M%s  Production quality (4.8 GB for 7B model)\n", brandSuccess, colorReset, brandSecondary, colorReset)
-	fmt.Printf("      %sQ3_K_M%s  Limited RAM (3.0 GB for 7B model)\n", brandSecondary, colorReset)
-	fmt.Printf("      %sQ8_0%s    Maximum quality (7.2 GB for 7B model)\n", brandSecondary, colorReset)
+	printOption("★ Q4_K_M", "Best for most users (4.0 GB for 7B model)")
+	printOption("★ Q5_K_M", "Production quality (4.8 GB for 7B model)")
+	printOption("  Q3_K_M", "Limited RAM (3.0 GB for 7B model)")
+	printOption("  Q8_0", "Maximum quality (7.2 GB for 7B model)")
 	fmt.Println()
 }
 
@@ -2104,11 +2103,11 @@ func handleQuantize(args []string) {
 		fmt.Println("Q8_0      8-bit (largest, highest quality)")
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%s--output <name>%s   Output model name (default: auto-generated)\n", brandSecondary, colorReset)
+		printOption("--output <name>", "Output model name (default: auto-generated)")
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid quantize llama-2-7b.F16 Q4_K_M%s\n", colorDim, colorReset)
-		fmt.Printf("   %soffgrid quantize phi-2.F16 Q5_K_M --output phi-2-hq%s\n", colorDim, colorReset)
+		printExample("offgrid quantize llama-2-7b.F16 Q4_K_M")
+		printExample("offgrid quantize phi-2.F16 Q5_K_M --output phi-2-hq")
 		fmt.Println()
 		fmt.Printf("%sℹ Use 'offgrid quantization' to see quality comparisons%s\n", colorDim, colorReset)
 		fmt.Println()
@@ -2363,19 +2362,16 @@ func printHelp() {
 		}
 	}
 
-	// Add padding (minimum 2 spaces, align to 4-space boundary)
-	pad := maxLen + 4
-
-	// Format string: "  " + Command + Padding + Description
-	// We construct the padding manually to ensure it's always spaces
+	// Use fixed column width of 26 chars for command column (consistent grid)
+	const columnWidth = 26
 
 	for _, s := range sections {
 		fmt.Printf("%s%s%s\n", brandPrimary+colorBold, s.title, colorReset)
 		for _, c := range s.cmds {
-			// Calculate padding needed
-			paddingNeeded := pad - len(c.name)
-			if paddingNeeded < 1 {
-				paddingNeeded = 1
+			// Calculate padding needed to reach fixed column width
+			paddingNeeded := columnWidth - len(c.name)
+			if paddingNeeded < 2 {
+				paddingNeeded = 2
 			}
 			padding := strings.Repeat(" ", paddingNeeded)
 
@@ -2388,13 +2384,30 @@ func printHelp() {
 	}
 
 	fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("   %soffgrid init%s                              # First-time setup\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid recommend%s                         # Get model suggestions\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid search llama --ram 4%s              # Find 4GB-compatible models\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --quant Q4_K_M%s\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid run tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid run llava-v1.6 --image photo.jpg%s  # Run VLM with image\n", colorDim, colorReset)
-	fmt.Printf("   %soffgrid doctor%s                            # Check system health\n", colorDim, colorReset)
+	examples := []struct {
+		cmd  string
+		desc string
+	}{
+		{"offgrid init", "First-time setup"},
+		{"offgrid recommend", "Get model suggestions"},
+		{"offgrid search llama --ram 4", "Find 4GB models"},
+		{"offgrid download-hf <repo>", "Download model"},
+		{"offgrid run <model>", "Start chat"},
+		{"offgrid run <model> --image x.jpg", "VLM with image"},
+		{"offgrid doctor", "Check system health"},
+	}
+
+	// Use same fixed column width for examples (consistent with commands)
+	const exampleColumnWidth = 34
+
+	for _, e := range examples {
+		paddingNeeded := exampleColumnWidth - len(e.cmd)
+		if paddingNeeded < 2 {
+			paddingNeeded = 2
+		}
+		padding := strings.Repeat(" ", paddingNeeded)
+		fmt.Printf("  %s%s%s%s%s\n", colorDim, e.cmd, colorReset, padding, e.desc)
+	}
 	fmt.Println()
 }
 
@@ -2746,18 +2759,18 @@ func handleSearch(args []string) {
 			fmt.Printf("%sUsage:%s offgrid search [query] [options]\n", colorDim, colorReset)
 			fmt.Println("")
 			fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-			fmt.Printf("%s-a, --author <name>%s   Filter by author (e.g., 'TheBloke')\n", brandSecondary, colorReset)
-			fmt.Printf("%s-q, --quant <type>%s    Filter by quantization (e.g., 'Q4_K_M')\n", brandSecondary, colorReset)
-			fmt.Printf("%s-r, --ram <GB>%s        Filter by max RAM (e.g., 4, 8, 16)\n", brandSecondary, colorReset)
-			fmt.Printf("%s-s, --sort <field>%s    Sort by: downloads, likes, created, modified\n", brandSecondary, colorReset)
-			fmt.Printf("%s-l, --limit <n>%s       Limit results (default: 20)\n", brandSecondary, colorReset)
-			fmt.Printf("%s--all%s                Include gated models\n", brandSecondary, colorReset)
+			printOption("-a, --author <name>", "Filter by author (e.g., 'TheBloke')")
+			printOption("-q, --quant <type>", "Filter by quantization (e.g., 'Q4_K_M')")
+			printOption("-r, --ram <GB>", "Filter by max RAM (e.g., 4, 8, 16)")
+			printOption("-s, --sort <field>", "Sort by: downloads, likes, created, modified")
+			printOption("-l, --limit <n>", "Limit results (default: 20)")
+			printOption("--all", "Include gated models")
 			fmt.Println()
 			fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-			fmt.Printf("   %soffgrid search llama%s\n", colorDim, colorReset)
-			fmt.Printf("   %soffgrid search llama --ram 4%s                    # 4GB RAM\n", colorDim, colorReset)
-			fmt.Printf("   %soffgrid search mistral --author TheBloke --quant Q4_K_M%s\n", colorDim, colorReset)
-			fmt.Printf("   %soffgrid search --sort likes --limit 10%s\n", colorDim, colorReset)
+			printExample("offgrid search llama")
+			printExample("offgrid search llama --ram 4")
+			printExample("offgrid search mistral --author TheBloke --quant Q4_K_M")
+			printExample("offgrid search --sort likes --limit 10")
 			fmt.Println()
 			return
 		default:
@@ -2938,13 +2951,13 @@ func handleDownloadHF(args []string) {
 		fmt.Printf("%sUsage:%s offgrid download-hf <model-id> [options]\n", colorDim, colorReset)
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%s--file <filename>%s  Specific GGUF file to download\n", brandSecondary, colorReset)
-		fmt.Printf("%s--quant <type>%s     Filter by quantization (e.g., Q4_K_M)\n", brandSecondary, colorReset)
-		fmt.Printf("%s--yes, -y%s          Auto-confirm all prompts (skip confirmations)\n", brandSecondary, colorReset)
+		printOption("--file <filename>", "Specific GGUF file to download")
+		printOption("--quant <type>", "Filter by quantization (e.g., Q4_K_M)")
+		printOption("--yes, -y", "Auto-confirm all prompts (skip confirmations)")
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --file llama-2-7b-chat.Q4_K_M.gguf%s\n", colorDim, colorReset)
-		fmt.Printf("   %soffgrid download-hf TheBloke/Mistral-7B-Instruct-v0.2-GGUF --quant Q4_K_M --yes%s\n", colorDim, colorReset)
+		printExample("offgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --file llama-2-7b-chat.Q4_K_M.gguf")
+		printExample("offgrid download-hf TheBloke/Mistral-7B-Instruct-v0.2-GGUF --quant Q4_K_M --yes")
 		fmt.Println()
 		fmt.Printf("%sℹ Use 'offgrid search <query>' to find models first%s\n", colorDim, colorReset)
 		fmt.Println()
@@ -3361,15 +3374,15 @@ func handleRun(args []string) {
 		fmt.Println("Start an interactive chat session with a model")
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%s--save <name>%s    Save conversation to session\n", brandSecondary, colorReset)
-		fmt.Printf("%s--load <name>%s    Load and continue existing session\n", brandSecondary, colorReset)
-		fmt.Printf("%s--image <path>%s   Attach an image (for VLM models)\n", brandSecondary, colorReset)
+		printOption("--save <name>", "Save conversation to session")
+		printOption("--load <name>", "Load and continue existing session")
+		printOption("--image <path>", "Attach an image (for VLM models)")
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid run tinyllama-1.1b-chat.Q4_K_M%s\n", colorDim, colorReset)
-		fmt.Printf("   %soffgrid run llava-v1.6 --image ./photo.jpg%s\n", colorDim, colorReset)
-		fmt.Printf("   %soffgrid run llama --save my-project%s\n", colorDim, colorReset)
-		fmt.Printf("   %soffgrid run llama --load my-project%s\n", colorDim, colorReset)
+		printExample("offgrid run tinyllama-1.1b-chat.Q4_K_M")
+		printExample("offgrid run llava-v1.6 --image ./photo.jpg")
+		printExample("offgrid run llama --save my-project")
+		printExample("offgrid run llama --load my-project")
 		fmt.Println()
 		fmt.Printf("%sℹ Use 'offgrid list' to see available models%s\n", colorDim, colorReset)
 		fmt.Printf("%sℹ Use 'offgrid session list' to see saved sessions%s\n", colorDim, colorReset)
@@ -4969,8 +4982,8 @@ func handleExportSession(args []string) {
 		fmt.Printf("%sUsage:%s offgrid export-session <session-name> [options]\n", colorDim, colorReset)
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%s--format <type>%s   Output format: markdown, json, txt (default: markdown)\n", brandSecondary, colorReset)
-		fmt.Printf("%s--output <file>%s   Output file (default: stdout)\n", brandSecondary, colorReset)
+		printOption("--format <type>", "Output format: markdown, json, txt (default: markdown)")
+		printOption("--output <file>", "Output file (default: stdout)")
 		fmt.Println()
 		printInfo("Exports chat session for documentation or research papers")
 		fmt.Println()
@@ -5087,12 +5100,12 @@ func handleBenchmarkCompare(args []string) {
 		fmt.Println("Compare performance across multiple models")
 		fmt.Println()
 		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%s--iterations N%s     Number of test iterations (default: 3)\n", brandSecondary, colorReset)
-		fmt.Printf("%s--prompt \"text\"%s   Custom prompt for comparison\n", brandSecondary, colorReset)
+		printOption("--iterations N", "Number of test iterations (default: 3)")
+		printOption("--prompt \"text\"", "Custom prompt for comparison")
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("   %soffgrid compare tinyllama-1.1b phi-2%s\n", colorDim, colorReset)
-		fmt.Printf("   %soffgrid compare llama-2-7b mistral-7b phi-2 --iterations 5%s\n", colorDim, colorReset)
+		printExample("offgrid compare tinyllama-1.1b phi-2")
+		printExample("offgrid compare llama-2-7b mistral-7b phi-2 --iterations 5")
 		fmt.Println()
 		os.Exit(1)
 	}
