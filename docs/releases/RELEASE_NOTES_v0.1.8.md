@@ -1,4 +1,4 @@
-# Release Notes - v0.1.9
+# Release Notes - v0.1.8
 
 **Release Date:** November 21, 2025
 
@@ -64,14 +64,14 @@ None—existing text-only workflows remain unchanged.
 
 ```bash
 # Download latest binary
-curl -LO https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.9/offgrid-linux-amd64
+curl -LO https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.8/offgrid-linux-amd64
 chmod +x offgrid-linux-amd64
 sudo mv offgrid-linux-amd64 /usr/local/bin/offgrid
 
 # Or build from source
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
-git checkout v0.1.9
+git checkout v0.1.8
 go build -o offgrid cmd/offgrid/main.go
 ```
 
@@ -88,7 +88,7 @@ offgrid run VLM-R1-Qwen2.5VL-3B-OVD-0321.i1-Q4_K_M --image photo.jpg
 # Or use the desktop/web UI for drag-and-drop image chat
 ```
 
-## What's Next (v0.1.9 Roadmap)
+## What's Next
 
 - Multi-turn vision conversations with persistent image context
 - Dynamic projector resolution (different adapters for different quant levels)
