@@ -181,6 +181,13 @@ offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 - Export sessions to markdown
 - Prompt templates for common tasks
 
+**Knowledge Base (RAG)**
+- Upload documents for AI-powered Q&A
+- Supports .txt, .md, .json, .csv, .html files
+- Hybrid search (semantic + keyword)
+- Auto-restores on server restart
+- CLI management with `offgrid kb`
+
 **Model Management**
 - RAM-aware search (--ram 4 shows models for 4GB systems)
 - Search HuggingFace directly from CLI
@@ -193,6 +200,8 @@ offgrid run Llama-3.2-3B-Instruct-Q4_K_M
 - Real-time markdown rendering
 - Code syntax highlighting
 - Model browser with system stats
+- Knowledge Base management
+- Benchmark dashboard
 - USB import/export with progress tracking
 
 ### For Developers
@@ -204,6 +213,29 @@ curl http://localhost:11611/v1/chat/completions \
   -d '{
     "model": "your-model.gguf",
     "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+**Function Calling / Tool Use**
+```bash
+curl http://localhost:11611/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-model.gguf",
+    "messages": [{"role": "user", "content": "What is the weather in London?"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string"}
+          }
+        }
+      }
+    }]
   }'
 ```
 

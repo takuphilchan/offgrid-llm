@@ -22,6 +22,8 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
+	"github.com/takuphilchan/offgrid-llm/internal/platform"
+	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/stats"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
@@ -35,6 +37,7 @@ type Server struct {
 	registry             *models.Registry
 	engine               inference.Engine
 	embeddingEngine      *inference.EmbeddingEngine
+	ragEngine            *rag.Engine
 	monitor              *resource.Monitor
 	statsTracker         *stats.Tracker
 	cache                *cache.ResponseCache
@@ -120,11 +123,15 @@ func NewWithConfig(cfg *config.Config) *Server {
 	// Inference endpoints: max 2 concurrent per IP, 3 global concurrent
 	inferenceRateLimiter := NewInferenceRateLimiter(2, 3)
 
+	// Initialize RAG engine
+	ragEngine := rag.NewEngine(embeddingEngine, cfg.ModelsDir)
+
 	return &Server{
 		config:               cfg,
 		registry:             registry,
 		engine:               engine,
 		embeddingEngine:      embeddingEngine,
+		ragEngine:            ragEngine,
 		monitor:              monitor,
 		statsTracker:         statsTracker,
 		cache:                responseCache,
@@ -230,8 +237,18 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/filesystem/browse", s.handleFilesystemBrowse)
 	mux.HandleFunc("/v1/filesystem/common-paths", s.handleCommonPaths)
 
+	// RAG (Retrieval Augmented Generation) endpoints
+	mux.HandleFunc("/v1/rag/status", s.handleRAGStatus)
+	mux.HandleFunc("/v1/rag/enable", s.handleRAGEnable)
+	mux.HandleFunc("/v1/rag/disable", s.handleRAGDisable)
+	mux.HandleFunc("/v1/documents", s.handleDocumentsList)
+	mux.HandleFunc("/v1/documents/ingest", s.handleDocumentIngest)
+	mux.HandleFunc("/v1/documents/delete", s.handleDocumentDelete)
+	mux.HandleFunc("/v1/documents/search", s.handleDocumentSearch)
+
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
+	mux.HandleFunc("/v1/system/info", s.handleSystemInfo)
 
 	// Model cache statistics
 	mux.HandleFunc("/v1/cache/stats", s.handleCacheStats)
@@ -283,6 +300,15 @@ func (s *Server) Start() error {
 		log.Printf("Warning: Failed to auto-start llama-server: %v", err)
 		log.Println("You may need to start llama-server manually")
 	}
+
+	// Auto-restore RAG state if there's persisted data
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := s.ragEngine.AutoRestore(ctx); err != nil {
+			log.Printf("Warning: Failed to auto-restore RAG: %v", err)
+		}
+	}()
 
 	// Create listener first to ensure port is available
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.ServerPort))
@@ -504,6 +530,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleSystemInfo returns detailed system information
+func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	sysInfo := platform.GetSystemInfo()
+
+	json.NewEncoder(w).Encode(sysInfo)
+}
+
 func (s *Server) getAggregateStats() map[string]interface{} {
 	allStats := s.statsTracker.GetAllStats()
 
@@ -674,6 +709,33 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
 			writeError(w, fmt.Sprintf("Failed to load model into engine: %v", err), http.StatusInternalServerError)
 			return
+		}
+	}
+
+	// Apply RAG enhancement if enabled
+	log.Printf("🔍 RAG Check: UseKnowledgeBase=%v, RAGEnabled=%v", req.UseKnowledgeBase, s.ragEngine.IsEnabled())
+	if req.UseKnowledgeBase != nil && *req.UseKnowledgeBase {
+		if !s.ragEngine.IsEnabled() {
+			log.Printf("⚠️ Knowledge Base requested but RAG is not enabled")
+		} else {
+			// Find the last user message
+			for i := len(req.Messages) - 1; i >= 0; i-- {
+				if req.Messages[i].Role == "user" {
+					userContent := req.Messages[i].StringContent()
+					log.Printf("🔍 RAG searching for: %s", userContent)
+					enhancedContent, ragCtx, err := s.ragEngine.EnhancePrompt(r.Context(), userContent)
+					if err != nil {
+						log.Printf("❌ RAG enhancement failed: %v", err)
+					} else if ragCtx != nil && len(ragCtx.Results) > 0 {
+						// Replace the user message with enhanced version
+						req.Messages[i].Content = enhancedContent
+						log.Printf("📚 RAG injected %d chunks for query (context length: %d chars)", len(ragCtx.Results), len(ragCtx.Context))
+					} else {
+						log.Printf("⚠️ RAG found no relevant results for query")
+					}
+					break
+				}
+			}
 		}
 	}
 

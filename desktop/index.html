@@ -1031,16 +1031,16 @@
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                 Chat
             </button>
-            <button onclick="switchTab('embeddings')" id="tab-embeddings" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-                Embeddings
+            <button onclick="switchTab('knowledge')" id="tab-knowledge" class="nav-item">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><line x1="12" y1="6" x2="12" y2="12"></line><line x1="9" y1="9" x2="15" y2="9"></line></svg>
+                Knowledge
             </button>
-            <button onclick="switchTab('sessions')" id="tab-sessions" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-                Sessions
+            <button onclick="switchTab('benchmark')" id="tab-benchmark" class="nav-item">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                Benchmark
             </button>
             <button onclick="switchTab('models')" id="tab-models" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 Models
             </button>
             <button onclick="switchTab('terminal')" id="tab-terminal" class="nav-item">
@@ -1093,6 +1093,16 @@
                             <input type="checkbox" id="streamToggle" checked class="rounded">
                             <span>Stream</span>
                         </label>
+                        <label class="flex items-center gap-2 text-xs" title="Enable to use RAG knowledge base for answers">
+                            <input type="checkbox" id="useKnowledgeBase" class="rounded accent-emerald-500">
+                            <span class="flex items-center gap-1">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400">
+                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                                </svg>
+                                Knowledge Base
+                            </span>
+                        </label>
                         <label class="flex items-center gap-2 text-xs">
                             <span>Temp:</span>
                             <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2" 
@@ -1105,20 +1115,47 @@
                         </label>
                     </div>
                     <div class="flex gap-2 ml-auto">
+                        <button onclick="toggleSessionsPanel()" class="btn btn-secondary btn-sm flex items-center gap-1" title="View saved sessions">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                            Sessions
+                        </button>
                         <button onclick="saveCurrentSession()" class="btn btn-info btn-sm">Save Session</button>
                         <button onclick="showExportOptions()" class="btn btn-info btn-sm">Export</button>
-                        <button onclick="clearChat()" class="btn btn-secondary btn-sm">Clear</button>
+                        <button onclick="newChat()" class="btn btn-secondary btn-sm">New Chat</button>
                     </div>
                 </div>
             </div>
 
-            <div class="flex-1 flex flex-col overflow-hidden bg-primary">
-                <div id="chatMessages" class="flex-1 scrollable px-4 py-4">
-                    <div class="text-center text-secondary py-32">
-                        <p class="text-xl font-medium">Start a conversation</p>
-                        <p class="text-sm mt-2">Select a model and type your message below</p>
+            <div class="flex-1 flex overflow-hidden bg-primary">
+                <!-- Sessions Panel (collapsible) -->
+                <div id="sessionsPanel" class="hidden w-72 border-r border-theme bg-secondary overflow-hidden flex-shrink-0 flex flex-col">
+                    <div class="p-3 border-b border-theme flex items-center justify-between">
+                        <h3 class="text-sm font-semibold">Saved Sessions</h3>
+                        <div class="flex items-center gap-1">
+                            <button onclick="createNewSession()" class="btn btn-primary btn-sm text-xs px-2 py-1">New</button>
+                            <button onclick="toggleSessionsPanel()" class="p-1 hover:bg-white/10 rounded">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-2">
+                        <input type="text" id="sessionSearch" placeholder="Search sessions..." 
+                               onkeyup="filterSessions()"
+                               class="w-full input-theme rounded px-2 py-1.5 text-xs" />
+                    </div>
+                    <div id="sessionsList" class="flex-1 overflow-auto px-2 pb-2 space-y-1">
+                        <p class="text-xs text-secondary text-center py-4">No saved sessions yet.</p>
                     </div>
                 </div>
+                
+                <!-- Main Chat Area -->
+                <div class="flex-1 flex flex-col overflow-hidden">
+                    <div id="chatMessages" class="flex-1 scrollable px-4 py-4">
+                        <div class="text-center text-secondary py-32">
+                            <p class="text-xl font-medium">Start a conversation</p>
+                            <p class="text-sm mt-2">Select a model and type your message below</p>
+                        </div>
+                    </div>
                 <div class="flex-shrink-0 bg-primary border-t border-theme">
                     <div class="max-w-3xl mx-auto py-4 px-4">
                         <div class="relative input-theme rounded-xl focus-within:border-theme transition-colors shadow-lg flex flex-col">
@@ -1172,25 +1209,146 @@
                                 <span id="tokenCount">0 tokens</span>
                                 <span>•</span>
                                 <span id="messageCount">0 messages</span>
+                                <span id="ragIndicator" class="hidden">•</span>
+                                <span id="ragIndicatorText" class="hidden text-emerald-400 flex items-center gap-1">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                                    </svg>
+                                    RAG Active
+                                </span>
                             </div>
                             <span id="statusBadge" class="text-xs font-medium">Ready</span>
                         </div>
                     </div>
                 </div>
+                </div>
             </div>
         </div>
 
-        <!-- Embeddings Tab -->
-        <div id="content-embeddings" class="hidden h-full overflow-auto px-6 py-4">
+        <!-- Knowledge Base (RAG) Tab -->
+        <div id="content-knowledge" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto space-y-4">
+                <!-- RAG Status Card -->
                 <div class="card">
-                    <h3 class="text-lg font-semibold mb-4">Text Embeddings</h3>
-                    <p class="text-xs text-secondary mb-4">Generate vector embeddings from text for semantic search, RAG, and similarity comparison</p>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold">Knowledge Base</h3>
+                            <p class="text-xs text-secondary">Upload documents for AI-powered Q&A with RAG (Retrieval Augmented Generation)</p>
+                        </div>
+                        <div id="ragStatusBadge" class="badge badge-secondary">Disabled</div>
+                    </div>
                     
-                    <div class="space-y-4">
+                    <!-- Embedding Model Selection - simplified -->
+                    <div class="flex items-center gap-3 mb-4">
+                        <label class="text-sm font-medium whitespace-nowrap">Embedding Model:</label>
+                        <select id="ragEmbeddingModel" onchange="onEmbeddingModelChange()" class="flex-1 input-theme rounded px-3 py-2 text-sm max-w-xs">
+                            <option value="">Select model to enable...</option>
+                        </select>
+                        <button onclick="disableRAG()" id="ragDisableBtn" class="btn btn-secondary btn-sm hidden">
+                            Disable
+                        </button>
+                    </div>
+
+                    <!-- RAG Stats -->
+                    <div id="ragStats" class="grid grid-cols-3 gap-4">
+                        <div class="text-center p-3 bg-tertiary rounded-lg">
+                            <div class="text-2xl font-bold text-accent" id="ragDocCount">0</div>
+                            <div class="text-xs text-secondary">Documents</div>
+                        </div>
+                        <div class="text-center p-3 bg-tertiary rounded-lg">
+                            <div class="text-2xl font-bold text-accent" id="ragChunkCount">0</div>
+                            <div class="text-xs text-secondary">Chunks</div>
+                        </div>
+                        <div class="text-center p-3 bg-tertiary rounded-lg">
+                            <div class="text-2xl font-bold text-accent" id="ragEmbeddingCount">0</div>
+                            <div class="text-xs text-secondary">Embeddings</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Documents Card -->
+                <div class="card">
+                    <h4 class="font-semibold mb-3">Add Documents</h4>
+                    
+                    <!-- Drag & Drop Zone -->
+                    <div id="ragDropZone" 
+                         class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-accent transition-colors cursor-pointer"
+                         ondrop="handleRAGDrop(event)" 
+                         ondragover="handleRAGDragOver(event)"
+                         ondragleave="handleRAGDragLeave(event)"
+                         onclick="document.getElementById('ragFileInput').click()">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p class="text-secondary mb-1">Drag & drop files here or click to browse</p>
+                        <p class="text-xs text-secondary">Supports: .txt, .md, .json, .csv, .html</p>
+                        <input type="file" id="ragFileInput" accept=".txt,.md,.markdown,.json,.csv,.html,.htm" multiple class="hidden" onchange="handleRAGFileSelect(event)">
+                    </div>
+
+                    <!-- Or paste text -->
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium mb-2">Or paste text directly:</label>
+                        <textarea id="ragTextInput" 
+                                  rows="4" 
+                                  class="w-full input-theme rounded-lg px-3 py-2 text-sm font-mono"
+                                  placeholder="Paste your text content here..."></textarea>
+                        <div class="flex items-center gap-2 mt-2">
+                            <input type="text" id="ragTextName" 
+                                   class="flex-1 input-theme rounded px-3 py-2 text-sm" 
+                                   placeholder="Document name (e.g., 'meeting-notes.txt')">
+                            <button onclick="ingestRAGText()" class="btn btn-primary">Add Text</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documents List Card -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold">Your Documents</h4>
+                        <button onclick="refreshRAGDocuments()" class="btn btn-secondary btn-sm">Refresh</button>
+                    </div>
+                    <div id="ragDocumentsList" class="space-y-2">
+                        <p class="text-secondary text-sm">No documents uploaded yet.</p>
+                    </div>
+                </div>
+
+                <!-- Search Test Card -->
+                <div class="card">
+                    <h4 class="font-semibold mb-3">Search Knowledge Base</h4>
+                    <p class="text-xs text-secondary mb-3">Search your documents to find relevant content.</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="ragSearchQuery" 
+                               class="flex-1 input-theme rounded px-3 py-2 text-sm" 
+                               placeholder="Enter a search query..."
+                               onkeypress="if(event.key==='Enter')searchRAGDocuments()">
+                        <button onclick="searchRAGDocuments()" class="btn btn-primary">Search</button>
+                    </div>
+                    <div id="ragSearchResults" class="mt-4 space-y-2"></div>
+                </div>
+
+                <!-- Developer Tools - Collapsible -->
+                <div class="card">
+                    <div class="flex items-center justify-between cursor-pointer" onclick="toggleDevTools()">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <span class="text-sm font-medium text-secondary">Developer Tools</span>
+                        </div>
+                        <svg id="devToolsIcon" class="w-4 h-4 text-secondary transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    
+                    <div id="devToolsContent" class="hidden mt-4 pt-4 border-t border-theme space-y-4">
+                        <div>
+                            <h5 class="text-sm font-medium mb-2">Test Embeddings</h5>
+                            <p class="text-xs text-secondary mb-3">Generate vector embeddings from text to test your embedding model.</p>
+                        </div>
+                        
                         <!-- Model Selection -->
                         <div>
-                            <label class="text-sm font-medium block mb-2">Embedding Model</label>
+                            <label class="text-xs text-secondary block mb-1">Embedding Model</label>
                             <select id="embeddingModel" class="w-full input-theme rounded px-3 py-2 text-sm">
                                 <option value="">Loading...</option>
                             </select>
@@ -1198,65 +1356,49 @@
                         
                         <!-- Text Input -->
                         <div>
-                            <label class="text-sm font-medium block mb-2">Input Text</label>
+                            <label class="text-xs text-secondary block mb-1">Input Text</label>
                             <textarea id="embeddingInput" 
-                                      placeholder="Enter text to generate embeddings (e.g., 'The quick brown fox jumps over the lazy dog')"
-                                      rows="4"
+                                      placeholder="Enter text to generate embeddings..."
+                                      rows="3"
                                       class="w-full input-theme rounded px-3 py-2 text-sm font-mono resize-y"></textarea>
                         </div>
                         
                         <!-- Actions -->
                         <div class="flex gap-2">
-                            <button onclick="generateEmbedding()" id="generateEmbeddingBtn" class="btn btn-primary">
-                                Generate Embedding
+                            <button onclick="generateEmbedding()" id="generateEmbeddingBtn" class="btn btn-secondary btn-sm">
+                                Generate
                             </button>
-                            <button onclick="clearEmbedding()" class="btn btn-secondary">Clear</button>
+                            <button onclick="clearEmbedding()" class="btn btn-secondary btn-sm">Clear</button>
                         </div>
                         
                         <!-- Results -->
                         <div id="embeddingResults" class="hidden">
-                            <div class="border-t border-theme pt-4">
+                            <div class="border-t border-theme pt-3">
                                 <div class="flex items-center justify-between mb-2">
-                                    <h4 class="text-sm font-medium">Embedding Output</h4>
-                                    <button onclick="copyEmbedding()" class="btn btn-secondary btn-sm">Copy Vector</button>
+                                    <span class="text-xs text-secondary">Output</span>
+                                    <button onclick="copyEmbedding()" class="text-xs text-accent hover:underline">Copy Vector</button>
                                 </div>
                                 
                                 <!-- Stats -->
-                                <div class="grid grid-cols-3 gap-4 mb-3 text-xs">
-                                    <div class="bg-secondary rounded px-3 py-2">
-                                        <div class="text-secondary">Dimensions</div>
-                                        <div id="embeddingDimensions" class="text-lg font-semibold text-accent">-</div>
+                                <div class="grid grid-cols-3 gap-2 mb-2 text-xs">
+                                    <div class="bg-secondary rounded px-2 py-1">
+                                        <div class="text-secondary">Dims</div>
+                                        <div id="embeddingDimensions" class="font-semibold text-accent">-</div>
                                     </div>
-                                    <div class="bg-secondary rounded px-3 py-2">
+                                    <div class="bg-secondary rounded px-2 py-1">
                                         <div class="text-secondary">Tokens</div>
-                                        <div id="embeddingTokens" class="text-lg font-semibold text-accent">-</div>
+                                        <div id="embeddingTokens" class="font-semibold text-accent">-</div>
                                     </div>
-                                    <div class="bg-secondary rounded px-3 py-2">
+                                    <div class="bg-secondary rounded px-2 py-1">
                                         <div class="text-secondary">Time</div>
-                                        <div id="embeddingTime" class="text-lg font-semibold text-accent">-</div>
+                                        <div id="embeddingTime" class="font-semibold text-accent">-</div>
                                     </div>
                                 </div>
                                 
                                 <!-- Vector Output -->
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Vector (first 100 values):</label>
-                                    <div id="embeddingVector" 
-                                         class="bg-tertiary rounded px-3 py-2 text-xs font-mono overflow-x-auto max-h-32 overflow-y-auto"
-                                         style="white-space: pre-wrap; word-break: break-all;"></div>
-                                </div>
-                                
-                                <!-- Full Vector (hidden) -->
-                                <div class="mt-2">
-                                    <button onclick="toggleFullVector()" id="toggleVectorBtn" class="btn btn-secondary btn-sm">
-                                        Show Full Vector
-                                    </button>
-                                </div>
-                                <div id="fullVectorContainer" class="hidden mt-2">
-                                    <label class="text-xs text-secondary block mb-1">Full Vector:</label>
-                                    <div id="embeddingVectorFull" 
-                                         class="bg-tertiary rounded px-3 py-2 text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto"
-                                         style="white-space: pre-wrap; word-break: break-all;"></div>
-                                </div>
+                                <div id="embeddingVector" 
+                                     class="bg-tertiary rounded px-2 py-1 text-xs font-mono overflow-x-auto max-h-24 overflow-y-auto"
+                                     style="white-space: pre-wrap; word-break: break-all;"></div>
                             </div>
                         </div>
                     </div>
@@ -1264,20 +1406,144 @@
             </div>
         </div>
 
-        <!-- Sessions Tab -->
-        <div id="content-sessions" class="hidden h-full overflow-auto px-6 py-4">
-            <div class="card max-w-5xl mx-auto">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold">Saved Sessions</h3>
-                    <button onclick="createNewSession()" class="btn btn-primary btn-sm">New Session</button>
+        <!-- Benchmark Tab -->
+        <div id="content-benchmark" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto space-y-4">
+                <!-- Benchmark Header -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold">Model Benchmarks</h3>
+                            <p class="text-xs text-secondary">Compare model performance on your hardware</p>
+                        </div>
+                        <button onclick="runBenchmark()" id="benchmarkRunBtn" class="btn btn-primary">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Run Benchmark
+                        </button>
+                    </div>
+
+                    <!-- Benchmark Settings -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Select Model</label>
+                            <select id="benchmarkModel" class="w-full input-theme rounded px-3 py-2 text-sm">
+                                <option value="">Choose a model...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Prompt Length</label>
+                            <select id="benchmarkPromptLength" class="w-full input-theme rounded px-3 py-2 text-sm">
+                                <option value="short">Short (~50 tokens)</option>
+                                <option value="medium" selected>Medium (~200 tokens)</option>
+                                <option value="long">Long (~500 tokens)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Output Tokens</label>
+                            <select id="benchmarkOutputTokens" class="w-full input-theme rounded px-3 py-2 text-sm">
+                                <option value="50">50 tokens</option>
+                                <option value="100" selected>100 tokens</option>
+                                <option value="200">200 tokens</option>
+                                <option value="500">500 tokens</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div id="benchmarkProgress" class="hidden mb-4">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-sm" id="benchmarkStatus">Running...</span>
+                            <span class="text-sm text-secondary" id="benchmarkPercent">0%</span>
+                        </div>
+                        <div class="w-full bg-tertiary rounded-full h-2">
+                            <div id="benchmarkProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-4">
-                    <input type="text" id="sessionSearch" placeholder="Search sessions..." 
-                           onkeyup="filterSessions()"
-                           class="w-full input-theme rounded px-3 py-2 text-sm" />
+
+                <!-- Live Metrics Card -->
+                <div class="card">
+                    <h4 class="font-semibold mb-4">Current Run Metrics</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="text-center p-4 bg-tertiary rounded-lg">
+                            <div class="text-3xl font-bold text-accent" id="benchLiveTokensPerSec">--</div>
+                            <div class="text-xs text-secondary">Tokens/sec</div>
+                        </div>
+                        <div class="text-center p-4 bg-tertiary rounded-lg">
+                            <div class="text-3xl font-bold text-accent" id="benchLiveTimeToFirst">--</div>
+                            <div class="text-xs text-secondary">Time to First Token (ms)</div>
+                        </div>
+                        <div class="text-center p-4 bg-tertiary rounded-lg">
+                            <div class="text-3xl font-bold text-accent" id="benchLiveTotalTime">--</div>
+                            <div class="text-xs text-secondary">Total Time (s)</div>
+                        </div>
+                        <div class="text-center p-4 bg-tertiary rounded-lg">
+                            <div class="text-3xl font-bold text-accent" id="benchLiveMemory">--</div>
+                            <div class="text-xs text-secondary">Memory Usage (GB)</div>
+                        </div>
+                    </div>
                 </div>
-                <div id="sessionsList" class="space-y-2">
-                    <p class="text-sm text-secondary text-center py-8">No saved sessions yet. Start chatting and click 'Save' to preserve your conversations.</p>
+
+                <!-- Benchmark History Card -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-semibold">Benchmark History</h4>
+                        <button onclick="clearBenchmarkHistory()" class="btn btn-secondary btn-sm">Clear History</button>
+                    </div>
+                    
+                    <!-- Comparison Chart -->
+                    <div class="mb-4">
+                        <div id="benchmarkChart" class="space-y-3">
+                            <p class="text-secondary text-sm text-center py-4">Run benchmarks to see comparison charts</p>
+                        </div>
+                    </div>
+
+                    <!-- History Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-theme">
+                                    <th class="text-left py-2 px-3">Model</th>
+                                    <th class="text-right py-2 px-3">Tokens/sec</th>
+                                    <th class="text-right py-2 px-3">TTFT (ms)</th>
+                                    <th class="text-right py-2 px-3">Total (s)</th>
+                                    <th class="text-right py-2 px-3">Memory (GB)</th>
+                                    <th class="text-right py-2 px-3">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="benchmarkHistoryTable">
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-secondary">No benchmarks yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Hardware Info Card -->
+                <div class="card">
+                    <h4 class="font-semibold mb-3">System Information</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                            <div class="text-secondary">CPU</div>
+                            <div id="sysInfoCPU" class="font-medium">Detecting...</div>
+                        </div>
+                        <div>
+                            <div class="text-secondary">RAM</div>
+                            <div id="sysInfoRAM" class="font-medium">Detecting...</div>
+                        </div>
+                        <div>
+                            <div class="text-secondary">GPU</div>
+                            <div id="sysInfoGPU" class="font-medium">Detecting...</div>
+                        </div>
+                        <div>
+                            <div class="text-secondary">Backend</div>
+                            <div id="sysInfoBackend" class="font-medium">llama.cpp</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1556,22 +1822,27 @@
             try {
                 const saved = localStorage.getItem('offgrid_messages');
                 const savedModel = localStorage.getItem('offgrid_current_model');
+                const chatMessages = document.getElementById('chatMessages');
+                
                 if (saved) {
                     messages = JSON.parse(saved);
                     if (savedModel) {
                         currentModel = savedModel;
                     }
-                    // Restore messages to UI
-                    const chatMessages = document.getElementById('chatMessages');
-                    chatMessages.innerHTML = '';
-                    messages.forEach(msg => {
-                        if (msg.role === 'user' || msg.role === 'assistant') {
-                            const { text, images } = normalizeMessageContent(msg.content);
-                            addChatMessage(msg.role, text, images);
-                        }
-                    });
+                    // Only render if there are actual messages
+                    if (messages.length > 0) {
+                        chatMessages.innerHTML = '';
+                        messages.forEach(msg => {
+                            if (msg.role === 'user' || msg.role === 'assistant') {
+                                const { text, images } = normalizeMessageContent(msg.content);
+                                addChatMessage(msg.role, text, images);
+                            }
+                        });
+                    }
+                    // If empty array, leave the initial placeholder
                     updateChatStats();
                 }
+                // If no saved messages, leave the initial placeholder
             } catch (e) {
                 console.error('Failed to load messages:', e);
             }
@@ -1580,7 +1851,7 @@
         // Tab switching
         function switchTab(tab) {
             document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.getElementById('content-' + tab).classList.remove('hidden');
             document.getElementById('tab-' + tab).classList.add('active');
             
@@ -1593,15 +1864,21 @@
                 document.getElementById('searchQuery').value = '';
                 document.getElementById('searchResults').innerHTML = '';
             }
-            if (tab === 'sessions') {
-                renderSessions();
-            }
             if (tab === 'chat') {
                 loadChatModels();
                 updateChatStats();
+                renderSessions(); // Load sessions panel within chat
             }
-            if (tab === 'embeddings') {
-                loadEmbeddingModels();
+            if (tab === 'knowledge') {
+                loadRAGStatus();
+                loadRAGEmbeddingModels();
+                refreshRAGDocuments();
+                loadEmbeddingModels(); // Load embedding models for embeddings section
+            }
+            if (tab === 'benchmark') {
+                loadBenchmarkModels();
+                loadSystemInfo();
+                renderBenchmarkHistory();
             }
         }
 
@@ -1826,9 +2103,6 @@
             
             btn.disabled = true;
             btn.textContent = 'Generating...';
-            
-                       
-
             
             const startTime = Date.now();
             
@@ -2148,13 +2422,15 @@
                 '<div class="w-12 h-12 rounded-full bg-yellow-100 text-yellow-500 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>' :
                 '<div class="w-12 h-12 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></div>';
 
+            const cancelButton = cancelText ? `<button class="btn btn-secondary" data-action="cancel">${cancelText}</button>` : '';
+            
             overlay.innerHTML = `
                 <div class="modal-dialog ${type}">
                     ${icon}
                     <h3 class="text-lg font-bold mb-2 text-center" style="color: var(--text-primary)">${title}</h3>
                     <p class="text-center mb-4" style="color: var(--text-secondary)">${message}</p>
                     <div class="flex justify-center gap-3">
-                        <button class="btn btn-secondary" data-action="cancel">${cancelText}</button>
+                        ${cancelButton}
                         <button class="btn ${type === 'error' ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmText}</button>
                     </div>
                 </div>
@@ -2181,57 +2457,135 @@
             });
         }
 
-        // Prompt dialog system
-        function showPrompt({ title, message, defaultValue = '', placeholder = '', confirmText = 'OK', cancelText = 'Cancel', onConfirm, onCancel }) {
+        // Simple alert dialog (replaces browser alert)
+        function showAlert(message, type = 'info', title = null) {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
             
+            // Auto-detect type from message content
+            if (!title) {
+                if (type === 'error' || message.toLowerCase().includes('failed') || message.toLowerCase().includes('error')) {
+                    type = 'error';
+                    title = 'Error';
+                } else if (message.toLowerCase().includes('success') || message.toLowerCase().includes('added') || message.toLowerCase().includes('deleted')) {
+                    type = 'success';
+                    title = 'Success';
+                } else if (message.toLowerCase().includes('please') || message.toLowerCase().includes('select') || message.toLowerCase().includes('enter')) {
+                    type = 'warning';
+                    title = 'Notice';
+                } else {
+                    title = 'Info';
+                }
+            }
+            
+            const icon = type === 'error' ? 
+                '<div class="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg></div>' :
+                type === 'warning' ?
+                '<div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>' :
+                type === 'success' ?
+                '<div class="w-12 h-12 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>' :
+                '<div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></div>';
+
             overlay.innerHTML = `
-                <div class="modal-dialog">
+                <div class="modal-dialog ${type}">
+                    ${icon}
                     <h3 class="text-lg font-bold mb-2 text-center" style="color: var(--text-primary)">${title}</h3>
-                    <p class="text-center mb-4" style="color: var(--text-secondary)">${message}</p>
-                    <input type="text" class="input-theme w-full p-2 mb-6" value="${defaultValue}" placeholder="${placeholder}" id="promptInput">
-                    <div class="flex justify-center gap-3">
-                        <button class="btn btn-secondary" data-action="cancel">${cancelText}</button>
-                        <button class="btn btn-primary" data-action="confirm">${confirmText}</button>
+                    <p class="text-center mb-6" style="color: var(--text-secondary)">${message}</p>
+                    <div class="flex justify-center">
+                        <button class="btn btn-primary px-8" data-action="ok">OK</button>
                     </div>
                 </div>
             `;
             
             document.body.appendChild(overlay);
             
-            const input = overlay.querySelector('#promptInput');
-            input.focus();
-            // Select all text if there is a default value
-            if (defaultValue) input.select();
-
-            // Handle Enter key
-            input.addEventListener('keyup', (e) => {
-                if (e.key === 'Enter') {
-                    const value = input.value;
-                    overlay.remove();
-                    if (onConfirm) onConfirm(value);
-                }
-            });
+            // Focus the OK button
+            overlay.querySelector('[data-action="ok"]').focus();
             
             // Handle clicks
             overlay.addEventListener('click', (e) => {
-                if (e.target.classList.contains('modal-overlay')) {
+                if (e.target.classList.contains('modal-overlay') || e.target.dataset.action === 'ok') {
                     overlay.remove();
-                    if (onCancel) onCancel();
                 }
             });
             
-            overlay.querySelector('[data-action="confirm"]')?.addEventListener('click', () => {
-                const value = input.value;
-                overlay.remove();
-                if (onConfirm) onConfirm(value);
+            // Handle Enter/Escape keys
+            const handleKey = (e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                    overlay.remove();
+                    document.removeEventListener('keydown', handleKey);
+                }
+            };
+            document.addEventListener('keydown', handleKey);
+        }
+
+        // Confirmation dialog system (replaces native confirm())
+        function showConfirm(message, onConfirm, options = {}) {
+            const title = options.title || 'Confirm';
+            const confirmText = options.confirmText || 'OK';
+            const cancelText = options.cancelText || 'Cancel';
+            const type = options.type || 'info';
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            
+            // Icon based on type
+            const icons = {
+                error: '<div class="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg></div>',
+                warning: '<div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>',
+                success: '<div class="w-12 h-12 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>',
+                info: '<div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></div>'
+            };
+            const icon = icons[type] || icons.info;
+            
+            // Button style based on type
+            const btnStyles = {
+                error: 'bg-red-600 hover:bg-red-700 text-white',
+                warning: 'bg-yellow-600 hover:bg-yellow-700 text-white',
+                success: 'bg-green-600 hover:bg-green-700 text-white',
+                info: 'bg-blue-600 hover:bg-blue-700 text-white'
+            };
+            const btnStyle = btnStyles[type] || btnStyles.info;
+
+            overlay.innerHTML = `
+                <div class="modal-dialog ${type}">
+                    ${icon}
+                    <h3 class="text-lg font-bold mb-2 text-center" style="color: var(--text-primary)">${title}</h3>
+                    <p class="text-center mb-6" style="color: var(--text-secondary)">${message}</p>
+                    <div class="flex justify-center gap-3">
+                        <button class="btn btn-secondary px-6" data-action="cancel">${cancelText}</button>
+                        <button class="btn px-6 ${btnStyle}" data-action="confirm">${confirmText}</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            // Focus the confirm button
+            overlay.querySelector('[data-action="confirm"]').focus();
+            
+            // Handle clicks
+            overlay.addEventListener('click', (e) => {
+                if (e.target.classList.contains('modal-overlay') || e.target.dataset.action === 'cancel') {
+                    overlay.remove();
+                } else if (e.target.dataset.action === 'confirm') {
+                    overlay.remove();
+                    if (onConfirm) onConfirm();
+                }
             });
             
-            overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
-                overlay.remove();
-                if (onCancel) onCancel();
-            });
+            // Handle Enter/Escape keys
+            const handleKey = (e) => {
+                if (e.key === 'Escape') {
+                    overlay.remove();
+                    document.removeEventListener('keydown', handleKey);
+                } else if (e.key === 'Enter') {
+                    overlay.remove();
+                    document.removeEventListener('keydown', handleKey);
+                    if (onConfirm) onConfirm();
+                }
+            };
+            document.addEventListener('keydown', handleKey);
         }
 
         // Prompt dialog system
@@ -2287,24 +2641,136 @@
             });
         }
 
-        // Clear chat
+        // New chat - offer to save current session first
+        function newChat() {
+            if (messages.length === 0) {
+                // No messages, just reset
+                resetChatUI();
+                return;
+            }
+            
+            // Show custom 3-button dialog
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            const msgCount = messages.length;
+            
+            overlay.innerHTML = `
+                <div class="modal-dialog warning" style="max-width: 480px;">
+                    <div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4 mx-auto">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2 text-center" style="color: var(--text-primary)">Start New Chat?</h3>
+                    <p class="text-center mb-4" style="color: var(--text-secondary)">You have <strong>${msgCount} messages</strong> in the current conversation.</p>
+                    <div class="flex gap-2 justify-center">
+                        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                        <button class="btn btn-primary" data-action="save-new">Save & New</button>
+                        <button class="btn btn-secondary" data-action="new">New Chat</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            // Handle clicks
+            overlay.addEventListener('click', (e) => {
+                if (e.target.classList.contains('modal-overlay')) {
+                    overlay.remove();
+                }
+            });
+            
+            overlay.querySelector('[data-action="save-new"]')?.addEventListener('click', () => {
+                overlay.remove();
+                // Save with callback to reset after save completes
+                saveSessionAndThen(() => {
+                    resetChatUI();
+                });
+            });
+            
+            overlay.querySelector('[data-action="new"]')?.addEventListener('click', () => {
+                overlay.remove();
+                resetChatUI();
+            });
+            
+            overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
+                overlay.remove();
+            });
+        }
+        
+        // Save session with a callback after completion
+        function saveSessionAndThen(onComplete) {
+            if (messages.length === 0) {
+                if (onComplete) onComplete();
+                return;
+            }
+            
+            // Copy messages before any reset happens
+            const messagesToSave = [...messages];
+            const modelToSave = currentModel;
+            const systemPromptToSave = currentSystemPrompt;
+            const sessionIdToSave = currentSessionId;
+            
+            showPrompt({
+                title: 'Save Session',
+                message: 'Enter a title for this session:',
+                defaultValue: `Chat ${new Date().toLocaleDateString()}`,
+                confirmText: 'Save',
+                onConfirm: (title) => {
+                    if (!title) {
+                        if (onComplete) onComplete();
+                        return;
+                    }
+                    
+                    const session = {
+                        id: sessionIdToSave || Date.now(),
+                        title: title,
+                        model: modelToSave,
+                        messages: messagesToSave,
+                        systemPrompt: systemPromptToSave,
+                        timestamp: new Date().toISOString(),
+                        messageCount: messagesToSave.length
+                    };
+                    
+                    const existingIndex = sessions.findIndex(s => s.id === session.id);
+                    if (existingIndex >= 0) {
+                        sessions[existingIndex] = session;
+                    } else {
+                        sessions.unshift(session);
+                    }
+                    
+                    localStorage.setItem('offgrid_sessions', JSON.stringify(sessions));
+                    renderSessionsList();
+                    
+                    if (onComplete) onComplete();
+                },
+                onCancel: () => {
+                    // User cancelled save, don't proceed with new chat
+                }
+            });
+        }
+
+        // Reset chat UI to initial state
+        function resetChatUI() {
+            messages = [];
+            currentSessionId = null;
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = `
+                <div class="text-center text-secondary py-32">
+                    <p class="text-xl font-medium">Start a conversation</p>
+                    <p class="text-sm mt-2">Select a model and type your message below</p>
+                </div>
+            `;
+            document.getElementById('chatInput').value = '';
+            updateChatStats();
+            saveMessages();
+        }
+
+        // Clear chat (legacy, now redirects to newChat)
         function clearChat() {
-            if (messages.length === 0) return;
-            
-            showModal({
-                type: 'error',
-                title: 'Clear All Messages?',
-                message: `This will delete all <strong>${messages.length} messages</strong> in the conversation.`,
-                confirmText: 'Clear Chat',
-                cancelText: 'Cancel',
-                onConfirm: () => {
-                    messages = [];
-                    const chatMessages = document.getElementById('chatMessages');
-                    chatMessages.innerHTML = '';
-                    updateChatStats();
-                    saveMessages();
-                }
-            });
+            newChat();
         }
 
         // Export chat with enhanced options
@@ -2509,25 +2975,45 @@
             });
         }
 
+        // Toggle sessions panel in chat tab
+        function toggleSessionsPanel() {
+            const panel = document.getElementById('sessionsPanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                renderSessions();
+            }
+        }
+
+        // Toggle embeddings section in knowledge tab
+        function toggleEmbeddingsSection() {
+            const content = document.getElementById('embeddingsContent');
+            const icon = document.getElementById('embeddingsSectionIcon');
+            content.classList.toggle('hidden');
+            icon.style.transform = content.classList.contains('hidden') ? '' : 'rotate(180deg)';
+        }
+
         function renderSessions() {
             const container = document.getElementById('sessionsList');
             
             if (sessions.length === 0) {
-                container.innerHTML = '<p class="text-sm text-secondary text-center py-8">No saved sessions yet. Start chatting and click \'Save\' to preserve your conversations.</p>';
+                container.innerHTML = '<p class="text-xs text-secondary text-center py-4">No saved sessions yet.</p>';
                 return;
             }
             
             container.innerHTML = sessions.map(session => `
-                <div class="card border-accent-hover cursor-pointer" data-session-id="${session.id}">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1" onclick="loadSession(${session.id})">
-                            <h4 class="font-semibold text-accent mb-1">${session.title}</h4>
-                            <p class="text-xs text-secondary mb-2">
-                                ${session.model} • ${session.messageCount} messages • ${new Date(session.timestamp).toLocaleString()}
+                <div class="p-2 rounded bg-tertiary hover:bg-white/5 cursor-pointer transition-colors group" data-session-id="${session.id}">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0" onclick="loadSession(${session.id})">
+                            <h4 class="font-medium text-sm text-accent truncate">${session.title}</h4>
+                            <p class="text-xs text-secondary mt-0.5">
+                                ${session.messageCount} messages • ${new Date(session.timestamp).toLocaleDateString()}
                             </p>
-                            <p class="text-xs text-secondary line-clamp-2">${session.messages[0]?.content.substring(0, 100)}...</p>
                         </div>
-                        <button onclick="deleteSession(${session.id}); event.stopPropagation();" class="btn btn-danger btn-sm ml-2">Delete</button>
+                        <button onclick="deleteSession(${session.id}); event.stopPropagation();" 
+                                class="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded text-red-400 transition-opacity"
+                                title="Delete session">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -2559,6 +3045,8 @@
                             addChatMessage(m.role, text, images);
                         });
                         
+                        // Close sessions panel after loading
+                        document.getElementById('sessionsPanel').classList.add('hidden');
                         switchTab('chat');
                         showModal({
                             type: 'success',
@@ -2585,6 +3073,8 @@
                 addChatMessage(m.role, text, images);
             });
             
+            // Close sessions panel after loading
+            document.getElementById('sessionsPanel').classList.add('hidden');
             switchTab('chat');
         }
 
@@ -2592,7 +3082,7 @@
             showModal({
                 type: 'error',
                 title: 'Delete Session?',
-                message: 'This action cannot be undone.',
+                message: `This action cannot be undone.`,
                 confirmText: 'Delete',
                 cancelText: 'Cancel',
                 onConfirm: () => {
@@ -2737,12 +3227,29 @@
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    imageAttachments.push({
-                        id: nextImageAttachmentId++,
-                        name: file.name,
-                        url: e.target.result
-                    });
-                    updateImagePreview();
+                    // Convert to JPEG to ensure compatibility with llama.cpp (stb_image)
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        // Fill white background for transparent images (PNG/WebP)
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Convert to JPEG
+                        const jpegUrl = canvas.toDataURL('image/jpeg', 0.95);
+                        
+                        imageAttachments.push({
+                            id: nextImageAttachmentId++,
+                            name: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+                            url: jpegUrl
+                        });
+                        updateImagePreview();
+                    };
+                    img.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
             });
@@ -2887,10 +3394,17 @@
                 inlineImages = imageAttachments.map(att => att.url);
                 messageContent = [
                     { type: "text", text: msg },
-                    ...inlineImages.map(url => ({
-                        type: "image_url",
-                        image_url: { url }
-                    }))
+                    ...inlineImages.map(url => {
+                        // Convert WebP to JPEG if needed, or just strip the prefix if llama-server expects raw base64
+                        // But standard OpenAI API expects data URI.
+                        // The issue is likely that llama-server's stb_image doesn't support WebP.
+                        // We should convert to JPEG/PNG before sending.
+                        // For now, let's try to ensure it's a format stb_image supports (JPEG/PNG).
+                        return {
+                            type: "image_url",
+                            image_url: { url }
+                        };
+                    })
                 ];
             }
 
@@ -2964,6 +3478,11 @@
                     const embedding = embeddingData.data[0].embedding;
                     const dimensions = embedding.length;
                     
+                    // Remove thinking indicator
+                    if (thinkingIndicator) {
+                        thinkingIndicator.remove();
+                    }
+                    
                     // Display embedding result as a message
                     const embeddingText = `**Embedding Generated**\n\n` +
                         `**Dimensions:** ${dimensions}\n` +
@@ -2991,11 +3510,13 @@
                     messages: apiMessages,
                     stream: streamEnabled,
                     temperature: temperature,
-                    max_tokens: maxTokens
+                    max_tokens: maxTokens,
+                    use_knowledge_base: document.getElementById('useKnowledgeBase').checked
                 };
                 
                 console.log('[SEND CHAT] REQUEST PAYLOAD:', JSON.stringify(requestPayload, null, 2));
                 console.log('[SEND CHAT] Model being sent:', model);
+                console.log('[SEND CHAT] Knowledge Base enabled:', document.getElementById('useKnowledgeBase').checked);
                 
                 const response = await fetch('/v1/chat/completions', {
                     method: 'POST',
@@ -3047,6 +3568,7 @@
                                     if (loadingInterval) {
                                         clearInterval(loadingInterval);
                                         loadingInterval = null;
+                    statusBadge.textContent = 'Generating...';
                                     }
                                     
                                     assistantMsg += content;
@@ -3159,6 +3681,35 @@
                 stopBtn.classList.add('hidden');
                 input.focus();
             }
+        }
+
+        // Add thinking indicator
+        function addThinkingIndicator() {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = 'message message-assistant thinking-indicator';
+            
+            div.innerHTML = `
+                <div class="message-wrapper">
+                    <div class="message-avatar">AI</div>
+                    <div class="message-body">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-medium text-secondary">Assistant</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm text-secondary">
+                            <div class="thinking-dots">
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                            </div>
+                            <span class="thinking-text">Thinking...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            scrollToBottom();
+            return div;
         }
 
         // Add thinking indicator
@@ -3338,7 +3889,7 @@
                     div.innerHTML = `
                         <div class="flex justify-between items-center">
                             <div class="flex-1">
-                                <div class="font-semibold text-sm text-accent truncate" title="${model.id}">${model.id}</div>
+                                <div class="font-semibold text-sm text-accent">${model.name || model.id}</div>
                                 <div class="text-xs text-secondary mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
                             </div>
                             <button onclick="downloadModelWithCommand('${escapedCmd}')" class="btn btn-primary btn-sm">Download</button>
@@ -3515,21 +4066,34 @@
                 
                 const data = await response.json();
                 
-                if (response.ok && data.paths) {
-                    container.innerHTML = data.paths
-                        .filter(p => p.exists)
-                        .map(p => `
-                            <button onclick="browseTo('${p.path.replace(/'/g, "\\'")}')" 
-                                    class="px-3 py-1 text-xs bg-secondary hover:bg-accent hover:text-white rounded border border-theme transition-colors"
-                                    title="${p.description}">
-                                ${p.label}
-                            </button>
-                        `).join('');
+                if (response.ok) {
+                    const count = data.count || 0;
+                    if (count > 0) {
+                        const totalSize = data.models.reduce((sum, m) => sum + m.size, 0);
+                        const totalGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2);
+                        
+                        resultsDiv.innerHTML = `
+                            <div class="p-2 bg-secondary rounded border border-accent">
+                                <div class="font-medium text-accent mb-2">Found ${count} model(s) - ${totalGB} GB</div>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    ${data.models.map(m => `
+                                        <div class="text-xs flex justify-between">
+                                            <span class="font-mono">${m.file_name}</span>
+                                            <span class="text-secondary">${(m.size / (1024*1024*1024)).toFixed(2)} GB</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        resultsDiv.innerHTML = '<span class="text-secondary">No GGUF models found</span>';
+                    }
                 } else {
-                    container.innerHTML = '<span class="text-xs text-red-400">Failed to load paths</span>';
+                    const error = data.error || 'Scan failed';
+                    resultsDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
                 }
             } catch (error) {
-                container.innerHTML = '<span class="text-xs text-red-400">Error loading paths</span>';
+                resultsDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
             }
         }
         
@@ -3887,6 +4451,7 @@
                 if (subcmd === 'run' && args.length > 1 && exitCode === 0) {
                     // Extract just the model name (first argument after run), ignoring flags
                     // We assume the syntax is: offgrid run <model_id> [flags]
+
                     const modelName = args[1];
                     
                     // Enable chat mode
@@ -3921,7 +4486,61 @@
             } finally {
                 flushTerminalBuffer(); // Flush any remaining buffered output
                 resetTerminalState();
-               
+                currentTerminalAbort = null;
+            }
+        }
+
+
+
+        // Send chat message in terminal mode
+        async function sendTerminalChat(message) {
+            try {
+                terminalChatHistory.push({ role: 'user', content: message });
+                
+                const resp = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: terminalChatModel,
+                        messages: terminalChatHistory,
+                        stream: false,
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (!resp.ok) {
+                    let errorMsg = `HTTP ${resp.status}`;
+                    try {
+                        const errorData = await resp.json();
+                        errorMsg = errorData.error?.message || errorMsg;
+                    } catch (e) {
+                        // Ignore JSON parse errors
+                    }
+                    addTerminalOutput(`Error: ${errorMsg}`, 'error');
+                    terminalChatHistory.pop(); // Remove failed message
+                    return;
+                }
+
+                const data = await resp.json();
+                const assistantMsg = data.choices?.[0]?.message?.content || 'No response';
+                const actualModel = data.model || terminalChatModel;
+                
+                terminalChatHistory.push({ role: 'assistant', content: assistantMsg });
+                
+                // Show model info if different from expected
+                if (actualModel !== terminalChatModel) {
+                    addTerminalOutput(`[Using model: ${actualModel}]`, 'error');
+                }
+                
+                addTerminalOutput('', 'normal');
+                addTerminalOutput(assistantMsg, 'success');
+                addTerminalOutput('', 'normal');
+                addTerminalOutput('> ', 'success');
+                
+            } catch (error) {
+                addTerminalOutput(`Error: ${error.message}`, 'error');
+                if (terminalChatHistory.length > 0 && terminalChatHistory[terminalChatHistory.length - 1].role === 'user') {
                     terminalChatHistory.pop(); // Remove failed message
                 }
             } finally {
@@ -4227,6 +4846,569 @@
             }
         }
 
+        // ==================== RAG (Knowledge Base) Functions ====================
+        
+        let ragEnabled = false;
+        
+        async function loadRAGStatus() {
+            try {
+                const response = await fetch('/v1/rag/status');
+                const data = await response.json();
+                ragEnabled = data.enabled;
+                
+                const badge = document.getElementById('ragStatusBadge');
+                const disableBtn = document.getElementById('ragDisableBtn');
+                const modelSelect = document.getElementById('ragEmbeddingModel');
+                
+                if (data.enabled) {
+                    badge.className = 'badge badge-success';
+                    badge.textContent = 'Enabled';
+                    disableBtn.classList.remove('hidden');
+                    // Set the current model in the dropdown
+                    if (data.embedding_model) {
+                        modelSelect.value = data.embedding_model;
+                    }
+                } else {
+                    badge.className = 'badge badge-secondary';
+                    badge.textContent = 'Disabled';
+                    disableBtn.classList.add('hidden');
+                }
+                
+                // Update stats
+                if (data.stats) {
+                    document.getElementById('ragDocCount').textContent = data.stats.document_count || 0;
+                    document.getElementById('ragChunkCount').textContent = data.stats.chunk_count || 0;
+                    document.getElementById('ragEmbeddingCount').textContent = data.stats.embedding_count || 0;
+                }
+            } catch (e) {
+                console.error('Failed to load RAG status:', e);
+            }
+        }
+        
+        async function loadRAGEmbeddingModels() {
+            try {
+                // First get current RAG status to know which model is active
+                const statusResp = await fetch('/v1/rag/status');
+                const status = await statusResp.json();
+                const currentModel = status.embedding_model || '';
+                
+                const response = await fetch('/v1/models');
+                const data = await response.json();
+                const select = document.getElementById('ragEmbeddingModel');
+                select.innerHTML = '<option value="">Select model to enable...</option>';
+                
+                const embeddingModels = data.data.filter(m => 
+                    m.id.toLowerCase().includes('embed') || 
+                    m.id.toLowerCase().includes('minilm') ||
+                    m.id.toLowerCase().includes('bge') ||
+                    m.id.toLowerCase().includes('nomic')
+                );
+                
+                let modelsToShow = embeddingModels.length > 0 ? embeddingModels : data.data;
+                
+                modelsToShow.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.id;
+                    select.appendChild(option);
+                });
+                
+                // Set the dropdown to show current model if RAG is enabled
+                if (currentModel) {
+                    select.value = currentModel;
+                }
+            } catch (e) {
+                console.error('Failed to load embedding models:', e);
+            }
+        }
+        
+        // Called when embedding model dropdown changes
+        async function onEmbeddingModelChange() {
+            const model = document.getElementById('ragEmbeddingModel').value;
+            
+            if (!model) {
+                // If cleared, disable RAG
+                if (ragEnabled) {
+                    await disableRAG();
+                }
+                return;
+            }
+            
+            // Enable RAG with selected model
+            try {
+                const response = await fetch('/v1/rag/enable', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ embedding_model: model })
+                });
+                if (!response.ok) {
+                    const err = await response.text();
+                    throw new Error(err);
+                }
+                loadRAGStatus();
+            } catch (e) {
+                showAlert('Failed to enable RAG: ' + e.message, 'error');
+            }
+        }
+        
+        async function disableRAG() {
+            try {
+                await fetch('/v1/rag/disable', { method: 'POST' });
+                document.getElementById('ragEmbeddingModel').value = '';
+                loadRAGStatus();
+            } catch (e) {
+                showAlert('Failed to disable RAG: ' + e.message, 'error');
+            }
+        }
+        
+        // Legacy function - kept for compatibility
+        async function toggleRAG() {
+            if (ragEnabled) {
+                await disableRAG();
+            } else {
+                await onEmbeddingModelChange();
+            }
+        }
+        
+        // Toggle developer tools section
+        function toggleDevTools() {
+            const content = document.getElementById('devToolsContent');
+            const icon = document.getElementById('devToolsIcon');
+            content.classList.toggle('hidden');
+            icon.style.transform = content.classList.contains('hidden') ? '' : 'rotate(180deg)';
+        }
+        
+        async function refreshRAGDocuments() {
+            try {
+                const response = await fetch('/v1/documents');
+                const data = await response.json();
+                const list = document.getElementById('ragDocumentsList');
+                
+                if (!data.documents || data.documents.length === 0) {
+                    list.innerHTML = '<p class="text-secondary text-sm">No documents uploaded yet.</p>';
+                    return;
+                }
+                
+                list.innerHTML = data.documents.map(doc => `
+                    <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <div>
+                                <div class="font-medium">${doc.name}</div>
+                                <div class="text-xs text-secondary">${doc.chunk_count} chunks • ${formatBytes(doc.size)}</div>
+                            </div>
+                        </div>
+                        <button onclick="deleteRAGDocument('${doc.id}')" class="btn btn-secondary btn-sm text-red-400 hover:text-red-300">
+                            Delete
+                        </button>
+                    </div>
+                `).join('');
+                
+                loadRAGStatus(); // Refresh stats
+            } catch (e) {
+                console.error('Failed to load documents:', e);
+            }
+        }
+        
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+        
+        async function ingestRAGText() {
+            const content = document.getElementById('ragTextInput').value.trim();
+            const name = document.getElementById('ragTextName').value.trim() || 'untitled.txt';
+            
+            if (!content) {
+                showAlert('Please enter some text content', 'warning');
+                return;
+            }
+            
+            if (!ragEnabled) {
+                showAlert('Please enable RAG first by selecting an embedding model', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/v1/documents/ingest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, content })
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to ingest document');
+                }
+                
+                document.getElementById('ragTextInput').value = '';
+                document.getElementById('ragTextName').value = '';
+                refreshRAGDocuments();
+                showAlert('Document added successfully!', 'success');
+            } catch (e) {
+                showAlert('Failed to ingest document: ' + e.message, 'error');
+            }
+        }
+        
+        async function deleteRAGDocument(docId) {
+            showConfirm('Are you sure you want to delete this document?', async () => {
+                try {
+                    await fetch('/v1/documents/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: docId })
+                    });
+                    refreshRAGDocuments();
+                } catch (e) {
+                    showAlert('Failed to delete document: ' + e.message, 'error');
+                }
+            }, { title: 'Delete Document', confirmText: 'Delete', type: 'error' });
+        }
+        
+        async function searchRAGDocuments() {
+            const query = document.getElementById('ragSearchQuery').value.trim();
+            if (!query) {
+                showAlert('Please enter a search query', 'warning');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('ragSearchResults');
+            resultsDiv.innerHTML = '<p class="text-secondary">Searching...</p>';
+            
+            try {
+                const response = await fetch('/v1/documents/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, top_k: 5 })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.results || data.results.length === 0) {
+                    resultsDiv.innerHTML = '<p class="text-secondary">No results found.</p>';
+                    return;
+                }
+                
+                resultsDiv.innerHTML = data.results.map((r, i) => `
+                    <div class="p-3 bg-tertiary rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium">${r.document_name}</span>
+                            <span class="text-xs text-accent">Score: ${(r.score * 100).toFixed(1)}%</span>
+                        </div>
+                        <p class="text-sm text-secondary">${r.chunk.content.substring(0, 300)}${r.chunk.content.length > 300 ? '...' : ''}</p>
+                    </div>
+                `).join('');
+            } catch (e) {
+                resultsDiv.innerHTML = `<p class="text-red-400">Search failed: ${e.message}</p>`;
+            }
+        }
+        
+        // Drag & Drop handlers for RAG
+        function handleRAGDragOver(event) {
+            event.preventDefault();
+            event.currentTarget.classList.add('border-accent');
+        }
+        
+        function handleRAGDragLeave(event) {
+            event.currentTarget.classList.remove('border-accent');
+        }
+        
+        async function handleRAGDrop(event) {
+            event.preventDefault();
+            event.currentTarget.classList.remove('border-accent');
+            
+            const files = event.dataTransfer.files;
+            await uploadRAGFiles(files);
+        }
+        
+        async function handleRAGFileSelect(event) {
+            const files = event.target.files;
+            await uploadRAGFiles(files);
+            event.target.value = ''; // Reset for next upload
+        }
+        
+        async function uploadRAGFiles(files) {
+            if (!ragEnabled) {
+                showAlert('Please enable RAG first by selecting an embedding model', 'warning');
+                return;
+            }
+            
+            for (const file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch('/v1/documents/ingest', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || 'Failed to upload');
+                    }
+                } catch (e) {
+                    showAlert(`Failed to upload ${file.name}: ${e.message}`, 'error');
+                }
+            }
+            
+            refreshRAGDocuments();
+        }
+        
+        // ==================== Benchmark Functions ====================
+        
+        let benchmarkHistory = JSON.parse(localStorage.getItem('offgrid_benchmarks') || '[]');
+        
+        async function loadBenchmarkModels() {
+            try {
+                const response = await fetch('/v1/models');
+                const data = await response.json();
+                const select = document.getElementById('benchmarkModel');
+                select.innerHTML = '<option value="">Choose a model...</option>';
+                
+                // Filter for LLM models (not embeddings)
+                const llmModels = data.data.filter(m => 
+                    !m.id.toLowerCase().includes('embed') && 
+                    !m.id.toLowerCase().includes('minilm') &&
+                    !m.id.toLowerCase().includes('bge')
+                );
+                
+                llmModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.id;
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                console.error('Failed to load models:', e);
+            }
+        }
+        
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch('/v1/system/info');
+                const data = await response.json();
+                
+                // Format CPU - truncate if too long
+                let cpuName = data.cpu || 'Unknown';
+                if (cpuName.length > 40) {
+                    cpuName = cpuName.substring(0, 37) + '...';
+                }
+                document.getElementById('sysInfoCPU').textContent = cpuName;
+                document.getElementById('sysInfoCPU').title = data.cpu || 'Unknown'; // Full name on hover
+                
+                // Format RAM
+                if (data.total_memory) {
+                    const totalGB = (data.total_memory / 1024 / 1024 / 1024).toFixed(1);
+                    const freeGB = data.free_memory ? (data.free_memory / 1024 / 1024 / 1024).toFixed(1) : '?';
+                    document.getElementById('sysInfoRAM').textContent = `${totalGB} GB`;
+                    document.getElementById('sysInfoRAM').title = `${freeGB} GB available`;
+                } else {
+                    document.getElementById('sysInfoRAM').textContent = 'Unknown';
+                }
+                
+                // Format GPU
+                let gpuName = data.gpu || 'CPU only';
+                if (gpuName.length > 30) {
+                    gpuName = gpuName.substring(0, 27) + '...';
+                }
+                document.getElementById('sysInfoGPU').textContent = gpuName;
+                if (data.gpu_memory) {
+                    const gpuMemGB = (data.gpu_memory / 1024 / 1024 / 1024).toFixed(1);
+                    document.getElementById('sysInfoGPU').title = `${data.gpu} (${gpuMemGB} GB VRAM)`;
+                } else {
+                    document.getElementById('sysInfoGPU').title = data.gpu || 'CPU only';
+                }
+                
+                // Backend
+                document.getElementById('sysInfoBackend').textContent = data.backend || 'llama.cpp';
+                
+            } catch (e) {
+                console.error('Failed to load system info:', e);
+                document.getElementById('sysInfoCPU').textContent = 'Error loading';
+                document.getElementById('sysInfoRAM').textContent = 'Error loading';
+                document.getElementById('sysInfoGPU').textContent = 'Error loading';
+            }
+        }
+        
+        async function runBenchmark() {
+            const model = document.getElementById('benchmarkModel').value;
+            if (!model) {
+                showAlert('Please select a model first', 'warning');
+                return;
+            }
+            
+            const promptLength = document.getElementById('benchmarkPromptLength').value;
+            const outputTokens = parseInt(document.getElementById('benchmarkOutputTokens').value);
+            
+            const btn = document.getElementById('benchmarkRunBtn');
+            const progress = document.getElementById('benchmarkProgress');
+            btn.disabled = true;
+            btn.innerHTML = '<svg class="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>Running...';
+            progress.classList.remove('hidden');
+            
+            // Generate test prompt based on length
+            let prompt = '';
+            switch (promptLength) {
+                case 'short':
+                    prompt = 'Write a haiku about programming.';
+                    break;
+                case 'medium':
+                    prompt = 'Explain the concept of recursion in programming. Include an example and discuss when it should be used versus iteration.';
+                    break;
+                case 'long':
+                    prompt = 'Write a comprehensive guide on building a REST API. Cover the following topics: 1) What is REST and its principles, 2) HTTP methods and status codes, 3) Authentication and authorization, 4) Error handling, 5) Best practices for API design. Include code examples where appropriate.';
+                    break;
+            }
+            
+            const startTime = performance.now();
+            let firstTokenTime = null;
+            let tokenCount = 0;
+            
+            try {
+                const response = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: prompt }],
+                        max_tokens: outputTokens,
+                        stream: true
+                    })
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                                    if (!firstTokenTime) {
+                                        firstTokenTime = performance.now();
+                                    }
+                                    tokenCount++;
+                                    
+                                    // Update progress
+                                    const percent = Math.min((tokenCount / outputTokens) * 100, 100);
+                                    document.getElementById('benchmarkProgressBar').style.width = percent + '%';
+                                    document.getElementById('benchmarkPercent').textContent = Math.round(percent) + '%';
+                                    
+                                    // Update live metrics
+                                    const elapsed = (performance.now() - startTime) / 1000;
+                                    document.getElementById('benchLiveTokensPerSec').textContent = (tokenCount / elapsed).toFixed(1);
+                                    if (firstTokenTime) {
+                                        document.getElementById('benchLiveTimeToFirst').textContent = Math.round(firstTokenTime - startTime);
+                                    }
+                                    document.getElementById('benchLiveTotalTime').textContent = elapsed.toFixed(2);
+                                }
+                            } catch (e) { }
+                        }
+                    }
+                }
+                
+                const endTime = performance.now();
+                const totalTime = (endTime - startTime) / 1000;
+                const ttft = firstTokenTime ? (firstTokenTime - startTime) : 0;
+                const tokensPerSec = tokenCount / totalTime;
+                
+                // Get memory usage from health endpoint
+                let memoryGB = '--';
+                try {
+                    const healthRes = await fetch('/health');
+                    const healthData = await healthRes.json();
+                    if (healthData.system && healthData.system.memory_mb) {
+                        memoryGB = (healthData.system.memory_mb / 1024).toFixed(2);
+                        document.getElementById('benchLiveMemory').textContent = memoryGB;
+                    }
+                } catch (e) { }
+                
+                // Save to history
+                const result = {
+                    model,
+                    tokensPerSec: tokensPerSec.toFixed(1),
+                    ttft: Math.round(ttft),
+                    totalTime: totalTime.toFixed(2),
+                    memory: memoryGB,
+                    date: new Date().toLocaleString(),
+                    promptLength,
+                    outputTokens
+                };
+                
+                benchmarkHistory.unshift(result);
+                benchmarkHistory = benchmarkHistory.slice(0, 20); // Keep last 20
+                localStorage.setItem('offgrid_benchmarks', JSON.stringify(benchmarkHistory));
+                
+                renderBenchmarkHistory();
+                
+            } catch (e) {
+                showAlert('Benchmark failed: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Run Benchmark';
+                progress.classList.add('hidden');
+            }
+        }
+        
+        function renderBenchmarkHistory() {
+            const table = document.getElementById('benchmarkHistoryTable');
+            const chart = document.getElementById('benchmarkChart');
+            
+            if (benchmarkHistory.length === 0) {
+                table.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-secondary">No benchmarks yet</td></tr>';
+                chart.innerHTML = '<p class="text-secondary text-sm text-center py-4">Run benchmarks to see comparison charts</p>';
+                return;
+            }
+            
+            // Render table
+            table.innerHTML = benchmarkHistory.map(r => `
+                <tr class="border-b border-theme">
+                    <td class="py-2 px-3">${r.model}</td>
+                    <td class="text-right py-2 px-3 font-mono">${r.tokensPerSec}</td>
+                    <td class="text-right py-2 px-3 font-mono">${r.ttft}</td>
+                    <td class="text-right py-2 px-3 font-mono">${r.totalTime}s</td>
+                    <td class="text-right py-2 px-3 font-mono">${r.memory}</td>
+                    <td class="text-right py-2 px-3 text-secondary text-xs">${r.date}</td>
+                </tr>
+            `).join('');
+            
+            // Render simple bar chart for tokens/sec
+            const maxTokens = Math.max(...benchmarkHistory.map(r => parseFloat(r.tokensPerSec)));
+            chart.innerHTML = benchmarkHistory.slice(0, 5).map(r => {
+                const width = (parseFloat(r.tokensPerSec) / maxTokens) * 100;
+                return `
+                    <div class="flex items-center gap-3">
+                        <div class="w-32 truncate text-sm">${r.model.split('/').pop()}</div>
+                        <div class="flex-1 bg-tertiary rounded-full h-4 overflow-hidden">
+                            <div class="bg-accent h-full rounded-full transition-all" style="width: ${width}%"></div>
+                        </div>
+                        <div class="w-20 text-right text-sm font-mono">${r.tokensPerSec} t/s</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function clearBenchmarkHistory() {
+            showConfirm('Clear all benchmark history?', () => {
+                benchmarkHistory = [];
+                localStorage.removeItem('offgrid_benchmarks');
+                renderBenchmarkHistory();
+            }, { title: 'Clear History', confirmText: 'Clear All', type: 'warning' });
+        }
+
         // Initialize
         window.addEventListener('DOMContentLoaded', () => {
             // Restore active tab
@@ -4242,6 +5424,46 @@
             
             // Load chat models
             loadChatModels();
+            
+            // Setup Knowledge Base toggle indicator
+            const kbCheckbox = document.getElementById('useKnowledgeBase');
+            const ragIndicator = document.getElementById('ragIndicator');
+            const ragIndicatorText = document.getElementById('ragIndicatorText');
+            
+            // Restore saved preference
+            const savedKbPref = localStorage.getItem('offgrid_use_knowledge_base');
+            if (savedKbPref === 'true') {
+                kbCheckbox.checked = true;
+                ragIndicator.classList.remove('hidden');
+                ragIndicatorText.classList.remove('hidden');
+            }
+            
+            kbCheckbox.addEventListener('change', async () => {
+                if (kbCheckbox.checked) {
+                    // Check if RAG is enabled on the server
+                    try {
+                        const response = await fetch('/v1/rag/status');
+                        const data = await response.json();
+                        if (!data.enabled) {
+                            showAlert('Knowledge Base is not enabled on the server. Go to the Knowledge Base tab and enable RAG first.', 'warning');
+                            kbCheckbox.checked = false;
+                            return;
+                        }
+                        if (!data.stats || data.stats.document_count === 0) {
+                            showAlert('No documents in knowledge base. Upload some documents in the Knowledge Base tab first.', 'warning');
+                        }
+                    } catch (e) {
+                        console.error('Failed to check RAG status:', e);
+                    }
+                    ragIndicator.classList.remove('hidden');
+                    ragIndicatorText.classList.remove('hidden');
+                    localStorage.setItem('offgrid_use_knowledge_base', 'true');
+                } else {
+                    ragIndicator.classList.add('hidden');
+                    ragIndicatorText.classList.add('hidden');
+                    localStorage.setItem('offgrid_use_knowledge_base', 'false');
+                }
+            });
         });
 
         // Theme Toggle Logic

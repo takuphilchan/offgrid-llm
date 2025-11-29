@@ -667,6 +667,9 @@ func main() {
 		case "session", "sessions":
 			handleSession(os.Args[2:])
 			return
+		case "kb", "knowledge", "rag":
+			handleKnowledgeBase(os.Args[2:])
+			return
 		case "completions", "completion":
 			handleCompletions(os.Args[2:])
 			return
@@ -2325,6 +2328,7 @@ func printHelp() {
 				{"serve", "Start API server (default)"},
 				{"run <model> [opts]", "Interactive chat (supports --image for VLMs)"},
 				{"session <cmd>", "Manage chat sessions"},
+				{"kb <cmd>", "Manage knowledge base (RAG)"},
 				{"template <cmd>", "Manage prompt templates"},
 				{"batch <file>", "Batch process prompts"},
 			},
@@ -3369,7 +3373,7 @@ func handleRun(args []string) {
 		fmt.Println()
 		fmt.Printf("%sRun Chat Session%s\n", brandPrimary+colorBold, colorReset)
 		fmt.Println("")
-		fmt.Printf("%sUsage:%s offgrid run <model-name> [--save <name>] [--load <name>] [--image <path>]\n", colorDim, colorReset)
+		fmt.Printf("%sUsage:%s offgrid run <model-name> [--save <name>] [--load <name>] [--image <path>] [--rag]\n", colorDim, colorReset)
 		fmt.Println("")
 		fmt.Println("Start an interactive chat session with a model")
 		fmt.Println()
@@ -3377,15 +3381,18 @@ func handleRun(args []string) {
 		printOption("--save <name>", "Save conversation to session")
 		printOption("--load <name>", "Load and continue existing session")
 		printOption("--image <path>", "Attach an image (for VLM models)")
+		printOption("--rag", "Enable knowledge base (RAG) for answers")
 		fmt.Println()
 		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
 		printExample("offgrid run tinyllama-1.1b-chat.Q4_K_M")
 		printExample("offgrid run llava-v1.6 --image ./photo.jpg")
 		printExample("offgrid run llama --save my-project")
 		printExample("offgrid run llama --load my-project")
+		printExample("offgrid run llama --rag")
 		fmt.Println()
 		fmt.Printf("%sℹ Use 'offgrid list' to see available models%s\n", colorDim, colorReset)
 		fmt.Printf("%sℹ Use 'offgrid session list' to see saved sessions%s\n", colorDim, colorReset)
+		fmt.Printf("%sℹ Use 'offgrid rag status' to check knowledge base%s\n", colorDim, colorReset)
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -3395,6 +3402,7 @@ func handleRun(args []string) {
 	var loadSession bool
 	var saveSession bool
 	var imagePath string
+	var useKnowledgeBase bool
 
 	// Parse flags
 	for i := 1; i < len(args); i++ {
@@ -3409,6 +3417,8 @@ func handleRun(args []string) {
 		} else if args[i] == "--image" && i+1 < len(args) {
 			imagePath = args[i+1]
 			i++
+		} else if args[i] == "--rag" || args[i] == "--knowledge-base" || args[i] == "-k" {
+			useKnowledgeBase = true
 		}
 	}
 
@@ -3672,7 +3682,10 @@ func handleRun(args []string) {
 	if currentSession != nil {
 		fmt.Printf("%sSession:%s %s (auto-saving)\n", colorDim, colorReset, currentSession.Name)
 	}
-	fmt.Printf("Type %sexit%s to quit · %sclear%s to reset\n", brandSecondary, colorReset, brandSecondary, colorReset)
+	if useKnowledgeBase {
+		fmt.Printf("%sKnowledge Base:%s Enabled (RAG)\n", colorDim, colorReset)
+	}
+	fmt.Printf("Type %sexit%s to quit · %sclear%s to reset · %srag%s to toggle knowledge base\n", brandSecondary, colorReset, brandSecondary, colorReset, brandSecondary, colorReset)
 	fmt.Println()
 
 	// Start chat session
@@ -3876,6 +3889,16 @@ func handleRun(args []string) {
 			continue
 		}
 
+		if input == "rag" || input == "/rag" {
+			useKnowledgeBase = !useKnowledgeBase
+			if useKnowledgeBase {
+				fmt.Printf("\n%s📚 Knowledge Base enabled%s\n", brandSuccess, colorReset)
+			} else {
+				fmt.Printf("\n%s📚 Knowledge Base disabled%s\n", colorDim, colorReset)
+			}
+			continue
+		}
+
 		// Add user message
 		var userContent interface{} = input
 
@@ -3929,9 +3952,10 @@ func handleRun(args []string) {
 
 		// Make API request
 		reqBody := ChatCompletionRequest{
-			Model:    modelName,
-			Messages: messages,
-			Stream:   true,
+			Model:            modelName,
+			Messages:         messages,
+			Stream:           true,
+			UseKnowledgeBase: useKnowledgeBase,
 		}
 
 		jsonData, _ := json.Marshal(reqBody)
@@ -4058,9 +4082,10 @@ func (m ChatMessage) StringContent() string {
 }
 
 type ChatCompletionRequest struct {
-	Model    string        `json:"model"`
-	Messages []ChatMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
+	Model            string        `json:"model"`
+	Messages         []ChatMessage `json:"messages"`
+	Stream           bool          `json:"stream"`
+	UseKnowledgeBase bool          `json:"use_knowledge_base,omitempty"`
 }
 
 type ChatCompletionChunk struct {
@@ -4699,6 +4724,414 @@ func handleSessionExport(sessionMgr *sessions.SessionManager, name string, outpu
 	}
 
 	printSuccess(fmt.Sprintf("Exported to: %s", outputPath))
+}
+
+// handleKnowledgeBase handles the kb/knowledge/rag command for managing the knowledge base
+func handleKnowledgeBase(args []string) {
+	if len(args) == 0 {
+		fmt.Println()
+		fmt.Printf("%sKnowledge Base Management%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("")
+		fmt.Printf("%sUsage:%s offgrid kb <command>\n", colorDim, colorReset)
+		fmt.Println("")
+		fmt.Println("Manage the RAG (Retrieval-Augmented Generation) knowledge base")
+		fmt.Println()
+		fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %sstatus%s              Show knowledge base status\n", brandSecondary, colorReset)
+		fmt.Printf("   %slist%s                List all documents in the knowledge base\n", brandSecondary, colorReset)
+		fmt.Printf("   %sadd <file>%s          Add a document to the knowledge base\n", brandSecondary, colorReset)
+		fmt.Printf("   %sremove <id>%s         Remove a document by ID\n", brandSecondary, colorReset)
+		fmt.Printf("   %ssearch <query>%s      Search the knowledge base\n", brandSecondary, colorReset)
+		fmt.Printf("   %sclear%s               Clear all documents from the knowledge base\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%sSupported File Types%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   .txt, .md, .markdown, .json, .csv, .html, .htm\n")
+		fmt.Println()
+		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("   %soffgrid kb status%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid kb list%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid kb add ./docs/manual.md%s\n", colorDim, colorReset)
+		fmt.Printf("   %soffgrid kb search \"how to configure\"%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sNote:%s The server must be running with RAG enabled for these commands.\n", colorDim, colorReset)
+		fmt.Printf("      Start the server with: %soffgrid serve%s\n", brandSecondary, colorReset)
+		fmt.Println()
+		return
+	}
+
+	subcommand := args[0]
+
+	switch subcommand {
+	case "status":
+		handleKBStatus()
+	case "list", "ls":
+		handleKBList()
+	case "add":
+		if len(args) < 2 {
+			printError("Usage: offgrid kb add <file>")
+			return
+		}
+		handleKBAdd(args[1])
+	case "remove", "rm", "delete", "del":
+		if len(args) < 2 {
+			printError("Usage: offgrid kb remove <id>")
+			return
+		}
+		handleKBRemove(args[1])
+	case "search":
+		if len(args) < 2 {
+			printError("Usage: offgrid kb search <query>")
+			return
+		}
+		query := strings.Join(args[1:], " ")
+		handleKBSearch(query)
+	case "clear":
+		handleKBClear()
+	default:
+		printError(fmt.Sprintf("Unknown subcommand: %s", subcommand))
+		fmt.Println("Available subcommands: status, list, add, remove, search, clear")
+	}
+}
+
+// getServerPort returns the configured server port
+func getServerPort() int {
+	cfg := config.LoadConfig()
+	return cfg.ServerPort
+}
+
+func handleKBStatus() {
+	port := getServerPort()
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v1/rag/status", port))
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		fmt.Println("Make sure the server is running with: offgrid serve")
+		return
+	}
+	defer resp.Body.Close()
+
+	var status map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		printError(fmt.Sprintf("Failed to parse response: %v", err))
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("%sKnowledge Base Status%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println()
+
+	enabled, _ := status["enabled"].(bool)
+	if enabled {
+		fmt.Printf("   %sStatus:%s      %sEnabled%s\n", colorDim, colorReset, colorGreen, colorReset)
+	} else {
+		fmt.Printf("   %sStatus:%s      %sDisabled%s\n", colorDim, colorReset, colorYellow, colorReset)
+	}
+
+	if model, ok := status["model"].(string); ok && model != "" {
+		fmt.Printf("   %sModel:%s       %s\n", colorDim, colorReset, model)
+	}
+
+	if docCount, ok := status["document_count"].(float64); ok {
+		fmt.Printf("   %sDocuments:%s   %.0f\n", colorDim, colorReset, docCount)
+	}
+
+	if chunkCount, ok := status["chunk_count"].(float64); ok {
+		fmt.Printf("   %sChunks:%s      %.0f\n", colorDim, colorReset, chunkCount)
+	}
+
+	if persistPath, ok := status["persist_path"].(string); ok && persistPath != "" {
+		fmt.Printf("   %sData Path:%s   %s\n", colorDim, colorReset, persistPath)
+	}
+
+	fmt.Println()
+}
+
+func handleKBList() {
+	port := getServerPort()
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v1/rag/status", port))
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		fmt.Println("Make sure the server is running with: offgrid serve")
+		return
+	}
+	defer resp.Body.Close()
+
+	var status map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		printError(fmt.Sprintf("Failed to parse response: %v", err))
+		return
+	}
+
+	enabled, _ := status["enabled"].(bool)
+	if !enabled {
+		printError("RAG is not enabled. Enable it first via the web UI or API.")
+		return
+	}
+
+	docs, ok := status["documents"].([]interface{})
+	if !ok || len(docs) == 0 {
+		fmt.Println()
+		fmt.Printf("%sKnowledge Base Documents%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("   %sNo documents in knowledge base%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("   Add documents with: %soffgrid kb add <file>%s\n", brandSecondary, colorReset)
+		fmt.Println()
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("%sKnowledge Base Documents%s (%d total)\n", brandPrimary+colorBold, colorReset, len(docs))
+	fmt.Println()
+
+	for _, d := range docs {
+		doc, ok := d.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		id, _ := doc["id"].(string)
+		name, _ := doc["name"].(string)
+		chunkCount, _ := doc["chunk_count"].(float64)
+		size, _ := doc["size"].(float64)
+
+		shortID := id
+		if len(id) > 8 {
+			shortID = id[:8]
+		}
+
+		fmt.Printf("   %s%s%s  %-40s  %s%d chunks%s  %s\n",
+			brandSecondary, shortID, colorReset,
+			name,
+			colorDim, int(chunkCount), colorReset,
+			formatBytes(int64(size)))
+	}
+	fmt.Println()
+}
+
+func handleKBAdd(filePath string) {
+	port := getServerPort()
+	// Check if file exists
+	info, err := os.Stat(filePath)
+	if err != nil {
+		printError(fmt.Sprintf("File not found: %s", filePath))
+		return
+	}
+
+	if info.IsDir() {
+		printError("Cannot add directory. Please specify a file.")
+		return
+	}
+
+	// Read file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to read file: %v", err))
+		return
+	}
+
+	// Prepare request
+	reqBody := map[string]interface{}{
+		"name":    filepath.Base(filePath),
+		"content": string(content),
+	}
+
+	jsonData, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://localhost:%d/v1/documents/ingest", port),
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		fmt.Println("Make sure the server is running with: offgrid serve")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		printError(fmt.Sprintf("Failed to add document: %s", string(body)))
+		return
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if doc, ok := result["document"].(map[string]interface{}); ok {
+		name, _ := doc["name"].(string)
+		chunkCount, _ := doc["chunk_count"].(float64)
+		printSuccess(fmt.Sprintf("Added '%s' (%d chunks)", name, int(chunkCount)))
+	} else {
+		printSuccess(fmt.Sprintf("Added '%s'", filepath.Base(filePath)))
+	}
+}
+
+func handleKBRemove(id string) {
+	port := getServerPort()
+	req, _ := http.NewRequest(http.MethodDelete,
+		fmt.Sprintf("http://localhost:%d/v1/documents/delete?id=%s", port, id), nil)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		fmt.Println("Make sure the server is running with: offgrid serve")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		printError(fmt.Sprintf("Document not found: %s", id))
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		printError(fmt.Sprintf("Failed to remove document: %s", string(body)))
+		return
+	}
+
+	printSuccess(fmt.Sprintf("Removed document: %s", id))
+}
+
+func handleKBSearch(query string) {
+	port := getServerPort()
+	reqBody := map[string]interface{}{
+		"query": query,
+		"top_k": 5,
+	}
+
+	jsonData, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://localhost:%d/v1/documents/search", port),
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		fmt.Println("Make sure the server is running with: offgrid serve")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		printError(fmt.Sprintf("Search failed: %s", string(body)))
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		printError(fmt.Sprintf("Failed to parse response: %v", err))
+		return
+	}
+
+	results, ok := result["results"].([]interface{})
+	if !ok || len(results) == 0 {
+		fmt.Println()
+		fmt.Printf("%sSearch Results%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("   %sNo results found for:%s \"%s\"\n", colorDim, colorReset, query)
+		fmt.Println()
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("%sSearch Results%s for \"%s\"\n", brandPrimary+colorBold, colorReset, query)
+	fmt.Println()
+
+	for i, r := range results {
+		res, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		score, _ := res["score"].(float64)
+		docName, _ := res["document_name"].(string)
+
+		chunk, _ := res["chunk"].(map[string]interface{})
+		content, _ := chunk["content"].(string)
+
+		// Truncate content for display
+		if len(content) > 200 {
+			content = content[:200] + "..."
+		}
+		content = strings.ReplaceAll(content, "\n", " ")
+
+		scoreColor := colorGreen
+		if score < 0.5 {
+			scoreColor = colorYellow
+		} else if score < 0.3 {
+			scoreColor = colorRed
+		}
+
+		fmt.Printf("   %s%d.%s %s[%.2f]%s %s%s%s\n",
+			brandSecondary, i+1, colorReset,
+			scoreColor, score, colorReset,
+			colorDim, docName, colorReset)
+		fmt.Printf("      %s%s%s\n", colorDim, content, colorReset)
+		fmt.Println()
+	}
+}
+
+func handleKBClear() {
+	port := getServerPort()
+	fmt.Printf("%sWarning:%s This will remove all documents from the knowledge base.\n", colorYellow, colorReset)
+	fmt.Print("Are you sure? (yes/no): ")
+
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	if input != "yes" && input != "y" {
+		fmt.Println("Cancelled.")
+		return
+	}
+
+	// Get list of documents first
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v1/rag/status", port))
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	var status map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&status)
+
+	docs, ok := status["documents"].([]interface{})
+	if !ok || len(docs) == 0 {
+		fmt.Println("Knowledge base is already empty.")
+		return
+	}
+
+	// Delete each document
+	deleted := 0
+	for _, d := range docs {
+		doc, ok := d.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id, _ := doc["id"].(string)
+		if id == "" {
+			continue
+		}
+
+		req, _ := http.NewRequest(http.MethodDelete,
+			fmt.Sprintf("http://localhost:%d/v1/documents/delete?id=%s", port, id), nil)
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			deleted++
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
+
+	printSuccess(fmt.Sprintf("Cleared %d documents from knowledge base", deleted))
 }
 
 // formatTimeAgo formats a time as a human-readable "ago" string

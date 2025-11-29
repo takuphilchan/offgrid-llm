@@ -26,6 +26,16 @@ offgrid import /media/usb                          # Import from USB
 offgrid export tinyllama-1.1b-chat.Q4_K_M /media/usb  # Export to USB
 ```
 
+### Knowledge Base (RAG)
+```bash
+offgrid kb status                          # Show RAG status
+offgrid kb list                            # List documents
+offgrid kb add ./docs/manual.md            # Add a document
+offgrid kb search "how to configure"       # Search knowledge base
+offgrid kb remove <id>                     # Remove document
+offgrid kb clear                           # Clear all documents
+```
+
 ### Inference
 ```bash
 offgrid serve                              # Start HTTP server

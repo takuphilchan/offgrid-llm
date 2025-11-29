@@ -15,13 +15,46 @@ type ChatCompletionRequest struct {
 	PresencePenalty  *float32      `json:"presence_penalty,omitempty"`
 	FrequencyPenalty *float32      `json:"frequency_penalty,omitempty"`
 	User             string        `json:"user,omitempty"`
+	// Function calling
+	Tools      []Tool      `json:"tools,omitempty"`
+	ToolChoice interface{} `json:"tool_choice,omitempty"` // "none", "auto", or {"type": "function", "function": {"name": "..."}}
+	// RAG / Knowledge Base
+	UseKnowledgeBase *bool `json:"use_knowledge_base,omitempty"` // Enable RAG context injection
+}
+
+// Tool represents a tool that can be called by the model
+type Tool struct {
+	Type     string      `json:"type"` // "function"
+	Function FunctionDef `json:"function"`
+}
+
+// FunctionDef represents a function definition
+type FunctionDef struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"` // JSON Schema
+}
+
+// ToolCall represents a tool call made by the model
+type ToolCall struct {
+	ID       string       `json:"id"`
+	Type     string       `json:"type"` // "function"
+	Function FunctionCall `json:"function"`
+}
+
+// FunctionCall represents the function being called
+type FunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"` // JSON string of arguments
 }
 
 // ChatMessage represents a single message in a chat
 type ChatMessage struct {
-	Role    string      `json:"role"` // "system", "user", "assistant"
-	Content interface{} `json:"content"`
-	Name    string      `json:"name,omitempty"`
+	Role       string      `json:"role"` // "system", "user", "assistant", "tool"
+	Content    interface{} `json:"content"`
+	Name       string      `json:"name,omitempty"`
+	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`   // For assistant messages with function calls
+	ToolCallID string      `json:"tool_call_id,omitempty"` // For tool response messages
 }
 
 // StringContent returns the string representation of the content
@@ -63,7 +96,7 @@ type ChatCompletionResponse struct {
 type ChatCompletionChoice struct {
 	Index        int          `json:"index"`
 	Message      ChatMessage  `json:"message"`
-	FinishReason string       `json:"finish_reason"`   // "stop", "length", "content_filter"
+	FinishReason string       `json:"finish_reason"`   // "stop", "length", "content_filter", "tool_calls"
 	Delta        *ChatMessage `json:"delta,omitempty"` // For streaming responses
 }
 
