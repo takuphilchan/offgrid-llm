@@ -4,7 +4,7 @@
 
 ## Overview
 
-Version 0.2.1 is a patch release that improves CLI reliability by ensuring the model is fully ready before accepting user input.
+Version 0.2.1 is a patch release that improves CLI reliability with model readiness checks and fixes model switching issues.
 
 ---
 
@@ -21,15 +21,28 @@ Version 0.2.1 is a patch release that improves CLI reliability by ensuring the m
 - The CLI now waits until the model can actually generate responses
 - Supports up to 120 seconds timeout for larger models
 
-**How It Works**
-1. Checks llama.cpp health endpoint
-2. Detects "loading model" status during model initialization
-3. Performs a minimal test completion to verify the model responds
-4. Only then shows the chat prompt to the user
+### Fixed Model Switching
+
+**Problem Solved**
+- Switching between models via CLI caused empty responses
+- CLI was managing llama-server directly, bypassing the server's model cache
+- Newly downloaded models weren't visible until server restart
+
+**Solution**
+- Model switching now goes through the OffGrid server's API
+- Server's model registry is refreshed before switching
+- Proper model cache management ensures correct model is loaded
 
 ---
 
 ## Technical Details
+
+### Model Switching Flow (Fixed)
+
+1. CLI calls `/models/refresh` to update server's model list
+2. CLI sends test completion request with target model name
+3. Server's model cache handles loading the new model
+4. CLI waits for successful response before showing prompt
 
 ### New Function: `waitForModelReady`
 
@@ -38,11 +51,6 @@ Version 0.2.1 is a patch release that improves CLI reliability by ensuring the m
 // It performs a test completion to verify the model can actually respond
 func waitForModelReady(port string, maxWaitSeconds int) error
 ```
-
-- Polls health endpoint for status changes
-- Sends a minimal chat completion request (`"Hi"` with `max_tokens: 1`)
-- Returns only when the model produces valid output
-- Timeout configurable (default: 120 seconds)
 
 ---
 

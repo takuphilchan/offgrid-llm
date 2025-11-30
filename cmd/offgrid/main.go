@@ -3775,6 +3775,12 @@ func handleRun(args []string) {
 
 	fmt.Printf(" %s✓%s\n", brandSuccess, colorReset)
 
+	// Refresh server's model list to pick up newly downloaded models
+	refreshURL := fmt.Sprintf("http://localhost:%d/models/refresh", cfg.ServerPort)
+	if refreshResp, err := client.Post(refreshURL, "application/json", nil); err == nil {
+		refreshResp.Body.Close()
+	}
+
 	// Check which model is currently loaded in the server
 	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", cfg.ServerPort)
 	resp, err = client.Get(modelsURL)
@@ -3799,46 +3805,45 @@ func handleRun(args []string) {
 
 			if !foundActive && len(modelsResp.Data) > 0 {
 				fmt.Println()
-				printWarning(fmt.Sprintf("Server is currently serving: %s", activeModel))
-				printInfo(fmt.Sprintf("Switching to: %s", modelName))
-				fmt.Println()
-
-				// Kill existing llama-server process
-				printInfo("Stopping llama-server...")
-				cmd := exec.Command("pkill", "-9", "llama-server")
-				cmd.Run() // Ignore errors
-				time.Sleep(1 * time.Second)
-
-				// Start llama-server with new model
-				fmt.Printf("%sStarting llama-server%s\n", brandPrimary+colorBold, colorReset)
-				fmt.Printf("%sModel:%s %s\n", colorDim, colorReset, filepath.Base(model.Path))
-				fmt.Printf("%sFlags:%s --no-mmap --mlock -fa (optimized)\n", colorDim, colorReset)
-				fmt.Println()
-
-				if err := startLlamaServerInBackground(model.Path); err != nil {
-					fmt.Println()
-					printError("Failed to start llama-server")
-					fmt.Println()
-					fmt.Printf("%sℹ Start manually:%s\n", colorDim, colorReset)
-					fmt.Printf("  %sllama-server -m %s --port 42382 &%s\n", brandSecondary, model.Path, colorReset)
-					fmt.Println()
-					os.Exit(1)
-				}
-
-				// Wait for llama-server to load the new model
+				printInfo(fmt.Sprintf("Switching model: %s → %s", activeModel, modelName))
 				fmt.Printf("%sLoading model...%s ", colorDim, colorReset)
 
-				llamaPort := "42382"
-				if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
-					llamaPort = strings.TrimSpace(string(portBytes))
+				// Let the OffGrid server handle model switching by making a test request
+				// The server's model cache will automatically load the new model
+				testPayload := map[string]interface{}{
+					"model": modelName,
+					"messages": []map[string]string{
+						{"role": "user", "content": "Hi"},
+					},
+					"max_tokens": 1,
+					"stream":     false,
+				}
+				payloadBytes, _ := json.Marshal(testPayload)
+
+				// Give the server time to switch models (may take a while for large models)
+				switchClient := &http.Client{
+					Timeout: 180 * time.Second, // 3 minute timeout for model loading
 				}
 
-				// Use the new robust readiness check
-				if err := waitForModelReady(llamaPort, 120); err != nil {
+				switchResp, err := switchClient.Post(
+					fmt.Sprintf("http://localhost:%d/v1/chat/completions", cfg.ServerPort),
+					"application/json",
+					bytes.NewReader(payloadBytes),
+				)
+
+				if err != nil {
 					fmt.Printf("%s✗%s\n", brandError, colorReset)
-					printError(fmt.Sprintf("Model failed to load: %v", err))
+					printError(fmt.Sprintf("Failed to switch model: %v", err))
 					os.Exit(1)
 				}
+				switchResp.Body.Close()
+
+				if switchResp.StatusCode != http.StatusOK {
+					fmt.Printf("%s✗%s\n", brandError, colorReset)
+					printError(fmt.Sprintf("Failed to switch model (status %d)", switchResp.StatusCode))
+					os.Exit(1)
+				}
+
 				fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
 				fmt.Println()
 			}
