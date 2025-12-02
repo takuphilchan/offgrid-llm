@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "offgrid-llm"
+version = "0.2.1"
+description = "Python client for OffGrid LLM - Run AI models completely offline"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "OffGrid LLM Team", email = "team@offgrid-llm.dev"}
+]
+maintainers = [
+    {name = "OffGrid LLM Team", email = "team@offgrid-llm.dev"}
+]
+keywords = [
+    "llm",
+    "ai",
+    "offline",
+    "local",
+    "inference",
+    "llama",
+    "gguf",
+    "machine-learning",
+    "nlp",
+    "chatbot"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "isort>=5.0",
+    "mypy>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/takuphilchan/offgrid-llm"
+Documentation = "https://github.com/takuphilchan/offgrid-llm/tree/main/python"
+Repository = "https://github.com/takuphilchan/offgrid-llm"
+Issues = "https://github.com/takuphilchan/offgrid-llm/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["offgrid_llm*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
