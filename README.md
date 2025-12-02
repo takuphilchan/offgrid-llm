@@ -23,39 +23,29 @@
 
 ## Installation
 
-Choose the method that best fits your needs:
+### Quick Install (Recommended)
 
-### Docker (Recommended - 2 minutes)
-
-**Fastest and easiest way to get started** - isolated, production-ready deployment.
+**Copy and paste this command into your terminal:**
 
 ```bash
-# Quick start
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm
-cd docker && docker-compose up -d
-
-# Access UI
-open http://localhost:11611/ui/
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
 ```
 
-**With NVIDIA GPU:**
+**What happens:**
+1. Automatically detects your computer (OS, CPU, GPU)
+2. Builds and installs OffGrid LLM
+3. Installs the web interface
+4. Asks if you want to start it now
+5. Sets up auto-start on boot (optional)
+
+**Time required:** 5-10 minutes (downloads and builds from source)
+
+**After installation, open your browser to:** `http://localhost:11611/ui/`
+
+**Install with auto-start enabled:**
 ```bash
-cd docker && docker-compose -f docker-compose.gpu.yml up -d
+AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh)
 ```
-
-**Production deployment with SSL and monitoring:**
-```bash
-cd docker && docker-compose -f docker-compose.prod.yml up -d
-```
-
-**Why Docker?**
-- No dependency conflicts
-- Easy updates and rollbacks
-- Portable across systems
-- Production-ready in minutes
-
-**See [docs/DOCKER.md](docs/DOCKER.md) for complete Docker documentation.**
 
 ---
 
@@ -84,31 +74,30 @@ See [desktop/DESKTOP_INSTALL.md](desktop/DESKTOP_INSTALL.md) for detailed deskto
 
 ---
 
-### CLI Installation (Full Control)
+### Docker (Containerized Deployment)
 
-**Copy and paste this command into your terminal:**
+**Ideal for production deployments** - isolated, easy to update, and portable.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
+# Quick start
+git clone https://github.com/takuphilchan/offgrid-llm.git
+cd offgrid-llm/docker && docker-compose up -d
+
+# Access UI
+open http://localhost:11611/ui/
 ```
 
-**What happens:**
-1. Automatically detects your computer (OS, CPU, GPU)
-2. Builds and installs OffGrid LLM
-3. Installs the web interface
-4. Asks if you want to start it now
-5. Sets up auto-start on boot (optional)
-
-**Time required:** 5-10 minutes (downloads and builds from source)
-
-**After installation, open your browser to:** `http://localhost:11611/ui/`
-
-**Start without asking:**
+**With NVIDIA GPU:**
 ```bash
-**Install with auto-start enabled:**
-```bash
-AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh)
+docker-compose -f docker-compose.gpu.yml up -d
 ```
+
+**Production deployment with SSL and monitoring:**
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+See [docs/DOCKER.md](docs/DOCKER.md) for complete Docker documentation.
 
 ---
 
