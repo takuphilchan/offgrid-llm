@@ -22,7 +22,9 @@ Usage:
     client.search("llama", ram=8)
 """
 
-__version__ = "0.2.1"
+from typing import Dict, List, Union
+
+__version__ = "0.1.0"
 __author__ = "OffGrid LLM Team"
 
 from .client import Client, OffGridError
@@ -86,7 +88,7 @@ def complete(prompt: str, model: str = None, **kwargs) -> str:
     return _get_client().complete(prompt, model=model, **kwargs)
 
 
-def embed(text: str | list[str], model: str = None) -> list[float] | list[list[float]]:
+def embed(text: Union[str, List[str]], model: str = None) -> Union[List[float], List[List[float]]]:
     """
     Generate embeddings for text.
     
@@ -100,7 +102,7 @@ def embed(text: str | list[str], model: str = None) -> list[float] | list[list[f
     return _get_client().embed(text, model=model)
 
 
-def list_models() -> list[dict]:
+def list_models() -> List[Dict]:
     """
     List all available models.
     
@@ -124,7 +126,7 @@ def download(repo: str, filename: str, **kwargs) -> bool:
     return _get_client().models.download(repo, filename, **kwargs)
 
 
-def search(query: str, ram: int = None, limit: int = 10) -> list[dict]:
+def search(query: str, ram: int = None, limit: int = 10) -> List[Dict]:
     """
     Search for models on HuggingFace.
     

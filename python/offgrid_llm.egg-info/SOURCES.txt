@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+offgrid_llm/__init__.py
+offgrid_llm/client.py
+offgrid_llm/kb.py
+offgrid_llm/models.py
+offgrid_llm.egg-info/PKG-INFO
+offgrid_llm.egg-info/SOURCES.txt
+offgrid_llm.egg-info/dependency_links.txt
+offgrid_llm.egg-info/requires.txt
+offgrid_llm.egg-info/top_level.txt
+tests/test_client.py

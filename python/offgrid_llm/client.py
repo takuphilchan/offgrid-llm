@@ -5,7 +5,7 @@ Main client class for interacting with the OffGrid LLM server.
 """
 
 import json
-from typing import Iterator, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlencode
@@ -137,7 +137,7 @@ class Client:
         message: str,
         model: str = None,
         system: str = None,
-        messages: list[dict] = None,
+        messages: List[Dict] = None,
         use_kb: bool = False,
         stream: bool = False,
         temperature: float = None,
@@ -278,9 +278,9 @@ class Client:
     
     def embed(
         self,
-        text: Union[str, list[str]],
+        text: Union[str, List[str]],
         model: str = None
-    ) -> Union[list[float], list[list[float]]]:
+    ) -> Union[List[float], List[List[float]]]:
         """
         Generate embeddings for text.
         
@@ -311,7 +311,7 @@ class Client:
         
         raise OffGridError("Invalid response from server", details=str(response))
     
-    def list_models(self) -> list[dict]:
+    def list_models(self) -> List[Dict]:
         """
         List all available models.
         
@@ -347,7 +347,7 @@ class Client:
         except OffGridError:
             return False
     
-    def refresh_models(self) -> list[dict]:
+    def refresh_models(self) -> List[Dict]:
         """
         Refresh the model list (rescan models directory).
         

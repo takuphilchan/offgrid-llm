@@ -6,7 +6,7 @@ Handles model downloading, searching, and USB import/export.
 
 import json
 import time
-from typing import Callable, Optional
+from typing import Callable, Dict, List, Optional
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
@@ -24,7 +24,7 @@ class ModelManager:
     def __init__(self, client):
         self._client = client
     
-    def list(self) -> list[dict]:
+    def list(self) -> List[Dict]:
         """
         List all installed models.
         
@@ -33,7 +33,7 @@ class ModelManager:
         """
         return self._client.list_models()
     
-    def refresh(self) -> list[dict]:
+    def refresh(self) -> List[Dict]:
         """
         Refresh the model list (rescan models directory).
         
@@ -120,7 +120,7 @@ class ModelManager:
         quantization: str = None,
         author: str = None,
         limit: int = 10
-    ) -> list[dict]:
+    ) -> List[Dict]:
         """
         Search for models on HuggingFace.
         
@@ -185,7 +185,7 @@ class ModelManager:
         self,
         path: str,
         progress_callback: Callable[[str, float], None] = None
-    ) -> list[str]:
+    ) -> List[str]:
         """
         Import models from USB drive or directory.
         

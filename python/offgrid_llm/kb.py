@@ -6,7 +6,7 @@ Manages document ingestion and RAG (Retrieval-Augmented Generation).
 
 import os
 import base64
-from typing import Optional
+from typing import Dict, List, Optional
 
 
 class KnowledgeBase:
@@ -104,7 +104,7 @@ class KnowledgeBase:
         
         return self._client._request("POST", "/v1/documents/ingest", payload)
     
-    def list(self) -> list[dict]:
+    def list(self) -> List[Dict]:
         """
         List all documents in the Knowledge Base.
         
@@ -139,7 +139,7 @@ class KnowledgeBase:
         query: str,
         top_k: int = 5,
         threshold: float = None
-    ) -> list[dict]:
+    ) -> List[Dict]:
         """
         Search the Knowledge Base.
         
@@ -202,9 +202,9 @@ class KnowledgeBase:
     def add_directory(
         self,
         path: str,
-        extensions: list[str] = None,
+        extensions: List[str] = None,
         recursive: bool = True
-    ) -> list[dict]:
+    ) -> List[Dict]:
         """
         Add all documents from a directory.
         
