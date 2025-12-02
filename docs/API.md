@@ -7,22 +7,30 @@ OffGrid LLM provides an OpenAI-compatible REST API for running language models o
 The easiest way to use OffGrid LLM from Python:
 
 ```bash
-pip install offgrid-llm
+pip install offgrid
 ```
 
 ```python
-import offgrid_llm
+import offgrid
 
-# Simple chat
-response = offgrid_llm.chat("Hello!")
+# Connect to server
+client = offgrid.Client()  # localhost:11611
+
+# Or custom server
+client = offgrid.Client(host="http://192.168.1.100:11611")
+
+# Chat
+response = client.chat("Hello!")
 print(response)
 
+# Specify model
+response = client.chat("Hello!", model="Llama-3.2-3B-Instruct")
+
 # Streaming
-for chunk in offgrid_llm.chat("Tell me a story", stream=True):
+for chunk in client.chat("Tell me a story", stream=True):
     print(chunk, end="", flush=True)
 
-# Full client
-client = offgrid_llm.Client()
+# Model management
 client.models.download("repo/model", "file.gguf")
 client.kb.add("document.txt")
 ```

@@ -47,6 +47,9 @@ client = offgrid.Client(host="http://192.168.1.100:11611")
 response = client.chat("Hello!")
 print(response)
 
+# Specify model
+response = client.chat("Hello!", model="Llama-3.2-3B-Instruct")
+
 # Streaming
 for chunk in client.chat("Tell me a story", stream=True):
     print(chunk, end="", flush=True)
@@ -54,6 +57,7 @@ for chunk in client.chat("Tell me a story", stream=True):
 # With options
 response = client.chat(
     "Explain quantum computing",
+    model="Llama-3.2-3B-Instruct",
     system="You are a physics teacher",
     temperature=0.7,
     max_tokens=500
