@@ -10,3 +10,4 @@ offgrid.egg-info/dependency_links.txt
 offgrid.egg-info/requires.txt
 offgrid.egg-info/top_level.txt
 tests/test_client.py
+tests/test_live.py
