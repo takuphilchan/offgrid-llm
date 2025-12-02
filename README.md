@@ -4,6 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
+[![PyPI](https://img.shields.io/pypi/v/offgrid-llm?style=flat-square&color=3776AB)](https://pypi.org/project/offgrid-llm/)
 
 No cloud. No subscriptions. No data leaving your machine.
 
@@ -130,9 +131,41 @@ See [CLI Reference](docs/CLI_REFERENCE.md) for all commands.
 
 ---
 
+## Python Library
+
+Install the official Python library:
+
+```bash
+pip install offgrid-llm
+```
+
+```python
+import offgrid_llm
+
+# Chat with a model
+response = offgrid_llm.chat("Hello!")
+print(response)
+
+# Stream responses
+for chunk in offgrid_llm.stream("Tell me a story"):
+    print(chunk, end="", flush=True)
+
+# Download models from HuggingFace
+client = offgrid_llm.Client()
+client.models.download("Qwen/Qwen2.5-0.5B-Instruct-GGUF")
+
+# Use Knowledge Base for document Q&A
+client.kb.add_file("my_document.pdf")
+response = client.chat("What does the document say about X?")
+```
+
+See [Python Library Docs](python/README.md) for the full API.
+
+---
+
 ## API Usage
 
-OffGrid provides an OpenAI-compatible API:
+OffGrid also provides an OpenAI-compatible REST API:
 
 ```python
 from openai import OpenAI
@@ -161,6 +194,7 @@ See [API Reference](docs/API.md) for endpoints and examples.
 | [Quick Start](docs/QUICKSTART.md) | Get running in 5 minutes |
 | [Model Setup](docs/guides/MODEL_SETUP.md) | Choosing and downloading models |
 | [Features Guide](docs/guides/FEATURES_GUIDE.md) | All features explained |
+| [Python Library](python/README.md) | Python SDK documentation |
 | [4GB RAM Guide](docs/4GB_RAM.md) | Running on limited hardware |
 | [API Reference](docs/API.md) | OpenAI-compatible endpoints |
 
