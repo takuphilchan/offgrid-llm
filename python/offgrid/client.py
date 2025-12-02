@@ -8,7 +8,7 @@ import json
 from typing import Dict, Iterator, List, Optional, Union
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from .models import ModelManager
 from .kb import KnowledgeBase
@@ -28,31 +28,32 @@ class Client:
     """
     OffGrid LLM Client.
     
-    Connects to a local OffGrid server for AI inference.
+    Connects to an OffGrid server for AI inference.
     
     Args:
-        host: Server host (default: localhost)
-        port: Server port (default: 11611)
+        host: Server URL (default: http://localhost:11611)
         timeout: Request timeout in seconds (default: 300)
     
     Example:
-        >>> client = Client()
+        >>> client = Client()  # localhost:11611
         >>> client.chat("Hello!")
-        'Hello! How can I help you today?'
         
-        >>> client = Client(port=8080)  # Custom port
+        >>> client = Client(host="http://192.168.1.100:11611")
+        >>> client.chat("Hello!")
     """
     
     def __init__(
         self,
-        host: str = "localhost",
-        port: int = 11611,
+        host: str = "http://localhost:11611",
         timeout: int = 300
     ):
-        self.host = host
-        self.port = port
+        # Normalize the host URL
+        if not host.startswith("http://") and not host.startswith("https://"):
+            host = f"http://{host}"
+        
+        self.host = host.rstrip("/")
         self.timeout = timeout
-        self.base_url = f"http://{host}:{port}"
+        self.base_url = self.host
         
         # Initialize sub-managers
         self.models = ModelManager(self)

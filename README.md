@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
-[![PyPI](https://img.shields.io/pypi/v/offgrid-llm?style=flat-square&color=3776AB)](https://pypi.org/project/offgrid-llm/)
+[![PyPI](https://img.shields.io/pypi/v/offgrid?style=flat-square&color=3776AB)](https://pypi.org/project/offgrid/)
 
 No cloud. No subscriptions. No data leaving your machine.
 
@@ -27,50 +27,46 @@ irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/d
 ### Python Library
 
 ```bash
-pip install offgrid-llm
+pip install offgrid
 ```
 
 ---
 
 ## Usage
 
-### Python
-
 ```python
-import offgrid_llm
+import offgrid
+
+# Connect to server
+client = offgrid.Client()  # localhost:11611
+
+# Or custom server
+client = offgrid.Client(host="http://192.168.1.100:11611")
 
 # Chat
-response = offgrid_llm.chat("Hello!")
+response = client.chat("Hello!")
 print(response)
 
 # Streaming
-for chunk in offgrid_llm.chat("Tell me a story", stream=True):
+for chunk in client.chat("Tell me a story", stream=True):
     print(chunk, end="", flush=True)
-```
 
-### With Client
-
-```python
-from offgrid_llm import Client
-
-client = Client()
-
-# Chat with options
+# With options
 response = client.chat(
     "Explain quantum computing",
     system="You are a physics teacher",
     temperature=0.7,
     max_tokens=500
 )
-
-# List models
-for model in client.list_models():
-    print(model["id"])
 ```
 
 ### Model Management
 
 ```python
+# List models
+for model in client.list_models():
+    print(model["id"])
+
 # Search HuggingFace
 results = client.models.search("llama", ram=8)
 
@@ -103,10 +99,7 @@ results = client.kb.search("deadline")
 ### Embeddings
 
 ```python
-# Single
 embedding = client.embed("Hello world")
-
-# Batch
 embeddings = client.embed(["Hello", "World"])
 ```
 
@@ -149,7 +142,6 @@ GPU optional. Supports NVIDIA (CUDA), AMD (ROCm), Apple Silicon (Metal), Vulkan.
 | [Quick Start](docs/QUICKSTART.md) | Get running in 5 minutes |
 | [CLI Reference](docs/CLI_REFERENCE.md) | All commands |
 | [API Reference](docs/API.md) | REST API endpoints |
-| [Model Setup](docs/guides/MODEL_SETUP.md) | Choosing models |
 
 **Docker:** [docs/DOCKER.md](docs/DOCKER.md) · **Contributing:** [dev/CONTRIBUTING.md](dev/CONTRIBUTING.md)
 
