@@ -2,7 +2,38 @@
 
 OffGrid LLM provides an OpenAI-compatible REST API for running language models offline.
 
-## Base URL
+## Python Library
+
+The easiest way to use OffGrid LLM from Python:
+
+```bash
+pip install offgrid-llm
+```
+
+```python
+import offgrid_llm
+
+# Simple chat
+response = offgrid_llm.chat("Hello!")
+print(response)
+
+# Streaming
+for chunk in offgrid_llm.chat("Tell me a story", stream=True):
+    print(chunk, end="", flush=True)
+
+# Full client
+client = offgrid_llm.Client()
+client.models.download("repo/model", "file.gguf")
+client.kb.add("document.txt")
+```
+
+See [Python Library Documentation](../python/README.md) for full API reference.
+
+---
+
+## REST API
+
+### Base URL
 
 ```
 http://localhost:11611
@@ -204,6 +235,53 @@ Create a text completion (single prompt).
 
 ---
 
+### Embeddings
+
+Generate vector embeddings for text.
+
+**Endpoint:** `POST /v1/embeddings`
+
+**Request Body:**
+```json
+{
+  "model": "bge-m3-Q4_K_M",
+  "input": ["Hello world", "How are you?"]
+}
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `model` | string | Yes | ID of the embedding model |
+| `input` | string or array | Yes | Text or array of texts to embed |
+
+**Response:**
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "embedding": [0.0023, -0.0134, ...],
+      "index": 0
+    },
+    {
+      "object": "embedding",
+      "embedding": [0.0045, -0.0089, ...],
+      "index": 1
+    }
+  ],
+  "model": "bge-m3-Q4_K_M",
+  "usage": {
+    "prompt_tokens": 8,
+    "total_tokens": 8
+  }
+}
+```
+
+---
+
 ## Error Responses
 
 All errors follow a consistent format:
@@ -361,7 +439,6 @@ Currently, no rate limiting is implemented. This will be added in future version
 ## Future API Endpoints
 
 Coming soon:
-- `POST /v1/embeddings` - Generate text embeddings
 - `POST /v1/import` - Import models from USB/SD card
 - `GET /v1/stats` - Server statistics and resource usage
 - `GET /v1/peers` - List P2P peers (when P2P is enabled)

@@ -147,16 +147,16 @@ response = offgrid_llm.chat("Hello!")
 print(response)
 
 # Stream responses
-for chunk in offgrid_llm.stream("Tell me a story"):
+for chunk in offgrid_llm.chat("Tell me a story", stream=True):
     print(chunk, end="", flush=True)
 
-# Download models from HuggingFace
+# Full client with model management
 client = offgrid_llm.Client()
-client.models.download("Qwen/Qwen2.5-0.5B-Instruct-GGUF")
+client.models.download("Qwen/Qwen2.5-0.5B-Instruct-GGUF", "model.gguf")
 
 # Use Knowledge Base for document Q&A
-client.kb.add_file("my_document.pdf")
-response = client.chat("What does the document say about X?")
+client.kb.add("my_document.txt")
+response = client.chat("What does the document say?", use_kb=True)
 ```
 
 See [Python Library Docs](python/README.md) for the full API.
