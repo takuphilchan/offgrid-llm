@@ -4,7 +4,7 @@ Example: Knowledge Base (RAG)
 Shows how to use the Knowledge Base for document Q&A.
 """
 
-from offgrid_llm import Client
+from offgrid import Client
 
 client = Client()
 

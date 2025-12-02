@@ -4,7 +4,7 @@ Example: Model Management
 Shows how to search, download, and manage models.
 """
 
-from offgrid_llm import Client
+from offgrid import Client
 
 client = Client()
 

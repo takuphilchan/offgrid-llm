@@ -22,7 +22,7 @@ Usage:
 
 from typing import Dict, List, Union
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "OffGrid LLM Team"
 
 from .client import Client, OffGridError

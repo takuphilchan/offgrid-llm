@@ -4,7 +4,7 @@ Example: Basic Chat Usage
 Shows simple chat interactions with OffGrid LLM.
 """
 
-import offgrid_llm as offgrid
+import offgrid
 
 # Check if server is running
 client = offgrid.Client()
@@ -29,7 +29,7 @@ print()
 
 # Simple chat
 print("=== Simple Chat ===")
-response = offgrid.chat("What is Python in one sentence?")
+response = client.chat("What is Python in one sentence?")
 print(f"Response: {response}")
 print()
 

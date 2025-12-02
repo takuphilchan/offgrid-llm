@@ -1,5 +1,5 @@
 """
-Tests for OffGrid LLM Python Client
+Tests for OffGrid Python Client
 
 Run with: pytest tests/
 """
@@ -11,8 +11,8 @@ import json
 # Import the library
 import sys
 sys.path.insert(0, '..')
-from offgrid_llm import Client, OffGridError
-from offgrid_llm.client import Client as ClientClass
+from offgrid import Client, OffGridError
+from offgrid.client import Client as ClientClass
 
 
 class TestClient:
@@ -33,7 +33,7 @@ class TestClient:
         assert client.timeout == 60
         assert client.base_url == "http://192.168.1.100:8080"
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_list_models(self, mock_urlopen):
         """Test listing models."""
         mock_response = MagicMock()
@@ -52,7 +52,7 @@ class TestClient:
         assert models[0]["id"] == "model1"
         assert models[1]["id"] == "model2"
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_chat(self, mock_urlopen):
         """Test chat completion."""
         mock_response = MagicMock()
@@ -72,7 +72,7 @@ class TestClient:
         response = client.chat("Hello!")
         assert response == "Hello! How can I help you?"
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_complete(self, mock_urlopen):
         """Test text completion."""
         mock_response = MagicMock()
@@ -89,7 +89,7 @@ class TestClient:
         response = client.complete("Python")
         assert response == "is a programming language."
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_embed(self, mock_urlopen):
         """Test embeddings."""
         mock_response = MagicMock()
@@ -106,7 +106,7 @@ class TestClient:
         embedding = client.embed("Hello")
         assert embedding == [0.1, 0.2, 0.3]
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_embed_multiple(self, mock_urlopen):
         """Test multiple embeddings."""
         mock_response = MagicMock()
@@ -126,7 +126,7 @@ class TestClient:
         assert embeddings[0] == [0.1, 0.2]
         assert embeddings[1] == [0.3, 0.4]
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_health_check(self, mock_urlopen):
         """Test health check."""
         mock_response = MagicMock()
@@ -138,7 +138,7 @@ class TestClient:
         client = Client()
         assert client.health() == True
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_info(self, mock_urlopen):
         """Test system info."""
         mock_response = MagicMock()
@@ -163,7 +163,7 @@ class TestClient:
 class TestModelManager:
     """Test ModelManager class."""
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_search(self, mock_urlopen):
         """Test model search."""
         mock_response = MagicMock()
@@ -181,7 +181,7 @@ class TestModelManager:
         assert len(results) == 2
         assert results[0]["id"] == "org/llama-7b"
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_search_with_ram_filter(self, mock_urlopen):
         """Test model search with RAM filter."""
         mock_response = MagicMock()
@@ -204,7 +204,7 @@ class TestModelManager:
 class TestKnowledgeBase:
     """Test KnowledgeBase class."""
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_status(self, mock_urlopen):
         """Test KB status."""
         mock_response = MagicMock()
@@ -220,7 +220,7 @@ class TestKnowledgeBase:
         assert status["enabled"] == True
         assert status["documents"] == 5
     
-    @patch('offgrid_llm.client.urlopen')
+    @patch('offgrid.client.urlopen')
     def test_search(self, mock_urlopen):
         """Test KB search."""
         mock_response = MagicMock()
