@@ -70,9 +70,9 @@
             --bg-tertiary: #262626; /* Neutral 800 */
             --text-primary: #fafafa; /* Neutral 50 */
             --text-secondary: #a3a3a3; /* Neutral 400 */
-            --accent-primary: #22d3ee; /* Cyan 400 */
-            --accent-hover: #67e8f9; /* Cyan 300 */
-            --accent-primary-alpha: rgba(34, 211, 238, 0.15);
+            --accent-primary: #06b6d4; /* Cyan 500 */
+            --accent-hover: #0891b2; /* Cyan 600 */
+            --accent-primary-alpha: rgba(6, 182, 212, 0.15);
             --border-color: #262626;
             --card-bg: #171717;
             --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
@@ -222,6 +222,22 @@
             border-color: var(--accent-primary);
             box-shadow: 0 0 0 2px var(--accent-primary-alpha);
             outline: none;
+        }
+        
+        .bg-tertiary { background: var(--bg-tertiary); }
+        .bg-card { background: var(--card-bg); }
+        
+        /* Screen reader only */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         .card { 
@@ -486,77 +502,66 @@
             border: 1px solid #21262d !important;
             box-shadow: none !important;
             border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         
         .terminal-card:hover {
             border-color: #30363d !important;
             box-shadow: none !important;
+            transform: none;
         }
-        
-        .terminal { 
-            background: #0d1117;
-            border: 1px solid #21262d;
-            border-radius: 6px;
-            padding: 16px;
-            font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
-            font-size: 13px;
-            overflow-y: auto;
-            color: #c9d1d9;
-        }
-
         
         .terminal-output { 
-            overflow-y: auto; 
-            overflow-x: hidden;
-            padding: 20px 24px;
-            line-height: 1.5;
-            font-size: 14px;
+            overflow-y: auto;
+            overflow-x: auto;
+            padding: 16px;
             background: #0d1117;
             flex: 1;
             min-height: 0;
-            font-family: Consolas, Monaco, 'Courier New', monospace;
-        }
-        
-        .terminal-line { 
-            color: #c9d1d9; 
-            margin-bottom: 0; 
-            white-space: pre;
-            font-family: Consolas, Monaco, 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.5;
-            padding: 0;
-        }
-        
-        .terminal-line:empty {
-            height: 0.5em;
-        }
-        
-        /* Command output grouping */
-        .terminal-command-group {
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        }
-        
-        .terminal-command-group:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
         }
 
-        /* Markdown styles for terminal */
-        .terminal-line p { margin-bottom: 0.5em; }
-        .terminal-line p:last-child { margin-bottom: 0; }
-        .terminal-line pre { background: #2d2d2d; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 0.5em 0; }
-        .terminal-line code { background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; font-family: inherit; }
-        .terminal-line pre code { background: transparent; padding: 0; }
-        .terminal-line ul, .terminal-line ol { margin-left: 1.5em; margin-bottom: 0.5em; }
-        .terminal-line li { margin-bottom: 0.2em; }
-        .terminal-line h1, .terminal-line h2, .terminal-line h3 { font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: var(--ansi-cyan); }
-        .terminal-line a { color: var(--ansi-blue); text-decoration: underline; }
+        .terminal-pre {
+            line-height: 1.6;
+            font-size: 13px;
+        }
+        
+        /* Custom scrollbar for terminal */
+        .terminal-output::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        .terminal-output::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+        
+        .terminal-output::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 5px;
+        }
+        
+        .terminal-output::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+        
+        /* Terminal pre block - THE KEY to proper formatting */
+        #terminalPre {
+            margin: 0;
+            padding: 0;
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #c9d1d9;
+            white-space: pre;
+            word-wrap: normal;
+            overflow-wrap: normal;
+        }
         
         /* ANSI color classes - GitHub dark theme inspired */
         .ansi-black { color: #484f58; }
-        .ansi-cyan { color: #56d4dd; }
+        .ansi-cyan { color: #06b6d4; }
         .ansi-green { color: #7ee787; }
         .ansi-yellow { color: #e3b341; }
         .ansi-red { color: #f85149; }
@@ -582,8 +587,8 @@
         .terminal-prompt { 
             color: #7ee787;
             font-weight: 600;
-            margin-top: 16px;
-            margin-bottom: 4px;
+            margin-top: 12px;
+            margin-bottom: 2px;
             display: block;
             padding-left: 0;
             font-family: inherit;
@@ -592,32 +597,6 @@
         .terminal-prompt::before {
             content: '❯ ';
             color: #7ee787;
-        }
-        
-        /* Section headers in output */
-        .terminal-section-header {
-            color: #58a6ff;
-            font-weight: 600;
-            margin-top: 12px;
-            margin-bottom: 4px;
-            border-bottom: 1px solid rgba(88, 166, 255, 0.2);
-            padding-bottom: 4px;
-        }
-        
-        /* Table-like output formatting */
-        .terminal-table-row {
-            display: flex;
-            gap: 16px;
-            padding: 2px 0;
-        }
-        
-        .terminal-table-row .label {
-            color: #8b949e;
-            min-width: 120px;
-        }
-        
-        .terminal-table-row .value {
-            color: #c9d1d9;
         }
         
         /* Progress bar styling */
@@ -646,22 +625,18 @@
             display: flex; 
             align-items: center; 
             gap: 8px; 
-            padding: 12px 24px 20px 24px;
+            padding: 12px 16px;
             border-top: 1px solid #21262d;
             background: #0d1117;
-            min-height: auto;
         }
 
         .terminal-input-line .terminal-prompt {
             margin: 0;
             padding: 0;
-            border: none;
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
             font-size: 13px;
             color: #7ee787;
-        }
-        
-        .terminal-input-line .terminal-prompt::before {
-            content: '';
+            font-weight: 500;
         }
         
         .terminal-input { 
@@ -671,8 +646,13 @@
             flex: 1; 
             outline: none; 
             box-shadow: none !important;
-            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace;
-            font-size: 14px; 
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+            font-size: 13px; 
+        }
+        
+        .terminal-input::placeholder {
+            color: #6e7681;
+        } 
         }
         
         .terminal-running { 
@@ -763,21 +743,46 @@
         }
         
         .scrollable::-webkit-scrollbar { 
-            width: 10px; 
+            width: 8px; 
         }
         
         .scrollable::-webkit-scrollbar-track { 
             background: transparent;
-            border-radius: 5px;
+            border-radius: 4px;
         }
         
         .scrollable::-webkit-scrollbar-thumb { 
             background: var(--scrollbar-thumb);
-            border-radius: 5px; 
+            border-radius: 4px; 
         }
         
         .scrollable::-webkit-scrollbar-thumb:hover { 
             background: var(--scrollbar-thumb-hover);
+        }
+
+        /* Global scrollbar styling */
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        *::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        *::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 4px;
+        }
+        
+        *::-webkit-scrollbar-thumb:hover {
+            background: var(--scrollbar-thumb-hover);
+        }
+
+        /* Firefox scrollbar */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--scrollbar-thumb) transparent;
         }
         
         .settings-grid { 
@@ -948,12 +953,10 @@
             border-bottom: 1px solid transparent;
             transition: border-color 0.2s;
         }
-        
+
         .message-content.prose a:hover {
             border-bottom-color: #06b6d4;
-        }
-        
-        .message-content.prose table {
+        }        .message-content.prose table {
             border-collapse: collapse;
             width: 100%;
             margin: 12px 0;
@@ -1073,56 +1076,109 @@
     <main class="flex-1 flex flex-col overflow-hidden">
         <!-- Chat Tab -->
         <div id="content-chat" class="h-full flex flex-col overflow-hidden">
-            <div class="p-4 border-b border-theme bg-primary/50 backdrop-blur-sm z-10">
-                <div class="flex items-center gap-3 flex-wrap mb-3">
-                    <select id="chatModel" class="flex-1 min-w-[200px] input-theme rounded px-3 py-2 text-sm" onchange="console.log('[INLINE] Dropdown changed to:', this.value); handleModelChange();">
-                        <option value="">Loading...</option>
-                    </select>
-                    <select id="systemPrompt" onchange="applySystemPrompt()" class="flex-1 min-w-[200px] input-theme rounded px-3 py-2 text-sm">
-                        <option value="">No System Prompt</option>
-                        <option value="research">Research Assistant</option>
-                        <option value="tutor">Study Tutor</option>
-                        <option value="coder">Code Reviewer</option>
-                        <option value="writer">Academic Writer</option>
-                        <option value="custom">Custom Prompt...</option>
-                    </select>
-                </div>
-                <div class="flex items-center gap-3 flex-wrap">
-                    <div class="flex gap-2 flex-wrap">
-                        <label class="flex items-center gap-2 text-xs">
-                            <input type="checkbox" id="streamToggle" checked class="rounded">
-                            <span>Stream</span>
+            <!-- Simplified Chat Header -->
+            <div class="px-4 py-3 border-b border-theme bg-secondary/50 backdrop-blur-sm z-10">
+                <div class="flex items-center gap-3">
+                    <!-- Model Selector - Primary -->
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                        <select id="chatModel" class="flex-1 max-w-xs input-theme rounded-lg px-3 py-2 text-sm font-medium" onchange="handleModelChange();">
+                            <option value="">Select Model...</option>
+                        </select>
+                        
+                        <!-- Quick Preset Buttons -->
+                        <div class="hidden md:flex items-center gap-1 border-l border-theme pl-3 ml-2">
+                            <span class="text-xs text-secondary mr-1">Mode:</span>
+                            <button onclick="setSystemPrompt('coder')" class="px-2 py-1 text-xs rounded-md bg-tertiary hover:bg-accent/20 text-secondary hover:text-accent transition-colors" title="Code Assistant">
+                                Code
+                            </button>
+                            <button onclick="setSystemPrompt('research')" class="px-2 py-1 text-xs rounded-md bg-tertiary hover:bg-accent/20 text-secondary hover:text-accent transition-colors" title="Research Mode">
+                                Research
+                            </button>
+                            <button onclick="setSystemPrompt('tutor')" class="px-2 py-1 text-xs rounded-md bg-tertiary hover:bg-accent/20 text-secondary hover:text-accent transition-colors" title="Tutor Mode">
+                                Tutor
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Actions -->
+                    <div class="flex items-center gap-2">
+                        <!-- Knowledge Base Toggle -->
+                        <label class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-tertiary hover:bg-accent/10 cursor-pointer transition-colors" title="Use Knowledge Base">
+                            <input type="checkbox" id="useKnowledgeBase" class="sr-only peer">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-secondary peer-checked:text-accent transition-colors">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                            <span class="text-xs text-secondary peer-checked:text-accent hidden sm:inline">KB</span>
                         </label>
-                        <label class="flex items-center gap-2 text-xs" title="Enable to use RAG knowledge base for answers">
-                            <input type="checkbox" id="useKnowledgeBase" class="rounded accent-emerald-500">
-                            <span class="flex items-center gap-1">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400">
-                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        
+                        <!-- Settings Dropdown -->
+                        <div class="relative">
+                            <button onclick="toggleChatSettings()" class="p-2 rounded-lg bg-tertiary hover:bg-accent/10 text-secondary hover:text-primary transition-colors" title="Settings">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                                 </svg>
-                                Knowledge Base
-                            </span>
-                        </label>
-                        <label class="flex items-center gap-2 text-xs">
-                            <span>Temp:</span>
-                            <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2" 
-                                   class="w-16 input-theme rounded px-2 py-1 text-xs">
-                        </label>
-                        <label class="flex items-center gap-2 text-xs">
-                            <span>Max:</span>
-                            <input type="number" id="maxTokens" value="1000" step="100" min="100" max="4000" 
-                                   class="w-20 input-theme rounded px-2 py-1 text-xs">
-                        </label>
-                    </div>
-                    <div class="flex gap-2 ml-auto">
-                        <button onclick="toggleSessionsPanel()" class="btn btn-secondary btn-sm flex items-center gap-1" title="View saved sessions">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-                            Sessions
+                            </button>
+                            <!-- Settings Panel -->
+                            <div id="chatSettingsPanel" class="hidden absolute right-0 top-full mt-2 w-64 bg-card border border-theme rounded-xl shadow-xl z-50 p-4 space-y-4">
+                                <div class="text-xs font-semibold text-secondary uppercase tracking-wide mb-2">Chat Settings</div>
+                                
+                                <!-- System Prompt -->
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">System Prompt</label>
+                                    <select id="systemPrompt" onchange="applySystemPrompt()" class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                        <option value="">None</option>
+                                        <option value="research">Research Assistant</option>
+                                        <option value="tutor">Study Tutor</option>
+                                        <option value="coder">Code Reviewer</option>
+                                        <option value="writer">Academic Writer</option>
+                                        <option value="custom">Custom...</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Temperature & Max Tokens -->
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-xs text-secondary block mb-1">Temperature</label>
+                                        <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2" 
+                                               class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-secondary block mb-1">Max Tokens</label>
+                                        <input type="number" id="maxTokens" value="1000" step="100" min="100" max="4000" 
+                                               class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                    </div>
+                                </div>
+                                
+                                <!-- Streaming Toggle -->
+                                <label class="flex items-center justify-between cursor-pointer">
+                                    <span class="text-sm">Stream Response</span>
+                                    <input type="checkbox" id="streamToggle" checked class="rounded accent-accent">
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Sessions -->
+                        <button onclick="toggleSessionsPanel()" class="p-2 rounded-lg bg-tertiary hover:bg-accent/10 text-secondary hover:text-primary transition-colors" title="Sessions">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
                         </button>
-                        <button onclick="saveCurrentSession()" class="btn btn-info btn-sm">Save Session</button>
-                        <button onclick="showExportOptions()" class="btn btn-info btn-sm">Export</button>
-                        <button onclick="newChat()" class="btn btn-secondary btn-sm">New Chat</button>
+                        
+                        <!-- New Chat -->
+                        <button onclick="newChat()" class="btn btn-primary btn-sm">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            <span class="hidden sm:inline">New</span>
+                        </button>
                     </div>
+                </div>
+                
+                <!-- Active Indicators (shown when applicable) -->
+                <div id="chatIndicators" class="flex items-center gap-2 mt-2 empty:hidden">
+                    <span id="ragIndicator" class="hidden text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+                        Knowledge Base
+                    </span>
+                    <span id="promptIndicator" class="hidden text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent"></span>
                 </div>
             </div>
 
@@ -1151,9 +1207,29 @@
                 <!-- Main Chat Area -->
                 <div class="flex-1 flex flex-col overflow-hidden">
                     <div id="chatMessages" class="flex-1 scrollable px-4 py-4">
-                        <div class="text-center text-secondary py-32">
-                            <p class="text-xl font-medium">Start a conversation</p>
-                            <p class="text-sm mt-2">Select a model and type your message below</p>
+                        <div id="emptyStatePrompts" class="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-4">
+                            <div class="text-center mb-8">
+                                <h2 class="text-2xl font-semibold text-primary mb-2">What can I help you with?</h2>
+                                <p class="text-sm text-secondary">Select a model above and try one of these prompts</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                                <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Explain a concept</div>
+                                    <div class="text-xs text-white/50 mt-1">"Explain how neural networks work in simple terms"</div>
+                                </button>
+                                <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Write code</div>
+                                    <div class="text-xs text-white/50 mt-1">"Write a Python function that sorts a list using quicksort"</div>
+                                </button>
+                                <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Brainstorm ideas</div>
+                                    <div class="text-xs text-white/50 mt-1">"Help me brainstorm ideas for a mobile app..."</div>
+                                </button>
+                                <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Compare topics</div>
+                                    <div class="text-xs text-white/50 mt-1">"Summarize the key differences between REST and GraphQL"</div>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 <div class="flex-shrink-0 bg-primary border-t border-theme">
@@ -1228,179 +1304,153 @@
 
         <!-- Knowledge Base (RAG) Tab -->
         <div id="content-knowledge" class="hidden h-full overflow-auto px-6 py-4">
-            <div class="max-w-5xl mx-auto space-y-4">
-                <!-- RAG Status Card -->
-                <div class="card">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 class="text-lg font-semibold">Knowledge Base</h3>
-                            <p class="text-xs text-secondary">Upload documents for AI-powered Q&A with RAG (Retrieval Augmented Generation)</p>
-                        </div>
+            <div class="max-w-5xl mx-auto">
+                <!-- Page Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-semibold">Knowledge Base</h2>
+                        <p class="text-sm text-secondary">Upload documents for AI-powered Q&A with RAG</p>
+                    </div>
+                    <div class="flex items-center gap-3">
                         <div id="ragStatusBadge" class="badge badge-secondary">Disabled</div>
-                    </div>
-                    
-                    <!-- Embedding Model Selection - simplified -->
-                    <div class="flex items-center gap-3 mb-4">
-                        <label class="text-sm font-medium whitespace-nowrap">Embedding Model:</label>
-                        <select id="ragEmbeddingModel" onchange="onEmbeddingModelChange()" class="flex-1 input-theme rounded px-3 py-2 text-sm max-w-xs">
-                            <option value="">Select model to enable...</option>
-                        </select>
-                        <button onclick="disableRAG()" id="ragDisableBtn" class="btn btn-secondary btn-sm hidden">
-                            Disable
-                        </button>
-                    </div>
-
-                    <!-- RAG Stats -->
-                    <div id="ragStats" class="grid grid-cols-3 gap-4">
-                        <div class="text-center p-3 bg-tertiary rounded-lg">
-                            <div class="text-2xl font-bold text-accent" id="ragDocCount">0</div>
-                            <div class="text-xs text-secondary">Documents</div>
-                        </div>
-                        <div class="text-center p-3 bg-tertiary rounded-lg">
-                            <div class="text-2xl font-bold text-accent" id="ragChunkCount">0</div>
-                            <div class="text-xs text-secondary">Chunks</div>
-                        </div>
-                        <div class="text-center p-3 bg-tertiary rounded-lg">
-                            <div class="text-2xl font-bold text-accent" id="ragEmbeddingCount">0</div>
-                            <div class="text-xs text-secondary">Embeddings</div>
-                        </div>
+                        <button onclick="disableRAG()" id="ragDisableBtn" class="btn btn-secondary btn-sm hidden">Disable</button>
                     </div>
                 </div>
 
-                <!-- Upload Documents Card -->
-                <div class="card">
-                    <h4 class="font-semibold mb-3">Add Documents</h4>
-                    
-                    <!-- Drag & Drop Zone -->
-                    <div id="ragDropZone" 
-                         class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-accent transition-colors cursor-pointer"
-                         ondrop="handleRAGDrop(event)" 
-                         ondragover="handleRAGDragOver(event)"
-                         ondragleave="handleRAGDragLeave(event)"
-                         onclick="document.getElementById('ragFileInput').click()">
-                        <svg class="w-12 h-12 mx-auto mb-3 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                        </svg>
-                        <p class="text-secondary mb-1">Drag & drop files here or click to browse</p>
-                        <p class="text-xs text-secondary">Supports: .txt, .md, .json, .csv, .html</p>
-                        <input type="file" id="ragFileInput" accept=".txt,.md,.markdown,.json,.csv,.html,.htm" multiple class="hidden" onchange="handleRAGFileSelect(event)">
-                    </div>
-
-                    <!-- Or paste text -->
-                    <div class="mt-4">
-                        <label class="block text-sm font-medium mb-2">Or paste text directly:</label>
-                        <textarea id="ragTextInput" 
-                                  rows="4" 
-                                  class="w-full input-theme rounded-lg px-3 py-2 text-sm font-mono"
-                                  placeholder="Paste your text content here..."></textarea>
-                        <div class="flex items-center gap-2 mt-2">
-                            <input type="text" id="ragTextName" 
-                                   class="flex-1 input-theme rounded px-3 py-2 text-sm" 
-                                   placeholder="Document name (e.g., 'meeting-notes.txt')">
-                            <button onclick="ingestRAGText()" class="btn btn-primary">Add Text</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Documents List Card -->
-                <div class="card">
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="font-semibold">Your Documents</h4>
-                        <button onclick="refreshRAGDocuments()" class="btn btn-secondary btn-sm">Refresh</button>
-                    </div>
-                    <div id="ragDocumentsList" class="space-y-2">
-                        <p class="text-secondary text-sm">No documents uploaded yet.</p>
-                    </div>
-                </div>
-
-                <!-- Search Test Card -->
-                <div class="card">
-                    <h4 class="font-semibold mb-3">Search Knowledge Base</h4>
-                    <p class="text-xs text-secondary mb-3">Search your documents to find relevant content.</p>
-                    <div class="flex gap-2">
-                        <input type="text" id="ragSearchQuery" 
-                               class="flex-1 input-theme rounded px-3 py-2 text-sm" 
-                               placeholder="Enter a search query..."
-                               onkeypress="if(event.key==='Enter')searchRAGDocuments()">
-                        <button onclick="searchRAGDocuments()" class="btn btn-primary">Search</button>
-                    </div>
-                    <div id="ragSearchResults" class="mt-4 space-y-2"></div>
-                </div>
-
-                <!-- Developer Tools - Collapsible -->
-                <div class="card">
-                    <div class="flex items-center justify-between cursor-pointer" onclick="toggleDevTools()">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            </svg>
-                            <span class="text-sm font-medium text-secondary">Developer Tools</span>
-                        </div>
-                        <svg id="devToolsIcon" class="w-4 h-4 text-secondary transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                    </div>
-                    
-                    <div id="devToolsContent" class="hidden mt-4 pt-4 border-t border-theme space-y-4">
-                        <div>
-                            <h5 class="text-sm font-medium mb-2">Test Embeddings</h5>
-                            <p class="text-xs text-secondary mb-3">Generate vector embeddings from text to test your embedding model.</p>
-                        </div>
-                        
-                        <!-- Model Selection -->
-                        <div>
-                            <label class="text-xs text-secondary block mb-1">Embedding Model</label>
-                            <select id="embeddingModel" class="w-full input-theme rounded px-3 py-2 text-sm">
-                                <option value="">Loading...</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Text Input -->
-                        <div>
-                            <label class="text-xs text-secondary block mb-1">Input Text</label>
-                            <textarea id="embeddingInput" 
-                                      placeholder="Enter text to generate embeddings..."
-                                      rows="3"
-                                      class="w-full input-theme rounded px-3 py-2 text-sm font-mono resize-y"></textarea>
-                        </div>
-                        
-                        <!-- Actions -->
-                        <div class="flex gap-2">
-                            <button onclick="generateEmbedding()" id="generateEmbeddingBtn" class="btn btn-secondary btn-sm">
-                                Generate
-                            </button>
-                            <button onclick="clearEmbedding()" class="btn btn-secondary btn-sm">Clear</button>
-                        </div>
-                        
-                        <!-- Results -->
-                        <div id="embeddingResults" class="hidden">
-                            <div class="border-t border-theme pt-3">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-xs text-secondary">Output</span>
-                                    <button onclick="copyEmbedding()" class="text-xs text-accent hover:underline">Copy Vector</button>
+                <!-- Two Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left Column - Setup & Upload -->
+                    <div class="lg:col-span-2 space-y-4">
+                        <!-- Enable/Model Selection Card -->
+                        <div class="card">
+                            <div class="flex items-center gap-4">
+                                <div class="flex-1">
+                                    <label class="text-sm font-medium block mb-2">Embedding Model</label>
+                                    <select id="ragEmbeddingModel" onchange="onEmbeddingModelChange()" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
+                                        <option value="">Select model to enable RAG...</option>
+                                    </select>
                                 </div>
-                                
-                                <!-- Stats -->
-                                <div class="grid grid-cols-3 gap-2 mb-2 text-xs">
-                                    <div class="bg-secondary rounded px-2 py-1">
-                                        <div class="text-secondary">Dims</div>
-                                        <div id="embeddingDimensions" class="font-semibold text-accent">-</div>
-                                    </div>
-                                    <div class="bg-secondary rounded px-2 py-1">
-                                        <div class="text-secondary">Tokens</div>
-                                        <div id="embeddingTokens" class="font-semibold text-accent">-</div>
-                                    </div>
-                                    <div class="bg-secondary rounded px-2 py-1">
-                                        <div class="text-secondary">Time</div>
-                                        <div id="embeddingTime" class="font-semibold text-accent">-</div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Vector Output -->
-                                <div id="embeddingVector" 
-                                     class="bg-tertiary rounded px-2 py-1 text-xs font-mono overflow-x-auto max-h-24 overflow-y-auto"
-                                     style="white-space: pre-wrap; word-break: break-all;"></div>
                             </div>
                         </div>
+
+                        <!-- Upload Card -->
+                        <div class="card">
+                            <h4 class="font-semibold mb-4">Add Documents</h4>
+                            
+                            <!-- Drag & Drop Zone -->
+                            <div id="ragDropZone" 
+                                 class="border-2 border-dashed border-theme rounded-xl p-8 text-center hover:border-accent hover:bg-accent/5 transition-all cursor-pointer"
+                                 ondrop="handleRAGDrop(event)" 
+                                 ondragover="handleRAGDragOver(event)"
+                                 ondragleave="handleRAGDragLeave(event)"
+                                 onclick="document.getElementById('ragFileInput').click()">
+                                <svg class="w-10 h-10 mx-auto mb-3 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                <p class="text-sm text-secondary mb-1">Drop files here or click to browse</p>
+                                <p class="text-xs text-secondary">Supports: .txt, .md, .json, .csv, .html</p>
+                                <input type="file" id="ragFileInput" accept=".txt,.md,.markdown,.json,.csv,.html,.htm" multiple class="hidden" onchange="handleRAGFileSelect(event)">
+                            </div>
+
+                            <!-- Paste text option -->
+                            <details class="mt-4">
+                                <summary class="text-sm font-medium cursor-pointer text-secondary hover:text-primary">Or paste text directly</summary>
+                                <div class="mt-3 space-y-3">
+                                    <textarea id="ragTextInput" rows="4" class="w-full input-theme rounded-lg px-3 py-2 text-sm" placeholder="Paste your text content here..."></textarea>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="ragTextName" class="flex-1 input-theme rounded px-3 py-2 text-sm" placeholder="Document name">
+                                        <button onclick="ingestRAGText()" class="btn btn-primary">Add</button>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+
+                        <!-- Documents List -->
+                        <div class="card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="font-semibold">Your Documents</h4>
+                                <button onclick="refreshRAGDocuments()" class="btn btn-secondary btn-sm">Refresh</button>
+                            </div>
+                            <div id="ragDocumentsList" class="space-y-2">
+                                <p class="text-secondary text-sm text-center py-4">No documents uploaded yet</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Stats & Search -->
+                    <div class="space-y-4">
+                        <!-- Stats Card -->
+                        <div class="card">
+                            <h4 class="font-semibold mb-4">Statistics</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
+                                    <span class="text-sm text-secondary">Documents</span>
+                                    <span class="text-lg font-bold text-accent" id="ragDocCount">0</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
+                                    <span class="text-sm text-secondary">Chunks</span>
+                                    <span class="text-lg font-bold text-accent" id="ragChunkCount">0</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
+                                    <span class="text-sm text-secondary">Embeddings</span>
+                                    <span class="text-lg font-bold text-accent" id="ragEmbeddingCount">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Search Card -->
+                        <div class="card">
+                            <h4 class="font-semibold mb-3">Search</h4>
+                            <div class="space-y-3">
+                                <input type="text" id="ragSearchQuery" class="w-full input-theme rounded-lg px-3 py-2 text-sm" placeholder="Search your documents..." onkeypress="if(event.key==='Enter')searchRAGDocuments()">
+                                <button onclick="searchRAGDocuments()" class="btn btn-primary w-full">Search</button>
+                            </div>
+                            <div id="ragSearchResults" class="mt-4 space-y-2"></div>
+                        </div>
+
+                        <!-- Developer Tools -->
+                        <details class="card">
+                            <summary class="font-semibold cursor-pointer flex items-center justify-between">
+                                <span>Developer Tools</span>
+                                <svg class="w-4 h-4 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </summary>
+                            <div class="mt-4 pt-4 border-t border-theme space-y-4">
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">Embedding Model</label>
+                                    <select id="embeddingModel" class="w-full input-theme rounded px-3 py-2 text-sm">
+                                        <option value="">Loading...</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">Test Text</label>
+                                    <textarea id="embeddingInput" placeholder="Enter text..." rows="2" class="w-full input-theme rounded px-3 py-2 text-sm resize-y"></textarea>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="generateEmbedding()" id="generateEmbeddingBtn" class="btn btn-secondary btn-sm flex-1">Generate</button>
+                                    <button onclick="clearEmbedding()" class="btn btn-secondary btn-sm">Clear</button>
+                                </div>
+                                <div id="embeddingResults" class="hidden text-xs">
+                                    <div class="grid grid-cols-3 gap-2 mb-2">
+                                        <div class="bg-tertiary rounded px-2 py-1 text-center">
+                                            <div class="text-secondary">Dims</div>
+                                            <div id="embeddingDimensions" class="font-semibold text-accent">-</div>
+                                        </div>
+                                        <div class="bg-tertiary rounded px-2 py-1 text-center">
+                                            <div class="text-secondary">Tokens</div>
+                                            <div id="embeddingTokens" class="font-semibold text-accent">-</div>
+                                        </div>
+                                        <div class="bg-tertiary rounded px-2 py-1 text-center">
+                                            <div class="text-secondary">Time</div>
+                                            <div id="embeddingTime" class="font-semibold text-accent">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end mb-1">
+                                        <button onclick="copyEmbedding()" class="text-xs text-accent hover:underline">Copy</button>
+                                    </div>
+                                    <div id="embeddingVector" class="bg-tertiary rounded px-2 py-1 font-mono overflow-x-auto max-h-20 overflow-y-auto text-xs" style="word-break: break-all;"></div>
+                                </div>
+                            </div>
+                        </details>
                     </div>
                 </div>
             </div>
@@ -1408,140 +1458,158 @@
 
         <!-- Benchmark Tab -->
         <div id="content-benchmark" class="hidden h-full overflow-auto px-6 py-4">
-            <div class="max-w-5xl mx-auto space-y-4">
-                <!-- Benchmark Header -->
-                <div class="card">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 class="text-lg font-semibold">Model Benchmarks</h3>
-                            <p class="text-xs text-secondary">Compare model performance on your hardware</p>
-                        </div>
-                        <button onclick="runBenchmark()" id="benchmarkRunBtn" class="btn btn-primary">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            Run Benchmark
-                        </button>
-                    </div>
-
-                    <!-- Benchmark Settings -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium mb-1">Select Model</label>
-                            <select id="benchmarkModel" class="w-full input-theme rounded px-3 py-2 text-sm">
-                                <option value="">Choose a model...</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1">Prompt Length</label>
-                            <select id="benchmarkPromptLength" class="w-full input-theme rounded px-3 py-2 text-sm">
-                                <option value="short">Short (~50 tokens)</option>
-                                <option value="medium" selected>Medium (~200 tokens)</option>
-                                <option value="long">Long (~500 tokens)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1">Output Tokens</label>
-                            <select id="benchmarkOutputTokens" class="w-full input-theme rounded px-3 py-2 text-sm">
-                                <option value="50">50 tokens</option>
-                                <option value="100" selected>100 tokens</option>
-                                <option value="200">200 tokens</option>
-                                <option value="500">500 tokens</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Progress Bar -->
-                    <div id="benchmarkProgress" class="hidden mb-4">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="text-sm" id="benchmarkStatus">Running...</span>
-                            <span class="text-sm text-secondary" id="benchmarkPercent">0%</span>
-                        </div>
-                        <div class="w-full bg-tertiary rounded-full h-2">
-                            <div id="benchmarkProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                        </div>
+            <div class="max-w-5xl mx-auto">
+                <!-- Page Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-semibold">Benchmarks</h2>
+                        <p class="text-sm text-secondary">Measure model performance on your hardware</p>
                     </div>
                 </div>
 
-                <!-- Live Metrics Card -->
-                <div class="card">
-                    <h4 class="font-semibold mb-4">Current Run Metrics</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="text-center p-4 bg-tertiary rounded-lg">
-                            <div class="text-3xl font-bold text-accent" id="benchLiveTokensPerSec">--</div>
-                            <div class="text-xs text-secondary">Tokens/sec</div>
-                        </div>
-                        <div class="text-center p-4 bg-tertiary rounded-lg">
-                            <div class="text-3xl font-bold text-accent" id="benchLiveTimeToFirst">--</div>
-                            <div class="text-xs text-secondary">Time to First Token (ms)</div>
-                        </div>
-                        <div class="text-center p-4 bg-tertiary rounded-lg">
-                            <div class="text-3xl font-bold text-accent" id="benchLiveTotalTime">--</div>
-                            <div class="text-xs text-secondary">Total Time (s)</div>
-                        </div>
-                        <div class="text-center p-4 bg-tertiary rounded-lg">
-                            <div class="text-3xl font-bold text-accent" id="benchLiveMemory">--</div>
-                            <div class="text-xs text-secondary">Memory Usage (GB)</div>
-                        </div>
-                    </div>
-                </div>
+                <!-- Two Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left Column - Run Benchmark -->
+                    <div class="lg:col-span-2 space-y-4">
+                        <!-- Run Benchmark Card -->
+                        <div class="card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="font-semibold">Run Benchmark</h4>
+                                <button onclick="runBenchmark()" id="benchmarkRunBtn" class="btn btn-primary">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                                    </svg>
+                                    Run
+                                </button>
+                            </div>
 
-                <!-- Benchmark History Card -->
-                <div class="card">
-                    <div class="flex items-center justify-between mb-4">
-                        <h4 class="font-semibold">Benchmark History</h4>
-                        <button onclick="clearBenchmarkHistory()" class="btn btn-secondary btn-sm">Clear History</button>
-                    </div>
-                    
-                    <!-- Comparison Chart -->
-                    <div class="mb-4">
-                        <div id="benchmarkChart" class="space-y-3">
-                            <p class="text-secondary text-sm text-center py-4">Run benchmarks to see comparison charts</p>
+                            <!-- Settings -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">Model</label>
+                                    <select id="benchmarkModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
+                                        <option value="">Select model...</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">Prompt Length</label>
+                                    <select id="benchmarkPromptLength" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
+                                        <option value="short">Short</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="long">Long</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">Output Tokens</label>
+                                    <select id="benchmarkOutputTokens" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
+                                        <option value="50">50</option>
+                                        <option value="100" selected>100</option>
+                                        <option value="200">200</option>
+                                        <option value="500">500</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Progress -->
+                            <div id="benchmarkProgress" class="hidden">
+                                <div class="flex items-center justify-between mb-1 text-sm">
+                                    <span id="benchmarkStatus">Running...</span>
+                                    <span class="text-secondary" id="benchmarkPercent">0%</span>
+                                </div>
+                                <div class="w-full bg-tertiary rounded-full h-2">
+                                    <div id="benchmarkProgressBar" class="bg-accent h-2 rounded-full transition-all" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Metrics -->
+                        <div class="card">
+                            <h4 class="font-semibold mb-4">Live Metrics</h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                <div class="p-4 bg-tertiary rounded-xl text-center">
+                                    <div class="text-2xl font-bold text-accent" id="benchLiveTokensPerSec">--</div>
+                                    <div class="text-xs text-secondary mt-1">Tokens/sec</div>
+                                </div>
+                                <div class="p-4 bg-tertiary rounded-xl text-center">
+                                    <div class="text-2xl font-bold text-accent" id="benchLiveTimeToFirst">--</div>
+                                    <div class="text-xs text-secondary mt-1">TTFT (ms)</div>
+                                </div>
+                                <div class="p-4 bg-tertiary rounded-xl text-center">
+                                    <div class="text-2xl font-bold text-accent" id="benchLiveTotalTime">--</div>
+                                    <div class="text-xs text-secondary mt-1">Total (s)</div>
+                                </div>
+                                <div class="p-4 bg-tertiary rounded-xl text-center">
+                                    <div class="text-2xl font-bold text-accent" id="benchLiveMemory">--</div>
+                                    <div class="text-xs text-secondary mt-1">Memory (GB)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- History -->
+                        <div class="card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="font-semibold">History</h4>
+                                <button onclick="clearBenchmarkHistory()" class="btn btn-secondary btn-sm">Clear</button>
+                            </div>
+                            
+                            <!-- Chart Area -->
+                            <div id="benchmarkChart" class="mb-4">
+                                <p class="text-secondary text-sm text-center py-8">Run benchmarks to see comparison</p>
+                            </div>
+
+                            <!-- Table -->
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-theme text-left">
+                                            <th class="py-2 px-3 font-medium">Model</th>
+                                            <th class="py-2 px-3 font-medium text-right">Tok/s</th>
+                                            <th class="py-2 px-3 font-medium text-right">TTFT</th>
+                                            <th class="py-2 px-3 font-medium text-right">Total</th>
+                                            <th class="py-2 px-3 font-medium text-right hidden sm:table-cell">Memory</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="benchmarkHistoryTable">
+                                        <tr><td colspan="5" class="text-center py-6 text-secondary">No benchmarks yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- History Table -->
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="border-b border-theme">
-                                    <th class="text-left py-2 px-3">Model</th>
-                                    <th class="text-right py-2 px-3">Tokens/sec</th>
-                                    <th class="text-right py-2 px-3">TTFT (ms)</th>
-                                    <th class="text-right py-2 px-3">Total (s)</th>
-                                    <th class="text-right py-2 px-3">Memory (GB)</th>
-                                    <th class="text-right py-2 px-3">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody id="benchmarkHistoryTable">
-                                <tr>
-                                    <td colspan="6" class="text-center py-4 text-secondary">No benchmarks yet</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                    <!-- Right Column - System Info -->
+                    <div class="space-y-4">
+                        <div class="card">
+                            <h4 class="font-semibold mb-4">System</h4>
+                            <div class="space-y-3">
+                                <div class="p-3 bg-tertiary rounded-lg">
+                                    <div class="text-xs text-secondary mb-1">CPU</div>
+                                    <div id="sysInfoCPU" class="text-sm font-medium truncate">Detecting...</div>
+                                </div>
+                                <div class="p-3 bg-tertiary rounded-lg">
+                                    <div class="text-xs text-secondary mb-1">RAM</div>
+                                    <div id="sysInfoRAM" class="text-sm font-medium">Detecting...</div>
+                                </div>
+                                <div class="p-3 bg-tertiary rounded-lg">
+                                    <div class="text-xs text-secondary mb-1">GPU</div>
+                                    <div id="sysInfoGPU" class="text-sm font-medium">Detecting...</div>
+                                </div>
+                                <div class="p-3 bg-tertiary rounded-lg">
+                                    <div class="text-xs text-secondary mb-1">Backend</div>
+                                    <div id="sysInfoBackend" class="text-sm font-medium">llama.cpp</div>
+                                </div>
+                            </div>
+                        </div>
 
-                <!-- Hardware Info Card -->
-                <div class="card">
-                    <h4 class="font-semibold mb-3">System Information</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                            <div class="text-secondary">CPU</div>
-                            <div id="sysInfoCPU" class="font-medium">Detecting...</div>
-                        </div>
-                        <div>
-                            <div class="text-secondary">RAM</div>
-                            <div id="sysInfoRAM" class="font-medium">Detecting...</div>
-                        </div>
-                        <div>
-                            <div class="text-secondary">GPU</div>
-                            <div id="sysInfoGPU" class="font-medium">Detecting...</div>
-                        </div>
-                        <div>
-                            <div class="text-secondary">Backend</div>
-                            <div id="sysInfoBackend" class="font-medium">llama.cpp</div>
+                        <!-- Tips Card -->
+                        <div class="card">
+                            <h4 class="font-semibold mb-3">Tips</h4>
+                            <ul class="text-sm text-secondary space-y-2">
+                                <li>• Close other apps for accurate results</li>
+                                <li>• Run multiple times to average</li>
+                                <li>• Smaller models = faster inference</li>
+                                <li>• GPU acceleration improves speed</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -1550,116 +1618,160 @@
 
         <!-- Models Tab -->
         <div id="content-models" class="hidden h-full overflow-auto px-6 py-4">
-            <div class="max-w-5xl mx-auto space-y-4">
+            <div class="max-w-5xl mx-auto space-y-6">
             
-            <!-- USB Import/Export Section -->
+            <!-- Header with stats -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-primary">Model Management</h2>
+                    <p class="text-sm text-secondary mt-1">Download, manage, and transfer your local models</p>
+                </div>
+                <button onclick="refreshAllModels()" class="btn btn-secondary btn-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+
+            <!-- Two-column layout for Installed Models and Search -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Installed Models - Left Column -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold">Installed Models</h3>
+                        <span id="modelCount" class="text-xs px-2 py-1 rounded-full bg-accent/20 text-accent">0 models</span>
+                    </div>
+                    <div id="installedModels" class="space-y-2 max-h-[400px] overflow-y-auto">
+                        <p class="text-sm text-secondary">Loading...</p>
+                    </div>
+                </div>
+
+                <!-- Search & Download - Right Column -->
+                <div class="card">
+                    <h3 class="text-lg font-semibold mb-4">Search & Download</h3>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="searchQuery" placeholder="Search models (llama, phi, mistral...)" 
+                               class="flex-1 input-theme rounded px-3 py-2 text-sm"
+                               onkeydown="if(event.key==='Enter')searchModels()" />
+                        <button onclick="searchModels()" class="btn btn-primary">Search</button>
+                    </div>
+                    <div id="searchResults" class="space-y-2 max-h-[340px] overflow-y-auto">
+                        <div class="text-center text-secondary py-8">
+                            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            <p class="text-sm">Search for models from Hugging Face</p>
+                            <p class="text-xs mt-1 text-secondary">Try "llama 3.2" or "phi" or "qwen"</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- USB Import/Export Section - Collapsible -->
             <div class="card">
-                <h3 class="text-lg font-semibold mb-4">USB Model Transfer</h3>
-                <p class="text-xs text-secondary mb-4">Transfer models to/from USB drives for offline deployment</p>
+                <button onclick="toggleUSBSection()" class="w-full flex items-center justify-between text-left">
+                    <div>
+                        <h3 class="text-lg font-semibold">USB Model Transfer</h3>
+                        <p class="text-xs text-secondary mt-1">Transfer models to/from USB drives for offline deployment</p>
+                    </div>
+                    <svg id="usbSectionArrow" class="w-5 h-5 text-secondary transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Import Section -->
-                    <div class="border border-theme rounded-lg p-4">
-                        <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
-                            Import from USB
-                        </h4>
-                        <p class="text-xs text-secondary mb-3">Load models from a USB drive with OffGrid packages</p>
-                        
-                        <div class="space-y-3">
-                            <div>
-                                <label class="text-xs text-secondary block mb-1">USB Path:</label>
+                <div id="usbSectionContent" class="hidden mt-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Import Section -->
+                        <div class="border border-theme rounded-lg p-4">
+                            <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                </svg>
+                                Import from USB
+                            </h4>
+                            <p class="text-xs text-secondary mb-3">Load models from a USB drive</p>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">USB Path:</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="usbImportPath" 
+                                               placeholder="/media/usb or D:\"
+                                               value="/media/usb"
+                                               class="flex-1 input-theme rounded px-3 py-2 text-sm font-mono" />
+                                        <button onclick="browseForPath('import')" class="btn btn-secondary px-3" title="Browse">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                
                                 <div class="flex gap-2">
-                                    <input type="text" id="usbImportPath" 
-                                           placeholder="/media/usb or D:\"
-                                           value="/media/usb"
-                                           class="flex-1 input-theme rounded px-3 py-2 text-sm font-mono" />
-                                    <button onclick="browseForPath('import')" class="btn btn-secondary px-3" title="Browse for folder">
-                                        Browse
-                                    </button>
+                                    <button onclick="scanUSB()" class="btn btn-secondary flex-1">Scan</button>
+                                    <button onclick="importFromUSB()" class="btn btn-primary flex-1">Import All</button>
+                                </div>
+                                
+                                <div id="usbScanResults" class="text-xs"></div>
+                                <div id="usbImportStatus" class="text-xs"></div>
+                                <div id="usbImportProgress" class="hidden">
+                                    <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
+                                        <div id="usbImportProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                    <div id="usbImportProgressText" class="text-xs text-secondary"></div>
                                 </div>
                             </div>
+                        </div>
+                        
+                        <!-- Export Section -->
+                        <div class="border border-theme rounded-lg p-4">
+                            <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                Export to USB
+                            </h4>
+                            <p class="text-xs text-secondary mb-3">Create a portable model bundle</p>
                             
-                            <div class="flex gap-2">
-                                <button onclick="scanUSB()" class="btn btn-secondary flex-1">
-                                    Scan
-                                </button>
-                                <button onclick="importFromUSB()" class="btn btn-primary flex-1">
-                                    Import All
-                                </button>
-                            </div>
-                            
-                            <div id="usbScanResults" class="text-xs"></div>
-                            <div id="usbImportStatus" class="text-xs"></div>
-                            <div id="usbImportProgress" class="hidden">
-                                <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
-                                    <div id="usbImportProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">USB Path:</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="usbExportPath" 
+                                               placeholder="/media/usb or D:\"
+                                               value="/media/usb"
+                                               class="flex-1 input-theme rounded px-3 py-2 text-sm font-mono" />
+                                        <button onclick="browseForPath('export')" class="btn btn-secondary px-3" title="Browse">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div id="usbImportProgressText" class="text-xs text-secondary"></div>
+                                
+                                <button onclick="exportToUSB()" class="btn btn-primary w-full">Export All Models</button>
+                                
+                                <div id="usbExportStatus" class="text-xs"></div>
+                                <div id="usbExportProgress" class="hidden">
+                                    <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
+                                        <div id="usbExportProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                    <div id="usbExportProgressText" class="text-xs text-secondary"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Export Section -->
-                    <div class="border border-theme rounded-lg p-4">
-                        <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
-                            Export to USB
-                        </h4>
-                        <p class="text-xs text-secondary mb-3">Create a portable bundle of all your models</p>
-                        
-                        <div class="space-y-3">
-                            <div>
-                                <label class="text-xs text-secondary block mb-1">USB Path:</label>
-                                <div class="flex gap-2">
-                                    <input type="text" id="usbExportPath" 
-                                           placeholder="/media/usb or D:\"
-                                           value="/media/usb"
-                                           class="flex-1 input-theme rounded px-3 py-2 text-sm font-mono" />
-                                    <button onclick="browseForPath('export')" class="btn btn-secondary px-3" title="Browse for folder">
-                                        Browse
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <button onclick="exportToUSB()" class="btn btn-primary w-full">
-                                Export All Models
-                            </button>
-                            
-                            <div id="usbExportStatus" class="text-xs"></div>
-                            <div id="usbExportProgress" class="hidden">
-                                <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
-                                    <div id="usbExportProgressBar" class="bg-accent h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                                </div>
-                                <div id="usbExportProgressText" class="text-xs text-secondary"></div>
-                            </div>
+                    <!-- Common USB Paths Helper -->
+                    <div class="mt-4 p-3 bg-secondary rounded text-xs">
+                        <span class="font-medium text-accent">Common USB mount points:</span>
+                        <div class="mt-2 grid grid-cols-3 gap-2 text-secondary">
+                            <div><span class="font-mono text-primary">Linux:</span> /media/usb</div>
+                            <div><span class="font-mono text-primary">macOS:</span> /Volumes/USB</div>
+                            <div><span class="font-mono text-primary">Windows:</span> D:\ E:\ F:\</div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Common USB Paths Helper -->
-                <div class="mt-4 p-3 bg-secondary rounded text-xs">
-                    <span class="font-medium text-accent">Common USB mount points:</span>
-                    <div class="mt-1 space-y-1 text-secondary">
-                        <div><span class="font-mono">Linux:</span> /media/username/device or /mnt/usb</div>
-                        <div><span class="font-mono">macOS:</span> /Volumes/device</div>
-                        <div><span class="font-mono">Windows:</span> D:\\ E:\\ F:\\</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card">
-                <h3 class="text-lg font-semibold mb-4">Search & Download Models</h3>
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="searchQuery" placeholder="Search models (e.g., llama, phi, mistral)..." 
-                           class="flex-1 input-theme rounded px-3 py-2 text-sm" />
-                    <button onclick="searchModels()" class="btn btn-primary">Search</button>
-                </div>
-                <div id="searchResults" class="space-y-2"></div>
-            </div>
-
-            <div class="card">
-                <h3 class="text-lg font-semibold mb-4">Installed Models</h3>
-                <div id="installedModels" class="space-y-2">
-                    <p class="text-sm text-secondary">Loading...</p>
                 </div>
             </div>
             </div>
@@ -1696,11 +1808,10 @@
                         <button onclick="clearTerminal()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
                 </div>
-                <div class="terminal-output scrollable flex-1 overflow-y-auto" id="terminalOutput">
-                    <div class="terminal-line terminal-success">OffGrid Terminal v0.2.1</div>
-                    <div class="terminal-line">Connected to real offgrid binary</div>
-                    <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
-                </div>
+                <div class="terminal-output" id="terminalOutput"><pre class="terminal-pre" id="terminalPre"><span style="color: #58a6ff;">OffGrid Terminal v0.2.2</span>
+Connected to real offgrid binary
+Type 'help' for available commands or 'offgrid --help' for all options
+</pre></div>
                 <div class="terminal-input-line flex-shrink-0" id="terminalInputLine">
                     <span class="terminal-prompt">$</span>
                     <input type="text" id="terminalInput" placeholder="Enter command..." 
@@ -1724,6 +1835,7 @@
         let terminalChatMode = false;
         let terminalChatModel = '';
         let terminalChatHistory = [];
+        let userScrolledUp = false;
         
         // Session management
         let sessions = JSON.parse(localStorage.getItem('offgrid_sessions') || '[]');
@@ -2758,9 +2870,29 @@
             currentSessionId = null;
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = `
-                <div class="text-center text-secondary py-32">
-                    <p class="text-xl font-medium">Start a conversation</p>
-                    <p class="text-sm mt-2">Select a model and type your message below</p>
+                <div id="emptyStatePrompts" class="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-4">
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-semibold text-primary mb-2">What can I help you with?</h2>
+                        <p class="text-sm text-secondary">Select a model above and try one of these prompts</p>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                        <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Explain a concept</div>
+                            <div class="text-xs text-white/50 mt-1">"Explain how neural networks work in simple terms"</div>
+                        </button>
+                        <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Write code</div>
+                            <div class="text-xs text-white/50 mt-1">"Write a Python function that sorts a list using quicksort"</div>
+                        </button>
+                        <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Brainstorm ideas</div>
+                            <div class="text-xs text-white/50 mt-1">"Help me brainstorm ideas for a mobile app..."</div>
+                        </button>
+                        <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Compare topics</div>
+                            <div class="text-xs text-white/50 mt-1">"Summarize the key differences between REST and GraphQL"</div>
+                        </button>
+                    </div>
                 </div>
             `;
             document.getElementById('chatInput').value = '';
@@ -2887,6 +3019,63 @@
         }
 
         // System prompt functions
+        function toggleChatSettings() {
+            const panel = document.getElementById('chatSettingsPanel');
+            panel.classList.toggle('hidden');
+            
+            // Close when clicking outside
+            if (!panel.classList.contains('hidden')) {
+                setTimeout(() => {
+                    document.addEventListener('click', closeChatSettingsOnOutsideClick);
+                }, 10);
+            }
+        }
+        
+        function closeChatSettingsOnOutsideClick(e) {
+            const panel = document.getElementById('chatSettingsPanel');
+            const button = e.target.closest('button[onclick="toggleChatSettings()"]');
+            if (!panel.contains(e.target) && !button) {
+                panel.classList.add('hidden');
+                document.removeEventListener('click', closeChatSettingsOnOutsideClick);
+            }
+        }
+        
+        function useExamplePrompt(prompt) {
+            const input = document.getElementById('chatInput');
+            input.value = prompt;
+            input.focus();
+            autoResizeTextarea(input);
+            // Hide empty state
+            const emptyState = document.getElementById('emptyStatePrompts');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+        }
+        
+        function setSystemPrompt(preset) {
+            const select = document.getElementById('systemPrompt');
+            select.value = preset;
+            applySystemPrompt();
+            updatePromptIndicator(preset);
+        }
+        
+        function updatePromptIndicator(preset) {
+            const indicator = document.getElementById('promptIndicator');
+            const labels = {
+                'research': 'Research Mode',
+                'tutor': 'Tutor Mode',
+                'coder': 'Code Mode',
+                'writer': 'Writer Mode',
+                'custom': 'Custom Prompt'
+            };
+            if (preset && labels[preset]) {
+                indicator.textContent = labels[preset];
+                indicator.classList.remove('hidden');
+            } else {
+                indicator.classList.add('hidden');
+            }
+        }
+        
         function applySystemPrompt() {
             const select = document.getElementById('systemPrompt');
             const value = select.value;
@@ -2900,28 +3089,20 @@
                     onConfirm: (custom) => {
                         if (custom) {
                             currentSystemPrompt = custom;
-                            showModal({
-                                type: 'success',
-                                title: 'Success',
-                                message: 'Custom prompt applied',
-                                confirmText: 'OK'
-                            });
+                            updatePromptIndicator('custom');
                         }
                     },
                     onCancel: () => {
-                        select.value = ''; // Reset selection
+                        select.value = '';
+                        updatePromptIndicator('');
                     }
                 });
             } else if (value) {
                 currentSystemPrompt = systemPrompts[value];
-                showModal({
-                    type: 'success',
-                    title: 'Success',
-                    message: `${select.options[select.selectedIndex].text} mode activated`,
-                    confirmText: 'OK'
-                });
+                updatePromptIndicator(value);
             } else {
                 currentSystemPrompt = '';
+                updatePromptIndicator('');
             }
         }
 
@@ -3145,9 +3326,29 @@
         function clearChatSilent() {
             messages = [];
             document.getElementById('chatMessages').innerHTML = `
-                <div class="text-center text-secondary py-20">
-                    <p>Start a conversation</p>
-                    <p class="text-xs mt-2 text-secondary">Select a model and type below</p>
+                <div id="emptyStatePrompts" class="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-4">
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-semibold text-primary mb-2">What can I help you with?</h2>
+                        <p class="text-sm text-secondary">Select a model above and try one of these prompts</p>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                        <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Explain a concept</div>
+                            <div class="text-xs text-white/50 mt-1">"Explain how neural networks work in simple terms"</div>
+                        </button>
+                        <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Write code</div>
+                            <div class="text-xs text-white/50 mt-1">"Write a Python function that sorts a list using quicksort"</div>
+                        </button>
+                        <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Brainstorm ideas</div>
+                            <div class="text-xs text-white/50 mt-1">"Help me brainstorm ideas for a mobile app..."</div>
+                        </button>
+                        <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
+                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Compare topics</div>
+                            <div class="text-xs text-white/50 mt-1">"Summarize the key differences between REST and GraphQL"</div>
+                        </button>
+                    </div>
                 </div>
             `;
             document.getElementById('chatInput').value = '';
@@ -3961,14 +4162,15 @@
                 const models = data.data || [];
 
                 if (models.length === 0) {
-                    container.innerHTML = '<p class="text-sm text-secondary">No models installed</p>';
+                    container.innerHTML = '<p class="text-sm text-secondary text-center py-8">No models installed yet.<br><span class="text-xs">Search and download models from the right panel.</span></p>';
+                    updateModelCount();
                     return;
                 }
 
                 container.innerHTML = '';
                 models.forEach(model => {
                     const div = document.createElement('div');
-                    div.className = 'model-item';
+                    div.className = 'model-card model-item';
                     const modelId = (model.id || '').replace(/'/g, "\\'");
                     
                     // Format size if available (assuming it might be in metadata)
@@ -3983,16 +4185,15 @@
                                     <span class="text-xs bg-secondary px-1.5 py-0.5 rounded text-secondary font-mono">GGUF</span>
                                 </div>
                             </div>
-                            <div class="flex gap-2">
-                                <button onclick="runQuickCommand('offgrid run ${modelId}')" class="btn btn-primary btn-sm flex-shrink-0">Run</button>
-                                <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm flex-shrink-0">Remove</button>
-                            </div>
+                            <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm flex-shrink-0">Remove</button>
                         </div>
                     `;
                     container.appendChild(div);
                 });
+                updateModelCount();
             } catch (error) {
                 container.innerHTML = '<p class="text-sm text-red-400">Failed to load models</p>';
+                updateModelCount();
             }
         }
 
@@ -4038,6 +4239,29 @@
                     message: `Failed to remove model: ${error.message}`,
                     confirmText: 'OK'
                 });
+            }
+        }
+
+        // Toggle USB section visibility
+        function toggleUSBSection() {
+            const content = document.getElementById('usbSectionContent');
+            const arrow = document.getElementById('usbSectionArrow');
+            content.classList.toggle('hidden');
+            arrow.style.transform = content.classList.contains('hidden') ? '' : 'rotate(180deg)';
+        }
+
+        // Refresh all models
+        async function refreshAllModels() {
+            await fetchModels();
+            updateModelCount();
+        }
+
+        // Update model count badge
+        function updateModelCount() {
+            const countEl = document.getElementById('modelCount');
+            if (countEl) {
+                const models = document.querySelectorAll('#installedModels .model-card');
+                countEl.textContent = models.length + ' model' + (models.length !== 1 ? 's' : '');
             }
         }
 
@@ -4199,13 +4423,17 @@
         }
 
         // Terminal commands
+        function scrollTerminalToBottom() {
+            if (userScrolledUp) return; // Don't auto-scroll if user scrolled up
+            const terminal = document.getElementById('terminalOutput');
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
         function clearTerminal() {
             terminalOutputBuffer = ''; // Clear any buffered output
-            document.getElementById('terminalOutput').innerHTML = `
-                <div class="terminal-line terminal-success">OffGrid Terminal v0.2.1</div>
-                <div class="terminal-line">Connected to real offgrid binary</div>
-                <div class="terminal-line">Type 'help' for available commands or 'offgrid --help' for all options</div>
-            `;
+            userScrolledUp = false;
+            const pre = document.getElementById('terminalPre');
+            pre.textContent = 'OffGrid Terminal v0.2.2\nConnected to real offgrid binary\nType \'help\' for available commands\n';
         }
 
         function killCommand() {
@@ -4588,261 +4816,114 @@
 
         // Parse ANSI color codes and convert to HTML with CSS classes
         function parseAnsiColors(text) {
-            // Map of ANSI codes to CSS classes
-            const colorMap = {
-                // Basic 16 colors
-                '30': 'ansi-black',
-                '31': 'ansi-red',
-                '32': 'ansi-green',
-                '33': 'ansi-yellow',
-                '34': 'ansi-blue',
-                '35': 'ansi-magenta',
-                '36': 'ansi-cyan',
-                '37': 'ansi-white',
-                '90': 'ansi-gray',
-                
-                // 256-color palette (extended colors used in offgrid)
-                '38;5;45': 'ansi-cyan',      // Bright cyan - headers
-                '38;5;78': 'ansi-green',     // Bright green
-                '38;5;141': 'ansi-purple',   // Purple - command names
-                '38;5;196': 'ansi-red',      // Bright red - errors
-                '38;5;226': 'ansi-yellow',   // Bright yellow
-                '38;5;240': 'ansi-gray',     // Gray - dim text
-                
-                // Text styles
-                '1': 'ansi-bold',            // Bold
-                '2': 'ansi-dim',             // Dim/faint
-                '22': 'ansi-normal',         // Normal intensity
-            };
-            
-            // Escape HTML and convert ALL spaces to &nbsp; for guaranteed alignment
+            // Simple escape - just escape HTML chars, preserve spaces
             function escapeHtml(str) {
                 return str
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/ /g, '\u00A0'); // Convert every space to non-breaking space
+                    .replace(/>/g, '&gt;');
             }
             
-            let result = '';
-            let currentClasses = new Set();
-            let lastIndex = 0;
-            
-            // First, clean up any malformed ANSI sequences (missing escape char)
-            // Replace [<codes>m with proper \x1b[<codes>m if not already escaped
-            text = text.replace(/(?<!\x1b)\[([0-9;]+)m/g, '\x1b[$1m');
-            
-            // Match ANSI escape sequences: ESC [ <codes> m
-            const ansiRegex = /\x1b\[([0-9;]+)m/g;
-            let match;
-            
-            while ((match = ansiRegex.exec(text)) !== null) {
-                // Add text before this escape code (escape HTML entities)
-                const textChunk = text.substring(lastIndex, match.index);
-                result += escapeHtml(textChunk);
-                lastIndex = match.index + match[0].length;
-                
-                const codes = match[1].split(';');
-                
-                for (const code of codes) {
-                    if (code === '0') {
-                        // Reset - close all open spans and clear classes
-                        if (currentClasses.size > 0) {
-                            result += '</span>';
-                            currentClasses.clear();
-                        }
-                    } else {
-                        const cssClass = colorMap[code] || colorMap[codes.join(';')];
-                        if (cssClass) {
-                            // Close previous span if exists
-                            if (currentClasses.size > 0) {
-                                result += '</span>';
-                            }
-                            // Add new class and open new span
-                            currentClasses.add(cssClass);
-                            result += `<span class="${Array.from(currentClasses).join(' ')}">`;
-                        }
-                    }
-                }
-            }
-            
-            // Add remaining text (escape HTML)
-            const remainingText = text.substring(lastIndex);
-            result += escapeHtml(remainingText);
-            
-            // Close any remaining open spans
-            if (currentClasses.size > 0) {
-                result += '</span>';
-            }
-            
-            return result;
+            // Strip ANSI codes completely for now - they cause formatting issues
+            // Just return clean text
+            const stripped = text.replace(/\\x1b\\[[0-9;]*m/g, '');
+            return escapeHtml(stripped);
         }
 
         function addTerminalOutput(text, type = 'normal') {
-            const terminal = document.getElementById('terminalOutput');
-            const line = document.createElement('div');
-            line.className = 'terminal-line';
+            const pre = document.getElementById('terminalPre');
             
-            if (type === 'prompt') {
-                line.className = 'terminal-line terminal-prompt';
-                line.textContent = text;
-            } else if (type === 'error') {
-                line.className = 'terminal-line terminal-error';
-                line.textContent = text;
-            } else if (type === 'success') {
-                line.className = 'terminal-line terminal-success';
-                // Use marked for markdown rendering
-                try {
-                    line.innerHTML = marked.parse(text);
-                } catch (e) {
-                    line.textContent = text;
-                }
-            } else if (type === 'raw') {
-                // Raw output with ANSI colors
-                line.innerHTML = parseAnsiColors(text);
-            } else {
-                // Normal output - preserve whitespace
-                line.textContent = text;
+            // Simple escape
+            function esc(str) {
+                return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             }
             
-            terminal.appendChild(line);
-            terminal.scrollTop = terminal.scrollHeight;
+            // Strip literal \n from text
+            const cleanText = text.replace(/\\n/g, '').replace(/\\r/g, '');
+            
+            let output = '';
+            if (type === 'prompt') {
+                output = '\n\n<span style="color: #06b6d4;">$ ' + esc(cleanText) + '</span>\n';
+            } else if (type === 'error') {
+                output = '<span style="color: #f7768e;">' + esc(cleanText) + '</span>\n';
+            } else if (type === 'success') {
+                output = '<span style="color: #06b6d4;">' + esc(cleanText) + '</span>\n';
+            } else {
+                output = esc(cleanText) + '\n';
+            }
+            
+            pre.innerHTML += output;
+            scrollTerminalToBottom();
         }
 
-        // Buffer for incomplete ANSI sequences across chunks
+        // Buffer for incomplete lines across chunks
         let terminalOutputBuffer = '';
 
+        // Strip ANSI escape codes from text
+        function stripAnsiCodes(str) {
+            // Match ESC[ followed by any number of digits/semicolons, ending with a letter
+            // This handles \x1b[, \033[, and actual escape character
+            return str
+                .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')  // Actual escape char
+                .replace(/\033\[[0-9;]*[a-zA-Z]/g, '')  // Octal escape
+                .replace(/\[\d+m/g, '')                  // Bare codes like [36m
+                .replace(/\[\d+;\d+m/g, '')              // Codes like [1;36m
+                .replace(/\[0m/g, '')                    // Reset code
+                .replace(/\[m/g, '');                    // Short reset
+        }
+
         function addTerminalRawOutput(text) {
-            const terminal = document.getElementById('terminalOutput');
+            const pre = document.getElementById('terminalPre');
             
-            // Combine with any buffered text from previous chunk
-            let currentText = terminalOutputBuffer + text;
+            // Simple escape function
+            function esc(str) {
+                return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+            
+            // Convert literal \n to actual newlines first
+            let processedText = text.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+            
+            // Combine with any buffered text
+            let currentText = terminalOutputBuffer + processedText;
             
             // Split by newlines
             const lines = currentText.split('\n');
             
-            // The last part is the new buffer (incomplete line)
-            const newBuffer = lines.pop();
+            // Keep the last incomplete line in buffer
+            terminalOutputBuffer = lines.pop() || '';
             
-            // Remove the last line if it was dynamic (incomplete/progress)
-            const lastLine = terminal.lastElementChild;
-            if (lastLine && lastLine.dataset.dynamic === "true") {
-                lastLine.remove();
-            }
-            
-            // Process complete lines
-            lines.forEach((lineText) => {
-                // Handle \r (carriage return) - take the last part
-                if (lineText.includes('\r')) {
-                    const parts = lineText.split('\r');
-                    lineText = parts[parts.length - 1];
-                }
-                
-                // Skip completely empty lines (reduce visual clutter)
-                const cleanText = stripAnsi(lineText).trim();
-                if (!cleanText) {
-                    // Add small spacing element instead of empty line
-                    const spacer = document.createElement('div');
-                    spacer.className = 'terminal-line';
-                    spacer.innerHTML = '&nbsp;';
-                    spacer.style.height = '4px';
-                    spacer.style.margin = '0';
-                    terminal.appendChild(spacer);
-                    return;
-                }
-                
-                // Check if this is a progress line
-                const isProgress = cleanText.startsWith('Progress:') || 
-                                   cleanText.includes('%') && (cleanText.includes('Downloading') || cleanText.includes('MB'));
-                
-                if (isProgress) {
-                    // Check if the last line in terminal is also a progress line
-                    const lastTermLine = terminal.lastElementChild;
-                    if (lastTermLine && lastTermLine.dataset.progress === "true") {
-                        // Update existing progress line
-                        lastTermLine.innerHTML = formatProgressLine(lineText);
-                        return; // Skip appending new line
+            // Append complete lines - strip ANSI codes but preserve text
+            if (lines.length > 0) {
+                let output = '';
+                for (let line of lines) {
+                    // Handle carriage return (take last part)
+                    if (line.includes('\r')) {
+                        const parts = line.split('\r');
+                        line = parts[parts.length - 1];
                     }
-                    
-                    // Create new progress line
-                    const line = document.createElement('div');
-                    line.className = 'terminal-line terminal-progress';
-                    line.dataset.progress = "true";
-                    line.innerHTML = formatProgressLine(lineText);
-                    terminal.appendChild(line);
-                    return;
+                    // Strip ANSI codes and escape HTML
+                    const clean = stripAnsiCodes(line);
+                    // Skip empty prompt lines (just > or whitespace)
+                    if (clean.trim() === '>' || clean.trim() === '') continue;
+                    output += esc(clean) + '\n';
                 }
-                
-                // Check if this is a section header (all caps or ends with colon)
-                const isSectionHeader = /^[A-Z][A-Z\s]+:?$/.test(cleanText) || 
-                                        (cleanText.endsWith(':') && cleanText.length < 40 && !cleanText.includes('  '));
-                
-                const line = document.createElement('div');
-                if (isSectionHeader) {
-                    line.className = 'terminal-line terminal-section-header';
-                } else {
-                    line.className = 'terminal-line';
+                if (output) {
+                    pre.innerHTML += output;
+                    scrollTerminalToBottom();
                 }
-                line.innerHTML = parseAnsiColors(lineText);
-                terminal.appendChild(line);
-            });
-            
-            // Process new buffer (incomplete line)
-            if (newBuffer !== undefined && newBuffer !== '') {
-                let content = newBuffer;
-                // Handle \r
-                if (content.includes('\r')) {
-                    const parts = content.split('\r');
-                    content = parts[parts.length - 1];
-                }
-                
-                const cleanContent = stripAnsi(content).trim();
-                const isProgress = cleanContent.startsWith('Progress:') || 
-                                   cleanContent.includes('%') && (cleanContent.includes('Downloading') || cleanContent.includes('MB'));
-
-                if (isProgress) {
-                    const lastTermLine = terminal.lastElementChild;
-                    if (lastTermLine && lastTermLine.dataset.progress === "true") {
-                        lastTermLine.innerHTML = formatProgressLine(content);
-                        lastTermLine.dataset.dynamic = "true";
-                        terminalOutputBuffer = newBuffer || '';
-                        terminal.scrollTop = terminal.scrollHeight;
-                        return;
-                    }
-                    
-                    // Create new progress line
-                    const line = document.createElement('div');
-                    line.className = 'terminal-line terminal-progress';
-                    line.dataset.progress = "true";
-                    line.dataset.dynamic = "true";
-                    line.innerHTML = formatProgressLine(content);
-                    terminal.appendChild(line);
-                    terminalOutputBuffer = newBuffer || '';
-                    terminal.scrollTop = terminal.scrollHeight;
-                    return;
-                }
-                
-                const line = document.createElement('div');
-                line.className = 'terminal-line';
-                line.dataset.dynamic = "true"; // Mark as dynamic/incomplete
-                line.innerHTML = parseAnsiColors(content);
-                terminal.appendChild(line);
             }
-            
-            terminalOutputBuffer = newBuffer || '';
-            terminal.scrollTop = terminal.scrollHeight;
         }
         
         // Flush any remaining buffer content (call this when command completes)
         function flushTerminalBuffer() {
             if (terminalOutputBuffer) {
-                const terminal = document.getElementById('terminalOutput');
-                const line = document.createElement('div');
-                line.className = 'terminal-line';
-                line.innerHTML = parseAnsiColors(terminalOutputBuffer);
-                terminal.appendChild(line);
+                const pre = document.getElementById('terminalPre');
+                // Strip ANSI and escape
+                const clean = stripAnsiCodes(terminalOutputBuffer);
+                const escaped = clean.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                pre.innerHTML += escaped + '\n';
                 terminalOutputBuffer = '';
-                terminal.scrollTop = terminal.scrollHeight;
+                scrollTerminalToBottom();
             }
         }
 
@@ -5411,6 +5492,13 @@
 
         // Initialize
         window.addEventListener('DOMContentLoaded', () => {
+            // Setup terminal scroll tracking
+            const terminalOutput = document.getElementById('terminalOutput');
+            terminalOutput.addEventListener('scroll', () => {
+                const isAtBottom = terminalOutput.scrollHeight - terminalOutput.scrollTop <= terminalOutput.clientHeight + 50;
+                userScrolledUp = !isAtBottom;
+            });
+            
             // Restore active tab
             const savedTab = localStorage.getItem('offgrid_active_tab');
             if (savedTab && document.getElementById('tab-' + savedTab)) {
@@ -5428,14 +5516,12 @@
             // Setup Knowledge Base toggle indicator
             const kbCheckbox = document.getElementById('useKnowledgeBase');
             const ragIndicator = document.getElementById('ragIndicator');
-            const ragIndicatorText = document.getElementById('ragIndicatorText');
             
             // Restore saved preference
             const savedKbPref = localStorage.getItem('offgrid_use_knowledge_base');
             if (savedKbPref === 'true') {
                 kbCheckbox.checked = true;
                 ragIndicator.classList.remove('hidden');
-                ragIndicatorText.classList.remove('hidden');
             }
             
             kbCheckbox.addEventListener('change', async () => {
@@ -5456,11 +5542,9 @@
                         console.error('Failed to check RAG status:', e);
                     }
                     ragIndicator.classList.remove('hidden');
-                    ragIndicatorText.classList.remove('hidden');
                     localStorage.setItem('offgrid_use_knowledge_base', 'true');
                 } else {
                     ragIndicator.classList.add('hidden');
-                    ragIndicatorText.classList.add('hidden');
                     localStorage.setItem('offgrid_use_knowledge_base', 'false');
                 }
             });
