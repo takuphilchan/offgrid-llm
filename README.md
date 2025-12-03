@@ -14,14 +14,14 @@ No cloud. No subscriptions. No data leaving your machine.
 
 ---
 
-## ✨ Features
+## Features
 
-- 🔒 **100% Offline** - Your data never leaves your computer
-- 💬 **Modern Chat UI** - Clean, responsive web interface
-- 🐍 **Python Library** - Simple API for scripting and automation
-- 📚 **Knowledge Base (RAG)** - Chat with your documents
-- 🔄 **USB Transfer** - Move models between air-gapped systems
-- 🖥️ **Cross-Platform** - Linux, macOS, and Windows support
+- **100% Offline** - Your data never leaves your computer
+- **Modern Chat UI** - Clean, responsive web interface
+- **Python Library** - Simple API for scripting and automation
+- **Knowledge Base (RAG)** - Chat with your documents
+- **USB Transfer** - Move models between air-gapped systems
+- **Cross-Platform** - Linux, macOS, and Windows support
 
 ---
 
