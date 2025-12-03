@@ -784,6 +784,37 @@
             scrollbar-width: thin;
             scrollbar-color: var(--scrollbar-thumb) transparent;
         }
+
+        /* Example prompt cards - theme aware */
+        .example-prompt-card {
+            padding: 1rem;
+            text-align: left;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            transition: all 0.2s;
+        }
+        
+        .example-prompt-card:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+        }
+        
+        .example-prompt-card .card-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .example-prompt-card:hover .card-title {
+            color: var(--accent-primary);
+        }
+        
+        .example-prompt-card .card-desc {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
         
         .settings-grid { 
             display: grid; 
@@ -1213,21 +1244,21 @@
                                 <p class="text-sm text-secondary">Select a model above and try one of these prompts</p>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                                <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Explain a concept</div>
-                                    <div class="text-xs text-white/50 mt-1">"Explain how neural networks work in simple terms"</div>
+                                <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="example-prompt-card">
+                                    <div class="card-title">Explain a concept</div>
+                                    <div class="card-desc">"Explain how neural networks work in simple terms"</div>
                                 </button>
-                                <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Write code</div>
-                                    <div class="text-xs text-white/50 mt-1">"Write a Python function that sorts a list using quicksort"</div>
+                                <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="example-prompt-card">
+                                    <div class="card-title">Write code</div>
+                                    <div class="card-desc">"Write a Python function that sorts a list using quicksort"</div>
                                 </button>
-                                <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Brainstorm ideas</div>
-                                    <div class="text-xs text-white/50 mt-1">"Help me brainstorm ideas for a mobile app..."</div>
+                                <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="example-prompt-card">
+                                    <div class="card-title">Brainstorm ideas</div>
+                                    <div class="card-desc">"Help me brainstorm ideas for a mobile app..."</div>
                                 </button>
-                                <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                                    <div class="text-sm font-medium text-white/90 group-hover:text-white">Compare topics</div>
-                                    <div class="text-xs text-white/50 mt-1">"Summarize the key differences between REST and GraphQL"</div>
+                                <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="example-prompt-card">
+                                    <div class="card-title">Compare topics</div>
+                                    <div class="card-desc">"Summarize the key differences between REST and GraphQL"</div>
                                 </button>
                             </div>
                         </div>
@@ -2876,21 +2907,21 @@ Type 'help' for available commands or 'offgrid --help' for all options
                         <p class="text-sm text-secondary">Select a model above and try one of these prompts</p>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                        <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Explain a concept</div>
-                            <div class="text-xs text-white/50 mt-1">"Explain how neural networks work in simple terms"</div>
+                        <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="example-prompt-card">
+                            <div class="card-title">Explain a concept</div>
+                            <div class="card-desc">"Explain how neural networks work in simple terms"</div>
                         </button>
-                        <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Write code</div>
-                            <div class="text-xs text-white/50 mt-1">"Write a Python function that sorts a list using quicksort"</div>
+                        <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="example-prompt-card">
+                            <div class="card-title">Write code</div>
+                            <div class="card-desc">"Write a Python function that sorts a list using quicksort"</div>
                         </button>
-                        <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Brainstorm ideas</div>
-                            <div class="text-xs text-white/50 mt-1">"Help me brainstorm ideas for a mobile app..."</div>
+                        <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="example-prompt-card">
+                            <div class="card-title">Brainstorm ideas</div>
+                            <div class="card-desc">"Help me brainstorm ideas for a mobile app..."</div>
                         </button>
-                        <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Compare topics</div>
-                            <div class="text-xs text-white/50 mt-1">"Summarize the key differences between REST and GraphQL"</div>
+                        <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="example-prompt-card">
+                            <div class="card-title">Compare topics</div>
+                            <div class="card-desc">"Summarize the key differences between REST and GraphQL"</div>
                         </button>
                     </div>
                 </div>
@@ -3332,21 +3363,21 @@ Type 'help' for available commands or 'offgrid --help' for all options
                         <p class="text-sm text-secondary">Select a model above and try one of these prompts</p>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                        <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Explain a concept</div>
-                            <div class="text-xs text-white/50 mt-1">"Explain how neural networks work in simple terms"</div>
+                        <button onclick="useExamplePrompt('Explain how neural networks work in simple terms')" class="example-prompt-card">
+                            <div class="card-title">Explain a concept</div>
+                            <div class="card-desc">"Explain how neural networks work in simple terms"</div>
                         </button>
-                        <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Write code</div>
-                            <div class="text-xs text-white/50 mt-1">"Write a Python function that sorts a list using quicksort"</div>
+                        <button onclick="useExamplePrompt('Write a Python function that sorts a list using quicksort')" class="example-prompt-card">
+                            <div class="card-title">Write code</div>
+                            <div class="card-desc">"Write a Python function that sorts a list using quicksort"</div>
                         </button>
-                        <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Brainstorm ideas</div>
-                            <div class="text-xs text-white/50 mt-1">"Help me brainstorm ideas for a mobile app..."</div>
+                        <button onclick="useExamplePrompt('Help me brainstorm ideas for a mobile app that helps people learn new languages')" class="example-prompt-card">
+                            <div class="card-title">Brainstorm ideas</div>
+                            <div class="card-desc">"Help me brainstorm ideas for a mobile app..."</div>
                         </button>
-                        <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="p-4 text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group">
-                            <div class="text-sm font-medium text-white/90 group-hover:text-white">Compare topics</div>
-                            <div class="text-xs text-white/50 mt-1">"Summarize the key differences between REST and GraphQL"</div>
+                        <button onclick="useExamplePrompt('Summarize the key differences between REST and GraphQL APIs')" class="example-prompt-card">
+                            <div class="card-title">Compare topics</div>
+                            <div class="card-desc">"Summarize the key differences between REST and GraphQL"</div>
                         </button>
                     </div>
                 </div>
