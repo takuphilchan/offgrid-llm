@@ -8,6 +8,21 @@
 
 No cloud. No subscriptions. No data leaving your machine.
 
+<p align="center">
+  <img src="docs/images/chat-page.png" alt="OffGrid LLM Chat Interface" width="800"/>
+</p>
+
+---
+
+## ✨ Features
+
+- 🔒 **100% Offline** - Your data never leaves your computer
+- 💬 **Modern Chat UI** - Clean, responsive web interface
+- 🐍 **Python Library** - Simple API for scripting and automation
+- 📚 **Knowledge Base (RAG)** - Chat with your documents
+- 🔄 **USB Transfer** - Move models between air-gapped systems
+- 🖥️ **Cross-Platform** - Linux, macOS, and Windows support
+
 ---
 
 ## Install
@@ -29,6 +44,25 @@ irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/d
 ```bash
 pip install offgrid
 ```
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/images/chat-page.png" alt="Chat Interface" width="400"/>
+      <br/>
+      <b>Chat Interface</b>
+    </td>
+    <td align="center">
+      <img src="docs/images/models-page.png" alt="Model Management" width="400"/>
+      <br/>
+      <b>Model Management</b>
+    </td>
+  </tr>
+</table>
 
 ---
 
