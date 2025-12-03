@@ -1,35 +1,16 @@
 # OffGrid LLM v0.2.2 Release Notes
 
-**Release Date:** June 2025
+**Release Date:** December 2025
 
 ## Highlights
 
-This release introduces **API authentication**, **REST API for sessions**, **comprehensive statistics endpoint**, **PDF support for RAG**, and a **significantly enhanced Python SDK**.
+This release introduces **REST API for sessions**, **comprehensive statistics endpoint**, and an **enhanced Python SDK**.
 
 ---
 
 ## New Features
 
-### 🔐 API Authentication
-
-- **Bearer Token Authentication**: Secure your API with optional API key authentication
-- **Environment Variable Support**: Set `OFFGRID_API_KEY` to enable authentication
-- **Flexible Security**: Authentication can be disabled for local development
-- **Excluded Paths**: Health check endpoints remain accessible without authentication
-
-```bash
-# Enable authentication
-export OFFGRID_API_KEY="your-secret-key"
-offgrid serve --port 11611
-```
-
-```bash
-# Client usage
-curl -H "Authorization: Bearer your-secret-key" \
-  http://localhost:11611/v1/chat/completions
-```
-
-### 📝 Sessions REST API
+### Sessions REST API
 
 New endpoints for managing conversation sessions:
 
@@ -53,7 +34,7 @@ curl -X POST http://localhost:11611/v1/sessions/my-chat/messages \
   -d '{"role": "user", "content": "Hello!"}'
 ```
 
-### 📊 Comprehensive Statistics Endpoint
+### Comprehensive Statistics Endpoint
 
 New `/v1/stats` endpoint provides detailed server metrics:
 
@@ -62,7 +43,7 @@ New `/v1/stats` endpoint provides detailed server metrics:
   "server": {
     "uptime": "2h15m30s",
     "uptime_seconds": 8130,
-    "start_time": "2025-06-14T10:00:00Z",
+    "start_time": "2025-12-03T10:00:00Z",
     "version": "0.2.2",
     "current_model": "phi-3-mini"
   },
@@ -94,21 +75,9 @@ New `/v1/stats` endpoint provides detailed server metrics:
 }
 ```
 
-### 📄 PDF Support in RAG
-
-- **Basic PDF Text Extraction**: Ingest PDF documents into the RAG knowledge base
-- **Automatic Format Detection**: PDF files are automatically detected and processed
-- **Text Extraction**: Extracts readable text from PDF documents
-
-```bash
-# Ingest a PDF document
-curl -X POST http://localhost:11611/v1/rag/ingest \
-  -F "file=@document.pdf"
-```
-
 ---
 
-## Python SDK v0.2.0
+## Python SDK v0.1.2
 
 The Python SDK has been significantly enhanced with new features:
 
