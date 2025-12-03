@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: offgrid
-Version: 0.1.1
+Version: 0.1.2
 Summary: Python client for OffGrid LLM - Run AI models completely offline
 Author-email: OffGrid LLM Team <team@offgrid-llm.dev>
 Maintainer-email: OffGrid LLM Team <team@offgrid-llm.dev>
@@ -98,6 +98,71 @@ messages = [
 response = client.chat(messages=messages)
 ```
 
+### API Key Authentication
+
+```python
+from offgrid import Client
+
+# With API key (if server has OFFGRID_API_KEY set)
+client = Client(api_key="your-secret-key")
+
+# All requests automatically include the Authorization header
+response = client.chat("Hello!")
+```
+
+### Session Management
+
+```python
+# Sessions preserve conversation context on the server
+sessions = client.sessions
+
+# Create a new session
+session = sessions.create("my-chat")
+
+# List all sessions
+for s in sessions.list():
+    print(f"- {s['name']}: {len(s.get('messages', []))} messages")
+
+# Chat with session (context is preserved)
+response1 = sessions.chat_with_session("my-chat", "My name is Alice")
+response2 = sessions.chat_with_session("my-chat", "What is my name?")
+# response2 will correctly reference "Alice"
+
+# Add messages manually
+sessions.add_message("my-chat", "user", "Hello")
+sessions.add_message("my-chat", "assistant", "Hi there!")
+
+# Get session details
+details = sessions.get("my-chat")
+print(f"Messages: {len(details['messages'])}")
+
+# Delete session
+sessions.delete("my-chat")
+```
+
+### Server Statistics
+
+```python
+# Get comprehensive server statistics
+stats = client.stats()
+
+# Server info
+print(f"Uptime: {stats['server']['uptime']}")
+print(f"Version: {stats['server']['version']}")
+
+# Inference metrics
+print(f"Total requests: {stats['inference']['aggregate']['total_requests']}")
+print(f"Total tokens: {stats['inference']['aggregate']['total_tokens']}")
+
+# System resources
+print(f"CPU usage: {stats['resources']['cpu_usage_percent']:.1f}%")
+print(f"Memory: {stats['resources']['memory_used_mb']}MB")
+
+# RAG status
+if stats['rag']['enabled']:
+    print(f"Documents: {stats['rag']['documents']}")
+```
+
 ### Model Management
 
 ```python
@@ -133,7 +198,7 @@ client.models.export_usb("Llama-3.2-3B-Instruct-Q4_K_M", "/media/usb")
 # Add documents
 client.kb.add("notes.md")
 client.kb.add("meeting", content="Meeting notes from today...")
-client.kb.add_directory("./docs", extensions=[".md", ".txt"])
+client.kb.add_directory("./docs", extensions=[".md", ".txt", ".pdf"])
 
 # List documents
 for doc in client.kb.list():
@@ -187,6 +252,70 @@ from offgrid import Client
 
 # Default: localhost:11611
 client = Client()
+
+# Custom server URL
+client = Client(host="http://192.168.1.100:11611")
+
+# Just hostname (auto-adds http://)
+client = Client(host="192.168.1.100:11611")
+
+# With API key authentication
+client = Client(api_key="your-secret-key")
+
+# Custom timeout (for slow models)
+client = Client(timeout=600)  # 10 minutes
+
+# Combined options
+client = Client(
+    host="http://192.168.1.100:11611",
+    api_key="your-secret-key",
+    timeout=300
+)
+```
+
+## Automatic Retry
+
+The client automatically retries failed requests with exponential backoff:
+
+- Up to 3 retry attempts
+- Delays: 1s → 2s → 4s between retries
+- Only retries on connection errors, not HTTP errors
+
+```python
+# Retries are automatic
+response = client.chat("Hello!")  # Will retry on transient failures
+```
+
+## Error Handling
+
+```python
+from offgrid import Client, OffGridError
+
+client = Client()
+
+try:
+    response = client.chat("Hello")
+except OffGridError as e:
+    print(f"Error: {e.message}")
+    if e.code:
+        print(f"Code: {e.code}")
+```
+
+## Requirements
+
+- Python 3.8+
+- OffGrid LLM server running (`offgrid serve`)
+- No external dependencies (uses only stdlib)
+
+## Links
+
+- [OffGrid LLM](https://github.com/takuphilchan/offgrid-llm) - Main project
+- [API Reference](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/API.md)
+- [Issue Tracker](https://github.com/takuphilchan/offgrid-llm/issues)
+
+## License
+
+MIT License
 
 # Custom server URL
 client = Client(host="http://192.168.1.100:11611")

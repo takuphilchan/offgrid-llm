@@ -53,6 +53,7 @@ type Server struct {
 	inferenceMutex       sync.Mutex // Ensures only one inference runs at a time
 	rateLimiter          *RateLimiter
 	inferenceRateLimiter *InferenceRateLimiter
+	sessionHandlers      *SessionHandlers
 }
 
 type DownloadProgress struct {
@@ -126,6 +127,10 @@ func NewWithConfig(cfg *config.Config) *Server {
 	// Initialize RAG engine
 	ragEngine := rag.NewEngine(embeddingEngine, cfg.ModelsDir)
 
+	// Initialize session handlers
+	sessionsDir := filepath.Join(cfg.ModelsDir, "..", "sessions")
+	sessionHandlers := NewSessionHandlers(sessionsDir)
+
 	return &Server{
 		config:               cfg,
 		registry:             registry,
@@ -141,6 +146,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		modelCache:           inference.NewModelCache(3, cfg.NumGPULayers), // Cache up to 3 models, use configured GPU layers
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
+		sessionHandlers:      sessionHandlers,
 	}
 }
 
@@ -248,7 +254,12 @@ func (s *Server) Start() error {
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
+	mux.HandleFunc("/v1/stats", s.handleStatsV1)
 	mux.HandleFunc("/v1/system/info", s.handleSystemInfo)
+
+	// Sessions endpoints
+	mux.HandleFunc("/v1/sessions", s.sessionHandlers.HandleSessions)
+	mux.HandleFunc("/v1/sessions/", s.sessionHandlers.HandleSessions)
 
 	// Model cache statistics
 	mux.HandleFunc("/v1/cache/stats", s.handleCacheStats)
@@ -537,6 +548,74 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	sysInfo := platform.GetSystemInfo()
 
 	json.NewEncoder(w).Encode(sysInfo)
+}
+
+// handleStatsV1 returns comprehensive server statistics (v1 API)
+func (s *Server) handleStatsV1(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get all model stats
+	allStats := s.statsTracker.GetAllStats()
+
+	// Get system info
+	sysInfo := platform.GetSystemInfo()
+
+	// Get resource usage
+	resourceStats := s.monitor.GetStats()
+
+	// Get model cache stats
+	modelCacheStats := s.modelCache.GetStats()
+
+	// Get response cache stats
+	responseCacheStats := s.cache.Stats()
+
+	// Get RAG stats
+	ragStats := map[string]interface{}{
+		"enabled": s.ragEngine.IsEnabled(),
+	}
+	if s.ragEngine.IsEnabled() {
+		ragStats["documents"] = len(s.ragEngine.ListDocuments())
+	}
+
+	// Calculate uptime
+	uptime := time.Since(s.startTime)
+
+	// Read version from VERSION file if available
+	version := "unknown"
+	if versionData, err := os.ReadFile("VERSION"); err == nil {
+		version = strings.TrimSpace(string(versionData))
+	}
+
+	response := map[string]interface{}{
+		"server": map[string]interface{}{
+			"uptime":         uptime.String(),
+			"uptime_seconds": int64(uptime.Seconds()),
+			"start_time":     s.startTime.Format(time.RFC3339),
+			"version":        version,
+			"current_model":  s.currentModelID,
+		},
+		"inference": map[string]interface{}{
+			"models":    allStats,
+			"aggregate": s.getAggregateStats(),
+		},
+		"system": map[string]interface{}{
+			"os":              sysInfo.OS,
+			"arch":            sysInfo.Architecture,
+			"cpu_cores":       sysInfo.CPUCores,
+			"total_memory_gb": sysInfo.TotalMemory / (1024 * 1024 * 1024),
+		},
+		"resources": resourceStats,
+		"cache": map[string]interface{}{
+			"models":   modelCacheStats,
+			"response": responseCacheStats,
+		},
+		"rag": ragStats,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding stats response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) getAggregateStats() map[string]interface{} {
