@@ -191,3 +191,15 @@ func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request)
 
 	writeError(w, "Not found", http.StatusNotFound)
 }
+
+// GetActiveSessionCount returns the number of active sessions
+func (h *SessionHandlers) GetActiveSessionCount() int {
+	if h.manager == nil {
+		return 0
+	}
+	sessions, err := h.manager.List()
+	if err != nil {
+		return 0
+	}
+	return len(sessions)
+}

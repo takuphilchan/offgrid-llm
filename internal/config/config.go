@@ -37,6 +37,11 @@ type Config struct {
 	// Logging
 	LogLevel string `yaml:"log_level" json:"log_level"`
 	LogFile  string `yaml:"log_file" json:"log_file"`
+
+	// Authentication & Multi-user
+	RequireAuth   bool `yaml:"require_auth" json:"require_auth"`       // Require authentication for API access
+	GuestAccess   bool `yaml:"guest_access" json:"guest_access"`       // Allow guest access when auth not required
+	MultiUserMode bool `yaml:"multi_user_mode" json:"multi_user_mode"` // Enable multi-user features (Users tab, quotas)
 }
 
 // LoadConfig loads configuration from environment variables
@@ -71,6 +76,9 @@ func LoadConfig() *Config {
 		DiscoveryPort:  getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
 		LogLevel:       getEnv("OFFGRID_LOG_LEVEL", "info"),
 		LogFile:        getEnv("OFFGRID_LOG_FILE", ""),
+		RequireAuth:    getEnvBool("OFFGRID_REQUIRE_AUTH", false),
+		GuestAccess:    getEnvBool("OFFGRID_GUEST_ACCESS", true),
+		MultiUserMode:  getEnvBool("OFFGRID_MULTI_USER", false), // Default: single-user mode
 	}
 }
 
@@ -306,5 +314,14 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if file := getEnv("OFFGRID_LOG_FILE", ""); file != "" {
 		c.LogFile = file
+	}
+	if auth := os.Getenv("OFFGRID_REQUIRE_AUTH"); auth != "" {
+		c.RequireAuth = getEnvBool("OFFGRID_REQUIRE_AUTH", false)
+	}
+	if guest := os.Getenv("OFFGRID_GUEST_ACCESS"); guest != "" {
+		c.GuestAccess = getEnvBool("OFFGRID_GUEST_ACCESS", true)
+	}
+	if multiUser := os.Getenv("OFFGRID_MULTI_USER"); multiUser != "" {
+		c.MultiUserMode = getEnvBool("OFFGRID_MULTI_USER", false)
 	}
 }

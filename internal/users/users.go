@@ -66,10 +66,10 @@ type User struct {
 	ID           string         `json:"id"`
 	Username     string         `json:"username"`
 	Email        string         `json:"email,omitempty"`
-	PasswordHash string         `json:"-"` // Never expose
+	PasswordHash string         `json:"password_hash,omitempty"` // Stored internally, never exposed via API
 	Role         Role           `json:"role"`
-	APIKey       string         `json:"-"` // Never expose
-	APIKeyHash   string         `json:"-"` // Stored hash
+	APIKey       string         `json:"-"`                      // Never stored or exposed
+	APIKeyHash   string         `json:"api_key_hash,omitempty"` // Stored internally for authentication
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	LastLoginAt  *time.Time     `json:"last_login_at,omitempty"`
@@ -524,11 +524,11 @@ func NewMiddleware(store *UserStore) *Middleware {
 	return &Middleware{
 		store: store,
 		bypassPaths: map[string]bool{
-			"/health":      true,
-			"/":            true,
-			"/ui/":         true,
-			"/v1/login":    true,
-			"/v1/register": true,
+			"/health":        true,
+			"/ui/":           true,
+			"/v1/login":      true,
+			"/v1/auth/login": true,
+			"/v1/register":   true,
 		},
 		requireAuth:  false, // Default: no auth required
 		guestEnabled: true,
@@ -553,7 +553,13 @@ func (m *Middleware) AddBypassPath(path string) {
 // Wrap wraps an HTTP handler with authentication
 func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check bypass paths
+		// Always bypass root path (serves UI redirect)
+		if r.URL.Path == "/" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Check bypass paths (prefix match)
 		for path := range m.bypassPaths {
 			if strings.HasPrefix(r.URL.Path, path) {
 				next.ServeHTTP(w, r)

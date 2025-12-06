@@ -572,6 +572,19 @@ func NewOffGridMetrics() *OffGridMetrics {
 	DefaultRegistry.Register(m.TotalUsers)
 	DefaultRegistry.Register(m.QuotaExceeded)
 
+	// Initialize gauges with base values so they appear in /metrics output
+	m.RequestsInFlight.Set(0)
+	m.ModelLoaded.Set(0)
+	m.RAGDocumentsTotal.Set(0)
+	m.RAGChunksTotal.Set(0)
+	m.ActiveSessions.Set(0)
+	m.MemoryUsage.Set(0)
+	m.CPUUsage.Set(0)
+	m.DiskUsage.Set(0)
+	m.WebSocketConnections.Set(0)
+	m.ActiveUsers.Set(0)
+	m.TotalUsers.Set(0)
+
 	return m
 }
 

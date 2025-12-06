@@ -497,6 +497,147 @@
             justify-content: flex-end;
         }
         
+        /* Agent Step Styles */
+        .agent-step {
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 3px solid;
+            margin-bottom: 12px;
+            background: var(--bg-tertiary);
+        }
+        
+        .agent-step-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .agent-step-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        
+        .agent-step-indicator.streaming {
+            background: #10b981;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        .agent-step-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .agent-step-number {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .agent-step-tool {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            font-weight: 600;
+        }
+        
+        .agent-step-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+        }
+        
+        .agent-step-meta {
+            margin-top: 12px;
+        }
+        
+        .agent-step-meta-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        
+        .agent-step-code {
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            font-size: 12px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+            max-height: 150px;
+            margin: 0;
+        }
+        
+        .agent-step-code.result {
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+        
+        /* Step type variants */
+        .agent-step-thought {
+            border-color: #3b82f6;
+        }
+        .agent-step-thought .agent-step-indicator { background: #3b82f6; }
+        .agent-step-thought .agent-step-label { color: #3b82f6; }
+        
+        .agent-step-action {
+            border-color: #f59e0b;
+        }
+        .agent-step-action .agent-step-indicator { background: #f59e0b; }
+        .agent-step-action .agent-step-label { color: #f59e0b; }
+        
+        .agent-step-observation {
+            border-color: #10b981;
+        }
+        .agent-step-observation .agent-step-indicator { background: #10b981; }
+        .agent-step-observation .agent-step-label { color: #10b981; }
+        
+        .agent-step-answer, .agent-step-complete {
+            border-color: #06b6d4;
+        }
+        .agent-step-answer .agent-step-indicator,
+        .agent-step-complete .agent-step-indicator { background: #06b6d4; }
+        .agent-step-answer .agent-step-label,
+        .agent-step-complete .agent-step-label { color: #06b6d4; }
+        
+        .agent-step-error {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.08);
+        }
+        .agent-step-error .agent-step-indicator { background: #ef4444; }
+        .agent-step-error .agent-step-label { color: #ef4444; }
+        
+        .agent-step-streaming {
+            border-color: #10b981;
+        }
+        .agent-step-streaming .agent-step-label { color: #10b981; }
+        
+        .agent-step-step {
+            border-color: #8b5cf6;
+        }
+        .agent-step-step .agent-step-indicator { background: #8b5cf6; }
+        .agent-step-step .agent-step-label { color: #8b5cf6; }
+        
+        .agent-step-default {
+            border-color: var(--text-secondary);
+        }
+
         .terminal-card {
             background: #0d1117 !important;
             border: 1px solid #21262d !important;
@@ -1081,9 +1222,58 @@
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
                 Terminal
             </button>
+            
+            <div class="my-3 border-t border-theme mx-3"></div>
+            <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Advanced</div>
+            
+            <button onclick="switchTab('agent')" id="tab-agent" class="nav-item">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>
+                Agent
+            </button>
+            <button onclick="switchTab('lora')" id="tab-lora" class="nav-item">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                LoRA
+            </button>
+            
+            <!-- Multi-user features (hidden by default in single-user mode) -->
+            <div id="multiUserNav" class="hidden">
+                <div class="my-3 border-t border-theme mx-3"></div>
+                <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Admin</div>
+                <button onclick="switchTab('users')" id="tab-users" class="nav-item">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    Users
+                </button>
+                <button onclick="switchTab('metrics')" id="tab-metrics" class="nav-item">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+                    Metrics
+                </button>
+            </div>
         </nav>
 
         <div class="sidebar-footer">
+            <!-- Auth Status -->
+            <div id="authStatus" class="w-full mb-2 p-2 bg-tertiary rounded-lg">
+                <div id="authLoggedIn" class="hidden">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xs font-bold" id="authUserInitial">U</div>
+                            <div>
+                                <div class="text-xs font-medium" id="authUsername">User</div>
+                                <div class="text-xs text-secondary" id="authRole">user</div>
+                            </div>
+                        </div>
+                        <button onclick="handleLogout()" class="p-1 hover:bg-tertiary rounded text-secondary hover:text-red-400" title="Logout">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="authLoggedOut">
+                    <button onclick="showLoginModal()" class="w-full text-xs py-1 px-2 bg-accent/20 text-accent rounded hover:bg-accent/30 transition-colors">
+                        <svg class="inline w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                        Login
+                    </button>
+                </div>
+            </div>
             <div class="flex items-center gap-2">
                 <span id="statusBadge" class="badge badge-success">Ready</span>
                 <span class="text-xs text-secondary">v0.2.1</span>
@@ -1852,7 +2042,561 @@ Type 'help' for available commands or 'offgrid --help' for all options
             </div>
             </div>
         </div>
+
+        <!-- Agent Tab -->
+        <div id="content-agent" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold">AI Agent</h1>
+                        <p class="text-secondary text-sm mt-1">Run autonomous tasks with tool access</p>
+                    </div>
+                    <button onclick="loadAgentTools()" class="btn btn-secondary btn-sm">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Agent Runner -->
+                    <div class="lg:col-span-2 space-y-4">
+                        <div class="card">
+                            <h3 class="text-lg font-semibold mb-4">Run Agent Task</h3>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-sm text-secondary block mb-2">Model</label>
+                                    <select id="agentModel" class="w-full input-theme rounded-lg px-3 py-2">
+                                        <option value="">Select Model...</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="text-sm text-secondary block mb-2">Task Description</label>
+                                    <textarea id="agentTask" rows="3" 
+                                              placeholder="Describe what you want the agent to accomplish..."
+                                              class="w-full input-theme rounded-lg px-3 py-2 resize-none"></textarea>
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-sm text-secondary block mb-2">Style</label>
+                                        <select id="agentStyle" class="w-full input-theme rounded-lg px-3 py-2">
+                                            <option value="react">ReAct (Reasoning + Acting)</option>
+                                            <option value="cot">Chain of Thought</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="text-sm text-secondary block mb-2">Max Steps</label>
+                                        <input type="number" id="agentMaxSteps" value="10" min="1" max="50"
+                                               class="w-full input-theme rounded-lg px-3 py-2">
+                                    </div>
+                                </div>
+                                
+                                <div class="flex gap-3">
+                                    <button onclick="runAgent()" id="runAgentBtn" class="btn btn-primary flex-1">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                        Run Agent
+                                    </button>
+                                    <button onclick="stopAgent()" id="stopAgentBtn" class="btn btn-danger hidden">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"></rect></svg>
+                                        Stop
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Agent Output -->
+                        <div class="card">
+                            <h3 class="text-lg font-semibold mb-4">Agent Steps</h3>
+                            <div id="agentOutput" class="space-y-3 max-h-96 overflow-auto">
+                                <p class="text-secondary text-sm text-center py-8">Run a task to see agent steps here</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tools Panel -->
+                    <div class="space-y-4">
+                        <div class="card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold">Available Tools</h3>
+                                <span id="toolCount" class="badge badge-info">0</span>
+                            </div>
+                            <div id="agentToolsList" class="space-y-2 max-h-64 overflow-auto">
+                                <p class="text-secondary text-sm text-center py-4">Loading tools...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- MCP Servers -->
+                        <div class="card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold">MCP Servers</h3>
+                                <button onclick="showAddMCPModal()" class="btn btn-primary btn-sm">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    Add
+                                </button>
+                            </div>
+                            <div id="mcpServersList" class="space-y-2">
+                                <p class="text-secondary text-sm text-center py-4">No MCP servers configured</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="content-users" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold">User Management</h1>
+                        <p class="text-secondary text-sm mt-1">Manage users, roles, and quotas</p>
+                    </div>
+                    <button onclick="showCreateUserModal()" class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Create User
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="card text-center">
+                        <div class="text-3xl font-bold text-accent" id="totalUsersCount">0</div>
+                        <div class="text-sm text-secondary">Total Users</div>
+                    </div>
+                    <div class="card text-center">
+                        <div class="text-3xl font-bold text-emerald-400" id="activeUsersCount">0</div>
+                        <div class="text-sm text-secondary">Active Today</div>
+                    </div>
+                    <div class="card text-center">
+                        <div class="text-3xl font-bold text-amber-400" id="adminUsersCount">0</div>
+                        <div class="text-sm text-secondary">Admins</div>
+                    </div>
+                    <div class="card text-center">
+                        <div class="text-3xl font-bold text-blue-400" id="totalTokensUsed">0</div>
+                        <div class="text-sm text-secondary">Tokens Used</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold">Users</h3>
+                        <input type="text" id="userSearch" placeholder="Search users..." 
+                               onkeyup="filterUsers()"
+                               class="input-theme rounded-lg px-3 py-2 text-sm w-64">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="text-left text-sm text-secondary border-b border-theme">
+                                    <th class="pb-3 font-medium">User</th>
+                                    <th class="pb-3 font-medium">Role</th>
+                                    <th class="pb-3 font-medium">Created</th>
+                                    <th class="pb-3 font-medium">Last Active</th>
+                                    <th class="pb-3 font-medium text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <tr><td colspan="5" class="text-center py-8 text-secondary">Loading users...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Tab -->
+        <div id="content-metrics" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold">System Metrics</h1>
+                        <p class="text-secondary text-sm mt-1">Monitor performance and usage</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="metricsTimeRange" onchange="loadMetrics()" class="input-theme rounded-lg px-3 py-2 text-sm">
+                            <option value="1h">Last Hour</option>
+                            <option value="24h" selected>Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                        </select>
+                        <button onclick="loadMetrics()" class="btn btn-secondary btn-sm">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Key Metrics -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="card">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-accent"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold" id="metricRequests">0</div>
+                                <div class="text-xs text-secondary">Total Requests</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold" id="metricAvgLatency">0ms</div>
+                                <div class="text-xs text-secondary">Avg Latency</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold" id="metricTokens">0</div>
+                                <div class="text-xs text-secondary">Tokens Generated</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold" id="metricErrors">0</div>
+                                <div class="text-xs text-secondary">Errors</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Resources -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="card">
+                        <h3 class="text-lg font-semibold mb-4">Resource Usage</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span>CPU</span>
+                                    <span id="cpuUsage">0%</span>
+                                </div>
+                                <div class="h-2 bg-tertiary rounded-full overflow-hidden">
+                                    <div id="cpuBar" class="h-full bg-accent transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span>Memory</span>
+                                    <span id="memoryUsage">0 MB</span>
+                                </div>
+                                <div class="h-2 bg-tertiary rounded-full overflow-hidden">
+                                    <div id="memoryBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span>Disk</span>
+                                    <span id="diskUsage">0 GB</span>
+                                </div>
+                                <div class="h-2 bg-tertiary rounded-full overflow-hidden">
+                                    <div id="diskBar" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3 class="text-lg font-semibold mb-4">Active Connections</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center p-4 bg-tertiary rounded-lg">
+                                <div class="text-3xl font-bold text-accent" id="wsConnections">0</div>
+                                <div class="text-sm text-secondary">WebSocket</div>
+                            </div>
+                            <div class="text-center p-4 bg-tertiary rounded-lg">
+                                <div class="text-3xl font-bold text-emerald-400" id="activeSessions">0</div>
+                                <div class="text-sm text-secondary">Sessions</div>
+                            </div>
+                            <div class="text-center p-4 bg-tertiary rounded-lg">
+                                <div class="text-3xl font-bold text-blue-400" id="loadedModels">0</div>
+                                <div class="text-sm text-secondary">Models Loaded</div>
+                            </div>
+                            <div class="text-center p-4 bg-tertiary rounded-lg">
+                                <div class="text-3xl font-bold text-amber-400" id="ragDocuments">0</div>
+                                <div class="text-sm text-secondary">RAG Documents</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Raw Prometheus Metrics -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold">Prometheus Metrics</h3>
+                        <button onclick="copyMetrics()" class="btn btn-secondary btn-sm">Copy</button>
+                    </div>
+                    <pre id="rawMetrics" class="bg-tertiary rounded-lg p-4 text-xs font-mono overflow-auto max-h-64 text-secondary">Loading metrics...</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- LoRA Tab -->
+        <div id="content-lora" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold">LoRA Adapters</h1>
+                        <p class="text-secondary text-sm mt-1">Fine-tuned model adapters</p>
+                    </div>
+                    <button onclick="showRegisterLoRAModal()" class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Register Adapter
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Registered Adapters -->
+                    <div class="lg:col-span-2">
+                        <div class="card">
+                            <h3 class="text-lg font-semibold mb-4">Registered Adapters</h3>
+                            <div id="loraAdaptersList" class="space-y-3">
+                                <div class="text-center py-8 text-secondary">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mx-auto mb-3 opacity-50"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                    <p>No LoRA adapters registered</p>
+                                    <p class="text-xs mt-1">Register an adapter to apply fine-tuned weights</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active LoRA -->
+                    <div class="space-y-4">
+                        <div class="card">
+                            <h3 class="text-lg font-semibold mb-4">Active Adapter</h3>
+                            <div id="activeLoraInfo" class="text-center py-6 text-secondary">
+                                <p>No adapter loaded</p>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <h3 class="text-lg font-semibold mb-4">Quick Load</h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-sm text-secondary block mb-2">Base Model</label>
+                                    <select id="loraBaseModel" class="w-full input-theme rounded-lg px-3 py-2">
+                                        <option value="">Select model...</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm text-secondary block mb-2">Adapter</label>
+                                    <select id="loraAdapterSelect" class="w-full input-theme rounded-lg px-3 py-2">
+                                        <option value="">Select adapter...</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm text-secondary block mb-2">Scale (0.0 - 1.0)</label>
+                                    <input type="range" id="loraScale" min="0" max="1" step="0.1" value="1" 
+                                           class="w-full" oninput="updateLoraScaleLabel()">
+                                    <div class="text-center text-sm text-secondary mt-1">
+                                        <span id="loraScaleLabel">1.0</span>
+                                    </div>
+                                </div>
+                                <button onclick="loadLoraAdapter()" class="btn btn-primary w-full">
+                                    Load Adapter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
+
+    <!-- Modals -->
+    <!-- Add MCP Server Modal -->
+    <div id="addMCPModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-card border border-theme rounded-xl p-6 w-full max-w-lg mx-4">
+            <h3 class="text-lg font-semibold mb-4">Add MCP Server</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Server Name</label>
+                    <input type="text" id="mcpServerName" placeholder="filesystem" 
+                           class="w-full input-theme rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Server URL or Command</label>
+                    <input type="text" id="mcpServerUrl" placeholder="npx -y @modelcontextprotocol/server-filesystem /tmp" 
+                           class="w-full input-theme rounded-lg px-3 py-2 font-mono text-sm">
+                    <p class="text-xs text-secondary mt-1">Enter an HTTP URL or an npx/node command to spawn the server</p>
+                </div>
+                
+                <!-- Quick Start Examples -->
+                <div class="bg-tertiary rounded-lg p-3">
+                    <div class="text-xs font-semibold text-secondary mb-2">Popular MCP Servers (click to use)</div>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex items-center justify-between p-2 bg-primary/5 rounded cursor-pointer hover:bg-primary/10" onclick="fillMCPExample('filesystem', 'npx -y @modelcontextprotocol/server-filesystem /tmp')">
+                            <div>
+                                <div class="font-medium">Filesystem</div>
+                                <div class="text-secondary">Read/write files, list directories</div>
+                            </div>
+                            <span class="text-accent">Use</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 bg-primary/5 rounded cursor-pointer hover:bg-primary/10" onclick="fillMCPExample('memory', 'npx -y @modelcontextprotocol/server-memory')">
+                            <div>
+                                <div class="font-medium">Memory</div>
+                                <div class="text-secondary">Key-value store for agent memory</div>
+                            </div>
+                            <span class="text-accent">Use</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 bg-primary/5 rounded cursor-pointer hover:bg-primary/10" onclick="fillMCPExample('sqlite', 'npx -y @modelcontextprotocol/server-sqlite /tmp/test.db')">
+                            <div>
+                                <div class="font-medium">SQLite</div>
+                                <div class="text-secondary">Database queries and operations</div>
+                            </div>
+                            <span class="text-accent">Use</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 bg-primary/5 rounded cursor-pointer hover:bg-primary/10" onclick="fillMCPExample('github', 'npx -y @modelcontextprotocol/server-github')">
+                            <div>
+                                <div class="font-medium">GitHub</div>
+                                <div class="text-secondary">Repository operations (needs token)</div>
+                            </div>
+                            <span class="text-accent">Use</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Connection Status -->
+                <div id="mcpConnectionStatus" class="hidden rounded-lg p-3">
+                    <div class="flex items-center gap-2">
+                        <div id="mcpStatusIndicator" class="w-2 h-2 rounded-full"></div>
+                        <span id="mcpStatusText" class="text-sm"></span>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button onclick="hideAddMCPModal()" class="btn btn-secondary flex-1">Cancel</button>
+                    <button onclick="testMCPConnection()" class="btn btn-secondary flex-1">Test Connection</button>
+                    <button onclick="addMCPServer()" class="btn btn-primary flex-1">Add Server</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="createUserModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-card border border-theme rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-lg font-semibold mb-4">Create User</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Username</label>
+                    <input type="text" id="newUsername" placeholder="username" 
+                           class="w-full input-theme rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Password</label>
+                    <div class="relative">
+                        <input type="password" id="newUserPassword" placeholder="password" 
+                               class="w-full input-theme rounded-lg px-3 py-2 pr-10">
+                        <button type="button" onclick="togglePasswordVisibility('newUserPassword', this)" 
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-secondary hover:text-primary p-1">
+                            <svg class="show-icon w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            <svg class="hide-icon w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Role</label>
+                    <select id="newUserRole" class="w-full input-theme rounded-lg px-3 py-2">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                        <option value="viewer">Viewer</option>
+                    </select>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="hideCreateUserModal()" class="btn btn-secondary flex-1">Cancel</button>
+                    <button onclick="createUser()" class="btn btn-primary flex-1">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-card border border-theme rounded-xl p-6 w-full max-w-sm mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">Login</h3>
+                <button onclick="hideLoginModal()" class="text-secondary hover:text-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Username</label>
+                    <input type="text" id="loginUsername" placeholder="Enter username" 
+                           class="w-full input-theme rounded-lg px-3 py-2"
+                           onkeydown="if(event.key==='Enter')handleLogin()">
+                </div>
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password" 
+                           class="w-full input-theme rounded-lg px-3 py-2"
+                           onkeydown="if(event.key==='Enter')handleLogin()">
+                </div>
+                <div id="loginError" class="hidden text-sm text-red-400 bg-red-500/10 p-2 rounded"></div>
+                <div class="flex gap-3">
+                    <button onclick="hideLoginModal()" class="btn btn-secondary flex-1">Cancel</button>
+                    <button onclick="handleLogin()" class="btn btn-primary flex-1">Login</button>
+                </div>
+                <p id="loginCreateAccountLink" class="text-xs text-secondary text-center pt-2 hidden">Don't have an account? Go to <a href="#" onclick="hideLoginModal();switchTab('users');" class="text-accent hover:underline">Users</a> to create one.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Details Modal -->
+    <div id="userDetailsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-card border border-theme rounded-xl p-6 w-full max-w-lg mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">User Details</h3>
+                <button onclick="hideUserDetailsModal()" class="text-secondary hover:text-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div id="userDetailsContent" class="space-y-4">
+                <!-- Content populated by JS -->
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="hideUserDetailsModal()" class="btn btn-secondary flex-1">Close</button>
+                <button onclick="regenerateApiKey()" class="btn btn-warning flex-1">Regenerate API Key</button>
+                <button onclick="editUserRole()" class="btn btn-primary flex-1">Change Role</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register LoRA Modal -->
+    <div id="registerLoRAModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-card border border-theme rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-lg font-semibold mb-4">Register LoRA Adapter</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-secondary block mb-2">Adapter Name</label>
+                    <input type="text" id="loraName" placeholder="my-adapter" 
+                           class="w-full input-theme rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="text-sm text-secondary block mb-2">File Path</label>
+                    <input type="text" id="loraPath" placeholder="/path/to/adapter.gguf" 
+                           class="w-full input-theme rounded-lg px-3 py-2">
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="hideRegisterLoRAModal()" class="btn btn-secondary flex-1">Cancel</button>
+                    <button onclick="registerLoRA()" class="btn btn-primary flex-1">Register</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         let currentModel = '';
@@ -2022,6 +2766,21 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 loadBenchmarkModels();
                 loadSystemInfo();
                 renderBenchmarkHistory();
+            }
+            if (tab === 'agent') {
+                loadAgentModels();
+                loadAgentTools();
+                loadMCPServers();
+            }
+            if (tab === 'users') {
+                loadUsers();
+            }
+            if (tab === 'metrics') {
+                loadMetrics();
+            }
+            if (tab === 'lora') {
+                loadLoRAAdapters();
+                loadLoRAModels();
             }
         }
 
@@ -2726,6 +3485,72 @@ Type 'help' for available commands or 'offgrid --help' for all options
                     overlay.remove();
                     document.removeEventListener('keydown', handleKey);
                     if (onConfirm) onConfirm();
+                }
+            };
+            document.addEventListener('keydown', handleKey);
+        }
+
+        // Alert dialog system (replaces native alert())
+        function showAlert(message, options = {}) {
+            const title = options.title || 'Notice';
+            const buttonText = options.buttonText || 'OK';
+            const type = options.type || 'info'; // info, success, warning, error
+            const onClose = options.onClose || null;
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            
+            // Icon based on type
+            const icons = {
+                error: '<div class="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg></div>',
+                warning: '<div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>',
+                success: '<div class="w-12 h-12 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>',
+                info: '<div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mb-4 mx-auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></div>'
+            };
+            const icon = icons[type] || icons.info;
+            
+            // Button style based on type
+            const btnStyles = {
+                error: 'bg-red-600 hover:bg-red-700 text-white',
+                warning: 'bg-yellow-600 hover:bg-yellow-700 text-white',
+                success: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                info: 'bg-accent hover:bg-accent/80 text-white'
+            };
+            const btnStyle = btnStyles[type] || btnStyles.info;
+            
+            // Border color based on type
+            const borderClass = type === 'error' ? 'error' : type === 'warning' ? 'warning' : '';
+
+            overlay.innerHTML = `
+                <div class="modal-dialog ${borderClass}">
+                    ${icon}
+                    <h3 class="text-lg font-bold mb-2 text-center" style="color: var(--text-primary)">${title}</h3>
+                    <p class="text-center mb-6" style="color: var(--text-secondary)">${message}</p>
+                    <div class="flex justify-center">
+                        <button class="btn px-8 ${btnStyle}" data-action="close">${buttonText}</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            // Focus the button
+            overlay.querySelector('[data-action="close"]').focus();
+            
+            // Handle clicks
+            overlay.addEventListener('click', (e) => {
+                if (e.target.classList.contains('modal-overlay') || e.target.dataset.action === 'close') {
+                    overlay.remove();
+                    if (onClose) onClose();
+                }
+            });
+            
+            // Handle Enter/Escape keys
+            const handleKey = (e) => {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                    overlay.remove();
+                    document.removeEventListener('keydown', handleKey);
+                    if (onClose) onClose();
                 }
             };
             document.addEventListener('keydown', handleKey);
@@ -5605,6 +6430,1266 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 localStorage.setItem('theme', 'dark');
             }
         });
+
+        // ============================================
+        // AUTHENTICATION FUNCTIONS
+        // ============================================
+        
+        let currentAuthUser = null;
+        
+        async function checkAuthStatus() {
+            try {
+                // Try to get current user info from a protected endpoint
+                const resp = await fetch('/v1/users/me', { credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.user) {
+                        setAuthUser(data.user);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.log('Auth check failed, treating as guest');
+            }
+            setAuthUser(null);
+        }
+        
+        function setAuthUser(user) {
+            currentAuthUser = user;
+            const loggedIn = document.getElementById('authLoggedIn');
+            const loggedOut = document.getElementById('authLoggedOut');
+            
+            if (user) {
+                loggedIn.classList.remove('hidden');
+                loggedOut.classList.add('hidden');
+                document.getElementById('authUserInitial').textContent = user.username.charAt(0).toUpperCase();
+                document.getElementById('authUsername').textContent = user.username;
+                document.getElementById('authRole').textContent = user.role;
+            } else {
+                loggedIn.classList.add('hidden');
+                loggedOut.classList.remove('hidden');
+            }
+        }
+        
+        function showLoginModal() {
+            document.getElementById('loginModal').classList.remove('hidden');
+            document.getElementById('loginModal').classList.add('flex');
+            document.getElementById('loginError').classList.add('hidden');
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginUsername').focus();
+        }
+        
+        function hideLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+            document.getElementById('loginModal').classList.remove('flex');
+        }
+        
+        async function handleLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorEl = document.getElementById('loginError');
+            
+            if (!username) {
+                errorEl.textContent = 'Please enter a username';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
+                });
+                
+                const data = await resp.json();
+                
+                if (resp.ok) {
+                    hideLoginModal();
+                    setAuthUser(data.user);
+                    showAlert('Logged in successfully', { title: 'Welcome', type: 'success' });
+                } else {
+                    errorEl.textContent = data.error || 'Login failed';
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (e) {
+                errorEl.textContent = 'Connection error: ' + e.message;
+                errorEl.classList.remove('hidden');
+            }
+        }
+        
+        async function handleLogout() {
+            try {
+                await fetch('/v1/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                setAuthUser(null);
+                showAlert('Logged out successfully', { type: 'info' });
+            } catch (e) {
+                console.error('Logout failed:', e);
+            }
+        }
+        
+        // System configuration (feature flags)
+        let systemConfig = { multi_user_mode: false, features: {} };
+        
+        async function loadSystemConfig() {
+            try {
+                const resp = await fetch('/v1/system/config');
+                if (resp.ok) {
+                    systemConfig = await resp.json();
+                    applyFeatureFlags();
+                }
+            } catch (e) {
+                console.log('Using default config (single-user mode)');
+            }
+        }
+        
+        function applyFeatureFlags() {
+            const multiUserNav = document.getElementById('multiUserNav');
+            const authStatus = document.getElementById('authStatus');
+            const createAccountLink = document.getElementById('loginCreateAccountLink');
+            
+            if (systemConfig.multi_user_mode) {
+                // Multi-user mode: show Users, Metrics, and auth status
+                if (multiUserNav) multiUserNav.classList.remove('hidden');
+                if (authStatus) authStatus.classList.remove('hidden');
+                if (createAccountLink) createAccountLink.classList.remove('hidden');
+            } else {
+                // Single-user mode: hide Users, Metrics, and auth status
+                if (multiUserNav) multiUserNav.classList.add('hidden');
+                if (authStatus) authStatus.classList.add('hidden');
+                if (createAccountLink) createAccountLink.classList.add('hidden');
+            }
+        }
+        
+        // Load config and check auth on page load
+        loadSystemConfig();
+        checkAuthStatus();
+
+        // ============================================
+        // AGENT FUNCTIONS
+        // ============================================
+        
+        let agentAbortController = null;
+        
+        async function loadAgentModels() {
+            try {
+                const resp = await fetch('/v1/models');
+                const data = await resp.json();
+                const select = document.getElementById('agentModel');
+                select.innerHTML = '<option value="">Select Model...</option>';
+                data.data.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.id;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Failed to load agent models:', e);
+            }
+        }
+        
+        async function loadAgentTools() {
+            try {
+                const resp = await fetch('/v1/agents/tools?all=true');
+                const data = await resp.json();
+                const tools = data.tools || [];
+                const list = document.getElementById('agentToolsList');
+                const count = document.getElementById('toolCount');
+                
+                if (tools.length === 0) {
+                    list.innerHTML = '<p class="text-secondary text-sm text-center py-4">No tools available</p>';
+                    count.textContent = '0';
+                    return;
+                }
+                
+                count.textContent = data.enabled_count || tools.filter(t => t.enabled).length;
+                list.innerHTML = tools.map(t => `
+                    <div class="p-2 bg-tertiary rounded-lg flex items-center justify-between gap-2 ${!t.enabled ? 'opacity-50' : ''}">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-sm flex items-center gap-2">
+                                <span class="truncate">${t.name}</span>
+                                ${t.source && t.source !== 'builtin' ? `<span class="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400">${t.source}</span>` : ''}
+                            </div>
+                            <div class="text-xs text-secondary mt-1 truncate">${t.description || 'No description'}</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input type="checkbox" class="sr-only peer" ${t.enabled ? 'checked' : ''} onchange="toggleTool('${t.name}', this.checked)">
+                            <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent"></div>
+                        </label>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to load tools:', e);
+            }
+        }
+        
+        async function toggleTool(name, enabled) {
+            try {
+                const resp = await fetch('/v1/agents/tools', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, enabled })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    document.getElementById('toolCount').textContent = data.enabled_count;
+                    // Re-render with updated state
+                    loadAgentTools();
+                } else {
+                    showAlert(data.error || 'Failed to toggle tool', { type: 'error' });
+                }
+            } catch (e) {
+                showAlert('Failed to toggle tool: ' + e.message, { type: 'error' });
+            }
+        }
+        
+        async function loadMCPServers() {
+            try {
+                const resp = await fetch('/v1/agents/tools');
+                const data = await resp.json();
+                const tools = data.tools || [];
+                // Filter for MCP tools (have source = mcp-*)
+                const mcpTools = tools.filter(t => t.source && t.source.startsWith('mcp-'));
+                const mcpServers = [...new Set(mcpTools.map(t => t.source.replace('mcp-', '')))];
+                
+                const list = document.getElementById('mcpServersList');
+                if (mcpServers.length === 0) {
+                    list.innerHTML = '<p class="text-secondary text-sm text-center py-4">No MCP servers configured</p>';
+                    return;
+                }
+                
+                list.innerHTML = mcpServers.map(s => `
+                    <div class="flex items-center justify-between p-2 bg-tertiary rounded-lg">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span class="text-sm font-medium">${s}</span>
+                        </div>
+                        <span class="text-xs text-secondary">${mcpTools.filter(t => t.source === 'mcp-' + s).length} tools</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to load MCP servers:', e);
+            }
+        }
+        
+        async function runAgent() {
+            const model = document.getElementById('agentModel').value;
+            const task = document.getElementById('agentTask').value;
+            const style = document.getElementById('agentStyle').value;
+            const maxSteps = parseInt(document.getElementById('agentMaxSteps').value) || 10;
+            
+            if (!model || !task) {
+                showAlert('Please select a model and enter a task', { title: 'Missing Information', type: 'warning' });
+                return;
+            }
+            
+            // Reset token buffer
+            tokenBuffer = '';
+            // Reset token buffer
+            tokenBuffer = '';
+            tokenContainer = null;
+            
+            // Reset duplicate content tracking
+            displayedContents = new Set();
+            lastStepId = -1;
+            
+            document.getElementById('runAgentBtn').classList.add('hidden');
+            document.getElementById('stopAgentBtn').classList.remove('hidden');
+            document.getElementById('agentOutput').innerHTML = '';
+            
+            agentAbortController = new AbortController();
+            
+            try {
+                const resp = await fetch('/v1/agents/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model, prompt: task, style, max_steps: maxSteps, stream: true }),
+                    signal: agentAbortController.signal
+                });
+                
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let output = document.getElementById('agentOutput');
+                output.innerHTML = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            if (data === '[DONE]') continue;
+                            
+                            try {
+                                const step = JSON.parse(data);
+                                appendAgentStep(step);
+                            } catch (e) {}
+                        }
+                    }
+                }
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    document.getElementById('agentOutput').innerHTML += `<div class="text-red-400 p-2">Error: ${e.message}</div>`;
+                }
+            } finally {
+                document.getElementById('runAgentBtn').classList.remove('hidden');
+                document.getElementById('stopAgentBtn').classList.add('hidden');
+                agentAbortController = null;
+            }
+        }
+        
+        // Token aggregator for streaming
+        let tokenBuffer = '';
+        let tokenContainer = null;
+        let lastStepId = -1;
+        
+        // Clean up messy agent output - remove tool descriptions that leak into thoughts
+        function cleanAgentOutput(text) {
+            if (!text) return '';
+            
+            // Remove tool description blocks that the model echoes
+            let cleaned = text;
+            
+            // Remove lines starting with "### tool_name" (tool headers)
+            cleaned = cleaned.replace(/^###\s+\w+.*$/gm, '');
+            
+            // Remove "Description:" lines
+            cleaned = cleaned.replace(/^Description:.*$/gm, '');
+            
+            // Remove "Parameters:" blocks
+            cleaned = cleaned.replace(/^Parameters:[\s\S]*?(?=\n\n|Thought:|Action:|Answer:|$)/gm, '');
+            
+            // Remove "  - param (type):" lines
+            cleaned = cleaned.replace(/^\s+-\s+\w+\s+\(\w+\):.*$/gm, '');
+            
+            // Remove "Required:" lines
+            cleaned = cleaned.replace(/^Required:.*$/gm, '');
+            
+            // Remove "Action Input:" lines (model echoing examples)
+            cleaned = cleaned.replace(/^Action Input:\s*\{.*\}$/gm, '');
+            cleaned = cleaned.replace(/^Action Input:\s*$/gm, '');
+            
+            // Remove "Action:" lines that aren't tool calls
+            cleaned = cleaned.replace(/^Action:\s*\w+\s*$/gm, '');
+            
+            // Remove "Observation:" prefix if followed by same content
+            cleaned = cleaned.replace(/^Observation:\s*/gm, '');
+            
+            // Remove "Thought:" prefix - we already label it as Thought
+            cleaned = cleaned.replace(/^Thought:\s*/gm, '');
+            
+            // Remove multiple newlines
+            cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+            
+            // Trim
+            return cleaned.trim();
+        }
+        
+        // Extract just the actual thought from messy output
+        function extractThought(text) {
+            if (!text) return '';
+            
+            // Look for content between "Thought:" and next section
+            const thoughtMatch = text.match(/(?:^|Thought:\s*)([^]*?)(?=Action:|Answer:|Observation:|Action Input:|$)/i);
+            if (thoughtMatch && thoughtMatch[1]) {
+                let thought = thoughtMatch[1].trim();
+                // Clean remaining noise
+                return cleanAgentOutput(thought);
+            }
+            
+            // If no explicit Thought:, clean the whole text
+            return cleanAgentOutput(text);
+        }
+        
+        // Track displayed content to avoid duplicates
+        let displayedContents = new Set();
+        
+        function appendAgentStep(step) {
+            const output = document.getElementById('agentOutput');
+            const stepType = step.step_type || step.type || 'unknown';
+            const stepId = step.step_id || step.id;
+            
+            // Handle token events - aggregate into a single streaming container
+            if (stepType === 'token') {
+                tokenBuffer += step.token || '';
+                if (!tokenContainer) {
+                    tokenContainer = document.createElement('div');
+                    tokenContainer.className = 'agent-step agent-step-streaming';
+                    tokenContainer.id = 'token-stream';
+                    tokenContainer.innerHTML = `
+                        <div class="agent-step-header">
+                            <span class="agent-step-indicator streaming"></span>
+                            <span class="agent-step-label">Thinking...</span>
+                        </div>
+                        <div class="agent-step-content" id="token-content"></div>
+                    `;
+                    output.appendChild(tokenContainer);
+                }
+                document.getElementById('token-content').textContent = tokenBuffer;
+                output.scrollTop = output.scrollHeight;
+                return;
+            }
+            
+            // When we get a real step, finalize the token buffer and remove streaming container
+            if (tokenContainer && tokenBuffer.trim()) {
+                // Clean and format the streamed content
+                const cleanedContent = extractThought(tokenBuffer);
+                if (cleanedContent && !displayedContents.has(cleanedContent.substring(0, 100))) {
+                    // Track this content to avoid showing it again
+                    displayedContents.add(cleanedContent.substring(0, 100));
+                    // Keep the content but change the style to a finalized thought
+                    tokenContainer.className = 'agent-step agent-step-thought';
+                    tokenContainer.innerHTML = `
+                        <div class="agent-step-header">
+                            <span class="agent-step-indicator"></span>
+                            <span class="agent-step-label">Reasoning</span>
+                        </div>
+                        <div class="agent-step-content">${escapeHtml(cleanedContent)}</div>
+                    `;
+                } else {
+                    // Content was all noise or duplicate, remove it
+                    tokenContainer.remove();
+                }
+            } else if (tokenContainer) {
+                // Remove empty streaming container
+                tokenContainer.remove();
+            }
+            
+            // Reset token state
+            tokenBuffer = '';
+            tokenContainer = null;
+            
+            // Skip status updates - they clutter the output
+            if (stepType === 'status') return;
+            
+            // Skip duplicate steps with same ID
+            if (stepId !== undefined && stepId === lastStepId) return;
+            lastStepId = stepId;
+            
+            const stepDiv = document.createElement('div');
+            
+            const typeConfig = {
+                'thought': { class: 'thought', label: 'Thought' },
+                'action': { class: 'action', label: 'Action' },
+                'observation': { class: 'observation', label: 'Observation' },
+                'answer': { class: 'answer', label: 'Answer' },
+                'step': { class: 'step', label: 'Step' },
+                'done': { class: 'complete', label: 'Complete' },
+                'error': { class: 'error', label: 'Error' }
+            };
+            
+            const config = typeConfig[stepType] || { class: 'default', label: stepType };
+            
+            stepDiv.className = `agent-step agent-step-${config.class}`;
+            
+            let content = step.content || step.output || '';
+            if (step.error) content = step.error;
+            
+            // Clean thought content to remove tool descriptions that leak through
+            if (stepType === 'thought' || stepType === 'step') {
+                content = extractThought(content);
+            } else {
+                content = cleanAgentOutput(content);
+            }
+            
+            // Skip empty steps after cleaning
+            if (!content && !step.tool_name && !step.tool_result) return;
+            
+            // Skip duplicate content (Reasoning already showed it from streaming)
+            const contentKey = content.substring(0, 100);
+            if (stepType === 'thought' && displayedContents.has(contentKey)) {
+                return; // Already shown as Reasoning from streaming
+            }
+            if (content) {
+                displayedContents.add(contentKey);
+            }
+            
+            content = escapeHtml(content);
+            
+            let html = `
+                <div class="agent-step-header">
+                    <span class="agent-step-indicator"></span>
+                    <span class="agent-step-label">${config.label}</span>
+                    ${stepId !== undefined ? `<span class="agent-step-number">#${stepId}</span>` : ''}
+                    ${step.tool_name ? `<span class="agent-step-tool">${step.tool_name}</span>` : ''}
+                </div>
+                <div class="agent-step-content">${content}</div>
+            `;
+            
+            // Add tool arguments if present
+            if (step.tool_args && Object.keys(step.tool_args).length > 0) {
+                const argsStr = typeof step.tool_args === 'string' ? step.tool_args : JSON.stringify(step.tool_args, null, 2);
+                html += `<div class="agent-step-meta">
+                    <div class="agent-step-meta-label">Input</div>
+                    <pre class="agent-step-code">${escapeHtml(argsStr)}</pre>
+                </div>`;
+            }
+            
+            // Add tool result if present  
+            if (step.tool_result) {
+                const resultStr = typeof step.tool_result === 'string' ? step.tool_result : JSON.stringify(step.tool_result, null, 2);
+                html += `<div class="agent-step-meta">
+                    <div class="agent-step-meta-label">Output</div>
+                    <pre class="agent-step-code result">${escapeHtml(resultStr)}</pre>
+                </div>`;
+            }
+            
+            stepDiv.innerHTML = html;
+            output.appendChild(stepDiv);
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function stopAgent() {
+            if (agentAbortController) {
+                agentAbortController.abort();
+            }
+        }
+        
+        function showAddMCPModal() {
+            document.getElementById('addMCPModal').classList.remove('hidden');
+            document.getElementById('addMCPModal').classList.add('flex');
+            document.getElementById('mcpServerName').value = '';
+            document.getElementById('mcpServerUrl').value = '';
+            document.getElementById('mcpCommandHint').classList.add('hidden');
+        }
+        
+        function hideAddMCPModal() {
+            document.getElementById('addMCPModal').classList.add('hidden');
+            document.getElementById('addMCPModal').classList.remove('flex');
+            // Reset connection status
+            document.getElementById('mcpConnectionStatus').classList.add('hidden');
+        }
+        
+        function fillMCPExample(name, command) {
+            document.getElementById('mcpServerName').value = name;
+            document.getElementById('mcpServerUrl').value = command;
+            // Reset connection status when changing server
+            document.getElementById('mcpConnectionStatus').classList.add('hidden');
+        }
+        
+        function showMCPStatus(status, message) {
+            const statusDiv = document.getElementById('mcpConnectionStatus');
+            const indicator = document.getElementById('mcpStatusIndicator');
+            const text = document.getElementById('mcpStatusText');
+            
+            statusDiv.classList.remove('hidden', 'bg-green-500/10', 'bg-red-500/10', 'bg-yellow-500/10');
+            indicator.classList.remove('bg-green-500', 'bg-red-500', 'bg-yellow-500', 'animate-pulse');
+            
+            if (status === 'testing') {
+                statusDiv.classList.add('bg-yellow-500/10');
+                indicator.classList.add('bg-yellow-500', 'animate-pulse');
+            } else if (status === 'success') {
+                statusDiv.classList.add('bg-green-500/10');
+                indicator.classList.add('bg-green-500');
+            } else {
+                statusDiv.classList.add('bg-red-500/10');
+                indicator.classList.add('bg-red-500');
+            }
+            
+            text.textContent = message;
+        }
+        
+        async function testMCPConnection() {
+            const urlOrCommand = document.getElementById('mcpServerUrl').value;
+            
+            if (!urlOrCommand) {
+                showAlert('Please enter a server URL or command first', { title: 'Missing Input', type: 'warning' });
+                return;
+            }
+            
+            const isCommand = urlOrCommand.startsWith('npx ') || urlOrCommand.startsWith('node ') || 
+                              urlOrCommand.startsWith('python ') || urlOrCommand.startsWith('./') || 
+                              urlOrCommand.startsWith('/');
+            
+            showMCPStatus('testing', isCommand ? 'Starting server and testing...' : 'Testing connection...');
+            
+            try {
+                const resp = await fetch('/v1/agents/mcp/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: urlOrCommand })
+                });
+                
+                const data = await resp.json();
+                
+                if (resp.ok) {
+                    showMCPStatus('success', `Connected! Found ${data.tools_count || 0} tools available.`);
+                } else {
+                    showMCPStatus('error', data.error || 'Connection failed');
+                }
+            } catch (e) {
+                showMCPStatus('error', 'Connection failed: ' + e.message);
+            }
+        }
+        
+        async function addMCPServer() {
+            const name = document.getElementById('mcpServerName').value;
+            const url = document.getElementById('mcpServerUrl').value;
+            
+            if (!name || !url) {
+                showAlert('Please fill in all fields', { title: 'Missing Information', type: 'warning' });
+                return;
+            }
+            
+            try {
+                // Add to tools.json config
+                const resp = await fetch('/v1/agents/mcp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, url })
+                });
+                
+                if (resp.ok) {
+                    const data = await resp.json();
+                    showAlert(`MCP server "${name}" added successfully!<br><br>Found ${data.tools_added || 0} tools from this server.`, { title: 'Server Added', type: 'success' });
+                    hideAddMCPModal();
+                    loadAgentTools();
+                    loadMCPServers();
+                } else {
+                    const err = await resp.json();
+                    throw new Error(err.error || 'Failed to add server');
+                }
+            } catch (e) {
+                showAlert('Failed to add MCP server: ' + e.message + '<br><br>Make sure the MCP server is running first. Use the "Test Connection" button to verify.', { title: 'Error', type: 'error' });
+            }
+        }
+
+        // ============================================
+        // USER MANAGEMENT FUNCTIONS
+        // ============================================
+        
+        async function loadUsers() {
+            try {
+                const resp = await fetch('/v1/users');
+                const data = await resp.json();
+                
+                const tbody = document.getElementById('usersTableBody');
+                const users = data.users || [];
+                
+                document.getElementById('totalUsersCount').textContent = users.length;
+                document.getElementById('adminUsersCount').textContent = users.filter(u => u.role === 'admin').length;
+                
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-secondary">No users found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = users.map(u => `
+                    <tr class="border-b border-theme hover:bg-tertiary/50">
+                        <td class="py-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-sm">
+                                    ${u.username.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <div class="font-medium">${u.username}</div>
+                                    <div class="text-xs text-secondary">${u.id.substring(0, 8)}...</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3">
+                            <span class="px-2 py-1 rounded text-xs font-medium ${getRoleBadgeClass(u.role)}">${u.role}</span>
+                        </td>
+                        <td class="py-3 text-sm text-secondary">${formatDate(u.created_at)}</td>
+                        <td class="py-3 text-sm text-secondary">${u.last_login_at ? formatDate(u.last_login_at) : 'Never'}</td>
+                        <td class="py-3 text-right">
+                            <button onclick="showUserDetails('${u.id}')" class="btn btn-secondary btn-sm mr-1">View</button>
+                            <button onclick="deleteUser('${u.id}')" class="btn btn-danger btn-sm">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to load users:', e);
+                document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-8 text-red-400">Failed to load users</td></tr>';
+            }
+        }
+        
+        function getRoleBadgeClass(role) {
+            const classes = {
+                'admin': 'bg-red-500/20 text-red-400',
+                'user': 'bg-blue-500/20 text-blue-400',
+                'viewer': 'bg-green-500/20 text-green-400',
+                'guest': 'bg-gray-500/20 text-gray-400'
+            };
+            return classes[role] || classes['user'];
+        }
+        
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            return new Date(dateStr).toLocaleDateString();
+        }
+        
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const showIcon = btn.querySelector('.show-icon');
+            const hideIcon = btn.querySelector('.hide-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                showIcon.classList.add('hidden');
+                hideIcon.classList.remove('hidden');
+            } else {
+                input.type = 'password';
+                showIcon.classList.remove('hidden');
+                hideIcon.classList.add('hidden');
+            }
+        }
+        
+        function showCreateUserModal() {
+            document.getElementById('createUserModal').classList.remove('hidden');
+            document.getElementById('createUserModal').classList.add('flex');
+        }
+        
+        function hideCreateUserModal() {
+            document.getElementById('createUserModal').classList.add('hidden');
+            document.getElementById('createUserModal').classList.remove('flex');
+        }
+        
+        async function createUser() {
+            const username = document.getElementById('newUsername').value;
+            const password = document.getElementById('newUserPassword').value;
+            const role = document.getElementById('newUserRole').value;
+            
+            if (!username) {
+                showAlert('Please enter a username', { title: 'Missing Information', type: 'warning' });
+                return;
+            }
+            
+            if (!password) {
+                showAlert('Please enter a password', { title: 'Missing Information', type: 'warning' });
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/v1/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role })
+                });
+                
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.error || 'Failed to create user');
+                }
+                
+                const data = await resp.json();
+                hideCreateUserModal();
+                loadUsers();
+                
+                // Clear form
+                document.getElementById('newUsername').value = '';
+                document.getElementById('newUserPassword').value = '';
+                document.getElementById('newUserRole').value = 'user';
+                
+                // Offer to login as new user
+                showConfirm(
+                    `User "${username}" created!<br><br>` +
+                    `<strong>API Key:</strong><br><code class="bg-tertiary px-2 py-1 rounded text-xs break-all">${data.api_key}</code><br><br>` +
+                    `<small class="text-secondary">Save this key - it won't be shown again.</small><br><br>` +
+                    `Would you like to login as this user now?`,
+                    async () => {
+                        // Auto-login with the credentials
+                        const loginResp = await fetch('/v1/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username, password }),
+                            credentials: 'include'
+                        });
+                        if (loginResp.ok) {
+                            const loginData = await loginResp.json();
+                            setAuthUser(loginData.user);
+                            showAlert(`Logged in as ${username}`, { title: 'Welcome!', type: 'success' });
+                        }
+                    },
+                    { title: 'User Created', type: 'success', confirmText: 'Login Now', cancelText: 'Not Now' }
+                );
+            } catch (e) {
+                showAlert('Failed to create user: ' + e.message, { title: 'Error', type: 'error' });
+            }
+        }
+        
+        async function deleteUser(id) {
+            showConfirm('Are you sure you want to delete this user? This action cannot be undone.', async () => {
+                try {
+                    const resp = await fetch(`/v1/users/${id}`, { method: 'DELETE' });
+                    if (!resp.ok) throw new Error('Failed to delete user');
+                    loadUsers();
+                    showAlert('User deleted successfully', { title: 'Deleted', type: 'success' });
+                } catch (e) {
+                    showAlert('Failed to delete user: ' + e.message, { title: 'Error', type: 'error' });
+                }
+            }, { title: 'Delete User?', type: 'warning', confirmText: 'Delete', cancelText: 'Cancel' });
+        }
+        
+        function filterUsers() {
+            const query = document.getElementById('userSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#usersTableBody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+        
+        let currentUserDetails = null;
+        
+        async function showUserDetails(userId) {
+            try {
+                const resp = await fetch(`/v1/users/${userId}`);
+                if (!resp.ok) throw new Error('Failed to fetch user');
+                const user = await resp.json();
+                currentUserDetails = user;
+                
+                const content = document.getElementById('userDetailsContent');
+                content.innerHTML = `
+                    <div class="flex items-center gap-4 pb-4 border-b border-theme">
+                        <div class="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center text-accent text-2xl font-bold">
+                            ${user.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold">${user.username}</h4>
+                            <span class="px-2 py-1 rounded text-xs font-medium ${getRoleBadgeClass(user.role)}">${user.role}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">User ID</label>
+                            <code class="text-sm bg-tertiary px-2 py-1 rounded block break-all">${user.id}</code>
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Created</label>
+                            <span class="text-sm">${formatDate(user.created_at)}</span>
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">Last Active</label>
+                            <span class="text-sm">${user.last_login_at ? formatDate(user.last_login_at) : 'Never'}</span>
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary block mb-1">API Key</label>
+                            <span class="text-sm text-secondary italic">Hidden for security</span>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 border-t border-theme">
+                        <h5 class="text-sm font-semibold mb-3">Quota & Usage</h5>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-tertiary rounded-lg p-3">
+                                <div class="text-2xl font-bold text-accent">${user.tokens_used || 0}</div>
+                                <div class="text-xs text-secondary">Tokens Used</div>
+                            </div>
+                            <div class="bg-tertiary rounded-lg p-3">
+                                <div class="text-2xl font-bold text-emerald-400">${user.requests_count || 0}</div>
+                                <div class="text-xs text-secondary">Requests Made</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('userDetailsModal').classList.remove('hidden');
+                document.getElementById('userDetailsModal').classList.add('flex');
+            } catch (e) {
+                showAlert('Failed to load user details: ' + e.message, { title: 'Error', type: 'error' });
+            }
+        }
+        
+        function hideUserDetailsModal() {
+            document.getElementById('userDetailsModal').classList.add('hidden');
+            document.getElementById('userDetailsModal').classList.remove('flex');
+            currentUserDetails = null;
+        }
+        
+        async function regenerateApiKey() {
+            if (!currentUserDetails) return;
+            
+            showConfirm('Regenerate API key? The old key will stop working immediately.', async () => {
+                try {
+                    const resp = await fetch(`/v1/users/${currentUserDetails.id}/regenerate-key`, {
+                        method: 'POST'
+                    });
+                    if (!resp.ok) throw new Error('Failed to regenerate key');
+                    const data = await resp.json();
+                    showAlert(`New API Key:<br><br><code class="bg-tertiary px-2 py-1 rounded text-sm break-all">${data.api_key}</code><br><br><small>Copy this - it won't be shown again.</small>`, { title: 'API Key Regenerated', type: 'success' });
+                    hideUserDetailsModal();
+                    loadUsers();
+                } catch (e) {
+                    showAlert('Failed to regenerate API key: ' + e.message, { title: 'Error', type: 'error' });
+                }
+            }, { title: 'Regenerate API Key?', type: 'warning', confirmText: 'Regenerate', cancelText: 'Cancel' });
+        }
+        
+        async function editUserRole() {
+            if (!currentUserDetails) return;
+            
+            const roles = ['admin', 'user', 'viewer', 'guest'];
+            const currentRole = currentUserDetails.role;
+            
+            // Create a simple role selector
+            const roleOptions = roles.map(r => 
+                `<option value="${r}" ${r === currentRole ? 'selected' : ''}>${r}</option>`
+            ).join('');
+            
+            const html = `
+                <select id="newRoleSelect" class="w-full input-theme rounded-lg px-3 py-2">
+                    ${roleOptions}
+                </select>
+            `;
+            
+            // Show a custom modal with the select
+            showPrompt('Select new role:', async (newRole) => {
+                if (!newRole || newRole === currentRole) return;
+                try {
+                    const resp = await fetch(`/v1/users/${currentUserDetails.id}/role`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ role: newRole })
+                    });
+                    if (!resp.ok) throw new Error('Failed to update role');
+                    showAlert(`Role updated to ${newRole}`, { title: 'Role Updated', type: 'success' });
+                    hideUserDetailsModal();
+                    loadUsers();
+                } catch (e) {
+                    showAlert('Failed to update role: ' + e.message, { title: 'Error', type: 'error' });
+                }
+            }, { 
+                title: 'Change User Role',
+                inputType: 'select',
+                selectOptions: roles,
+                defaultValue: currentRole
+            });
+        }
+        
+        // Add showPrompt function for role editing
+        function showPrompt(message, onSubmit, options = {}) {
+            const { title = 'Input', inputType = 'text', selectOptions = [], defaultValue = '' } = options;
+            
+            let inputHtml = '';
+            if (inputType === 'select') {
+                const opts = selectOptions.map(o => 
+                    `<option value="${o}" ${o === defaultValue ? 'selected' : ''}>${o}</option>`
+                ).join('');
+                inputHtml = `<select id="promptInput" class="w-full input-theme rounded-lg px-3 py-2 mt-3">${opts}</select>`;
+            } else {
+                inputHtml = `<input type="text" id="promptInput" value="${defaultValue}" class="w-full input-theme rounded-lg px-3 py-2 mt-3">`;
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[100]';
+            modal.innerHTML = `
+                <div class="bg-card border border-theme rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+                    <h3 class="text-lg font-semibold mb-2">${title}</h3>
+                    <p class="text-secondary text-sm">${message}</p>
+                    ${inputHtml}
+                    <div class="flex gap-3 mt-4">
+                        <button id="promptCancel" class="btn btn-secondary flex-1">Cancel</button>
+                        <button id="promptSubmit" class="btn btn-primary flex-1">Confirm</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            const input = document.getElementById('promptInput');
+            input.focus();
+            
+            modal.querySelector('#promptCancel').addEventListener('click', () => {
+                modal.remove();
+            });
+            
+            modal.querySelector('#promptSubmit').addEventListener('click', () => {
+                onSubmit(input.value);
+                modal.remove();
+            });
+            
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    onSubmit(input.value);
+                    modal.remove();
+                }
+            });
+        }
+
+        // ============================================
+        // METRICS FUNCTIONS
+        // ============================================
+        
+        async function loadMetrics() {
+            try {
+                // Fetch both prometheus metrics and system stats
+                const [metricsResp, statsResp] = await Promise.all([
+                    fetch('/metrics'),
+                    fetch('/v1/system/stats')
+                ]);
+                
+                const metricsText = await metricsResp.text();
+                const rawMetricsEl = document.getElementById('rawMetrics');
+                
+                // Format the raw metrics for better readability
+                if (rawMetricsEl) {
+                    const formatted = formatPrometheusMetrics(metricsText);
+                    rawMetricsEl.innerHTML = formatted;
+                }
+                
+                // Use real system stats
+                const stats = await statsResp.json();
+                
+                // Update top cards (with null checks)
+                const reqEl = document.getElementById('metricRequests');
+                const errEl = document.getElementById('metricErrors');
+                const tokEl = document.getElementById('metricTokens');
+                const latEl = document.getElementById('metricLatency');
+                const avgLatEl = document.getElementById('metricAvgLatency');
+                
+                if (reqEl) reqEl.textContent = (stats.requests_total || 0).toLocaleString();
+                if (errEl) errEl.textContent = (stats.errors_total || 0).toLocaleString();
+                if (tokEl) tokEl.textContent = (stats.tokens_generated || 0).toLocaleString();
+                
+                // Update latency (use actual average latency)
+                const avgLatency = stats.avg_latency_ms || 0;
+                if (latEl) latEl.textContent = avgLatency.toFixed(1) + 'ms';
+                if (avgLatEl) avgLatEl.textContent = avgLatency.toFixed(1) + 'ms';
+                
+                // Update resource usage (with null checks)
+                const cpuPercent = stats.cpu_percent || 0;
+                const cpuUsageEl = document.getElementById('cpuUsage');
+                const cpuBarEl = document.getElementById('cpuBar');
+                if (cpuUsageEl) cpuUsageEl.textContent = cpuPercent.toFixed(1) + '%';
+                if (cpuBarEl) cpuBarEl.style.width = Math.min(cpuPercent, 100) + '%';
+                
+                const memBytes = stats.memory_bytes || 0;
+                const memMB = (memBytes / 1024 / 1024).toFixed(0);
+                const memUsageEl = document.getElementById('memoryUsage');
+                const memBarEl = document.getElementById('memoryBar');
+                if (memUsageEl) memUsageEl.textContent = memMB + ' MB';
+                const memTotal = stats.memory_total || (8 * 1024 * 1024 * 1024);
+                if (memBarEl) memBarEl.style.width = Math.min(memBytes / memTotal * 100, 100) + '%';
+                
+                // Disk usage
+                const diskUsageEl = document.getElementById('diskUsage');
+                const diskBarEl = document.getElementById('diskBar');
+                if (diskUsageEl) diskUsageEl.textContent = '0.0 GB';
+                if (diskBarEl) diskBarEl.style.width = '0%';
+                
+                // Update active connections (with null checks)
+                const wsEl = document.getElementById('wsConnections');
+                const sessEl = document.getElementById('activeSessions');
+                const modelsEl = document.getElementById('loadedModels');
+                const ragEl = document.getElementById('ragDocuments');
+                
+                if (wsEl) wsEl.textContent = stats.websocket_connections || 0;
+                if (sessEl) sessEl.textContent = stats.active_sessions || 0;
+                if (modelsEl) modelsEl.textContent = stats.models_loaded || 0;
+                if (ragEl) ragEl.textContent = stats.rag_documents || 0;
+                
+            } catch (e) {
+                console.error('Failed to load metrics:', e);
+                const rawMetricsEl = document.getElementById('rawMetrics');
+                if (rawMetricsEl) rawMetricsEl.textContent = 'Failed to load metrics: ' + e.message;
+            }
+        }
+        
+        function formatPrometheusMetrics(text) {
+            // Parse and format Prometheus metrics for better readability
+            const lines = text.split('\n');
+            let html = '';
+            let currentMetric = '';
+            
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                
+                if (line.startsWith('# HELP')) {
+                    // Help line - extract metric name and description
+                    const match = line.match(/# HELP (\S+) (.+)/);
+                    if (match) {
+                        html += `<div class="mt-3 text-accent font-medium">${match[1]}</div>`;
+                        html += `<div class="text-xs text-secondary italic mb-1">${match[2]}</div>`;
+                        currentMetric = match[1];
+                    }
+                } else if (line.startsWith('# TYPE')) {
+                    // Type line - skip (redundant for display)
+                    continue;
+                } else {
+                    // Metric value line
+                    const match = line.match(/^(\S+?)(\{[^}]+\})?\s+(.+)$/);
+                    if (match) {
+                        const [, name, labels, value] = match;
+                        const numValue = parseFloat(value);
+                        const formattedValue = Number.isInteger(numValue) ? numValue.toLocaleString() : numValue.toFixed(2);
+                        const labelStr = labels ? `<span class="text-blue-400">${labels}</span>` : '';
+                        html += `<div class="pl-2">${labelStr} <span class="text-emerald-400 font-mono">${formattedValue}</span></div>`;
+                    }
+                }
+            }
+            
+            return html || '<span class="text-secondary">No metrics available</span>';
+        }
+        
+        function copyMetrics() {
+            const el = document.getElementById('rawMetrics');
+            const text = el.innerText || el.textContent;
+            navigator.clipboard.writeText(text);
+            showAlert('Metrics copied to clipboard', { title: 'Copied', type: 'success' });
+        }
+
+        // ============================================
+        // LORA FUNCTIONS
+        // ============================================
+        
+        async function loadLoRAAdapters() {
+            try {
+                const resp = await fetch('/v1/lora/adapters');
+                const data = await resp.json();
+                const list = document.getElementById('loraAdaptersList');
+                const adapters = data.adapters || [];
+                
+                if (adapters.length === 0) {
+                    list.innerHTML = `
+                        <div class="text-center py-8 text-secondary">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mx-auto mb-3 opacity-50"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                            <p>No LoRA adapters registered</p>
+                            <p class="text-xs mt-1">Register an adapter to apply fine-tuned weights</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                list.innerHTML = adapters.map(a => `
+                    <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
+                        <div>
+                            <div class="font-medium">${a.name}</div>
+                            <div class="text-xs text-secondary mt-1">${a.path}</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-secondary">Scale: ${a.scale || 1.0}</span>
+                            <button onclick="removeLoRA('${a.id}')" class="btn btn-danger btn-sm">Remove</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Update adapter select
+                const select = document.getElementById('loraAdapterSelect');
+                select.innerHTML = '<option value="">Select adapter...</option>' + 
+                    adapters.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+                    
+            } catch (e) {
+                console.error('Failed to load LoRA adapters:', e);
+            }
+        }
+        
+        async function loadLoRAModels() {
+            try {
+                const resp = await fetch('/v1/models');
+                const data = await resp.json();
+                const select = document.getElementById('loraBaseModel');
+                select.innerHTML = '<option value="">Select model...</option>';
+                data.data.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.id;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Failed to load models for LoRA:', e);
+            }
+        }
+        
+        function updateLoraScaleLabel() {
+            const val = document.getElementById('loraScale').value;
+            document.getElementById('loraScaleLabel').textContent = parseFloat(val).toFixed(1);
+        }
+        
+        function showRegisterLoRAModal() {
+            document.getElementById('registerLoRAModal').classList.remove('hidden');
+            document.getElementById('registerLoRAModal').classList.add('flex');
+        }
+        
+        function hideRegisterLoRAModal() {
+            document.getElementById('registerLoRAModal').classList.add('hidden');
+            document.getElementById('registerLoRAModal').classList.remove('flex');
+        }
+        
+        async function registerLoRA() {
+            const name = document.getElementById('loraName').value;
+            const path = document.getElementById('loraPath').value;
+            
+            if (!name || !path) {
+                showAlert('Please fill in all fields', { title: 'Missing Information', type: 'warning' });
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/v1/lora/adapters', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, path })
+                });
+                
+                if (!resp.ok) throw new Error('Failed to register adapter');
+                
+                hideRegisterLoRAModal();
+                loadLoRAAdapters();
+            } catch (e) {
+                showAlert('Failed to register adapter: ' + e.message, { title: 'Error', type: 'error' });
+            }
+        }
+        
+        async function removeLoRA(id) {
+            showConfirm('Are you sure you want to remove this adapter?', async () => {
+                try {
+                    const resp = await fetch(`/v1/lora/adapters/${id}`, { method: 'DELETE' });
+                    if (!resp.ok) throw new Error('Failed to remove adapter');
+                    loadLoRAAdapters();
+                    showAlert('Adapter removed successfully', { title: 'Removed', type: 'success' });
+                } catch (e) {
+                    showAlert('Failed to remove adapter: ' + e.message, { title: 'Error', type: 'error' });
+                }
+            }, { title: 'Remove Adapter?', type: 'warning', confirmText: 'Remove', cancelText: 'Cancel' });
+        }
+        
+        async function loadLoraAdapter() {
+            const model = document.getElementById('loraBaseModel').value;
+            const adapter = document.getElementById('loraAdapterSelect').value;
+            const scale = parseFloat(document.getElementById('loraScale').value);
+            
+            if (!model || !adapter) {
+                showAlert('Please select a model and adapter', { title: 'Missing Selection', type: 'warning' });
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/v1/lora/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model, adapter_id: adapter, scale })
+                });
+                
+                if (!resp.ok) throw new Error('Failed to load adapter');
+                
+                const data = await resp.json();
+                document.getElementById('activeLoraInfo').innerHTML = `
+                    <div class="text-left">
+                        <div class="text-sm"><span class="text-secondary">Model:</span> ${model}</div>
+                        <div class="text-sm"><span class="text-secondary">Adapter:</span> ${data.adapter_name || adapter}</div>
+                        <div class="text-sm"><span class="text-secondary">Scale:</span> ${scale}</div>
+                    </div>
+                `;
+            } catch (e) {
+                showAlert('Failed to load adapter: ' + e.message, { title: 'Error', type: 'error' });
+            }
+        }
+
     </script>
 
     <!-- File Browser Modal -->

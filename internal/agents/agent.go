@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -137,12 +138,52 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 	// Add the task
 	messages = append(messages, api.ChatMessage{Role: "user", Content: task})
 
+	// Track consecutive errors to prevent infinite loops
+	var lastErrorAction string
+	var lastErrorInput string
+	var consecutiveErrors int
+	const maxConsecutiveErrors = 2
+
+	// Track total errors - stop if too many errors overall
+	var totalErrors int
+	const maxTotalErrors = 5
+
+	// Track unknown tool errors - stop if LLM keeps inventing fake tools
+	unknownToolCount := 0
+	const maxUnknownTools = 3
+
+	// Track repeated successful tool calls - model stuck in loop
+	var lastSuccessfulAction string
+	var successfulActionCount int
+	const maxRepeatedActions = 3
+
 	// Main reasoning loop
 	for i := 0; i < a.config.MaxIterations; i++ {
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
 		default:
+		}
+
+		// Context window protection: estimate message size and trim if needed
+		// Keep system prompt + last N turns to stay under context limit
+		totalLen := 0
+		for _, msg := range messages {
+			totalLen += len(msg.StringContent())
+		}
+		// If approaching context limit (roughly 6000 chars ~ 1500 tokens), trim middle messages
+		// Keep system prompt (first) and recent conversation (last 4 messages)
+		if totalLen > 6000 && len(messages) > 6 {
+			// Keep system prompt and last 4 messages
+			trimmed := make([]api.ChatMessage, 0, 5)
+			trimmed = append(trimmed, messages[0]) // system prompt
+			trimmed = append(trimmed, api.ChatMessage{
+				Role:    "user",
+				Content: "[Previous conversation trimmed for context limit]",
+			})
+			trimmed = append(trimmed, messages[len(messages)-4:]...) // last 4 messages
+			messages = trimmed
+			a.logger.Printf("Context trimmed: %d chars -> keeping last 4 messages", totalLen)
 		}
 
 		// Create step context with timeout
@@ -184,7 +225,9 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 
 		// PRIORITIZE checking for actions over answers
 		// This ensures tools are actually called before giving final answer
-		if action != "" {
+		// Skip "None" or "none" as they indicate no tool is needed
+		actionLower := strings.ToLower(action)
+		if action != "" && actionLower != "none" && actionLower != "n/a" && actionLower != "null" {
 			a.mu.Lock()
 			a.state = StateExecuting
 			a.mu.Unlock()
@@ -203,18 +246,131 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 			result, err := a.executor(ctx, action, json.RawMessage(actionInput))
 			actionStep.Duration = time.Since(execStart)
 
+			isError := false
+			isUnknownTool := false
 			if err != nil {
 				result = fmt.Sprintf("Error: %s", err.Error())
 				actionStep.ToolResult = result
+				isError = true
+				if strings.Contains(err.Error(), "unknown tool") {
+					isUnknownTool = true
+				}
+			} else if strings.HasPrefix(result, "Error:") {
+				isError = true
+				actionStep.ToolResult = result
+				if strings.Contains(result, "unknown tool") {
+					isUnknownTool = true
+				}
 			} else {
 				actionStep.ToolResult = result
+				// Reset error tracking on success
+				consecutiveErrors = 0
+				lastErrorAction = ""
+				lastErrorInput = ""
+				unknownToolCount = 0
+
+				// Track repeated successful calls to same tool - model might be stuck
+				if action == lastSuccessfulAction {
+					successfulActionCount++
+					if successfulActionCount >= maxRepeatedActions {
+						// Model is stuck calling same tool repeatedly - generate answer from last result
+						a.addStep(actionStep)
+
+						// Generate a sensible answer based on the tool and its result
+						var finalAnswer string
+						switch action {
+						case "current_time":
+							finalAnswer = fmt.Sprintf("The current time is %s.", result)
+						case "calculator":
+							finalAnswer = fmt.Sprintf("The result is %s.", result)
+						case "read_file":
+							finalAnswer = fmt.Sprintf("Here is the file content:\n%s", result)
+						case "list_files":
+							finalAnswer = fmt.Sprintf("Here are the files:\n%s", result)
+						case "http_get":
+							finalAnswer = fmt.Sprintf("Here is the response:\n%s", result)
+						default:
+							finalAnswer = fmt.Sprintf("Based on my analysis: %s", result)
+						}
+
+						answerStep := Step{
+							ID:        len(a.steps) + 1,
+							Type:      "answer",
+							Content:   finalAnswer,
+							Timestamp: time.Now(),
+						}
+						a.addStep(answerStep)
+						a.mu.Lock()
+						a.state = StateCompleted
+						a.mu.Unlock()
+						return finalAnswer, nil
+					}
+				} else {
+					lastSuccessfulAction = action
+					successfulActionCount = 1
+				}
+			}
+
+			// Track unknown tool errors - LLM is hallucinating tools
+			if isUnknownTool {
+				unknownToolCount++
+				if unknownToolCount >= maxUnknownTools {
+					a.addStep(actionStep)
+					errorStep := Step{
+						ID:        len(a.steps) + 1,
+						Type:      "error",
+						Content:   fmt.Sprintf("Agent stopped: tried %d non-existent tools. The LLM is hallucinating tools that don't exist.", unknownToolCount),
+						Timestamp: time.Now(),
+					}
+					a.addStep(errorStep)
+					return fmt.Sprintf("I cannot complete this task. I only have access to: calculator, read_file, write_file, list_files, shell, http_get, and current_time. Please rephrase your request using only these tools, or ask a simpler question."), nil
+				}
+			}
+
+			// Track consecutive errors on same action
+			if isError {
+				totalErrors++
+
+				// Check total errors first
+				if totalErrors >= maxTotalErrors {
+					a.addStep(actionStep)
+					errorStep := Step{
+						ID:        len(a.steps) + 1,
+						Type:      "error",
+						Content:   fmt.Sprintf("Agent stopped: too many errors (%d). Last error: %s", totalErrors, result),
+						Timestamp: time.Now(),
+					}
+					a.addStep(errorStep)
+					return "I was unable to complete the task due to multiple errors. Please try a simpler request or check the available tools.", nil
+				}
+
+				if action == lastErrorAction && actionInput == lastErrorInput {
+					consecutiveErrors++
+					if consecutiveErrors >= maxConsecutiveErrors {
+						// Stop the loop - agent is stuck
+						a.addStep(actionStep)
+						errorStep := Step{
+							ID:        len(a.steps) + 1,
+							Type:      "error",
+							Content:   fmt.Sprintf("Agent stopped: repeated failures on %s. The operation cannot be completed due to: %s", action, result),
+							Timestamp: time.Now(),
+						}
+						a.addStep(errorStep)
+						return fmt.Sprintf("I was unable to complete the task. The tool '%s' failed repeatedly with error: %s", action, result), nil
+					}
+				} else {
+					// New error, reset counter
+					consecutiveErrors = 1
+					lastErrorAction = action
+					lastErrorInput = actionInput
+				}
 			}
 			a.addStep(actionStep)
 
-			// Truncate long results for context management
+			// Truncate long results for context management - smaller limit for LLMs
 			observationText := result
-			if len(observationText) > 2000 {
-				observationText = observationText[:2000] + "\n... (truncated for context)"
+			if len(observationText) > 1000 {
+				observationText = observationText[:1000] + "\n... (output truncated)"
 			}
 
 			// Add observation step
@@ -231,9 +387,16 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 				Role:    "assistant",
 				Content: response,
 			})
+
+			// If unknown tool error, add stronger guidance
+			observationMessage := fmt.Sprintf("Observation: %s", observationText)
+			if isUnknownTool {
+				observationMessage = fmt.Sprintf("Observation: %s\n\nIMPORTANT: That tool does not exist. Your ONLY available tools are: calculator, read_file, write_file, list_files, shell, http_get, current_time. Do NOT try other tools. If you already have the answer, use Final Answer now.", observationText)
+			}
+
 			messages = append(messages, api.ChatMessage{
 				Role:    "user",
-				Content: fmt.Sprintf("Observation: %s", observationText),
+				Content: observationMessage,
 			})
 			// Continue to next iteration to process tool result
 			continue
@@ -267,100 +430,395 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 }
 
 // parseResponse extracts thought, action, action_input, and final answer from LLM response
+// Only extracts the FIRST action to prevent multi-action confusion
 func (a *Agent) parseResponse(response string) (thought, action, actionInput, answer string) {
 	lines := strings.Split(response, "\n")
 
-	var inThought, inAction, inActionInput, inAnswer bool
-	var thoughtLines, actionLines, actionInputLines, answerLines []string
+	var thoughtBuilder strings.Builder
+	var actionFound bool
+	var actionInputFound bool
+	var answerFound bool
 
-	for _, line := range lines {
+	for i, line := range lines {
 		lineLower := strings.ToLower(strings.TrimSpace(line))
+		trimmed := strings.TrimSpace(line)
 
-		// Check for section markers
+		// Check for Final Answer first (highest priority to stop)
+		if strings.HasPrefix(lineLower, "final answer:") || strings.HasPrefix(lineLower, "answer:") {
+			content := strings.TrimPrefix(strings.TrimPrefix(line, "Final Answer:"), "Answer:")
+			content = strings.TrimPrefix(strings.TrimPrefix(content, "final answer:"), "answer:")
+			content = strings.TrimSpace(content)
+
+			// Collect remaining lines as part of the answer
+			var answerLines []string
+			if content != "" {
+				answerLines = append(answerLines, content)
+			}
+			for j := i + 1; j < len(lines); j++ {
+				nextLine := strings.TrimSpace(lines[j])
+				// Stop if we hit another section marker
+				nextLower := strings.ToLower(nextLine)
+				if strings.HasPrefix(nextLower, "thought:") ||
+					strings.HasPrefix(nextLower, "action:") ||
+					strings.HasPrefix(nextLower, "observation:") {
+					break
+				}
+				if nextLine != "" {
+					answerLines = append(answerLines, nextLine)
+				}
+			}
+			answer = strings.Join(answerLines, "\n")
+			answerFound = true
+			break
+		}
+
+		// Check for Thought
 		if strings.HasPrefix(lineLower, "thought:") || strings.HasPrefix(lineLower, "thinking:") {
-			inThought = true
-			inAction = false
-			inActionInput = false
-			inAnswer = false
 			content := strings.TrimPrefix(strings.TrimPrefix(line, "Thought:"), "Thinking:")
 			content = strings.TrimPrefix(strings.TrimPrefix(content, "thought:"), "thinking:")
 			if strings.TrimSpace(content) != "" {
-				thoughtLines = append(thoughtLines, strings.TrimSpace(content))
+				thoughtBuilder.WriteString(strings.TrimSpace(content))
+				thoughtBuilder.WriteString(" ")
 			}
 			continue
 		}
-		if strings.HasPrefix(lineLower, "action:") {
-			inThought = false
-			inAction = true
-			inActionInput = false
-			inAnswer = false
+
+		// Check for Action (only take the first one)
+		if strings.HasPrefix(lineLower, "action:") && !actionFound {
 			content := strings.TrimPrefix(strings.TrimPrefix(line, "Action:"), "action:")
-			if strings.TrimSpace(content) != "" {
-				actionLines = append(actionLines, strings.TrimSpace(content))
+			action = strings.TrimSpace(content)
+			// Validate action is a single word (tool name)
+			if strings.Contains(action, " ") {
+				// Take only the first word as the action
+				parts := strings.Fields(action)
+				if len(parts) > 0 {
+					action = parts[0]
+				}
 			}
+			actionFound = true
 			continue
 		}
-		if strings.HasPrefix(lineLower, "action_input:") || strings.HasPrefix(lineLower, "action input:") {
-			inThought = false
-			inAction = false
-			inActionInput = true
-			inAnswer = false
+
+		// Check for Action Input (only if we have an action and haven't found input yet)
+		if (strings.HasPrefix(lineLower, "action_input:") || strings.HasPrefix(lineLower, "action input:")) && actionFound && !actionInputFound {
 			content := strings.TrimPrefix(strings.TrimPrefix(line, "Action_Input:"), "Action Input:")
 			content = strings.TrimPrefix(strings.TrimPrefix(content, "action_input:"), "action input:")
-			if strings.TrimSpace(content) != "" {
-				actionInputLines = append(actionInputLines, strings.TrimSpace(content))
+			content = strings.TrimSpace(content)
+
+			// Collect content that might span multiple lines
+			var inputLines []string
+			if content != "" {
+				inputLines = append(inputLines, content)
 			}
-			continue
-		}
-		if strings.HasPrefix(lineLower, "final answer:") || strings.HasPrefix(lineLower, "answer:") {
-			inThought = false
-			inAction = false
-			inActionInput = false
-			inAnswer = true
-			content := strings.TrimPrefix(strings.TrimPrefix(line, "Final Answer:"), "Answer:")
-			content = strings.TrimPrefix(strings.TrimPrefix(content, "final answer:"), "answer:")
-			if strings.TrimSpace(content) != "" {
-				answerLines = append(answerLines, strings.TrimSpace(content))
+
+			// Look ahead for more content (JSON or otherwise)
+			braceCount := strings.Count(content, "{") - strings.Count(content, "}")
+			for j := i + 1; j < len(lines); j++ {
+				nextLine := strings.TrimSpace(lines[j])
+				if nextLine == "" {
+					continue
+				}
+				// Stop if we hit another section marker or LLM commentary
+				nextLower := strings.ToLower(nextLine)
+				if strings.HasPrefix(nextLower, "thought:") ||
+					strings.HasPrefix(nextLower, "action:") ||
+					strings.HasPrefix(nextLower, "observation:") ||
+					strings.HasPrefix(nextLower, "answer:") ||
+					strings.HasPrefix(nextLower, "result:") ||
+					strings.HasPrefix(nextLower, "note:") ||
+					strings.HasPrefix(nextLower, "response:") ||
+					strings.HasPrefix(nextLower, "output:") ||
+					strings.HasPrefix(nextLower, "this ") ||
+					strings.HasPrefix(nextLower, "since ") {
+					break
+				}
+				inputLines = append(inputLines, nextLine)
+				braceCount += strings.Count(nextLine, "{") - strings.Count(nextLine, "}")
+				// Stop if we've closed all braces
+				if braceCount == 0 && strings.Contains(strings.Join(inputLines, ""), "}") {
+					break
+				}
 			}
-			continue
+
+			actionInput = strings.Join(inputLines, " ")
+			actionInputFound = true
+
+			// Once we have action + input, we can stop parsing
+			break
 		}
 
-		// Append to current section
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if inThought {
-			thoughtLines = append(thoughtLines, trimmed)
-		} else if inAction {
-			actionLines = append(actionLines, trimmed)
-		} else if inActionInput {
-			actionInputLines = append(actionInputLines, trimmed)
-		} else if inAnswer {
-			answerLines = append(answerLines, trimmed)
+		// Append content to thought if we're in thought mode
+		if !actionFound && !answerFound && trimmed != "" &&
+			!strings.HasPrefix(lineLower, "observation:") {
+			// Only add non-section content to thought
+			thoughtBuilder.WriteString(trimmed)
+			thoughtBuilder.WriteString(" ")
 		}
 	}
 
-	thought = strings.Join(thoughtLines, "\n")
-	action = strings.TrimSpace(strings.Join(actionLines, " "))
-	actionInput = strings.TrimSpace(strings.Join(actionInputLines, "\n"))
-	answer = strings.Join(answerLines, "\n")
+	thought = strings.TrimSpace(thoughtBuilder.String())
 
-	// Clean up action input - try to extract JSON if present
-	if actionInput != "" {
-		if start := strings.Index(actionInput, "{"); start != -1 {
-			if end := strings.LastIndex(actionInput, "}"); end != -1 && end > start {
-				actionInput = actionInput[start : end+1]
-			}
-		}
-	}
-
-	// If no JSON found, create a simple JSON object
-	if actionInput == "" && action != "" {
-		actionInput = "{}"
-	}
+	// Clean up and normalize action input
+	actionInput = normalizeActionInput(action, actionInput)
 
 	return
+}
+
+// normalizeActionInput tries to extract or create valid JSON from action input
+func normalizeActionInput(action, input string) string {
+	input = strings.TrimSpace(input)
+
+	// Strip common LLM commentary/hallucinations that might have leaked in
+	commentPrefixes := []string{
+		"Response:", "response:",
+		"Note:", "note:",
+		"Output:", "output:",
+		"Answer:", "answer:",
+		"This ", "Since ",
+		"\nThought:", "\nAction:",
+	}
+	for _, prefix := range commentPrefixes {
+		if idx := strings.Index(input, prefix); idx != -1 {
+			input = strings.TrimSpace(input[:idx])
+		}
+	}
+
+	// Try to extract balanced JSON from the input
+	if start := strings.Index(input, "{"); start != -1 {
+		extracted := extractBalancedJSON(input[start:])
+		if extracted != "" {
+			// Validate and fix the JSON
+			return fixJSON(extracted)
+		}
+	}
+
+	// Handle backtick-wrapped commands: `command here`
+	if strings.Contains(input, "`") {
+		// Extract content between backticks
+		re := regexp.MustCompile("`([^`]+)`")
+		matches := re.FindStringSubmatch(input)
+		if len(matches) > 1 {
+			cmd := matches[1]
+			// Create JSON based on tool type
+			if action == "shell" {
+				return fmt.Sprintf(`{"command": "%s"}`, escapeJSON(cmd))
+			}
+			if action == "calculator" {
+				return fmt.Sprintf(`{"expression": "%s"}`, escapeJSON(cmd))
+			}
+			// Generic: use as first parameter
+			return fmt.Sprintf(`{"input": "%s"}`, escapeJSON(cmd))
+		}
+	}
+
+	// Handle raw string inputs (no JSON, no backticks)
+	if input != "" && !strings.HasPrefix(input, "{") {
+		// Strip outer quotes if present (LLM sometimes wraps commands in quotes)
+		if (strings.HasPrefix(input, `"`) && strings.HasSuffix(input, `"`)) ||
+			(strings.HasPrefix(input, `'`) && strings.HasSuffix(input, `'`)) {
+			input = input[1 : len(input)-1]
+		}
+
+		// Try to infer the parameter name based on the tool
+		switch action {
+		case "shell":
+			return fmt.Sprintf(`{"command": "%s"}`, escapeJSON(input))
+		case "calculator":
+			return fmt.Sprintf(`{"expression": "%s"}`, escapeJSON(input))
+		case "write_file":
+			// Can't infer both path and content from raw string
+			return "{}"
+		case "read_file", "list_files":
+			return fmt.Sprintf(`{"path": "%s"}`, escapeJSON(input))
+		default:
+			// Generic fallback
+			return fmt.Sprintf(`{"input": "%s"}`, escapeJSON(input))
+		}
+	}
+
+	// No input found, return empty JSON
+	if action != "" {
+		return "{}"
+	}
+	return ""
+}
+
+// extractBalancedJSON extracts the first balanced JSON object from a string
+func extractBalancedJSON(s string) string {
+	if len(s) == 0 || s[0] != '{' {
+		return ""
+	}
+
+	depth := 0
+	inString := false
+	escaped := false
+
+	for i, ch := range s {
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if ch == '\\' && inString {
+			escaped = true
+			continue
+		}
+
+		if ch == '"' {
+			inString = !inString
+			continue
+		}
+
+		if inString {
+			continue
+		}
+
+		if ch == '{' {
+			depth++
+		} else if ch == '}' {
+			depth--
+			if depth == 0 {
+				return s[:i+1]
+			}
+		}
+	}
+
+	// Unbalanced - return what we have
+	return s
+}
+
+// fixJSON attempts to fix common JSON issues from LLM output
+func fixJSON(s string) string {
+	s = strings.TrimSpace(s)
+
+	// Try to parse as-is first
+	var test map[string]interface{}
+	if json.Unmarshal([]byte(s), &test) == nil {
+		return s
+	}
+
+	// Fix 0: Remove trailing garbage after the JSON (e.g., "Output: ..." lines)
+	// Find the last } and truncate there
+	if lastBrace := strings.LastIndex(s, "}"); lastBrace != -1 {
+		s = s[:lastBrace+1]
+	}
+
+	// Fix 1: Replace single quotes with double quotes
+	// But be careful not to replace apostrophes inside already double-quoted strings
+	s = fixSingleQuotes(s)
+
+	// Try again
+	if json.Unmarshal([]byte(s), &test) == nil {
+		// Check if values have extra quotes and fix them
+		return fixDoubleQuotedValues(s)
+	}
+
+	// Fix 2: Remove trailing extra braces (e.g., "{}}" -> "{}")
+	for strings.HasSuffix(s, "}}") {
+		candidate := s[:len(s)-1]
+		if json.Unmarshal([]byte(candidate), &test) == nil {
+			return fixDoubleQuotedValues(candidate)
+		}
+		s = candidate
+	}
+
+	// Fix 3: Add missing quotes around keys (e.g., {expression: "x"} -> {"expression": "x"})
+	re := regexp.MustCompile(`([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)`)
+	s = re.ReplaceAllString(s, `$1"$2"$3`)
+
+	// Try again after fixes
+	if json.Unmarshal([]byte(s), &test) == nil {
+		return fixDoubleQuotedValues(s)
+	}
+
+	// Fix 4: If still invalid, try to rebuild from scratch
+	return rebuildJSON(s)
+}
+
+// fixDoubleQuotedValues removes extra quotes from JSON string values
+// e.g., {"command": "\"date\""} -> {"command": "date"}
+func fixDoubleQuotedValues(s string) string {
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &data); err != nil {
+		return s
+	}
+
+	modified := false
+	for key, val := range data {
+		if strVal, ok := val.(string); ok {
+			// Check if value starts and ends with escaped quotes
+			if strings.HasPrefix(strVal, `"`) && strings.HasSuffix(strVal, `"`) {
+				data[key] = strVal[1 : len(strVal)-1]
+				modified = true
+			} else if strings.HasPrefix(strVal, `'`) && strings.HasSuffix(strVal, `'`) {
+				data[key] = strVal[1 : len(strVal)-1]
+				modified = true
+			}
+		}
+	}
+
+	if modified {
+		result, _ := json.Marshal(data)
+		return string(result)
+	}
+	return s
+}
+
+// fixSingleQuotes replaces single quotes with double quotes for JSON values
+func fixSingleQuotes(s string) string {
+	result := strings.Builder{}
+	inDoubleQuote := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+
+		if ch == '"' && (i == 0 || s[i-1] != '\\') {
+			inDoubleQuote = !inDoubleQuote
+			result.WriteByte(ch)
+		} else if ch == '\'' && !inDoubleQuote {
+			// Replace single quote with double quote
+			result.WriteByte('"')
+		} else {
+			result.WriteByte(ch)
+		}
+	}
+
+	return result.String()
+}
+
+// rebuildJSON attempts to rebuild valid JSON from broken input
+func rebuildJSON(s string) string {
+	// Try to extract key-value pairs using a more flexible approach
+	pairs := make(map[string]string)
+
+	// Pattern: key (quoted or unquoted) : value (quoted)
+	// Matches: "key": "value" or key: "value" or "key": 'value' or key: 'value'
+	re := regexp.MustCompile(`["\']?([a-zA-Z_][a-zA-Z0-9_]*)["\']?\s*:\s*["\']([^"\']*)["\']`)
+	matches := re.FindAllStringSubmatch(s, -1)
+
+	for _, match := range matches {
+		if len(match) >= 3 {
+			pairs[match[1]] = match[2]
+		}
+	}
+
+	if len(pairs) == 0 {
+		return "{}"
+	}
+
+	// Rebuild as valid JSON
+	result, _ := json.Marshal(pairs)
+	return string(result)
+}
+
+// escapeJSON escapes a string for use in JSON
+func escapeJSON(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
 }
 
 // addStep adds a step and calls the callback
@@ -405,72 +863,83 @@ func getDefaultSystemPrompt(style string, tools []api.Tool) string {
 
 	switch style {
 	case "react":
-		return fmt.Sprintf(`You are an autonomous AI agent that uses a ReAct (Reasoning + Acting) approach to solve problems.
+		return fmt.Sprintf(`You are a helpful AI assistant with access to specific tools.
 
-You have access to the following tools:
+YOUR ONLY AVAILABLE TOOLS ARE:
 %s
 
-To use a tool, respond with:
-Thought: [your reasoning about what to do next]
-Action: [the tool name]
-Action_Input: [the JSON arguments for the tool]
+CRITICAL RULES:
+1. You can ONLY use the tools listed above. Do NOT invent or guess tool names.
+2. If a tool returns "unknown tool", that tool does not exist - do NOT try variations.
+3. For simple questions, use minimal tools and give the Final Answer quickly.
+4. STOP when you have the information needed - do not continue unnecessarily.
 
-After receiving an observation (tool result), continue reasoning.
+RESPONSE FORMAT - Pick ONE:
 
-When you have enough information to answer, respond with:
-Thought: [your final reasoning]
-Final Answer: [your complete answer to the user]
-
-Important:
-- Always think step by step
-- Use tools when you need external information
-- Be concise but thorough
-- If a tool returns an error, try a different approach
-- Always end with a Final Answer
-
-Begin!`, toolDescriptions)
-
-	case "cot":
-		return fmt.Sprintf(`You are an AI assistant that thinks step by step to solve problems.
-
-You have access to these tools:
-%s
-
-Think through problems carefully before providing an answer. Show your reasoning process.
-
-If you need to use a tool:
-Action: [tool_name]
+Option A - Use a tool:
+Thought: [why you need this specific tool]
+Action: [exact tool name from list above]
 Action_Input: {"param": "value"}
 
-Then wait for the observation before continuing.
+Option B - Give final answer (when you have the info):
+Thought: [brief summary]
+Final Answer: [your answer to the user]
 
-Always provide a clear Final Answer when done.`, toolDescriptions)
+EXAMPLE:
+User: What time is it?
 
-	case "plan-execute":
-		return fmt.Sprintf(`You are an AI agent that plans before executing.
+Response 1:
+Thought: I need the current time. I'll use current_time.
+Action: current_time
+Action_Input: {}
 
-Available tools:
+[System provides: Observation: 2025-12-06 14:30:00 CST]
+
+Response 2:
+Thought: I have the time.
+Final Answer: It is 2:30 PM CST on December 6, 2025.
+
+COMMON MISTAKES TO AVOID:
+- Do NOT call tools that aren't in the list above (parse_xml, puppeteer, selenium, etc. DO NOT EXIST)
+- Do NOT continue after getting the answer - give Final Answer immediately
+- Do NOT predict/hallucinate tool outputs with "Answer:" before seeing Observation
+- Do NOT make up URLs or try to fetch random websites`, toolDescriptions)
+
+	case "cot":
+		return fmt.Sprintf(`You are an AI assistant. You can ONLY use these tools:
+
 %s
 
-When given a task:
-1. First, create a step-by-step plan
-2. Execute each step using tools as needed
-3. Revise the plan if needed based on observations
-4. Provide the final answer
+RULES:
+- ONLY use tools from the list above - no others exist
+- One tool per response, wait for result
+- Give Final Answer as soon as you have the information
 
-Use this format:
-Plan:
-1. [step 1]
-2. [step 2]
-...
+FORMAT:
+Thought: [reasoning]
+Action: [tool from list]
+Action_Input: {"key": "value"}
 
-Then for each step:
-Thought: [reasoning for this step]
-Action: [tool if needed]
-Action_Input: [arguments]
+OR when done:
+Final Answer: [your answer]`, toolDescriptions)
 
-End with:
-Final Answer: [complete answer]`, toolDescriptions)
+	case "plan-execute":
+		return fmt.Sprintf(`You are an AI agent. You can ONLY use these tools:
+
+%s
+
+RULES:
+- ONLY use the tools listed - no others exist
+- One action per response
+- Stop as soon as you can answer
+
+FORMAT:
+Thought: [reasoning]
+Action: [tool from list]
+Action_Input: {"key": "value"}
+
+When done:
+Final Answer: [result]`, toolDescriptions)
 
 	default:
 		return getDefaultSystemPrompt("react", tools)

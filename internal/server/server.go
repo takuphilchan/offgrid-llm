@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -58,6 +59,7 @@ type Server struct {
 	rateLimiter          *RateLimiter
 	inferenceRateLimiter *InferenceRateLimiter
 	sessionHandlers      *SessionHandlers
+	authMiddleware       *users.Middleware
 	// New feature managers
 	userStore      *users.UserStore
 	quotaManager   *users.QuotaManager
@@ -67,6 +69,12 @@ type Server struct {
 	toolRegistry   *agents.ToolRegistry
 	offgridMetrics *metrics.OffGridMetrics
 	wsHub          *websocket.Hub
+	// Runtime tracking
+	requestCount       int64
+	wsConnections      int64
+	tokensGenerated    int64
+	errorsTotal        int64
+	totalLatencyMicros int64 // For calculating average latency
 }
 
 type DownloadProgress struct {
@@ -162,6 +170,17 @@ func NewWithConfig(cfg *config.Config) *Server {
 	ctx := context.Background()
 	go wsHub.Run(ctx)
 
+	// Initialize auth middleware
+	authMiddleware := users.NewMiddleware(userStore)
+	authMiddleware.SetRequireAuth(cfg.RequireAuth)
+	authMiddleware.SetGuestEnabled(cfg.GuestAccess)
+	// Add bypass paths for public endpoints
+	authMiddleware.AddBypassPath("/health")
+	authMiddleware.AddBypassPath("/ready")
+	authMiddleware.AddBypassPath("/livez")
+	authMiddleware.AddBypassPath("/readyz")
+	authMiddleware.AddBypassPath("/metrics")
+
 	return &Server{
 		config:               cfg,
 		registry:             registry,
@@ -178,6 +197,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
 		sessionHandlers:      sessionHandlers,
+		authMiddleware:       authMiddleware,
 		userStore:            userStore,
 		quotaManager:         quotaManager,
 		kbManager:            kbManager,
@@ -309,8 +329,11 @@ func (s *Server) Start() error {
 
 	// Prometheus metrics endpoint
 	mux.HandleFunc("/metrics", s.handleMetrics)
+	mux.HandleFunc("/v1/system/stats", s.handleSystemStats)
+	mux.HandleFunc("/v1/system/config", s.handleSystemConfig) // UI feature flags
 
 	// User management endpoints
+	mux.HandleFunc("/v1/users/me", s.handleCurrentUser)
 	mux.HandleFunc("/v1/users", s.handleUsers)
 	mux.HandleFunc("/v1/users/", s.handleUsers)
 	mux.HandleFunc("/v1/auth/login", s.handleLogin)
@@ -326,6 +349,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/agents/tasks", s.handleAgentTasks)
 	mux.HandleFunc("/v1/agents/workflows", s.handleAgentWorkflows)
 	mux.HandleFunc("/v1/agents/tools", s.handleAgentTools)
+	mux.HandleFunc("/v1/agents/mcp", s.handleAgentMCP)
+	mux.HandleFunc("/v1/agents/mcp/test", s.handleAgentMCPTest)
 
 	// WebSocket endpoint
 	mux.HandleFunc("/v1/ws", s.handleWebSocket)
@@ -357,9 +382,14 @@ func (s *Server) Start() error {
 	// Root endpoint
 	mux.HandleFunc("/", s.handleRoot)
 
+	// Build handler chain: logging -> auth -> routes
+	var handler http.Handler = mux
+	handler = s.authMiddleware.Wrap(handler) // Auth middleware
+	handler = s.loggingMiddleware(handler)   // Logging middleware (outermost)
+
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.config.ServerPort),
-		Handler:      s.loggingMiddleware(mux),
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 300 * time.Second, // Long timeout for LLM inference
 		IdleTimeout:  60 * time.Second,
@@ -382,6 +412,9 @@ func (s *Server) Start() error {
 			log.Printf("Warning: Failed to auto-restore RAG: %v", err)
 		}
 	}()
+
+	// Start background metrics collection
+	go s.collectSystemMetrics()
 
 	// Create listener first to ensure port is available
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.ServerPort))
@@ -443,6 +476,60 @@ func (s *Server) handleShutdown() {
 	log.Println("Server stopped")
 }
 
+// collectSystemMetrics periodically updates system metrics
+func (s *Server) collectSystemMetrics() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
+
+			// Update memory metrics
+			s.offgridMetrics.MemoryUsage.Set(float64(memStats.Alloc))
+
+			// Update CPU usage (approximate from goroutine count)
+			numGoroutines := runtime.NumGoroutine()
+			s.offgridMetrics.CPUUsage.Set(float64(numGoroutines) / 100.0 * 10)
+
+			// Update model loaded status
+			if s.engine != nil && s.engine.IsLoaded() {
+				s.offgridMetrics.ModelLoaded.Set(1)
+			} else {
+				s.offgridMetrics.ModelLoaded.Set(0)
+			}
+
+			// Update RAG metrics
+			if s.ragEngine != nil {
+				docs := s.ragEngine.ListDocuments()
+				s.offgridMetrics.RAGDocumentsTotal.Set(float64(len(docs)))
+			}
+
+			// Update session count
+			if s.sessionHandlers != nil {
+				s.offgridMetrics.ActiveSessions.Set(float64(s.sessionHandlers.GetActiveSessionCount()))
+			}
+
+			// Update WebSocket connections
+			s.offgridMetrics.WebSocketConnections.Set(float64(s.wsConnections))
+
+			// Update user counts
+			users := s.userStore.ListUsers()
+			s.offgridMetrics.TotalUsers.Set(float64(len(users)))
+			// Active users approximation - count users who logged in recently
+			activeUsers := 0
+			for _, u := range users {
+				if u.LastLoginAt != nil && time.Since(*u.LastLoginAt) < 24*time.Hour {
+					activeUsers++
+				}
+			}
+			s.offgridMetrics.ActiveUsers.Set(float64(activeUsers))
+		}
+	}
+}
+
 // loggingMiddleware logs all HTTP requests
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -457,11 +544,51 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Track in-flight requests
+		s.offgridMetrics.RequestsInFlight.Inc()
+		defer s.offgridMetrics.RequestsInFlight.Dec()
+
+		// Wrap response writer to capture status code
+		wrapped := &statusResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
 		start := time.Now()
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(wrapped, r)
 		duration := time.Since(start)
-		log.Printf("%s %s · %.2fms", r.Method, r.URL.Path, float64(duration.Microseconds())/1000)
+
+		// Record metrics
+		s.offgridMetrics.RequestsTotal.Inc(r.Method, r.URL.Path, fmt.Sprintf("%d", wrapped.statusCode))
+		s.offgridMetrics.RequestDuration.Observe(duration.Seconds(), r.Method, r.URL.Path)
+
+		// Track errors
+		if wrapped.statusCode >= 400 {
+			s.offgridMetrics.ErrorsTotal.Inc(r.Method, r.URL.Path, fmt.Sprintf("%d", wrapped.statusCode))
+			atomic.AddInt64(&s.errorsTotal, 1)
+		}
+
+		// Increment request count and latency tracking (atomic)
+		atomic.AddInt64(&s.requestCount, 1)
+		atomic.AddInt64(&s.totalLatencyMicros, duration.Microseconds())
+
+		log.Printf("%s %s %d · %.2fms", r.Method, r.URL.Path, wrapped.statusCode, float64(duration.Microseconds())/1000)
 	})
+}
+
+// statusResponseWriter wraps http.ResponseWriter to capture status code
+type statusResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *statusResponseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// Flush implements http.Flusher to support streaming
+func (w *statusResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // Handler functions (placeholders for now)
@@ -479,7 +606,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.1.7","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.3","status":"running"}`)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -904,6 +1031,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	totalTokens := int64(response.Usage.TotalTokens)
 	s.statsTracker.RecordInference(req.Model, totalTokens, duration.Milliseconds())
 
+	// Track tokens generated for metrics
+	atomic.AddInt64(&s.tokensGenerated, int64(response.Usage.CompletionTokens))
+	s.offgridMetrics.TokensOutputTotal.Add(float64(response.Usage.CompletionTokens))
+	s.offgridMetrics.TokensInputTotal.Add(float64(response.Usage.PromptTokens))
+
 	// Send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
@@ -1031,6 +1163,12 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	fmt.Fprintf(w, "data: [DONE]\n\n")
 	flusher.Flush()
+
+	// Track tokens generated for metrics (approximate from tokenIndex)
+	if tokenIndex > 0 {
+		atomic.AddInt64(&s.tokensGenerated, int64(tokenIndex))
+		s.offgridMetrics.TokensOutputTotal.Add(float64(tokenIndex))
+	}
 }
 
 func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
@@ -2736,20 +2874,199 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(output))
 }
 
+// handleSystemStats returns real-time system statistics
+func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	// Get number of goroutines as a proxy for activity
+	numGoroutines := runtime.NumGoroutine()
+
+	// Count users
+	userList := s.userStore.ListUsers()
+	adminCount := 0
+	for _, u := range userList {
+		if u.Role == "admin" {
+			adminCount++
+		}
+	}
+
+	// Get loaded models count (check if engine has a model loaded)
+	modelsLoaded := 0
+	if s.engine != nil && s.engine.IsLoaded() {
+		modelsLoaded = 1
+	}
+
+	// Get RAG document count
+	ragDocs := 0
+	if s.ragEngine != nil {
+		ragDocs = len(s.ragEngine.ListDocuments())
+	}
+
+	// Get active sessions - use session handlers
+	activeSessions := 0
+	if s.sessionHandlers != nil {
+		activeSessions = s.sessionHandlers.GetActiveSessionCount()
+	}
+
+	// Calculate average latency
+	reqCount := atomic.LoadInt64(&s.requestCount)
+	totalLatency := atomic.LoadInt64(&s.totalLatencyMicros)
+	avgLatencyMs := float64(0)
+	if reqCount > 0 {
+		avgLatencyMs = float64(totalLatency) / float64(reqCount) / 1000.0
+	}
+
+	stats := map[string]interface{}{
+		"cpu_percent":           float64(numGoroutines) / 100.0 * 10, // Approximate
+		"memory_bytes":          memStats.Alloc,
+		"memory_total":          memStats.Sys,
+		"heap_alloc":            memStats.HeapAlloc,
+		"heap_sys":              memStats.HeapSys,
+		"goroutines":            numGoroutines,
+		"gc_cycles":             memStats.NumGC,
+		"models_loaded":         modelsLoaded,
+		"rag_documents":         ragDocs,
+		"active_sessions":       activeSessions,
+		"total_users":           len(userList),
+		"admin_users":           adminCount,
+		"uptime_seconds":        time.Since(s.startTime).Seconds(),
+		"requests_total":        atomic.LoadInt64(&s.requestCount),
+		"websocket_connections": atomic.LoadInt64(&s.wsConnections),
+		"tokens_generated":      atomic.LoadInt64(&s.tokensGenerated),
+		"errors_total":          atomic.LoadInt64(&s.errorsTotal),
+		"avg_latency_ms":        avgLatencyMs,
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}
+
+// handleSystemConfig returns feature flags for the UI
+func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"multi_user_mode": s.config.MultiUserMode,
+		"require_auth":    s.config.RequireAuth,
+		"guest_access":    s.config.GuestAccess,
+		"version":         "0.2.2",
+		"features": map[string]bool{
+			"users":   s.config.MultiUserMode,
+			"metrics": true, // Always available but can be hidden
+			"agent":   true,
+			"lora":    true,
+		},
+	})
+}
+
 // ============================================================================
 // User Management Handlers
 // ============================================================================
 
+// handleCurrentUser returns the currently authenticated user
+func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user := users.GetUser(r)
+	if user == nil || user.ID == "guest" {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"user":          nil,
+			"authenticated": false,
+			"guest":         user != nil && user.ID == "guest",
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"user":          user.ToPublic(),
+		"authenticated": true,
+	})
+}
+
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	// Parse path: /v1/users, /v1/users/{id}, /v1/users/{id}/regenerate-key, /v1/users/{id}/role
+	path := strings.TrimPrefix(r.URL.Path, "/v1/users")
+	path = strings.TrimPrefix(path, "/")
+	parts := strings.Split(path, "/")
+
+	// Handle special sub-paths
+	if len(parts) >= 2 && parts[0] != "" {
+		userID := parts[0]
+		action := parts[1]
+
+		// Verify user exists
+		_, ok := s.userStore.GetUser(userID)
+		if !ok {
+			http.Error(w, `{"error": "user not found"}`, http.StatusNotFound)
+			return
+		}
+
+		switch action {
+		case "regenerate-key":
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			newKey, err := s.userStore.RegenerateAPIKey(userID)
+			if err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"api_key": newKey})
+			return
+
+		case "role":
+			if r.Method != http.MethodPut {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req struct {
+				Role users.Role `json:"role"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+				return
+			}
+			if err := s.userStore.UpdateUser(userID, map[string]any{"role": req.Role}); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+				return
+			}
+			// Update quota limits for new role
+			s.quotaManager.InitUserQuota(userID, req.Role)
+			json.NewEncoder(w).Encode(map[string]string{"status": "role updated"})
+			return
+
+		default:
+			http.Error(w, `{"error": "unknown action"}`, http.StatusNotFound)
+			return
+		}
+	}
 
 	switch r.Method {
 	case http.MethodGet:
 		// List users or get specific user
-		path := strings.TrimPrefix(r.URL.Path, "/v1/users/")
-		if path != "" && path != "users" {
+		if len(parts) > 0 && parts[0] != "" {
 			// Get specific user
-			user, ok := s.userStore.GetUser(path)
+			user, ok := s.userStore.GetUser(parts[0])
 			if !ok {
 				http.Error(w, `{"error": "user not found"}`, http.StatusNotFound)
 				return
@@ -2763,7 +3080,9 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		for _, u := range userList {
 			publicUsers = append(publicUsers, u.ToPublic())
 		}
-		json.NewEncoder(w).Encode(publicUsers)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"users": publicUsers,
+		})
 
 	case http.MethodPost:
 		// Create user
@@ -2793,16 +3112,15 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		// Delete user
-		path := strings.TrimPrefix(r.URL.Path, "/v1/users/")
-		if path == "" {
+		if len(parts) == 0 || parts[0] == "" {
 			http.Error(w, `{"error": "user id required"}`, http.StatusBadRequest)
 			return
 		}
-		if err := s.userStore.DeleteUser(path); err != nil {
+		if err := s.userStore.DeleteUser(parts[0]); err != nil {
 			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
 			return
 		}
-		s.quotaManager.DeleteUserQuota(path)
+		s.quotaManager.DeleteUserQuota(parts[0])
 		json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 
 	default:
@@ -2930,7 +3248,8 @@ func (s *Server) handleLoRA(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		if len(parts) == 0 || parts[0] == "" {
+		if len(parts) == 0 || parts[0] == "" || parts[0] == "adapters" {
+			// List all adapters - GetStatus already returns the right format
 			json.NewEncoder(w).Encode(s.loraManager.GetStatus())
 			return
 		}
@@ -3012,6 +3331,7 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Prompt        string `json:"prompt"`
+		Task          string `json:"task"` // Alias for prompt
 		Model         string `json:"model"`
 		Style         string `json:"style"`
 		Stream        bool   `json:"stream"`
@@ -3023,6 +3343,19 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+		return
+	}
+
+	// Use Task as fallback for Prompt
+	if req.Prompt == "" && req.Task != "" {
+		req.Prompt = req.Task
+	}
+
+	// Validate prompt
+	if req.Prompt == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "prompt or task is required"})
 		return
 	}
 
@@ -3183,9 +3516,13 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		// Set up step callback
 		agent.SetStepCallback(func(step agents.Step) {
 			stepData := map[string]interface{}{
-				"type":      "step",
-				"step_type": step.Type,
-				"step_id":   step.ID,
+				"type":        "step",
+				"step_type":   step.Type,
+				"step_id":     step.ID,
+				"content":     step.Content,
+				"tool_name":   step.ToolName,
+				"tool_args":   step.ToolArgs,
+				"tool_result": step.ToolResult,
 			}
 			jsonData, _ := json.Marshal(stepData)
 			fmt.Fprintf(w, "data: %s\n\n", jsonData)
@@ -3249,6 +3586,7 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 	agent := agents.NewAgent(agentCfg, tools, executor, llmCaller)
 	result, err := agent.Run(r.Context(), req.Prompt)
 	if err != nil {
+		log.Printf("[Agent] Error: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -3348,7 +3686,18 @@ func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		// List all available tools
+		// Check for ?all=true to include disabled tools with status
+		if r.URL.Query().Get("all") == "true" {
+			toolsWithStatus := s.toolRegistry.GetAllToolsWithStatus()
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"tools":         toolsWithStatus,
+				"total":         len(toolsWithStatus),
+				"enabled_count": s.toolRegistry.GetEnabledCount(),
+			})
+			return
+		}
+
+		// List only enabled tools
 		tools := s.toolRegistry.GetTools()
 
 		type ToolInfo struct {
@@ -3371,6 +3720,42 @@ func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"tools": toolList,
 			"count": len(toolList),
+		})
+
+	case http.MethodPatch:
+		// Enable or disable a tool
+		var req struct {
+			Name    string `json:"name"`
+			Enabled bool   `json:"enabled"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			return
+		}
+
+		if req.Name == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "tool name is required"})
+			return
+		}
+
+		if err := s.toolRegistry.SetToolEnabled(req.Name, req.Enabled); err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		action := "disabled"
+		if req.Enabled {
+			action = "enabled"
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":        action,
+			"tool":          req.Name,
+			"enabled_count": s.toolRegistry.GetEnabledCount(),
 		})
 
 	case http.MethodPost:
@@ -3437,4 +3822,109 @@ func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
 	}
+}
+
+// handleAgentMCP manages MCP server connections
+func (s *Server) handleAgentMCP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		// List connected MCP servers
+		tools := s.toolRegistry.GetTools()
+		mcpServers := make(map[string]int)
+
+		for _, tool := range tools {
+			// Check if tool has MCP source
+			if tool.Function.Name != "" {
+				// This is a simple implementation - in production, track sources properly
+				mcpServers["mcp"] = len(tools)
+			}
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"servers": mcpServers,
+		})
+
+	case http.MethodPost:
+		// Add new MCP server
+		var req struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			return
+		}
+
+		if req.Name == "" || req.URL == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "name and url are required"})
+			return
+		}
+
+		// Try to connect to the MCP server and discover tools
+		count, err := s.toolRegistry.LoadMCPTools(req.Name, req.URL)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": fmt.Sprintf("failed to connect to MCP server: %v", err),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":      "connected",
+			"server":      req.Name,
+			"tools_added": count,
+		})
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+	}
+}
+
+// handleAgentMCPTest tests connectivity to an MCP server without adding it
+func (s *Server) handleAgentMCPTest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		URL string `json:"url"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+		return
+	}
+
+	if req.URL == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "url is required"})
+		return
+	}
+
+	// Test connection to MCP server
+	count, err := s.toolRegistry.TestMCPConnection(req.URL)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": fmt.Sprintf("Connection failed: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":      "ok",
+		"tools_count": count,
+	})
 }

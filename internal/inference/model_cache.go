@@ -114,7 +114,7 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		"-m", modelPath,
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
-		"-c", "2048", // Reduced context size for stability
+		"-c", "8192", // Larger context for agent tasks with many tools
 		"-np", "1", // Limit to 1 parallel sequence to improve stability
 		"--no-warmup", // Disable warmup to save memory/time
 		"-b", "256",   // Reduced batch size

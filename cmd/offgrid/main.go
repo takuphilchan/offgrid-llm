@@ -2453,7 +2453,7 @@ func printHelp() {
 			},
 		},
 		{
-			title: "Multi-User & Security",
+			title: "Multi-User (set OFFGRID_MULTI_USER=true)",
 			cmds: []cmdEntry{
 				{"users <cmd>", "User management & auth"},
 				{"metrics", "View Prometheus metrics"},
@@ -5890,6 +5890,23 @@ func handleBenchmarkCompare(args []string) {
 // handleUsers handles user management commands
 func handleUsers(args []string) {
 	cfg := config.LoadConfig()
+
+	// Check if multi-user mode is enabled
+	if !cfg.MultiUserMode {
+		fmt.Println()
+		fmt.Printf("%sUser Management%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("  %s⚠ Single-user mode is enabled (default)%s\n", colorYellow, colorReset)
+		fmt.Println()
+		fmt.Printf("  To enable multi-user features, set:\n")
+		fmt.Printf("    %sexport OFFGRID_MULTI_USER=true%s\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("  Or add to your config:\n")
+		fmt.Printf("    %smulti_user_mode: true%s\n", brandSecondary, colorReset)
+		fmt.Println()
+		return
+	}
+
 	dataDir := filepath.Join(cfg.ModelsDir, "..", "data")
 	store := users.NewUserStore(dataDir)
 

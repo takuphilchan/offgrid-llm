@@ -9,11 +9,145 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+// getRestrictedWritePaths returns OS-specific restricted paths
+func getRestrictedWritePaths() []string {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{
+			`C:\Windows`,
+			`C:\Program Files`,
+			`C:\Program Files (x86)`,
+			`C:\ProgramData`,
+			`C:\Users\Default`,
+			`C:\Users\Public`,
+			`C:\System Volume Information`,
+		}
+	case "darwin": // macOS
+		return []string{
+			"/System",
+			"/Library",
+			"/usr",
+			"/bin",
+			"/sbin",
+			"/etc",
+			"/var",
+			"/private/etc",
+			"/private/var",
+		}
+	default: // Linux and others
+		return []string{
+			"/etc",
+			"/bin",
+			"/sbin",
+			"/usr",
+			"/boot",
+			"/dev",
+			"/proc",
+			"/sys",
+			"/var/lib",
+			"/var/log",
+			"/root",
+			"/lib",
+			"/lib64",
+			"/opt",
+		}
+	}
+}
+
+// getRestrictedReadPaths returns OS-specific restricted read paths
+func getRestrictedReadPaths() []string {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{
+			`C:\Windows\System32\config`,
+			`C:\Users\Default\NTUSER.DAT`,
+		}
+	case "darwin":
+		return []string{
+			"/etc/shadow",
+			"/etc/master.passwd",
+			"/private/etc/shadow",
+			"/private/etc/master.passwd",
+		}
+	default:
+		return []string{
+			"/etc/shadow",
+			"/etc/passwd",
+			"/etc/sudoers",
+			"/etc/ssh",
+			"/root/.ssh",
+		}
+	}
+}
+
+// normalizePath normalizes a path for consistent comparison across platforms
+func normalizePath(path string) string {
+	// Clean the path
+	path = filepath.Clean(path)
+
+	// On Windows, normalize drive letters to uppercase
+	if runtime.GOOS == "windows" && len(path) >= 2 && path[1] == ':' {
+		path = strings.ToUpper(path[:1]) + path[1:]
+	}
+
+	return path
+}
+
+// isSubPath checks if child is under parent directory (cross-platform)
+func isSubPath(parent, child string) bool {
+	parent = normalizePath(parent)
+	child = normalizePath(child)
+
+	// Ensure parent ends with separator for accurate prefix matching
+	if !strings.HasSuffix(parent, string(filepath.Separator)) {
+		parent = parent + string(filepath.Separator)
+	}
+
+	return strings.HasPrefix(child, parent) || child == strings.TrimSuffix(parent, string(filepath.Separator))
+}
+
+// validateSafePath checks if a path is safe to write to
+func validateSafePath(path string) error {
+	cleanPath := normalizePath(path)
+
+	// Check against restricted paths
+	for _, restricted := range getRestrictedWritePaths() {
+		if isSubPath(restricted, cleanPath) {
+			return fmt.Errorf("access denied: cannot write to system path '%s' - agents are restricted from modifying system directories", restricted)
+		}
+	}
+
+	// Block hidden files in root directories
+	if runtime.GOOS != "windows" {
+		// Unix: block /.<anything>
+		if strings.HasPrefix(cleanPath, "/.") {
+			return fmt.Errorf("access denied: cannot write to hidden root files")
+		}
+	}
+
+	return nil
+}
+
+// validateSafeReadPath checks if a path is safe to read from
+func validateSafeReadPath(path string) error {
+	cleanPath := normalizePath(path)
+
+	// Check against restricted read paths
+	for _, restricted := range getRestrictedReadPaths() {
+		if isSubPath(restricted, cleanPath) {
+			return fmt.Errorf("access denied: cannot read sensitive system file '%s'", restricted)
+		}
+	}
+
+	return nil
+}
 
 // BuiltInTools returns a set of built-in tools the agent can use
 func BuiltInTools() []api.Tool {
@@ -215,9 +349,14 @@ func executeReadFile(path string) (string, error) {
 		return "", fmt.Errorf("path is required")
 	}
 
-	// Security: limit to current directory and subdirs
+	// Get absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Security: validate path is safe to read
+	if err := validateSafeReadPath(absPath); err != nil {
 		return "", err
 	}
 
@@ -238,17 +377,33 @@ func executeWriteFile(path, content string) (string, error) {
 		return "", fmt.Errorf("path is required")
 	}
 
+	// Security: validate path is safe
+	if err := validateSafePath(path); err != nil {
+		return "", err
+	}
+
+	// Get absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Re-validate absolute path
+	if err := validateSafePath(absPath); err != nil {
+		return "", err
+	}
+
 	// Create directory if needed
-	dir := filepath.Dir(path)
+	dir := filepath.Dir(absPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	return fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path), nil
+	return fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), absPath), nil
 }
 
 func executeListFiles(path string) (string, error) {
@@ -282,15 +437,37 @@ func executeShell(ctx context.Context, command string) (string, error) {
 		return "", fmt.Errorf("command is required")
 	}
 
-	// Security: block dangerous commands
-	dangerous := []string{"rm -rf /", "mkfs", "dd if=", "> /dev/"}
-	for _, d := range dangerous {
-		if strings.Contains(command, d) {
-			return "", fmt.Errorf("command blocked for safety")
+	// Security: block dangerous commands (cross-platform)
+	dangerousPatterns := getDangerousCommands()
+	commandLower := strings.ToLower(command)
+	for _, d := range dangerousPatterns {
+		if strings.Contains(commandLower, strings.ToLower(d)) {
+			return "", fmt.Errorf("command blocked for safety: contains '%s'", d)
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "bash", "-c", command)
+	// Security: block writes to system paths
+	for _, restricted := range getRestrictedWritePaths() {
+		restrictedLower := strings.ToLower(restricted)
+		if strings.Contains(commandLower, restrictedLower) {
+			// Check for write-like operations
+			writeOps := []string{">", ">>", "tee ", "copy ", "move ", "del ", "rm ", "cp ", "mv "}
+			for _, op := range writeOps {
+				if strings.Contains(commandLower, op) {
+					return "", fmt.Errorf("command blocked: cannot write to system path '%s'", restricted)
+				}
+			}
+		}
+	}
+
+	// Execute command based on OS
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "cmd", "/C", command)
+	} else {
+		cmd = exec.CommandContext(ctx, "bash", "-c", command)
+	}
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Sprintf("Error: %s\nOutput: %s", err.Error(), string(output)), nil
@@ -302,6 +479,37 @@ func executeShell(ctx context.Context, command string) (string, error) {
 		result = result[:2000] + "\n... (output truncated)"
 	}
 	return result, nil
+}
+
+// getDangerousCommands returns OS-specific dangerous command patterns
+func getDangerousCommands() []string {
+	common := []string{
+		"sudo ",
+		"runas ",
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		return append(common, []string{
+			"format ",
+			"del /s /q c:\\",
+			"rd /s /q c:\\",
+			"rmdir /s /q",
+			"reg delete",
+			"bcdedit",
+			"diskpart",
+		}...)
+	default: // Unix-like
+		return append(common, []string{
+			"rm -rf /",
+			"mkfs",
+			"dd if=",
+			"> /dev/",
+			"chmod 777 /",
+			"chown root",
+			":(){:|:&};:", // fork bomb
+		}...)
+	}
 }
 
 func executeHTTPGet(ctx context.Context, url string) (string, error) {
@@ -385,21 +593,28 @@ Answer: [Your final answer to the user]
 
 IMPORTANT RULES:
 1. Always start with "Thought:" to explain your reasoning
-2. Use "Action:" and "Action Input:" when you need to use a tool
-3. Use "Answer:" only when you have the final answer
-4. Action Input must be valid JSON
-5. Only use the tools listed above
-6. Think step by step
+2. For simple questions (math, facts, general knowledge), answer directly without tools
+3. Use "Action:" and "Action Input:" ONLY when you genuinely need a tool
+4. Use "Answer:" when you have the final answer - don't repeat tool calls
+5. Action Input must be valid JSON
+6. Only use the tools listed above - do not invent new tools
+7. If a tool fails or doesn't exist, provide the best answer you can or explain why you cannot help
 
-Example:
-User: What is 15%% of 85?
+Example 1 - Simple question (no tools needed):
+User: What is 2+2?
 
-Thought: I need to calculate 15%% of 85. I'll use the calculator tool.
-Action: calculator
-Action Input: {"expression": "85 * 0.15"}
+Thought: This is simple arithmetic I can answer directly.
+Answer: 2+2 equals 4.
 
-Observation: 12.75
+Example 2 - Tool needed:
+User: What is the current time?
 
-Thought: The calculation is complete. 15%% of 85 is 12.75.
-Answer: 15%% of 85 is 12.75`, toolDescs.String())
+Thought: I need to check the current time using the current_time tool.
+Action: current_time
+Action Input: {}
+
+Observation: 2024-01-15 10:30:00 UTC
+
+Thought: I now have the current time.
+Answer: The current time is 2024-01-15 10:30:00 UTC.`, toolDescs.String())
 }

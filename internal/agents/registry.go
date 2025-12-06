@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,11 +18,13 @@ import (
 // - User-defined tools from config
 // - MCP server tools (future)
 type ToolRegistry struct {
-	mu         sync.RWMutex
-	tools      map[string]api.Tool
-	executors  map[string]SimpleExecutor
-	mcpClients map[string]*MCPClient
-	configPath string
+	mu            sync.RWMutex
+	tools         map[string]api.Tool
+	executors     map[string]SimpleExecutor
+	mcpClients    map[string]*MCPClient
+	configPath    string
+	disabledTools map[string]bool   // Tools that are disabled
+	toolSources   map[string]string // Maps tool name to source (builtin, mcp:servername, user)
 }
 
 // SimpleExecutor wraps tool execution with just context and args
@@ -46,26 +49,34 @@ type ToolsConfig struct {
 
 // MCPServerConfig configures an MCP server connection
 type MCPServerConfig struct {
-	Name    string `json:"name"`
-	URL     string `json:"url"`
-	APIKey  string `json:"api_key,omitempty"`
-	Enabled bool   `json:"enabled"`
+	Name      string   `json:"name"`
+	URL       string   `json:"url,omitempty"`       // For HTTP transport
+	Command   string   `json:"command,omitempty"`   // For stdio transport (e.g., "npx")
+	Args      []string `json:"args,omitempty"`      // Command arguments
+	Transport string   `json:"transport,omitempty"` // "http" or "stdio" (default: auto-detect)
+	APIKey    string   `json:"api_key,omitempty"`
+	Enabled   bool     `json:"enabled"`
 }
 
-// MCPClient is a placeholder for MCP server integration
+// MCPClient wraps an MCP connection (HTTP or stdio)
 type MCPClient struct {
-	Name   string
-	URL    string
-	APIKey string
-	Tools  []api.Tool
+	Name      string
+	URL       string
+	Transport string
+	Tools     []api.Tool
+	// Underlying client (either HTTP or Stdio)
+	httpClient  *MCPHTTPClient
+	stdioClient *MCPStdioClient
 }
 
 // NewToolRegistry creates a new tool registry with built-in tools
 func NewToolRegistry() *ToolRegistry {
 	r := &ToolRegistry{
-		tools:      make(map[string]api.Tool),
-		executors:  make(map[string]SimpleExecutor),
-		mcpClients: make(map[string]*MCPClient),
+		tools:         make(map[string]api.Tool),
+		executors:     make(map[string]SimpleExecutor),
+		mcpClients:    make(map[string]*MCPClient),
+		disabledTools: make(map[string]bool),
+		toolSources:   make(map[string]string),
 	}
 
 	// Register built-in tools
@@ -79,6 +90,7 @@ func (r *ToolRegistry) registerBuiltInTools() {
 	builtIns := BuiltInTools()
 	for _, tool := range builtIns {
 		r.tools[tool.Function.Name] = tool
+		r.toolSources[tool.Function.Name] = "builtin"
 	}
 
 	// Register executors for built-in tools - they all use ExecuteTool
@@ -183,37 +195,82 @@ func (r *ToolRegistry) createUserToolExecutor(ut UserDefinedTool) SimpleExecutor
 
 // connectMCPServer connects to an MCP server and registers its tools
 func (r *ToolRegistry) connectMCPServer(config MCPServerConfig) error {
-	// Create HTTP MCP client
-	client := NewMCPHTTPClient(config.Name, config.URL, config.APIKey)
-
-	// Connect and discover tools
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := client.Connect(ctx); err != nil {
-		return fmt.Errorf("failed to connect to MCP server %s: %w", config.Name, err)
+	// Determine transport type
+	transport := config.Transport
+	if transport == "" {
+		// Auto-detect based on config
+		if config.Command != "" {
+			transport = "stdio"
+		} else if config.URL != "" {
+			transport = "http"
+		} else {
+			return fmt.Errorf("MCP server %s: must specify either 'url' (for HTTP) or 'command' (for stdio)", config.Name)
+		}
+	}
+
+	var tools []api.Tool
+	var mcpClient *MCPClient
+
+	if transport == "stdio" {
+		// Stdio transport - spawn subprocess
+		client := NewMCPStdioClient(config.Name, config.Command, config.Args)
+		if err := client.Connect(ctx); err != nil {
+			return fmt.Errorf("failed to connect to MCP server %s: %w", config.Name, err)
+		}
+
+		tools = client.GetTools()
+		mcpClient = &MCPClient{
+			Name:        config.Name,
+			Transport:   "stdio",
+			Tools:       tools,
+			stdioClient: client,
+		}
+
+		// Register tools with stdio executor
+		for _, tool := range tools {
+			toolName := tool.Function.Name
+			stdioClient := client // Capture for closure
+
+			r.tools[toolName] = tool
+			r.executors[toolName] = func(ctx context.Context, args json.RawMessage) (string, error) {
+				return stdioClient.CallTool(ctx, toolName, args)
+			}
+			fmt.Printf("  - Registered MCP tool (stdio): %s\n", toolName)
+		}
+	} else {
+		// HTTP transport
+		client := NewMCPHTTPClient(config.Name, config.URL, config.APIKey)
+		if err := client.Connect(ctx); err != nil {
+			return fmt.Errorf("failed to connect to MCP server %s: %w", config.Name, err)
+		}
+
+		tools = client.GetTools()
+		mcpClient = &MCPClient{
+			Name:       config.Name,
+			URL:        config.URL,
+			Transport:  "http",
+			Tools:      tools,
+			httpClient: client,
+		}
+
+		// Register tools with HTTP executor
+		for _, tool := range tools {
+			toolName := tool.Function.Name
+			httpClient := client // Capture for closure
+
+			r.tools[toolName] = tool
+			r.executors[toolName] = func(ctx context.Context, args json.RawMessage) (string, error) {
+				return httpClient.CallTool(ctx, toolName, args)
+			}
+			fmt.Printf("  - Registered MCP tool (http): %s\n", toolName)
+		}
 	}
 
 	// Store client reference
-	r.mcpClients[config.Name] = &MCPClient{
-		Name:   config.Name,
-		URL:    config.URL,
-		APIKey: config.APIKey,
-		Tools:  client.GetTools(),
-	}
-
-	// Register each tool from the MCP server
-	for _, tool := range client.GetTools() {
-		toolName := tool.Function.Name
-		mcpClient := client // Capture for closure
-
-		r.tools[toolName] = tool
-		r.executors[toolName] = func(ctx context.Context, args json.RawMessage) (string, error) {
-			return mcpClient.CallTool(ctx, toolName, args)
-		}
-
-		fmt.Printf("  - Registered MCP tool: %s\n", toolName)
-	}
+	r.mcpClients[config.Name] = mcpClient
 
 	return nil
 }
@@ -227,16 +284,208 @@ func (r *ToolRegistry) RegisterTool(tool api.Tool, executor SimpleExecutor) {
 	r.executors[tool.Function.Name] = executor
 }
 
-// GetTools returns all registered tools
+// LoadMCPTools connects to an MCP server and loads its tools dynamically
+// Supports both HTTP URLs and stdio commands
+func (r *ToolRegistry) LoadMCPTools(name, urlOrCommand string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Detect if it's a command (starts with common executables) or URL
+	isCommand := strings.HasPrefix(urlOrCommand, "npx ") ||
+		strings.HasPrefix(urlOrCommand, "node ") ||
+		strings.HasPrefix(urlOrCommand, "python ") ||
+		strings.HasPrefix(urlOrCommand, "./") ||
+		strings.HasPrefix(urlOrCommand, "/")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if isCommand {
+		// Parse command and args
+		parts := strings.Fields(urlOrCommand)
+		if len(parts) == 0 {
+			return 0, fmt.Errorf("empty command")
+		}
+
+		client := NewMCPStdioClient(name, parts[0], parts[1:])
+		if err := client.Connect(ctx); err != nil {
+			return 0, fmt.Errorf("failed to connect to MCP server %s: %w", name, err)
+		}
+
+		tools := client.GetTools()
+		r.mcpClients[name] = &MCPClient{
+			Name:        name,
+			Transport:   "stdio",
+			Tools:       tools,
+			stdioClient: client,
+		}
+
+		count := 0
+		for _, tool := range tools {
+			toolName := tool.Function.Name
+			stdioClient := client
+
+			r.tools[toolName] = tool
+			r.toolSources[toolName] = "mcp:" + name
+			r.executors[toolName] = func(ctx context.Context, args json.RawMessage) (string, error) {
+				return stdioClient.CallTool(ctx, toolName, args)
+			}
+			fmt.Printf("  - Registered MCP tool (stdio): %s\n", toolName)
+			count++
+		}
+
+		return count, nil
+	}
+
+	// HTTP transport
+	client := NewMCPHTTPClient(name, urlOrCommand, "")
+	if err := client.Connect(ctx); err != nil {
+		return 0, fmt.Errorf("failed to connect to MCP server %s: %w", name, err)
+	}
+
+	tools := client.GetTools()
+	r.mcpClients[name] = &MCPClient{
+		Name:       name,
+		URL:        urlOrCommand,
+		Transport:  "http",
+		Tools:      tools,
+		httpClient: client,
+	}
+
+	count := 0
+	for _, tool := range tools {
+		toolName := tool.Function.Name
+		httpClient := client
+
+		r.tools[toolName] = tool
+		r.toolSources[toolName] = "mcp:" + name
+		r.executors[toolName] = func(ctx context.Context, args json.RawMessage) (string, error) {
+			return httpClient.CallTool(ctx, toolName, args)
+		}
+		fmt.Printf("  - Registered MCP tool (http): %s\n", toolName)
+		count++
+	}
+
+	return count, nil
+}
+
+// TestMCPConnection tests connectivity to an MCP server without registering tools
+// Supports both HTTP URLs and stdio commands
+func (r *ToolRegistry) TestMCPConnection(urlOrCommand string) (int, error) {
+	// Detect if it's a command or URL
+	isCommand := strings.HasPrefix(urlOrCommand, "npx ") ||
+		strings.HasPrefix(urlOrCommand, "node ") ||
+		strings.HasPrefix(urlOrCommand, "python ") ||
+		strings.HasPrefix(urlOrCommand, "./") ||
+		strings.HasPrefix(urlOrCommand, "/")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if isCommand {
+		parts := strings.Fields(urlOrCommand)
+		if len(parts) == 0 {
+			return 0, fmt.Errorf("empty command")
+		}
+
+		client := NewMCPStdioClient("test", parts[0], parts[1:])
+		if err := client.Connect(ctx); err != nil {
+			return 0, err
+		}
+		defer client.Close()
+
+		return len(client.GetTools()), nil
+	}
+
+	// HTTP transport
+	client := NewMCPHTTPClient("test", urlOrCommand, "")
+	if err := client.Connect(ctx); err != nil {
+		return 0, err
+	}
+
+	// Return tool count without registering
+	return len(client.GetTools()), nil
+}
+
+// GetTools returns all enabled tools (filters out disabled ones)
 func (r *ToolRegistry) GetTools() []api.Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	tools := make([]api.Tool, 0, len(r.tools))
-	for _, tool := range r.tools {
-		tools = append(tools, tool)
+	for name, tool := range r.tools {
+		if !r.disabledTools[name] {
+			tools = append(tools, tool)
+		}
 	}
 	return tools
+}
+
+// GetAllToolsWithStatus returns all tools with their enabled/disabled status
+func (r *ToolRegistry) GetAllToolsWithStatus() []map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	tools := make([]map[string]interface{}, 0, len(r.tools))
+	for name, tool := range r.tools {
+		source := r.toolSources[name]
+		if source == "" {
+			source = "unknown"
+		}
+		tools = append(tools, map[string]interface{}{
+			"name":        name,
+			"description": tool.Function.Description,
+			"enabled":     !r.disabledTools[name],
+			"source":      source,
+		})
+	}
+	return tools
+}
+
+// EnableTool enables a tool by name
+func (r *ToolRegistry) EnableTool(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.tools[name]; !ok {
+		return fmt.Errorf("tool not found: %s", name)
+	}
+	delete(r.disabledTools, name)
+	return nil
+}
+
+// DisableTool disables a tool by name
+func (r *ToolRegistry) DisableTool(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.tools[name]; !ok {
+		return fmt.Errorf("tool not found: %s", name)
+	}
+	r.disabledTools[name] = true
+	return nil
+}
+
+// SetToolEnabled sets whether a tool is enabled or disabled
+func (r *ToolRegistry) SetToolEnabled(name string, enabled bool) error {
+	if enabled {
+		return r.EnableTool(name)
+	}
+	return r.DisableTool(name)
+}
+
+// GetEnabledCount returns the count of enabled tools
+func (r *ToolRegistry) GetEnabledCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for name := range r.tools {
+		if !r.disabledTools[name] {
+			count++
+		}
+	}
+	return count
 }
 
 // GetTool returns a specific tool by name
