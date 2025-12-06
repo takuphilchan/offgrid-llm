@@ -18,15 +18,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/cache"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
+	"github.com/takuphilchan/offgrid-llm/internal/metrics"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/platform"
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/stats"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
+	"github.com/takuphilchan/offgrid-llm/internal/users"
+	"github.com/takuphilchan/offgrid-llm/internal/websocket"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -54,6 +58,15 @@ type Server struct {
 	rateLimiter          *RateLimiter
 	inferenceRateLimiter *InferenceRateLimiter
 	sessionHandlers      *SessionHandlers
+	// New feature managers
+	userStore      *users.UserStore
+	quotaManager   *users.QuotaManager
+	kbManager      *users.KnowledgeBaseManager
+	loraManager    *inference.LoRAManager
+	agentManager   *agents.Manager
+	toolRegistry   *agents.ToolRegistry
+	offgridMetrics *metrics.OffGridMetrics
+	wsHub          *websocket.Hub
 }
 
 type DownloadProgress struct {
@@ -131,6 +144,24 @@ func NewWithConfig(cfg *config.Config) *Server {
 	sessionsDir := filepath.Join(cfg.ModelsDir, "..", "sessions")
 	sessionHandlers := NewSessionHandlers(sessionsDir)
 
+	// Initialize new feature components
+	dataDir := filepath.Join(cfg.ModelsDir, "..", "data")
+	userStore := users.NewUserStore(dataDir)
+	quotaManager := users.NewQuotaManager(dataDir)
+	kbManager := users.NewKnowledgeBaseManager(dataDir)
+	loraManager := inference.NewLoRAManager(dataDir, engine)
+	agentManager := agents.NewManager(nil, nil, nil) // Tools and LLM caller can be set later
+	toolRegistry := agents.NewToolRegistry()         // Unified tool registry
+	// Load user-defined tools from config if exists
+	toolsConfigPath := filepath.Join(dataDir, "tools.json")
+	if err := toolRegistry.LoadUserTools(toolsConfigPath); err != nil {
+		log.Printf("Warning: Failed to load user tools: %v", err)
+	}
+	offgridMetrics := metrics.NewOffGridMetrics() // Uses DefaultRegistry
+	wsHub := websocket.NewHub()
+	ctx := context.Background()
+	go wsHub.Run(ctx)
+
 	return &Server{
 		config:               cfg,
 		registry:             registry,
@@ -147,6 +178,14 @@ func NewWithConfig(cfg *config.Config) *Server {
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
 		sessionHandlers:      sessionHandlers,
+		userStore:            userStore,
+		quotaManager:         quotaManager,
+		kbManager:            kbManager,
+		loraManager:          loraManager,
+		agentManager:         agentManager,
+		toolRegistry:         toolRegistry,
+		offgridMetrics:       offgridMetrics,
+		wsHub:                wsHub,
 	}
 }
 
@@ -267,6 +306,29 @@ func (s *Server) Start() error {
 	// Cache management endpoints
 	mux.HandleFunc("/cache/stats", s.handleCacheStats)
 	mux.HandleFunc("/cache/clear", s.handleCacheClear)
+
+	// Prometheus metrics endpoint
+	mux.HandleFunc("/metrics", s.handleMetrics)
+
+	// User management endpoints
+	mux.HandleFunc("/v1/users", s.handleUsers)
+	mux.HandleFunc("/v1/users/", s.handleUsers)
+	mux.HandleFunc("/v1/auth/login", s.handleLogin)
+	mux.HandleFunc("/v1/auth/logout", s.handleLogout)
+	mux.HandleFunc("/v1/quota", s.handleQuota)
+
+	// LoRA adapter endpoints
+	mux.HandleFunc("/v1/lora", s.handleLoRAList)
+	mux.HandleFunc("/v1/lora/", s.handleLoRA)
+
+	// Agent endpoints
+	mux.HandleFunc("/v1/agents/run", s.handleAgentRun)
+	mux.HandleFunc("/v1/agents/tasks", s.handleAgentTasks)
+	mux.HandleFunc("/v1/agents/workflows", s.handleAgentWorkflows)
+	mux.HandleFunc("/v1/agents/tools", s.handleAgentTools)
+
+	// WebSocket endpoint
+	mux.HandleFunc("/v1/ws", s.handleWebSocket)
 
 	// Simplified UI endpoints (no /v1 prefix for easier frontend access)
 	mux.HandleFunc("/models", s.handleListModels)
@@ -2657,4 +2719,722 @@ func (s *Server) handleCommonPaths(w http.ResponseWriter, r *http.Request) {
 		"os":    runtime.GOOS,
 		"paths": commonPaths,
 	})
+}
+
+// ============================================================================
+// Prometheus Metrics Handler
+// ============================================================================
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	output := metrics.DefaultRegistry.Collect()
+	w.Write([]byte(output))
+}
+
+// ============================================================================
+// User Management Handlers
+// ============================================================================
+
+func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		// List users or get specific user
+		path := strings.TrimPrefix(r.URL.Path, "/v1/users/")
+		if path != "" && path != "users" {
+			// Get specific user
+			user, ok := s.userStore.GetUser(path)
+			if !ok {
+				http.Error(w, `{"error": "user not found"}`, http.StatusNotFound)
+				return
+			}
+			json.NewEncoder(w).Encode(user.ToPublic())
+			return
+		}
+		// List all users
+		userList := s.userStore.ListUsers()
+		publicUsers := make([]users.UserPublic, 0, len(userList))
+		for _, u := range userList {
+			publicUsers = append(publicUsers, u.ToPublic())
+		}
+		json.NewEncoder(w).Encode(publicUsers)
+
+	case http.MethodPost:
+		// Create user
+		var req struct {
+			Username string     `json:"username"`
+			Password string     `json:"password"`
+			Role     users.Role `json:"role"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Role == "" {
+			req.Role = users.RoleUser
+		}
+		user, apiKey, err := s.userStore.CreateUser(req.Username, req.Password, req.Role)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		// Initialize quota for user
+		s.quotaManager.InitUserQuota(user.ID, req.Role)
+		json.NewEncoder(w).Encode(map[string]any{
+			"user":    user.ToPublic(),
+			"api_key": apiKey,
+		})
+
+	case http.MethodDelete:
+		// Delete user
+		path := strings.TrimPrefix(r.URL.Path, "/v1/users/")
+		if path == "" {
+			http.Error(w, `{"error": "user id required"}`, http.StatusBadRequest)
+			return
+		}
+		if err := s.userStore.DeleteUser(path); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		s.quotaManager.DeleteUserQuota(path)
+		json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	user, ok := s.userStore.ValidatePassword(req.Username, req.Password)
+	if !ok {
+		http.Error(w, `{"error": "invalid credentials"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Create session
+	session, token, err := s.userStore.CreateSession(user.ID, r.RemoteAddr, r.UserAgent(), 24*time.Hour)
+	if err != nil {
+		http.Error(w, `{"error": "failed to create session"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Set session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    token,
+		Path:     "/",
+		Expires:  session.ExpiresAt,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"user":       user.ToPublic(),
+		"token":      token,
+		"expires_at": session.ExpiresAt,
+	})
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get token from cookie or header
+	token := ""
+	if cookie, err := r.Cookie("session"); err == nil {
+		token = cookie.Value
+	}
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		token = strings.TrimPrefix(auth, "Bearer ")
+	}
+
+	if token != "" {
+		s.userStore.DeleteSession(token)
+	}
+
+	// Clear cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "logged out"})
+}
+
+func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get user from context or query
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		// Try to get from auth
+		if user := users.GetUser(r); user != nil {
+			userID = user.ID
+		}
+	}
+
+	if userID == "" {
+		http.Error(w, `{"error": "user_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	summary := s.quotaManager.GetUsageSummary(userID)
+	json.NewEncoder(w).Encode(summary)
+}
+
+// ============================================================================
+// LoRA Adapter Handlers
+// ============================================================================
+
+func (s *Server) handleLoRAList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s.loraManager.GetStatus())
+}
+
+func (s *Server) handleLoRA(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	path := strings.TrimPrefix(r.URL.Path, "/v1/lora/")
+	parts := strings.Split(path, "/")
+
+	switch r.Method {
+	case http.MethodGet:
+		if len(parts) == 0 || parts[0] == "" {
+			json.NewEncoder(w).Encode(s.loraManager.GetStatus())
+			return
+		}
+		adapter, ok := s.loraManager.GetAdapter(parts[0])
+		if !ok {
+			http.Error(w, `{"error": "adapter not found"}`, http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(adapter)
+
+	case http.MethodPost:
+		// Register or load adapter
+		var req struct {
+			Action      string  `json:"action"` // "register" or "load"
+			Name        string  `json:"name"`
+			Path        string  `json:"path"`
+			Scale       float32 `json:"scale"`
+			Description string  `json:"description"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+
+		switch req.Action {
+		case "register":
+			if req.Scale == 0 {
+				req.Scale = 1.0
+			}
+			adapter, err := s.loraManager.RegisterAdapter("", req.Name, req.Path, req.Scale, req.Description)
+			if err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(adapter)
+		case "load":
+			adapterID := parts[0]
+			if err := s.loraManager.LoadAdapter(r.Context(), adapterID); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"status": "loaded", "id": adapterID})
+		case "unload":
+			adapterID := parts[0]
+			if err := s.loraManager.UnloadAdapter(r.Context(), adapterID); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"status": "unloaded", "id": adapterID})
+		default:
+			http.Error(w, `{"error": "invalid action"}`, http.StatusBadRequest)
+		}
+
+	case http.MethodDelete:
+		if len(parts) == 0 || parts[0] == "" {
+			http.Error(w, `{"error": "adapter id required"}`, http.StatusBadRequest)
+			return
+		}
+		if err := s.loraManager.DeleteAdapter(parts[0]); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// ============================================================================
+// Agent Handlers
+// ============================================================================
+
+func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Prompt        string `json:"prompt"`
+		Model         string `json:"model"`
+		Style         string `json:"style"`
+		Stream        bool   `json:"stream"`
+		MaxIterations int    `json:"max_iterations"`
+		MaxSteps      int    `json:"max_steps"`
+		SystemPrompt  string `json:"system_prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+		return
+	}
+
+	// Validate model
+	if req.Model == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "model is required"})
+		return
+	}
+
+	// Get model metadata
+	modelMeta, err := s.registry.GetModel(req.Model)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("model not found: %s", req.Model)})
+		return
+	}
+
+	// Switch to requested model if different
+	if err := s.switchModel(req.Model); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to switch model: %v", err)})
+		return
+	}
+
+	// Load model if not loaded
+	if !modelMeta.IsLoaded {
+		log.Printf("[Agent] Loading model: %s", req.Model)
+		if err := s.registry.LoadModel(req.Model); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to load model: %v", err)})
+			return
+		}
+
+		ctx := context.Background()
+		opts := inference.DefaultLoadOptions()
+		opts.NumThreads = s.config.NumThreads
+		opts.ContextSize = s.config.MaxContextSize
+
+		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to load model into engine: %v", err)})
+			return
+		}
+	}
+
+	style := "react"
+	switch req.Style {
+	case "cot":
+		style = "cot"
+	case "plan", "plan-execute":
+		style = "plan-execute"
+	}
+
+	maxIter := req.MaxIterations
+	if maxIter == 0 {
+		maxIter = req.MaxSteps
+	}
+	if maxIter == 0 {
+		maxIter = 10
+	}
+
+	// Get tools from registry (includes built-in + user-defined + MCP tools)
+	tools := s.toolRegistry.GetTools()
+	executor := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+		return s.toolRegistry.Execute(ctx, name, args)
+	}
+
+	// Use ReAct system prompt if not provided
+	systemPrompt := req.SystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = agents.ReActSystemPrompt(tools)
+	}
+
+	agentCfg := agents.AgentConfig{
+		SystemPrompt:   systemPrompt,
+		ReasoningStyle: style,
+		MaxIterations:  maxIter,
+		MaxTokens:      2048,
+		Temperature:    0.7,
+		TimeoutPerStep: 120 * time.Second, // 2 minutes per step for model loading
+	}
+
+	// Check if streaming is requested
+	stream := req.Stream
+
+	if stream {
+		// Stream the agent output using SSE
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+			return
+		}
+
+		// Send initial status
+		statusData, _ := json.Marshal(map[string]interface{}{
+			"type":   "status",
+			"status": "thinking",
+		})
+		fmt.Fprintf(w, "data: %s\n\n", statusData)
+		flusher.Flush()
+
+		// Create streaming LLM caller
+		var fullResponse strings.Builder
+		llmCaller := func(ctx context.Context, messages []api.ChatMessage, opts map[string]interface{}) (string, error) {
+			if s.engine == nil {
+				return "", fmt.Errorf("no LLM configured - load a model first")
+			}
+
+			// Build streaming chat request
+			chatReq := api.ChatCompletionRequest{
+				Model:    req.Model,
+				Messages: messages,
+				Stream:   true,
+			}
+			if temp, ok := opts["temperature"].(float64); ok {
+				t := float32(temp)
+				chatReq.Temperature = &t
+			}
+			if maxTokens, ok := opts["max_tokens"].(int); ok {
+				chatReq.MaxTokens = &maxTokens
+			}
+
+			// Stream tokens
+			fullResponse.Reset()
+			err := s.engine.ChatCompletionStream(ctx, &chatReq, func(chunk string) error {
+				fullResponse.WriteString(chunk)
+				// Send each token to the client
+				tokenData, _ := json.Marshal(map[string]interface{}{
+					"type":  "token",
+					"token": chunk,
+				})
+				fmt.Fprintf(w, "data: %s\n\n", tokenData)
+				flusher.Flush()
+				return nil
+			})
+
+			if err != nil {
+				return "", err
+			}
+
+			return fullResponse.String(), nil
+		}
+
+		// Create agent with streaming LLM
+		agent := agents.NewAgent(agentCfg, tools, executor, llmCaller)
+
+		// Set up step callback
+		agent.SetStepCallback(func(step agents.Step) {
+			stepData := map[string]interface{}{
+				"type":      "step",
+				"step_type": step.Type,
+				"step_id":   step.ID,
+			}
+			jsonData, _ := json.Marshal(stepData)
+			fmt.Fprintf(w, "data: %s\n\n", jsonData)
+			flusher.Flush()
+		})
+
+		// Run the agent
+		result, err := agent.Run(r.Context(), req.Prompt)
+
+		// Send final result
+		if err != nil {
+			errData, _ := json.Marshal(map[string]interface{}{
+				"type":  "error",
+				"error": err.Error(),
+			})
+			fmt.Fprintf(w, "data: %s\n\n", errData)
+		} else {
+			doneData, _ := json.Marshal(map[string]interface{}{
+				"type":   "done",
+				"output": result,
+			})
+			fmt.Fprintf(w, "data: %s\n\n", doneData)
+		}
+		flusher.Flush()
+		return
+	}
+
+	// Non-streaming: regular LLM caller
+	llmCaller := func(ctx context.Context, messages []api.ChatMessage, opts map[string]interface{}) (string, error) {
+		// Check if a model is loaded
+		if s.engine == nil {
+			return "", fmt.Errorf("no LLM configured - load a model first")
+		}
+
+		// Build chat request
+		chatReq := api.ChatCompletionRequest{
+			Model:    req.Model,
+			Messages: messages,
+		}
+		if temp, ok := opts["temperature"].(float64); ok {
+			t := float32(temp)
+			chatReq.Temperature = &t
+		}
+		if maxTokens, ok := opts["max_tokens"].(int); ok {
+			chatReq.MaxTokens = &maxTokens
+		}
+
+		// Use server's chat completion
+		resp, err := s.engine.ChatCompletion(ctx, &chatReq)
+		if err != nil {
+			return "", err
+		}
+
+		if len(resp.Choices) > 0 {
+			return resp.Choices[0].Message.StringContent(), nil
+		}
+		return "", fmt.Errorf("no response from model")
+	}
+
+	// Non-streaming agent
+	agent := agents.NewAgent(agentCfg, tools, executor, llmCaller)
+	result, err := agent.Run(r.Context(), req.Prompt)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"output": result,
+		"steps":  agent.GetSteps(),
+	})
+}
+
+func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s.agentManager.ListTasks())
+}
+
+func (s *Server) handleAgentWorkflows(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		// Workflows are managed by WorkflowEngine - return info message
+		json.NewEncoder(w).Encode(map[string]any{
+			"workflows": []any{},
+			"message":   "Use POST to register workflows",
+		})
+
+	case http.MethodPost:
+		var wf agents.Workflow
+		if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		// Would need a WorkflowEngine instance to register
+		json.NewEncoder(w).Encode(map[string]string{"status": "registered", "id": wf.ID})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// ============================================================================
+// WebSocket Handler
+// ============================================================================
+
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := websocket.Upgrade(w, r)
+	if err != nil {
+		log.Printf("WebSocket upgrade error: %v", err)
+		return
+	}
+
+	// Register with hub
+	s.wsHub.Register(conn)
+
+	// Set up message handler
+	conn.SetMessageHandler(func(msgType websocket.MessageType, data []byte) {
+		// Process message
+		var request map[string]any
+		if err := json.Unmarshal(data, &request); err != nil {
+			return
+		}
+
+		// Handle different message types
+		reqType, _ := request["type"].(string)
+		switch reqType {
+		case "subscribe":
+			channel, _ := request["channel"].(string)
+			s.wsHub.Subscribe(conn, channel)
+		case "unsubscribe":
+			channel, _ := request["channel"].(string)
+			s.wsHub.Unsubscribe(conn, channel)
+		case "ping":
+			conn.WriteJSON(map[string]string{"type": "pong"})
+		}
+	})
+
+	// Set close handler to unregister from hub
+	conn.SetCloseHandler(func() {
+		s.wsHub.Unregister(conn)
+	})
+
+	// Start the read loop (blocking)
+	conn.ReadLoop()
+}
+
+// handleAgentTools lists and manages agent tools
+func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		// List all available tools
+		tools := s.toolRegistry.GetTools()
+
+		type ToolInfo struct {
+			Name        string                 `json:"name"`
+			Description string                 `json:"description"`
+			Parameters  map[string]interface{} `json:"parameters,omitempty"`
+			Type        string                 `json:"type"`
+		}
+
+		var toolList []ToolInfo
+		for _, tool := range tools {
+			toolList = append(toolList, ToolInfo{
+				Name:        tool.Function.Name,
+				Description: tool.Function.Description,
+				Parameters:  tool.Function.Parameters,
+				Type:        tool.Type,
+			})
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"tools": toolList,
+			"count": len(toolList),
+		})
+
+	case http.MethodPost:
+		// Register a new tool dynamically
+		var req struct {
+			Name        string                 `json:"name"`
+			Description string                 `json:"description"`
+			Parameters  map[string]interface{} `json:"parameters"`
+			Type        string                 `json:"type"` // "shell", "http", "script"
+			Command     string                 `json:"command,omitempty"`
+			URL         string                 `json:"url,omitempty"`
+			Script      string                 `json:"script,omitempty"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			return
+		}
+
+		if req.Name == "" || req.Description == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "name and description are required"})
+			return
+		}
+
+		// Create tool definition
+		tool := api.Tool{
+			Type: "function",
+			Function: api.FunctionDef{
+				Name:        req.Name,
+				Description: req.Description,
+				Parameters:  req.Parameters,
+			},
+		}
+
+		// Create executor based on type
+		var executor agents.SimpleExecutor
+		switch req.Type {
+		case "shell":
+			command := req.Command
+			executor = func(ctx context.Context, args json.RawMessage) (string, error) {
+				return agents.ExecuteTool(ctx, "shell", json.RawMessage(fmt.Sprintf(`{"command": "%s"}`, command)))
+			}
+		case "http":
+			url := req.URL
+			executor = func(ctx context.Context, args json.RawMessage) (string, error) {
+				return agents.ExecuteTool(ctx, "http_get", json.RawMessage(fmt.Sprintf(`{"url": "%s"}`, url)))
+			}
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "unsupported tool type, use 'shell' or 'http'"})
+			return
+		}
+
+		s.toolRegistry.RegisterTool(tool, executor)
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "registered",
+			"tool":   req.Name,
+		})
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+	}
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/server"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
+	"github.com/takuphilchan/offgrid-llm/internal/users"
 )
 
 // Version is set via ldflags during build
@@ -766,6 +767,18 @@ func main() {
 			return
 		case "completions", "completion":
 			handleCompletions(os.Args[2:])
+			return
+		case "users", "user":
+			handleUsers(os.Args[2:])
+			return
+		case "metrics":
+			handleMetrics(os.Args[2:])
+			return
+		case "lora":
+			handleLoRA(os.Args[2:])
+			return
+		case "agent", "agents":
+			handleAgent(os.Args[2:])
 			return
 		case "serve", "server":
 			// Fall through to start server
@@ -2437,6 +2450,20 @@ func printHelp() {
 				{"config <action>", "Manage configuration"},
 				{"benchmark <id>", "Performance testing"},
 				{"help", "Show this help"},
+			},
+		},
+		{
+			title: "Multi-User & Security",
+			cmds: []cmdEntry{
+				{"users <cmd>", "User management & auth"},
+				{"metrics", "View Prometheus metrics"},
+			},
+		},
+		{
+			title: "Advanced Features",
+			cmds: []cmdEntry{
+				{"lora <cmd>", "LoRA adapter management"},
+				{"agent <cmd>", "AI agent workflows"},
 			},
 		},
 		{
@@ -4201,6 +4228,33 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+// wrapText wraps text to a specified width
+func wrapText(text string, width int) string {
+	if len(text) <= width {
+		return text
+	}
+	var lines []string
+	words := strings.Fields(text)
+	var line string
+	for _, word := range words {
+		if len(line)+len(word)+1 > width {
+			if line != "" {
+				lines = append(lines, line)
+			}
+			line = word
+		} else {
+			if line != "" {
+				line += " "
+			}
+			line += word
+		}
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // formatDuration formats a duration in human-readable form
 func formatDuration(d time.Duration) string {
 	if d < time.Microsecond {
@@ -5831,4 +5885,1060 @@ func handleBenchmarkCompare(args []string) {
 	fmt.Println()
 	fmt.Printf("   %s★ = Fastest model%s\n", colorDim, colorReset)
 	fmt.Println()
+}
+
+// handleUsers handles user management commands
+func handleUsers(args []string) {
+	cfg := config.LoadConfig()
+	dataDir := filepath.Join(cfg.ModelsDir, "..", "data")
+	store := users.NewUserStore(dataDir)
+
+	if len(args) < 1 {
+		fmt.Println()
+		fmt.Printf("%sUser Management%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("")
+		fmt.Printf("%sUsage:%s offgrid users <command> [options]\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %slist%s                   List all users\n", brandSecondary, colorReset)
+		fmt.Printf("  %screate <name> <role>%s  Create a user (roles: admin, user, viewer, guest)\n", brandSecondary, colorReset)
+		fmt.Printf("  %sdelete <id>%s           Delete a user\n", brandSecondary, colorReset)
+		fmt.Printf("  %sinfo <id>%s             Show user info\n", brandSecondary, colorReset)
+		fmt.Printf("  %sreset-key <id>%s        Regenerate API key\n", brandSecondary, colorReset)
+		fmt.Printf("  %squota <id>%s            Show user quota usage\n", brandSecondary, colorReset)
+		fmt.Println()
+		return
+	}
+
+	subCmd := args[0]
+	switch subCmd {
+	case "list":
+		userList := store.ListUsers()
+		if output.JSONMode {
+			publicUsers := make([]users.UserPublic, 0, len(userList))
+			for _, u := range userList {
+				publicUsers = append(publicUsers, u.ToPublic())
+			}
+			output.PrintJSON(publicUsers)
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sUsers%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		if len(userList) == 0 {
+			fmt.Println("  No users configured")
+			fmt.Println()
+			fmt.Printf("  %sCreate a user:%s offgrid users create <name> <role>\n", colorDim, colorReset)
+		} else {
+			fmt.Printf("  %s%-32s  %-10s  %-10s  %s%s\n", colorDim, "ID", "Username", "Role", "Created", colorReset)
+			for _, u := range userList {
+				status := ""
+				if u.Disabled {
+					status = " (disabled)"
+				}
+				fmt.Printf("  %-32s  %-10s  %-10s  %s%s\n", u.ID[:16]+"...", u.Username, u.Role, u.CreatedAt.Format("2006-01-02"), status)
+			}
+		}
+		fmt.Println()
+
+	case "create":
+		if len(args) < 3 {
+			printError("Usage: offgrid users create <username> <role>")
+			return
+		}
+		username := args[1]
+		role := users.Role(args[2])
+
+		// Validate role
+		validRoles := map[users.Role]bool{
+			users.RoleAdmin: true, users.RoleUser: true,
+			users.RoleViewer: true, users.RoleGuest: true,
+		}
+		if !validRoles[role] {
+			printError("Invalid role. Use: admin, user, viewer, or guest")
+			return
+		}
+
+		// Generate a random password
+		password := fmt.Sprintf("temp-%d", time.Now().UnixNano())
+
+		user, apiKey, err := store.CreateUser(username, password, role)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to create user: %v", err))
+			return
+		}
+
+		if output.JSONMode {
+			output.PrintJSON(map[string]any{
+				"id":       user.ID,
+				"username": user.Username,
+				"role":     user.Role,
+				"api_key":  apiKey,
+			})
+			return
+		}
+
+		fmt.Println()
+		printSuccess(fmt.Sprintf("Created user: %s", username))
+		fmt.Println()
+		fmt.Printf("  %sUser ID:%s     %s\n", colorDim, colorReset, user.ID)
+		fmt.Printf("  %sUsername:%s    %s\n", colorDim, colorReset, user.Username)
+		fmt.Printf("  %sRole:%s        %s\n", colorDim, colorReset, user.Role)
+		fmt.Printf("  %sAPI Key:%s     %s\n", colorDim, colorReset, apiKey)
+		fmt.Println()
+		fmt.Printf("  %s⚠ Save the API key - it cannot be retrieved later%s\n", colorYellow, colorReset)
+		fmt.Println()
+
+	case "delete":
+		if len(args) < 2 {
+			printError("Usage: offgrid users delete <user-id>")
+			return
+		}
+		userID := args[1]
+		if err := store.DeleteUser(userID); err != nil {
+			printError(fmt.Sprintf("Failed to delete user: %v", err))
+			return
+		}
+		printSuccess(fmt.Sprintf("Deleted user: %s", userID))
+
+	case "info":
+		if len(args) < 2 {
+			printError("Usage: offgrid users info <user-id>")
+			return
+		}
+		userID := args[1]
+		user, ok := store.GetUser(userID)
+		if !ok {
+			printError("User not found")
+			return
+		}
+		if output.JSONMode {
+			output.PrintJSON(user.ToPublic())
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sUser Info%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sID:%s          %s\n", colorDim, colorReset, user.ID)
+		fmt.Printf("  %sUsername:%s    %s\n", colorDim, colorReset, user.Username)
+		fmt.Printf("  %sRole:%s        %s\n", colorDim, colorReset, user.Role)
+		fmt.Printf("  %sCreated:%s     %s\n", colorDim, colorReset, user.CreatedAt.Format(time.RFC3339))
+		if user.LastLoginAt != nil {
+			fmt.Printf("  %sLast Login:%s  %s\n", colorDim, colorReset, user.LastLoginAt.Format(time.RFC3339))
+		}
+		fmt.Printf("  %sDisabled:%s    %v\n", colorDim, colorReset, user.Disabled)
+		fmt.Println()
+
+	case "reset-key":
+		if len(args) < 2 {
+			printError("Usage: offgrid users reset-key <user-id>")
+			return
+		}
+		userID := args[1]
+		apiKey, err := store.RegenerateAPIKey(userID)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to regenerate API key: %v", err))
+			return
+		}
+		if output.JSONMode {
+			output.PrintJSON(map[string]string{"api_key": apiKey})
+			return
+		}
+		fmt.Println()
+		printSuccess("API key regenerated")
+		fmt.Printf("  %sNew API Key:%s %s\n", colorDim, colorReset, apiKey)
+		fmt.Println()
+		fmt.Printf("  %s⚠ Save the API key - it cannot be retrieved later%s\n", colorYellow, colorReset)
+		fmt.Println()
+
+	case "quota":
+		if len(args) < 2 {
+			printError("Usage: offgrid users quota <user-id>")
+			return
+		}
+		userID := args[1]
+		quotaManager := users.NewQuotaManager(dataDir)
+		summary := quotaManager.GetUsageSummary(userID)
+		if output.JSONMode {
+			output.PrintJSON(summary)
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sQuota Usage%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		quotas, ok := summary["quotas"].([]map[string]any)
+		if !ok || len(quotas) == 0 {
+			fmt.Println("  No quotas configured for this user")
+		} else {
+			for _, q := range quotas {
+				exceeded := ""
+				if ex, ok := q["exceeded"].(bool); ok && ex {
+					exceeded = " " + colorRed + "(EXCEEDED)" + colorReset
+				}
+				fmt.Printf("  %s (%s): %v / %v%s\n", q["type"], q["period"], q["current"], q["limit"], exceeded)
+			}
+		}
+		fmt.Println()
+
+	default:
+		printError(fmt.Sprintf("Unknown users command: %s", subCmd))
+	}
+}
+
+// handleMetrics handles metrics display
+func handleMetrics(args []string) {
+	cfg := config.LoadConfig()
+
+	// Try to fetch from running server
+	serverURL := fmt.Sprintf("http://localhost:%d/metrics", cfg.ServerPort)
+
+	resp, err := http.Get(serverURL)
+	if err != nil {
+		// Server not running
+		if output.JSONMode {
+			output.PrintJSON(map[string]string{"status": "server_not_running", "message": "Start server to view live metrics"})
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sMetrics%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sServer not running%s\n", colorYellow, colorReset)
+		fmt.Println()
+		fmt.Printf("  Start the server to view live metrics:\n")
+		fmt.Printf("    %soffgrid serve%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("  Then access metrics at:\n")
+		fmt.Printf("    %s%s%s\n", colorDim, serverURL, colorReset)
+		fmt.Println()
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if output.JSONMode {
+		// Parse Prometheus format to JSON
+		lines := strings.Split(string(body), "\n")
+		metricsData := make(map[string]string)
+		for _, line := range lines {
+			if strings.HasPrefix(line, "#") || line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, " ", 2)
+			if len(parts) == 2 {
+				metricsData[parts[0]] = parts[1]
+			}
+		}
+		output.PrintJSON(metricsData)
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("%sPrometheus Metrics%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println()
+	fmt.Println(string(body))
+}
+
+// handleLoRA handles LoRA adapter management
+func handleLoRA(args []string) {
+	cfg := config.LoadConfig()
+	dataDir := filepath.Join(cfg.ModelsDir, "..", "data")
+	manager := inference.NewLoRAManager(dataDir, nil)
+
+	if len(args) < 1 {
+		fmt.Println()
+		fmt.Printf("%sLoRA Adapter Management%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("")
+		fmt.Printf("%sUsage:%s offgrid lora <command> [options]\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %slist%s                          List registered adapters\n", brandSecondary, colorReset)
+		fmt.Printf("  %sregister <name> <path>%s       Register a LoRA adapter\n", brandSecondary, colorReset)
+		fmt.Printf("  %sremove <id>%s                  Remove an adapter\n", brandSecondary, colorReset)
+		fmt.Printf("  %sinfo <id>%s                    Show adapter info\n", brandSecondary, colorReset)
+		fmt.Printf("  %sscale <id> <value>%s           Set adapter scale (0.0-1.0)\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%sNote:%s LoRA loading requires the server to be running.\n", colorDim, colorReset)
+		fmt.Printf("      Use the /v1/lora/* API endpoints for runtime loading.\n")
+		fmt.Println()
+		return
+	}
+
+	subCmd := args[0]
+	switch subCmd {
+	case "list":
+		adapterList := manager.ListAdapters()
+		if output.JSONMode {
+			output.PrintJSON(manager.GetStatus())
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sLoRA Adapters%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		if len(adapterList) == 0 {
+			fmt.Println("  No adapters registered")
+			fmt.Println()
+			fmt.Printf("  %sRegister an adapter:%s offgrid lora register <name> <path>\n", colorDim, colorReset)
+		} else {
+			fmt.Printf("  %s%-16s  %-20s  %-8s  %s%s\n", colorDim, "ID", "Name", "Scale", "Path", colorReset)
+			for _, a := range adapterList {
+				fmt.Printf("  %-16s  %-20s  %-8.2f  %s\n", a.ID[:16], a.Name, a.Scale, a.Path)
+			}
+		}
+		fmt.Println()
+
+	case "register":
+		if len(args) < 3 {
+			printError("Usage: offgrid lora register <name> <path> [scale]")
+			return
+		}
+		name := args[1]
+		path := args[2]
+		scale := float32(1.0)
+		if len(args) > 3 {
+			fmt.Sscanf(args[3], "%f", &scale)
+		}
+
+		adapter, err := manager.RegisterAdapter("", name, path, scale, "")
+		if err != nil {
+			printError(fmt.Sprintf("Failed to register adapter: %v", err))
+			return
+		}
+
+		if output.JSONMode {
+			output.PrintJSON(adapter)
+			return
+		}
+		printSuccess(fmt.Sprintf("Registered adapter: %s (%s)", adapter.Name, adapter.ID))
+
+	case "remove":
+		if len(args) < 2 {
+			printError("Usage: offgrid lora remove <id>")
+			return
+		}
+		if err := manager.DeleteAdapter(args[1]); err != nil {
+			printError(fmt.Sprintf("Failed to remove adapter: %v", err))
+			return
+		}
+		printSuccess("Adapter removed")
+
+	case "info":
+		if len(args) < 2 {
+			printError("Usage: offgrid lora info <id>")
+			return
+		}
+		adapter, ok := manager.GetAdapter(args[1])
+		if !ok {
+			printError("Adapter not found")
+			return
+		}
+		if output.JSONMode {
+			output.PrintJSON(adapter)
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sAdapter Info%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sID:%s          %s\n", colorDim, colorReset, adapter.ID)
+		fmt.Printf("  %sName:%s        %s\n", colorDim, colorReset, adapter.Name)
+		fmt.Printf("  %sPath:%s        %s\n", colorDim, colorReset, adapter.Path)
+		fmt.Printf("  %sScale:%s       %.2f\n", colorDim, colorReset, adapter.Scale)
+		fmt.Printf("  %sCreated:%s     %s\n", colorDim, colorReset, adapter.CreatedAt.Format(time.RFC3339))
+		fmt.Println()
+
+	case "scale":
+		if len(args) < 3 {
+			printError("Usage: offgrid lora scale <id> <value>")
+			return
+		}
+		var scale float32
+		fmt.Sscanf(args[2], "%f", &scale)
+		if err := manager.SetAdapterScale(context.Background(), args[1], scale); err != nil {
+			printError(fmt.Sprintf("Failed to set scale: %v", err))
+			return
+		}
+		printSuccess(fmt.Sprintf("Scale updated to %.2f", scale))
+
+	default:
+		printError(fmt.Sprintf("Unknown lora command: %s", subCmd))
+	}
+}
+
+// handleAgent handles AI agent commands
+func handleAgent(args []string) {
+	if len(args) < 1 {
+		fmt.Println()
+		fmt.Printf("%sAI Agent Workflows%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("")
+		fmt.Printf("%sUsage:%s offgrid agent <command> [options]\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %srun <prompt>%s              Run an agent with a task\n", brandSecondary, colorReset)
+		fmt.Printf("  %stools%s                     List available tools\n", brandSecondary, colorReset)
+		fmt.Printf("  %smcp add <url>%s             Add an MCP server for external tools\n", brandSecondary, colorReset)
+		fmt.Printf("  %smcp list%s                  List configured MCP servers\n", brandSecondary, colorReset)
+		fmt.Printf("  %smcp remove <name>%s         Remove an MCP server\n", brandSecondary, colorReset)
+		fmt.Printf("  %stasks%s                     List recent tasks\n", brandSecondary, colorReset)
+		fmt.Printf("  %sworkflows%s                 List workflows\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %s--model <name>%s            Model to use (required)\n", colorDim, colorReset)
+		fmt.Printf("  %s--style <style>%s           Reasoning style: react, cot, plan (default: react)\n", colorDim, colorReset)
+		fmt.Printf("  %s--max-steps <n>%s           Maximum iterations (default: 10)\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %soffgrid agent run \"What is 2+2?\" --model llama3%s\n", colorDim, colorReset)
+		fmt.Printf("  %soffgrid agent mcp add http://localhost:3100 --name my-tools%s\n", colorDim, colorReset)
+		fmt.Println()
+		return
+	}
+
+	subCmd := args[0]
+	switch subCmd {
+	case "run":
+		if len(args) < 2 {
+			printError("Usage: offgrid agent run <prompt> --model <name>")
+			return
+		}
+
+		// Parse options first
+		style := "react"
+		maxSteps := 10
+		modelName := ""
+		skipNext := false
+		var promptParts []string
+
+		for i, arg := range args[1:] {
+			if skipNext {
+				skipNext = false
+				continue
+			}
+			if arg == "--style" && i+1 < len(args[1:]) {
+				switch args[i+2] {
+				case "cot":
+					style = "cot"
+				case "plan":
+					style = "plan-execute"
+				}
+				skipNext = true
+				continue
+			}
+			if arg == "--max-steps" && i+1 < len(args[1:]) {
+				fmt.Sscanf(args[i+2], "%d", &maxSteps)
+				skipNext = true
+				continue
+			}
+			if arg == "--model" && i+1 < len(args[1:]) {
+				modelName = args[i+2]
+				skipNext = true
+				continue
+			}
+			if !strings.HasPrefix(arg, "--") {
+				promptParts = append(promptParts, arg)
+			}
+		}
+
+		prompt := strings.Join(promptParts, " ")
+		if prompt == "" {
+			printError("Usage: offgrid agent run <prompt> --model <name>")
+			return
+		}
+
+		if modelName == "" {
+			printError("Model required. Use: offgrid agent run <prompt> --model <name>\n\n  List models: offgrid list")
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("%sRunning Agent%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sModel:%s %s\n", colorDim, colorReset, modelName)
+		fmt.Printf("  %sTask:%s %s\n", colorDim, colorReset, prompt)
+		fmt.Printf("  %sStyle:%s %s\n", colorDim, colorReset, style)
+		fmt.Printf("  %sMax Steps:%s %d\n", colorDim, colorReset, maxSteps)
+		fmt.Println()
+
+		// Connect to running server with streaming
+		cfg := config.LoadConfig()
+		serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/run", cfg.ServerPort)
+
+		reqBody := map[string]interface{}{
+			"prompt":    prompt,
+			"model":     modelName,
+			"style":     style,
+			"max_steps": maxSteps,
+			"stream":    true, // Enable streaming for real-time output
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(serverURL, "application/json", bytes.NewBuffer(jsonBody))
+		if err != nil {
+			printError(fmt.Sprintf("Cannot connect to server: %v\n\n  Start the server with: offgrid serve", err))
+			return
+		}
+		defer resp.Body.Close()
+
+		// Check if streaming response
+		if resp.Header.Get("Content-Type") == "text/event-stream" {
+			// Process streaming response - show tokens as they arrive
+			reader := bufio.NewReader(resp.Body)
+			var finalOutput string
+			isFirstToken := true
+
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					break
+				}
+
+				line = strings.TrimSpace(line)
+				if !strings.HasPrefix(line, "data: ") {
+					continue
+				}
+
+				data := strings.TrimPrefix(line, "data: ")
+				var event map[string]interface{}
+				if err := json.Unmarshal([]byte(data), &event); err != nil {
+					continue
+				}
+
+				eventType, _ := event["type"].(string)
+
+				switch eventType {
+				case "status":
+					status, _ := event["status"].(string)
+					if status == "thinking" {
+						fmt.Printf("%sThinking...%s\n\n", colorDim, colorReset)
+					}
+
+				case "token":
+					// Print token immediately (streaming output)
+					token, _ := event["token"].(string)
+					if isFirstToken {
+						fmt.Printf("  %s", token)
+						isFirstToken = false
+					} else {
+						fmt.Printf("%s", token)
+					}
+
+				case "step":
+					// New step starting - add newline if we were printing tokens
+					if !isFirstToken {
+						fmt.Println()
+						fmt.Println()
+						isFirstToken = true
+					}
+					stepType, _ := event["step_type"].(string)
+					stepID, _ := event["step_id"].(float64)
+
+					fmt.Printf("%sStep %d%s [%s]\n", colorBold, int(stepID), colorReset, stepType)
+
+				case "error":
+					if !isFirstToken {
+						fmt.Println()
+					}
+					errMsg, _ := event["error"].(string)
+					printError(fmt.Sprintf("Agent error: %s", errMsg))
+					return
+
+				case "done":
+					finalOutput, _ = event["output"].(string)
+				}
+			}
+
+			// Show final result
+			if !isFirstToken {
+				fmt.Println()
+			}
+			fmt.Println()
+			fmt.Printf("%sDone%s\n", colorGreen+colorBold, colorReset)
+			if finalOutput != "" {
+				fmt.Printf("\n  %sAnswer:%s %s\n", colorDim, colorReset, finalOutput)
+			}
+			fmt.Println()
+			return
+		}
+
+		// Non-streaming fallback
+		var result map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			printError(fmt.Sprintf("Failed to parse response: %v", err))
+			return
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			if errMsg, ok := result["error"].(string); ok {
+				printError(fmt.Sprintf("Agent error: %s", errMsg))
+			} else {
+				printError(fmt.Sprintf("Server returned status %d", resp.StatusCode))
+			}
+			return
+		}
+
+		if output.JSONMode {
+			output.PrintJSON(result)
+			return
+		}
+
+		fmt.Printf("%sResult%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+
+		// Handle different response formats
+		if resultOutput, ok := result["output"].(string); ok && resultOutput != "" {
+			fmt.Printf("  %sOutput:%s %s\n", colorDim, colorReset, resultOutput)
+		} else if result["output"] == nil {
+			// Check if the response itself is the answer
+			if msg, ok := result["message"].(string); ok {
+				fmt.Printf("  %sOutput:%s %s\n", colorDim, colorReset, msg)
+			} else {
+				fmt.Printf("  %sOutput:%s (no output returned)\n", colorDim, colorReset)
+			}
+		}
+
+		if steps, ok := result["steps"].([]interface{}); ok && len(steps) > 0 {
+			fmt.Printf("  %sSteps:%s %d\n", colorDim, colorReset, len(steps))
+			// Show step summaries
+			for i, step := range steps {
+				if s, ok := step.(map[string]interface{}); ok {
+					stepType := s["type"]
+					content := s["content"]
+					if content != nil {
+						contentStr := fmt.Sprintf("%v", content)
+						if len(contentStr) > 80 {
+							contentStr = contentStr[:77] + "..."
+						}
+						fmt.Printf("    %d. [%v] %s\n", i+1, stepType, contentStr)
+					}
+				}
+			}
+		}
+		fmt.Println()
+
+	case "tasks":
+		// Connect to running server
+		cfg := config.LoadConfig()
+		serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/tasks", cfg.ServerPort)
+
+		resp, err := http.Get(serverURL)
+		if err != nil {
+			printError(fmt.Sprintf("Cannot connect to server: %v\n\n  Start the server with: offgrid serve", err))
+			return
+		}
+		defer resp.Body.Close()
+
+		var tasks []map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+			printError(fmt.Sprintf("Failed to parse response: %v", err))
+			return
+		}
+
+		if output.JSONMode {
+			output.PrintJSON(tasks)
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sRecent Tasks%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		if len(tasks) == 0 {
+			fmt.Println("  No tasks found")
+		} else {
+			for _, task := range tasks {
+				id := task["id"].(string)
+				status := task["status"].(string)
+				prompt := task["prompt"].(string)
+				statusColor := colorYellow
+				if status == "completed" {
+					statusColor = colorGreen
+				} else if status == "failed" {
+					statusColor = colorRed
+				}
+				displayID := id
+				if len(id) > 16 {
+					displayID = id[:16]
+				}
+				fmt.Printf("  %-16s  %s%-12s%s  %s\n", displayID, statusColor, status, colorReset, prompt)
+			}
+		}
+		fmt.Println()
+
+	case "workflows":
+		// Connect to running server
+		cfg := config.LoadConfig()
+		serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/workflows", cfg.ServerPort)
+
+		resp, err := http.Get(serverURL)
+		if err != nil {
+			printError(fmt.Sprintf("Cannot connect to server: %v\n\n  Start the server with: offgrid serve", err))
+			return
+		}
+		defer resp.Body.Close()
+
+		var workflows []map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&workflows); err != nil {
+			printError(fmt.Sprintf("Failed to parse response: %v", err))
+			return
+		}
+
+		if output.JSONMode {
+			output.PrintJSON(workflows)
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sWorkflows%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		if len(workflows) == 0 {
+			fmt.Println("  No workflows defined")
+			fmt.Println()
+			fmt.Printf("  %sNote:%s Workflows can be created via the API\n", colorDim, colorReset)
+		} else {
+			for _, wf := range workflows {
+				name := wf["name"].(string)
+				desc := ""
+				if d, ok := wf["description"].(string); ok {
+					desc = d
+				}
+				fmt.Printf("  • %s%s%s - %s\n", colorBold, name, colorReset, desc)
+			}
+		}
+		fmt.Println()
+
+	case "tools":
+		// List or manage agent tools
+		cfg := config.LoadConfig()
+		serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/tools", cfg.ServerPort)
+
+		resp, err := http.Get(serverURL)
+		if err != nil {
+			printError(fmt.Sprintf("Cannot connect to server: %v\n\n  Start the server with: offgrid serve", err))
+			return
+		}
+		defer resp.Body.Close()
+
+		var result struct {
+			Tools []struct {
+				Name        string                 `json:"name"`
+				Description string                 `json:"description"`
+				Parameters  map[string]interface{} `json:"parameters,omitempty"`
+				Type        string                 `json:"type"`
+			} `json:"tools"`
+			Count int `json:"count"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			printError(fmt.Sprintf("Failed to parse response: %v", err))
+			return
+		}
+
+		if output.JSONMode {
+			output.PrintJSON(result)
+			return
+		}
+		fmt.Println()
+		fmt.Printf("%sAgent Tools%s (%d available)\n", brandPrimary+colorBold, colorReset, result.Count)
+		fmt.Println()
+		if len(result.Tools) == 0 {
+			fmt.Println("  No tools available")
+		} else {
+			// Group by type
+			builtIn := []string{}
+			userDefined := []string{}
+			for _, t := range result.Tools {
+				line := fmt.Sprintf("  • %s%s%s - %s", colorBold, t.Name, colorReset, t.Description)
+				builtIn = append(builtIn, line) // For now, all are shown together
+			}
+			for _, line := range builtIn {
+				fmt.Println(line)
+			}
+			for _, line := range userDefined {
+				fmt.Println(line)
+			}
+		}
+		fmt.Println()
+		fmt.Printf("%sAdd custom tools:%s offgrid agent mcp add <url>\n", colorDim, colorReset)
+		fmt.Println()
+
+	case "mcp":
+		// MCP server management
+		handleAgentMCP(args[1:])
+
+	default:
+		printError(fmt.Sprintf("Unknown agent command: %s", subCmd))
+	}
+}
+
+// handleAgentMCP manages MCP server configuration
+func handleAgentMCP(args []string) {
+	// Get config path
+	homeDir, _ := os.UserHomeDir()
+	configPath := filepath.Join(homeDir, ".offgrid-llm", "data", "tools.json")
+
+	if len(args) < 1 {
+		fmt.Println()
+		fmt.Printf("%sMCP Server Management%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("%sUsage:%s offgrid agent mcp <command>\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %sadd <url>%s                 Add an MCP server\n", brandSecondary, colorReset)
+		fmt.Printf("  %slist%s                      List configured MCP servers\n", brandSecondary, colorReset)
+		fmt.Printf("  %sremove <name>%s             Remove an MCP server\n", brandSecondary, colorReset)
+		fmt.Printf("  %senable <name>%s             Enable an MCP server\n", brandSecondary, colorReset)
+		fmt.Printf("  %sdisable <name>%s            Disable an MCP server\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %s--name <name>%s             Server name (default: derived from URL)\n", colorDim, colorReset)
+		fmt.Printf("  %s--api-key <key>%s           API key for authentication\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %soffgrid agent mcp add http://localhost:3100 --name my-tools%s\n", colorDim, colorReset)
+		fmt.Printf("  %soffgrid agent mcp list%s\n", colorDim, colorReset)
+		fmt.Printf("  %soffgrid agent mcp remove my-tools%s\n", colorDim, colorReset)
+		fmt.Println()
+		return
+	}
+
+	// Load existing config
+	loadConfig := func() (map[string]interface{}, error) {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Create default config
+				return map[string]interface{}{
+					"tools":       []interface{}{},
+					"mcp_servers": []interface{}{},
+				}, nil
+			}
+			return nil, err
+		}
+		var cfg map[string]interface{}
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return nil, err
+		}
+		return cfg, nil
+	}
+
+	// Save config
+	saveConfig := func(cfg map[string]interface{}) error {
+		dir := filepath.Dir(configPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(configPath, data, 0644)
+	}
+
+	mcpCmd := args[0]
+	switch mcpCmd {
+	case "add":
+		if len(args) < 2 {
+			printError("Usage: offgrid agent mcp add <url> [--name <name>] [--api-key <key>]")
+			return
+		}
+
+		url := args[1]
+		name := ""
+		apiKey := ""
+
+		// Parse options
+		for i := 2; i < len(args); i++ {
+			if args[i] == "--name" && i+1 < len(args) {
+				name = args[i+1]
+				i++
+			} else if args[i] == "--api-key" && i+1 < len(args) {
+				apiKey = args[i+1]
+				i++
+			}
+		}
+
+		// Generate name from URL if not provided
+		if name == "" {
+			// Extract host from URL
+			name = url
+			if idx := strings.Index(url, "://"); idx != -1 {
+				name = url[idx+3:]
+			}
+			if idx := strings.Index(name, "/"); idx != -1 {
+				name = name[:idx]
+			}
+			if idx := strings.Index(name, ":"); idx != -1 {
+				name = name[:idx]
+			}
+			if name == "localhost" || name == "127.0.0.1" {
+				name = fmt.Sprintf("mcp-%d", time.Now().Unix()%10000)
+			}
+		}
+
+		cfg, err := loadConfig()
+		if err != nil {
+			printError(fmt.Sprintf("Failed to load config: %v", err))
+			return
+		}
+
+		// Add new MCP server
+		servers, _ := cfg["mcp_servers"].([]interface{})
+		newServer := map[string]interface{}{
+			"name":    name,
+			"url":     url,
+			"enabled": true,
+		}
+		if apiKey != "" {
+			newServer["api_key"] = apiKey
+		}
+		servers = append(servers, newServer)
+		cfg["mcp_servers"] = servers
+
+		if err := saveConfig(cfg); err != nil {
+			printError(fmt.Sprintf("Failed to save config: %v", err))
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("%sMCP Server Added%s\n", colorGreen+colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("  Name: %s\n", name)
+		fmt.Printf("  URL:  %s\n", url)
+		fmt.Println()
+		fmt.Printf("%sRestart the server to connect:%s offgrid serve\n", colorDim, colorReset)
+		fmt.Println()
+
+	case "list":
+		cfg, err := loadConfig()
+		if err != nil {
+			printError(fmt.Sprintf("Failed to load config: %v", err))
+			return
+		}
+
+		servers, _ := cfg["mcp_servers"].([]interface{})
+
+		fmt.Println()
+		fmt.Printf("%sMCP Servers%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+
+		if len(servers) == 0 {
+			fmt.Println("  No MCP servers configured")
+			fmt.Println()
+			fmt.Printf("  %sAdd one with:%s offgrid agent mcp add <url>\n", colorDim, colorReset)
+		} else {
+			for _, s := range servers {
+				srv, ok := s.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				name := srv["name"].(string)
+				url := srv["url"].(string)
+				enabled, _ := srv["enabled"].(bool)
+
+				status := colorGreen + "enabled" + colorReset
+				if !enabled {
+					status = colorDim + "disabled" + colorReset
+				}
+
+				fmt.Printf("  • %s%s%s [%s]\n", colorBold, name, colorReset, status)
+				fmt.Printf("    URL: %s\n", url)
+			}
+		}
+		fmt.Println()
+
+	case "remove":
+		if len(args) < 2 {
+			printError("Usage: offgrid agent mcp remove <name>")
+			return
+		}
+
+		name := args[1]
+
+		cfg, err := loadConfig()
+		if err != nil {
+			printError(fmt.Sprintf("Failed to load config: %v", err))
+			return
+		}
+
+		servers, _ := cfg["mcp_servers"].([]interface{})
+		newServers := []interface{}{}
+		found := false
+		for _, s := range servers {
+			srv, ok := s.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if srv["name"].(string) == name {
+				found = true
+				continue
+			}
+			newServers = append(newServers, srv)
+		}
+
+		if !found {
+			printError(fmt.Sprintf("MCP server not found: %s", name))
+			return
+		}
+
+		cfg["mcp_servers"] = newServers
+		if err := saveConfig(cfg); err != nil {
+			printError(fmt.Sprintf("Failed to save config: %v", err))
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("%sMCP Server Removed:%s %s\n", colorGreen+colorBold, colorReset, name)
+		fmt.Println()
+		fmt.Printf("%sRestart the server to apply:%s offgrid serve\n", colorDim, colorReset)
+		fmt.Println()
+
+	case "enable", "disable":
+		if len(args) < 2 {
+			printError(fmt.Sprintf("Usage: offgrid agent mcp %s <name>", mcpCmd))
+			return
+		}
+
+		name := args[1]
+		enable := mcpCmd == "enable"
+
+		cfg, err := loadConfig()
+		if err != nil {
+			printError(fmt.Sprintf("Failed to load config: %v", err))
+			return
+		}
+
+		servers, _ := cfg["mcp_servers"].([]interface{})
+		found := false
+		for i, s := range servers {
+			srv, ok := s.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if srv["name"].(string) == name {
+				srv["enabled"] = enable
+				servers[i] = srv
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			printError(fmt.Sprintf("MCP server not found: %s", name))
+			return
+		}
+
+		cfg["mcp_servers"] = servers
+		if err := saveConfig(cfg); err != nil {
+			printError(fmt.Sprintf("Failed to save config: %v", err))
+			return
+		}
+
+		action := "Enabled"
+		if !enable {
+			action = "Disabled"
+		}
+		fmt.Println()
+		fmt.Printf("%sMCP Server %s:%s %s\n", colorGreen+colorBold, action, colorReset, name)
+		fmt.Println()
+		fmt.Printf("%sRestart the server to apply:%s offgrid serve\n", colorDim, colorReset)
+		fmt.Println()
+
+	default:
+		printError(fmt.Sprintf("Unknown mcp command: %s", mcpCmd))
+	}
 }

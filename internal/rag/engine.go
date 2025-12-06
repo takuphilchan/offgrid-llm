@@ -203,6 +203,7 @@ func (e *Engine) IngestText(ctx context.Context, name, content string, metadata 
 }
 
 // IngestFile ingests a file from the filesystem
+// Now supports PDF, DOCX, XLSX, PPTX, and many more formats
 func (e *Engine) IngestFile(ctx context.Context, filePath string, metadata map[string]string) (*Document, error) {
 	// Read file content
 	content, err := os.ReadFile(filePath)
@@ -212,30 +213,12 @@ func (e *Engine) IngestFile(ctx context.Context, filePath string, metadata map[s
 
 	// Detect content type
 	ext := strings.ToLower(filepath.Ext(filePath))
-	var textContent string
 
-	switch ext {
-	case ".txt", ".md", ".markdown":
-		textContent = string(content)
-	case ".json":
-		// Pretty print JSON for better chunking
-		var data interface{}
-		if err := json.Unmarshal(content, &data); err == nil {
-			pretty, _ := json.MarshalIndent(data, "", "  ")
-			textContent = string(pretty)
-		} else {
-			textContent = string(content)
-		}
-	case ".csv":
-		textContent = string(content)
-	case ".html", ".htm":
-		// Simple HTML text extraction (strips tags)
-		textContent = stripHTMLTags(string(content))
-	case ".pdf":
-		return nil, fmt.Errorf("PDF support coming soon - for now, convert to text first")
-	default:
-		// Try to read as text
-		textContent = string(content)
+	// Use the document parser for advanced formats
+	parser := NewDocumentParser()
+	result, err := parser.Parse(content, filepath.Base(filePath), ext)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s file: %w", ext, err)
 	}
 
 	if metadata == nil {
@@ -243,8 +226,14 @@ func (e *Engine) IngestFile(ctx context.Context, filePath string, metadata map[s
 	}
 	metadata["source_file"] = filePath
 	metadata["file_ext"] = ext
+	metadata["content_type"] = result.ContentType
 
-	return e.IngestText(ctx, filepath.Base(filePath), textContent, metadata)
+	// Merge parser metadata
+	for k, v := range result.Metadata {
+		metadata[k] = v
+	}
+
+	return e.IngestText(ctx, filepath.Base(filePath), result.Content, metadata)
 }
 
 // IngestReader ingests content from an io.Reader
