@@ -139,6 +139,9 @@ sudo ./dev/install.sh
 - **Build from source** → [Building Guide](advanced/BUILDING.md)
 - **Understand the system** → [Architecture](advanced/ARCHITECTURE.md)
 - **Contribute** → [Contributing](../dev/CONTRIBUTING.md)
+- **Use AI Agents** → [Agent Guide](guides/AGENT_GUIDE.md)
+- **Monitor metrics** → [Metrics Guide](guides/METRICS_GUIDE.md)
+- **Enable multi-user mode** → [Multi-User Mode](guides/MULTI_USER_MODE.md)
 
 ### By Problem
 
@@ -175,6 +178,12 @@ sudo ./dev/install.sh
 - [**Model Setup**](guides/MODEL_SETUP.md) - Download and manage models
 - [**Embeddings Guide**](guides/EMBEDDINGS_GUIDE.md) - Using embeddings API
 - [**HuggingFace Integration**](guides/HUGGINGFACE_INTEGRATION.md) - Direct HF model downloads
+
+### New in v0.2.3
+
+- [**AI Agent Guide**](guides/AGENT_GUIDE.md) - Autonomous AI agents with MCP support
+- [**Metrics Guide**](guides/METRICS_GUIDE.md) - System monitoring and Prometheus metrics
+- [**Multi-User Mode**](guides/MULTI_USER_MODE.md) - User management and authentication
 
 ---
 

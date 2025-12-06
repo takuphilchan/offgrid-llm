@@ -49,7 +49,22 @@ http://localhost:11611
 
 ## Authentication
 
-Currently, no authentication is required. This will be added in future versions for multi-user deployments.
+OffGrid supports optional authentication in multi-user mode.
+
+### Single-User Mode (Default)
+No authentication required. All endpoints are accessible without credentials.
+
+### Multi-User Mode
+Enable with `OFFGRID_MULTI_USER=true`. Authentication can be configured with:
+- `OFFGRID_REQUIRE_AUTH=true` - Require auth for all requests
+- `OFFGRID_GUEST_ACCESS=true` - Allow guest access when auth not required
+
+### API Key Authentication
+```bash
+curl -H "Authorization: Bearer og_YOUR_API_KEY" http://localhost:11611/v1/models
+```
+
+See [Multi-User Mode Guide](guides/MULTI_USER_MODE.md) for details.
 
 ## Endpoints
 
@@ -444,9 +459,154 @@ See [Configuration Guide](CONFIGURATION.md) for environment variables and server
 
 Currently, no rate limiting is implemented. This will be added in future versions.
 
-## Future API Endpoints
+---
 
-Coming soon:
-- `POST /v1/import` - Import models from USB/SD card
-- `GET /v1/stats` - Server statistics and resource usage
-- `GET /v1/peers` - List P2P peers (when P2P is enabled)
+## New API Endpoints (v0.2.3+)
+
+### System Configuration
+
+Get current system configuration and feature flags.
+
+**Endpoint:** `GET /v1/system/config`
+
+**Response:**
+```json
+{
+  "multi_user_mode": false,
+  "require_auth": false,
+  "guest_access": true,
+  "version": "0.2.3",
+  "features": {
+    "users": false,
+    "metrics": true,
+    "agent": true,
+    "lora": true
+  }
+}
+```
+
+### System Stats
+
+Get real-time system statistics.
+
+**Endpoint:** `GET /v1/system/stats`
+
+**Response:**
+```json
+{
+  "cpu_percent": 2.5,
+  "memory_bytes": 52428800,
+  "models_loaded": 1,
+  "active_sessions": 3,
+  "requests_total": 150,
+  "tokens_generated": 50000,
+  "uptime_seconds": 3600
+}
+```
+
+### Prometheus Metrics
+
+Get Prometheus-format metrics for monitoring.
+
+**Endpoint:** `GET /metrics`
+
+---
+
+### AI Agent Endpoints
+
+Run autonomous AI agents with tool use.
+
+**Run Agent Task:**
+```bash
+POST /v1/agents/run
+{
+  "model": "qwen2.5-7b-instruct",
+  "prompt": "Calculate the factorial of 10",
+  "style": "react",
+  "max_steps": 10,
+  "stream": true
+}
+```
+
+**List Tools:**
+```bash
+GET /v1/agents/tools?all=true
+```
+
+**Toggle Tool:**
+```bash
+PATCH /v1/agents/tools
+{
+  "name": "write_file",
+  "enabled": false
+}
+```
+
+**MCP Server Management:**
+```bash
+# List servers
+GET /v1/agents/mcp
+
+# Add server
+POST /v1/agents/mcp
+{
+  "name": "filesystem",
+  "url": "npx -y @modelcontextprotocol/server-filesystem /tmp"
+}
+
+# Test connection
+POST /v1/agents/mcp/test
+{
+  "url": "npx -y @modelcontextprotocol/server-memory"
+}
+
+# Remove server
+DELETE /v1/agents/mcp/{name}
+```
+
+See [Agent Guide](guides/AGENT_GUIDE.md) for detailed documentation.
+
+---
+
+### User Management Endpoints (Multi-User Mode)
+
+> Requires `OFFGRID_MULTI_USER=true`
+
+**List Users:**
+```bash
+GET /v1/users
+```
+
+**Get Current User:**
+```bash
+GET /v1/users/me
+```
+
+**Create User:**
+```bash
+POST /v1/users
+{
+  "username": "alice",
+  "password": "secret",
+  "role": "user"
+}
+```
+
+**Login:**
+```bash
+POST /v1/auth/login
+{
+  "username": "alice",
+  "password": "secret"
+}
+```
+
+**Generate API Key:**
+```bash
+POST /v1/users/{id}/api-keys
+{
+  "name": "My API Key"
+}
+```
+
+See [Multi-User Mode Guide](guides/MULTI_USER_MODE.md) for detailed documentation.

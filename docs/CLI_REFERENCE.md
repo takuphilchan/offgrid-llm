@@ -43,6 +43,21 @@ offgrid run tinyllama-1.1b-chat.Q4_K_M    # Interactive chat
 offgrid benchmark tinyllama-1.1b-chat.Q4_K_M  # Performance test
 ```
 
+### AI Agents (New)
+```bash
+offgrid agent run "Calculate factorial of 10"  # Run agent task
+offgrid agent tools                             # List available tools
+offgrid agent mcp list                          # List MCP servers
+offgrid agent mcp add name "npx -y @modelcontextprotocol/server-filesystem /tmp"
+```
+
+### User Management (Multi-User Mode)
+```bash
+offgrid users                              # List users (requires OFFGRID_MULTI_USER=true)
+offgrid users create alice                 # Create a user
+offgrid users delete <user-id>             # Delete a user
+```
+
 ### Information
 ```bash
 offgrid info          # System information
@@ -556,6 +571,85 @@ curl http://localhost:11611/v1/chat/completions \
 - **Bold**: Commands, file names
 - `Code`: Literal values, flags
 - Regular: Descriptions, help text
+
+---
+
+## AI Agent Commands
+
+### `offgrid agent run`
+
+Run an AI agent to complete a task autonomously.
+
+```bash
+offgrid agent run "Calculate the factorial of 10"
+offgrid agent run "Search for Llama models and summarize" --model qwen2.5-7b
+```
+
+**Options:**
+- `--model`: Model to use for agent reasoning
+- `--style`: Agent style (`react` or `cot`)
+- `--max-steps`: Maximum reasoning steps (default: 10)
+
+### `offgrid agent tools`
+
+List available tools for agents.
+
+```bash
+offgrid agent tools
+```
+
+### `offgrid agent mcp`
+
+Manage MCP (Model Context Protocol) servers.
+
+```bash
+# List MCP servers
+offgrid agent mcp list
+
+# Add MCP server
+offgrid agent mcp add filesystem "npx -y @modelcontextprotocol/server-filesystem /tmp"
+
+# Remove MCP server
+offgrid agent mcp remove filesystem
+
+# Test MCP server connection
+offgrid agent mcp test "npx -y @modelcontextprotocol/server-memory"
+```
+
+---
+
+## User Management Commands
+
+> **Note:** User management requires multi-user mode. Enable with `OFFGRID_MULTI_USER=true`.
+
+### `offgrid users`
+
+List all users (multi-user mode only).
+
+```bash
+# In single-user mode (shows helpful message)
+offgrid users
+
+# In multi-user mode
+OFFGRID_MULTI_USER=true offgrid users
+```
+
+### `offgrid users create`
+
+Create a new user.
+
+```bash
+offgrid users create alice --role user
+offgrid users create bob --role admin
+```
+
+### `offgrid users delete`
+
+Delete a user by ID.
+
+```bash
+offgrid users delete <user-id>
+```
 
 ---
 
