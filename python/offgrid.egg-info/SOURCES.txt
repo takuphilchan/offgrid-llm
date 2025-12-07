@@ -1,8 +1,10 @@
 README.md
 pyproject.toml
 offgrid/__init__.py
+offgrid/agent.py
 offgrid/client.py
 offgrid/kb.py
+offgrid/lora.py
 offgrid/models.py
 offgrid.egg-info/PKG-INFO
 offgrid.egg-info/SOURCES.txt

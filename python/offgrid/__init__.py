@@ -37,7 +37,7 @@ Usage:
 
 from typing import Dict, List, Union
 
-__version__ = "0.2.3"
+__version__ = "0.1.3"
 __author__ = "OffGrid LLM Team"
 
 from .client import Client, OffGridError, Sessions
