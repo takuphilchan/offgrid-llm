@@ -2961,7 +2961,7 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		"multi_user_mode": s.config.MultiUserMode,
 		"require_auth":    s.config.RequireAuth,
 		"guest_access":    s.config.GuestAccess,
-		"version":         "0.2.2",
+		"version":         "0.2.3",
 		"features": map[string]bool{
 			"users":   s.config.MultiUserMode,
 			"metrics": true, // Always available but can be hidden
