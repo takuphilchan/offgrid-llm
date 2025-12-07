@@ -186,6 +186,108 @@ client.kb.remove("notes.md")
 client.kb.clear()  # Remove all
 ```
 
+### AI Agents (New in v0.2.3)
+
+Run autonomous agents that can use tools to complete tasks:
+
+```python
+# Run an agent task
+result = client.agent.run(
+    "Calculate 127 * 48 + 356",
+    model="llama3.2:3b"
+)
+print(result["result"])
+
+# List available tools
+tools = client.agent.tools()
+for tool in tools:
+    status = "✓" if tool["enabled"] else "✗"
+    print(f"[{status}] {tool['name']}: {tool['description']}")
+
+# Toggle tools on/off
+client.agent.disable_tool("shell")  # Security: disable shell access
+client.agent.enable_tool("calculator")
+
+# Complex multi-step tasks
+result = client.agent.run(
+    "Read the VERSION file and tell me what version it is",
+    model="llama3.2:3b",
+    max_steps=5
+)
+```
+
+**Built-in Tools:**
+- `calculator` - Evaluate mathematical expressions
+- `current_time` - Get current date/time
+- `read_file` - Read file contents
+- `write_file` - Write content to files
+- `list_files` - List directory contents
+- `shell` - Execute shell commands
+- `http_get` - Make HTTP GET requests
+
+### MCP Integration (New in v0.2.3)
+
+Connect external tools via Model Context Protocol:
+
+```python
+# Add an MCP server
+client.agent.mcp.add(
+    "filesystem",
+    "npx -y @modelcontextprotocol/server-filesystem /tmp"
+)
+
+# List configured servers
+servers = client.agent.mcp.list()
+for s in servers:
+    print(f"{s['name']}: {s['url']}")
+
+# Test a server connection
+result = client.agent.mcp.test(url="npx -y @modelcontextprotocol/server-github")
+print(f"Found {len(result.get('tools', []))} tools")
+
+# Remove a server
+client.agent.mcp.remove("filesystem")
+```
+
+### LoRA Adapters (New in v0.2.3)
+
+Manage LoRA adapters for fine-tuned models:
+
+```python
+# List registered adapters
+adapters = client.lora.list()
+for a in adapters:
+    print(f"{a['name']}: {a['path']}")
+
+# Register a new adapter
+client.lora.register(
+    "coding-assistant",
+    "/path/to/code-lora.gguf",
+    scale=0.8
+)
+
+# Get adapter details
+adapter = client.lora.get("coding-assistant")
+
+# Remove an adapter
+client.lora.remove("coding-assistant")
+```
+
+### System Configuration (New in v0.2.3)
+
+```python
+# Get server configuration and feature flags
+config = client.config()
+print(f"Version: {config['version']}")
+print(f"Multi-user mode: {config['multi_user_mode']}")
+print(f"Agent enabled: {config['features']['agent']}")
+
+# Get real-time system stats
+stats = client.system_stats()
+print(f"CPU: {stats['cpu_percent']}%")
+print(f"Memory: {stats['memory_percent']}%")
+```
+
 ### Embeddings
 
 ```python

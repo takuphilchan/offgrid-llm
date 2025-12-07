@@ -26,16 +26,25 @@ Usage:
     sessions = client.sessions
     session = sessions.create("my-chat")
     sessions.chat_with_session("my-chat", "Hello!")
+    
+    # AI Agents with tool use
+    result = client.agent.run("Calculate 127 * 48", model="llama3.2:3b")
+    print(result["result"])
+    
+    # MCP server integration
+    client.agent.mcp.add("filesystem", "npx -y @modelcontextprotocol/server-filesystem /tmp")
 """
 
 from typing import Dict, List, Union
 
-__version__ = "0.1.2"
+__version__ = "0.2.3"
 __author__ = "OffGrid LLM Team"
 
 from .client import Client, OffGridError, Sessions
 from .models import ModelManager
 from .kb import KnowledgeBase
+from .agent import Agent, MCP
+from .lora import LoRA
 
 __all__ = [
     "Client",
@@ -43,5 +52,8 @@ __all__ = [
     "OffGridError",
     "ModelManager",
     "KnowledgeBase",
+    "Agent",
+    "MCP",
+    "LoRA",
     "__version__",
 ]

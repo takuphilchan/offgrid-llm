@@ -13,6 +13,8 @@ from urllib.parse import urlencode, urlparse
 
 from .models import ModelManager
 from .kb import KnowledgeBase
+from .agent import Agent
+from .lora import LoRA
 
 
 class OffGridError(Exception):
@@ -218,6 +220,8 @@ class Client:
         self.models = ModelManager(self)
         self.kb = KnowledgeBase(self)
         self.sessions = Sessions(self)
+        self.agent = Agent(self)
+        self.lora = LoRA(self)
         
         # Cache for default model
         self._default_model = None
@@ -541,6 +545,39 @@ class Client:
             >>> print(f"Total requests: {stats['inference']['aggregate']['total_requests']}")
         """
         return self._request("GET", "/v1/stats")
+    
+    def config(self) -> Dict:
+        """
+        Get system configuration and feature flags.
+        
+        Returns:
+            Dictionary with:
+                - multi_user_mode: Whether multi-user mode is enabled
+                - require_auth: Whether authentication is required
+                - guest_access: Whether guest access is allowed
+                - version: Server version
+                - features: Dict of enabled features (users, metrics, agent, lora)
+        
+        Example:
+            >>> config = client.config()
+            >>> print(f"Version: {config['version']}")
+            >>> print(f"Agent enabled: {config['features']['agent']}")
+        """
+        return self._request("GET", "/v1/system/config")
+    
+    def system_stats(self) -> Dict:
+        """
+        Get real-time system statistics.
+        
+        Returns:
+            Dictionary with CPU, memory, disk usage, and uptime
+        
+        Example:
+            >>> stats = client.system_stats()
+            >>> print(f"CPU: {stats['cpu_percent']}%")
+            >>> print(f"Memory: {stats['memory_percent']}%")
+        """
+        return self._request("GET", "/v1/system/stats")
     
     def refresh_models(self) -> List[Dict]:
         """
