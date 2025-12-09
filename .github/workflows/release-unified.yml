@@ -70,7 +70,7 @@ jobs:
         include:
           # Linux variants - AVX2 (compatible with most CPUs from 2013+)
           - name: linux-amd64-cpu-avx2
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             platform: linux
             arch: amd64
             variant: cpu
@@ -79,7 +79,7 @@ jobs:
             cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
           - name: linux-amd64-vulkan-avx2
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             platform: linux
             arch: amd64
             variant: vulkan
@@ -89,7 +89,7 @@ jobs:
             
           # Linux variants - AVX-512 (newer Intel CPUs)
           - name: linux-amd64-cpu-avx512
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             platform: linux
             arch: amd64
             variant: cpu
@@ -98,7 +98,7 @@ jobs:
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-amd64-vulkan-avx512
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             platform: linux
             arch: amd64
             variant: vulkan
@@ -107,7 +107,7 @@ jobs:
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-arm64-cpu
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             platform: linux
             arch: arm64
             variant: cpu
@@ -235,9 +235,21 @@ jobs:
           esac
           
           # Build CMake command with validated flags
+          # Use static linking for maximum GLIBC compatibility (works on GLIBC 2.17+)
           CMAKE_ARGS="-DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DGGML_STATIC=ON -DLLAMA_CURL=OFF"
           
-          if [ -n "$CPU_FLAGS" ]; then
+          # Add static linking flags for Linux to avoid GLIBC version requirements
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            STATIC_FLAGS="-static-libgcc -static-libstdc++"
+            if [ -n "$CPU_FLAGS" ]; then
+              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$CPU_FLAGS $STATIC_FLAGS\" -DCMAKE_CXX_FLAGS=\"$CPU_FLAGS $STATIC_FLAGS\""
+              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_EXE_LINKER_FLAGS=\"$STATIC_FLAGS\""
+            else
+              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$STATIC_FLAGS\" -DCMAKE_CXX_FLAGS=\"$STATIC_FLAGS\""
+              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_EXE_LINKER_FLAGS=\"$STATIC_FLAGS\""
+            fi
+            echo "Using static linking for Linux (GLIBC compatibility)"
+          elif [ -n "$CPU_FLAGS" ]; then
             CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$CPU_FLAGS\" -DCMAKE_CXX_FLAGS=\"$CPU_FLAGS\""
             echo "CMake will use CPU optimizations: $CPU_FLAGS"
           else
@@ -263,7 +275,16 @@ jobs:
           echo "WHISPER_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           
           mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
+          
+          # Build with static linking for Linux (GLIBC compatibility)
+          CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF"
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            STATIC_FLAGS="-static-libgcc -static-libstdc++"
+            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$STATIC_FLAGS\" -DCMAKE_CXX_FLAGS=\"$STATIC_FLAGS\""
+            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_EXE_LINKER_FLAGS=\"$STATIC_FLAGS\""
+          fi
+          
+          eval cmake .. $CMAKE_ARGS
           cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
       - name: Download Piper
@@ -559,7 +580,7 @@ jobs:
       matrix:
         include:
           - os: linux
-            runner: ubuntu-20.04
+            runner: ubuntu-22.04
             build_script: build:linux
             
           - os: macos
