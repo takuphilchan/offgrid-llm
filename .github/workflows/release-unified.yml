@@ -352,19 +352,9 @@ jobs:
             
             # Create whisper wrapper script
             if [ "${{ matrix.platform }}" = "linux" ]; then
-              cat > "$BUNDLE_NAME/audio/whisper/whisper" << 'WHISPER_EOF'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export LD_LIBRARY_PATH="$SCRIPT_DIR:$LD_LIBRARY_PATH"
-exec "$SCRIPT_DIR/whisper-cli" "$@"
-WHISPER_EOF
+              printf '%s\n' '#!/bin/bash' 'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' 'export LD_LIBRARY_PATH="$SCRIPT_DIR:$LD_LIBRARY_PATH"' 'exec "$SCRIPT_DIR/whisper-cli" "$@"' > "$BUNDLE_NAME/audio/whisper/whisper"
             elif [ "${{ matrix.platform }}" = "darwin" ]; then
-              cat > "$BUNDLE_NAME/audio/whisper/whisper" << 'WHISPER_EOF'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export DYLD_LIBRARY_PATH="$SCRIPT_DIR:$DYLD_LIBRARY_PATH"
-exec "$SCRIPT_DIR/whisper-cli" "$@"
-WHISPER_EOF
+              printf '%s\n' '#!/bin/bash' 'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' 'export DYLD_LIBRARY_PATH="$SCRIPT_DIR:$DYLD_LIBRARY_PATH"' 'exec "$SCRIPT_DIR/whisper-cli" "$@"' > "$BUNDLE_NAME/audio/whisper/whisper"
             fi
             chmod +x "$BUNDLE_NAME/audio/whisper/whisper" "$BUNDLE_NAME/audio/whisper/whisper-cli"
             
@@ -377,50 +367,50 @@ WHISPER_EOF
           # Create install script
           if [ "${{ matrix.platform }}" != "windows" ]; then
             cat > "$BUNDLE_NAME/install.sh" << 'EOF'
-#!/bin/bash
-set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUDIO_DIR="$HOME/.offgrid-llm/audio"
-
-echo "Installing OffGrid LLM..."
-
-# Install main binaries
-sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
-sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
-sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server
-
-# Install audio components
-echo "Installing audio components..."
-mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
-
-if [ -d "$SCRIPT_DIR/audio/whisper" ]; then
-  cp -r "$SCRIPT_DIR/audio/whisper/"* "$AUDIO_DIR/whisper/"
-  chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
-  echo "✓ Whisper (speech-to-text) installed"
-fi
-
-if [ -d "$SCRIPT_DIR/audio/piper" ]; then
-  cp -r "$SCRIPT_DIR/audio/piper/"* "$AUDIO_DIR/piper/"
-  chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
-  echo "✓ Piper (text-to-speech) installed"
-fi
-
-# Install web UI
-WEB_DIR="/var/lib/offgrid/web/ui"
-if [ -d "$SCRIPT_DIR/web/ui" ]; then
-  sudo mkdir -p "$WEB_DIR"
-  sudo cp -r "$SCRIPT_DIR/web/ui/"* "$WEB_DIR/"
-  echo "✓ Web UI installed"
-fi
-
-echo ""
-echo "✓ OffGrid LLM installed successfully!"
-echo ""
-echo "Get started:"
-echo "  offgrid --version"
-echo "  offgrid serve              # Start server with Web UI"
-echo "  offgrid search llama       # Search for models"
-EOF
+          #!/bin/bash
+          set -e
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          AUDIO_DIR="$HOME/.offgrid-llm/audio"
+          
+          echo "Installing OffGrid LLM..."
+          
+          # Install main binaries
+          sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
+          sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
+          sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server
+          
+          # Install audio components
+          echo "Installing audio components..."
+          mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
+          
+          if [ -d "$SCRIPT_DIR/audio/whisper" ]; then
+            cp -r "$SCRIPT_DIR/audio/whisper/"* "$AUDIO_DIR/whisper/"
+            chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
+            echo "✓ Whisper (speech-to-text) installed"
+          fi
+          
+          if [ -d "$SCRIPT_DIR/audio/piper" ]; then
+            cp -r "$SCRIPT_DIR/audio/piper/"* "$AUDIO_DIR/piper/"
+            chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
+            echo "✓ Piper (text-to-speech) installed"
+          fi
+          
+          # Install web UI
+          WEB_DIR="/var/lib/offgrid/web/ui"
+          if [ -d "$SCRIPT_DIR/web/ui" ]; then
+            sudo mkdir -p "$WEB_DIR"
+            sudo cp -r "$SCRIPT_DIR/web/ui/"* "$WEB_DIR/"
+            echo "✓ Web UI installed"
+          fi
+          
+          echo ""
+          echo "✓ OffGrid LLM installed successfully!"
+          echo ""
+          echo "Get started:"
+          echo "  offgrid --version"
+          echo "  offgrid serve              # Start server with Web UI"
+          echo "  offgrid search llama       # Search for models"
+          EOF
             chmod +x "$BUNDLE_NAME/install.sh"
           fi
           
@@ -432,76 +422,76 @@ EOF
           
           # Create README
           cat > "$BUNDLE_NAME/README.md" << EOF
-# OffGrid LLM ${VERSION}
-
-**Platform:** ${{ matrix.name }}
-**llama.cpp:** ${{ env.LLAMA_COMMIT }}
-**whisper.cpp:** ${{ env.WHISPER_COMMIT }}
-
-## Installation
-EOF
+          # OffGrid LLM ${VERSION}
+          
+          **Platform:** ${{ matrix.name }}
+          **llama.cpp:** ${{ env.LLAMA_COMMIT }}
+          **whisper.cpp:** ${{ env.WHISPER_COMMIT }}
+          
+          ## Installation
+          EOF
           
           if [ "${{ matrix.platform }}" = "windows" ]; then
             cat >> "$BUNDLE_NAME/README.md" << 'EOF'
-### Windows
-1. Extract this archive
-2. Run the installer or manually copy binaries to your PATH
-
-```powershell
-# Copy main binaries
-Copy-Item offgrid.exe C:\Program Files\OffGrid\
-Copy-Item llama-server.exe C:\Program Files\OffGrid\
-
-# Audio binaries are in audio\ folder
-```
-EOF
+          ### Windows
+          1. Extract this archive
+          2. Run the installer or manually copy binaries to your PATH
+          
+          ```powershell
+          # Copy main binaries
+          Copy-Item offgrid.exe C:\Program Files\OffGrid\
+          Copy-Item llama-server.exe C:\Program Files\OffGrid\
+          
+          # Audio binaries are in audio\ folder
+          ```
+          EOF
           else
             cat >> "$BUNDLE_NAME/README.md" << 'EOF'
-### Linux / macOS
-```bash
-./install.sh
-```
-
-This installs:
-- offgrid and llama-server to /usr/local/bin
-- whisper.cpp and piper to ~/.offgrid-llm/audio/
-- Web UI to /var/lib/offgrid/web/ui/
-EOF
+          ### Linux / macOS
+          ```bash
+          ./install.sh
+          ```
+          
+          This installs:
+          - offgrid and llama-server to /usr/local/bin
+          - whisper.cpp and piper to ~/.offgrid-llm/audio/
+          - Web UI to /var/lib/offgrid/web/ui/
+          EOF
           fi
           
           cat >> "$BUNDLE_NAME/README.md" << 'EOF'
-
-## Getting Started
-
-```bash
-# Verify installation
-offgrid --version
-
-# Start server with Web UI
-offgrid serve
-
-# Search for models
-offgrid search llama --limit 5
-
-# Download a model
-offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
-  --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
-
-# Start chatting
-offgrid run Llama-3.2-3B-Instruct-Q4_K_M
-```
-
-## Features
-
-- **LLM Inference**: Chat with local AI models
-- **Speech-to-Text**: Transcribe audio with whisper.cpp
-- **Text-to-Speech**: Generate speech with Piper
-- **Web UI**: Access at http://localhost:11611/ui
-
-## Documentation
-
-https://github.com/takuphilchan/offgrid-llm
-EOF
+          
+          ## Getting Started
+          
+          ```bash
+          # Verify installation
+          offgrid --version
+          
+          # Start server with Web UI
+          offgrid serve
+          
+          # Search for models
+          offgrid search llama --limit 5
+          
+          # Download a model
+          offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
+            --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
+          
+          # Start chatting
+          offgrid run Llama-3.2-3B-Instruct-Q4_K_M
+          ```
+          
+          ## Features
+          
+          - **LLM Inference**: Chat with local AI models
+          - **Speech-to-Text**: Transcribe audio with whisper.cpp
+          - **Text-to-Speech**: Generate speech with Piper
+          - **Web UI**: Access at http://localhost:11611/ui
+          
+          ## Documentation
+          
+          https://github.com/takuphilchan/offgrid-llm
+          EOF
           
           # Create checksums (use shasum on macOS, sha256sum on Linux)
           cd "$BUNDLE_NAME"
