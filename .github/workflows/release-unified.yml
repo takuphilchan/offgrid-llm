@@ -772,7 +772,7 @@ jobs:
           if [ "${{ matrix.os }}" = "linux" ]; then
             PATTERN="\( -name \"*.AppImage\" -o -name \"*.deb\" \)"
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            PATTERN="-name \"*.dmg\""
+            PATTERN="-name \"*.zip\""
           else
             PATTERN="-name \"*.exe\""
           fi
@@ -782,7 +782,7 @@ jobs:
           if [ "${{ matrix.os }}" = "linux" ]; then
             FILE_COUNT=$(find . -maxdepth 1 \( -name "*.AppImage" -o -name "*.deb" \) -type f | wc -l)
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            FILE_COUNT=$(find . -maxdepth 1 -name "*.dmg" -type f | wc -l)
+            FILE_COUNT=$(find . -maxdepth 1 -name "*.zip" -type f | wc -l)
           else
             FILE_COUNT=$(find . -maxdepth 1 -name "*.exe" -type f | wc -l)
           fi
@@ -808,7 +808,7 @@ jobs:
               fi
             done
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            find . -maxdepth 1 -name "*.dmg" -type f | while IFS= read -r filepath; do
+            find . -maxdepth 1 -name "*.zip" -type f | while IFS= read -r filepath; do
               file="${filepath#./}"
               echo "Uploading: $file ($(du -h "$file" | cut -f1))"
               if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
