@@ -321,6 +321,97 @@ download_desktop_app() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# Build Whisper from Source (for GLIBC compatibility)
+# ═══════════════════════════════════════════════════════════════
+build_whisper_from_source() {
+    local install_dir="$1"
+    local build_dir="/tmp/whisper-build-$$"
+    
+    # Check for required build tools
+    local missing_tools=""
+    command -v git >/dev/null 2>&1 || missing_tools="$missing_tools git"
+    command -v cmake >/dev/null 2>&1 || missing_tools="$missing_tools cmake"
+    command -v make >/dev/null 2>&1 || missing_tools="$missing_tools make"
+    (command -v g++ >/dev/null 2>&1 || command -v clang++ >/dev/null 2>&1) || missing_tools="$missing_tools g++"
+    
+    if [ -n "$missing_tools" ]; then
+        log_warn "Missing build tools:$missing_tools"
+        log_info "Installing build dependencies..."
+        
+        # Try to install missing tools
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq git cmake build-essential
+        elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y git cmake gcc-c++ make
+        elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y git cmake gcc-c++ make
+        elif command -v pacman >/dev/null 2>&1; then
+            sudo pacman -S --noconfirm git cmake base-devel
+        else
+            log_error "Cannot install build tools automatically. Please install: git cmake g++ make"
+            return 1
+        fi
+    fi
+    
+    # Clone and build
+    rm -rf "$build_dir"
+    mkdir -p "$build_dir"
+    
+    log_dim "Cloning whisper.cpp..."
+    if ! git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git "$build_dir/whisper.cpp" 2>/dev/null; then
+        log_error "Failed to clone whisper.cpp"
+        rm -rf "$build_dir"
+        return 1
+    fi
+    
+    cd "$build_dir/whisper.cpp"
+    
+    log_dim "Building whisper.cpp (this may take a few minutes)..."
+    if ! cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_CCACHE=OFF >/dev/null 2>&1; then
+        log_error "CMake configuration failed"
+        cd - >/dev/null
+        rm -rf "$build_dir"
+        return 1
+    fi
+    
+    local num_cores
+    num_cores=$(nproc 2>/dev/null || echo 4)
+    
+    if ! cmake --build build --config Release -j"$num_cores" >/dev/null 2>&1; then
+        log_error "Build failed"
+        cd - >/dev/null
+        rm -rf "$build_dir"
+        return 1
+    fi
+    
+    # Install binaries
+    mkdir -p "$install_dir"
+    
+    # Copy the main binary
+    if [ -f "build/bin/whisper-cli" ]; then
+        cp "build/bin/whisper-cli" "$install_dir/"
+    elif [ -f "build/bin/main" ]; then
+        cp "build/bin/main" "$install_dir/whisper-cli"
+    else
+        log_error "whisper-cli binary not found after build"
+        cd - >/dev/null
+        rm -rf "$build_dir"
+        return 1
+    fi
+    
+    chmod +x "$install_dir/whisper-cli"
+    
+    # Copy shared libraries if they exist
+    find build -name "*.so*" -exec cp {} "$install_dir/" \; 2>/dev/null || true
+    
+    cd - >/dev/null
+    rm -rf "$build_dir"
+    
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════
 # Installation Functions
 # ═══════════════════════════════════════════════════════════════
 install_cli() {
@@ -362,44 +453,104 @@ install_audio() {
     mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
     
     # Install Whisper (Speech-to-Text)
-    if [ -d "$bundle_dir/audio/whisper" ]; then
+    # Always build from source on Linux for GLIBC compatibility
+    local whisper_installed=false
+    local os
+    os="$(uname -s)"
+    
+    if [ "$os" = "Linux" ]; then
+        # Build whisper.cpp from source to avoid GLIBC issues
+        log_info "Building Whisper from source (ensures compatibility)..."
+        if build_whisper_from_source "$AUDIO_DIR/whisper"; then
+            whisper_installed=true
+            log_success "Whisper (Speech-to-Text) built and installed"
+        else
+            log_warn "Whisper build failed - voice input will not be available"
+        fi
+    elif [ -d "$bundle_dir/audio/whisper" ]; then
+        # macOS/Windows: use pre-built binaries
         cp -r "$bundle_dir/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
         chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
-        # Create lib symlinks for whisper if needed
-        if [ -d "$AUDIO_DIR/whisper/lib" ]; then
-            cd "$AUDIO_DIR/whisper/lib"
-            for lib in *.so.*.*; do
-                if [ -f "$lib" ]; then
-                    base="${lib%.*.*}"
-                    ln -sf "$lib" "${base}" 2>/dev/null || true
-                fi
-            done
-            cd - > /dev/null
-        fi
+        whisper_installed=true
         log_success "Whisper (Speech-to-Text) installed"
     else
         log_warn "Whisper binaries not in bundle - will build on first use"
     fi
     
     # Install Piper (Text-to-Speech)
-    if [ -d "$bundle_dir/audio/piper" ]; then
+    # Piper has complex dependencies, download pre-built from official releases
+    local piper_installed=false
+    
+    if [ "$os" = "Linux" ]; then
+        log_info "Downloading Piper from official releases..."
+        if download_piper "$AUDIO_DIR/piper"; then
+            piper_installed=true
+            log_success "Piper (Text-to-Speech) installed"
+        else
+            log_warn "Piper download failed - voice output will not be available"
+        fi
+    elif [ -d "$bundle_dir/audio/piper" ]; then
         cp -r "$bundle_dir/audio/piper/"* "$AUDIO_DIR/piper/" 2>/dev/null || true
         chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
-        # Create lib symlinks for piper (required for shared libraries)
-        local piper_lib_dir="$AUDIO_DIR/piper"
-        [ -d "$AUDIO_DIR/piper/piper" ] && piper_lib_dir="$AUDIO_DIR/piper/piper"
-        if [ -d "$piper_lib_dir" ]; then
-            cd "$piper_lib_dir"
-            # Create symlinks for versioned libraries
-            [ -f "libpiper_phonemize.so.1.2.0" ] && ln -sf "libpiper_phonemize.so.1.2.0" "libpiper_phonemize.so.1" 2>/dev/null && ln -sf "libpiper_phonemize.so.1" "libpiper_phonemize.so" 2>/dev/null
-            [ -f "libonnxruntime.so.1.14.1" ] && ln -sf "libonnxruntime.so.1.14.1" "libonnxruntime.so.1" 2>/dev/null && ln -sf "libonnxruntime.so.1" "libonnxruntime.so" 2>/dev/null
-            [ -f "libespeak-ng.so.1.52.0.1" ] && ln -sf "libespeak-ng.so.1.52.0.1" "libespeak-ng.so.1" 2>/dev/null && ln -sf "libespeak-ng.so.1" "libespeak-ng.so" 2>/dev/null
-            cd - > /dev/null
-        fi
+        piper_installed=true
         log_success "Piper (Text-to-Speech) installed"
     else
         log_warn "Piper binaries not in bundle - will download on first use"
     fi
+}
+
+# Download Piper from official releases
+download_piper() {
+    local install_dir="$1"
+    local arch
+    arch="$(uname -m)"
+    
+    local piper_url=""
+    case "$arch" in
+        x86_64|amd64)
+            piper_url="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz"
+            ;;
+        aarch64|arm64)
+            piper_url="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz"
+            ;;
+        *)
+            log_warn "Unsupported architecture for Piper: $arch"
+            return 1
+            ;;
+    esac
+    
+    local tmp_dir="/tmp/piper-download-$$"
+    mkdir -p "$tmp_dir"
+    
+    log_dim "Downloading Piper..."
+    if ! curl -fsSL -o "$tmp_dir/piper.tar.gz" "$piper_url" 2>/dev/null; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    
+    log_dim "Extracting Piper..."
+    if ! tar -xzf "$tmp_dir/piper.tar.gz" -C "$tmp_dir" 2>/dev/null; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    
+    # Copy piper files
+    mkdir -p "$install_dir"
+    if [ -d "$tmp_dir/piper" ]; then
+        cp -r "$tmp_dir/piper/"* "$install_dir/"
+    fi
+    
+    chmod +x "$install_dir/piper" 2>/dev/null || true
+    
+    # Create lib symlinks
+    cd "$install_dir"
+    [ -f "libpiper_phonemize.so.1.2.0" ] && ln -sf "libpiper_phonemize.so.1.2.0" "libpiper_phonemize.so.1" 2>/dev/null && ln -sf "libpiper_phonemize.so.1" "libpiper_phonemize.so" 2>/dev/null
+    [ -f "libonnxruntime.so.1.14.1" ] && ln -sf "libonnxruntime.so.1.14.1" "libonnxruntime.so.1" 2>/dev/null && ln -sf "libonnxruntime.so.1" "libonnxruntime.so" 2>/dev/null
+    [ -f "libespeak-ng.so.1.52.0.1" ] && ln -sf "libespeak-ng.so.1.52.0.1" "libespeak-ng.so.1" 2>/dev/null && ln -sf "libespeak-ng.so.1" "libespeak-ng.so" 2>/dev/null
+    cd - >/dev/null
+    
+    rm -rf "$tmp_dir"
+    return 0
 }
 
 install_webui() {
