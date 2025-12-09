@@ -28,21 +28,46 @@ No cloud. No subscriptions. No data leaving your machine.
 
 ## Install
 
-**One command to install everything:**
+### Quick Install (Non-Interactive)
+
+Installs everything automatically - CLI, Desktop App, and Voice Assistant:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
-This installs CLI + Desktop App + Voice Assistant (Whisper STT + Piper TTS).
+> **Note:** When piped through `curl`, the installer runs in non-interactive mode and installs the full system automatically. This is ideal for quick setup.
 
-For non-interactive installation:
+### Interactive Install (Choose Components)
+
+Download first, then run to get a menu:
+
 ```bash
-# Install everything (default)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | NONINTERACTIVE=yes bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh -o install.sh
+bash install.sh
+```
 
-# CLI + Voice only (no desktop)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | DESKTOP=no NONINTERACTIVE=yes bash
+This shows an interactive menu:
+```
+What would you like to install?
+  1) Full System      CLI + Desktop + Audio (recommended)
+  2) CLI Only         Command-line tools only
+  3) CLI + Audio      CLI with voice features
+  4) CLI + Desktop    CLI with desktop app
+```
+
+### Environment Variable Options
+
+```bash
+# Custom configurations (pipe or interactive)
+DESKTOP=no bash install.sh          # Skip desktop app
+AUDIO=no bash install.sh            # Skip voice features
+CLI=yes DESKTOP=no AUDIO=yes bash install.sh  # CLI + Audio only
+```
+
+**Start the server:**
+```bash
+offgrid serve
 ```
 
 **Then open:** http://localhost:11611
@@ -204,6 +229,32 @@ offgrid serve                   # Start server
 | 16GB+ | 13B+ parameters |
 
 GPU optional. Supports NVIDIA (CUDA), AMD (ROCm), Apple Silicon (Metal), Vulkan.
+
+---
+
+## Troubleshooting
+
+### Desktop App: FUSE Error on Linux
+
+If you see `AppImages require FUSE to run`, the installer automatically extracts the AppImage. If the desktop app still doesn't work:
+
+```bash
+# Option 1: Install FUSE
+sudo apt install libfuse2    # Ubuntu/Debian
+sudo dnf install fuse-libs   # Fedora
+
+# Option 2: Reinstall (will extract automatically)
+rm -rf ~/.local/share/offgrid-desktop
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+```
+
+### Voice Features Not Working
+
+If whisper/piper fails, rebuild from source:
+```bash
+rm -rf ~/.offgrid-llm/audio
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+```
 
 ---
 

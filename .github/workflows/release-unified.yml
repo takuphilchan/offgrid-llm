@@ -293,7 +293,22 @@ jobs:
           fi
           
           echo "Downloading Piper from: $PIPER_URL"
-          curl -fsSL -o piper-archive "$PIPER_URL"
+          
+          # Retry logic for transient network errors (502, etc)
+          for i in 1 2 3 4 5; do
+            if curl -fsSL --retry 3 --retry-delay 5 -o piper-archive "$PIPER_URL"; then
+              echo "Download successful on attempt $i"
+              break
+            else
+              echo "Attempt $i failed, retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
+          
+          if [ ! -f piper-archive ]; then
+            echo "Failed to download Piper after 5 attempts"
+            exit 1
+          fi
           
           if [[ "$PIPER_URL" == *.zip ]]; then
             unzip piper-archive

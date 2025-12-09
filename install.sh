@@ -605,11 +605,35 @@ install_desktop() {
     
     case "$os" in
         linux)
-            # Install AppImage
-            local app_dir="$HOME/.local/bin"
-            mkdir -p "$app_dir"
-            cp "$app_path" "$app_dir/offgrid-desktop"
-            chmod +x "$app_dir/offgrid-desktop"
+            # Install AppImage - always extract to avoid FUSE requirement
+            # FUSE is often not available, especially on WSL, containers, minimal installs
+            local app_dir="$HOME/.local/share/offgrid-desktop"
+            local bin_dir="$HOME/.local/bin"
+            
+            # Clean previous installation
+            rm -rf "$app_dir"
+            mkdir -p "$app_dir" "$bin_dir"
+            
+            log_dim "Extracting AppImage..."
+            chmod +x "$app_path"
+            cd "$app_dir"
+            "$app_path" --appimage-extract >/dev/null 2>&1 || true
+            cd - >/dev/null
+            
+            # Create launcher script
+            if [ -d "$app_dir/squashfs-root" ]; then
+                cat > "$bin_dir/offgrid-desktop" << 'LAUNCHER'
+#!/bin/bash
+cd "$HOME/.local/share/offgrid-desktop/squashfs-root"
+exec ./AppRun "$@"
+LAUNCHER
+                chmod +x "$bin_dir/offgrid-desktop"
+            else
+                # Extraction failed - try copying AppImage directly (requires FUSE)
+                log_dim "Extraction failed, installing AppImage directly (requires FUSE)..."
+                cp "$app_path" "$bin_dir/offgrid-desktop"
+                chmod +x "$bin_dir/offgrid-desktop"
+            fi
             
             # Create desktop entry
             local desktop_dir="$HOME/.local/share/applications"
@@ -618,13 +642,13 @@ install_desktop() {
 [Desktop Entry]
 Name=OffGrid LLM
 Comment=Local AI Assistant
-Exec=$app_dir/offgrid-desktop
+Exec=$bin_dir/offgrid-desktop
 Icon=offgrid-llm
 Type=Application
 Categories=Utility;Development;
 Terminal=false
 EOF
-            log_success "Desktop app installed to $app_dir"
+            log_success "Desktop app installed to $bin_dir"
             ;;
         darwin)
             # Mount DMG and copy app
