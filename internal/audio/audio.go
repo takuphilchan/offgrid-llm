@@ -336,6 +336,17 @@ func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, e
 	}
 
 	cmd := exec.Command(e.whisperPath, args...)
+
+	// Set LD_LIBRARY_PATH so whisper can find its shared libraries
+	whisperDir := filepath.Dir(e.whisperPath)
+	ldPath := os.Getenv("LD_LIBRARY_PATH")
+	if ldPath != "" {
+		ldPath = whisperDir + ":" + ldPath
+	} else {
+		ldPath = whisperDir
+	}
+	cmd.Env = append(os.Environ(), "LD_LIBRARY_PATH="+ldPath)
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

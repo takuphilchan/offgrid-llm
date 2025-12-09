@@ -368,7 +368,8 @@ build_whisper_from_source() {
     cd "$build_dir/whisper.cpp"
     
     log_dim "Building whisper.cpp (this may take a few minutes)..."
-    if ! cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_CCACHE=OFF >/dev/null 2>&1; then
+    # Build with static linking to avoid LD_LIBRARY_PATH issues
+    if ! cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_CCACHE=OFF -DBUILD_SHARED_LIBS=OFF >/dev/null 2>&1; then
         log_error "CMake configuration failed"
         cd - >/dev/null
         rm -rf "$build_dir"
