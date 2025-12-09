@@ -344,9 +344,9 @@ download_desktop_app() {
             ;;
         darwin)
             if [ "$arch" = "arm64" ]; then
-                app_name="OffGrid.LLM.Desktop-${version_num}-arm64.dmg"
+                app_name="OffGrid.LLM.Desktop-${version_num}-arm64.zip"
             else
-                app_name="OffGrid.LLM.Desktop-${version_num}-x64.dmg"
+                app_name="OffGrid.LLM.Desktop-${version_num}-x64.zip"
             fi
             download_url="${GITHUB_URL}/releases/download/${version}/${app_name}"
             ;;
