@@ -4763,7 +4763,7 @@ Type 'help' for available commands or 'offgrid --help' for all options
                     }
                     
                     localStorage.setItem('offgrid_sessions', JSON.stringify(sessions));
-                    renderSessionsList();
+                    renderSessions();
                     
                     if (onComplete) onComplete();
                 },
@@ -5054,13 +5054,13 @@ Type 'help' for available commands or 'offgrid --help' for all options
                     }
                     
                     localStorage.setItem('offgrid_sessions', JSON.stringify(sessions));
+                    renderSessions();
                     showModal({
                         type: 'success',
                         title: 'Saved',
                         message: 'Session saved successfully',
                         confirmText: 'OK'
                     });
-                    renderSessionsList();
                 }
             });
         }
@@ -8451,7 +8451,7 @@ Type 'help' for available commands or 'offgrid --help' for all options
             `;
             
             // Show a custom modal with the select
-            showPrompt('Select new role:', async (newRole) => {
+            showInputPrompt('Select new role:', async (newRole) => {
                 if (!newRole || newRole === currentRole) return;
                 try {
                     const resp = await fetch(`/v1/users/${currentUserDetails.id}/role`, {
@@ -8474,8 +8474,8 @@ Type 'help' for available commands or 'offgrid --help' for all options
             });
         }
         
-        // Add showPrompt function for role editing
-        function showPrompt(message, onSubmit, options = {}) {
+        // Add showInputPrompt function for role editing
+        function showInputPrompt(message, onSubmit, options = {}) {
             const { title = 'Input', inputType = 'text', selectOptions = [], defaultValue = '' } = options;
             
             let inputHtml = '';
