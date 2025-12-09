@@ -70,7 +70,7 @@ jobs:
         include:
           # Linux variants - AVX2 (compatible with most CPUs from 2013+)
           - name: linux-amd64-cpu-avx2
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             platform: linux
             arch: amd64
             variant: cpu
@@ -79,7 +79,7 @@ jobs:
             cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
           - name: linux-amd64-vulkan-avx2
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             platform: linux
             arch: amd64
             variant: vulkan
@@ -89,7 +89,7 @@ jobs:
             
           # Linux variants - AVX-512 (newer Intel CPUs)
           - name: linux-amd64-cpu-avx512
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             platform: linux
             arch: amd64
             variant: cpu
@@ -98,7 +98,7 @@ jobs:
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-amd64-vulkan-avx512
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             platform: linux
             arch: amd64
             variant: vulkan
@@ -107,7 +107,7 @@ jobs:
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-arm64-cpu
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             platform: linux
             arch: arm64
             variant: cpu
@@ -171,9 +171,11 @@ jobs:
           
           # Install Vulkan SDK if needed
           if [ "${{ matrix.variant }}" = "vulkan" ]; then
-            # Install Vulkan SDK from LunarG for glslc (use jammy for Ubuntu 22.04)
+            # Install Vulkan SDK from LunarG for glslc
+            # Detect Ubuntu version and use correct repo
+            UBUNTU_CODENAME=$(lsb_release -cs)
             wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-            sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+            sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan.list "https://packages.lunarg.com/vulkan/lunarg-vulkan-${UBUNTU_CODENAME}.list"
             sudo apt-get update
             sudo apt-get install -y vulkan-sdk
           fi
