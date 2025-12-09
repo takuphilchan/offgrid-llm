@@ -70,7 +70,7 @@ jobs:
         include:
           # Linux variants - AVX2 (compatible with most CPUs from 2013+)
           - name: linux-amd64-cpu-avx2
-            os: ubuntu-24.04
+            os: ubuntu-20.04
             platform: linux
             arch: amd64
             variant: cpu
@@ -79,7 +79,7 @@ jobs:
             cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
           - name: linux-amd64-vulkan-avx2
-            os: ubuntu-24.04
+            os: ubuntu-20.04
             platform: linux
             arch: amd64
             variant: vulkan
@@ -89,7 +89,7 @@ jobs:
             
           # Linux variants - AVX-512 (newer Intel CPUs)
           - name: linux-amd64-cpu-avx512
-            os: ubuntu-24.04
+            os: ubuntu-20.04
             platform: linux
             arch: amd64
             variant: cpu
@@ -98,7 +98,7 @@ jobs:
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-amd64-vulkan-avx512
-            os: ubuntu-24.04
+            os: ubuntu-20.04
             platform: linux
             arch: amd64
             variant: vulkan
@@ -107,7 +107,7 @@ jobs:
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-arm64-cpu
-            os: ubuntu-24.04
+            os: ubuntu-20.04
             platform: linux
             arch: arm64
             variant: cpu
@@ -559,7 +559,7 @@ jobs:
       matrix:
         include:
           - os: linux
-            runner: ubuntu-22.04
+            runner: ubuntu-20.04
             build_script: build:linux
             
           - os: macos
