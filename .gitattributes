@@ -22,3 +22,12 @@ go.sum text eol=lf
 *.dll binary
 *.dylib binary
 *.exe binary
+
+# Linguist overrides for GitHub language statistics
+# Mark large HTML UI files as vendored so Go is shown as primary language
+web/ui/index.html linguist-vendored
+desktop/index.html linguist-vendored
+desktop/node_modules/** linguist-vendored
+
+# Mark Python package info as generated
+python/offgrid.egg-info/** linguist-generated
