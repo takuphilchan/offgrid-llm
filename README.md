@@ -3,6 +3,7 @@
 **Run powerful AI models completely offline on your own computer.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-0.2.4-blue.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
 [![PyPI](https://img.shields.io/pypi/v/offgrid?style=flat-square&color=3776AB)](https://pypi.org/project/offgrid/)
 
@@ -16,13 +17,28 @@ No cloud. No subscriptions. No data leaving your machine.
 
 ## Features
 
+### Core
 - **100% Offline** - Your data never leaves your computer
-- **Modern Chat UI** - Clean, responsive web interface
-- **Voice Assistant** - Multi-language speech-to-text and text-to-speech (18+ languages)
-- **Python Library** - Simple API for scripting and automation
-- **Knowledge Base (RAG)** - Chat with your documents
-- **USB Transfer** - Move models between air-gapped systems
+- **Modern Chat UI** - Clean, responsive web interface with session management
 - **Cross-Platform** - Linux, macOS, and Windows support
+
+### AI Capabilities
+- **Voice Assistant** - Multi-language speech-to-text and text-to-speech (18+ languages)
+- **Knowledge Base (RAG)** - Chat with your documents using embeddings
+- **AI Agent** - Autonomous task execution with tool use
+- **LoRA Fine-tuning** - Load custom adapters for specialized models
+
+### Developer Tools
+- **Python Library** - Simple API for scripting and automation
+- **REST API** - OpenAI-compatible endpoints
+- **Benchmark Suite** - Compare model performance
+- **Built-in Terminal** - Run commands from the web UI
+
+### Management
+- **Model Hub** - Search and download from HuggingFace
+- **User Management** - Multi-user support with API keys
+- **Metrics Dashboard** - Server statistics and resource monitoring
+- **USB Transfer** - Move models between air-gapped systems
 
 ---
 
@@ -96,6 +112,21 @@ pip install offgrid
     </td>
   </tr>
 </table>
+
+---
+
+## Quick Start
+
+```bash
+# Install
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+
+# Start server
+offgrid serve
+
+# Open browser
+# http://localhost:11611
+```
 
 ---
 
@@ -205,9 +236,19 @@ offgrid audio voices                              # List voices
 
 ## Web UI & CLI
 
-After installing the desktop app:
+**Web Interface:** `http://localhost:11611`
 
-**Web Interface:** `http://localhost:11611/ui/`
+The web UI includes:
+- **Chat** - Conversation interface with session history
+- **Voice** - Voice assistant with push-to-talk
+- **Agent** - Autonomous AI task execution
+- **Models** - Browse, download, and manage models
+- **Knowledge** - RAG document management and embeddings
+- **LoRA** - Load fine-tuned adapters
+- **Benchmark** - Compare model performance
+- **Terminal** - Run commands from browser
+- **Users** - Manage users and API keys
+- **Metrics** - Server statistics and monitoring
 
 **Command Line:**
 ```bash
@@ -216,6 +257,8 @@ offgrid search llama --ram 8    # Search HuggingFace
 offgrid download-hf repo --file model.gguf
 offgrid run model-name          # Interactive chat
 offgrid serve                   # Start server
+offgrid audio transcribe file.wav  # Transcribe audio
+offgrid audio speak "Hello!"       # Text to speech
 ```
 
 ---
@@ -285,10 +328,12 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 
 | Guide | Description |
 |-------|-------------|
-| [Python Library](python/README.md) | Full Python API reference |
 | [Quick Start](docs/QUICKSTART.md) | Get running in 5 minutes |
+| [Python Library](python/README.md) | Full Python API reference |
 | [CLI Reference](docs/CLI_REFERENCE.md) | All commands |
 | [API Reference](docs/API.md) | REST API endpoints |
+| [Embeddings Guide](docs/guides/EMBEDDINGS_GUIDE.md) | RAG and document embeddings |
+| [HuggingFace Integration](docs/guides/HUGGINGFACE_INTEGRATION.md) | Model search and download |
 
 **Docker:** [docs/DOCKER.md](docs/DOCKER.md) · **Contributing:** [dev/CONTRIBUTING.md](dev/CONTRIBUTING.md)
 
