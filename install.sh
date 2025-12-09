@@ -12,12 +12,12 @@
 #   AUDIO=yes|no       Install Audio - Whisper STT + Piper TTS (default: yes)
 #   AUTOSTART=yes|no   Auto-start service (default: ask)
 #   NONINTERACTIVE=yes Skip all prompts, use defaults (installs everything)
-#   GPU=cpu|vulkan     Force CPU or Vulkan build (default: auto-detect)
+#   GPU=cpu|vulkan     Force CPU or Vulkan build (default: auto-detect GPU)
 #
-# GLIBC Compatibility:
-#   CPU builds: GLIBC 2.35+ (Ubuntu 22.04+, Debian 12+)
-#   Vulkan builds: GLIBC 2.38+ (Ubuntu 24.04+)
-#   Installer auto-detects and falls back to CPU if GLIBC is too old
+# Requirements:
+#   Linux: GLIBC 2.38+ (Ubuntu 24.04+, Fedora 40+)
+#   macOS: 12.0+ (Monterey)
+#   For older Linux systems, build from source: ./dev/install.sh
 
 set -e
 
@@ -119,22 +119,19 @@ detect_gpu() {
     local os="$1"
     local variant="cpu"
     
-    # GPU/Vulkan builds require GLIBC 2.38+ (Ubuntu 24.04)
-    # Always default to CPU for maximum compatibility
+    # Auto-detect GPU for acceleration
     if [ "$os" = "linux" ]; then
-        local glibc_check=$(check_glibc_version 2 38)
-        if [ "$glibc_check" = "compatible" ]; then
-            # System has new enough GLIBC - can use Vulkan if available
-            if command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
-                variant="vulkan"
-            elif command -v nvidia-smi >/dev/null 2>&1; then
-                variant="vulkan"
-            elif [ -d "/sys/class/drm" ] && ls /sys/class/drm/card*/device/vendor 2>/dev/null | xargs cat 2>/dev/null | grep -q "0x1002"; then
-                variant="vulkan"
-            fi
+        # Check for Vulkan-capable GPU
+        if command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
+            variant="vulkan"
+        elif command -v nvidia-smi >/dev/null 2>&1; then
+            variant="vulkan"
+        elif [ -d "/sys/class/drm" ] && ls /sys/class/drm/card*/device/vendor 2>/dev/null | xargs cat 2>/dev/null | grep -q "0x1002"; then
+            # AMD GPU detected
+            variant="vulkan"
         fi
-        # If GLIBC is too old, stay with CPU (which is built on Ubuntu 22.04)
     elif [ "$os" = "darwin" ]; then
+        # macOS Apple Silicon uses Metal
         if [ "$(uname -m)" = "arm64" ]; then
             variant="metal"
         fi
@@ -797,6 +794,22 @@ main() {
     local arch=$(detect_arch)
     local cpu_features=$(detect_cpu_features)
     
+    # Check GLIBC version on Linux (requires 2.38+ / Ubuntu 24.04+)
+    if [ "$os" = "linux" ]; then
+        local glibc_check=$(check_glibc_version 2 38)
+        if [ "$glibc_check" != "compatible" ]; then
+            local current_glibc=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo "unknown")
+            log_error "GLIBC $current_glibc detected, but 2.38+ required (Ubuntu 24.04+)"
+            log_error "Pre-built binaries require Ubuntu 24.04, Fedora 40+, or similar"
+            echo "" >&2
+            log_info "For older systems, build from source:"
+            log_dim "  git clone https://github.com/takuphilchan/offgrid-llm.git"
+            log_dim "  cd offgrid-llm && sudo ./dev/install.sh"
+            echo "" >&2
+            exit 1
+        fi
+    fi
+    
     # Allow environment variable override for GPU variant
     # Use: GPU=vulkan or GPU=cpu to force a specific build
     local gpu_variant
@@ -809,18 +822,9 @@ main() {
     
     log_info "System detected: $os-$arch ($gpu_variant, $cpu_features)"
     
-    # Inform user about GPU/GLIBC status on Linux
-    if [ "$os" = "linux" ]; then
-        local glibc_check=$(check_glibc_version 2 38)
-        if [ "$gpu_variant" = "cpu" ] && [ "$glibc_check" != "compatible" ]; then
-            local current_glibc=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo "unknown")
-            if command -v nvidia-smi >/dev/null 2>&1 || command -v vulkaninfo >/dev/null 2>&1; then
-                log_warn "GPU detected but GLIBC $current_glibc < 2.38 required for Vulkan builds"
-                log_warn "Using CPU build for compatibility. Upgrade to Ubuntu 24.04+ for GPU acceleration."
-            fi
-        elif [ "$gpu_variant" = "vulkan" ]; then
-            log_info "GPU acceleration enabled (Vulkan)"
-        fi
+    # Inform user about GPU status
+    if [ "$os" = "linux" ] && [ "$gpu_variant" = "vulkan" ]; then
+        log_info "GPU acceleration enabled (Vulkan)"
     fi
     
     # Get version

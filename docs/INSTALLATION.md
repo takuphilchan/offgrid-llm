@@ -15,6 +15,16 @@ This installs:
 
 **Then open:** http://localhost:11611
 
+### System Requirements
+
+| Platform | Requirement |
+|----------|-------------|
+| **Linux** | Ubuntu 24.04+, Fedora 40+, or GLIBC 2.38+ |
+| **macOS** | macOS 12.0+ (Monterey) |
+| **Windows** | Windows 10/11 |
+
+> **Older Linux systems:** Build from source with `./dev/install.sh` (see below)
+
 ### Non-Interactive Installation
 
 Use environment variables for automated installations:
@@ -30,30 +40,29 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | DESKTOP=no AUDIO=no NONINTERACTIVE=yes bash
 ```
 
-### GPU Builds
+### GPU Acceleration
 
-By default, the installer auto-detects your GPU and GLIBC version:
+The installer auto-detects your GPU:
 
-| Build Type | GLIBC Required | Systems |
-|------------|----------------|---------|
-| CPU | 2.35+ | Ubuntu 22.04+, Debian 12+ |
-| Vulkan (GPU) | 2.38+ | Ubuntu 24.04+ |
+| GPU Type | Build | Acceleration |
+|----------|-------|--------------|
+| NVIDIA/AMD | Vulkan | Auto-detected |
+| Apple Silicon | Metal | Auto-detected |
+| Intel/None | CPU | Default fallback |
 
 ```bash
-# Force CPU build (maximum compatibility)
+# Force CPU build (disable GPU)
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | GPU=cpu bash
 
-# Force Vulkan build (requires GLIBC 2.38+)
+# Force Vulkan build (requires compatible GPU)
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | GPU=vulkan bash
 ```
-
-> **Note:** If your system has a GPU but GLIBC < 2.38, the installer will automatically fall back to the CPU build and display a warning.
 
 ---
 
 ## Development Installation (Build from Source)
 
-**For GPU optimization and development:**
+**For older Linux systems (Ubuntu 22.04, Debian 12, etc.) or GPU optimization:**
 
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git

@@ -68,7 +68,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux variants - AVX2 (compatible with most CPUs from 2013+)
+          # Linux builds on Ubuntu 24.04 (GLIBC 2.38)
+          # For older systems, build from source: ./dev/install.sh
           - name: linux-amd64-cpu-avx2
             os: ubuntu-24.04
             platform: linux
@@ -87,7 +88,6 @@ jobs:
             gpu_flags: "-DGGML_VULKAN=ON"
             cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
-          # Linux variants - AVX-512 (newer Intel CPUs)
           - name: linux-amd64-cpu-avx512
             os: ubuntu-24.04
             platform: linux
