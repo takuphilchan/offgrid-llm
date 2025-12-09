@@ -536,7 +536,8 @@ func (hf *HuggingFaceClient) selectBestVariant(files []GGUFFileInfo) *GGUFFileIn
 
 // GetModelInfo fetches detailed information about a specific model
 func (hf *HuggingFaceClient) GetModelInfo(modelID string) (*HFModel, error) {
-	apiURL := fmt.Sprintf("%s/models/%s", hf.baseURL, url.PathEscape(modelID))
+	// Note: modelID is in format "owner/repo" - don't escape the slash
+	apiURL := fmt.Sprintf("%s/models/%s", hf.baseURL, modelID)
 
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
@@ -568,7 +569,8 @@ func (hf *HuggingFaceClient) GetModelInfo(modelID string) (*HFModel, error) {
 
 func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
 	// Use the tree API which includes file sizes
-	apiURL := fmt.Sprintf("%s/models/%s/tree/main", hf.baseURL, url.PathEscape(modelID))
+	// Note: modelID is in format "owner/repo" - don't escape the slash
+	apiURL := fmt.Sprintf("%s/models/%s/tree/main", hf.baseURL, modelID)
 
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
