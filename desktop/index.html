@@ -3453,11 +3453,13 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 <div>
                     <label class="text-sm text-secondary block mb-2">Server Name</label>
                     <input type="text" id="mcpServerName" placeholder="filesystem" 
+                           autocomplete="off"
                            class="w-full input-theme rounded-lg px-3 py-2">
                 </div>
                 <div>
                     <label class="text-sm text-secondary block mb-2">Server URL or Command</label>
                     <input type="text" id="mcpServerUrl" placeholder="npx -y @modelcontextprotocol/server-filesystem /tmp" 
+                           autocomplete="off"
                            class="w-full input-theme rounded-lg px-3 py-2 font-mono text-sm">
                     <p class="text-xs text-secondary mt-1">Enter an HTTP URL or an npx/node command to spawn the server</p>
                 </div>
@@ -3522,12 +3524,14 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 <div>
                     <label class="text-sm text-secondary block mb-2">Username</label>
                     <input type="text" id="newUsername" placeholder="username" 
+                           autocomplete="off"
                            class="w-full input-theme rounded-lg px-3 py-2">
                 </div>
                 <div>
                     <label class="text-sm text-secondary block mb-2">Password</label>
                     <div class="relative">
                         <input type="password" id="newUserPassword" placeholder="password" 
+                               autocomplete="new-password"
                                class="w-full input-theme rounded-lg px-3 py-2 pr-10">
                         <button type="button" onclick="togglePasswordVisibility('newUserPassword', this)" 
                                 class="absolute right-2 top-1/2 -translate-y-1/2 text-secondary hover:text-primary p-1">
@@ -3565,12 +3569,14 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 <div>
                     <label class="text-sm text-secondary block mb-2">Username</label>
                     <input type="text" id="loginUsername" placeholder="Enter username" 
+                           autocomplete="off"
                            class="w-full input-theme rounded-lg px-3 py-2"
                            onkeydown="if(event.key==='Enter')handleLogin()">
                 </div>
                 <div>
                     <label class="text-sm text-secondary block mb-2">Password</label>
                     <input type="password" id="loginPassword" placeholder="Enter password" 
+                           autocomplete="off"
                            class="w-full input-theme rounded-lg px-3 py-2"
                            onkeydown="if(event.key==='Enter')handleLogin()">
                 </div>
@@ -3612,11 +3618,13 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 <div>
                     <label class="text-sm text-secondary block mb-2">Adapter Name</label>
                     <input type="text" id="loraName" placeholder="my-adapter" 
+                           autocomplete="off"
                            class="w-full input-theme rounded-lg px-3 py-2">
                 </div>
                 <div>
                     <label class="text-sm text-secondary block mb-2">File Path</label>
                     <input type="text" id="loraPath" placeholder="/path/to/adapter.gguf" 
+                           autocomplete="off"
                            class="w-full input-theme rounded-lg px-3 py-2">
                 </div>
                 <div class="flex gap-3">
@@ -6773,6 +6781,9 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 .replace(/\[m/g, '');                    // Short reset
         }
 
+        // Track progress line element for in-place updates
+        let terminalProgressLine = null;
+        
         function addTerminalRawOutput(text) {
             const pre = document.getElementById('terminalPre');
             
@@ -6786,6 +6797,37 @@ Type 'help' for available commands or 'offgrid --help' for all options
             
             // Combine with any buffered text
             let currentText = terminalOutputBuffer + processedText;
+            
+            // Check for carriage return at the start (progress update pattern)
+            // This handles "\r  Progress: XX%" style updates
+            if (currentText.includes('\r') && !currentText.includes('\n')) {
+                // This is a progress update - show in real-time
+                const parts = currentText.split('\r');
+                const lastPart = parts[parts.length - 1];
+                const clean = stripAnsiCodes(lastPart);
+                
+                if (clean.trim()) {
+                    // Create or update progress line element
+                    if (!terminalProgressLine) {
+                        terminalProgressLine = document.createElement('span');
+                        terminalProgressLine.className = 'terminal-progress';
+                        pre.appendChild(terminalProgressLine);
+                    }
+                    terminalProgressLine.textContent = esc(clean);
+                    scrollTerminalToBottom();
+                }
+                
+                // Keep the last part in buffer (will be replaced by next \r)
+                terminalOutputBuffer = currentText;
+                return;
+            }
+            
+            // If we have a progress line and now getting a newline, finalize it
+            if (terminalProgressLine && currentText.includes('\n')) {
+                // Clear the progress line since we're moving to next line
+                terminalProgressLine.remove();
+                terminalProgressLine = null;
+            }
             
             // Split by newlines
             const lines = currentText.split('\n');
@@ -6817,12 +6859,26 @@ Type 'help' for available commands or 'offgrid --help' for all options
         
         // Flush any remaining buffer content (call this when command completes)
         function flushTerminalBuffer() {
+            // Clear any progress line element
+            if (terminalProgressLine) {
+                terminalProgressLine.remove();
+                terminalProgressLine = null;
+            }
+            
             if (terminalOutputBuffer) {
                 const pre = document.getElementById('terminalPre');
+                // Handle carriage return - take last part
+                let content = terminalOutputBuffer;
+                if (content.includes('\r')) {
+                    const parts = content.split('\r');
+                    content = parts[parts.length - 1];
+                }
                 // Strip ANSI and escape
-                const clean = stripAnsiCodes(terminalOutputBuffer);
-                const escaped = clean.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                pre.innerHTML += escaped + '\n';
+                const clean = stripAnsiCodes(content);
+                if (clean.trim() && clean.trim() !== '>') {
+                    const escaped = clean.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    pre.innerHTML += escaped + '\n';
+                }
                 terminalOutputBuffer = '';
                 scrollTerminalToBottom();
             }

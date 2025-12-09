@@ -54,7 +54,7 @@ type HFCard struct {
 	License      string                 `json:"license"`
 	ModelType    string                 `json:"model_type"`
 	Quantization string                 `json:"quantization_config"`
-	BaseModel    string                 `json:"base_model"`
+	BaseModel    interface{}            `json:"base_model"` // Can be string or []string
 	Tags         []string               `json:"tags"`
 	Datasets     []string               `json:"datasets"`
 	Metrics      map[string]interface{} `json:"model-index"`
@@ -297,6 +297,12 @@ func (hf *HuggingFaceClient) parseGGUFFilesFromTree(modelID string, files []HFFi
 
 	for _, file := range files {
 		filename := file.Filename
+
+		// Only include .gguf files
+		if !strings.HasSuffix(strings.ToLower(filename), ".gguf") {
+			continue
+		}
+
 		size := file.Size
 		sizeGB := float64(size) / (1024 * 1024 * 1024)
 
