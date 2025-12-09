@@ -285,22 +285,27 @@ download_desktop_app() {
     
     local app_name=""
     local download_url=""
+    local version_num="${version#v}"  # Remove 'v' prefix
     
     case "$os" in
         linux)
-            app_name="OffGrid-LLM-${version#v}-linux-${arch}.AppImage"
+            if [ "$arch" = "amd64" ]; then
+                app_name="OffGrid.LLM.Desktop-${version_num}-x86_64.AppImage"
+            else
+                app_name="OffGrid.LLM.Desktop-${version_num}-arm64.AppImage"
+            fi
             download_url="${GITHUB_URL}/releases/download/${version}/${app_name}"
             ;;
         darwin)
             if [ "$arch" = "arm64" ]; then
-                app_name="OffGrid-LLM-${version#v}-mac-arm64.dmg"
+                app_name="OffGrid.LLM.Desktop-${version_num}-arm64.dmg"
             else
-                app_name="OffGrid-LLM-${version#v}-mac-x64.dmg"
+                app_name="OffGrid.LLM.Desktop-${version_num}-x64.dmg"
             fi
             download_url="${GITHUB_URL}/releases/download/${version}/${app_name}"
             ;;
         windows)
-            app_name="OffGrid-LLM-${version#v}-win-x64.exe"
+            app_name="OffGrid.LLM.Desktop-Setup-${version_num}.exe"
             download_url="${GITHUB_URL}/releases/download/${version}/${app_name}"
             ;;
     esac
