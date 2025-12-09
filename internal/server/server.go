@@ -1655,13 +1655,26 @@ func (s *Server) handleTerminalExecStream(w http.ResponseWriter, r *http.Request
 	// Channel to signal completion
 	done := make(chan bool)
 
+	// Mutex and flag to prevent SSE writes after disconnect
+	var sseMu sync.Mutex
+	sseOpen := true
+
+	// Safe SSE sender that checks if connection is still open
+	safeSendSSE := func(eventType, data string) {
+		sseMu.Lock()
+		defer sseMu.Unlock()
+		if sseOpen {
+			sendSSE(w, flusher, eventType, data)
+		}
+	}
+
 	// Stream stdout
 	go func() {
 		buf := make([]byte, 1024)
 		for {
 			n, err := stdoutPipe.Read(buf)
 			if n > 0 {
-				sendSSE(w, flusher, "output", string(buf[:n]))
+				safeSendSSE("output", string(buf[:n]))
 			}
 			if err != nil {
 				break
@@ -1675,7 +1688,7 @@ func (s *Server) handleTerminalExecStream(w http.ResponseWriter, r *http.Request
 		for {
 			n, err := stderrPipe.Read(buf)
 			if n > 0 {
-				sendSSE(w, flusher, "output", string(buf[:n]))
+				safeSendSSE("output", string(buf[:n]))
 			}
 			if err != nil {
 				break
@@ -1695,21 +1708,31 @@ func (s *Server) handleTerminalExecStream(w http.ResponseWriter, r *http.Request
 				exitCode = 1
 			}
 		}
-		sendSSE(w, flusher, "exit", fmt.Sprintf("%d", exitCode))
+		safeSendSSE("exit", fmt.Sprintf("%d", exitCode))
 	}()
 
 	// Wait for completion or client disconnect
 	select {
 	case <-done:
-		// Command finished
+		// Command finished normally
 	case <-r.Context().Done():
-		// Client disconnected
+		// Client disconnected - mark SSE as closed before killing process
+		sseMu.Lock()
+		sseOpen = false
+		sseMu.Unlock()
 		cmd.Process.Kill()
 	}
 }
 
 // sendSSE sends a Server-Sent Event with the given event type and data
 func sendSSE(w http.ResponseWriter, flusher http.Flusher, eventType, data string) {
+	// Recover from any panics (e.g., writing to closed connection)
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("SSE send recovered from panic: %v", r)
+		}
+	}()
+
 	// SSE format: multi-line data must have each line prefixed with "data: "
 	// Split by newlines and prefix each line
 	fmt.Fprintf(w, "event: %s\n", eventType)
@@ -1718,7 +1741,9 @@ func sendSSE(w http.ResponseWriter, flusher http.Flusher, eventType, data string
 		fmt.Fprintf(w, "data: %s\n", line)
 	}
 	fmt.Fprintf(w, "\n")
-	flusher.Flush()
+	if flusher != nil {
+		flusher.Flush()
+	}
 }
 
 // handleDownloadModel downloads a model from HuggingFace
