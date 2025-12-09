@@ -18,6 +18,7 @@ No cloud. No subscriptions. No data leaving your machine.
 
 - **100% Offline** - Your data never leaves your computer
 - **Modern Chat UI** - Clean, responsive web interface
+- **Voice Assistant** - Multi-language speech-to-text and text-to-speech (18+ languages)
 - **Python Library** - Simple API for scripting and automation
 - **Knowledge Base (RAG)** - Chat with your documents
 - **USB Transfer** - Move models between air-gapped systems
@@ -27,17 +28,24 @@ No cloud. No subscriptions. No data leaving your machine.
 
 ## Install
 
-### Desktop App
+**One command to install everything:**
 
-**Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
-**Windows** (PowerShell as Admin):
-```powershell
-irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
+This installs CLI + Desktop App + Voice Assistant (Whisper STT + Piper TTS).
+
+For non-interactive installation:
+```bash
+# Install everything (default)
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | NONINTERACTIVE=yes bash
+
+# CLI + Voice only (no desktop)
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | DESKTOP=no NONINTERACTIVE=yes bash
 ```
+
+**Then open:** http://localhost:11611
 
 ### Python Library
 
@@ -139,6 +147,33 @@ results = client.kb.search("deadline")
 ```python
 embedding = client.embed("Hello world")
 embeddings = client.embed(["Hello", "World"])
+```
+
+### Voice Assistant
+
+```python
+# Speech-to-text (transcribe audio)
+text = client.audio.transcribe("recording.wav")
+print(text["text"])
+
+# With language hint
+text = client.audio.transcribe("spanish.wav", language="es")
+
+# Text-to-speech (generate audio)
+audio = client.audio.speak("Hello world!", voice="en_US-amy-medium")
+with open("hello.wav", "wb") as f:
+    f.write(audio)
+
+# List available voices & models
+voices = client.audio.voices()
+models = client.audio.whisper_models()
+```
+
+**CLI:**
+```bash
+offgrid audio transcribe recording.wav           # Transcribe audio
+offgrid audio speak "Hello!" -o greeting.wav     # Generate speech
+offgrid audio voices                              # List voices
 ```
 
 ---

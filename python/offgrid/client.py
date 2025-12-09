@@ -15,6 +15,7 @@ from .models import ModelManager
 from .kb import KnowledgeBase
 from .agent import Agent
 from .lora import LoRA
+from .audio import Audio
 
 
 class OffGridError(Exception):
@@ -222,6 +223,7 @@ class Client:
         self.sessions = Sessions(self)
         self.agent = Agent(self)
         self.lora = LoRA(self)
+        self.audio = Audio(self)
         
         # Cache for default model
         self._default_model = None

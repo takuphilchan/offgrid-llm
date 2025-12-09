@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 offgrid/__init__.py
 offgrid/agent.py
+offgrid/audio.py
 offgrid/client.py
 offgrid/kb.py
 offgrid/lora.py

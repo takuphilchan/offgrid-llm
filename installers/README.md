@@ -1,45 +1,40 @@
 # OffGrid LLM - Installation Scripts
 
-**Simple one-line installers for all platforms.**
+> **Note:** The recommended way to install OffGrid LLM is using the unified installer at the repository root. These individual scripts are kept for legacy compatibility.
 
 ---
 
-## CLI Installation (Command Line)
+## Unified Installer (Recommended)
 
-**Pre-built binaries with auto-detection:**
+**One command installs everything:**
 
-#### Linux / macOS
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
-#### Windows (PowerShell as Administrator)
-*Coming soon - use Linux installer via WSL for now*
+Interactive menu lets you choose:
+- CLI tools and server
+- Desktop application  
+- Voice/Audio support (whisper.cpp + piper)
+
+For non-interactive installation:
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | CLI=yes DESKTOP=yes AUDIO=yes bash
+```
 
 ---
 
-## Desktop Application Installation
+## Legacy Scripts
 
-**Docker Desktop-like experience with system tray:**
-
-#### Linux / macOS
+### Desktop Application (Linux / macOS)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
 ```
 
-#### Windows (PowerShell as Administrator)
+### Windows (PowerShell as Administrator)
 ```powershell
 irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
 ```
-
-**Features:**
-- System tray icon for easy access
-- Automatic server start/stop
-- Minimize to tray (keeps running in background)
-- Bundled CLI binary (no separate installation)
-- Native installers (.deb, .dmg, .exe)
-
-See [../DESKTOP_INSTALL.md](../DESKTOP_INSTALL.md) for detailed desktop app documentation.
 
 ---
 

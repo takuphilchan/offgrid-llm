@@ -2,33 +2,37 @@
 
 ## Quick Install (Recommended)
 
-**For most users, use the automated installer:**
-
-The installation script (`scripts/install.sh`) automatically:
+**One command to install everything:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+```
 
-**What it does:**
-- Builds OffGrid LLM from source
-- Optimized for your CPU and GPU
-- Installs web interface automatically
-- Sets up auto-start service (optional)
-- Takes 5-10 minutes
+This installs:
+- **CLI** - Command-line tools and server
+- **Desktop App** - Standalone GUI application  
+- **Voice Assistant** - Speech-to-text (Whisper) + Text-to-speech (Piper)
 
-**Skip prompts (auto-start enabled):**
-### Install with Auto-Start Enabled
+**Then open:** http://localhost:11611
+
+### Non-Interactive Installation
+
+Use environment variables for automated installations:
 
 ```bash
-AUTOSTART=yes bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh)
+# Install everything (default)
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | NONINTERACTIVE=yes bash
 
-After installation, open: `http://localhost:11611/ui/`
+# CLI + Voice only (no desktop app)
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | DESKTOP=no NONINTERACTIVE=yes bash
+
+# CLI only (minimal, no voice)
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | DESKTOP=no AUDIO=no NONINTERACTIVE=yes bash
+```
 
 ---
 
-## Advanced Installation
-
-### Full Build from Source (Developers)
+## Development Installation (Build from Source)
 
 **For GPU optimization and development:**
 

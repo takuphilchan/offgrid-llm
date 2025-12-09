@@ -304,6 +304,24 @@ install_binaries() {
     $use_sudo cp "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/"
     $use_sudo chmod +x "$INSTALL_DIR/offgrid${ext}" "$INSTALL_DIR/llama-server${ext}"
     
+    # Install audio components (whisper.cpp and piper)
+    local AUDIO_DIR="$HOME/.offgrid-llm/audio"
+    mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
+    
+    if [ -d "$bundle_dir/audio/whisper" ]; then
+        log_info "Installing whisper.cpp (speech-to-text)..."
+        cp -r "$bundle_dir/audio/whisper/"* "$AUDIO_DIR/whisper/"
+        chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
+        log_success "Whisper installed"
+    fi
+    
+    if [ -d "$bundle_dir/audio/piper" ]; then
+        log_info "Installing Piper (text-to-speech)..."
+        cp -r "$bundle_dir/audio/piper/"* "$AUDIO_DIR/piper/"
+        chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
+        log_success "Piper installed"
+    fi
+    
     # Install web UI files
     local WEB_DIR="/var/lib/offgrid/web/ui"
     $use_sudo mkdir -p "$WEB_DIR"
@@ -330,7 +348,7 @@ install_binaries() {
         fi
     fi
     
-    log_success "Binaries installed successfully"
+    log_success "OffGrid LLM installed successfully"
 }
 
 # Verify checksums

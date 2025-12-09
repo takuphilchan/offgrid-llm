@@ -29,30 +29,44 @@ Perfect for:
 
 Choose the method that fits your needs:
 
-###  Option 1: Docker (Recommended - Easiest)
+### 🚀 Option 1: One-Line Install (Recommended)
 
-**Best for:** Quick setup, isolated environment, production deployment
+**Best for:** Most users - installs everything in one command
 
 ```bash
-# Install Docker (if not installed)
-curl -fsSL https://get.docker.com | sh
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+```
 
+**What you get:**
+- CLI tools and server
+- Desktop app with system tray
+- Voice Assistant (Whisper STT + Piper TTS)
+
+**Then open:** http://localhost:11611
+
+---
+
+### 🐳 Option 2: Docker
+
+**Best for:** Isolated environment, production deployment
+
+```bash
 # Clone and run
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
 docker-compose up -d
 
 # Access UI
-open http://localhost:11611/ui/
+open http://localhost:11611
 ```
 
-**Done!** See [Docker Guide](DOCKER.md) for advanced configuration.
+**Done!** See [Docker Guide](DOCKER.md) for GPU support.
 
 ---
 
-###  Option 2: Desktop App (Best UI Experience)
+### 💻 Option 3: Desktop App Only
 
-**Best for:** Non-technical users, system tray integration, drag-and-drop
+**Best for:** Non-technical users who just want the app
 
 **Linux/macOS:**
 ```bash
@@ -64,19 +78,11 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
 ```
 
-**Features:**
-- System tray icon
-- Auto-start on boot
-- Native OS integration
-- Bundled everything
-
 ---
 
-### ⌨️ Option 3: CLI Installation (Most Control)
+### ⌨️ Option 4: CLI Only (Minimal)
 
-**Best for:** Developers, servers, automated deployments
-
-**CLI Installation (Linux/macOS):**
+**Best for:** Servers, headless systems, developers
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
 

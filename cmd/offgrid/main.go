@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/audio"
 	"github.com/takuphilchan/offgrid-llm/internal/batch"
 	"github.com/takuphilchan/offgrid-llm/internal/completions"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
@@ -128,8 +129,7 @@ func printSection(title string) {
 	if output.JSONMode {
 		return
 	}
-	fmt.Printf("%s%s%s\n", brandPrimary, colorBold, title)
-	fmt.Printf("%s%s%s\n", brandMuted, strings.Repeat(boxH, 50), colorReset)
+	fmt.Printf("\n%s%s%s\n\n", brandPrimary+colorBold, title, colorReset)
 }
 
 func printSuccess(message string) {
@@ -779,6 +779,9 @@ func main() {
 			return
 		case "agent", "agents":
 			handleAgent(os.Args[2:])
+			return
+		case "audio":
+			handleAudio(os.Args[2:])
 			return
 		case "serve", "server":
 			// Fall through to start server
@@ -2464,6 +2467,7 @@ func printHelp() {
 			cmds: []cmdEntry{
 				{"lora <cmd>", "LoRA adapter management"},
 				{"agent <cmd>", "AI agent workflows"},
+				{"audio <cmd>", "Speech-to-text & text-to-speech"},
 			},
 		},
 		{
@@ -6958,4 +6962,519 @@ func handleAgentMCP(args []string) {
 	default:
 		printError(fmt.Sprintf("Unknown mcp command: %s", mcpCmd))
 	}
+}
+
+// handleAudio handles audio commands for TTS/ASR
+func handleAudio(args []string) {
+	if len(args) < 1 {
+		fmt.Println()
+		fmt.Printf("%sAudio - Speech to Text & Text to Speech%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println("")
+		fmt.Printf("%sUsage:%s offgrid audio <command> [options]\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sCommands%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %stranscribe <file>%s         Transcribe audio file to text (ASR)\n", brandSecondary, colorReset)
+		fmt.Printf("  %sspeak <text>%s              Convert text to speech (TTS)\n", brandSecondary, colorReset)
+		fmt.Printf("  %sstatus%s                    Show audio system status\n", brandSecondary, colorReset)
+		fmt.Printf("  %smodels%s                    List available/installed models\n", brandSecondary, colorReset)
+		fmt.Printf("  %ssetup whisper%s             Download whisper model for ASR\n", brandSecondary, colorReset)
+		fmt.Printf("  %ssetup piper%s               Download piper voice for TTS\n", brandSecondary, colorReset)
+		fmt.Println()
+		fmt.Printf("%sOptions%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %s--model <name>%s            Whisper model: tiny, base, small, medium, large\n", colorDim, colorReset)
+		fmt.Printf("  %s--voice <name>%s            Piper voice: en_US-amy-medium, etc.\n", colorDim, colorReset)
+		fmt.Printf("  %s--output <file>%s           Output file for TTS (default: output.wav)\n", colorDim, colorReset)
+		fmt.Printf("  %s--language <code>%s         Language code for ASR (default: auto)\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("%sExamples%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %soffgrid audio transcribe recording.wav%s\n", colorDim, colorReset)
+		fmt.Printf("  %soffgrid audio speak \"Hello, world!\" --output hello.wav%s\n", colorDim, colorReset)
+		fmt.Printf("  %soffgrid audio setup whisper --model base.en%s\n", colorDim, colorReset)
+		fmt.Printf("  %soffgrid audio setup piper --voice en_US-amy-medium%s\n", colorDim, colorReset)
+		fmt.Println()
+		return
+	}
+
+	cfg := config.LoadConfig()
+	baseURL := fmt.Sprintf("http://localhost:%d", cfg.ServerPort)
+
+	subCmd := args[0]
+	switch subCmd {
+	case "transcribe":
+		if len(args) < 2 {
+			printError("Usage: offgrid audio transcribe <audio-file> [--model <name>] [--language <code>]")
+			return
+		}
+
+		audioFile := args[1]
+		model := "base.en"
+		language := ""
+
+		// Parse options
+		for i := 2; i < len(args); i++ {
+			switch args[i] {
+			case "--model", "-m":
+				if i+1 < len(args) {
+					model = args[i+1]
+					i++
+				}
+			case "--language", "-l":
+				if i+1 < len(args) {
+					language = args[i+1]
+					i++
+				}
+			}
+		}
+
+		// Check if file exists
+		if _, err := os.Stat(audioFile); os.IsNotExist(err) {
+			printError(fmt.Sprintf("Audio file not found: %s", audioFile))
+			return
+		}
+
+		fmt.Println()
+		printSection("Transcribing Audio")
+		fmt.Printf("  %sFile:%s %s\n", colorDim, colorReset, audioFile)
+		fmt.Printf("  %sModel:%s %s\n", colorDim, colorReset, model)
+		if language != "" {
+			fmt.Printf("  %sLanguage:%s %s\n", colorDim, colorReset, language)
+		}
+		fmt.Println()
+
+		// Read the audio file
+		audioData, err := os.ReadFile(audioFile)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to read audio file: %v", err))
+			return
+		}
+
+		// Create multipart form request
+		body := &bytes.Buffer{}
+		writer := NewMultipartWriter(body)
+
+		part, err := writer.CreateFormFile("file", filepath.Base(audioFile))
+		if err != nil {
+			printError(fmt.Sprintf("Failed to create form: %v", err))
+			return
+		}
+		part.Write(audioData)
+
+		if model != "" {
+			writer.WriteField("model", model)
+		}
+		if language != "" {
+			writer.WriteField("language", language)
+		}
+		writer.Close()
+
+		req, err := http.NewRequest("POST", baseURL+"/v1/audio/transcriptions", body)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to create request: %v", err))
+			return
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		client := &http.Client{Timeout: 300 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to connect to server: %v", err))
+			printInfo("Make sure the server is running: offgrid serve")
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			printError(fmt.Sprintf("Transcription failed: %s", string(respBody)))
+			return
+		}
+
+		var result struct {
+			Text string `json:"text"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			printError(fmt.Sprintf("Failed to parse response: %v", err))
+			return
+		}
+
+		printSuccess("Transcription Complete")
+		fmt.Println()
+		fmt.Println(result.Text)
+		fmt.Println()
+
+	case "speak":
+		if len(args) < 2 {
+			printError("Usage: offgrid audio speak <text> [--voice <name>] [--output <file>]")
+			return
+		}
+
+		text := args[1]
+		voice := "en_US-amy-medium"
+		outputFile := "output.wav"
+		speed := 1.0
+
+		// Parse options
+		for i := 2; i < len(args); i++ {
+			switch args[i] {
+			case "--voice", "-v":
+				if i+1 < len(args) {
+					voice = args[i+1]
+					i++
+				}
+			case "--output", "-o":
+				if i+1 < len(args) {
+					outputFile = args[i+1]
+					i++
+				}
+			case "--speed", "-s":
+				if i+1 < len(args) {
+					fmt.Sscanf(args[i+1], "%f", &speed)
+					i++
+				}
+			}
+		}
+
+		fmt.Println()
+		printSection("Generating Speech")
+		fmt.Printf("  %sText:%s %s\n", colorDim, colorReset, text)
+		fmt.Printf("  %sVoice:%s %s\n", colorDim, colorReset, voice)
+		fmt.Printf("  %sOutput:%s %s\n", colorDim, colorReset, outputFile)
+		fmt.Println()
+
+		// Create request
+		reqBody := map[string]interface{}{
+			"input": text,
+			"model": voice,
+			"voice": voice,
+			"speed": speed,
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req, err := http.NewRequest("POST", baseURL+"/v1/audio/speech", bytes.NewReader(jsonBody))
+		if err != nil {
+			printError(fmt.Sprintf("Failed to create request: %v", err))
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 60 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to connect to server: %v", err))
+			printInfo("Make sure the server is running: offgrid serve")
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			printError(fmt.Sprintf("Speech generation failed: %s", string(respBody)))
+			return
+		}
+
+		// Save audio to file
+		outFile, err := os.Create(outputFile)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to create output file: %v", err))
+			return
+		}
+		defer outFile.Close()
+
+		written, err := io.Copy(outFile, resp.Body)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to write audio: %v", err))
+			return
+		}
+
+		printSuccess(fmt.Sprintf("Speech generated: %s (%d bytes)", outputFile, written))
+		fmt.Println()
+
+	case "status":
+		fmt.Println()
+		printSection("Audio System Status")
+
+		resp, err := http.Get(baseURL + "/v1/audio/status")
+		if err != nil {
+			printError(fmt.Sprintf("Failed to connect to server: %v", err))
+			printInfo("Make sure the server is running: offgrid serve")
+			return
+		}
+		defer resp.Body.Close()
+
+		var status map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			printError(fmt.Sprintf("Failed to parse response: %v", err))
+			return
+		}
+
+		// ASR Status
+		asr, _ := status["asr"].(map[string]interface{})
+		asrAvailable, _ := asr["available"].(bool)
+		asrPath, _ := asr["whisper_path"].(string)
+		asrModels, _ := asr["models"].([]interface{})
+
+		fmt.Println()
+		fmt.Printf("  %sSpeech-to-Text (ASR)%s\n", brandPrimary+colorBold, colorReset)
+		if asrAvailable {
+			fmt.Printf("    %s%s Available%s\n", colorGreen, iconCheck, colorReset)
+			fmt.Printf("    %sWhisper:%s %s\n", colorDim, colorReset, asrPath)
+			fmt.Printf("    %sModels:%s %d installed\n", colorDim, colorReset, len(asrModels))
+		} else {
+			fmt.Printf("    %s%s Not Available%s\n", colorRed, iconCross, colorReset)
+			fmt.Printf("    %sRun: offgrid audio setup whisper%s\n", colorDim, colorReset)
+		}
+
+		// TTS Status
+		tts, _ := status["tts"].(map[string]interface{})
+		ttsAvailable, _ := tts["available"].(bool)
+		ttsPath, _ := tts["piper_path"].(string)
+		ttsVoices, _ := tts["voices"].(float64)
+
+		fmt.Println()
+		fmt.Printf("  %sText-to-Speech (TTS)%s\n", brandPrimary+colorBold, colorReset)
+		if ttsAvailable {
+			fmt.Printf("    %s%s Available%s\n", colorGreen, iconCheck, colorReset)
+			fmt.Printf("    %sPiper:%s %s\n", colorDim, colorReset, ttsPath)
+			fmt.Printf("    %sVoices:%s %d installed\n", colorDim, colorReset, int(ttsVoices))
+		} else {
+			fmt.Printf("    %s%s Not Available%s\n", colorRed, iconCross, colorReset)
+			fmt.Printf("    %sRun: offgrid audio setup piper%s\n", colorDim, colorReset)
+		}
+
+		dataDir, _ := status["data_dir"].(string)
+		fmt.Println()
+		fmt.Printf("  %sData Directory:%s %s\n", colorDim, colorReset, dataDir)
+		fmt.Println()
+
+	case "models":
+		fmt.Println()
+		printSection("Audio Models")
+
+		resp, err := http.Get(baseURL + "/v1/audio/models")
+		if err != nil {
+			printError(fmt.Sprintf("Failed to connect to server: %v", err))
+			printInfo("Make sure the server is running: offgrid serve")
+			return
+		}
+		defer resp.Body.Close()
+
+		var models map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
+			printError(fmt.Sprintf("Failed to parse response: %v", err))
+			return
+		}
+
+		// Whisper models
+		whisper, _ := models["whisper"].(map[string]interface{})
+		installed, _ := whisper["installed"].([]interface{})
+		available, _ := whisper["available"].([]interface{})
+
+		fmt.Println()
+		fmt.Printf("  %sWhisper Models (ASR)%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %sInstalled:%s\n", colorDim, colorReset)
+		if len(installed) == 0 {
+			fmt.Printf("    %sNone%s\n", colorDim, colorReset)
+		} else {
+			for _, m := range installed {
+				fmt.Printf("    %s%s%s %s\n", colorGreen, iconCheck, colorReset, m)
+			}
+		}
+		fmt.Printf("  %sAvailable for download:%s\n", colorDim, colorReset)
+		for _, m := range available {
+			if model, ok := m.(map[string]interface{}); ok {
+				name, _ := model["Name"].(string)
+				size, _ := model["Size"].(string)
+				fmt.Printf("    %s%s%s (%s)\n", brandSecondary, name, colorReset, size)
+			}
+		}
+
+		// Piper voices
+		piper, _ := models["piper"].(map[string]interface{})
+		piperInstalled, _ := piper["installed"].([]interface{})
+		piperAvailable, _ := piper["available"].([]interface{})
+
+		fmt.Println()
+		fmt.Printf("  %sPiper Voices (TTS)%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %sInstalled:%s\n", colorDim, colorReset)
+		if len(piperInstalled) == 0 {
+			fmt.Printf("    %sNone%s\n", colorDim, colorReset)
+		} else {
+			for _, v := range piperInstalled {
+				if voice, ok := v.(map[string]interface{}); ok {
+					name, _ := voice["name"].(string)
+					fmt.Printf("    %s%s%s %s\n", colorGreen, iconCheck, colorReset, name)
+				}
+			}
+		}
+		fmt.Printf("  %sAvailable for download:%s\n", colorDim, colorReset)
+		for _, v := range piperAvailable {
+			if voice, ok := v.(map[string]interface{}); ok {
+				name, _ := voice["Name"].(string)
+				lang, _ := voice["Language"].(string)
+				fmt.Printf("    %s%s%s (%s)\n", brandSecondary, name, colorReset, lang)
+			}
+		}
+		fmt.Println()
+
+	case "setup":
+		if len(args) < 2 {
+			printError("Usage: offgrid audio setup <whisper|piper> [--model/--voice <name>]")
+			return
+		}
+
+		setupType := args[1]
+		name := ""
+
+		// Parse options
+		for i := 2; i < len(args); i++ {
+			switch args[i] {
+			case "--model", "--voice", "-m", "-v":
+				if i+1 < len(args) {
+					name = args[i+1]
+					i++
+				}
+			}
+		}
+
+		switch setupType {
+		case "whisper":
+			if name == "" {
+				name = "base.en"
+			}
+
+			// Check if model exists
+			modelInfo, ok := audio.WhisperModels[name]
+			if !ok {
+				printError(fmt.Sprintf("Unknown whisper model: %s", name))
+				fmt.Println()
+				fmt.Println("Available models:")
+				for n, m := range audio.WhisperModels {
+					fmt.Printf("  %s%s%s (%s)\n", brandPrimary, n, colorReset, m.Size)
+				}
+				return
+			}
+
+			fmt.Println()
+			fmt.Printf("%sDownloading Whisper Model%s\n", brandPrimary+colorBold, colorReset)
+			fmt.Printf("%s%s%s (%s)\n", brandMuted, name, colorReset, modelInfo.Size)
+			fmt.Println()
+
+			// Create audio engine with empty config (uses defaults)
+			engine, err := audio.NewEngine(audio.Config{})
+			if err != nil {
+				printError(fmt.Sprintf("Failed to initialize audio engine: %v", err))
+				return
+			}
+
+			// Download with progress (nil uses default progress printer)
+			if err := engine.DownloadWhisperModel(name, nil); err != nil {
+				printError(fmt.Sprintf("Download failed: %v", err))
+				return
+			}
+
+			printSuccess(fmt.Sprintf("Whisper model '%s' installed", name))
+			fmt.Println()
+
+		case "piper":
+			if name == "" {
+				name = "en_US-amy-medium"
+			}
+
+			// Check if voice exists
+			voiceInfo, ok := audio.PiperVoices[name]
+			if !ok {
+				printError(fmt.Sprintf("Unknown piper voice: %s", name))
+				fmt.Println()
+				fmt.Println("Available voices:")
+				for n, v := range audio.PiperVoices {
+					fmt.Printf("  %s%s%s (%s, %s)\n", brandPrimary, n, colorReset, v.Language, v.Quality)
+				}
+				return
+			}
+
+			fmt.Println()
+			fmt.Printf("%sDownloading Piper Voice%s\n", brandPrimary+colorBold, colorReset)
+			fmt.Printf("%s%s%s (%s, %s)\n", brandMuted, name, colorReset, voiceInfo.Language, voiceInfo.Quality)
+			fmt.Println()
+
+			// Create audio engine with empty config (uses defaults)
+			engine, err := audio.NewEngine(audio.Config{})
+			if err != nil {
+				printError(fmt.Sprintf("Failed to initialize audio engine: %v", err))
+				return
+			}
+
+			// Download piper binary if not present
+			if !engine.HasPiperBinary() {
+				fmt.Println()
+				fmt.Printf("%sDownloading Piper binary...%s\n", colorDim, colorReset)
+				if err := engine.DownloadPiperBinary(nil); err != nil {
+					printError(fmt.Sprintf("Failed to download Piper: %v", err))
+					return
+				}
+				printSuccess("Piper binary installed")
+			}
+
+			// Download with progress (nil uses default progress printer)
+			if err := engine.DownloadPiperVoice(name, nil); err != nil {
+				printError(fmt.Sprintf("Download failed: %v", err))
+				return
+			}
+
+			printSuccess(fmt.Sprintf("Piper voice '%s' installed", name))
+			fmt.Println()
+
+		default:
+			printError(fmt.Sprintf("Unknown setup type: %s (use 'whisper' or 'piper')", setupType))
+		}
+
+	default:
+		printError(fmt.Sprintf("Unknown audio command: %s", subCmd))
+		fmt.Println()
+		fmt.Println("Commands: transcribe, speak, status, models, setup")
+	}
+}
+
+// MultipartWriter wraps the multipart writer
+type MultipartWriter struct {
+	*multipartWriterImpl
+}
+
+type multipartWriterImpl struct {
+	w        io.Writer
+	boundary string
+	parts    []byte
+}
+
+func NewMultipartWriter(w io.Writer) *MultipartWriter {
+	boundary := fmt.Sprintf("----OffGridBoundary%d", time.Now().UnixNano())
+	return &MultipartWriter{
+		&multipartWriterImpl{
+			w:        w,
+			boundary: boundary,
+		},
+	}
+}
+
+func (m *MultipartWriter) FormDataContentType() string {
+	return "multipart/form-data; boundary=" + m.boundary
+}
+
+func (m *MultipartWriter) CreateFormFile(fieldname, filename string) (io.Writer, error) {
+	header := fmt.Sprintf("--%s\r\nContent-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\nContent-Type: application/octet-stream\r\n\r\n",
+		m.boundary, fieldname, filename)
+	m.w.Write([]byte(header))
+	return m.w, nil
+}
+
+func (m *MultipartWriter) WriteField(fieldname, value string) error {
+	header := fmt.Sprintf("\r\n--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s",
+		m.boundary, fieldname, value)
+	_, err := m.w.Write([]byte(header))
+	return err
+}
+
+func (m *MultipartWriter) Close() error {
+	_, err := m.w.Write([]byte(fmt.Sprintf("\r\n--%s--\r\n", m.boundary)))
+	return err
 }

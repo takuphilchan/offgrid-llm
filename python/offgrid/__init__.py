@@ -33,11 +33,20 @@ Usage:
     
     # MCP server integration
     client.agent.mcp.add("filesystem", "npx -y @modelcontextprotocol/server-filesystem /tmp")
+    
+    # Audio: Speech-to-Text (transcribe audio files)
+    text = client.audio.transcribe("recording.wav", model="base")
+    print(text)
+    
+    # Audio: Text-to-Speech (generate audio from text)
+    audio_data = client.audio.speak("Hello world!", voice="en_US-amy-medium")
+    with open("output.wav", "wb") as f:
+        f.write(audio_data)
 """
 
 from typing import Dict, List, Union
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __author__ = "OffGrid LLM Team"
 
 from .client import Client, OffGridError, Sessions
@@ -45,6 +54,7 @@ from .models import ModelManager
 from .kb import KnowledgeBase
 from .agent import Agent, MCP
 from .lora import LoRA
+from .audio import Audio
 
 __all__ = [
     "Client",
@@ -55,5 +65,6 @@ __all__ = [
     "Agent",
     "MCP",
     "LoRA",
+    "Audio",
     "__version__",
 ]

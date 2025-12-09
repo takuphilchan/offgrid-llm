@@ -273,6 +273,75 @@ adapter = client.lora.get("coding-assistant")
 client.lora.remove("coding-assistant")
 ```
 
+### Audio: Speech-to-Text & Text-to-Speech (New in v0.2.4)
+
+Transcribe audio files and generate speech completely offline:
+
+```python
+# Setup: Download Whisper model for transcription
+client.audio.setup_whisper("base")  # Options: tiny, base, small, medium, large
+
+# Setup: Download a voice for text-to-speech  
+client.audio.setup_piper("en_US-amy-medium")
+
+# Transcribe audio (Speech-to-Text)
+text = client.audio.transcribe("recording.wav", model="base")
+print(f"Transcription: {text}")
+
+# Transcribe with options
+text = client.audio.transcribe(
+    "recording.mp3",
+    model="small",       # Larger = more accurate
+    language="en",       # Optional: specify language
+    response_format="text"  # text, json, verbose_json
+)
+
+# Generate speech (Text-to-Speech)
+audio_data = client.audio.speak("Hello, how are you today?", voice="en_US-amy-medium")
+with open("output.wav", "wb") as f:
+    f.write(audio_data)
+
+# Text-to-speech with options
+audio_data = client.audio.speak(
+    "Welcome to OffGrid!",
+    voice="en_US-amy-medium",
+    speed=1.0,              # 0.5 = slow, 2.0 = fast
+    response_format="wav"   # wav, mp3, opus, flac
+)
+
+# List available voices
+voices = client.audio.voices()
+for v in voices:
+    print(f"- {v['id']}: {v['language']}")
+
+# List Whisper models
+models = client.audio.models()
+for m in models:
+    status = "✓ installed" if m["installed"] else "✗ not installed"
+    print(f"- {m['id']} ({m['size']}): {status}")
+
+# Check audio status
+status = client.audio.status()
+print(f"Whisper installed: {status['whisper']['installed']}")
+print(f"Piper installed: {status['piper']['installed']}")
+```
+
+**Available Whisper Models:**
+| Model | Size | RAM | Speed | Quality |
+|-------|------|-----|-------|---------|
+| tiny | 75MB | ~1GB | Fastest | Basic |
+| base | 142MB | ~1GB | Fast | Good |
+| small | 466MB | ~2GB | Medium | Better |
+| medium | 1.5GB | ~5GB | Slower | Great |
+| large | 2.9GB | ~10GB | Slowest | Best |
+
+**Popular Voices:**
+- `en_US-amy-medium` - American English, female
+- `en_US-ryan-medium` - American English, male
+- `en_GB-alba-medium` - British English, female
+- `de_DE-thorsten-medium` - German, male
+- `fr_FR-siwis-medium` - French, female
+
 ### System Configuration (New in v0.2.3)
 
 ```python

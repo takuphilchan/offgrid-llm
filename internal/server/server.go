@@ -352,6 +352,17 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/agents/mcp", s.handleAgentMCP)
 	mux.HandleFunc("/v1/agents/mcp/test", s.handleAgentMCPTest)
 
+	// Audio endpoints (OpenAI-compatible TTS/ASR)
+	mux.HandleFunc("/v1/audio/transcriptions", s.handleAudioTranscriptions)
+	mux.HandleFunc("/v1/audio/speech", s.handleAudioSpeech)
+	mux.HandleFunc("/v1/audio/voices", s.handleAudioVoices)
+	mux.HandleFunc("/v1/audio/whisper-models", s.handleAudioWhisperModels)
+	mux.HandleFunc("/v1/audio/models", s.handleAudioModels)
+	mux.HandleFunc("/v1/audio/status", s.handleAudioStatus)
+	mux.HandleFunc("/v1/audio/download", s.handleAudioDownload)
+	mux.HandleFunc("/v1/audio/setup/whisper", s.handleAudioSetupWhisper)
+	mux.HandleFunc("/v1/audio/setup/piper", s.handleAudioSetupPiper)
+
 	// WebSocket endpoint
 	mux.HandleFunc("/v1/ws", s.handleWebSocket)
 

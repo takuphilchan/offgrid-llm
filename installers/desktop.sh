@@ -133,16 +133,26 @@ if [ "$INSTALL_CLI" = true ]; then
     cd "${TMP_DIR}"
     tar -xzf "${CLI_BUNDLE}"
     
+    # Find the bundle directory
+    BUNDLE_DIR=$(find . -maxdepth 1 -type d -name "offgrid-*" | head -1)
+    if [ -z "$BUNDLE_DIR" ]; then
+        BUNDLE_DIR="."
+    fi
+    
     # Find the extracted offgrid binary
-    OFFGRID_BIN=$(find . -name "offgrid" -o -name "offgrid.exe" | head -1)
+    OFFGRID_BIN=$(find "$BUNDLE_DIR" -name "offgrid" -o -name "offgrid.exe" | head -1)
     if [ -z "$OFFGRID_BIN" ]; then
         print_error "Could not find offgrid binary in bundle"
         exit 1
     fi
     
-    chmod +x "$OFFGRID_BIN"
+    # Find llama-server binary
+    LLAMA_BIN=$(find "$BUNDLE_DIR" -name "llama-server" -o -name "llama-server.exe" | head -1)
     
-    print_step "Installing to /usr/local/bin/offgrid..."
+    chmod +x "$OFFGRID_BIN"
+    [ -n "$LLAMA_BIN" ] && chmod +x "$LLAMA_BIN"
+    
+    print_step "Installing to /usr/local/bin/..."
     
     # Check if offgrid is currently running
     if pgrep -x offgrid > /dev/null; then
@@ -151,16 +161,18 @@ if [ "$INSTALL_CLI" = true ]; then
         sleep 1
     fi
     
-    # Try to install, retry if file is busy
+    # Try to install binaries, retry if file is busy
     MAX_RETRIES=3
     RETRY_COUNT=0
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         if [ "$EUID" -eq 0 ]; then
             if cp "$OFFGRID_BIN" /usr/local/bin/offgrid 2>/dev/null; then
+                [ -n "$LLAMA_BIN" ] && cp "$LLAMA_BIN" /usr/local/bin/llama-server 2>/dev/null
                 break
             fi
         else
             if sudo cp "$OFFGRID_BIN" /usr/local/bin/offgrid 2>/dev/null; then
+                [ -n "$LLAMA_BIN" ] && sudo cp "$LLAMA_BIN" /usr/local/bin/llama-server 2>/dev/null
                 break
             fi
         fi
@@ -174,6 +186,48 @@ if [ "$INSTALL_CLI" = true ]; then
             exit 1
         fi
     done
+    
+    # Make binaries executable
+    if [ "$EUID" -eq 0 ]; then
+        chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server 2>/dev/null || true
+    else
+        sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server 2>/dev/null || true
+    fi
+    
+    print_success "CLI binaries installed"
+    
+    # Install audio components (whisper.cpp and piper)
+    AUDIO_DIR="$HOME/.offgrid-llm/audio"
+    if [ -d "$BUNDLE_DIR/audio" ]; then
+        print_step "Installing audio components (whisper.cpp, piper)..."
+        mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
+        
+        if [ -d "$BUNDLE_DIR/audio/whisper" ]; then
+            cp -r "$BUNDLE_DIR/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
+            chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
+            print_success "Whisper (speech-to-text) installed"
+        fi
+        
+        if [ -d "$BUNDLE_DIR/audio/piper" ]; then
+            cp -r "$BUNDLE_DIR/audio/piper/"* "$AUDIO_DIR/piper/" 2>/dev/null || true
+            chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
+            print_success "Piper (text-to-speech) installed"
+        fi
+    fi
+    
+    # Install web UI
+    if [ -d "$BUNDLE_DIR/web/ui" ]; then
+        print_step "Installing web UI..."
+        WEB_DIR="/var/lib/offgrid/web/ui"
+        if [ "$EUID" -eq 0 ]; then
+            mkdir -p "$WEB_DIR"
+            cp -r "$BUNDLE_DIR/web/ui/"* "$WEB_DIR/"
+        else
+            sudo mkdir -p "$WEB_DIR"
+            sudo cp -r "$BUNDLE_DIR/web/ui/"* "$WEB_DIR/"
+        fi
+        print_success "Web UI installed"
+    fi
     
     print_success "CLI installed successfully"
     
