@@ -846,6 +846,245 @@
             color: white; 
         }
         
+        /* ========================================
+           Section Organization Patterns (WCAG 2.1)
+           ======================================== */
+        
+        /* Page Header - Primary heading for each tab */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .page-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        
+        .page-header p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        
+        /* Section Header - Used within cards or sections */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .section-header h3,
+        .section-header h4 {
+            font-size: 0.9375rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .section-header .section-icon {
+            width: 1.125rem;
+            height: 1.125rem;
+            color: var(--accent-primary);
+        }
+        
+        /* Card Improvements - Static cards (no hover effect) */
+        .card-static {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+        }
+        
+        /* Content Groups - Visual grouping within sections */
+        .content-group {
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .content-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .content-group-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Stats Display - Consistent metric presentation */
+        .stats-grid {
+            display: grid;
+            gap: 0.75rem;
+        }
+        
+        .stats-grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .stats-grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .stats-grid-4 { grid-template-columns: repeat(4, 1fr); }
+        
+        @media (max-width: 640px) {
+            .stats-grid-3, .stats-grid-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 0.75rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            line-height: 1;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        
+        /* Form Groups - Consistent form layout */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.375rem;
+        }
+        
+        /* Info Box - Contextual information */
+        .info-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .info-box-icon {
+            flex-shrink: 0;
+            width: 1rem;
+            height: 1rem;
+            color: var(--accent-primary);
+            margin-top: 0.125rem;
+        }
+        
+        /* Collapsible Sections - Advanced/Developer options */
+        .collapsible-section {
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .collapsible-section summary {
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+        
+        .collapsible-section summary:hover {
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+        }
+        
+        .collapsible-section[open] summary {
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .collapsible-section .collapsible-content {
+            padding: 1rem;
+        }
+        
+        /* Empty State - Consistent empty content display */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            text-align: center;
+        }
+        
+        .empty-state-icon {
+            width: 3rem;
+            height: 3rem;
+            color: var(--text-secondary);
+            opacity: 0.5;
+            margin-bottom: 0.75rem;
+        }
+        
+        .empty-state-title {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .empty-state-desc {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+        
+        /* Action Bar - Button groups at bottom of sections */
+        .action-bar {
+            display: flex;
+            gap: 0.5rem;
+            padding-top: 1rem;
+            margin-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .action-bar-right {
+            justify-content: flex-end;
+        }
+        
+        .action-bar-spread {
+            justify-content: space-between;
+        }
+        
         /* Voice Library Styles */
         .voice-card {
             transition: all 0.2s ease;
@@ -1664,10 +1903,10 @@
         <div id="content-knowledge" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
                 <!-- Page Header -->
-                <div class="flex items-center justify-between mb-6">
+                <div class="page-header">
                     <div>
-                        <h2 class="text-xl font-semibold">Knowledge Base</h2>
-                        <p class="text-sm text-secondary">Upload documents for AI-powered Q&A with RAG</p>
+                        <h2>Knowledge Base</h2>
+                        <p>Upload documents for AI-powered Q&A with retrieval-augmented generation</p>
                     </div>
                     <div class="flex items-center gap-3">
                         <div id="ragStatusBadge" class="badge badge-secondary">Disabled</div>
@@ -1680,20 +1919,33 @@
                     <!-- Left Column - Setup & Upload -->
                     <div class="lg:col-span-2 space-y-4">
                         <!-- Enable/Model Selection Card -->
-                        <div class="card">
-                            <div class="flex items-center gap-4">
-                                <div class="flex-1">
-                                    <label class="text-sm font-medium block mb-2">Embedding Model</label>
-                                    <select id="ragEmbeddingModel" onchange="onEmbeddingModelChange()" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
-                                        <option value="">Select model to enable RAG...</option>
-                                    </select>
-                                </div>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                                    </svg>
+                                    Configuration
+                                </h3>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Embedding Model</label>
+                                <select id="ragEmbeddingModel" onchange="onEmbeddingModelChange()" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
+                                    <option value="">Select model to enable RAG...</option>
+                                </select>
                             </div>
                         </div>
 
                         <!-- Upload Card -->
-                        <div class="card">
-                            <h4 class="font-semibold mb-4">Add Documents</h4>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                    </svg>
+                                    Add Documents
+                                </h3>
+                            </div>
                             
                             <!-- Drag & Drop Zone -->
                             <div id="ragDropZone" 
@@ -1711,10 +1963,19 @@
                             </div>
 
                             <!-- Paste text option -->
-                            <details class="mt-4">
-                                <summary class="text-sm font-medium cursor-pointer text-secondary hover:text-primary">Or paste text directly</summary>
-                                <div class="mt-3 space-y-3">
-                                    <textarea id="ragTextInput" rows="4" class="w-full input-theme rounded-lg px-3 py-2 text-sm" placeholder="Paste your text content here..."></textarea>
+                            <details class="collapsible-section mt-4">
+                                <summary>
+                                    <span class="flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                        Paste text directly
+                                    </span>
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="collapsible-content space-y-3">
+                                    <div class="form-group">
+                                        <label class="form-label">Content</label>
+                                        <textarea id="ragTextInput" rows="4" class="w-full input-theme rounded-lg px-3 py-2 text-sm" placeholder="Paste your text content here..."></textarea>
+                                    </div>
                                     <div class="flex gap-2">
                                         <input type="text" id="ragTextName" class="flex-1 input-theme rounded px-3 py-2 text-sm" placeholder="Document name">
                                         <button onclick="ingestRAGText()" class="btn btn-primary">Add</button>
@@ -1724,13 +1985,24 @@
                         </div>
 
                         <!-- Documents List -->
-                        <div class="card">
-                            <div class="flex items-center justify-between mb-4">
-                                <h4 class="font-semibold">Your Documents</h4>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    Your Documents
+                                </h3>
                                 <button onclick="refreshRAGDocuments()" class="btn btn-secondary btn-sm">Refresh</button>
                             </div>
                             <div id="ragDocumentsList" class="space-y-2">
-                                <p class="text-secondary text-sm text-center py-4">No documents uploaded yet</p>
+                                <div class="empty-state">
+                                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <p class="empty-state-title">No documents uploaded yet</p>
+                                    <p class="empty-state-desc">Upload files above to get started</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1738,27 +2010,41 @@
                     <!-- Right Column - Stats & Search -->
                     <div class="space-y-4">
                         <!-- Stats Card -->
-                        <div class="card">
-                            <h4 class="font-semibold mb-4">Statistics</h4>
-                            <div class="space-y-3">
-                                <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
-                                    <span class="text-sm text-secondary">Documents</span>
-                                    <span class="text-lg font-bold text-accent" id="ragDocCount">0</span>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                    </svg>
+                                    Statistics
+                                </h3>
+                            </div>
+                            <div class="stats-grid stats-grid-3">
+                                <div class="stat-item">
+                                    <span class="stat-value" id="ragDocCount">0</span>
+                                    <span class="stat-label">Docs</span>
                                 </div>
-                                <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
-                                    <span class="text-sm text-secondary">Chunks</span>
-                                    <span class="text-lg font-bold text-accent" id="ragChunkCount">0</span>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="ragChunkCount">0</span>
+                                    <span class="stat-label">Chunks</span>
                                 </div>
-                                <div class="flex items-center justify-between p-3 bg-tertiary rounded-lg">
-                                    <span class="text-sm text-secondary">Embeddings</span>
-                                    <span class="text-lg font-bold text-accent" id="ragEmbeddingCount">0</span>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="ragEmbeddingCount">0</span>
+                                    <span class="stat-label">Vectors</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Search Card -->
-                        <div class="card">
-                            <h4 class="font-semibold mb-3">Search</h4>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                    </svg>
+                                    Search
+                                </h3>
+                            </div>
                             <div class="space-y-3">
                                 <input type="text" id="ragSearchQuery" class="w-full input-theme rounded-lg px-3 py-2 text-sm" placeholder="Search your documents..." onkeypress="if(event.key==='Enter')searchRAGDocuments()">
                                 <button onclick="searchRAGDocuments()" class="btn btn-primary w-full">Search</button>
@@ -1767,20 +2053,23 @@
                         </div>
 
                         <!-- Developer Tools -->
-                        <details class="card">
-                            <summary class="font-semibold cursor-pointer flex items-center justify-between">
-                                <span>Developer Tools</span>
-                                <svg class="w-4 h-4 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        <details class="collapsible-section">
+                            <summary>
+                                <span class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                                    Developer Tools
+                                </span>
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                             </summary>
-                            <div class="mt-4 pt-4 border-t border-theme space-y-4">
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Embedding Model</label>
+                            <div class="collapsible-content space-y-4">
+                                <div class="form-group">
+                                    <label class="form-label">Embedding Model</label>
                                     <select id="embeddingModel" class="w-full input-theme rounded px-3 py-2 text-sm">
                                         <option value="">Loading...</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Test Text</label>
+                                <div class="form-group">
+                                    <label class="form-label">Test Text</label>
                                     <textarea id="embeddingInput" placeholder="Enter text..." rows="2" class="w-full input-theme rounded px-3 py-2 text-sm resize-y"></textarea>
                                 </div>
                                 <div class="flex gap-2">
@@ -1788,22 +2077,22 @@
                                     <button onclick="clearEmbedding()" class="btn btn-secondary btn-sm">Clear</button>
                                 </div>
                                 <div id="embeddingResults" class="hidden text-xs">
-                                    <div class="grid grid-cols-3 gap-2 mb-2">
-                                        <div class="bg-tertiary rounded px-2 py-1 text-center">
-                                            <div class="text-secondary">Dims</div>
-                                            <div id="embeddingDimensions" class="font-semibold text-accent">-</div>
+                                    <div class="stats-grid stats-grid-3 mb-2">
+                                        <div class="stat-item" style="padding: 0.5rem;">
+                                            <span class="stat-label">Dims</span>
+                                            <span class="stat-value text-sm" id="embeddingDimensions">-</span>
                                         </div>
-                                        <div class="bg-tertiary rounded px-2 py-1 text-center">
-                                            <div class="text-secondary">Tokens</div>
-                                            <div id="embeddingTokens" class="font-semibold text-accent">-</div>
+                                        <div class="stat-item" style="padding: 0.5rem;">
+                                            <span class="stat-label">Tokens</span>
+                                            <span class="stat-value text-sm" id="embeddingTokens">-</span>
                                         </div>
-                                        <div class="bg-tertiary rounded px-2 py-1 text-center">
-                                            <div class="text-secondary">Time</div>
-                                            <div id="embeddingTime" class="font-semibold text-accent">-</div>
+                                        <div class="stat-item" style="padding: 0.5rem;">
+                                            <span class="stat-label">Time</span>
+                                            <span class="stat-value text-sm" id="embeddingTime">-</span>
                                         </div>
                                     </div>
                                     <div class="flex justify-end mb-1">
-                                        <button onclick="copyEmbedding()" class="text-xs text-accent hover:underline">Copy</button>
+                                        <button onclick="copyEmbedding()" class="text-xs text-accent hover:underline">Copy Vector</button>
                                     </div>
                                     <div id="embeddingVector" class="bg-tertiary rounded px-2 py-1 font-mono overflow-x-auto max-h-20 overflow-y-auto text-xs" style="word-break: break-all;"></div>
                                 </div>
@@ -1818,10 +2107,10 @@
         <div id="content-benchmark" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
                 <!-- Page Header -->
-                <div class="flex items-center justify-between mb-6">
+                <div class="page-header">
                     <div>
-                        <h2 class="text-xl font-semibold">Benchmarks</h2>
-                        <p class="text-sm text-secondary">Measure model performance on your hardware</p>
+                        <h2>Benchmarks</h2>
+                        <p>Measure model performance on your hardware</p>
                     </div>
                 </div>
 
@@ -1830,10 +2119,16 @@
                     <!-- Left Column - Run Benchmark -->
                     <div class="lg:col-span-2 space-y-4">
                         <!-- Run Benchmark Card -->
-                        <div class="card">
-                            <div class="flex items-center justify-between mb-4">
-                                <h4 class="font-semibold">Run Benchmark</h4>
-                                <button onclick="runBenchmark()" id="benchmarkRunBtn" class="btn btn-primary">
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    Run Benchmark
+                                </h3>
+                                <button onclick="runBenchmark()" id="benchmarkRunBtn" class="btn btn-primary btn-sm">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                                     </svg>
@@ -1843,22 +2138,22 @@
 
                             <!-- Settings -->
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Model</label>
+                                <div class="form-group">
+                                    <label class="form-label">Model</label>
                                     <select id="benchmarkModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
                                         <option value="">Select model...</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Prompt Length</label>
+                                <div class="form-group">
+                                    <label class="form-label">Prompt Length</label>
                                     <select id="benchmarkPromptLength" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
                                         <option value="short">Short</option>
                                         <option value="medium" selected>Medium</option>
                                         <option value="long">Long</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Output Tokens</label>
+                                <div class="form-group">
+                                    <label class="form-label">Output Tokens</label>
                                     <select id="benchmarkOutputTokens" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
                                         <option value="50">50</option>
                                         <option value="100" selected>100</option>
@@ -1881,38 +2176,55 @@
                         </div>
 
                         <!-- Live Metrics -->
-                        <div class="card">
-                            <h4 class="font-semibold mb-4">Live Metrics</h4>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                <div class="p-4 bg-tertiary rounded-xl text-center">
-                                    <div class="text-2xl font-bold text-accent" id="benchLiveTokensPerSec">--</div>
-                                    <div class="text-xs text-secondary mt-1">Tokens/sec</div>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                    Live Metrics
+                                </h3>
+                            </div>
+                            <div class="stats-grid stats-grid-4">
+                                <div class="stat-item">
+                                    <span class="stat-value" id="benchLiveTokensPerSec">--</span>
+                                    <span class="stat-label">Tokens/sec</span>
                                 </div>
-                                <div class="p-4 bg-tertiary rounded-xl text-center">
-                                    <div class="text-2xl font-bold text-accent" id="benchLiveTimeToFirst">--</div>
-                                    <div class="text-xs text-secondary mt-1">TTFT (ms)</div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="benchLiveTimeToFirst">--</span>
+                                    <span class="stat-label">TTFT (ms)</span>
                                 </div>
-                                <div class="p-4 bg-tertiary rounded-xl text-center">
-                                    <div class="text-2xl font-bold text-accent" id="benchLiveTotalTime">--</div>
-                                    <div class="text-xs text-secondary mt-1">Total (s)</div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="benchLiveTotalTime">--</span>
+                                    <span class="stat-label">Total (s)</span>
                                 </div>
-                                <div class="p-4 bg-tertiary rounded-xl text-center">
-                                    <div class="text-2xl font-bold text-accent" id="benchLiveMemory">--</div>
-                                    <div class="text-xs text-secondary mt-1">Memory (GB)</div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="benchLiveMemory">--</span>
+                                    <span class="stat-label">Memory (GB)</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- History -->
-                        <div class="card">
-                            <div class="flex items-center justify-between mb-4">
-                                <h4 class="font-semibold">History</h4>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    History
+                                </h3>
                                 <button onclick="clearBenchmarkHistory()" class="btn btn-secondary btn-sm">Clear</button>
                             </div>
                             
                             <!-- Chart Area -->
                             <div id="benchmarkChart" class="mb-4">
-                                <p class="text-secondary text-sm text-center py-8">Run benchmarks to see comparison</p>
+                                <div class="empty-state">
+                                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                    </svg>
+                                    <p class="empty-state-title">Run benchmarks to see comparison</p>
+                                </div>
                             </div>
 
                             <!-- Table -->
@@ -1937,36 +2249,62 @@
 
                     <!-- Right Column - System Info -->
                     <div class="space-y-4">
-                        <div class="card">
-                            <h4 class="font-semibold mb-4">System</h4>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                                    </svg>
+                                    System
+                                </h3>
+                            </div>
                             <div class="space-y-3">
-                                <div class="p-3 bg-tertiary rounded-lg">
-                                    <div class="text-xs text-secondary mb-1">CPU</div>
+                                <div class="content-group">
+                                    <div class="content-group-label">CPU</div>
                                     <div id="sysInfoCPU" class="text-sm font-medium truncate">Detecting...</div>
                                 </div>
-                                <div class="p-3 bg-tertiary rounded-lg">
-                                    <div class="text-xs text-secondary mb-1">RAM</div>
+                                <div class="content-group">
+                                    <div class="content-group-label">RAM</div>
                                     <div id="sysInfoRAM" class="text-sm font-medium">Detecting...</div>
                                 </div>
-                                <div class="p-3 bg-tertiary rounded-lg">
-                                    <div class="text-xs text-secondary mb-1">GPU</div>
+                                <div class="content-group">
+                                    <div class="content-group-label">GPU</div>
                                     <div id="sysInfoGPU" class="text-sm font-medium">Detecting...</div>
                                 </div>
-                                <div class="p-3 bg-tertiary rounded-lg">
-                                    <div class="text-xs text-secondary mb-1">Backend</div>
+                                <div class="content-group">
+                                    <div class="content-group-label">Backend</div>
                                     <div id="sysInfoBackend" class="text-sm font-medium">llama.cpp</div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Tips Card -->
-                        <div class="card">
-                            <h4 class="font-semibold mb-3">Tips</h4>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                    </svg>
+                                    Tips
+                                </h3>
+                            </div>
                             <ul class="text-sm text-secondary space-y-2">
-                                <li>• Close other apps for accurate results</li>
-                                <li>• Run multiple times to average</li>
-                                <li>• Smaller models = faster inference</li>
-                                <li>• GPU acceleration improves speed</li>
+                                <li class="flex items-start gap-2">
+                                    <span class="text-accent">•</span>
+                                    Close other apps for accurate results
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="text-accent">•</span>
+                                    Run multiple times to average
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="text-accent">•</span>
+                                    Smaller models = faster inference
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="text-accent">•</span>
+                                    GPU acceleration improves speed
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -1978,11 +2316,11 @@
         <div id="content-models" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto space-y-6">
             
-            <!-- Header with stats -->
-            <div class="flex items-center justify-between">
+            <!-- Page Header -->
+            <div class="page-header">
                 <div>
-                    <h2 class="text-xl font-semibold text-primary">Model Management</h2>
-                    <p class="text-sm text-secondary mt-1">Download, manage, and transfer your local models</p>
+                    <h2>Model Management</h2>
+                    <p>Download, manage, and transfer your local models</p>
                 </div>
                 <button onclick="refreshAllModels()" class="btn btn-secondary btn-sm flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1995,19 +2333,36 @@
             <!-- Two-column layout for Installed Models and Search -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Installed Models - Left Column -->
-                <div class="card">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold">Installed Models</h3>
+                <div class="card-static">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                            </svg>
+                            Installed Models
+                        </h3>
                         <span id="modelCount" class="text-xs px-2 py-1 rounded-full bg-accent/20 text-accent">0 models</span>
                     </div>
                     <div id="installedModels" class="space-y-2 max-h-[400px] overflow-y-auto">
-                        <p class="text-sm text-secondary">Loading...</p>
+                        <div class="empty-state">
+                            <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                            </svg>
+                            <p class="empty-state-title">Loading...</p>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Search & Download - Right Column -->
-                <div class="card">
-                    <h3 class="text-lg font-semibold mb-4">Search & Download</h3>
+                <div class="card-static">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            Search & Download
+                        </h3>
+                    </div>
                     <div class="flex gap-2 mb-4">
                         <input type="text" id="searchQuery" placeholder="Search models (llama, phi, mistral...)" 
                                class="flex-1 input-theme rounded px-3 py-2 text-sm"
@@ -2015,44 +2370,49 @@
                         <button onclick="searchModels()" class="btn btn-primary">Search</button>
                     </div>
                     <div id="searchResults" class="space-y-2 max-h-[340px] overflow-y-auto">
-                        <div class="text-center text-secondary py-8">
-                            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="empty-state">
+                            <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                             </svg>
-                            <p class="text-sm">Search for models from Hugging Face</p>
-                            <p class="text-xs mt-1 text-secondary">Try "llama 3.2" or "phi" or "qwen"</p>
+                            <p class="empty-state-title">Search for models from Hugging Face</p>
+                            <p class="empty-state-desc">Try "llama 3.2" or "phi" or "qwen"</p>
                         </div>
                     </div>
                 </div>
             </div>
             
             <!-- USB Import/Export Section - Collapsible -->
-            <div class="card">
-                <button onclick="toggleUSBSection()" class="w-full flex items-center justify-between text-left">
-                    <div>
-                        <h3 class="text-lg font-semibold">USB Model Transfer</h3>
-                        <p class="text-xs text-secondary mt-1">Transfer models to/from USB drives for offline deployment</p>
+            <details class="collapsible-section">
+                <summary>
+                    <div class="flex items-center gap-3">
+                        <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                        </svg>
+                        <div class="text-left">
+                            <div class="font-semibold text-primary">USB Model Transfer</div>
+                            <div class="text-xs text-secondary">Transfer models to/from USB drives for offline deployment</div>
+                        </div>
                     </div>
-                    <svg id="usbSectionArrow" class="w-5 h-5 text-secondary transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 text-secondary transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
-                </button>
+                </summary>
                 
-                <div id="usbSectionContent" class="hidden mt-4">
+                <div class="collapsible-content">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Import Section -->
-                        <div class="border border-theme rounded-lg p-4">
-                            <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="content-group">
+                            <div class="content-group-label flex items-center gap-2">
+                                <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                                 </svg>
                                 Import from USB
-                            </h4>
+                            </div>
                             <p class="text-xs text-secondary mb-3">Load models from a USB drive</p>
                             
                             <div class="space-y-3">
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">USB Path:</label>
+                                <div class="form-group">
+                                    <label class="form-label">USB Path</label>
                                     <div class="flex gap-2">
                                         <input type="text" id="usbImportPath" 
                                                placeholder="/media/usb or D:\"
@@ -2083,18 +2443,18 @@
                         </div>
                         
                         <!-- Export Section -->
-                        <div class="border border-theme rounded-lg p-4">
-                            <h4 class="text-sm font-medium mb-2 text-accent flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="content-group">
+                            <div class="content-group-label flex items-center gap-2">
+                                <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                 </svg>
                                 Export to USB
-                            </h4>
+                            </div>
                             <p class="text-xs text-secondary mb-3">Create a portable model bundle</p>
                             
                             <div class="space-y-3">
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">USB Path:</label>
+                                <div class="form-group">
+                                    <label class="form-label">USB Path</label>
                                     <div class="flex gap-2">
                                         <input type="text" id="usbExportPath" 
                                                placeholder="/media/usb or D:\"
@@ -2122,16 +2482,21 @@
                     </div>
                     
                     <!-- Common USB Paths Helper -->
-                    <div class="mt-4 p-3 bg-secondary rounded text-xs">
-                        <span class="font-medium text-accent">Common USB mount points:</span>
-                        <div class="mt-2 grid grid-cols-3 gap-2 text-secondary">
-                            <div><span class="font-mono text-primary">Linux:</span> /media/usb</div>
-                            <div><span class="font-mono text-primary">macOS:</span> /Volumes/USB</div>
-                            <div><span class="font-mono text-primary">Windows:</span> D:\ E:\ F:\</div>
+                    <div class="info-box mt-4">
+                        <svg class="info-box-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div>
+                            <span class="font-medium">Common USB mount points:</span>
+                            <div class="mt-1 grid grid-cols-3 gap-2 text-xs text-secondary">
+                                <div><span class="font-mono text-primary">Linux:</span> /media/usb</div>
+                                <div><span class="font-mono text-primary">macOS:</span> /Volumes/USB</div>
+                                <div><span class="font-mono text-primary">Windows:</span> D:\ E:\ F:\</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </details>
             </div>
         </div>
 
@@ -2139,42 +2504,52 @@
         <div id="content-terminal" class="hidden h-full flex flex-col px-6 py-4">
             <div class="max-w-5xl mx-auto flex-1 flex flex-col gap-4 w-full min-h-0">
             <!-- Page Header -->
-            <div class="flex-shrink-0 flex items-center justify-between mb-2">
+            <div class="page-header flex-shrink-0">
                 <div>
-                    <h2 class="text-xl font-semibold">Terminal</h2>
-                    <p class="text-sm text-secondary">Run OffGrid CLI commands directly</p>
+                    <h2>Terminal</h2>
+                    <p>Run OffGrid CLI commands directly</p>
                 </div>
             </div>
             
             <div class="flex-shrink-0">
-                <div class="flex items-center gap-3 px-4 py-3 bg-secondary rounded-lg border border-theme">
-                    <span class="text-xs font-bold text-secondary uppercase tracking-wider">Quick Commands:</span>
-                    <div class="flex gap-2 flex-1">
-                        <button onclick="runQuickCommand('offgrid list')" 
-                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
-                            list
-                        </button>
-                        <button onclick="runQuickCommand('offgrid recommend')" 
-                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
-                            recommend
-                        </button>
-                        <button onclick="runQuickCommand('offgrid help')" 
-                                class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
-                            help
-                        </button>
+                <div class="info-box">
+                    <svg class="info-box-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <div class="flex items-center gap-3 flex-1">
+                        <span class="text-xs font-bold text-secondary uppercase tracking-wider">Quick Commands:</span>
+                        <div class="flex gap-2">
+                            <button onclick="runQuickCommand('offgrid list')" 
+                                    class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
+                                list
+                            </button>
+                            <button onclick="runQuickCommand('offgrid recommend')" 
+                                    class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
+                                recommend
+                            </button>
+                            <button onclick="runQuickCommand('offgrid help')" 
+                                    class="px-4 py-1.5 bg-[#1e1e1e] hover:bg-[#2d2d2d] text-[#00bcd4] hover:text-[#4FC1FF] rounded border border-[#333] font-mono text-xs transition-all duration-150 shadow-sm">
+                                help
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <div class="card terminal-card flex-1 flex flex-col min-h-0">
-                <div class="flex items-center justify-between mb-3 flex-shrink-0">
-                    <h3 class="text-lg font-semibold">Terminal</h3>
+            <div class="card-static terminal-card flex-1 flex flex-col min-h-0">
+                <div class="section-header flex-shrink-0">
+                    <h3>
+                        <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Console
+                    </h3>
                     <div class="flex gap-2">
                         <button onclick="killCommand()" id="killBtn" class="btn btn-danger btn-sm hidden">Kill</button>
                         <button onclick="clearTerminal()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
                 </div>
-                <div class="terminal-output" id="terminalOutput"><pre class="terminal-pre" id="terminalPre"><span style="color: #58a6ff;">OffGrid Terminal v0.2.3</span>
+                <div class="terminal-output" id="terminalOutput"><pre class="terminal-pre" id="terminalPre"><span style="color: #58a6ff;">OffGrid Terminal v0.2.4</span>
 Connected to real offgrid binary
 Type 'help' for available commands or 'offgrid --help' for all options
 </pre></div>
@@ -2192,10 +2567,10 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <div id="content-agent" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
                 <!-- Page Header -->
-                <div class="flex items-center justify-between mb-6">
+                <div class="page-header">
                     <div>
-                        <h2 class="text-xl font-semibold">AI Agent</h2>
-                        <p class="text-sm text-secondary">Run autonomous tasks with tool access and reasoning</p>
+                        <h2>AI Agent</h2>
+                        <p>Run autonomous tasks with tool access and reasoning</p>
                     </div>
                     <button onclick="loadAgentTools()" class="btn btn-secondary btn-sm flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2208,40 +2583,48 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- Agent Runner -->
                     <div class="lg:col-span-2 space-y-4">
-                        <div class="card">
-                            <h3 class="text-lg font-semibold mb-4">Run Agent Task</h3>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    Run Agent Task
+                                </h3>
+                            </div>
                             
                             <div class="space-y-4">
-                                <div>
-                                    <label class="text-sm text-secondary block mb-2">Model</label>
+                                <div class="form-group">
+                                    <label class="form-label">Model</label>
                                     <select id="agentModel" class="w-full input-theme rounded-lg px-3 py-2">
                                         <option value="">Select Model...</option>
                                     </select>
                                 </div>
                                 
-                                <div>
-                                    <label class="text-sm text-secondary block mb-2">Task Description</label>
+                                <div class="form-group">
+                                    <label class="form-label">Task Description</label>
                                     <textarea id="agentTask" rows="3" 
                                               placeholder="Describe what you want the agent to accomplish..."
                                               class="w-full input-theme rounded-lg px-3 py-2 resize-none"></textarea>
                                 </div>
                                 
                                 <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="text-sm text-secondary block mb-2">Style</label>
+                                    <div class="form-group">
+                                        <label class="form-label">Style</label>
                                         <select id="agentStyle" class="w-full input-theme rounded-lg px-3 py-2">
                                             <option value="react">ReAct (Reasoning + Acting)</option>
                                             <option value="cot">Chain of Thought</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label class="text-sm text-secondary block mb-2">Max Steps</label>
+                                    <div class="form-group">
+                                        <label class="form-label">Max Steps</label>
                                         <input type="number" id="agentMaxSteps" value="10" min="1" max="50"
                                                class="w-full input-theme rounded-lg px-3 py-2">
                                     </div>
                                 </div>
                                 
-                                <div class="flex gap-3">
+                                <div class="action-bar" style="margin-top: 0; padding-top: 0; border-top: none;">
                                     <button onclick="runAgent()" id="runAgentBtn" class="btn btn-primary flex-1">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                                         Run Agent
@@ -2255,37 +2638,66 @@ Type 'help' for available commands or 'offgrid --help' for all options
                         </div>
                         
                         <!-- Agent Output -->
-                        <div class="card">
-                            <h3 class="text-lg font-semibold mb-4">Agent Steps</h3>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                                    </svg>
+                                    Agent Steps
+                                </h3>
+                            </div>
                             <div id="agentOutput" class="space-y-3 max-h-96 overflow-auto">
-                                <p class="text-secondary text-sm text-center py-8">Run a task to see agent steps here</p>
+                                <div class="empty-state">
+                                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                    </svg>
+                                    <p class="empty-state-title">Run a task to see agent steps here</p>
+                                    <p class="empty-state-desc">The agent will show reasoning and actions</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Tools Panel -->
                     <div class="space-y-4">
-                        <div class="card">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-lg font-semibold">Available Tools</h3>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                    Available Tools
+                                </h3>
                                 <span id="toolCount" class="badge badge-info">0</span>
                             </div>
                             <div id="agentToolsList" class="space-y-2 max-h-64 overflow-auto">
-                                <p class="text-secondary text-sm text-center py-4">Loading tools...</p>
+                                <div class="empty-state" style="padding: 1rem;">
+                                    <p class="empty-state-title">Loading tools...</p>
+                                </div>
                             </div>
                         </div>
                         
                         <!-- MCP Servers -->
-                        <div class="card">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-lg font-semibold">MCP Servers</h3>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                                    </svg>
+                                    MCP Servers
+                                </h3>
                                 <button onclick="showAddMCPModal()" class="btn btn-primary btn-sm">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                     Add
                                 </button>
                             </div>
                             <div id="mcpServersList" class="space-y-2">
-                                <p class="text-secondary text-sm text-center py-4">No MCP servers configured</p>
+                                <div class="empty-state" style="padding: 1rem;">
+                                    <p class="empty-state-title">No MCP servers configured</p>
+                                    <p class="empty-state-desc">Add a server to extend agent capabilities</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2296,10 +2708,11 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <!-- Users Tab -->
         <div id="content-users" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
-                <div class="flex items-center justify-between mb-6">
+                <!-- Page Header -->
+                <div class="page-header">
                     <div>
-                        <h1 class="text-2xl font-bold">User Management</h1>
-                        <p class="text-secondary text-sm mt-1">Manage users, roles, and quotas</p>
+                        <h2>User Management</h2>
+                        <p>Manage users, roles, and access permissions</p>
                     </div>
                     <button onclick="showCreateUserModal()" class="btn btn-primary">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -2307,28 +2720,47 @@ Type 'help' for available commands or 'offgrid --help' for all options
                     </button>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-                    <div class="card text-center">
-                        <div class="text-3xl font-bold text-accent" id="totalUsersCount">0</div>
-                        <div class="text-sm text-secondary">Total Users</div>
+                <!-- Stats Grid -->
+                <div class="stats-grid mb-6" style="--cols: 4;">
+                    <div class="stat-item">
+                        <svg class="stat-icon text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        <div class="stat-value" id="totalUsersCount">0</div>
+                        <div class="stat-label">Total Users</div>
                     </div>
-                    <div class="card text-center">
-                        <div class="text-3xl font-bold text-emerald-400" id="activeUsersCount">0</div>
-                        <div class="text-sm text-secondary">Active Today</div>
+                    <div class="stat-item">
+                        <svg class="stat-icon text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div class="stat-value text-emerald-400" id="activeUsersCount">0</div>
+                        <div class="stat-label">Active Today</div>
                     </div>
-                    <div class="card text-center">
-                        <div class="text-3xl font-bold text-amber-400" id="adminUsersCount">0</div>
-                        <div class="text-sm text-secondary">Admins</div>
+                    <div class="stat-item">
+                        <svg class="stat-icon text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                        <div class="stat-value text-amber-400" id="adminUsersCount">0</div>
+                        <div class="stat-label">Admins</div>
                     </div>
-                    <div class="card text-center">
-                        <div class="text-3xl font-bold text-blue-400" id="totalTokensUsed">0</div>
-                        <div class="text-sm text-secondary">Tokens Used</div>
+                    <div class="stat-item">
+                        <svg class="stat-icon text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                        </svg>
+                        <div class="stat-value text-blue-400" id="totalTokensUsed">0</div>
+                        <div class="stat-label">Tokens Used</div>
                     </div>
                 </div>
 
-                <div class="card">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold">Users</h3>
+                <!-- Users Table Card -->
+                <div class="card-static">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                            </svg>
+                            All Users
+                        </h3>
                         <input type="text" id="userSearch" placeholder="Search users..." 
                                onkeyup="filterUsers()"
                                class="input-theme rounded-lg px-3 py-2 text-sm w-64">
@@ -2356,10 +2788,11 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <!-- Metrics Tab -->
         <div id="content-metrics" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
-                <div class="flex items-center justify-between mb-6">
+                <!-- Page Header -->
+                <div class="page-header">
                     <div>
-                        <h1 class="text-2xl font-bold">System Metrics</h1>
-                        <p class="text-secondary text-sm mt-1">Monitor performance and usage</p>
+                        <h2>System Metrics</h2>
+                        <p>Monitor performance, usage, and system health</p>
                     </div>
                     <div class="flex gap-2">
                         <select id="metricsTimeRange" onchange="loadMetrics()" class="input-theme rounded-lg px-3 py-2 text-sm">
@@ -2374,117 +2807,123 @@ Type 'help' for available commands or 'offgrid --help' for all options
                     </div>
                 </div>
 
-                <!-- Key Metrics -->
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    <div class="card">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-accent"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold" id="metricRequests">0</div>
-                                <div class="text-xs text-secondary">Total Requests</div>
-                            </div>
-                        </div>
+                <!-- Key Metrics Stats Grid -->
+                <div class="stats-grid mb-6" style="--cols: 4;">
+                    <div class="stat-item">
+                        <svg class="stat-icon text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                        </svg>
+                        <div class="stat-value" id="metricRequests">0</div>
+                        <div class="stat-label">Total Requests</div>
                     </div>
-                    <div class="card">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold" id="metricAvgLatency">0ms</div>
-                                <div class="text-xs text-secondary">Avg Latency</div>
-                            </div>
-                        </div>
+                    <div class="stat-item">
+                        <svg class="stat-icon text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <div class="stat-value text-emerald-400" id="metricAvgLatency">0ms</div>
+                        <div class="stat-label">Avg Latency</div>
                     </div>
-                    <div class="card">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold" id="metricTokens">0</div>
-                                <div class="text-xs text-secondary">Tokens Generated</div>
-                            </div>
-                        </div>
+                    <div class="stat-item">
+                        <svg class="stat-icon text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                        <div class="stat-value text-blue-400" id="metricTokens">0</div>
+                        <div class="stat-label">Tokens Generated</div>
                     </div>
-                    <div class="card">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold" id="metricErrors">0</div>
-                                <div class="text-xs text-secondary">Errors</div>
-                            </div>
-                        </div>
+                    <div class="stat-item">
+                        <svg class="stat-icon text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div class="stat-value text-amber-400" id="metricErrors">0</div>
+                        <div class="stat-label">Errors</div>
                     </div>
                 </div>
 
                 <!-- System Resources -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <div class="card">
-                        <h3 class="text-lg font-semibold mb-4">Resource Usage</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <div class="card-static">
+                        <div class="section-header">
+                            <h3>
+                                <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                                </svg>
+                                Resource Usage
+                            </h3>
+                        </div>
                         <div class="space-y-4">
                             <div>
                                 <div class="flex justify-between text-sm mb-1">
-                                    <span>CPU</span>
-                                    <span id="cpuUsage">0%</span>
+                                    <span class="font-medium">CPU</span>
+                                    <span id="cpuUsage" class="text-accent">0%</span>
                                 </div>
-                                <div class="h-2 bg-tertiary rounded-full overflow-hidden">
+                                <div class="h-2.5 bg-tertiary rounded-full overflow-hidden">
                                     <div id="cpuBar" class="h-full bg-accent transition-all duration-300" style="width: 0%"></div>
                                 </div>
                             </div>
                             <div>
                                 <div class="flex justify-between text-sm mb-1">
-                                    <span>Memory</span>
-                                    <span id="memoryUsage">0 MB</span>
+                                    <span class="font-medium">Memory</span>
+                                    <span id="memoryUsage" class="text-emerald-400">0 MB</span>
                                 </div>
-                                <div class="h-2 bg-tertiary rounded-full overflow-hidden">
+                                <div class="h-2.5 bg-tertiary rounded-full overflow-hidden">
                                     <div id="memoryBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
                                 </div>
                             </div>
                             <div>
                                 <div class="flex justify-between text-sm mb-1">
-                                    <span>Disk</span>
-                                    <span id="diskUsage">0 GB</span>
+                                    <span class="font-medium">Disk</span>
+                                    <span id="diskUsage" class="text-blue-400">0 GB</span>
                                 </div>
-                                <div class="h-2 bg-tertiary rounded-full overflow-hidden">
+                                <div class="h-2.5 bg-tertiary rounded-full overflow-hidden">
                                     <div id="diskBar" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="card">
-                        <h3 class="text-lg font-semibold mb-4">Active Connections</h3>
-                        <div class="grid grid-cols-2 gap-4">
+                    <div class="card-static">
+                        <div class="section-header">
+                            <h3>
+                                <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                                </svg>
+                                Active Connections
+                            </h3>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
                             <div class="text-center p-4 bg-tertiary rounded-lg">
-                                <div class="text-3xl font-bold text-accent" id="wsConnections">0</div>
-                                <div class="text-sm text-secondary">WebSocket</div>
+                                <div class="text-2xl font-bold text-accent" id="wsConnections">0</div>
+                                <div class="text-xs text-secondary mt-1">WebSocket</div>
                             </div>
                             <div class="text-center p-4 bg-tertiary rounded-lg">
-                                <div class="text-3xl font-bold text-emerald-400" id="activeSessions">0</div>
-                                <div class="text-sm text-secondary">Sessions</div>
+                                <div class="text-2xl font-bold text-emerald-400" id="activeSessions">0</div>
+                                <div class="text-xs text-secondary mt-1">Sessions</div>
                             </div>
                             <div class="text-center p-4 bg-tertiary rounded-lg">
-                                <div class="text-3xl font-bold text-blue-400" id="loadedModels">0</div>
-                                <div class="text-sm text-secondary">Models Loaded</div>
+                                <div class="text-2xl font-bold text-blue-400" id="loadedModels">0</div>
+                                <div class="text-xs text-secondary mt-1">Models Loaded</div>
                             </div>
                             <div class="text-center p-4 bg-tertiary rounded-lg">
-                                <div class="text-3xl font-bold text-amber-400" id="ragDocuments">0</div>
-                                <div class="text-sm text-secondary">RAG Documents</div>
+                                <div class="text-2xl font-bold text-amber-400" id="ragDocuments">0</div>
+                                <div class="text-xs text-secondary mt-1">RAG Documents</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Raw Prometheus Metrics -->
-                <div class="card">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold">Prometheus Metrics</h3>
-                        <button onclick="copyMetrics()" class="btn btn-secondary btn-sm">Copy</button>
+                <div class="card-static">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            Prometheus Metrics
+                        </h3>
+                        <button onclick="copyMetrics()" class="btn btn-secondary btn-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                            Copy
+                        </button>
                     </div>
                     <pre id="rawMetrics" class="bg-tertiary rounded-lg p-4 text-xs font-mono overflow-auto max-h-64 text-secondary">Loading metrics...</pre>
                 </div>
@@ -2495,10 +2934,10 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <div id="content-lora" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
                 <!-- Page Header -->
-                <div class="flex items-center justify-between mb-6">
+                <div class="page-header">
                     <div>
-                        <h2 class="text-xl font-semibold">LoRA Adapters</h2>
-                        <p class="text-sm text-secondary">Manage fine-tuned model adapters for specialized tasks</p>
+                        <h2>LoRA Adapters</h2>
+                        <p>Manage fine-tuned model adapters for specialized tasks</p>
                     </div>
                     <button onclick="showRegisterLoRAModal()" class="btn btn-primary flex items-center gap-2">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -2509,13 +2948,26 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- Registered Adapters -->
                     <div class="lg:col-span-2">
-                        <div class="card">
-                            <h3 class="text-lg font-semibold mb-4">Registered Adapters</h3>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 17l10 5 10-5"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12l10 5 10-5"/>
+                                    </svg>
+                                    Registered Adapters
+                                </h3>
+                            </div>
                             <div id="loraAdaptersList" class="space-y-3">
-                                <div class="text-center py-8 text-secondary">
-                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="mx-auto mb-3 opacity-50"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                                    <p>No LoRA adapters registered</p>
-                                    <p class="text-xs mt-1">Register an adapter to apply fine-tuned weights</p>
+                                <div class="empty-state">
+                                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2 17l10 5 10-5"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2 12l10 5 10-5"/>
+                                    </svg>
+                                    <p class="empty-state-title">No LoRA adapters registered</p>
+                                    <p class="empty-state-desc">Register an adapter to apply fine-tuned weights</p>
                                 </div>
                             </div>
                         </div>
@@ -2523,30 +2975,44 @@ Type 'help' for available commands or 'offgrid --help' for all options
 
                     <!-- Active LoRA -->
                     <div class="space-y-4">
-                        <div class="card">
-                            <h3 class="text-lg font-semibold mb-4">Active Adapter</h3>
-                            <div id="activeLoraInfo" class="text-center py-6 text-secondary">
-                                <p>No adapter loaded</p>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    Active Adapter
+                                </h3>
+                            </div>
+                            <div id="activeLoraInfo" class="empty-state" style="padding: 1rem;">
+                                <p class="empty-state-title">No adapter loaded</p>
                             </div>
                         </div>
                         
-                        <div class="card">
-                            <h3 class="text-lg font-semibold mb-4">Quick Load</h3>
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                    Quick Load
+                                </h3>
+                            </div>
                             <div class="space-y-3">
-                                <div>
-                                    <label class="text-sm text-secondary block mb-2">Base Model</label>
+                                <div class="form-group">
+                                    <label class="form-label">Base Model</label>
                                     <select id="loraBaseModel" class="w-full input-theme rounded-lg px-3 py-2">
                                         <option value="">Select model...</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm text-secondary block mb-2">Adapter</label>
+                                <div class="form-group">
+                                    <label class="form-label">Adapter</label>
                                     <select id="loraAdapterSelect" class="w-full input-theme rounded-lg px-3 py-2">
                                         <option value="">Select adapter...</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm text-secondary block mb-2">Scale (0.0 - 1.0)</label>
+                                <div class="form-group">
+                                    <label class="form-label">Scale (0.0 - 1.0)</label>
                                     <input type="range" id="loraScale" min="0" max="1" step="0.1" value="1" 
                                            class="w-full" oninput="updateLoraScaleLabel()">
                                     <div class="text-center text-sm text-secondary mt-1">
@@ -2567,10 +3033,10 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <div id="content-audio" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
                 <!-- Page Header -->
-                <div class="flex items-center justify-between mb-6">
+                <div class="page-header">
                     <div>
-                        <h2 class="text-xl font-semibold">Voice & Audio</h2>
-                        <p class="text-sm text-secondary">Speech-to-text (Whisper) and text-to-speech (Piper) capabilities</p>
+                        <h2>Voice & Audio</h2>
+                        <p>Speech-to-text (Whisper) and text-to-speech (Piper) capabilities</p>
                     </div>
                     <button onclick="refreshAudioStatus(); loadAvailableVoices(); loadAvailableWhisperModels();" class="btn btn-secondary btn-sm flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2598,56 +3064,70 @@ Type 'help' for available commands or 'offgrid --help' for all options
 
                 <!-- Voice Assistant Sub-tab -->
                 <div id="audio-content-assistant" class="audio-subcontent">
-                    <div class="card">
-                        <!-- Compact Settings Row -->
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                            <div>
-                                <label class="text-xs text-secondary block mb-1">LLM Model</label>
-                                <select id="voiceAssistantModel" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceModelChange()">
-                                    <option value="">Loading...</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="text-xs text-secondary block mb-1">Voice</label>
-                                <select id="voiceAssistantVoice" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceVoiceChange()">
-                                    <option value="">Loading...</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="text-xs text-secondary block mb-1">Language</label>
-                                <select id="voiceAssistantLang" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceLangChange()">
-                                    <option value="auto">Auto</option>
-                                    <option value="en" selected>English</option>
-                                    <option value="zh">中文</option>
-                                    <option value="de">Deutsch</option>
-                                    <option value="es">Español</option>
-                                    <option value="fr">Français</option>
-                                    <option value="ja">日本語</option>
-                                    <option value="ko">한국어</option>
-                                    <option value="pt">Português</option>
-                                    <option value="ru">Русский</option>
-                                    <option value="sw">Kiswahili</option>
-                                    <option value="ar">العربية</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="text-xs text-secondary block mb-1">Whisper</label>
-                                <select id="voiceAssistantWhisper" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceWhisperChange()">
-                                    <option value="">Loading...</option>
-                                </select>
+                    <div class="card-static">
+                        <!-- Section Header -->
+                        <div class="section-header">
+                            <h3>
+                                <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                </svg>
+                                Voice Assistant
+                            </h3>
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-secondary flex items-center gap-1.5 px-2 py-1 rounded bg-tertiary cursor-pointer">
+                                    <input type="checkbox" id="voiceAutoSpeak" checked class="accent-cyan-500 w-3 h-3">
+                                    Auto-speak responses
+                                </label>
                             </div>
                         </div>
-                        <p id="whisperModelHint" class="text-xs text-yellow-400 mb-3 hidden">⚠️ Use multilingual model for non-English</p>
                         
-                        <!-- Voice Assistant Main Area -->
-                        <div class="flex flex-col items-center py-4">
-                            <div class="flex items-center gap-3 mb-3">
-                                <label class="text-xs text-secondary flex items-center gap-1">
-                                    <input type="checkbox" id="voiceAutoSpeak" checked class="accent-cyan-500 w-3 h-3">
-                                    Auto-speak
-                                </label>
-                                <span id="voiceAssistantStatus" class="text-xs text-secondary">Press to speak</span>
+                        <!-- Configuration Grid -->
+                        <div class="content-group mb-4">
+                            <div class="content-group-label">Configuration</div>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label">LLM Model</label>
+                                    <select id="voiceAssistantModel" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceModelChange()">
+                                        <option value="">Loading...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label">Voice Output</label>
+                                    <select id="voiceAssistantVoice" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceVoiceChange()">
+                                        <option value="">Loading...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label">Language</label>
+                                    <select id="voiceAssistantLang" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceLangChange()">
+                                        <option value="auto">Auto-detect</option>
+                                        <option value="en" selected>English</option>
+                                        <option value="zh">中文</option>
+                                        <option value="de">Deutsch</option>
+                                        <option value="es">Español</option>
+                                        <option value="fr">Français</option>
+                                        <option value="ja">日本語</option>
+                                        <option value="ko">한국어</option>
+                                        <option value="pt">Português</option>
+                                        <option value="ru">Русский</option>
+                                        <option value="sw">Kiswahili</option>
+                                        <option value="ar">العربية</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label">Whisper Model</label>
+                                    <select id="voiceAssistantWhisper" class="w-full input-theme rounded px-2 py-1.5 text-sm" onchange="onVoiceWhisperChange()">
+                                        <option value="">Loading...</option>
+                                    </select>
+                                </div>
                             </div>
+                        </div>
+                        <p id="whisperModelHint" class="text-xs text-yellow-400 mb-3 hidden">⚠️ Use multilingual model for non-English languages</p>
+                        
+                        <!-- Push-to-Talk Interface -->
+                        <div class="flex flex-col items-center py-6 border-t border-theme">
+                            <span id="voiceAssistantStatus" class="text-sm text-secondary mb-4">Hold button to speak</span>
                             
                             <!-- Push-to-Talk Button -->
                             <button id="voicePTTBtn" 
@@ -2656,8 +3136,8 @@ Type 'help' for available commands or 'offgrid --help' for all options
                                     onmouseleave="stopVoiceChat()"
                                     ontouchstart="startVoiceChat()" 
                                     ontouchend="stopVoiceChat()"
-                                    class="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95">
-                                <svg id="voicePTTIcon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    class="w-28 h-28 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 ring-4 ring-cyan-500/20">
+                                <svg id="voicePTTIcon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                                     <line x1="12" y1="19" x2="12" y2="23"></line>
@@ -2665,209 +3145,295 @@ Type 'help' for available commands or 'offgrid --help' for all options
                                 </svg>
                             </button>
                             
-                            <!-- Voice Waveform -->
-                            <div id="voiceWaveform" class="hidden flex items-center gap-1 h-6 mt-2">
-                                <div class="w-1 bg-cyan-500 rounded-full animate-pulse" style="height: 40%;"></div>
-                                <div class="w-1 bg-cyan-500 rounded-full animate-pulse" style="height: 70%;"></div>
-                                <div class="w-1 bg-cyan-500 rounded-full animate-pulse" style="height: 100%;"></div>
-                                <div class="w-1 bg-cyan-500 rounded-full animate-pulse" style="height: 60%;"></div>
-                                <div class="w-1 bg-cyan-500 rounded-full animate-pulse" style="height: 80%;"></div>
+                            <!-- Voice Waveform Animation -->
+                            <div id="voiceWaveform" class="hidden flex items-center justify-center gap-1 h-8 mt-4">
+                                <div class="w-1.5 bg-cyan-500 rounded-full animate-pulse" style="height: 40%; animation-delay: 0ms;"></div>
+                                <div class="w-1.5 bg-cyan-500 rounded-full animate-pulse" style="height: 70%; animation-delay: 150ms;"></div>
+                                <div class="w-1.5 bg-cyan-500 rounded-full animate-pulse" style="height: 100%; animation-delay: 300ms;"></div>
+                                <div class="w-1.5 bg-cyan-500 rounded-full animate-pulse" style="height: 60%; animation-delay: 450ms;"></div>
+                                <div class="w-1.5 bg-cyan-500 rounded-full animate-pulse" style="height: 80%; animation-delay: 600ms;"></div>
                             </div>
+                            
+                            <p class="text-xs text-secondary mt-4">Click and hold to record, release to send</p>
                         </div>
                         
-                        <!-- Conversation Display -->
-                        <div id="voiceConversation" class="w-full max-h-48 overflow-y-auto space-y-2 hidden border-t border-theme pt-3 mt-2">
+                        <!-- Conversation History -->
+                        <div id="voiceConversation" class="w-full max-h-64 overflow-y-auto space-y-2 hidden border-t border-theme pt-4 mt-4">
                         </div>
                         
-                        <button id="voiceClearBtn" onclick="clearVoiceConversation()" class="btn btn-secondary btn-sm mt-2 hidden">
-                            Clear
-                        </button>
+                        <div id="voiceClearBtn" class="action-bar hidden" style="justify-content: flex-end;">
+                            <button onclick="clearVoiceConversation()" class="btn btn-secondary btn-sm">
+                                Clear Conversation
+                            </button>
+                        </div>
                     </div>
                 </div><!-- End of Voice Assistant Sub-tab -->
                 
                 <!-- Tools Sub-tab (STT & TTS) -->
                 <div id="audio-content-tools" class="audio-subcontent hidden">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <!-- Speech-to-Text Section -->
-                    <div class="card">
-                        <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path></svg>
-                            Speech-to-Text
-                        </h3>
-                        
-                        <div class="space-y-3">
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Model</label>
-                                    <select id="whisperModel" class="w-full input-theme rounded px-2 py-1.5 text-sm">
-                                        <option value="tiny">Tiny</option>
-                                        <option value="base" selected>Base</option>
-                                        <option value="small">Small</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="large">Large</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Language</label>
-                                    <select id="sttLanguage" class="w-full input-theme rounded px-2 py-1.5 text-sm">
-                                        <option value="auto">Auto</option>
-                                        <option value="en" selected>English</option>
-                                        <option value="zh">中文</option>
-                                        <option value="es">Español</option>
-                                        <option value="fr">Français</option>
-                                        <option value="de">Deutsch</option>
-                                        <option value="ja">日本語</option>
-                                        <option value="ko">한국어</option>
-                                        <option value="sw">Kiswahili</option>
-                                    </select>
+                    <!-- Backend Status Bar -->
+                    <div class="info-box mb-4">
+                        <svg class="info-box-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                        <div class="flex items-center gap-6 flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-medium">Whisper (ASR)</span>
+                                <span id="whisperStatus" class="badge badge-secondary text-xs">Checking...</span>
+                                <div id="whisperSetup" class="hidden">
+                                    <button onclick="setupWhisperBinary()" class="btn btn-primary btn-sm text-xs">Install</button>
                                 </div>
                             </div>
-                            
-                            <div class="border border-dashed border-theme rounded p-3 text-center cursor-pointer hover:border-accent" onclick="document.getElementById('audioFileInput').click()">
-                                <input type="file" id="audioFileInput" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg,.webm" class="hidden" onchange="handleAudioFileSelect(event)">
-                                <p id="audioFileName" class="text-xs text-secondary">Click to upload or drag audio</p>
-                            </div>
-                            
-                            <div class="flex gap-2">
-                                <button id="recordBtn" onclick="toggleRecording()" class="btn btn-secondary btn-sm flex-1">
-                                    <svg id="recordIcon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"></circle></svg>
-                                    <span id="recordText">Record</span>
-                                </button>
-                                <button onclick="transcribeAudio()" id="transcribeBtn" class="btn btn-primary btn-sm flex-1" disabled>
-                                    Transcribe
-                                </button>
-                            </div>
-                            
-                            <div id="transcriptionResult" class="hidden">
-                                <div class="bg-tertiary rounded p-2">
-                                    <p id="transcriptionText" class="text-xs whitespace-pre-wrap"></p>
-                                </div>
-                                <div class="flex gap-1 mt-1">
-                                    <button onclick="copyTranscription()" class="btn btn-secondary text-xs px-2 py-1">Copy</button>
-                                    <button onclick="sendTranscriptionToChat()" class="btn btn-secondary text-xs px-2 py-1">→ Chat</button>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-medium">Piper (TTS)</span>
+                                <span id="piperStatus" class="badge badge-secondary text-xs">Checking...</span>
+                                <div id="piperSetup" class="hidden">
+                                    <button onclick="setupPiperBinary()" class="btn btn-primary btn-sm text-xs">Install</button>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <!-- Speech-to-Text Section -->
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                    </svg>
+                                    Speech-to-Text
+                                </h3>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <!-- Settings -->
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="form-label">Whisper Model</label>
+                                        <select id="whisperModel" class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                            <option value="tiny">Tiny (fastest)</option>
+                                            <option value="base" selected>Base</option>
+                                            <option value="small">Small</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="large">Large (best)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="form-label">Language</label>
+                                        <select id="sttLanguage" class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                            <option value="auto">Auto-detect</option>
+                                            <option value="en" selected>English</option>
+                                            <option value="zh">中文</option>
+                                            <option value="es">Español</option>
+                                            <option value="fr">Français</option>
+                                            <option value="de">Deutsch</option>
+                                            <option value="ja">日本語</option>
+                                            <option value="ko">한국어</option>
+                                            <option value="sw">Kiswahili</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <!-- Audio Input -->
+                                <div class="content-group">
+                                    <div class="content-group-label">Audio Input</div>
+                                    <div class="border-2 border-dashed border-theme rounded-lg p-4 text-center cursor-pointer hover:border-accent hover:bg-accent/5 transition-all" onclick="document.getElementById('audioFileInput').click()">
+                                        <input type="file" id="audioFileInput" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg,.webm" class="hidden" onchange="handleAudioFileSelect(event)">
+                                        <svg class="w-8 h-8 mx-auto mb-2 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                                        </svg>
+                                        <p id="audioFileName" class="text-sm text-secondary">Click to upload audio file</p>
+                                        <p class="text-xs text-secondary mt-1">WAV, MP3, M4A, FLAC, OGG, WebM</p>
+                                    </div>
+                                    
+                                    <div class="flex gap-2 mt-3">
+                                        <button id="recordBtn" onclick="toggleRecording()" class="btn btn-secondary btn-sm flex-1 flex items-center justify-center gap-2">
+                                            <svg id="recordIcon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"></circle></svg>
+                                            <span id="recordText">Record Live</span>
+                                        </button>
+                                        <button onclick="transcribeAudio()" id="transcribeBtn" class="btn btn-primary btn-sm flex-1" disabled>
+                                            Transcribe
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Transcription Result -->
+                                <div id="transcriptionResult" class="hidden">
+                                    <div class="content-group">
+                                        <div class="content-group-label">Transcription Result</div>
+                                        <p id="transcriptionText" class="text-sm whitespace-pre-wrap"></p>
+                                    </div>
+                                    <div class="action-bar">
+                                        <button onclick="copyTranscription()" class="btn btn-secondary btn-sm">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                                            Copy
+                                        </button>
+                                        <button onclick="sendTranscriptionToChat()" class="btn btn-primary btn-sm">
+                                            Send to Chat →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                    <!-- Text-to-Speech Section -->
-                    <div class="card">
-                        <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                            Text-to-Speech
-                        </h3>
-                        
-                        <div class="space-y-3">
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Voice</label>
-                                    <select id="ttsVoice" class="w-full input-theme rounded px-2 py-1.5 text-sm">
-                                        <option value="">Loading...</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-xs text-secondary block mb-1">Speed: <span id="ttsSpeedLabel">1.0x</span></label>
-                                    <input type="range" id="ttsSpeed" min="0.5" max="2" step="0.1" value="1" class="w-full" oninput="updateTTSSpeedLabel()">
-                                </div>
+                        <!-- Text-to-Speech Section -->
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                                    </svg>
+                                    Text-to-Speech
+                                </h3>
                             </div>
                             
-                            <textarea id="ttsText" rows="3" class="w-full input-theme rounded px-2 py-1.5 text-sm resize-none" placeholder="Enter text to speak..."></textarea>
-                            
-                            <button onclick="generateSpeech()" id="speakBtn" class="btn btn-primary btn-sm w-full">
-                                Generate Speech
-                            </button>
-                            
-                            <div id="ttsPlayer" class="hidden">
-                                <audio id="ttsAudio" controls class="w-full h-8"></audio>
-                                <button onclick="downloadTTSAudio()" class="btn btn-secondary btn-sm w-full mt-1">Download</button>
+                            <div class="space-y-4">
+                                <!-- Settings -->
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="form-label">Voice</label>
+                                        <select id="ttsVoice" class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                            <option value="">Loading...</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="form-label">Speed: <span id="ttsSpeedLabel" class="text-accent">1.0x</span></label>
+                                        <input type="range" id="ttsSpeed" min="0.5" max="2" step="0.1" value="1" class="w-full mt-1" oninput="updateTTSSpeedLabel()">
+                                    </div>
+                                </div>
+                                
+                                <!-- Text Input -->
+                                <div class="form-group">
+                                    <label class="form-label">Text to Speak</label>
+                                    <textarea id="ttsText" rows="4" class="w-full input-theme rounded px-3 py-2 text-sm resize-none" placeholder="Enter or paste text to convert to speech..."></textarea>
+                                </div>
+                                
+                                <button onclick="generateSpeech()" id="speakBtn" class="btn btn-primary w-full">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                    </svg>
+                                    Generate Speech
+                                </button>
+                                
+                                <!-- Audio Player -->
+                                <div id="ttsPlayer" class="hidden">
+                                    <div class="content-group">
+                                        <div class="content-group-label">Generated Audio</div>
+                                        <audio id="ttsAudio" controls class="w-full"></audio>
+                                    </div>
+                                    <button onclick="downloadTTSAudio()" class="btn btn-secondary btn-sm w-full mt-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                        </svg>
+                                        Download Audio
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
                 
-                <!-- Compact Status Row -->
-                <div class="grid grid-cols-2 gap-4 mt-4">
-                    <div class="bg-tertiary rounded-lg p-3 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm">ASR (Whisper)</span>
-                            <span id="whisperStatus" class="badge badge-secondary text-xs">Checking...</span>
-                        </div>
-                        <div id="whisperSetup" class="hidden">
-                            <button onclick="setupWhisperBinary()" class="btn btn-primary btn-sm text-xs">Install</button>
-                        </div>
-                    </div>
-                    <div class="bg-tertiary rounded-lg p-3 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm">TTS (Piper)</span>
-                            <span id="piperStatus" class="badge badge-secondary text-xs">Checking...</span>
-                        </div>
-                        <div id="piperSetup" class="hidden">
-                            <button onclick="setupPiperBinary()" class="btn btn-primary btn-sm text-xs">Install</button>
-                        </div>
-                    </div>
-                </div>
                 <div id="whisperModels" class="hidden"></div>
                 <div id="piperVoices" class="hidden"></div>
                 </div><!-- End of Tools Sub-tab -->
                 
                 <!-- Library Sub-tab (Models & Voices) -->
                 <div id="audio-content-library" class="audio-subcontent hidden">
-                    <!-- Two-column layout for models and voices -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <!-- Whisper Models -->
-                        <div class="card">
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="text-sm font-semibold flex items-center gap-2">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                                    Whisper Models
+                        <div class="card-static">
+                            <div class="section-header" style="flex-wrap: wrap;">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                        <line x1="12" y1="19" x2="12" y2="23"/>
+                                        <line x1="8" y1="23" x2="16" y2="23"/>
+                                    </svg>
+                                    Whisper Models (ASR)
                                 </h3>
-                                <span id="whisperModelCount" class="text-xs text-secondary"></span>
+                                <span id="whisperModelCount" class="badge badge-secondary text-xs"></span>
                             </div>
                             
-                            <div class="flex gap-2 mb-3">
-                                <select id="whisperLanguageFilter" class="input-theme rounded px-2 py-1 text-xs flex-1" onchange="filterWhisperModels()">
-                                    <option value="">All Types</option>
-                                    <option value="multilingual">Multilingual</option>
-                                    <option value="english">English only</option>
-                                </select>
-                                <select id="whisperStatusFilter" class="input-theme rounded px-2 py-1 text-xs" onchange="filterWhisperModels()">
-                                    <option value="">All</option>
-                                    <option value="installed">Installed</option>
-                                    <option value="available">Available</option>
-                                </select>
+                            <!-- Filter Controls -->
+                            <div class="content-group mb-4">
+                                <div class="content-group-label">Filter Models</div>
+                                <div class="flex gap-2">
+                                    <select id="whisperLanguageFilter" class="input-theme rounded px-2 py-1.5 text-sm flex-1" onchange="filterWhisperModels()">
+                                        <option value="">All Types</option>
+                                        <option value="multilingual">Multilingual</option>
+                                        <option value="english">English Only</option>
+                                    </select>
+                                    <select id="whisperStatusFilter" class="input-theme rounded px-2 py-1.5 text-sm" onchange="filterWhisperModels()">
+                                        <option value="">All Status</option>
+                                        <option value="installed">Installed</option>
+                                        <option value="available">Available</option>
+                                    </select>
+                                </div>
                             </div>
                             
-                            <div id="whisperModelLibrary" class="space-y-1 max-h-64 overflow-y-auto">
-                                <div class="text-xs text-secondary">Loading...</div>
+                            <!-- Model List -->
+                            <div class="content-group">
+                                <div class="content-group-label">Available Models</div>
+                                <div id="whisperModelLibrary" class="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
+                                    <div class="empty-state py-4">
+                                        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                        </svg>
+                                        <p>Loading models...</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
                         <!-- Voice Library -->
-                        <div class="card">
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="text-sm font-semibold flex items-center gap-2">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                                    TTS Voices
+                        <div class="card-static">
+                            <div class="section-header" style="flex-wrap: wrap;">
+                                <h3>
+                                    <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                                    </svg>
+                                    TTS Voices (Piper)
                                 </h3>
-                                <span id="voiceCount" class="text-xs text-secondary"></span>
+                                <span id="voiceCount" class="badge badge-secondary text-xs"></span>
                             </div>
                             
-                            <div class="flex gap-2 mb-3">
-                                <input type="text" id="voiceSearch" placeholder="Search..." 
-                                       class="input-theme rounded px-2 py-1 text-xs flex-1"
-                                       oninput="filterVoices()">
-                                <select id="voiceLanguageFilter" class="input-theme rounded px-2 py-1 text-xs" onchange="filterVoices()">
-                                    <option value="">All</option>
-                                </select>
-                                <select id="voiceStatusFilter" class="input-theme rounded px-2 py-1 text-xs" onchange="filterVoices()">
-                                    <option value="">All</option>
-                                    <option value="installed">Installed</option>
-                                    <option value="available">Available</option>
-                                </select>
+                            <!-- Filter Controls -->
+                            <div class="content-group mb-4">
+                                <div class="content-group-label">Search & Filter</div>
+                                <div class="space-y-2">
+                                    <input type="text" id="voiceSearch" placeholder="Search voices by name..." 
+                                           class="input-theme rounded px-3 py-1.5 text-sm w-full"
+                                           oninput="filterVoices()">
+                                    <div class="flex gap-2">
+                                        <select id="voiceLanguageFilter" class="input-theme rounded px-2 py-1.5 text-sm flex-1" onchange="filterVoices()">
+                                            <option value="">All Languages</option>
+                                        </select>
+                                        <select id="voiceStatusFilter" class="input-theme rounded px-2 py-1.5 text-sm" onchange="filterVoices()">
+                                            <option value="">All Status</option>
+                                            <option value="installed">Installed</option>
+                                            <option value="available">Available</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                             
-                            <div id="voiceLibrary" class="space-y-1 max-h-64 overflow-y-auto">
-                                <div class="text-xs text-secondary">Loading...</div>
+                            <!-- Voice List -->
+                            <div class="content-group">
+                                <div class="content-group-label">Available Voices</div>
+                                <div id="voiceLibrary" class="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
+                                    <div class="empty-state py-4">
+                                        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                        </svg>
+                                        <p>Loading voices...</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -5768,7 +6334,7 @@ Type 'help' for available commands or 'offgrid --help' for all options
             terminalOutputBuffer = ''; // Clear any buffered output
             userScrolledUp = false;
             const pre = document.getElementById('terminalPre');
-            pre.textContent = 'OffGrid Terminal v0.2.3\nConnected to real offgrid binary\nType \'help\' for available commands\n';
+            pre.textContent = 'OffGrid Terminal v0.2.4\nConnected to real offgrid binary\nType \'help\' for available commands\n';
         }
 
         function killCommand() {
@@ -7060,11 +7626,12 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 const resp = await fetch('/v1/models');
                 const data = await resp.json();
                 const select = document.getElementById('agentModel');
-                select.innerHTML = '<option value="">Select Model...</option>';
-                data.data.forEach(m => {
+                select.innerHTML = '';
+                data.data.forEach((m, i) => {
                     const opt = document.createElement('option');
                     opt.value = m.id;
                     opt.textContent = m.id;
+                    if (i === 0) opt.selected = true; // Auto-select first model
                     select.appendChild(opt);
                 });
             } catch (e) {
