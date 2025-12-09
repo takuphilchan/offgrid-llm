@@ -1271,52 +1271,58 @@
         </div>
         
         <nav class="sidebar-nav">
-            <button onclick="switchTab('chat')" id="tab-chat" class="nav-item active">
+            <!-- Primary Features - Most Used -->
+            <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Conversation</div>
+            <button onclick="switchTab('chat')" id="tab-chat" class="nav-item active" aria-label="Chat with AI">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                 Chat
             </button>
-            <button onclick="switchTab('knowledge')" id="tab-knowledge" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><line x1="12" y1="6" x2="12" y2="12"></line><line x1="9" y1="9" x2="15" y2="9"></line></svg>
-                Knowledge
+            <button onclick="switchTab('audio')" id="tab-audio" class="nav-item" aria-label="Voice Assistant">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                Voice
             </button>
-            <button onclick="switchTab('benchmark')" id="tab-benchmark" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                Benchmark
-            </button>
-            <button onclick="switchTab('models')" id="tab-models" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                Models
-            </button>
-            <button onclick="switchTab('terminal')" id="tab-terminal" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-                Terminal
-            </button>
-            
-            <div class="my-3 border-t border-theme mx-3"></div>
-            <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Advanced</div>
-            
-            <button onclick="switchTab('agent')" id="tab-agent" class="nav-item">
+            <button onclick="switchTab('agent')" id="tab-agent" class="nav-item" aria-label="AI Agent">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>
                 Agent
             </button>
-            <button onclick="switchTab('lora')" id="tab-lora" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-                LoRA
+            
+            <div class="my-3 border-t border-theme mx-3"></div>
+            <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Resources</div>
+            
+            <button onclick="switchTab('models')" id="tab-models" class="nav-item" aria-label="Model Management">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                Models
             </button>
-            <button onclick="switchTab('audio')" id="tab-audio" class="nav-item">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                Audio
+            <button onclick="switchTab('knowledge')" id="tab-knowledge" class="nav-item" aria-label="Knowledge Base">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><line x1="12" y1="6" x2="12" y2="12"></line><line x1="9" y1="9" x2="15" y2="9"></line></svg>
+                Knowledge
+            </button>
+            <button onclick="switchTab('lora')" id="tab-lora" class="nav-item" aria-label="LoRA Adapters">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                LoRA Adapters
+            </button>
+            
+            <div class="my-3 border-t border-theme mx-3"></div>
+            <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Tools</div>
+            
+            <button onclick="switchTab('benchmark')" id="tab-benchmark" class="nav-item" aria-label="Performance Benchmark">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                Benchmark
+            </button>
+            <button onclick="switchTab('terminal')" id="tab-terminal" class="nav-item" aria-label="Terminal">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                Terminal
             </button>
             
             <!-- Multi-user features (hidden by default in single-user mode) -->
             <div id="multiUserNav" class="hidden">
                 <div class="my-3 border-t border-theme mx-3"></div>
-                <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Admin</div>
-                <button onclick="switchTab('users')" id="tab-users" class="nav-item">
+                <div class="px-3 mb-2 text-xs text-secondary uppercase tracking-wider font-semibold">Administration</div>
+                <button onclick="switchTab('users')" id="tab-users" class="nav-item" aria-label="User Management">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     Users
                 </button>
-                <button onclick="switchTab('metrics')" id="tab-metrics" class="nav-item">
+                <button onclick="switchTab('metrics')" id="tab-metrics" class="nav-item" aria-label="System Metrics">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
                     Metrics
                 </button>
@@ -1349,7 +1355,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <span id="statusBadge" class="badge badge-success">Ready</span>
-                <span class="text-xs text-secondary">v0.2.3</span>
+                <span class="text-xs text-secondary">v0.2.4</span>
             </div>
             <button id="theme-toggle" class="p-2 rounded-lg hover:bg-tertiary transition-colors text-secondary hover:text-primary" title="Toggle Theme">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2132,6 +2138,14 @@
         <!-- Terminal Tab -->
         <div id="content-terminal" class="hidden h-full flex flex-col px-6 py-4">
             <div class="max-w-5xl mx-auto flex-1 flex flex-col gap-4 w-full min-h-0">
+            <!-- Page Header -->
+            <div class="flex-shrink-0 flex items-center justify-between mb-2">
+                <div>
+                    <h2 class="text-xl font-semibold">Terminal</h2>
+                    <p class="text-sm text-secondary">Run OffGrid CLI commands directly</p>
+                </div>
+            </div>
+            
             <div class="flex-shrink-0">
                 <div class="flex items-center gap-3 px-4 py-3 bg-secondary rounded-lg border border-theme">
                     <span class="text-xs font-bold text-secondary uppercase tracking-wider">Quick Commands:</span>
@@ -2177,13 +2191,16 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <!-- Agent Tab -->
         <div id="content-agent" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
+                <!-- Page Header -->
                 <div class="flex items-center justify-between mb-6">
                     <div>
-                        <h1 class="text-2xl font-bold">AI Agent</h1>
-                        <p class="text-secondary text-sm mt-1">Run autonomous tasks with tool access</p>
+                        <h2 class="text-xl font-semibold">AI Agent</h2>
+                        <p class="text-sm text-secondary">Run autonomous tasks with tool access and reasoning</p>
                     </div>
-                    <button onclick="loadAgentTools()" class="btn btn-secondary btn-sm">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <button onclick="loadAgentTools()" class="btn btn-secondary btn-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
                         Refresh
                     </button>
                 </div>
@@ -2477,12 +2494,13 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <!-- LoRA Tab -->
         <div id="content-lora" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
+                <!-- Page Header -->
                 <div class="flex items-center justify-between mb-6">
                     <div>
-                        <h1 class="text-2xl font-bold">LoRA Adapters</h1>
-                        <p class="text-secondary text-sm mt-1">Fine-tuned model adapters</p>
+                        <h2 class="text-xl font-semibold">LoRA Adapters</h2>
+                        <p class="text-sm text-secondary">Manage fine-tuned model adapters for specialized tasks</p>
                     </div>
-                    <button onclick="showRegisterLoRAModal()" class="btn btn-primary">
+                    <button onclick="showRegisterLoRAModal()" class="btn btn-primary flex items-center gap-2">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         Register Adapter
                     </button>
@@ -2548,24 +2566,33 @@ Type 'help' for available commands or 'offgrid --help' for all options
         <!-- Audio Tab -->
         <div id="content-audio" class="hidden h-full overflow-auto px-6 py-4">
             <div class="max-w-5xl mx-auto">
-                <!-- Compact Sub-tabs (no header) -->
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex gap-1 border-b border-theme">
-                        <button onclick="switchAudioSubTab('assistant')" id="audio-subtab-assistant" class="audio-subtab active px-4 py-2 text-sm font-medium rounded-t-lg transition-colors">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline mr-1"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                            Voice Assistant
-                        </button>
-                        <button onclick="switchAudioSubTab('tools')" id="audio-subtab-tools" class="audio-subtab px-4 py-2 text-sm font-medium rounded-t-lg transition-colors">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline mr-1"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                            STT / TTS Tools
-                        </button>
-                        <button onclick="switchAudioSubTab('library')" id="audio-subtab-library" class="audio-subtab px-4 py-2 text-sm font-medium rounded-t-lg transition-colors">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline mr-1"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            Models & Voices
-                        </button>
+                <!-- Page Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-semibold">Voice & Audio</h2>
+                        <p class="text-sm text-secondary">Speech-to-text (Whisper) and text-to-speech (Piper) capabilities</p>
                     </div>
-                    <button onclick="refreshAudioStatus(); loadAvailableVoices(); loadAvailableWhisperModels();" class="btn btn-sm btn-secondary">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                    <button onclick="refreshAudioStatus(); loadAvailableVoices(); loadAvailableWhisperModels();" class="btn btn-secondary btn-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                
+                <!-- Sub-tabs -->
+                <div class="flex gap-1 border-b border-theme mb-4">
+                    <button onclick="switchAudioSubTab('assistant')" id="audio-subtab-assistant" class="audio-subtab active px-4 py-2 text-sm font-medium rounded-t-lg transition-colors">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline mr-1"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                        Voice Assistant
+                    </button>
+                    <button onclick="switchAudioSubTab('tools')" id="audio-subtab-tools" class="audio-subtab px-4 py-2 text-sm font-medium rounded-t-lg transition-colors">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline mr-1"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                        STT / TTS Tools
+                    </button>
+                    <button onclick="switchAudioSubTab('library')" id="audio-subtab-library" class="audio-subtab px-4 py-2 text-sm font-medium rounded-t-lg transition-colors">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="inline mr-1"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Models & Voices
                     </button>
                 </div>
 
