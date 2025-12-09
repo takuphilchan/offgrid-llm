@@ -580,7 +580,7 @@ jobs:
       matrix:
         include:
           - os: linux
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
             build_script: build:linux
             
           - os: macos
