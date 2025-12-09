@@ -535,8 +535,11 @@ download_piper() {
         return 1
     fi
     
-    # Copy piper files
+    # Clean existing piper installation to avoid conflicts
+    rm -rf "$install_dir"
     mkdir -p "$install_dir"
+    
+    # Copy piper files (tarball extracts to piper/ subdirectory)
     if [ -d "$tmp_dir/piper" ]; then
         cp -r "$tmp_dir/piper/"* "$install_dir/"
     fi
