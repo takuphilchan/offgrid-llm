@@ -68,10 +68,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux builds on Ubuntu 24.04 (GLIBC 2.38)
-          # For older systems, build from source: ./dev/install.sh
+          # Linux CPU builds on Ubuntu 22.04 (GLIBC 2.35 - wide compatibility)
           - name: linux-amd64-cpu-avx2
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             platform: linux
             arch: amd64
             variant: cpu
@@ -79,6 +78,25 @@ jobs:
             gpu_flags: ""
             cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
+          - name: linux-amd64-cpu-avx512
+            os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+            variant: cpu
+            cpu_features: avx512
+            gpu_flags: ""
+            cpu_flags: "-march=x86-64-v4"
+            
+          - name: linux-arm64-cpu
+            os: ubuntu-22.04
+            platform: linux
+            arch: arm64
+            variant: cpu
+            cpu_features: neon
+            gpu_flags: ""
+            cpu_flags: "-march=armv8-a"
+          
+          # Linux Vulkan builds on Ubuntu 24.04 (GLIBC 2.38 - GPU acceleration)
           - name: linux-amd64-vulkan-avx2
             os: ubuntu-24.04
             platform: linux
@@ -88,15 +106,6 @@ jobs:
             gpu_flags: "-DGGML_VULKAN=ON"
             cpu_flags: "-march=x86-64-v3 -mno-avx512f"
             
-          - name: linux-amd64-cpu-avx512
-            os: ubuntu-24.04
-            platform: linux
-            arch: amd64
-            variant: cpu
-            cpu_features: avx512
-            gpu_flags: ""
-            cpu_flags: "-march=x86-64-v4"
-            
           - name: linux-amd64-vulkan-avx512
             os: ubuntu-24.04
             platform: linux
@@ -105,15 +114,6 @@ jobs:
             cpu_features: avx512
             gpu_flags: "-DGGML_VULKAN=ON"
             cpu_flags: "-march=x86-64-v4"
-            
-          - name: linux-arm64-cpu
-            os: ubuntu-24.04
-            platform: linux
-            arch: arm64
-            variant: cpu
-            cpu_features: neon
-            gpu_flags: ""
-            cpu_flags: "-march=armv8-a"
             
           # macOS variants
           - name: darwin-arm64-metal

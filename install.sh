@@ -15,9 +15,9 @@
 #   GPU=cpu|vulkan     Force CPU or Vulkan build (default: auto-detect GPU)
 #
 # Requirements:
-#   Linux: GLIBC 2.38+ (Ubuntu 24.04+, Fedora 40+)
+#   CPU builds: GLIBC 2.35+ (Ubuntu 22.04+, Debian 12+)
+#   Vulkan builds: GLIBC 2.38+ (Ubuntu 24.04+) - auto-fallback to CPU if unavailable
 #   macOS: 12.0+ (Monterey)
-#   For older Linux systems, build from source: ./dev/install.sh
 
 set -e
 
@@ -794,22 +794,6 @@ main() {
     local arch=$(detect_arch)
     local cpu_features=$(detect_cpu_features)
     
-    # Check GLIBC version on Linux (requires 2.38+ / Ubuntu 24.04+)
-    if [ "$os" = "linux" ]; then
-        local glibc_check=$(check_glibc_version 2 38)
-        if [ "$glibc_check" != "compatible" ]; then
-            local current_glibc=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo "unknown")
-            log_error "GLIBC $current_glibc detected, but 2.38+ required (Ubuntu 24.04+)"
-            log_error "Pre-built binaries require Ubuntu 24.04, Fedora 40+, or similar"
-            echo "" >&2
-            log_info "For older systems, build from source:"
-            log_dim "  git clone https://github.com/takuphilchan/offgrid-llm.git"
-            log_dim "  cd offgrid-llm && sudo ./dev/install.sh"
-            echo "" >&2
-            exit 1
-        fi
-    fi
-    
     # Allow environment variable override for GPU variant
     # Use: GPU=vulkan or GPU=cpu to force a specific build
     local gpu_variant
@@ -818,6 +802,18 @@ main() {
         log_info "GPU variant override: $gpu_variant"
     else
         gpu_variant=$(detect_gpu "$os")
+    fi
+    
+    # Check GLIBC for Vulkan builds on Linux (requires 2.38+)
+    # CPU builds work on GLIBC 2.35+ (Ubuntu 22.04+)
+    if [ "$os" = "linux" ] && [ "$gpu_variant" = "vulkan" ]; then
+        local glibc_check=$(check_glibc_version 2 38)
+        if [ "$glibc_check" != "compatible" ]; then
+            local current_glibc=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo "unknown")
+            log_warn "GPU detected but GLIBC $current_glibc < 2.38 (Vulkan requires Ubuntu 24.04+)"
+            log_warn "Falling back to CPU build for compatibility"
+            gpu_variant="cpu"
+        fi
     fi
     
     log_info "System detected: $os-$arch ($gpu_variant, $cpu_features)"
