@@ -504,8 +504,14 @@ main() {
     fi
     log_info "Version: $VERSION"
     
+    # Check if running interactively (stdin is a terminal)
+    local is_interactive="no"
+    if [ -t 0 ] && [ "${NONINTERACTIVE:-}" != "yes" ]; then
+        is_interactive="yes"
+    fi
+    
     # Show menu if interactive
-    if [ "${NONINTERACTIVE:-}" != "yes" ] && [ -z "${CLI:-}" ] && [ -z "${DESKTOP:-}" ] && [ -z "${AUDIO:-}" ]; then
+    if [ "$is_interactive" = "yes" ] && [ -z "${CLI:-}" ] && [ -z "${DESKTOP:-}" ] && [ -z "${AUDIO:-}" ]; then
         show_menu "$os"
     else
         # Use defaults or environment variables
@@ -513,6 +519,10 @@ main() {
         INSTALL_CLI="${CLI:-yes}"
         INSTALL_DESKTOP="${DESKTOP:-yes}"
         INSTALL_AUDIO="${AUDIO:-yes}"
+        
+        if [ "$is_interactive" != "yes" ]; then
+            log_info "Non-interactive mode: Installing full system (CLI + Desktop + Audio)"
+        fi
     fi
     
     # Summary
@@ -523,7 +533,7 @@ main() {
     echo -e "  Audio (STT/TTS): ${INSTALL_AUDIO}" >&2
     echo "" >&2
     
-    if [ "${NONINTERACTIVE:-}" != "yes" ]; then
+    if [ "$is_interactive" = "yes" ]; then
         read -p "Proceed with installation? [Y/n]: " confirm
         confirm="${confirm:-Y}"
         if [[ ! "$confirm" =~ ^[Yy] ]]; then
