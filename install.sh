@@ -142,6 +142,42 @@ get_latest_version() {
     echo "$version"
 }
 
+# Check GLIBC version (for Linux binary compatibility)
+# Returns: "compatible" if >= required, "incompatible" otherwise
+check_glibc_version() {
+    local required_major="${1:-2}"
+    local required_minor="${2:-38}"
+    
+    if [ "$(uname -s)" != "Linux" ]; then
+        echo "compatible"
+        return
+    fi
+    
+    local glibc_version
+    glibc_version=$(ldd --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    
+    if [ -z "$glibc_version" ]; then
+        echo "unknown"
+        return
+    fi
+    
+    local major minor
+    major=$(echo "$glibc_version" | cut -d. -f1)
+    minor=$(echo "$glibc_version" | cut -d. -f2)
+    
+    if [ "$major" -gt "$required_major" ] || \
+       ([ "$major" -eq "$required_major" ] && [ "$minor" -ge "$required_minor" ]); then
+        echo "compatible"
+    else
+        echo "incompatible:$glibc_version"
+    fi
+}
+
+# Get GLIBC version string
+get_glibc_version() {
+    ldd --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1
+}
+
 # ═══════════════════════════════════════════════════════════════
 # Installation Menu
 # ═══════════════════════════════════════════════════════════════
@@ -447,26 +483,89 @@ install_cli() {
 
 install_audio() {
     local bundle_dir="$1"
+    local interactive="$2"
     
     log_info "Installing Audio components..."
     
     local AUDIO_DIR="$HOME/.offgrid-llm/audio"
     mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
     
-    # Install Whisper (Speech-to-Text)
-    # Always build from source on Linux for GLIBC compatibility
-    local whisper_installed=false
     local os
     os="$(uname -s)"
     
+    # Check GLIBC compatibility on Linux
+    local glibc_status="compatible"
+    local glibc_version=""
+    
     if [ "$os" = "Linux" ]; then
-        # Build whisper.cpp from source to avoid GLIBC issues
-        log_info "Building Whisper from source (ensures compatibility)..."
-        if build_whisper_from_source "$AUDIO_DIR/whisper"; then
-            whisper_installed=true
-            log_success "Whisper (Speech-to-Text) built and installed"
+        glibc_status=$(check_glibc_version 2 38)
+        glibc_version=$(get_glibc_version)
+        
+        if [[ "$glibc_status" == incompatible* ]]; then
+            echo "" >&2
+            log_warn "GLIBC Compatibility Notice"
+            echo -e "${DIM}  Your system has GLIBC $glibc_version${NC}" >&2
+            echo -e "${DIM}  Pre-built audio binaries require GLIBC 2.38+${NC}" >&2
+            echo "" >&2
+            
+            if [ "$interactive" = "yes" ]; then
+                echo -e "${BOLD}Audio Installation Options:${NC}" >&2
+                echo "  1) Build from source  (Recommended - works on any system, takes ~5 min)" >&2
+                echo "  2) Skip audio         (Install CLI only, no voice features)" >&2
+                echo "" >&2
+                
+                local audio_choice
+                read -r -p "Enter choice [1-2] (default: 1): " audio_choice </dev/tty
+                audio_choice="${audio_choice:-1}"
+                
+                case "$audio_choice" in
+                    2)
+                        log_info "Skipping audio installation"
+                        log_dim "You can install audio later with: offgrid audio setup"
+                        return 0
+                        ;;
+                    *)
+                        # Continue with build from source
+                        ;;
+                esac
+            else
+                log_info "Non-interactive mode: Building audio from source"
+            fi
         else
-            log_warn "Whisper build failed - voice input will not be available"
+            log_dim "GLIBC $glibc_version detected - compatible with pre-built binaries"
+        fi
+    fi
+    
+    # Install Whisper (Speech-to-Text)
+    local whisper_installed=false
+    
+    if [ "$os" = "Linux" ]; then
+        if [[ "$glibc_status" == "compatible" ]] && [ -d "$bundle_dir/audio/whisper" ]; then
+            # Use pre-built binaries
+            log_info "Installing pre-built Whisper..."
+            cp -r "$bundle_dir/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
+            chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
+            
+            # Test if it works
+            if "$AUDIO_DIR/whisper/whisper-cli" --help >/dev/null 2>&1; then
+                whisper_installed=true
+                log_success "Whisper (Speech-to-Text) installed"
+            else
+                log_warn "Pre-built Whisper failed, building from source..."
+                rm -rf "$AUDIO_DIR/whisper"/*
+            fi
+        fi
+        
+        if [ "$whisper_installed" = "false" ]; then
+            # Build from source
+            log_info "Building Whisper from source (this may take a few minutes)..."
+            if build_whisper_from_source "$AUDIO_DIR/whisper"; then
+                whisper_installed=true
+                log_success "Whisper (Speech-to-Text) built and installed"
+            else
+                log_warn "Whisper build failed - voice input will not be available"
+                log_dim "You can try later with: offgrid audio setup whisper"
+            fi
         fi
     elif [ -d "$bundle_dir/audio/whisper" ]; then
         # macOS/Windows: use pre-built binaries
@@ -479,14 +578,20 @@ install_audio() {
     fi
     
     # Install Piper (Text-to-Speech)
-    # Piper has complex dependencies, download pre-built from official releases
     local piper_installed=false
     
     if [ "$os" = "Linux" ]; then
         log_info "Downloading Piper from official releases..."
         if download_piper "$AUDIO_DIR/piper"; then
-            piper_installed=true
-            log_success "Piper (Text-to-Speech) installed"
+            # Test if it works
+            if LD_LIBRARY_PATH="$AUDIO_DIR/piper:$LD_LIBRARY_PATH" "$AUDIO_DIR/piper/piper" --help >/dev/null 2>&1; then
+                piper_installed=true
+                log_success "Piper (Text-to-Speech) installed"
+            else
+                log_warn "Piper binary not compatible with your system"
+                log_dim "Text-to-speech will not be available"
+                rm -rf "$AUDIO_DIR/piper"/*
+            fi
         else
             log_warn "Piper download failed - voice output will not be available"
         fi
@@ -745,7 +850,7 @@ main() {
         install_webui "$bundle_dir"
         
         if [ "$INSTALL_AUDIO" = "yes" ]; then
-            install_audio "$bundle_dir"
+            install_audio "$bundle_dir" "$is_interactive"
         fi
     fi
     

@@ -248,9 +248,32 @@ rm -rf ~/.local/share/offgrid-desktop
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
+### Voice Features: GLIBC Compatibility
+
+Pre-built audio binaries require GLIBC 2.38+. The installer detects your GLIBC version and:
+- **Compatible (GLIBC ≥ 2.38):** Uses fast pre-built binaries
+- **Incompatible (older GLIBC):** Prompts you to build from source or skip
+
+If running interactively, you'll see options:
+```
+⚠ GLIBC Compatibility Notice
+  Your system has GLIBC 2.35
+  Pre-built audio binaries require GLIBC 2.38+
+
+Audio Installation Options:
+  1) Build from source  (Recommended - works on any system, takes ~5 min)
+  2) Skip audio         (Install CLI only, no voice features)
+```
+
+To rebuild audio manually:
+```bash
+rm -rf ~/.offgrid-llm/audio
+offgrid audio setup whisper
+```
+
 ### Voice Features Not Working
 
-If whisper/piper fails, rebuild from source:
+If whisper/piper fails after installation:
 ```bash
 rm -rf ~/.offgrid-llm/audio
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
