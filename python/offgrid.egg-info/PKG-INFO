@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: offgrid
-Version: 0.1.4
+Version: 0.1.5
 Summary: Python client for OffGrid LLM - Run AI models completely offline
 Author-email: OffGrid LLM Team <team@offgrid-llm.dev>
 Maintainer-email: OffGrid LLM Team <team@offgrid-llm.dev>
