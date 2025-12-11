@@ -573,6 +573,32 @@
             justify-content: flex-end;
         }
         
+        /* Code Block Styles */
+        .hljs {
+            background: transparent !important;
+            padding: 0 !important;
+        }
+        
+        .code-block-wrapper {
+            background-color: #282c34; /* Atom One Dark background */
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .code-block-header {
+            background-color: #21252b;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #181a1f;
+            color: #9da5b4;
+            font-size: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
         /* Agent Step Styles */
         .agent-step {
             padding: 16px;
@@ -1455,11 +1481,12 @@
         }
         
         .message-content :not(pre) > code {
-            background: rgba(110, 118, 129, 0.4);
+            background: var(--code-inline-bg);
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 13px;
-            color: #e2e8f0;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
         }
         
         /* Prose styling for markdown content */
@@ -5970,7 +5997,15 @@ Type 'help' for available commands or 'offgrid --help' for all options
             
             // Configure marked.js with syntax highlighting and copy button
             const renderer = new marked.Renderer();
-            renderer.code = function(code, language) {
+            renderer.code = function(entry, langParam) {
+                // Handle Marked v12+ breaking change where arguments are passed as an object
+                let code = entry;
+                let language = langParam;
+                if (typeof entry === 'object' && entry !== null && entry.text) {
+                    code = entry.text;
+                    language = entry.lang;
+                }
+
                 code = String(code || '');
                 const validLang = !!(language && hljs.getLanguage(language));
                 const highlighted = validLang
@@ -5982,11 +6017,11 @@ Type 'help' for available commands or 'offgrid --help' for all options
                 const escapedCode = code.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n');
                 
                 return `
-                    <div class="relative group my-4 rounded-lg overflow-hidden border border-theme bg-code-bg">
-                        <div class="flex items-center justify-between px-4 py-2 bg-gray-800 text-gray-200 text-xs border-b border-gray-700">
+                    <div class="code-block-wrapper group">
+                        <div class="code-block-header">
                             <span class="font-mono">${language || 'text'}</span>
                             <button onclick="copyCodeToClipboard(this)" data-code="${encodeURIComponent(code)}" class="flex items-center gap-1 hover:text-white transition-colors">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                 <span>Copy</span>
                             </button>
                         </div>
