@@ -38,33 +38,30 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
+# Icons (matching CLI)
+ICON_BOLT="⚡"
+ICON_CHECK="✓"
+ICON_CROSS="✗"
+ICON_ARROW="→"
+ICON_WARN="○"
+ICON_DOWN="↓"
+ICON_SPIN="◐"
+
 # ═══════════════════════════════════════════════════════════════
 # Helper Functions
 # ═══════════════════════════════════════════════════════════════
-log_info() { echo -e "${CYAN}▶${NC} $1" >&2; }
-log_success() { echo -e "${GREEN}✓${NC} $1" >&2; }
-log_error() { echo -e "${RED}✗${NC} $1" >&2; }
-log_warn() { echo -e "${YELLOW}⚠${NC} $1" >&2; }
-log_dim() { echo -e "${DIM}  $1${NC}" >&2; }
+log_info() { echo -e "  ${CYAN}${ICON_ARROW}${NC} $1" >&2; }
+log_success() { echo -e "  ${GREEN}${ICON_CHECK}${NC} $1" >&2; }
+log_error() { echo -e "  ${RED}${ICON_CROSS}${NC} $1" >&2; }
+log_warn() { echo -e "  ${YELLOW}${ICON_WARN}${NC} $1" >&2; }
+log_dim() { echo -e "    ${DIM}$1${NC}" >&2; }
+log_step() { echo -e "  ${CYAN}[$1]${NC} ${BOLD}$2${NC}" >&2; }
 
 print_banner() {
     echo "" >&2
-    echo -e "${CYAN}${BOLD}" >&2
-    cat << "EOF" >&2
-    ╔═══════════════════════════════════════════════════════════╗
-    ║                                                           ║
-    ║     ██████╗ ███████╗███████╗ ██████╗ ██████╗ ██╗██████╗  ║
-    ║    ██╔═══██╗██╔════╝██╔════╝██╔════╝ ██╔══██╗██║██╔══██╗ ║
-    ║    ██║   ██║█████╗  █████╗  ██║  ███╗██████╔╝██║██║  ██║ ║
-    ║    ██║   ██║██╔══╝  ██╔══╝  ██║   ██║██╔══██╗██║██║  ██║ ║
-    ║    ╚██████╔╝██║     ██║     ╚██████╔╝██║  ██║██║██████╔╝ ║
-    ║     ╚═════╝ ╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝  ║
-    ║                                                           ║
-    ║              Universal Installer                          ║
-    ║                                                           ║
-    ╚═══════════════════════════════════════════════════════════╝
-EOF
-    echo -e "${NC}" >&2
+    echo -e "  ${CYAN}${BOLD}${ICON_BOLT} OffGrid LLM Installer${NC}" >&2
+    echo -e "  ${DIM}Universal installer for CLI, Desktop & Audio${NC}" >&2
+    echo "" >&2
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -195,22 +192,22 @@ show_menu() {
     local os="$1"
     
     echo "" >&2
-    echo -e "${BOLD}What would you like to install?${NC}" >&2
+    echo -e "  ${BOLD}Select installation type${NC}" >&2
     echo "" >&2
-    echo -e "  ${GREEN}1)${NC} ${BOLD}Full Installation${NC} ${GREEN}(Recommended)${NC}" >&2
-    echo -e "     ${DIM}CLI + Desktop App + Voice Assistant (Speech-to-Text & Text-to-Speech)${NC}" >&2
+    echo -e "    ${GREEN}1${NC}  ${BOLD}Full Installation${NC} ${GREEN}(Recommended)${NC}" >&2
+    echo -e "       ${DIM}CLI + Desktop + Voice (STT & TTS)${NC}" >&2
     echo "" >&2
-    echo -e "  ${GREEN}2)${NC} ${BOLD}CLI + Voice${NC}" >&2
-    echo -e "     ${DIM}Command-line with Voice Assistant support${NC}" >&2
+    echo -e "    ${GREEN}2${NC}  ${BOLD}CLI + Voice${NC}" >&2
+    echo -e "       ${DIM}Command-line with voice support${NC}" >&2
     echo "" >&2
-    echo -e "  ${GREEN}3)${NC} ${BOLD}CLI Only${NC}" >&2
-    echo -e "     ${DIM}Minimal installation (no voice features)${NC}" >&2
+    echo -e "    ${GREEN}3${NC}  ${BOLD}CLI Only${NC}" >&2
+    echo -e "       ${DIM}Minimal installation${NC}" >&2
     echo "" >&2
-    echo -e "  ${GREEN}4)${NC} ${BOLD}Custom${NC}" >&2
-    echo -e "     ${DIM}Choose individual components${NC}" >&2
+    echo -e "    ${GREEN}4${NC}  ${BOLD}Custom${NC}" >&2
+    echo -e "       ${DIM}Choose components${NC}" >&2
     echo "" >&2
     
-    read -p "Enter your choice [1-4] (default: 1): " choice
+    read -p "  Enter choice [1-4] (default: 1): " choice
     choice="${choice:-1}"
     
     case "$choice" in
@@ -242,7 +239,7 @@ show_menu() {
 
 custom_menu() {
     echo "" >&2
-    echo -e "${BOLD}Custom Installation${NC}" >&2
+    echo -e "  ${BOLD}Custom Installation${NC}" >&2
     echo "" >&2
     
     # CLI (always yes for custom, needed for everything)
@@ -250,7 +247,7 @@ custom_menu() {
     log_info "CLI tools will be installed (required)"
     
     # Desktop
-    read -p "Install Desktop app? [Y/n]: " desktop_choice
+    read -p "  Install Desktop app? [Y/n]: " desktop_choice
     desktop_choice="${desktop_choice:-Y}"
     if [[ "$desktop_choice" =~ ^[Yy] ]]; then
         INSTALL_DESKTOP="yes"
@@ -259,7 +256,7 @@ custom_menu() {
     fi
     
     # Audio (Voice Assistant)
-    read -p "Install Voice Assistant (Whisper STT + Piper TTS)? [Y/n]: " audio_choice
+    read -p "  Install Voice Assistant (Whisper + Piper)? [Y/n]: " audio_choice
     audio_choice="${audio_choice:-Y}"
     if [[ "$audio_choice" =~ ^[Yy] ]]; then
         INSTALL_AUDIO="yes"
@@ -285,12 +282,13 @@ download_cli_bundle() {
     
     local download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
     
-    log_info "Downloading CLI bundle: ${bundle_name}${ext}"
+    log_step "1/3" "Downloading CLI..."
+    log_dim "${bundle_name}${ext}"
     
     if ! curl -fsSL -o "${tmp_dir}/bundle${ext}" "$download_url" 2>/dev/null; then
         # Fallback to CPU variant
         if [ "$variant" != "cpu" ]; then
-            log_warn "GPU variant not available, trying CPU..."
+            log_dim "GPU variant unavailable, trying CPU..."
             variant="cpu"
             bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
             download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
@@ -298,7 +296,7 @@ download_cli_bundle() {
             if ! curl -fsSL -o "${tmp_dir}/bundle${ext}" "$download_url" 2>/dev/null; then
                 # Fallback to AVX2
                 if [ "$cpu_features" = "avx512" ]; then
-                    log_warn "Trying AVX2 version..."
+                    log_dim "Trying AVX2 version..."
                     cpu_features="avx2"
                     bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
                     download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
@@ -356,7 +354,8 @@ download_desktop_app() {
             ;;
     esac
     
-    log_info "Downloading Desktop app: ${app_name}"
+    log_step "2/3" "Downloading Desktop app..."
+    log_dim "$app_name"
     
     if curl -fsSL -o "${tmp_dir}/${app_name}" "$download_url" 2>/dev/null; then
         echo "${tmp_dir}/${app_name}"
@@ -465,7 +464,7 @@ install_cli() {
     local bundle_dir="$1"
     local os="$2"
     
-    log_info "Installing CLI tools..."
+    log_step "3/3" "Installing CLI..."
     
     local ext=""
     [ "$os" = "windows" ] && ext=".exe"
@@ -513,25 +512,22 @@ install_audio() {
         
         if [[ "$glibc_status" == incompatible* ]]; then
             echo "" >&2
-            log_warn "GLIBC Compatibility Notice"
-            echo -e "${DIM}  Your system has GLIBC $glibc_version${NC}" >&2
-            echo -e "${DIM}  Pre-built audio binaries require GLIBC 2.38+${NC}" >&2
+            log_warn "GLIBC $glibc_version detected (2.38+ required for binaries)"
             echo "" >&2
             
             if [ "$interactive" = "yes" ]; then
-                echo -e "${BOLD}Audio Installation Options:${NC}" >&2
-                echo "  1) Build from source  (Recommended - works on any system, takes ~5 min)" >&2
-                echo "  2) Skip audio         (Install CLI only, no voice features)" >&2
+                echo -e "  ${BOLD}Audio Options${NC}" >&2
+                echo -e "    ${GREEN}1${NC}  Build from source ${DIM}(recommended, ~5 min)${NC}" >&2
+                echo -e "    ${GREEN}2${NC}  Skip audio ${DIM}(install later)${NC}" >&2
                 echo "" >&2
                 
                 local audio_choice
-                read -r -p "Enter choice [1-2] (default: 1): " audio_choice </dev/tty
+                read -r -p "  Enter choice [1-2] (default: 1): " audio_choice </dev/tty
                 audio_choice="${audio_choice:-1}"
                 
                 case "$audio_choice" in
                     2)
-                        log_info "Skipping audio installation"
-                        log_dim "You can install audio later with: offgrid audio setup"
+                        log_dim "Skipped. Install later: offgrid audio setup"
                         return 0
                         ;;
                     *)
@@ -539,10 +535,10 @@ install_audio() {
                         ;;
                 esac
             else
-                log_info "Non-interactive mode: Building audio from source"
+                log_dim "Building audio from source..."
             fi
         else
-            log_dim "GLIBC $glibc_version detected - compatible with pre-built binaries"
+            log_dim "GLIBC $glibc_version — compatible with binaries"
         fi
     fi
     
@@ -692,7 +688,7 @@ install_webui() {
         log_success "Web UI installed"
     else
         # Download from GitHub
-        log_info "Downloading Web UI from GitHub..."
+        log_dim "Downloading Web UI..."
         local ui_tmp="/tmp/offgrid-ui-$$"
         mkdir -p "$ui_tmp"
         
@@ -745,7 +741,7 @@ LAUNCHER
                 chmod +x "$bin_dir/offgrid-desktop"
             else
                 # Extraction failed - try copying AppImage directly (requires FUSE)
-                log_dim "Extraction failed, installing AppImage directly (requires FUSE)..."
+                log_dim "Using AppImage directly (requires FUSE)..."
                 cp "$app_path" "$bin_dir/offgrid-desktop"
                 chmod +x "$bin_dir/offgrid-desktop"
             fi
@@ -763,7 +759,7 @@ Type=Application
 Categories=Utility;Development;
 Terminal=false
 EOF
-            log_success "Desktop app installed to $bin_dir"
+            log_success "Desktop app installed"
             ;;
         darwin)
             # Mount DMG and copy app
@@ -777,8 +773,8 @@ EOF
             # Just save the installer
             local app_dir="$HOME/Desktop"
             cp "$app_path" "$app_dir/"
-            log_success "Desktop installer saved to $app_dir"
-            log_info "Run the installer to complete Desktop installation"
+            log_success "Desktop installer saved to Desktop"
+            log_dim "Run the installer to complete setup"
             ;;
     esac
 }
@@ -799,7 +795,7 @@ main() {
     local gpu_variant
     if [ -n "${GPU:-}" ]; then
         gpu_variant="$GPU"
-        log_info "GPU variant override: $gpu_variant"
+        log_dim "GPU variant override: $gpu_variant"
     else
         gpu_variant=$(detect_gpu "$os")
     fi
@@ -810,24 +806,18 @@ main() {
         local glibc_check=$(check_glibc_version 2 38)
         if [ "$glibc_check" != "compatible" ]; then
             local current_glibc=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo "unknown")
-            log_warn "GPU detected but GLIBC $current_glibc < 2.38 (Vulkan requires Ubuntu 24.04+)"
-            log_warn "Falling back to CPU build for compatibility"
+            log_warn "GLIBC $current_glibc < 2.38 — falling back to CPU build"
             gpu_variant="cpu"
         fi
     fi
     
-    log_info "System detected: $os-$arch ($gpu_variant, $cpu_features)"
-    
-    # Inform user about GPU status
-    if [ "$os" = "linux" ] && [ "$gpu_variant" = "vulkan" ]; then
-        log_info "GPU acceleration enabled (Vulkan)"
-    fi
+    echo -e "  ${DIM}System${NC}   ${BOLD}$os-$arch${NC} ${DIM}($gpu_variant, $cpu_features)${NC}" >&2
     
     # Get version
     if [ "$VERSION" = "latest" ]; then
         VERSION=$(get_latest_version)
     fi
-    log_info "Version: $VERSION"
+    echo -e "  ${DIM}Version${NC}  ${BOLD}$VERSION${NC}" >&2
     
     # Check if running interactively (stdin is a terminal)
     local is_interactive="no"
@@ -846,26 +836,28 @@ main() {
         INSTALL_AUDIO="${AUDIO:-yes}"
         
         if [ "$is_interactive" != "yes" ]; then
-            log_info "Non-interactive mode: Installing full system (CLI + Desktop + Audio)"
+            log_dim "Non-interactive: Installing full system"
         fi
     fi
     
     # Summary
     echo "" >&2
-    echo -e "${BOLD}Installation Summary:${NC}" >&2
-    echo -e "  CLI Tools:    ${INSTALL_CLI}" >&2
-    echo -e "  Desktop App:  ${INSTALL_DESKTOP}" >&2
-    echo -e "  Audio (STT/TTS): ${INSTALL_AUDIO}" >&2
+    echo -e "  ${BOLD}Components${NC}" >&2
+    [ "$INSTALL_CLI" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} CLI Tools" >&2 || echo -e "    ${DIM}○ CLI Tools${NC}" >&2
+    [ "$INSTALL_DESKTOP" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} Desktop App" >&2 || echo -e "    ${DIM}○ Desktop App${NC}" >&2
+    [ "$INSTALL_AUDIO" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} Audio (STT/TTS)" >&2 || echo -e "    ${DIM}○ Audio (STT/TTS)${NC}" >&2
     echo "" >&2
     
     if [ "$is_interactive" = "yes" ]; then
-        read -p "Proceed with installation? [Y/n]: " confirm
+        read -p "  Proceed? [Y/n]: " confirm
         confirm="${confirm:-Y}"
         if [[ ! "$confirm" =~ ^[Yy] ]]; then
-            log_info "Installation cancelled"
+            log_info "Cancelled"
             exit 0
         fi
     fi
+    
+    echo "" >&2
     
     # Create temp directory
     local tmp_dir=$(mktemp -d)
@@ -897,43 +889,38 @@ main() {
     fi
     
     # Success message
-    echo ""
-    echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}${BOLD}║           Installation Complete!                          ║${NC}"
-    echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════╝${NC}"
-    echo ""
+    echo "" >&2
+    echo -e "  ${GREEN}${ICON_CHECK} Installation complete${NC}" >&2
+    echo "" >&2
     
     if [ "$INSTALL_CLI" = "yes" ]; then
-        echo -e "${BOLD}Get Started:${NC}"
-        echo ""
-        echo -e "  ${CYAN}offgrid --version${NC}          Check installation"
-        echo -e "  ${CYAN}offgrid serve${NC}              Start server with Web UI"
-        echo -e "  ${CYAN}offgrid search llama${NC}       Search for models"
-        echo ""
-        echo -e "${BOLD}Web UI:${NC} http://localhost:11611/ui"
-        echo ""
+        echo -e "  ${BOLD}Quick Start${NC}" >&2
+        echo -e "    ${DIM}\$${NC} offgrid --version        ${DIM}# Verify install${NC}" >&2
+        echo -e "    ${DIM}\$${NC} offgrid init             ${DIM}# First-time setup${NC}" >&2
+        echo -e "    ${DIM}\$${NC} offgrid serve            ${DIM}# Start server${NC}" >&2
+        echo "" >&2
+        echo -e "  ${BOLD}Web UI${NC}  ${CYAN}http://localhost:11611/ui${NC}" >&2
+        echo "" >&2
     fi
     
     if [ "$INSTALL_DESKTOP" = "yes" ]; then
-        echo -e "${BOLD}Desktop App:${NC}"
+        echo -e "  ${BOLD}Desktop${NC}" >&2
         case "$os" in
-            linux) echo -e "  Run: ${CYAN}offgrid-desktop${NC} or find in app menu" ;;
-            darwin) echo -e "  Open: ${CYAN}OffGrid LLM${NC} from Applications" ;;
-            windows) echo -e "  Run the installer on your Desktop" ;;
+            linux) echo -e "    Run ${CYAN}offgrid-desktop${NC} or find in app menu" >&2 ;;
+            darwin) echo -e "    Open ${CYAN}OffGrid LLM${NC} from Applications" >&2 ;;
+            windows) echo -e "    Run the installer on your Desktop" >&2 ;;
         esac
-        echo ""
+        echo "" >&2
     fi
     
     if [ "$INSTALL_AUDIO" = "yes" ]; then
-        echo -e "${BOLD}Audio Features:${NC}"
-        echo -e "  Speech-to-Text: Whisper.cpp installed"
-        echo -e "  Text-to-Speech: Piper installed"
-        echo -e "  ${DIM}Download voice models: offgrid audio setup whisper --model base.en${NC}"
-        echo ""
+        echo -e "  ${BOLD}Voice${NC}" >&2
+        echo -e "    ${DIM}\$${NC} offgrid audio setup      ${DIM}# Download voice models${NC}" >&2
+        echo "" >&2
     fi
     
-    echo -e "${BOLD}Documentation:${NC} https://github.com/takuphilchan/offgrid-llm"
-    echo ""
+    echo -e "  ${DIM}Docs: https://github.com/takuphilchan/offgrid-llm${NC}" >&2
+    echo "" >&2
 }
 
 # Run main

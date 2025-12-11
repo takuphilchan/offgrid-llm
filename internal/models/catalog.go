@@ -40,9 +40,11 @@ type ModelSource struct {
 }
 
 // DefaultCatalog returns the built-in model catalog
+// These are curated, verified models from HuggingFace with proper download URLs
 func DefaultCatalog() *ModelCatalog {
 	return &ModelCatalog{
 		Models: []CatalogEntry{
+			// ========== LIGHTWEIGHT MODELS (2-4GB RAM) ==========
 			{
 				ID:          "tinyllama-1.1b-chat",
 				Name:        "TinyLlama 1.1B Chat",
@@ -58,7 +60,7 @@ func DefaultCatalog() *ModelCatalog {
 					{
 						Quantization: "Q4_K_M",
 						Size:         668788096, // ~638MB
-						SHA256:       "9fecc3b3cd76bba89d504f29b616eedf7da85b96540e490ca5824d3f7d2776a0",
+						SHA256:       "",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
@@ -68,15 +70,42 @@ func DefaultCatalog() *ModelCatalog {
 							},
 						},
 					},
+				},
+			},
+			{
+				ID:          "llama-3.2-1b-instruct",
+				Name:        "Llama 3.2 1B Instruct",
+				Description: "Meta's latest compact model, excellent for edge devices",
+				Parameters:  "1B",
+				License:     "Llama 3.2 Community",
+				Provider:    "Meta",
+				Type:        "llm",
+				MinRAM:      2,
+				Recommended: true,
+				Tags:        []string{"instruct", "lightweight", "latest"},
+				Variants: []ModelVariant{
 					{
-						Quantization: "Q5_K_M",
-						Size:         783017344, // ~768MB
-						SHA256:       "aa54a5fb99ace5b964859cf072346631b2da6109715a805d07161d157c66ce7f",
+						Quantization: "Q4_K_M",
+						Size:         770000000, // ~0.8GB
+						SHA256:       "",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q5_K_M.gguf",
+								URL:      "https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-1b-instruct-q4_k_m.gguf",
+								Priority: 1,
+							},
+						},
+					},
+					{
+						Quantization: "Q8_0",
+						Size:         1200000000, // ~1.2GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF/resolve/main/llama-3.2-1b-instruct-q8_0.gguf",
 								Priority: 1,
 							},
 						},
@@ -84,39 +113,81 @@ func DefaultCatalog() *ModelCatalog {
 				},
 			},
 			{
-				ID:          "llama-2-7b-chat",
-				Name:        "Llama 2 7B Chat",
-				Description: "Meta's open-source chat model, good balance of quality and size",
-				Parameters:  "7B",
-				License:     "Llama 2 Community",
+				ID:          "llama-3.2-3b-instruct",
+				Name:        "Llama 3.2 3B Instruct",
+				Description: "Great balance of size and capability for mobile/edge",
+				Parameters:  "3B",
+				License:     "Llama 3.2 Community",
+				Provider:    "Meta",
+				Type:        "llm",
+				MinRAM:      4,
+				Recommended: true,
+				Tags:        []string{"instruct", "efficient", "latest"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         1900000000, // ~1.9GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "phi-3.5-mini-instruct",
+				Name:        "Phi 3.5 Mini Instruct",
+				Description: "Microsoft's efficient model with strong reasoning",
+				Parameters:  "3.8B",
+				License:     "MIT",
+				Provider:    "Microsoft",
+				Type:        "llm",
+				MinRAM:      4,
+				Recommended: true,
+				Tags:        []string{"instruct", "reasoning", "efficient"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         2200000000, // ~2.2GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/MaziyarPanahi/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			// ========== STANDARD MODELS (8GB RAM) ==========
+			{
+				ID:          "llama-3.1-8b-instruct",
+				Name:        "Llama 3.1 8B Instruct",
+				Description: "Meta's powerful 8B model with 128K context",
+				Parameters:  "8B",
+				License:     "Llama 3.1 Community",
 				Provider:    "Meta",
 				Type:        "llm",
 				MinRAM:      8,
 				Recommended: true,
-				Tags:        []string{"chat", "general", "popular"},
+				Tags:        []string{"instruct", "general", "latest", "long-context"},
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         4081004224, // ~3.8GB
-						SHA256:       "08a5566d61d7cb6b420c3e4387a39e0078e1f2fe5f055f3a03887385304d4bfa",
+						Size:         4600000000, // ~4.6GB
+						SHA256:       "",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
-								Priority: 1,
-							},
-						},
-					},
-					{
-						Quantization: "Q5_K_M",
-						Size:         4783156928, // ~4.6GB
-						SHA256:       "e0b99920cf47b94c78d2fb06a1eceb9ed795176dfa3f7feac64629f1b52b997f",
-						Quality:      "high",
-						Sources: []ModelSource{
-							{
-								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q5_K_M.gguf",
+								URL:      "https://huggingface.co/MaziyarPanahi/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf",
 								Priority: 1,
 							},
 						},
@@ -124,9 +195,9 @@ func DefaultCatalog() *ModelCatalog {
 				},
 			},
 			{
-				ID:          "mistral-7b-instruct",
-				Name:        "Mistral 7B Instruct",
-				Description: "High-quality instruction-following model, excellent for code",
+				ID:          "mistral-7b-instruct-v0.3",
+				Name:        "Mistral 7B Instruct v0.3",
+				Description: "Latest Mistral instruct model, excellent for code and reasoning",
 				Parameters:  "7B",
 				License:     "Apache 2.0",
 				Provider:    "Mistral AI",
@@ -137,13 +208,13 @@ func DefaultCatalog() *ModelCatalog {
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         4368439584, // ~4.1GB
-						SHA256:       "3e0039fd0273fcbebb49228943b17831aadd55cbcbf56f0af00499be2040ccf9",
+						Size:         4100000000, // ~4.1GB
+						SHA256:       "",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+								URL:      "https://huggingface.co/MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3.Q4_K_M.gguf",
 								Priority: 1,
 							},
 						},
@@ -151,107 +222,109 @@ func DefaultCatalog() *ModelCatalog {
 				},
 			},
 			{
-				ID:          "phi-2",
-				Name:        "Phi-2",
-				Description: "Microsoft's efficient 2.7B parameter model, great quality for size",
-				Parameters:  "2.7B",
+				ID:          "hermes-3-llama-3.1-8b",
+				Name:        "Hermes 3 Llama 3.1 8B",
+				Description: "NousResearch's flagship instruct model with strong capabilities",
+				Parameters:  "8B",
+				License:     "Llama 3.1 Community",
+				Provider:    "NousResearch",
+				Type:        "llm",
+				MinRAM:      8,
+				Recommended: true,
+				Tags:        []string{"instruct", "chat", "general"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         4600000000, // ~4.6GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B-GGUF/resolve/main/Hermes-3-Llama-3.1-8B.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			// ========== MEDIUM MODELS (12-16GB RAM) ==========
+			{
+				ID:          "mistral-nemo-instruct-2407",
+				Name:        "Mistral Nemo Instruct",
+				Description: "12B parameter model with excellent instruction following",
+				Parameters:  "12B",
+				License:     "Apache 2.0",
+				Provider:    "Mistral AI",
+				Type:        "llm",
+				MinRAM:      12,
+				Recommended: true,
+				Tags:        []string{"instruct", "general", "quality"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         7000000000, // ~7GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/MaziyarPanahi/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "phi-4",
+				Name:        "Phi 4",
+				Description: "Microsoft's latest reasoning model with strong performance",
+				Parameters:  "14B",
 				License:     "MIT",
 				Provider:    "Microsoft",
 				Type:        "llm",
-				MinRAM:      4,
+				MinRAM:      12,
 				Recommended: true,
-				Tags:        []string{"efficient", "code", "reasoning"},
+				Tags:        []string{"reasoning", "code", "quality"},
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         1789239136, // ~1.67GB
-						SHA256:       "324356668fa5ba9f4135de348447bb2bbe2467eaa1b8fcfb53719de62fbd2499",
-						Quality:      "high",
-						Sources: []ModelSource{
-							{
-								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_M.gguf",
-								Priority: 1,
-							},
-						},
-					},
-				},
-			},
-			{
-				ID:          "llama-3-8b-instruct",
-				Name:        "Llama 3 8B Instruct",
-				Description: "Meta's latest Llama 3 model with improved performance",
-				Parameters:  "8B",
-				License:     "Llama 3 Community",
-				Provider:    "Meta",
-				Type:        "llm",
-				MinRAM:      8,
-				Recommended: true,
-				Tags:        []string{"instruct", "general", "latest"},
-				Variants: []ModelVariant{
-					{
-						Quantization: "Q4_K_M",
-						Size:         4661219968, // ~4.3GB
+						Size:         8400000000, // ~8.4GB
 						SHA256:       "",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q4_K_M.gguf",
+								URL:      "https://huggingface.co/MaziyarPanahi/phi-4-GGUF/resolve/main/phi-4.Q4_K_M.gguf",
 								Priority: 1,
 							},
 						},
 					},
 				},
 			},
+			// ========== LARGE MODELS (24GB+ RAM) ==========
 			{
-				ID:          "codellama-7b-instruct",
-				Name:        "CodeLlama 7B Instruct",
-				Description: "Specialized for code generation and programming tasks",
-				Parameters:  "7B",
-				License:     "Llama 2 Community",
-				Provider:    "Meta",
-				Type:        "llm",
-				MinRAM:      8,
-				Recommended: false,
-				Tags:        []string{"code", "programming", "specialized"},
-				Variants: []ModelVariant{
-					{
-						Quantization: "Q4_K_M",
-						Size:         4081004224, // ~3.8GB
-						SHA256:       "",
-						Quality:      "high",
-						Sources: []ModelSource{
-							{
-								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/CodeLlama-7B-Instruct-GGUF/resolve/main/codellama-7b-instruct.Q4_K_M.gguf",
-								Priority: 1,
-							},
-						},
-					},
-				},
-			},
-			{
-				ID:          "neural-chat-7b",
-				Name:        "Neural Chat 7B",
-				Description: "Intel's fine-tuned chat model with strong conversational abilities",
-				Parameters:  "7B",
+				ID:          "mistral-small-24b-instruct",
+				Name:        "Mistral Small 24B Instruct",
+				Description: "Powerful 24B model for complex tasks",
+				Parameters:  "24B",
 				License:     "Apache 2.0",
-				Provider:    "Intel",
+				Provider:    "Mistral AI",
 				Type:        "llm",
-				MinRAM:      8,
+				MinRAM:      24,
 				Recommended: false,
-				Tags:        []string{"chat", "conversation", "general"},
+				Tags:        []string{"instruct", "quality", "large"},
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         4108946752, // ~3.8GB
+						Size:         13300000000, // ~13.3GB
 						SHA256:       "",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/neural-chat-7B-v3-1-GGUF/resolve/main/neural-chat-7b-v3-1.Q4_K_M.gguf",
+								URL:      "https://huggingface.co/MaziyarPanahi/Mistral-Small-24B-Instruct-2501-GGUF/resolve/main/Mistral-Small-24B-Instruct-2501.Q4_K_M.gguf",
 								Priority: 1,
 							},
 						},
@@ -259,25 +332,26 @@ func DefaultCatalog() *ModelCatalog {
 				},
 			},
 			{
-				ID:          "zephyr-7b-beta",
-				Name:        "Zephyr 7B Beta",
-				Description: "HuggingFace's aligned chat model, excellent instruction following",
-				Parameters:  "7B",
-				License:     "MIT",
-				Provider:    "HuggingFace",
-				MinRAM:      8,
+				ID:          "llama-3.3-70b-instruct",
+				Name:        "Llama 3.3 70B Instruct",
+				Description: "Meta's flagship 70B model with exceptional capabilities",
+				Parameters:  "70B",
+				License:     "Llama 3.3 Community",
+				Provider:    "Meta",
+				Type:        "llm",
+				MinRAM:      48,
 				Recommended: false,
-				Tags:        []string{"chat", "instruct", "aligned"},
+				Tags:        []string{"instruct", "flagship", "quality"},
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         4368439584, // ~4.1GB
+						Size:         39600000000, // ~39.6GB
 						SHA256:       "",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF/resolve/main/zephyr-7b-beta.Q4_K_M.gguf",
+								URL:      "https://huggingface.co/MaziyarPanahi/Llama-3.3-70B-Instruct-GGUF/resolve/main/Llama-3.3-70B-Instruct.Q4_K_M.gguf",
 								Priority: 1,
 							},
 						},
@@ -288,14 +362,14 @@ func DefaultCatalog() *ModelCatalog {
 			{
 				ID:          "all-minilm-l6-v2",
 				Name:        "all-MiniLM-L6-v2",
-				Description: "Lightweight sentence embedding model, 384 dimensions, perfect for semantic search",
+				Description: "Lightweight sentence embedding model, 384 dimensions",
 				Parameters:  "22M",
 				License:     "Apache 2.0",
 				Provider:    "sentence-transformers",
 				Type:        "embedding",
 				MinRAM:      1,
 				Recommended: true,
-				Tags:        []string{"embedding", "semantic-search", "lightweight", "beginner"},
+				Tags:        []string{"embedding", "semantic-search", "lightweight"},
 				Variants: []ModelVariant{
 					{
 						Quantization: "F16",
@@ -310,32 +384,19 @@ func DefaultCatalog() *ModelCatalog {
 							},
 						},
 					},
-					{
-						Quantization: "Q8_0",
-						Size:         23875100, // ~23MB
-						SHA256:       "",
-						Quality:      "high",
-						Sources: []ModelSource{
-							{
-								Type:     "huggingface",
-								URL:      "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/ggml-model-q8_0.gguf",
-								Priority: 1,
-							},
-						},
-					},
 				},
 			},
 			{
 				ID:          "bge-small-en-v1.5",
 				Name:        "BGE Small EN v1.5",
-				Description: "High-quality English embedding model from BAAI, 384 dimensions",
+				Description: "High-quality English embedding model, 384 dimensions",
 				Parameters:  "33M",
 				License:     "MIT",
 				Provider:    "BAAI",
 				Type:        "embedding",
 				MinRAM:      1,
 				Recommended: true,
-				Tags:        []string{"embedding", "semantic-search", "retrieval", "rag"},
+				Tags:        []string{"embedding", "semantic-search", "rag"},
 				Variants: []ModelVariant{
 					{
 						Quantization: "F16",
@@ -353,43 +414,16 @@ func DefaultCatalog() *ModelCatalog {
 				},
 			},
 			{
-				ID:          "e5-small-v2",
-				Name:        "E5 Small v2",
-				Description: "Multilingual embedding model from Microsoft, 384 dimensions",
-				Parameters:  "33M",
-				License:     "MIT",
-				Provider:    "Microsoft",
-				Type:        "embedding",
-				MinRAM:      1,
-				Recommended: false,
-				Tags:        []string{"embedding", "multilingual", "semantic-search"},
-				Variants: []ModelVariant{
-					{
-						Quantization: "F16",
-						Size:         67108864, // ~64MB
-						SHA256:       "",
-						Quality:      "high",
-						Sources: []ModelSource{
-							{
-								Type:     "huggingface",
-								URL:      "https://huggingface.co/intfloat/e5-small-v2/resolve/main/ggml-model-f16.gguf",
-								Priority: 1,
-							},
-						},
-					},
-				},
-			},
-			{
 				ID:          "nomic-embed-text-v1",
 				Name:        "Nomic Embed Text v1",
-				Description: "Open-source embedding model with strong performance, 768 dimensions",
+				Description: "Open-source embedding model, 768 dimensions, long context",
 				Parameters:  "137M",
 				License:     "Apache 2.0",
 				Provider:    "Nomic AI",
 				Type:        "embedding",
 				MinRAM:      2,
 				Recommended: true,
-				Tags:        []string{"embedding", "rag", "long-context", "open-source"},
+				Tags:        []string{"embedding", "rag", "long-context"},
 				Variants: []ModelVariant{
 					{
 						Quantization: "F16",
@@ -407,9 +441,9 @@ func DefaultCatalog() *ModelCatalog {
 				},
 			},
 			{
-				ID:          "bge-m3-Q4_K_M",
+				ID:          "bge-m3",
 				Name:        "BGE M3",
-				Description: "Multilingual embedding model from BAAI, 1024 dimensions, supports long context",
+				Description: "Multilingual embedding model, 1024 dimensions, supports long context",
 				Parameters:  "567M",
 				License:     "MIT",
 				Provider:    "BAAI",

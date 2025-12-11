@@ -617,7 +617,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.4","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.5","status":"running"}`)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -1444,7 +1444,7 @@ func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
 			sizeGB = result.BestVariant.SizeGB
 			bestFile = result.BestVariant.Filename
 			bestQuant = result.BestVariant.Quantization
-			downloadCmd = fmt.Sprintf("offgrid download-hf %s --file %s", modelID, bestFile)
+			downloadCmd = fmt.Sprintf("offgrid download %s --file %s", modelID, bestFile)
 		}
 
 		uiModels = append(uiModels, UIModel{
@@ -2997,7 +2997,7 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		"multi_user_mode": s.config.MultiUserMode,
 		"require_auth":    s.config.RequireAuth,
 		"guest_access":    s.config.GuestAccess,
-		"version":         "0.2.4",
+		"version":         "0.2.5",
 		"features": map[string]bool{
 			"users":   s.config.MultiUserMode,
 			"metrics": true, // Always available but can be hidden

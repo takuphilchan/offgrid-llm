@@ -120,13 +120,14 @@ func (res *SystemResources) RecommendedModels() []ModelRecommendation {
 	}
 
 	// Model recommendations based on memory
-	// These are approximate sizes for Q4_K_M quantization
-	if availMemory >= 40000 { // 40+ GB
+	// Only recommend models that exist in the catalog with verified HuggingFace sources
+
+	if availMemory >= 48000 { // 48+ GB
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "llama-3-70b-instruct",
+			ModelID:      "llama-3.3-70b-instruct",
 			Quantization: "Q4_K_M",
-			Reason:       "Large model for best quality",
-			SizeGB:       38,
+			Reason:       "Meta's flagship model - exceptional quality",
+			SizeGB:       39.6,
 			Priority:     1,
 			UseGPU:       useGPU,
 		})
@@ -134,18 +135,18 @@ func (res *SystemResources) RecommendedModels() []ModelRecommendation {
 
 	if availMemory >= 16000 { // 16+ GB
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "mistral-7b-instruct",
-			Quantization: "Q5_K_M",
-			Reason:       "High quality, excellent for code and reasoning",
-			SizeGB:       4.8,
+			ModelID:      "phi-4",
+			Quantization: "Q4_K_M",
+			Reason:       "Microsoft's latest reasoning model",
+			SizeGB:       8.4,
 			Priority:     1,
 			UseGPU:       useGPU,
 		})
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "llama-2-13b-chat",
+			ModelID:      "mistral-nemo-instruct-2407",
 			Quantization: "Q4_K_M",
-			Reason:       "Good balance of quality and performance",
-			SizeGB:       7.3,
+			Reason:       "12B model with excellent instruction following",
+			SizeGB:       7.0,
 			Priority:     2,
 			UseGPU:       useGPU,
 		})
@@ -153,26 +154,26 @@ func (res *SystemResources) RecommendedModels() []ModelRecommendation {
 
 	if availMemory >= 8000 { // 8+ GB
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "llama-2-7b-chat",
+			ModelID:      "llama-3.1-8b-instruct",
 			Quantization: "Q4_K_M",
-			Reason:       "Recommended for most users - best balance",
-			SizeGB:       3.8,
+			Reason:       "Latest Llama with 128K context",
+			SizeGB:       4.6,
 			Priority:     1,
 			UseGPU:       useGPU,
 		})
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "mistral-7b-instruct",
+			ModelID:      "mistral-7b-instruct-v0.3",
 			Quantization: "Q4_K_M",
-			Reason:       "Excellent quality, great for general use",
+			Reason:       "Excellent for code and reasoning",
 			SizeGB:       4.1,
 			Priority:     1,
 			UseGPU:       useGPU,
 		})
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "codellama-7b-instruct",
+			ModelID:      "hermes-3-llama-3.1-8b",
 			Quantization: "Q4_K_M",
-			Reason:       "Specialized for code generation",
-			SizeGB:       3.8,
+			Reason:       "Strong instruction following",
+			SizeGB:       4.6,
 			Priority:     2,
 			UseGPU:       useGPU,
 		})
@@ -180,30 +181,38 @@ func (res *SystemResources) RecommendedModels() []ModelRecommendation {
 
 	if availMemory >= 4000 { // 4+ GB
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "phi-2",
+			ModelID:      "llama-3.2-3b-instruct",
 			Quantization: "Q4_K_M",
-			Reason:       "Efficient 2.7B model, great quality for size",
-			SizeGB:       1.7,
+			Reason:       "Latest Llama - great for mobile/edge",
+			SizeGB:       1.9,
 			Priority:     1,
 			UseGPU:       useGPU,
 		})
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "tinyllama-1.1b-chat",
+			ModelID:      "phi-3.5-mini-instruct",
 			Quantization: "Q4_K_M",
-			Reason:       "Compact model for resource-constrained environments",
-			SizeGB:       0.6,
-			Priority:     2,
+			Reason:       "Microsoft's efficient model with strong reasoning",
+			SizeGB:       2.2,
+			Priority:     1,
 			UseGPU:       useGPU,
 		})
 	}
 
 	if availMemory >= 2000 { // 2+ GB (minimum)
 		recommendations = append(recommendations, ModelRecommendation{
+			ModelID:      "llama-3.2-1b-instruct",
+			Quantization: "Q4_K_M",
+			Reason:       fmt.Sprintf("Fits in available %s - latest Llama", formatMemory(availMemory)),
+			SizeGB:       0.8,
+			Priority:     1,
+			UseGPU:       useGPU,
+		})
+		recommendations = append(recommendations, ModelRecommendation{
 			ModelID:      "tinyllama-1.1b-chat",
 			Quantization: "Q4_K_M",
-			Reason:       fmt.Sprintf("Fits in available %s", formatMemory(availMemory)),
+			Reason:       "Compact and fast for resource-constrained environments",
 			SizeGB:       0.6,
-			Priority:     1,
+			Priority:     2,
 			UseGPU:       useGPU,
 		})
 	}
