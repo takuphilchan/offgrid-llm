@@ -29,6 +29,12 @@ if [ -f "$ROOT_DIR/desktop/index.html" ]; then
     sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v$VERSION/g" "$ROOT_DIR/desktop/index.html"
 fi
 
+# Update web/ui/index.html (version displays)
+if [ -f "$ROOT_DIR/web/ui/index.html" ]; then
+    echo "Updating web/ui/index.html..."
+    sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v$VERSION/g" "$ROOT_DIR/web/ui/index.html"
+fi
+
 # Update scripts/build-all.sh
 if [ -f "$ROOT_DIR/scripts/build-all.sh" ]; then
     echo "Updating scripts/build-all.sh..."
@@ -39,6 +45,20 @@ fi
 if [ -f "$ROOT_DIR/internal/p2p/discovery.go" ]; then
     echo "Updating internal/p2p/discovery.go..."
     sed -i "s/Version: \"[^\"]*\"/Version: \"$VERSION\"/" "$ROOT_DIR/internal/p2p/discovery.go"
+fi
+
+# Update python/pyproject.toml
+# Note: Python client version is managed separately (currently 0.1.x vs system 0.2.x)
+# if [ -f "$ROOT_DIR/python/pyproject.toml" ]; then
+#     echo "Updating python/pyproject.toml..."
+#     sed -i "s/version = \"[^\"]*\"/version = \"$VERSION\"/" "$ROOT_DIR/python/pyproject.toml"
+# fi
+
+# Update internal/server/server.go
+if [ -f "$ROOT_DIR/internal/server/server.go" ]; then
+    echo "Updating internal/server/server.go..."
+    sed -i "s/\"version\":\"[^\"]*\"/\"version\":\"$VERSION\"/" "$ROOT_DIR/internal/server/server.go"
+    sed -i "s/\"version\":        \"[^\"]*\"/\"version\":        \"$VERSION\"/" "$ROOT_DIR/internal/server/server.go"
 fi
 
 # Note: cmd/offgrid/main.go uses ldflags, so it's set at build time

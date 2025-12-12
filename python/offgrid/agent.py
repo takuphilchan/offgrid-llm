@@ -108,6 +108,21 @@ class Agent:
         response = self._client._request("GET", "/v1/agents/tools")
         return response.get("tools", [])
     
+    def tasks(self) -> List[Dict]:
+        """
+        List agent task history.
+        
+        Returns:
+            List of past agent tasks with status and steps.
+        
+        Example:
+            >>> tasks = agent.tasks()
+            >>> for task in tasks:
+            ...     print(f"{task['id']}: {task['prompt']} ({task['status']})")
+        """
+        response = self._client._request("GET", "/v1/agents/tasks")
+        return response.get("tasks", [])
+    
     def toggle_tool(self, name: str, enabled: bool) -> Dict:
         """
         Enable or disable a specific tool.
@@ -183,18 +198,6 @@ class MCP:
         payload = {"name": name, "url": url}
         return self._client._request("POST", "/v1/agents/mcp", payload)
     
-    def remove(self, name: str) -> Dict:
-        """
-        Remove an MCP server.
-        
-        Args:
-            name: Server name to remove
-        
-        Returns:
-            Deletion confirmation
-        """
-        return self._client._request("DELETE", f"/v1/agents/mcp/{name}")
-    
     def test(self, name: str = None, url: str = None) -> Dict:
         """
         Test an MCP server connection.
@@ -204,11 +207,11 @@ class MCP:
             url: New server URL to test
         
         Returns:
-            Connection test result with tools discovered
+            Connection test result with tools count
         
         Example:
             >>> result = mcp.test(url="npx -y @modelcontextprotocol/server-filesystem /tmp")
-            >>> print(f"Found {len(result['tools'])} tools")
+            >>> print(f"Found {result['tools_count']} tools")
         """
         payload = {}
         if name:

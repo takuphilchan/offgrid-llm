@@ -293,7 +293,7 @@ func (vs *VectorStore) GetAllEmbeddings() map[string][]float32 {
 	return result
 }
 
-// Stats returns statistics about the vector store
+// Stats returns statistics about the store
 func (vs *VectorStore) Stats() map[string]interface{} {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
@@ -302,11 +302,18 @@ func (vs *VectorStore) Stats() map[string]interface{} {
 		"document_count":  len(vs.documents),
 		"chunk_count":     len(vs.chunks),
 		"embedding_count": len(vs.embeddings),
+		"backend":         "memory",
 	}
 }
 
+// Close closes the store (no-op for in-memory)
+func (vs *VectorStore) Close() error {
+	return nil
+}
+
 // cosineSimilarity calculates the cosine similarity between two vectors
-func cosineSimilarity(a, b []float32) float32 {
+// Renamed to avoid conflict with sqlite_store.go
+func cosineSimilarityInMemory(a, b []float32) float32 {
 	if len(a) != len(b) || len(a) == 0 {
 		return 0
 	}

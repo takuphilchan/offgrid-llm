@@ -407,6 +407,24 @@ func (r *ToolRegistry) TestMCPConnection(urlOrCommand string) (int, error) {
 	return len(client.GetTools()), nil
 }
 
+// GetMCPServers returns a list of connected MCP servers
+func (r *ToolRegistry) GetMCPServers() []map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	servers := make([]map[string]interface{}, 0, len(r.mcpClients))
+	for name, client := range r.mcpClients {
+		servers = append(servers, map[string]interface{}{
+			"name":      name,
+			"url":       client.URL,
+			"transport": client.Transport,
+			"tools":     len(client.Tools),
+			"status":    "connected",
+		})
+	}
+	return servers
+}
+
 // GetTools returns all enabled tools (filters out disabled ones)
 func (r *ToolRegistry) GetTools() []api.Tool {
 	r.mu.RLock()

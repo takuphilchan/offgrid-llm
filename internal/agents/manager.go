@@ -71,6 +71,20 @@ func (m *Manager) SetMaxParallel(max int) {
 	m.maxParallel = max
 }
 
+// SetExecutor sets the tool executor
+func (m *Manager) SetExecutor(executor ToolExecutor) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.executor = executor
+}
+
+// SetLLMCaller sets the LLM caller
+func (m *Manager) SetLLMCaller(caller LLMCaller) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.llmCaller = caller
+}
+
 // RegisterTool adds a tool for agents to use
 func (m *Manager) RegisterTool(tool api.Tool) {
 	m.mu.Lock()
@@ -98,6 +112,59 @@ func (m *Manager) CreateTask(id, prompt string, config *AgentConfig) *Task {
 
 	m.tasks[id] = task
 	return task
+}
+
+// StartTask marks a task as running
+func (m *Manager) StartTask(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	task, exists := m.tasks[id]
+	if !exists {
+		return fmt.Errorf("task not found: %s", id)
+	}
+
+	now := time.Now()
+	task.StartedAt = &now
+	task.Status = TaskRunning
+	return nil
+}
+
+// AddTaskStep adds a step to a task
+func (m *Manager) AddTaskStep(id string, step Step) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	task, exists := m.tasks[id]
+	if !exists {
+		return fmt.Errorf("task not found: %s", id)
+	}
+
+	task.Steps = append(task.Steps, step)
+	return nil
+}
+
+// CompleteTask marks a task as completed or failed
+func (m *Manager) CompleteTask(id string, result string, err error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	task, exists := m.tasks[id]
+	if !exists {
+		return fmt.Errorf("task not found: %s", id)
+	}
+
+	completedAt := time.Now()
+	task.CompletedAt = &completedAt
+
+	if err != nil {
+		task.Status = TaskFailed
+		task.Error = err.Error()
+	} else {
+		task.Status = TaskCompleted
+		task.Result = result
+	}
+	return nil
 }
 
 // RunTask runs a task synchronously

@@ -25,6 +25,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/metrics"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
+	"github.com/takuphilchan/offgrid-llm/internal/p2p"
 	"github.com/takuphilchan/offgrid-llm/internal/platform"
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
@@ -67,6 +68,8 @@ type Server struct {
 	loraManager    *inference.LoRAManager
 	agentManager   *agents.Manager
 	toolRegistry   *agents.ToolRegistry
+	p2pDiscovery   *p2p.Discovery
+	p2pTransfer    *p2p.TransferManager
 	offgridMetrics *metrics.OffGridMetrics
 	wsHub          *websocket.Hub
 	// Runtime tracking
@@ -158,8 +161,30 @@ func NewWithConfig(cfg *config.Config) *Server {
 	quotaManager := users.NewQuotaManager(dataDir)
 	kbManager := users.NewKnowledgeBaseManager(dataDir)
 	loraManager := inference.NewLoRAManager(dataDir, engine)
-	agentManager := agents.NewManager(nil, nil, nil) // Tools and LLM caller can be set later
-	toolRegistry := agents.NewToolRegistry()         // Unified tool registry
+
+	// Initialize Agent Sandbox
+	// Try Docker first, fall back to Local
+	var sandbox agents.Sandbox
+	var err error
+	sandbox, err = agents.NewDockerSandbox("python:3.10-slim")
+	if err != nil {
+		log.Printf("Docker sandbox not available (%v), falling back to local sandbox", err)
+		sandbox, err = agents.NewLocalSandbox()
+		if err != nil {
+			log.Printf("Warning: Failed to create local sandbox: %v", err)
+		}
+	}
+
+	// Initialize Agent Manager with Sandboxed Executor
+	var executor agents.ToolExecutor
+	if sandbox != nil {
+		executor = agents.NewSandboxedExecutor(sandbox)
+	} else {
+		executor = agents.BuiltInExecutor() // Fallback to unsafe executor if sandbox fails completely
+	}
+
+	agentManager := agents.NewManager(nil, executor, nil) // Tools and LLM caller can be set later
+	toolRegistry := agents.NewToolRegistry()              // Unified tool registry
 	// Load user-defined tools from config if exists
 	toolsConfigPath := filepath.Join(dataDir, "tools.json")
 	if err := toolRegistry.LoadUserTools(toolsConfigPath); err != nil {
@@ -181,6 +206,14 @@ func NewWithConfig(cfg *config.Config) *Server {
 	authMiddleware.AddBypassPath("/readyz")
 	authMiddleware.AddBypassPath("/metrics")
 
+	// Initialize P2P components if enabled
+	var p2pDiscovery *p2p.Discovery
+	var p2pTransfer *p2p.TransferManager
+	if cfg.EnableP2P {
+		p2pDiscovery = p2p.NewDiscovery(cfg.ServerPort, cfg.DiscoveryPort)
+		p2pTransfer = p2p.NewTransferManager(cfg.P2PPort, cfg.ModelsDir)
+	}
+
 	return &Server{
 		config:               cfg,
 		registry:             registry,
@@ -193,7 +226,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		startTime:            time.Now(),
 		downloadProgress:     make(map[string]*DownloadProgress),
 		exportProgress:       make(map[string]*ExportProgress),
-		modelCache:           inference.NewModelCache(3, cfg.NumGPULayers), // Cache up to 3 models, use configured GPU layers
+		modelCache:           inference.NewModelCache(3, cfg.NumGPULayers, filepath.Join(cfg.ModelsDir, "..", "bin")), // Cache up to 3 models, use configured GPU layers
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
 		sessionHandlers:      sessionHandlers,
@@ -204,6 +237,8 @@ func NewWithConfig(cfg *config.Config) *Server {
 		loraManager:          loraManager,
 		agentManager:         agentManager,
 		toolRegistry:         toolRegistry,
+		p2pDiscovery:         p2pDiscovery,
+		p2pTransfer:          p2pTransfer,
 		offgridMetrics:       offgridMetrics,
 		wsHub:                wsHub,
 	}
@@ -310,6 +345,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/documents/ingest", s.handleDocumentIngest)
 	mux.HandleFunc("/v1/documents/delete", s.handleDocumentDelete)
 	mux.HandleFunc("/v1/documents/search", s.handleDocumentSearch)
+
+	// P2P endpoints
+	mux.HandleFunc("/v1/p2p/peers", s.handleP2PPeers)
+	mux.HandleFunc("/v1/p2p/download", s.handleP2PDownload)
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
@@ -424,6 +463,26 @@ func (s *Server) Start() error {
 		}
 	}()
 
+	// Start P2P services if enabled
+	if s.config.EnableP2P {
+		// Update local models for discovery
+		modelIDs := make([]string, 0)
+		for _, m := range s.registry.ListModels() {
+			modelIDs = append(modelIDs, m.ID)
+		}
+		s.p2pDiscovery.SetLocalModels(modelIDs)
+
+		// Start discovery
+		if err := s.p2pDiscovery.Start(context.Background()); err != nil {
+			log.Printf("Failed to start P2P discovery: %v", err)
+		}
+
+		// Start transfer server
+		if err := s.p2pTransfer.StartServer(context.Background()); err != nil {
+			log.Printf("Failed to start P2P transfer server: %v", err)
+		}
+	}
+
 	// Start background metrics collection
 	go s.collectSystemMetrics()
 
@@ -476,6 +535,12 @@ func (s *Server) handleShutdown() {
 	log.Println("Stopping all llama-server instances...")
 	s.modelCache.UnloadAll()
 	log.Println("All llama-server instances stopped")
+
+	// Stop P2P services
+	if s.config.EnableP2P && s.p2pDiscovery != nil {
+		log.Println("Stopping P2P services...")
+		s.p2pDiscovery.Stop()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -617,7 +682,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.5","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.6","status":"running"}`)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -636,7 +701,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	// Build detailed health response
 	health := map[string]interface{}{
 		"status":         "healthy",
-		"version":        "0.1.0-alpha",
+		"version":        "0.2.6",
 		"uptime":         uptimeStr,
 		"uptime_seconds": int(uptime.Seconds()),
 		"timestamp":      time.Now().Unix(),
@@ -3477,13 +3542,19 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		MaxIterations:  maxIter,
 		MaxTokens:      2048,
 		Temperature:    0.7,
-		TimeoutPerStep: 120 * time.Second, // 2 minutes per step for model loading
+		TimeoutPerStep: 300 * time.Second, // 5 minutes per step for model loading and slow operations
 	}
 
 	// Check if streaming is requested
 	stream := req.Stream
 
+	// Create task for tracking
+	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
+	s.agentManager.CreateTask(taskID, req.Prompt, &agentCfg)
+
 	if stream {
+		s.agentManager.StartTask(taskID)
+
 		// Stream the agent output using SSE
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -3498,8 +3569,9 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 
 		// Send initial status
 		statusData, _ := json.Marshal(map[string]interface{}{
-			"type":   "status",
-			"status": "thinking",
+			"type":    "status",
+			"status":  "thinking",
+			"task_id": taskID,
 		})
 		fmt.Fprintf(w, "data: %s\n\n", statusData)
 		flusher.Flush()
@@ -3551,6 +3623,8 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 
 		// Set up step callback
 		agent.SetStepCallback(func(step agents.Step) {
+			s.agentManager.AddTaskStep(taskID, step)
+
 			stepData := map[string]interface{}{
 				"type":        "step",
 				"step_type":   step.Type,
@@ -3570,12 +3644,14 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 
 		// Send final result
 		if err != nil {
+			s.agentManager.CompleteTask(taskID, "", err)
 			errData, _ := json.Marshal(map[string]interface{}{
 				"type":  "error",
 				"error": err.Error(),
 			})
 			fmt.Fprintf(w, "data: %s\n\n", errData)
 		} else {
+			s.agentManager.CompleteTask(taskID, result, nil)
 			doneData, _ := json.Marshal(map[string]interface{}{
 				"type":   "done",
 				"output": result,
@@ -3618,10 +3694,17 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		return "", fmt.Errorf("no response from model")
 	}
 
+	s.agentManager.StartTask(taskID)
+
 	// Non-streaming agent
 	agent := agents.NewAgent(agentCfg, tools, executor, llmCaller)
+	agent.SetStepCallback(func(step agents.Step) {
+		s.agentManager.AddTaskStep(taskID, step)
+	})
+
 	result, err := agent.Run(r.Context(), req.Prompt)
 	if err != nil {
+		s.agentManager.CompleteTask(taskID, "", err)
 		log.Printf("[Agent] Error: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -3629,10 +3712,13 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.agentManager.CompleteTask(taskID, result, nil)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"output": result,
-		"steps":  agent.GetSteps(),
+		"output":  result,
+		"steps":   agent.GetSteps(),
+		"task_id": taskID,
 	})
 }
 
@@ -3867,19 +3953,9 @@ func (s *Server) handleAgentMCP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		// List connected MCP servers
-		tools := s.toolRegistry.GetTools()
-		mcpServers := make(map[string]int)
-
-		for _, tool := range tools {
-			// Check if tool has MCP source
-			if tool.Function.Name != "" {
-				// This is a simple implementation - in production, track sources properly
-				mcpServers["mcp"] = len(tools)
-			}
-		}
-
+		servers := s.toolRegistry.GetMCPServers()
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"servers": mcpServers,
+			"servers": servers,
 		})
 
 	case http.MethodPost:

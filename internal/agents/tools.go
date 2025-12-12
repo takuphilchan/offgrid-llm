@@ -324,6 +324,54 @@ func BuiltInExecutor() ToolExecutor {
 	}
 }
 
+// NewSandboxedExecutor creates a tool executor that runs dangerous tools in a sandbox
+func NewSandboxedExecutor(sandbox Sandbox) ToolExecutor {
+	return func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+		var params map[string]interface{}
+		if len(args) > 0 {
+			if err := json.Unmarshal(args, &params); err != nil {
+				return "", fmt.Errorf("invalid arguments: %w", err)
+			}
+		}
+
+		switch name {
+		case "shell":
+			command, _ := params["command"].(string)
+			// Use sandbox for shell
+			return sandbox.Execute(ctx, command, nil, nil)
+
+		case "read_file":
+			path, _ := params["path"].(string)
+			content, err := sandbox.ReadFile(path)
+			if err != nil {
+				return "", err
+			}
+			// Limit output size
+			if len(content) > 3000 {
+				return string(content[:3000]) + "\n\n... (file truncated)", nil
+			}
+			return string(content), nil
+
+		case "write_file":
+			path, _ := params["path"].(string)
+			content, _ := params["content"].(string)
+			err := sandbox.WriteFile(path, []byte(content))
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path), nil
+
+		case "list_files":
+			path, _ := params["path"].(string)
+			return sandbox.ListFiles(path)
+
+		default:
+			// Fallback to built-in executor for safe tools
+			return BuiltInExecutor()(ctx, name, args)
+		}
+	}
+}
+
 func executeCalculator(expr string) (string, error) {
 	if expr == "" {
 		return "", fmt.Errorf("expression is required")
@@ -501,7 +549,8 @@ func getDangerousCommands() []string {
 		}...)
 	default: // Unix-like
 		return append(common, []string{
-			"rm -rf /",
+			"rm ",
+			"rm -rf",
 			"mkfs",
 			"dd if=",
 			"> /dev/",

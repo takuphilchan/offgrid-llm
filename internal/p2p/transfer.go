@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -155,18 +157,21 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
+	// Use bufio.Reader to handle buffering correctly
+	reader := bufio.NewReader(conn)
+
 	// Read response header
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
+	header, err := reader.ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return fmt.Errorf("failed to read response header: %w", err)
 	}
 
-	response := string(buf[:n])
-
 	var totalBytes int64
-	if _, err := fmt.Sscanf(response, "OK %d\n", &totalBytes); err != nil {
-		return fmt.Errorf("invalid response: %s", response)
+	if _, err := fmt.Sscanf(header, "OK %d\n", &totalBytes); err != nil {
+		if strings.HasPrefix(header, "ERROR") {
+			return fmt.Errorf("peer error: %s", strings.TrimSpace(header))
+		}
+		return fmt.Errorf("invalid response: %s", header)
 	}
 
 	// Create destination file
@@ -203,7 +208,7 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			n, err := conn.Read(buffer)
+			n, err := reader.Read(buffer)
 			if n > 0 {
 				if _, writeErr := multiWriter.Write(buffer[:n]); writeErr != nil {
 					return fmt.Errorf("write error: %w", writeErr)

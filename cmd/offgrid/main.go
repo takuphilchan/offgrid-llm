@@ -6373,47 +6373,26 @@ func handleLoRA(args []string) {
 func handleAgent(args []string) {
 	// Check for help flag
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
-		args = []string{} // Trigger help display
+		printAgentHelp()
+		return
 	}
 
-	if len(args) < 1 {
-		fmt.Println()
-		fmt.Printf("  %s◈ Agent Workflows%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("  %sAutonomous AI agents with reasoning and tool use%s\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sUsage%s  offgrid agent <command> [options]\n", colorDim, colorReset)
-		fmt.Println()
+	// Interactive mode if no args or "chat" or flags
+	if len(args) < 1 || args[0] == "chat" || strings.HasPrefix(args[0], "--") {
+		modelName := ""
+		// Simple flag parsing for interactive mode
+		for i, arg := range args {
+			if arg == "--model" && i+1 < len(args) {
+				modelName = args[i+1]
+			}
+		}
 
-		// Commands
-		fmt.Printf("  %sCommands%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %-24s %sExecute an agent task%s\n", "run <prompt>", colorDim, colorReset)
-		fmt.Printf("    %-24s %sList available tools%s\n", "tools", colorDim, colorReset)
-		fmt.Printf("    %-24s %sList recent tasks%s\n", "tasks", colorDim, colorReset)
-		fmt.Printf("    %-24s %sList defined workflows%s\n", "workflows", colorDim, colorReset)
-		fmt.Printf("    %-24s %sManage MCP servers%s\n", "mcp <cmd>", colorDim, colorReset)
-		fmt.Println()
+		// If no model specified, try to find a reasonable default
+		// if modelName == "" {
+		// 	modelName = "llama3.2:3b" // Default to a fast model
+		// }
 
-		// Options
-		fmt.Printf("  %sOptions%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %-24s %sModel to use (required)%s\n", "--model <name>", colorDim, colorReset)
-		fmt.Printf("    %-24s %sReasoning: react, cot, plan%s\n", "--style <style>", colorDim, colorReset)
-		fmt.Printf("    %-24s %sMax iterations (default: 10)%s\n", "--max-steps <n>", colorDim, colorReset)
-		fmt.Printf("    %-24s %sOutput as JSON%s\n", "--json", colorDim, colorReset)
-		fmt.Println()
-
-		// Reasoning Styles
-		fmt.Printf("  %sReasoning Styles%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %sreact%s    %sThink → Act → Observe loop (default)%s\n", brandSecondary, colorReset, colorDim, colorReset)
-		fmt.Printf("    %scot%s      %sChain-of-thought reasoning%s\n", brandSecondary, colorReset, colorDim, colorReset)
-		fmt.Printf("    %splan%s     %sPlan first, then execute%s\n", brandSecondary, colorReset, colorDim, colorReset)
-		fmt.Println()
-
-		// Examples
-		fmt.Printf("  %sExamples%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %s$%s offgrid agent run \"What files are in this directory?\" --model llama3\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid agent run \"Calculate 15%% of 299\" --model qwen2 --style cot\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid agent tools\n", colorDim, colorReset)
-		fmt.Println()
+		startInteractiveAgent(modelName)
 		return
 	}
 
@@ -6480,206 +6459,15 @@ func handleAgent(args []string) {
 		fmt.Printf("  %sStyle%s       %s  %sSteps%s  %d\n", colorDim, colorReset, style, colorDim, colorReset, maxSteps)
 		fmt.Printf("  %sTask%s        %s\n", colorDim, colorReset, prompt)
 		fmt.Println()
-		fmt.Printf("  %s─────────────────────────────────────────────────────────%s\n", colorDim, colorReset)
-		fmt.Println()
 		fmt.Printf("  %s⏳ Processing...%s\n", colorDim, colorReset)
 
 		// Connect to running server with streaming
 		cfg := config.LoadConfig()
 		serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/run", cfg.ServerPort)
 
-		reqBody := map[string]interface{}{
-			"prompt":    prompt,
-			"model":     modelName,
-			"style":     style,
-			"max_steps": maxSteps,
-			"stream":    true, // Enable streaming for real-time output
-		}
-		jsonBody, _ := json.Marshal(reqBody)
+		runAgentRequest(serverURL, prompt, modelName, style, maxSteps)
 
-		resp, err := http.Post(serverURL, "application/json", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			printError(fmt.Sprintf("Cannot connect to server: %v\n\n  Start the server with: offgrid serve", err))
-			return
-		}
-		defer resp.Body.Close()
-
-		// Check if streaming response
-		if resp.Header.Get("Content-Type") == "text/event-stream" {
-			// Process streaming response - show tokens as they arrive
-			reader := bufio.NewReader(resp.Body)
-			var finalOutput string
-			isFirstToken := true
-
-			for {
-				line, err := reader.ReadString('\n')
-				if err != nil {
-					break
-				}
-
-				line = strings.TrimSpace(line)
-				if !strings.HasPrefix(line, "data: ") {
-					continue
-				}
-
-				data := strings.TrimPrefix(line, "data: ")
-				var event map[string]interface{}
-				if err := json.Unmarshal([]byte(data), &event); err != nil {
-					continue
-				}
-
-				eventType, _ := event["type"].(string)
-
-				switch eventType {
-				case "status":
-					status, _ := event["status"].(string)
-					if status == "thinking" {
-						fmt.Printf("\r  %s◐ Thinking...%s\n", colorDim, colorReset)
-					}
-
-				case "token":
-					// Print token immediately (streaming output)
-					token, _ := event["token"].(string)
-					if isFirstToken {
-						fmt.Printf("    %s", token)
-						isFirstToken = false
-					} else {
-						fmt.Printf("%s", token)
-					}
-
-				case "step":
-					// New step starting - add newline if we were printing tokens
-					if !isFirstToken {
-						fmt.Println()
-						fmt.Println()
-						isFirstToken = true
-					}
-					stepType, _ := event["step_type"].(string)
-					stepID, _ := event["step_id"].(float64)
-
-					// Step type icons
-					stepIcon := "›"
-					switch stepType {
-					case "thought", "thinking":
-						stepIcon = "◐"
-					case "action", "tool":
-						stepIcon = "⚡"
-					case "observation":
-						stepIcon = "◉"
-					case "result", "answer":
-						stepIcon = "✓"
-					}
-
-					fmt.Printf("  %s%s Step %d%s %s[%s]%s\n", brandPrimary, stepIcon, int(stepID), colorReset, colorDim, stepType, colorReset)
-
-				case "error":
-					if !isFirstToken {
-						fmt.Println()
-					}
-					errMsg, _ := event["error"].(string)
-					printError(fmt.Sprintf("Agent error: %s", errMsg))
-					return
-
-				case "done":
-					finalOutput, _ = event["output"].(string)
-				}
-			}
-
-			// Show final result
-			if !isFirstToken {
-				fmt.Println()
-			}
-			fmt.Println()
-			fmt.Printf("  %s✓ Complete%s\n", colorGreen+colorBold, colorReset)
-			if finalOutput != "" {
-				fmt.Println()
-				fmt.Printf("  %s┌─ Answer ─────────────────────────────────────────────────┐%s\n", brandPrimary, colorReset)
-				// Word wrap the output
-				wrapped := wrapText(finalOutput, 58)
-				for _, line := range strings.Split(wrapped, "\n") {
-					fmt.Printf("  %s│%s %-58s %s│%s\n", brandPrimary, colorReset, line, brandPrimary, colorReset)
-				}
-				fmt.Printf("  %s└───────────────────────────────────────────────────────────┘%s\n", brandPrimary, colorReset)
-			}
-			fmt.Println()
-			return
-		}
-
-		// Non-streaming fallback
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			printError(fmt.Sprintf("Failed to parse response: %v", err))
-			return
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			if errMsg, ok := result["error"].(string); ok {
-				printError(fmt.Sprintf("Agent error: %s", errMsg))
-			} else {
-				printError(fmt.Sprintf("Server returned status %d", resp.StatusCode))
-			}
-			return
-		}
-
-		if output.JSONMode {
-			output.PrintJSON(result)
-			return
-		}
-
-		fmt.Printf("  %s✓ Complete%s\n", colorGreen+colorBold, colorReset)
-		fmt.Println()
-
-		// Handle different response formats
-		var resultOutput string
-		if ro, ok := result["output"].(string); ok && ro != "" {
-			resultOutput = ro
-		} else if msg, ok := result["message"].(string); ok {
-			resultOutput = msg
-		}
-
-		if resultOutput != "" {
-			fmt.Printf("  %s┌─ Answer ─────────────────────────────────────────────────┐%s\n", brandPrimary, colorReset)
-			wrapped := wrapText(resultOutput, 58)
-			for _, line := range strings.Split(wrapped, "\n") {
-				fmt.Printf("  %s│%s %-58s %s│%s\n", brandPrimary, colorReset, line, brandPrimary, colorReset)
-			}
-			fmt.Printf("  %s└───────────────────────────────────────────────────────────┘%s\n", brandPrimary, colorReset)
-		} else {
-			fmt.Printf("  %sNo output returned%s\n", colorDim, colorReset)
-		}
-
-		if steps, ok := result["steps"].([]interface{}); ok && len(steps) > 0 {
-			fmt.Println()
-			fmt.Printf("  %sSteps (%d)%s\n", colorDim, len(steps), colorReset)
-			for i, step := range steps {
-				if s, ok := step.(map[string]interface{}); ok {
-					stepType := s["type"]
-					content := s["content"]
-					// Step type icons
-					stepIcon := "›"
-					switch fmt.Sprintf("%v", stepType) {
-					case "thought", "thinking":
-						stepIcon = "◐"
-					case "action", "tool":
-						stepIcon = "⚡"
-					case "observation":
-						stepIcon = "◉"
-					case "result", "answer":
-						stepIcon = "✓"
-					}
-					if content != nil {
-						contentStr := fmt.Sprintf("%v", content)
-						if len(contentStr) > 60 {
-							contentStr = contentStr[:57] + "..."
-						}
-						fmt.Printf("    %s%s%s %d. %s[%v]%s %s\n", brandPrimary, stepIcon, colorReset, i+1, colorDim, stepType, colorReset, contentStr)
-					}
-				}
-			}
-		}
-		fmt.Println()
-
-	case "tasks":
+	case "tasks", "list":
 		// Connect to running server
 		cfg := config.LoadConfig()
 		serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/tasks", cfg.ServerPort)

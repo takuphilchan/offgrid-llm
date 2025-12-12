@@ -32,10 +32,11 @@ type ModelCache struct {
 	gpuLayers    int // Number of GPU layers to offload
 	mu           sync.RWMutex
 	basePort     int
+	binManager   *BinaryManager
 }
 
 // NewModelCache creates a new model cache with specified capacity
-func NewModelCache(maxInstances int, gpuLayers int) *ModelCache {
+func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 	if maxInstances < 1 {
 		maxInstances = 1
 	}
@@ -50,6 +51,7 @@ func NewModelCache(maxInstances int, gpuLayers int) *ModelCache {
 		maxInstances: maxInstances,
 		gpuLayers:    gpuLayers,
 		basePort:     42382,
+		binManager:   NewBinaryManager(binDir),
 	}
 }
 
@@ -134,7 +136,13 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 
 	log.Printf("Starting llama-server with args: %v", args)
 
-	cmd := exec.Command("llama-server", args...)
+	// Get llama-server binary path
+	binaryPath, err := mc.binManager.GetLlamaServer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get llama-server binary: %w", err)
+	}
+
+	cmd := exec.Command(binaryPath, args...)
 
 	cmd.Env = append(cmd.Env, "NO_PROXY=*")
 
