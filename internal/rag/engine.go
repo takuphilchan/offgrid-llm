@@ -45,12 +45,14 @@ type Store interface {
 func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engine {
 	// Initialize SQLite store
 	ragDir := filepath.Join(dataDir, "rag")
-	store, err := NewSQLiteStore(ragDir)
+
+	var store Store
+	sqliteStore, err := NewSQLiteStore(ragDir)
 	if err != nil {
 		log.Printf("Failed to initialize SQLite store, falling back to in-memory: %v", err)
-		// Fallback to in-memory (we need to adapt VectorStore to match interface)
-		// For now, we'll just panic or handle it gracefully in a real app
-		// But since we just added SQLiteStore, let's assume it works or fix it
+		store = NewVectorStore()
+	} else {
+		store = sqliteStore
 	}
 
 	return &Engine{

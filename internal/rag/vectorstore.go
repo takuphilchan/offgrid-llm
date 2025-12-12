@@ -2,6 +2,7 @@ package rag
 
 import (
 	"container/heap"
+	"fmt"
 	"math"
 	"strings"
 	"sync"
@@ -27,14 +28,15 @@ func NewVectorStore() *VectorStore {
 }
 
 // AddDocument adds a document to the store
-func (vs *VectorStore) AddDocument(doc *Document) {
+func (vs *VectorStore) AddDocument(doc *Document) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 	vs.documents[doc.ID] = doc
+	return nil
 }
 
 // AddChunk adds a chunk with its embedding to the store
-func (vs *VectorStore) AddChunk(chunk *Chunk, embedding []float32) {
+func (vs *VectorStore) AddChunk(chunk *Chunk, embedding []float32) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
@@ -43,24 +45,33 @@ func (vs *VectorStore) AddChunk(chunk *Chunk, embedding []float32) {
 
 	// Track which chunks belong to which document
 	vs.docChunks[chunk.DocumentID] = append(vs.docChunks[chunk.DocumentID], chunk.ID)
+	return nil
 }
 
 // GetDocument retrieves a document by ID
-func (vs *VectorStore) GetDocument(id string) *Document {
+func (vs *VectorStore) GetDocument(id string) (*Document, error) {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
-	return vs.documents[id]
+	doc, ok := vs.documents[id]
+	if !ok {
+		return nil, fmt.Errorf("document not found")
+	}
+	return doc, nil
 }
 
 // GetChunk retrieves a chunk by ID
-func (vs *VectorStore) GetChunk(id string) *Chunk {
+func (vs *VectorStore) GetChunk(id string) (*Chunk, error) {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
-	return vs.chunks[id]
+	chunk, ok := vs.chunks[id]
+	if !ok {
+		return nil, fmt.Errorf("chunk not found")
+	}
+	return chunk, nil
 }
 
 // ListDocuments returns all documents
-func (vs *VectorStore) ListDocuments() []*Document {
+func (vs *VectorStore) ListDocuments() ([]*Document, error) {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 
@@ -68,16 +79,16 @@ func (vs *VectorStore) ListDocuments() []*Document {
 	for _, doc := range vs.documents {
 		docs = append(docs, doc)
 	}
-	return docs
+	return docs, nil
 }
 
 // DeleteDocument removes a document and all its chunks
-func (vs *VectorStore) DeleteDocument(docID string) bool {
+func (vs *VectorStore) DeleteDocument(docID string) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
 	if _, exists := vs.documents[docID]; !exists {
-		return false
+		return fmt.Errorf("document not found")
 	}
 
 	// Remove all chunks for this document
@@ -89,24 +100,16 @@ func (vs *VectorStore) DeleteDocument(docID string) bool {
 
 	delete(vs.docChunks, docID)
 	delete(vs.documents, docID)
-	return true
+	return nil
 }
 
 // Search finds the top-k most similar chunks to the query embedding
-func (vs *VectorStore) Search(queryEmbedding []float32, opts SearchOptions) []SearchResult {
+func (vs *VectorStore) Search(queryEmbedding []float32, limit int, minScore float32) ([]SearchResult, error) {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 
 	if len(vs.embeddings) == 0 {
-		return nil
-	}
-
-	// Build a filter set if document filter is provided
-	docFilter := make(map[string]bool)
-	if len(opts.DocumentFilter) > 0 {
-		for _, docID := range opts.DocumentFilter {
-			docFilter[docID] = true
-		}
+		return []SearchResult{}, nil
 	}
 
 	// Use a max-heap to find top-k results efficiently
@@ -119,16 +122,11 @@ func (vs *VectorStore) Search(queryEmbedding []float32, opts SearchOptions) []Se
 			continue
 		}
 
-		// Apply document filter
-		if len(docFilter) > 0 && !docFilter[chunk.DocumentID] {
-			continue
-		}
-
 		// Calculate cosine similarity
-		score := cosineSimilarity(queryEmbedding, embedding)
+		score := cosineSimilarityInMemory(queryEmbedding, embedding)
 
 		// Skip low scores
-		if score < opts.MinScore {
+		if score < minScore {
 			continue
 		}
 
@@ -146,9 +144,9 @@ func (vs *VectorStore) Search(queryEmbedding []float32, opts SearchOptions) []Se
 		}
 
 		// Maintain top-k using min-heap
-		if h.Len() < opts.TopK {
+		if h.Len() < limit {
 			heap.Push(h, result)
-		} else if score > (*h)[0].Score {
+		} else if h.Len() > 0 && score > (*h)[0].Score {
 			heap.Pop(h)
 			heap.Push(h, result)
 		}
@@ -160,18 +158,7 @@ func (vs *VectorStore) Search(queryEmbedding []float32, opts SearchOptions) []Se
 		results[i] = heap.Pop(h).(SearchResult)
 	}
 
-	// Clear content if not requested
-	if !opts.IncludeContent {
-		for i := range results {
-			results[i].Chunk = &Chunk{
-				ID:         results[i].Chunk.ID,
-				DocumentID: results[i].Chunk.DocumentID,
-				Index:      results[i].Chunk.Index,
-			}
-		}
-	}
-
-	return results
+	return results, nil
 }
 
 // HybridSearch combines semantic search with keyword matching
