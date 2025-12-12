@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+offgrid/__init__.py
+offgrid/agent.py
+offgrid/audio.py
+offgrid/client.py
+offgrid/kb.py
+offgrid/lora.py
+offgrid/models.py
+offgrid.egg-info/PKG-INFO
+offgrid.egg-info/SOURCES.txt
+offgrid.egg-info/dependency_links.txt
+offgrid.egg-info/requires.txt
+offgrid.egg-info/top_level.txt
+tests/test_client.py
+tests/test_live.py
