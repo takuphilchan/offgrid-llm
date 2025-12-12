@@ -682,7 +682,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.6","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.5","status":"running"}`)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -701,7 +701,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	// Build detailed health response
 	health := map[string]interface{}{
 		"status":         "healthy",
-		"version":        "0.2.6",
+		"version":        "0.2.5",
 		"uptime":         uptimeStr,
 		"uptime_seconds": int(uptime.Seconds()),
 		"timestamp":      time.Now().Unix(),
@@ -3062,7 +3062,7 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		"multi_user_mode": s.config.MultiUserMode,
 		"require_auth":    s.config.RequireAuth,
 		"guest_access":    s.config.GuestAccess,
-		"version":         "0.2.5",
+		"version":         "0.2.6",
 		"features": map[string]bool{
 			"users":   s.config.MultiUserMode,
 			"metrics": true, // Always available but can be hidden

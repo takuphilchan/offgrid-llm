@@ -3,7 +3,7 @@
 **Run powerful AI models completely offline on your own computer.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.2.5-blue.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
+[![Version](https://img.shields.io/badge/Version-0.2.6-blue.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
 [![PyPI](https://img.shields.io/pypi/v/offgrid?style=flat-square&color=3776AB)](https://pypi.org/project/offgrid/)
 
