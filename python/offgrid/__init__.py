@@ -46,7 +46,7 @@ Usage:
 
 from typing import Dict, List, Union
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 __author__ = "OffGrid LLM Team"
 
 from .client import Client, OffGridError, Sessions
