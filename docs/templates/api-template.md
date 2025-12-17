@@ -159,7 +159,7 @@ METHOD /v1/endpoint/{parameter}
 ### cURL
 
 ```bash
-curl -X POST "http://localhost:8080/v1/endpoint/param" \
+curl -X POST "http://localhost:11611/v1/endpoint/param" \
   -H "Content-Type: application/json" \
   -d '{
     "field1": "value",
@@ -173,7 +173,7 @@ curl -X POST "http://localhost:8080/v1/endpoint/param" \
 import requests
 
 response = requests.post(
-    "http://localhost:8080/v1/endpoint/param",
+    "http://localhost:11611/v1/endpoint/param",
     json={
         "field1": "value",
         "field2": 123
@@ -200,7 +200,7 @@ payload := map[string]interface{}{
 
 body, _ := json.Marshal(payload)
 resp, err := http.Post(
-    "http://localhost:8080/v1/endpoint/param",
+    "http://localhost:11611/v1/endpoint/param",
     "application/json",
     bytes.NewBuffer(body),
 )
@@ -209,7 +209,7 @@ resp, err := http.Post(
 ### JavaScript
 
 ```javascript
-const response = await fetch('http://localhost:8080/v1/endpoint/param', {
+const response = await fetch('http://localhost:11611/v1/endpoint/param', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',

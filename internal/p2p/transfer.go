@@ -150,8 +150,8 @@ func (tm *TransferManager) handleConnection(conn net.Conn) {
 
 // DownloadFromPeer downloads a file from a peer
 func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, modelPath string, expectedHash string) error {
-	// Connect to peer
-	addr := fmt.Sprintf("%s:%d", peer.Address, peer.Port)
+	// Connect to peer (use net.JoinHostPort for IPv6 compatibility)
+	addr := net.JoinHostPort(peer.Address, fmt.Sprintf("%d", peer.Port))
 	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to connect to peer %s: %w", addr, err)

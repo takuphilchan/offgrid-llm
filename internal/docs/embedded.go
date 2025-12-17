@@ -402,14 +402,14 @@ Under memory pressure, OffGrid will:
 
 ## Base URL
 
-    http://localhost:8080
+    http://localhost:11611
 
 ## Endpoints
 
 ### POST /v1/chat/completions
 OpenAI-compatible chat endpoint.
 
-    curl -X POST http://localhost:8080/v1/chat/completions \
+    curl -X POST http://localhost:11611/v1/chat/completions \
       -H "Content-Type: application/json" \
       -d '{
         "model": "tinyllama-1.1b",
@@ -419,22 +419,22 @@ OpenAI-compatible chat endpoint.
 ### GET /v1/models
 List available models.
 
-    curl http://localhost:8080/v1/models
+    curl http://localhost:11611/v1/models
 
 ### GET /health
 Health check endpoint.
 
-    curl http://localhost:8080/health
+    curl http://localhost:11611/health
 
 ### GET /metrics
 Prometheus metrics.
 
-    curl http://localhost:8080/metrics
+    curl http://localhost:11611/metrics
 
 ### POST /v1/embeddings
 Generate embeddings.
 
-    curl -X POST http://localhost:8080/v1/embeddings \
+    curl -X POST http://localhost:11611/v1/embeddings \
       -H "Content-Type: application/json" \
       -d '{"input": "Hello world", "model": "bge-small"}'
 `,

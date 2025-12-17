@@ -40,7 +40,7 @@
 
 ```bash
 # Download latest release
-curl -fsSL https://github.com/takuphilchan/offgrid-llm/releases/latest/download/offgrid-linux-amd64 -o offgrid
+curl -fsSL https://github.com/yourusername/offgrid-llm/releases/latest/download/offgrid-linux-amd64 -o offgrid
 chmod +x offgrid
 sudo mv offgrid /usr/local/bin/
 ```
@@ -48,14 +48,14 @@ sudo mv offgrid /usr/local/bin/
 ### Option B: Install Script
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/yourusername/offgrid-llm/main/install.sh | bash
 ```
 
 ### Option C: Build from Source
 
 ```bash
 # Clone repository
-git clone https://github.com/takuphilchan/offgrid-llm.git
+git clone https://github.com/yourusername/offgrid-llm.git
 cd offgrid-llm
 
 # Build
@@ -68,8 +68,8 @@ sudo mv offgrid /usr/local/bin/
 ### Verify Installation
 
 ```bash
-offgrid --version
-# Output: offgrid version 0.1.0
+offgrid version
+# Output: Version 0.2.7
 ```
 
 ---
@@ -85,9 +85,9 @@ offgrid serve
 You should see:
 
 ```
-Server starting...
-Models directory: ~/.offgrid-llm/models
-Listening on: http://localhost:11611
+🌐 Server starting...
+📁 Models directory: ~/.offgrid-llm/models
+🔌 Listening on: http://localhost:11611
 ```
 
 ### Step 2: Open the Web UI
@@ -111,7 +111,7 @@ http://localhost:11611
 2. Select your downloaded model from the dropdown
 3. Type your message and press Enter
 
-**Congratulations!** You're now running AI locally!
+🎉 **Congratulations!** You're now running AI locally!
 
 ---
 
@@ -288,7 +288,7 @@ ls ~/.offgrid-llm/models/
 
 Now that you're up and running, explore these features:
 
-### Enable RAG (Document Chat)
+### 📚 Enable RAG (Document Chat)
 
 Add your documents to chat with them:
 
@@ -299,7 +299,7 @@ offgrid chat "What does my document say about...?"
 
 **Guide:** [Embeddings Guide](embeddings.md)
 
-### Voice Input/Output
+### 🎤 Voice Input/Output
 
 Talk to your AI:
 
@@ -309,7 +309,7 @@ offgrid serve --enable-voice
 
 **Guide:** [Features Guide](features.md)
 
-### Run Agent Tasks
+### 🤖 Run Agent Tasks
 
 Let AI autonomously complete tasks:
 
@@ -319,13 +319,13 @@ offgrid agent "Research quantum computing and summarize"
 
 **Guide:** [Agents Guide](agents.md)
 
-### Use the API
+### 🔌 Use the API
 
 Integrate with your own applications:
 
 **Guide:** [API Reference](../reference/api.md)
 
-### Desktop App
+### 🖥️ Desktop App
 
 Install the native desktop application:
 
@@ -341,4 +341,4 @@ Install the native desktop application:
 
 ---
 
-**Happy chatting! **
+**Happy chatting! 🎉**

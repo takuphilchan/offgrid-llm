@@ -6,9 +6,9 @@ This directory contains templates for writing consistent documentation across th
 
 | Template | Purpose | When to Use |
 |----------|---------|-------------|
-| [FEATURE_TEMPLATE.md](FEATURE_TEMPLATE.md) | Document new features | Adding new capabilities |
-| [API_TEMPLATE.md](API_TEMPLATE.md) | Document API endpoints | New REST endpoints |
-| [GUIDE_TEMPLATE.md](GUIDE_TEMPLATE.md) | Write how-to guides | Tutorials and walkthroughs |
+| [feature-template.md](feature-template.md) | Document new features | Adding new capabilities |
+| [api-template.md](api-template.md) | Document API endpoints | New REST endpoints |
+| [guide-template.md](guide-template.md) | Write how-to guides | Tutorials and walkthroughs |
 
 ---
 
@@ -21,7 +21,7 @@ This directory contains templates for writing consistent documentation across th
 
 ```bash
 # Example: Create a new feature doc
-cp templates/FEATURE_TEMPLATE.md guides/MY_FEATURE.md
+cp templates/feature-template.md guides/my-feature.md
 ```
 
 ---
@@ -32,7 +32,7 @@ cp templates/FEATURE_TEMPLATE.md guides/MY_FEATURE.md
 
 | Location | Convention | Example |
 |----------|------------|---------|
-| Root docs/ | SCREAMING_SNAKE | `INSTALLATION.md`, `API.md` |
+| All docs | lowercase-kebab | `installation.md`, `api.md` |
 | docs/guides/ | SCREAMING_SNAKE_GUIDE | `AGENT_GUIDE.md` |
 | docs/advanced/ | SCREAMING_SNAKE | `ARCHITECTURE.md` |
 
@@ -103,13 +103,13 @@ client = offgrid.Client()
 ### Callouts
 
 ```markdown
-> **Tip:** Helpful suggestion
+> 💡 **Tip:** Helpful suggestion
 
-> **Warning:** Important caution
+> ⚠️ **Warning:** Important caution
 
-> **Danger:** Critical warning
+> ❌ **Danger:** Critical warning
 
->  **Note:** Additional information
+> ℹ️ **Note:** Additional information
 ```
 
 ---
@@ -118,20 +118,20 @@ client = offgrid.Client()
 
 ### Do
 
-Write for beginners - assume minimal context  
-Be concise - respect reader's time  
-Use examples - show, don't just tell  
-Stay current - update when code changes  
-Test instructions - verify steps work  
-Use relative links - `../API.md` not absolute URLs  
+✅ Write for beginners - assume minimal context  
+✅ Be concise - respect reader's time  
+✅ Use examples - show, don't just tell  
+✅ Stay current - update when code changes  
+✅ Test instructions - verify steps work  
+✅ Use relative links - `../API.md` not absolute URLs  
 
 ### Don't
 
-Assume prior knowledge  
-Use jargon without explanation  
-Leave outdated information  
-Skip error handling in examples  
-Use absolute file paths  
+❌ Assume prior knowledge  
+❌ Use jargon without explanation  
+❌ Leave outdated information  
+❌ Skip error handling in examples  
+❌ Use absolute file paths  
 
 ---
 

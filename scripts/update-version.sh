@@ -61,9 +61,15 @@ if [ -f "$ROOT_DIR/internal/server/server.go" ]; then
     sed -i "s/\"version\":        \"[^\"]*\"/\"version\":        \"$VERSION\"/" "$ROOT_DIR/internal/server/server.go"
 fi
 
-# Note: cmd/offgrid/main.go uses ldflags, so it's set at build time
+# Update internal/agents/mcp_client.go
+if [ -f "$ROOT_DIR/internal/agents/mcp_client.go" ]; then
+    echo "Updating internal/agents/mcp_client.go..."
+    sed -i "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/internal/agents/mcp_client.go"
+fi
+
+# Note: cmd/offgrid/main.go now uses getVersion() which reads from VERSION file
 echo ""
 echo "Version updated to $VERSION in all files."
 echo ""
-echo "Note: cmd/offgrid/main.go version is set via ldflags at build time."
-echo "Build with: go build -ldflags=\"-X main.Version=$VERSION\" ..."
+echo "For development builds, cmd/offgrid/main.go reads VERSION file automatically."
+echo "For release builds, use: go build -ldflags=\"-X main.Version=$VERSION\" ..."

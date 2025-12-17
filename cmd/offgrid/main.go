@@ -35,6 +35,24 @@ import (
 // Version is set via ldflags during build
 var Version = "dev"
 
+// getVersion returns the current version, reading from VERSION file if needed
+func getVersion() string {
+	if Version != "dev" {
+		return Version
+	}
+	// Try to read from VERSION file for development builds
+	if data, err := os.ReadFile("VERSION"); err == nil {
+		return strings.TrimSpace(string(data))
+	}
+	// Try common locations
+	for _, path := range []string{"/var/lib/offgrid/VERSION", "/usr/local/share/offgrid/VERSION"} {
+		if data, err := os.ReadFile(path); err == nil {
+			return strings.TrimSpace(string(data))
+		}
+	}
+	return Version
+}
+
 // Shared HTTP clients with connection pooling for better performance
 // Avoids creating new connections for every request
 var (
@@ -153,7 +171,7 @@ func printBanner() {
 		return
 	}
 	fmt.Println()
-	fmt.Printf("  %s%s OffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, Version, colorReset)
+	fmt.Printf("  %s%s OffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, getVersion(), colorReset)
 	fmt.Printf("  %sLocal LLM inference at the edge%s\n", brandMuted, colorReset)
 	fmt.Println()
 }
@@ -2971,7 +2989,7 @@ func handleQuantize(args []string) {
 func printHelp() {
 	fmt.Println()
 	// Modern branded header
-	fmt.Printf("  %s%s OffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, Version, colorReset)
+	fmt.Printf("  %s%s OffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, getVersion(), colorReset)
 	fmt.Printf("  %sEdge inference orchestrator for local LLMs%s\n", brandMuted, colorReset)
 	fmt.Println()
 	fmt.Printf("  %sUsage%s  offgrid %s<command>%s %s[options]%s\n", colorBold, colorReset, brandPrimary, colorReset, brandMuted, colorReset)
@@ -3075,9 +3093,10 @@ func printHelp() {
 }
 
 func handleVersion() {
+	version := getVersion()
 	if output.JSONMode {
 		output.PrintJSON(map[string]interface{}{
-			"version": Version,
+			"version": version,
 			"go":      runtime.Version(),
 			"os":      runtime.GOOS,
 			"arch":    runtime.GOARCH,
@@ -3088,7 +3107,7 @@ func handleVersion() {
 	fmt.Println()
 	fmt.Printf("  %s%s OffGrid LLM%s\n", brandPrimary+colorBold, iconBolt, colorReset)
 	fmt.Println()
-	printKeyValue("Version", Version)
+	printKeyValue("Version", version)
 	printKeyValue("Go", runtime.Version())
 	printKeyValue("Platform", fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH))
 	fmt.Println()
@@ -3164,7 +3183,7 @@ func handleInfo() {
 		}
 
 		output.PrintJSON(map[string]interface{}{
-			"version": "0.1.6",
+			"version": getVersion(),
 			"config": map[string]interface{}{
 				"port":        cfg.ServerPort,
 				"models_dir":  cfg.ModelsDir,
@@ -3184,7 +3203,7 @@ func handleInfo() {
 
 	// Human-readable output
 	fmt.Println()
-	fmt.Printf("  %s◈ OffGrid LLM%s %sv0.1.6-alpha%s\n", brandPrimary+colorBold, colorReset, brandMuted, colorReset)
+	fmt.Printf("  %s◈ OffGrid LLM%s %sv%s%s\n", brandPrimary+colorBold, colorReset, brandMuted, getVersion(), colorReset)
 	fmt.Println()
 
 	// Configuration
