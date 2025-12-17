@@ -3,7 +3,6 @@
 # One command to install everything: CLI, Desktop, Audio (Whisper/Piper)
 #
 # Usage:
-#   curl -fsSL https://offgrid.dev/install | bash
 #   curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 #
 # Options (environment variables):
@@ -11,13 +10,13 @@
 #   DESKTOP=yes|no     Install Desktop app (default: yes)
 #   AUDIO=yes|no       Install Audio - Whisper STT + Piper TTS (default: yes)
 #   AUTOSTART=yes|no   Auto-start service (default: ask)
-#   NONINTERACTIVE=yes Skip all prompts, use defaults (installs everything)
-#   GPU=cpu|vulkan     Force CPU or Vulkan build (default: auto-detect GPU)
+#   NONINTERACTIVE=yes Skip all prompts, use defaults
+#   GPU=cpu|vulkan     CPU (default) or Vulkan GPU acceleration
 #
 # Requirements:
-#   CPU builds: GLIBC 2.35+ (Ubuntu 22.04+, Debian 12+)
-#   Vulkan builds: GLIBC 2.38+ (Ubuntu 24.04+) - auto-fallback to CPU if unavailable
-#   macOS: 12.0+ (Monterey)
+#   Linux: GLIBC 2.35+ (Ubuntu 22.04+, Debian 12+)
+#   macOS: 12.0+ (Monterey) - Apple Silicon uses Metal automatically
+#   Windows: Windows 10+
 
 set -e
 
@@ -190,6 +189,7 @@ get_glibc_version() {
 # ═══════════════════════════════════════════════════════════════
 show_menu() {
     local os="$1"
+    local has_gpu="$2"
     
     echo "" >&2
     echo -e "  ${BOLD}Select installation type${NC}" >&2
@@ -227,7 +227,7 @@ show_menu() {
             INSTALL_AUDIO="no"
             ;;
         4)
-            custom_menu
+            custom_menu "$has_gpu"
             ;;
         *)
             INSTALL_CLI="yes"
@@ -238,6 +238,8 @@ show_menu() {
 }
 
 custom_menu() {
+    local has_gpu="$1"
+    
     echo "" >&2
     echo -e "  ${BOLD}Custom Installation${NC}" >&2
     echo "" >&2
@@ -262,6 +264,18 @@ custom_menu() {
         INSTALL_AUDIO="yes"
     else
         INSTALL_AUDIO="no"
+    fi
+    
+    # GPU acceleration (if available)
+    if [ "$has_gpu" = "true" ]; then
+        echo "" >&2
+        read -p "  Enable GPU acceleration (Vulkan)? [y/N]: " gpu_choice
+        gpu_choice="${gpu_choice:-N}"
+        if [[ "$gpu_choice" =~ ^[Yy] ]]; then
+            ENABLE_GPU="yes"
+        else
+            ENABLE_GPU="no"
+        fi
     fi
 }
 
@@ -790,28 +804,51 @@ main() {
     local arch=$(detect_arch)
     local cpu_features=$(detect_cpu_features)
     
-    # Allow environment variable override for GPU variant
-    # Use: GPU=vulkan or GPU=cpu to force a specific build
-    local gpu_variant
+    # GPU variant: CPU is default, user can opt-in to GPU
+    # Use: GPU=vulkan to enable Vulkan acceleration
+    local gpu_variant="cpu"
+    local has_gpu=false
+    local detected_gpu=""
+    
+    # Check if GPU is available (for menu display)
+    if [ "$os" = "linux" ]; then
+        if command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
+            has_gpu=true
+            detected_gpu="vulkan"
+        elif command -v nvidia-smi >/dev/null 2>&1; then
+            has_gpu=true
+            detected_gpu="vulkan"
+        elif [ -d "/sys/class/drm" ] && ls /sys/class/drm/card*/device/vendor 2>/dev/null | xargs cat 2>/dev/null | grep -q "0x1002"; then
+            has_gpu=true
+            detected_gpu="vulkan"
+        fi
+    elif [ "$os" = "darwin" ]; then
+        # macOS Apple Silicon always uses Metal (handled automatically)
+        if [ "$arch" = "arm64" ]; then
+            gpu_variant="metal"
+            detected_gpu="metal"
+        fi
+    fi
+    
+    # Environment variable override
     if [ -n "${GPU:-}" ]; then
         gpu_variant="$GPU"
         log_dim "GPU variant override: $gpu_variant"
-    else
-        gpu_variant=$(detect_gpu "$os")
     fi
     
     # Check GLIBC for Vulkan builds on Linux (requires 2.38+)
-    # CPU builds work on GLIBC 2.35+ (Ubuntu 22.04+)
     if [ "$os" = "linux" ] && [ "$gpu_variant" = "vulkan" ]; then
         local glibc_check=$(check_glibc_version 2 38)
         if [ "$glibc_check" != "compatible" ]; then
             local current_glibc=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo "unknown")
-            log_warn "GLIBC $current_glibc < 2.38 — falling back to CPU build"
+            log_warn "GLIBC $current_glibc < 2.38 - Vulkan requires Ubuntu 24.04+"
+            log_info "Falling back to CPU build"
             gpu_variant="cpu"
+            has_gpu=false
         fi
     fi
     
-    echo -e "  ${DIM}System${NC}   ${BOLD}$os-$arch${NC} ${DIM}($gpu_variant, $cpu_features)${NC}" >&2
+    echo -e "  ${DIM}System${NC}   ${BOLD}$os-$arch${NC} ${DIM}($cpu_features)${NC}" >&2
     
     # Get version
     if [ "$VERSION" = "latest" ]; then
@@ -825,19 +862,27 @@ main() {
         is_interactive="yes"
     fi
     
+    # Initialize GPU choice
+    ENABLE_GPU="no"
+    
     # Show menu if interactive
     if [ "$is_interactive" = "yes" ] && [ -z "${CLI:-}" ] && [ -z "${DESKTOP:-}" ] && [ -z "${AUDIO:-}" ]; then
-        show_menu "$os"
+        show_menu "$os" "$has_gpu"
     else
         # Use defaults or environment variables
-        # Default: Full installation (CLI + Desktop + Audio)
+        # Default: Full installation (CLI + Desktop + Audio) with CPU
         INSTALL_CLI="${CLI:-yes}"
         INSTALL_DESKTOP="${DESKTOP:-yes}"
         INSTALL_AUDIO="${AUDIO:-yes}"
         
         if [ "$is_interactive" != "yes" ]; then
-            log_dim "Non-interactive: Installing full system"
+            log_dim "Non-interactive: Installing full system (CPU)"
         fi
+    fi
+    
+    # Apply GPU choice if user selected it
+    if [ "$ENABLE_GPU" = "yes" ] && [ "$has_gpu" = "true" ]; then
+        gpu_variant="vulkan"
     fi
     
     # Summary
@@ -846,6 +891,7 @@ main() {
     [ "$INSTALL_CLI" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} CLI Tools" >&2 || echo -e "    ${DIM}○ CLI Tools${NC}" >&2
     [ "$INSTALL_DESKTOP" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} Desktop App" >&2 || echo -e "    ${DIM}○ Desktop App${NC}" >&2
     [ "$INSTALL_AUDIO" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} Audio (STT/TTS)" >&2 || echo -e "    ${DIM}○ Audio (STT/TTS)${NC}" >&2
+    echo -e "  ${BOLD}Backend${NC}   ${DIM}$gpu_variant${NC}" >&2
     echo "" >&2
     
     if [ "$is_interactive" = "yes" ]; then
