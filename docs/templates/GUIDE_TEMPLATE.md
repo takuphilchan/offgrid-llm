@@ -83,7 +83,7 @@ offgrid status --check feature
 
 **Success looks like:**
 ```
-✓ Feature is working correctly
+[OK] Feature is working correctly
 ```
 
 ## Common Variations

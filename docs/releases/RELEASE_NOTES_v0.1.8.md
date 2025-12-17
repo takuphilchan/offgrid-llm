@@ -23,7 +23,7 @@ This release brings comprehensive vision model support with automatic projector 
 - **Accurate File Sizes**: All GGUF listings now show real file sizes instead of estimates
 - **Better Error Messages**: Vision-specific errors (`missing_mmproj`) now surface through the API with actionable guidance
 
-#### 🖼️ UI/CLI Parity
+####  UI/CLI Parity
 - **Multi-Image Upload**: Desktop and web UIs support dragging/selecting multiple images per message
 - **Capability Detection**: Automatic check for vision support—image controls only appear for compatible models
 - **Structured Error Display**: When projectors are missing, the UI explains what's needed and suggests next steps

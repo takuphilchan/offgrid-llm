@@ -73,9 +73,9 @@ offgrid help          # Command help
 - **Structure**: Clear hierarchy with consistent spacing
 - **Brutalist**: Minimal, functional, industrial aesthetic
 
-### 🛡️ Error Handling
+###  Error Handling
 Every command validates inputs and provides:
-- ✗ Clear error explanation
+- [X] Clear error explanation
 -  Available options when applicable
 -  Helpful tips and next steps
 -  Suggestions for fix
@@ -153,7 +153,7 @@ Commands: 'exit' to quit, 'clear' to reset conversation
 
 **Error (Model Not Found):**
 ```
-✗ Model not found: nonexistent-model
+[X] Model not found: nonexistent-model
 
 Available models:
   • tinyllama-1.1b-chat.Q4_K_M
@@ -248,7 +248,7 @@ Remove an installed model with confirmation.
 
 **Interactive:**
 ```
-🗑️  Remove Model
+  Remove Model
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Model:  tinyllama-1.1b-chat.Q4_K_M
@@ -300,7 +300,7 @@ Importing models...
 
 **Error (Path Not Found):**
 ```
-✗ Path not found: /media/unknown
+[X] Path not found: /media/unknown
 
 Common USB/SD mount points:
   • Linux:   /media/<username>/<device>
@@ -449,7 +449,7 @@ Examples
 ### Model Not Found
 All model-related commands validate existence:
 ```
-✗ Model not found: fake-model
+[X] Model not found: fake-model
 
 Available models:
   • tinyllama-1.1b-chat.Q4_K_M
@@ -474,7 +474,7 @@ Tip: Use 'offgrid list' to see available models
 ### Connection Errors
 Server connectivity issues are handled gracefully:
 ```
-✗ Cannot connect to inference server
+[X] Cannot connect to inference server
 
 Make sure:
   • Server is running: offgrid serve
@@ -487,7 +487,7 @@ Check server status: curl http://localhost:11611/health
 ### HuggingFace Errors
 Network and API issues show helpful guidance:
 ```
-✗ Failed to fetch model info from HuggingFace
+[X] Failed to fetch model info from HuggingFace
 
 Possible causes:
   • Network connectivity issues
@@ -548,16 +548,16 @@ curl http://localhost:11611/v1/chat/completions \
 -  Launch/Start
 - [Lightning] Speed/Performance
 - [OK] Success
-- ✗ Error
+- [X] Error
 - [Package] Package/Model
 - ⏬ Download
 -  Search
-- 🗑️ Delete
+-  Delete
 -  Catalog
 - ⏳ In Progress
-- ️ Warning
-- ❤️ Likes
-- 📅 Date
+-  Warning
+-  Likes
+-  Date
 
 ### Box Drawing
 ```

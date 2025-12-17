@@ -37,7 +37,7 @@ offgrid compare <model1> <model2> [model3...] [OPTIONS]
 
 The comparison displays a table with:
 
-- **★** - Star symbol marks the fastest model
+- **[*]** - Star symbol marks the fastest model
 - **Speed** - Average tokens per second
 - **Latency** - Average response time
 - **Range** - Min-max tokens/sec across iterations
@@ -57,25 +57,25 @@ Results are sorted by average speed (fastest first).
 │  Comparing 2 models with 3 iterations each
 
 ├─ Testing: tinyllama-1.1b-chat-v1.0.Q4_K_M
-│  [1/3] ✓ 45.2 tok/s
-│  [2/3] ✓ 47.1 tok/s
-│  [3/3] ✓ 46.8 tok/s
+│  [1/3] [OK] 45.2 tok/s
+│  [2/3] [OK] 47.1 tok/s
+│  [3/3] [OK] 46.8 tok/s
 │  Average: 46.4 tok/s
 │
 ├─ Testing: Llama-3.2-3B-Instruct-Q4_K_M
-│  [1/3] ✓ 28.3 tok/s
-│  [2/3] ✓ 29.1 tok/s
-│  [3/3] ✓ 28.7 tok/s
+│  [1/3] [OK] 28.3 tok/s
+│  [2/3] [OK] 29.1 tok/s
+│  [3/3] [OK] 28.7 tok/s
 │  Average: 28.7 tok/s
 │
 └─ Comparison Results
 
    Model                                Speed       Latency       Range      Size
    ──────────────────────────────────────────────────────────────────────────────
-   ★ tinyllama-1.1b-chat-v1.0.Q4_K_M      46.4 t/s      2.15s    45- 47  637.8 MB Q4_K_M
+   [*] tinyllama-1.1b-chat-v1.0.Q4_K_M      46.4 t/s      2.15s    45- 47  637.8 MB Q4_K_M
      Llama-3.2-3B-Instruct-Q4_K_M         28.7 t/s      3.48s    28- 29  1.9 GB Q4_K_M
 
-   ★ = Fastest model
+   [*] = Fastest model
 ```
 
 ## Use Cases

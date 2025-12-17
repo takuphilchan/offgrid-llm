@@ -11,7 +11,7 @@ This release focuses on refining the user interface and improving the stability 
 ## Highlights
 
 - **Unified UI Design**: Consistent "fluffy" aesthetic across Web and Desktop.
-- 🌊 **Smoother Streaming**: New rendering engine eliminates jitter during generation.
+-  **Smoother Streaming**: New rendering engine eliminates jitter during generation.
 - **Bug Fixes**: Resolved markdown parsing errors and theme inconsistencies.
 
 ---

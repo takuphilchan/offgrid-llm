@@ -148,7 +148,7 @@ Use smaller quantizations for faster loading:
 
 | Quantization | Model Size | Load Time | Quality |
 |-------------|-----------|-----------|---------|
-| Q4_K_M | ~2.5 GB | 1-2 sec | [Star][Star][Star][Star]☆ (Recommended) |
+| Q4_K_M | ~2.5 GB | 1-2 sec | [Star][Star][Star][Star][ ] (Recommended) |
 | Q5_K_M | ~3.0 GB | 2-3 sec | [Star][Star][Star][Star][Star] |
 | Q8_0 | ~5.0 GB | 4-6 sec | [Star][Star][Star][Star][Star] |
 | F16 | ~7.0 GB | 6-10 sec | [Star][Star][Star][Star][Star] |

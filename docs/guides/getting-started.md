@@ -341,4 +341,4 @@ Install the native desktop application:
 
 ---
 
-**Happy chatting! 🎉**
+**Happy chatting! **

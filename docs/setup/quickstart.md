@@ -10,9 +10,9 @@ Get OffGrid LLM running in under 5 minutes.
 
 Perfect for:
 -  Privacy-conscious users
-- 🏔️ Remote/offline environments
-- 🏢 Air-gapped enterprise systems
-- 🎓 Educational institutions
+-  Remote/offline environments
+-  Air-gapped enterprise systems
+-  Educational institutions
 -  Local development
 
 **Features:**
@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 
 ---
 
-### 🐳 Option 2: Docker
+###  Option 2: Docker
 
 **Best for:** Isolated environment, production deployment
 
@@ -80,7 +80,7 @@ irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/d
 
 ---
 
-### ⌨️ Option 4: CLI Only (Minimal)
+###  Option 4: CLI Only (Minimal)
 
 **Best for:** Servers, headless systems, developers
 ```bash
@@ -342,7 +342,7 @@ export OFFGRID_PORT=8080
 
 ### Learn More
 -  [Full Documentation](../README.md)
-- 🐳 [Docker Deployment](docker.md)
+-  [Docker Deployment](docker.md)
 -  [API Reference](../reference/api.md)
 -  [Performance Tuning](../advanced/performance.md)
 

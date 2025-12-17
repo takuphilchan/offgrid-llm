@@ -48,12 +48,12 @@ offgrid search --sort modified --limit 20
 Found 15 models:
 
 1. TheBloke/Llama-2-7B-Chat-GGUF
-   ↓ 2.5M downloads  ❤ 342 likes  │  Recommended: Q4_K_M (3.8 GB)
+   downloads 2.5M downloads  likes 342 likes  │  Recommended: Q4_K_M (3.8 GB)
    Available: Q4_K_M (3.8GB), Q5_K_M (4.6GB), Q6_K (5.5GB), Q8_0 (7.2GB), F16 (13.5GB)
    Download: offgrid download-hf TheBloke/Llama-2-7B-Chat-GGUF --file llama-2-7b-chat.Q4_K_M.gguf
 
 2. TheBloke/Mistral-7B-Instruct-v0.2-GGUF
-   ↓ 1.8M downloads  ❤ 218 likes  │  Recommended: Q4_K_M (4.1 GB)
+   downloads 1.8M downloads  likes 218 likes  │  Recommended: Q4_K_M (4.1 GB)
    ...
 ```
 

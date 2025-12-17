@@ -109,7 +109,7 @@ client = offgrid.Client()
 
 > **Danger:** Critical warning
 
-> ℹ️ **Note:** Additional information
+>  **Note:** Additional information
 ```
 
 ---

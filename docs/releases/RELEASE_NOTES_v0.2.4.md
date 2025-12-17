@@ -2,7 +2,7 @@
 
 **Release Date:** December 9, 2025
 
-## 🎙️ Audio: Complete Voice Experience
+##  Audio: Complete Voice Experience
 
 This release delivers a **complete offline voice assistant** with multi-language support, speech recognition, text-to-speech, and a redesigned Audio UI.
 
@@ -10,7 +10,7 @@ This release delivers a **complete offline voice assistant** with multi-language
 
 ## Highlights
 
-- 🌍 **18+ Languages** for speech recognition
+-  **18+ Languages** for speech recognition
 - **Voice Assistant** with push-to-talk conversation
 - **Downloadable Model Library** for Whisper & Piper
 - **Redesigned Audio Tab** with sub-tabs for better organization
