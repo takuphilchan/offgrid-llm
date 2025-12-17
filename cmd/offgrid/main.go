@@ -514,17 +514,17 @@ func startLlamaServerInBackground(modelPath string) error {
 	}
 
 	// Build optimized command line
-	// -fa: Flash attention for faster inference
 	// --cont-batching: Better throughput
 	// --cache-type-k/v q8_0: Quantized KV cache saves memory with minimal quality loss
+	// Note: Flash attention is auto-enabled by default in newer llama.cpp
 	var cmdStr string
 	if res != nil && res.AvailableRAM < 8000 {
 		// Low RAM: use mmap (won't crash, but slower first token)
-		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d -fa --cont-batching --cache-type-k q8_0 --cache-type-v q8_0",
+		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d --cont-batching --cache-type-k q8_0 --cache-type-v q8_0",
 			llamaServerPath, modelPath, port, threads, contextSize, batchSize)
 	} else {
 		// Sufficient RAM: load fully into memory for speed
-		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d --no-mmap --mlock -fa --cont-batching --cache-type-k q8_0 --cache-type-v q8_0",
+		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d --no-mmap --mlock --cont-batching --cache-type-k q8_0 --cache-type-v q8_0",
 			llamaServerPath, modelPath, port, threads, contextSize, batchSize)
 	}
 
@@ -862,18 +862,17 @@ func reloadLlamaServerWithModel(modelPath string) error {
 	// -t: Thread count for CPU inference
 	// -c: Context window size
 	// -b: Batch size (lower = faster first token)
-	// -fa: Flash attention (faster inference, less memory)
 	// --cont-batching: Better throughput for concurrent requests
 	// --cache-type-k/v q8_0: Use q8 for KV cache (good balance of speed/quality)
-	// Note: Removed --no-mmap and --mlock for low-RAM systems (mmap is better for <8GB RAM)
+	// Note: Flash attention is auto-enabled by default in newer llama.cpp
 	var cmdStr string
 	if res != nil && res.AvailableRAM < 8000 {
 		// Low RAM mode: use mmap (slower first token, but won't OOM)
-		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d -fa --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 > /dev/null 2>&1 &",
+		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 > /dev/null 2>&1 &",
 			modelPath, llamaPort, threads, contextSize, batchSize)
 	} else {
 		// High RAM mode: load model fully into RAM (faster inference)
-		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d --no-mmap --mlock -fa --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 > /dev/null 2>&1 &",
+		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d --no-mmap --mlock --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 > /dev/null 2>&1 &",
 			modelPath, llamaPort, threads, contextSize, batchSize)
 	}
 
@@ -3820,9 +3819,9 @@ func handleRun(args []string) {
 		fmt.Println()
 		fmt.Printf("%sStarting llama-server%s\n", brandPrimary+colorBold, colorReset)
 		fmt.Printf("%sModel:%s %s\n", colorDim, colorReset, filepath.Base(model.Path))
-		fmt.Printf("%sFlags:%s --no-mmap --mlock -fa (optimized)\n", colorDim, colorReset)
+		fmt.Printf("%sFlags:%s --no-mmap --mlock --cont-batching (optimized)\n", colorDim, colorReset)
 		fmt.Println()
-		fmt.Printf("%sℹ Keep server running for instant responses:%s\n", colorDim, colorReset)
+		fmt.Printf("%sKeep server running for instant responses:%s\n", colorDim, colorReset)
 		fmt.Printf("  %ssudo systemctl enable --now llama-server%s\n", brandSecondary, colorReset)
 		fmt.Println()
 		if err := startLlamaServerInBackground(model.Path); err != nil {

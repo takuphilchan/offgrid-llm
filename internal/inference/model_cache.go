@@ -157,7 +157,6 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		"--no-warmup",                      // Skip warmup to save memory/time on load
 		"-b", fmt.Sprintf("%d", batchSize), // Adaptive batch size
 		"-nr",                    // Disable weight repacking to save memory
-		"-fa",                    // Flash attention - faster inference, less VRAM
 		"--cont-batching",        // Continuous batching for better throughput
 		"--cache-type-k", "q8_0", // Quantized KV cache - reduces memory ~50%
 		"--cache-type-v", "q8_0", // with minimal quality loss
