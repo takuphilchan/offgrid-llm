@@ -66,15 +66,15 @@ type GenerationOptions struct {
 	StopSequences    []string
 }
 
-// DefaultLoadOptions returns default load options
+// DefaultLoadOptions returns default load options optimized for low-end hardware
 func DefaultLoadOptions() LoadOptions {
 	return LoadOptions{
 		ContextSize:  4096,
-		NumGPULayers: 0, // CPU only by default
-		NumThreads:   4,
-		BatchSize:    512,
-		UseMlock:     false,
-		UseMmap:      true,
+		NumGPULayers: 0,     // CPU only by default
+		NumThreads:   0,     // 0 = auto-detect based on CPU cores
+		BatchSize:    256,   // Lower batch = faster time-to-first-token
+		UseMlock:     false, // Don't lock RAM by default (safer for low RAM systems)
+		UseMmap:      true,  // Memory-map for low RAM systems
 	}
 }
 

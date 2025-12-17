@@ -45,6 +45,19 @@ func (s *Server) handleP2PDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate path first (fail fast on bad input)
+	// Only allow requesting a plain filename from peers (no absolute paths / traversal)
+	requestedName := filepath.Base(req.ModelPath)
+	if requestedName == "." || requestedName == string(filepath.Separator) || requestedName == "" {
+		writeError(w, "Invalid model_path", http.StatusBadRequest)
+		return
+	}
+	if requestedName != req.ModelPath {
+		// Reject rather than silently changing semantics
+		writeError(w, "model_path must be a filename (no directories)", http.StatusBadRequest)
+		return
+	}
+
 	// Find peer
 	var targetPeer *p2p.Peer
 	for _, p := range s.p2pDiscovery.GetPeers() {

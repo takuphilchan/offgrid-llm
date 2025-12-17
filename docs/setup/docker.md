@@ -532,9 +532,9 @@ services:
 ## Next Steps
 
 - [API Documentation](API.md)
-- [Model Setup Guide](docs/guides/MODEL_SETUP.md)
-- [Performance Tuning](docs/advanced/PERFORMANCE.md)
-- [Production Deployment](docs/advanced/DEPLOYMENT.md)
+- [Model Setup Guide](../guides/models.md)
+- [Performance Tuning](../advanced/performance.md)
+- [Production Deployment](../advanced/deployment.md)
 
 ---
 

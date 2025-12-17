@@ -104,11 +104,18 @@ func (tm *TransferManager) handleConnection(conn net.Conn) {
 		return
 	}
 
-	// Validate and serve file
-	fullPath := filePath
-	if !filepath.IsAbs(filePath) {
-		fullPath = filepath.Join(tm.downloadDir, filePath)
+	// Validate and serve file: only allow a plain filename (no absolute paths, no traversal)
+	clean := strings.TrimSpace(filePath)
+	if clean == "" {
+		conn.Write([]byte("ERROR Empty path\n"))
+		return
 	}
+	if filepath.IsAbs(clean) || strings.Contains(clean, "..") || strings.ContainsAny(clean, "\\/") {
+		conn.Write([]byte("ERROR Invalid path\n"))
+		return
+	}
+
+	fullPath := filepath.Join(tm.downloadDir, clean)
 
 	file, err := os.Open(fullPath)
 	if err != nil {
@@ -151,8 +158,12 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 	}
 	defer conn.Close()
 
-	// Send request
-	request := fmt.Sprintf("GET %s\n", modelPath)
+	// Send request (only request by filename)
+	requestName := filepath.Base(strings.TrimSpace(modelPath))
+	if requestName == "." || requestName == "" {
+		return fmt.Errorf("invalid model path")
+	}
+	request := fmt.Sprintf("GET %s\n", requestName)
 	if _, err := conn.Write([]byte(request)); err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -175,7 +186,7 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 	}
 
 	// Create destination file
-	filename := filepath.Base(modelPath)
+	filename := requestName
 	destPath := filepath.Join(tm.downloadDir, filename)
 	tmpPath := destPath + ".tmp"
 

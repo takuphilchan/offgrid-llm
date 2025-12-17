@@ -13,7 +13,7 @@ import (
 
 // This demo shows the new core features added to OffGrid LLM
 func main() {
-	fmt.Println("=== OffGrid LLM - Core Features Demo ===\n")
+	fmt.Println("=== OffGrid LLM - Core Features Demo ===")
 
 	// 1. GPU Detection & Monitoring
 	fmt.Println("1. GPU Detection & Monitoring")

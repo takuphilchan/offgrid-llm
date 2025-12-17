@@ -58,6 +58,19 @@ func DefaultCatalog() *ModelCatalog {
 				Tags:        []string{"chat", "lightweight", "beginner"},
 				Variants: []ModelVariant{
 					{
+						Quantization: "Q2_K",
+						Size:         420000000, // ~0.4GB
+						SHA256:       "",
+						Quality:      "medium",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf",
+								Priority: 2,
+							},
+						},
+					},
+					{
 						Quantization: "Q4_K_M",
 						Size:         668788096, // ~638MB
 						SHA256:       "",
@@ -66,6 +79,93 @@ func DefaultCatalog() *ModelCatalog {
 							{
 								Type:     "huggingface",
 								URL:      "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			// Legacy / compatibility models referenced by older docs and tests
+			{
+				ID:          "phi-2",
+				Name:        "Phi-2",
+				Description: "Microsoft's efficient 2.7B model",
+				Parameters:  "2.7B",
+				License:     "MIT",
+				Provider:    "Microsoft",
+				Type:        "llm",
+				MinRAM:      4,
+				Recommended: true,
+				Tags:        []string{"instruct", "reasoning", "efficient"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         1600000000, // ~1.6GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "mistral-7b-instruct",
+				Name:        "Mistral 7B Instruct",
+				Description: "Mistral instruct model (compat ID)",
+				Parameters:  "7B",
+				License:     "Apache 2.0",
+				Provider:    "Mistral AI",
+				Type:        "llm",
+				MinRAM:      8,
+				Recommended: true,
+				Tags:        []string{"instruct", "code", "general"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         4100000000, // ~4.1GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+								Priority: 2,
+							},
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3.Q4_K_M.gguf",
+								Priority: 1,
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:          "llama-2-7b-chat",
+				Name:        "Llama 2 7B Chat",
+				Description: "Meta's popular chat model (compat ID)",
+				Parameters:  "7B",
+				License:     "Llama 2 Community",
+				Provider:    "Meta",
+				Type:        "llm",
+				MinRAM:      8,
+				Recommended: true,
+				Tags:        []string{"chat", "assistant", "legacy"},
+				Variants: []ModelVariant{
+					{
+						Quantization: "Q4_K_M",
+						Size:         3800000000, // ~3.8GB
+						SHA256:       "",
+						Quality:      "high",
+						Sources: []ModelSource{
+							{
+								Type:     "huggingface",
+								URL:      "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
 								Priority: 1,
 							},
 						},

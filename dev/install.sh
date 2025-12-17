@@ -1096,8 +1096,15 @@ else
 fi
 
 # Execute llama-server with the selected model
+# Performance flags:
+#   -c 2048: Context size (adjust based on RAM - lower uses less memory)
+#   -b 256: Batch size (lower = faster time-to-first-token)
+#   -fa: Flash attention (faster inference, less memory)
+#   --cont-batching: Better throughput for concurrent requests
+#   --cache-type-k/v q8_0: Quantized KV cache saves ~50% memory
+#   --cache-prompt: Reuses prompt processing across requests (big speedup for chat)
 echo "[$(date)] Executing llama-server..."
-exec /usr/local/bin/llama-server -m "$MODEL_PATH" --port "$LLAMA_PORT" --host 127.0.0.1 -c 2048 EXTRA_ARGS_PLACEHOLDER
+exec /usr/local/bin/llama-server -m "$MODEL_PATH" --port "$LLAMA_PORT" --host 127.0.0.1 -c 2048 -b 256 -fa --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-prompt EXTRA_ARGS_PLACEHOLDER
 START_SCRIPT_EOF
     
     # Replace EXTRA_ARGS_PLACEHOLDER with actual GPU args

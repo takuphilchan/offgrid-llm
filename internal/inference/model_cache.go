@@ -30,6 +30,8 @@ type ModelCache struct {
 	usedPorts    map[int]bool              // track which ports are in use
 	maxInstances int
 	gpuLayers    int // Number of GPU layers to offload
+	contextSize  int // Context window size (0 = auto-detect based on RAM)
+	batchSize    int // Batch size for inference (lower = faster first token)
 	mu           sync.RWMutex
 	basePort     int
 	binManager   *BinaryManager
@@ -50,9 +52,28 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		usedPorts:    make(map[int]bool),
 		maxInstances: maxInstances,
 		gpuLayers:    gpuLayers,
+		contextSize:  0,   // 0 = auto-detect based on available RAM
+		batchSize:    256, // Lower batch = faster time-to-first-token
 		basePort:     42382,
 		binManager:   NewBinaryManager(binDir),
 	}
+}
+
+// SetContextSize sets the context window size (0 = auto-detect)
+func (mc *ModelCache) SetContextSize(size int) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.contextSize = size
+}
+
+// SetBatchSize sets the batch size for inference
+func (mc *ModelCache) SetBatchSize(size int) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if size < 1 {
+		size = 256
+	}
+	mc.batchSize = size
 }
 
 // GetOrLoad returns an existing model instance or loads a new one
@@ -112,15 +133,35 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	// Start llama-server with this model
 	log.Printf("Loading model %s on port %d (cache: %d/%d)", modelID, port, len(mc.instances)+1, mc.maxInstances)
 
+	// Determine context size - use configured value or auto-detect
+	contextSize := mc.contextSize
+	if contextSize <= 0 {
+		// Auto-detect based on available RAM
+		// Default to 4096, but could be optimized further with runtime detection
+		contextSize = 4096
+	}
+
+	// Use configured batch size
+	batchSize := mc.batchSize
+	if batchSize <= 0 {
+		batchSize = 256
+	}
+
+	// Build optimized args for inference performance
 	args := []string{
 		"-m", modelPath,
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
-		"-c", "8192", // Larger context for agent tasks with many tools
-		"-np", "1", // Limit to 1 parallel sequence to improve stability
-		"--no-warmup", // Disable warmup to save memory/time
-		"-b", "256",   // Reduced batch size
-		"-nr", // Disable weight repacking to save memory
+		"-c", fmt.Sprintf("%d", contextSize), // Adaptive context size
+		"-np", "1", // Limit to 1 parallel sequence for stability
+		"--no-warmup",                      // Skip warmup to save memory/time on load
+		"-b", fmt.Sprintf("%d", batchSize), // Adaptive batch size
+		"-nr",                    // Disable weight repacking to save memory
+		"-fa",                    // Flash attention - faster inference, less VRAM
+		"--cont-batching",        // Continuous batching for better throughput
+		"--cache-type-k", "q8_0", // Quantized KV cache - reduces memory ~50%
+		"--cache-type-v", "q8_0", // with minimal quality loss
+		"--cache-prompt", // Reuse prompt processing across requests (big speedup for chat)
 	}
 
 	if projectorPath != "" {

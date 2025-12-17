@@ -39,6 +39,10 @@ type ImportProgress struct {
 	Message    string // Additional status message
 }
 
+type manifestIndex struct {
+	byFileName map[string]string
+}
+
 // ScanUSBDrive scans a USB drive for GGUF model files
 func (u *USBImporter) ScanUSBDrive(usbPath string) ([]string, error) {
 	if _, err := os.Stat(usbPath); os.IsNotExist(err) {
@@ -74,7 +78,7 @@ func (u *USBImporter) ScanUSBDrive(usbPath string) ([]string, error) {
 }
 
 // ImportModel imports a single model file from USB to models directory
-func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgress)) error {
+func (u *USBImporter) ImportModel(sourcePath string, expectedSHA256 string, onProgress func(ImportProgress)) error {
 	// Get file info
 	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
@@ -97,6 +101,10 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 		sourceHash, err := u.calculateFileHash(sourcePath)
 		if err != nil {
 			return fmt.Errorf("cannot calculate source hash: %w", err)
+		}
+
+		if expectedSHA256 != "" && sourceHash != expectedSHA256 {
+			return fmt.Errorf("manifest verification failed for %s: expected %s, got %s", fileName, expectedSHA256, sourceHash)
 		}
 
 		destHash, err := u.calculateFileHash(destPath)
@@ -186,6 +194,10 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 		return fmt.Errorf("cannot verify source: %w", err)
 	}
 
+	if expectedSHA256 != "" && sourceHash != expectedSHA256 {
+		return fmt.Errorf("manifest verification failed for %s: expected %s, got %s", fileName, expectedSHA256, sourceHash)
+	}
+
 	destHash, err := u.calculateFileHash(tempPath)
 	if err != nil {
 		return fmt.Errorf("cannot verify destination: %w", err)
@@ -242,9 +254,18 @@ func (u *USBImporter) ImportModel(sourcePath string, onProgress func(ImportProgr
 func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress)) (int, error) {
 	// Try to load manifest first
 	manifest, manifestErr := u.LoadManifest(usbPath)
+	var idx *manifestIndex
 	if manifestErr == nil && manifest != nil {
 		fmt.Printf("Found package manifest: %d models, %.2f GB total\n",
 			manifest.TotalModels, manifest.TotalSizeGB)
+		idx = &manifestIndex{byFileName: make(map[string]string, len(manifest.Models))}
+		for _, entry := range manifest.Models {
+			name := strings.ToLower(strings.TrimSpace(entry.FileName))
+			sha := strings.ToLower(strings.TrimSpace(entry.SHA256))
+			if name != "" && sha != "" {
+				idx.byFileName[name] = sha
+			}
+		}
 	}
 
 	modelFiles, err := u.ScanUSBDrive(usbPath)
@@ -273,9 +294,30 @@ func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress))
 
 	imported := 0
 	skipped := 0
+	manifestSkipped := 0
 
 	for _, modelFile := range modelFiles {
-		err := u.ImportModel(modelFile, onProgress)
+		fileName := strings.ToLower(filepath.Base(modelFile))
+		expected := ""
+		if idx != nil {
+			var ok bool
+			expected, ok = idx.byFileName[fileName]
+			if !ok {
+				manifestSkipped++
+				if onProgress != nil {
+					onProgress(ImportProgress{
+						FilePath: modelFile,
+						FileName: filepath.Base(modelFile),
+						Status:   "skipped",
+						Percent:  100,
+						Message:  "Skipped (not listed in manifest)",
+					})
+				}
+				continue
+			}
+		}
+
+		err := u.ImportModel(modelFile, expected, onProgress)
 		if err != nil {
 			// Check if it was skipped (already exists)
 			if strings.Contains(err.Error(), "already exists") {
@@ -290,6 +332,9 @@ func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress))
 
 	if skipped > 0 {
 		fmt.Printf("Skipped %d model(s) (already imported)\n", skipped)
+	}
+	if manifestSkipped > 0 {
+		fmt.Printf("Skipped %d model(s) (not listed in manifest)\n", manifestSkipped)
 	}
 
 	return imported, nil

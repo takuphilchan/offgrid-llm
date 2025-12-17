@@ -267,19 +267,25 @@ func (s *SQLiteStore) Stats() map[string]interface{} {
 	}
 }
 
-// Helper for cosine similarity
+// cosineSimilarity calculates cosine similarity between two embedding vectors
+// Optimized: uses float64 accumulator to avoid precision loss with many dimensions
 func cosineSimilarity(a, b []float32) float32 {
-	if len(a) != len(b) {
+	n := len(a)
+	if n != len(b) || n == 0 {
 		return 0
 	}
-	var dot, normA, normB float32
-	for i := 0; i < len(a); i++ {
-		dot += a[i] * b[i]
-		normA += a[i] * a[i]
-		normB += b[i] * b[i]
+
+	// Use float64 for accumulation to avoid precision issues with high-dimensional vectors
+	var dot, normA, normB float64
+	for i := 0; i < n; i++ {
+		ai, bi := float64(a[i]), float64(b[i])
+		dot += ai * bi
+		normA += ai * ai
+		normB += bi * bi
 	}
+
 	if normA == 0 || normB == 0 {
 		return 0
 	}
-	return dot / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
+	return float32(dot / (math.Sqrt(normA) * math.Sqrt(normB)))
 }

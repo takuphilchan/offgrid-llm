@@ -396,6 +396,6 @@ Gated Penalty = score * 0.5
 
 ## See Also
 
-- [API Documentation](API.md)
-- [Model Setup Guide](MODEL_SETUP.md)
-- [Deployment Guide](DEPLOYMENT.md)
+- [API Documentation](../reference/api.md)
+- [Model Setup Guide](models.md)
+- [Deployment Guide](../advanced/deployment.md)

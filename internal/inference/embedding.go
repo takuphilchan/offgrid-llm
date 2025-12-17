@@ -38,14 +38,14 @@ type EmbeddingOptions struct {
 	PoolingMethod string // "mean", "cls", or "last" token pooling
 }
 
-// DefaultEmbeddingOptions returns sensible defaults
+// DefaultEmbeddingOptions returns sensible defaults optimized for low-end hardware
 func DefaultEmbeddingOptions() EmbeddingOptions {
 	return EmbeddingOptions{
-		NumThreads:    4,
-		NumGPULayers:  0, // CPU by default
-		UseMmap:       true,
-		UseMlock:      false,
-		ContextSize:   512,
+		NumThreads:    0,      // 0 = auto-detect based on CPU cores
+		NumGPULayers:  0,      // CPU by default
+		UseMmap:       true,   // Memory-map for lower RAM usage
+		UseMlock:      false,  // Don't lock RAM (safer for low-end systems)
+		ContextSize:   512,    // Embeddings don't need large context
 		NormalizeL2:   true,   // Standard for embeddings
 		PoolingMethod: "mean", // Mean pooling is most common
 	}

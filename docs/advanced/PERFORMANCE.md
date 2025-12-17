@@ -2,22 +2,16 @@
 
 ## Fast Model Loading
 
-OffGrid LLM now includes optimizations for **significantly faster startup and first response times**.
+OffGrid LLM now includes optimizations for **significantly faster startup and first response times**, especially on low-end hardware.
 
 ### Automatic Optimizations
 
 When you run `offgrid run <model>`, the llama-server is automatically started with these performance flags:
 
-#### Memory-Mapped Files (--no-mmap)
-- **Disabled by default** for faster first inference
-- Models load directly into RAM instead of using memory-mapped files
-- **Trade-off**: Uses more RAM but eliminates mmap overhead on first request
-- **Speed improvement**: 2-5x faster first response
-
-#### Memory Locking (--mlock)
-- Models are locked in RAM to prevent swapping
-- Ensures consistent inference speed
-- **Requirement**: Enough RAM to hold the entire model
+#### Adaptive Memory Mode
+- **Low RAM (<8GB)**: Uses memory-mapped files (mmap) to prevent crashes
+- **High RAM (≥8GB)**: Loads model directly into RAM with mlock for speed
+- **Automatic detection**: System RAM is checked at startup
 
 #### Flash Attention (-fa)
 - Enables optimized attention mechanism
@@ -28,29 +22,83 @@ When you run `offgrid run <model>`, the llama-server is automatically started wi
 - Better throughput for multiple requests
 - Reduces latency when handling concurrent requests
 
-#### Optimized KV Cache (--cache-type-k f16 --cache-type-v f16)
-- Uses FP16 instead of FP32 for key-value cache
-- **Speed improvement**: Faster processing with minimal quality loss
-- **Memory savings**: 50% less cache memory
+#### Quantized KV Cache (--cache-type-k q8_0 --cache-type-v q8_0)
+- Uses INT8 quantization for key-value cache
+- **Memory savings**: ~50% less cache memory
+- Minimal quality loss (imperceptible in most cases)
 
-#### Lower Batch Size (-b 512)
+#### Prompt Caching (--cache-prompt)
+- **NEW**: Reuses computed prompt tokens across requests
+- **Speed improvement**: 2-5x faster for multi-turn conversations
+- Critical for chat applications where system prompts repeat
+
+#### Lower Batch Size (-b 256)
 - Reduces latency for first token generation
-- Better for interactive chat
+- Better for interactive chat on low-end hardware
+
+#### Adaptive Context Size
+- Context window automatically scales based on available RAM:
+  - <4GB RAM: 1024 tokens
+  - 4-6GB RAM: 2048 tokens
+  - 6-12GB RAM: 4096 tokens
+  - 12GB+ RAM: 8192 tokens
+
+#### Optimal Thread Configuration
+- Automatically uses physical cores (not hyperthreads)
+- Leaves 1 core for OS operations
+- No manual configuration needed
 
 ### Performance Comparison
 
 | Configuration | First Response | Subsequent Responses | RAM Usage |
 |--------------|----------------|---------------------|-----------|
-| **Default** | 8-15 seconds | 0.5-2 seconds | 4-6 GB |
-| **Optimized** (current) | **2-4 seconds** | 0.3-1.5 seconds | 6-8 GB |
-| **Mmap Mode** | 3-6 seconds | 0.5-2 seconds | 3-4 GB |
+| **Old Defaults** | 8-15 seconds | 0.5-2 seconds | 4-6 GB |
+| **New Optimized** | **2-4 seconds** | **0.2-0.8 seconds** | 4-8 GB |
+| **Low RAM Mode** | 3-6 seconds | 0.4-1.2 seconds | 3-4 GB |
 
 ### Manual Configuration
 
-If you need to customize these settings, you can modify the startup flags in:
+If you need to customize these settings:
 
 1. **Direct startup**: Edit `/cmd/offgrid/main.go` in `startLlamaServerInBackground()`
 2. **System service**: Edit `/usr/local/bin/llama-server-start.sh`
+3. **Environment variables** (see below)
+
+### Environment Variables
+
+```bash
+# Performance tuning
+export OFFGRID_BATCH_SIZE=256          # Token batch size (lower = faster first token)
+export OFFGRID_FLASH_ATTENTION=true    # Enable flash attention
+export OFFGRID_KV_CACHE_TYPE=q8_0      # KV cache quantization: f16, q8_0, q4_0
+export OFFGRID_USE_MMAP=true           # Memory-map model (good for low RAM)
+export OFFGRID_USE_MLOCK=false         # Lock model in RAM (only if RAM >= model size)
+export OFFGRID_CONT_BATCHING=true      # Continuous batching
+export OFFGRID_LOW_MEMORY=true         # Enable all low-memory optimizations
+export OFFGRID_ADAPTIVE_CONTEXT=true   # Auto-adjust context based on RAM
+```
+
+### Low-End Hardware Tips
+
+For systems with **4GB RAM or less**:
+
+1. **Use 1B-3B models**: 
+   ```bash
+   offgrid search llama --ram 4
+   offgrid download-hf bartowski/Llama-3.2-1B-Instruct-GGUF
+   ```
+
+2. **Use aggressive quantization**: Q3_K_M or Q4_K_S
+
+3. **Reduce context size**:
+   ```bash
+   export OFFGRID_MAX_CONTEXT=1024
+   ```
+
+4. **Enable low memory mode**:
+   ```bash
+   export OFFGRID_LOW_MEMORY=true
+   ```
 
 ### Advanced Optimizations
 

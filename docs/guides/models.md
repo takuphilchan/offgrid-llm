@@ -195,6 +195,6 @@ export OFFGRID_NUM_THREADS=4
 
 ## Next Steps
 
-- Read the [API Documentation](API.md)
+- Read the [API Documentation](../reference/api.md)
 - Learn about [P2P Model Sharing](P2P.md)
 - Configure [Resource Limits](CONFIGURATION.md)

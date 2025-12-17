@@ -307,10 +307,10 @@ sudo rm -rf /var/lib/offgrid
 
 ## Next Steps
 
-- [Download models](MODEL_SETUP.md)
-- [Learn CLI commands](CLI_REFERENCE.md)
-- [Use the API](API.md)
-- [Read feature guide](guides/FEATURES_GUIDE.md)
+- [Download models](../guides/models.md)
+- [Learn CLI commands](../reference/cli.md)
+- [Use the API](../reference/api.md)
+- [Read feature guide](../guides/features.md)
 
 ```
 
@@ -420,12 +420,12 @@ After installation:
 
 1. **Visit the Web UI:** http://localhost:11611/ui
 2. **Download models:** `offgrid download tinyllama`
-3. **Read the docs:** `docs/FEATURES_GUIDE.md`
-4. **Try the API:** `docs/API.md`
-5. **Configure systemd:** `docs/DEPLOYMENT.md`
+3. **Read the docs:** [Features Guide](../guides/features.md)
+4. **Try the API:** [API Reference](../reference/api.md)
+5. **Configure systemd:** [Deployment Guide](../advanced/deployment.md)
 
 ## Support
 
-- **Documentation:** [docs/](../docs/)
+- **Documentation:** [docs/](../README.md)
 - **Issues:** [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)

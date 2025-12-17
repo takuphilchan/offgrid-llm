@@ -1,277 +1,443 @@
-# Model Distribution & Offline Strategy
+# OffGrid LLM Architecture
 
-## The Challenge
+> Technical overview of the OffGrid LLM system design.
 
-OffGrid LLM is designed for **truly offline environments** where internet may be:
-- Completely unavailable (ships, remote clinics, air-gapped networks)
-- Intermittent (rural areas, disaster zones)
-- Expensive/metered (satellite connections)
+---
 
-Unlike Ollama (assumes internet for initial download), we need **multiple distribution paths**.
+## Table of Contents
 
-## Distribution Strategy
+- [System Overview](#system-overview)
+- [Component Architecture](#component-architecture)
+- [Request Flow](#request-flow)
+- [Key Subsystems](#key-subsystems)
+- [Data Flow](#data-flow)
+- [Configuration](#configuration)
+- [Extension Points](#extension-points)
 
-### Tier 1: Online Bootstrap (Internet Available)
+---
 
-For users with internet, provide easy downloads from existing sources:
+## System Overview
 
-```bash
-# Download from Hugging Face (TheBloke's quantized models)
-offgrid download llama-2-7b-chat --quantization Q4_K_M
+OffGrid LLM is a **locally-running AI inference server** that provides:
 
-# Under the hood: wget/curl from HuggingFace CDN
-# https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/
+- HTTP API for chat completions (OpenAI-compatible)
+- Web-based user interface
+- Voice input/output (Whisper STT, Piper TTS)
+- RAG/knowledge base capabilities
+- Multi-model management
+
+### Design Principles
+
+1. **Offline-First** - All core functionality works without internet
+2. **Privacy-Preserving** - Data never leaves the local machine
+3. **Resource-Aware** - Graceful degradation under load
+4. **Modular** - Components can be enabled/disabled
+5. **API-Compatible** - OpenAI API compatibility for easy migration
+
+---
+
+## Component Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              Clients                                     │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐       │
+│  │ Web UI  │  │ Python  │  │  cURL   │  │ Desktop │  │  Other  │       │
+│  │(Browser)│  │   SDK   │  │   CLI   │  │   App   │  │ Clients │       │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘       │
+└───────┼────────────┼────────────┼────────────┼────────────┼─────────────┘
+        │            │            │            │            │
+        └────────────┴────────────┴─────┬──────┴────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           HTTP Server (:11611)                           │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                        Middleware Stack                           │   │
+│  │   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐         │   │
+│  │   │ Logging │ → │  Auth   │ → │  CORS   │ → │  Rate   │         │   │
+│  │   │         │   │         │   │         │   │ Limit   │         │   │
+│  │   └─────────┘   └─────────┘   └─────────┘   └─────────┘         │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
+│  │   REST Router   │  │ WebSocket Hub   │  │  Static Files   │         │
+│  │ /api/v1/*       │  │ /api/v1/ws      │  │ /ui/*           │         │
+│  └────────┬────────┘  └────────┬────────┘  └─────────────────┘         │
+└───────────┼────────────────────┼────────────────────────────────────────┘
+            │                    │
+            ▼                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          Service Layer                                   │
+│                                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
+│  │    Inference    │  │      RAG        │  │     Agents      │         │
+│  │    Engine       │  │    Engine       │  │    Executor     │         │
+│  │  ┌───────────┐  │  │  ┌───────────┐  │  │  ┌───────────┐  │         │
+│  │  │ llama.cpp │  │  │  │ Vector DB │  │  │  │MCP Server │  │         │
+│  │  │ bindings  │  │  │  │ Embeddings│  │  │  │Tool Calls │  │         │
+│  │  └───────────┘  │  │  └───────────┘  │  │  └───────────┘  │         │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘         │
+│                                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
+│  │     Audio       │  │    Sessions     │  │     Models      │         │
+│  │    Service      │  │    Manager      │  │    Manager      │         │
+│  │  ┌───────────┐  │  │  ┌───────────┐  │  │  ┌───────────┐  │         │
+│  │  │  Whisper  │  │  │  │ Chat State│  │  │  │HuggingFace│  │         │
+│  │  │  Piper    │  │  │  │ Persistence│ │  │  │ Registry  │  │         │
+│  │  └───────────┘  │  │  └───────────┘  │  │  └───────────┘  │         │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘         │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Support Services                                  │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐    │
+│  │Watchdog│ │Metrics │ │ Audit  │ │ Cache  │ │ Config │ │Degrade │    │
+│  │        │ │        │ │        │ │        │ │        │ │        │    │
+│  │Health  │ │Stats   │ │Security│ │Response│ │Settings│ │Fallback│    │
+│  │Monitor │ │Tracking│ │Logging │ │Cache   │ │Export  │ │Handler │    │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          Storage Layer                                   │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐            │
+│  │   Model Files  │  │   Vector Store │  │   Config Files │            │
+│  │ ~/.offgrid-llm │  │   (embedded)   │  │    settings    │            │
+│  │    /models/    │  │                │  │                │            │
+│  └────────────────┘  └────────────────┘  └────────────────┘            │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Advantages:**
-- No hosting costs for us
-- Leverage existing infrastructure
-- Always up-to-date models
+---
 
-**Implementation:**
-- Simple wrapper around HuggingFace URLs
-- No need to host models ourselves
-- Built-in integrity checks (SHA256)
+## Request Flow
 
-### Tier 2: Peer-to-Peer Distribution (Local Network)
-
-**The core innovation:** Share models across local network
+### Chat Completion Request
 
 ```
-Ship Network Example:
-┌─────────────┐         ┌─────────────┐
-│  Bridge PC  │◄───────►│ Engine Room │
-│ (has models)│  LAN    │ (downloads) │
-└─────────────┘         └─────────────┘
-       ▲                       ▲
-       │      P2P Sync         │
-       └───────────────────────┘
+Client                 Server                    Inference
+  │                      │                          │
+  │ POST /chat/completions                          │
+  │ ─────────────────────►                          │
+  │                      │                          │
+  │                      │ Validate request         │
+  │                      │ Check auth               │
+  │                      │                          │
+  │                      │ Load model (if needed)   │
+  │                      │ ─────────────────────────►
+  │                      │                          │
+  │                      │ RAG lookup (if enabled)  │
+  │                      │ ◄─────────────────────── │
+  │                      │                          │
+  │                      │ Generate tokens          │
+  │                      │ ─────────────────────────►
+  │                      │                          │
+  │ SSE: token chunks    │ ◄───────────────────────│
+  │ ◄─────────────────── │         (streaming)     │
+  │ ...                  │                          │
+  │ SSE: [DONE]          │                          │
+  │ ◄─────────────────── │                          │
+  │                      │                          │
 ```
 
-**How it works:**
-1. One computer downloads models (while at port/internet)
-2. Other computers on ship discover peers via UDP broadcast
-3. Models transfer over local network (no internet needed)
+### WebSocket Streaming
 
-**Implementation Details:**
+```
+Client                 Server                    Inference
+  │                      │                          │
+  │ WS Connect           │                          │
+  │ ═════════════════════►                          │
+  │                      │                          │
+  │ {"type":"chat",...}  │                          │
+  │ ─────────────────────►                          │
+  │                      │                          │
+  │                      │ Process & generate       │
+  │                      │ ─────────────────────────►
+  │                      │                          │
+  │ {"type":"token",...} │                          │
+  │ ◄═════════════════════                          │
+  │ ...                  │                          │
+  │ {"type":"done",...}  │                          │
+  │ ◄═════════════════════                          │
+  │                      │                          │
+```
+
+---
+
+## Key Subsystems
+
+### 1. Inference Engine (`internal/inference`)
+
+The core LLM execution engine built on llama.cpp.
 
 ```go
-// Enhanced P2P discovery
-type ModelAnnouncement struct {
-    PeerID    string
-    Address   string
-    Models    []ModelInfo
-    Bandwidth int // Available transfer speed
+type Engine struct {
+    model       *llama.Model      // Loaded model
+    contextSize int               // Token context window
+    gpuLayers   int               // Layers offloaded to GPU
+    threads     int               // CPU threads
 }
 
-// Peer requests model
-func (p *P2P) RequestModel(modelID, peerID string) error {
-    // 1. Find peer with model
-    peer := p.FindPeerWithModel(modelID)
-    
-    // 2. Negotiate transfer (HTTP or raw TCP)
-    // 3. Stream model file with resume support
-    // 4. Verify integrity
-    // 5. Install to local registry
-}
+// Key methods
+func (e *Engine) Load(modelPath string) error
+func (e *Engine) Generate(ctx context.Context, prompt string, opts Options) (chan string, error)
+func (e *Engine) Unload() error
 ```
 
-### Tier 3: Physical Media Distribution (USB/SD Card)
+**Responsibilities:**
+- Model loading/unloading
+- Token generation with streaming
+- GPU/CPU resource management
+- Context window handling
 
-For **completely offline** deployment:
+### 2. RAG Engine (`internal/rag`)
 
-```bash
-# Prepare distribution package on internet-connected computer
-offgrid pack-usb /media/usb --models llama-2-7b,mistral-7b
+Retrieval-Augmented Generation for document context.
 
-# Result:
-# /media/usb/
-#   ├── offgrid-linux-amd64     (binary)
-#   ├── offgrid-windows.exe
-#   ├── models/
-#   │   ├── llama-2-7b.Q4_K_M.gguf
-#   │   └── mistral-7b.Q4_K_M.gguf
-#   └── install.sh
-
-# On offline machine:
-./install.sh
-# Automatically copies binary and models to correct locations
-```
-
-**Real-world scenario:**
-- Medical NGO downloads models at HQ
-- Copies to USB drives
-- Distributes to 50 rural clinics
-- Clinics never need internet
-
-### Tier 4: Sneakernet Updates
-
-**Monthly update workflow:**
-
-```bash
-# At HQ (with internet)
-offgrid create-update-pack --since 2024-10 --output october-update.tar.gz
-
-# Contains:
-# - New model versions
-# - Security patches
-# - Updated binary
-# - Changelog
-
-# Ship to field offices
-# Apply update offline
-offgrid apply-update october-update.tar.gz
-```
-
-## Deep Dive: Why This Solves Real Problems
-
-### Problem 1: Maritime Operations
-**Challenge:** Ships at sea for months, need AI for:
-- Navigation assistance
-- Documentation translation
-- Technical manuals Q&A
-
-**Solution:**
-- Download models before departure (Tier 1)
-- Share across ship network (Tier 2)
-- USB backup from home office (Tier 3)
-
-### Problem 2: Rural Healthcare
-**Challenge:** Clinic with satellite internet ($50/GB)
-
-**Solution:**
-- Monthly model delivery via courier (Tier 3)
-- P2P sharing between clinic departments (Tier 2)
-- No expensive satellite downloads needed
-
-### Problem 3: Air-Gapped Security Networks
-**Challenge:** Government/military networks with no external connectivity
-
-**Solution:**
-- Only Tier 3 (USB) distribution allowed
-- Internal P2P for efficiency
-- Formal approval process for new models
-
-## Implementation Roadmap
-
-### Phase 1: Foundation (Completed)
-- Model registry
-- Basic file management
-- P2P discovery skeleton
-
-### Phase 2: Core Distribution (Next)
 ```go
-// Add to internal/models/downloader.go
-type Downloader struct {
-    sources []ModelSource // HuggingFace, local peers, USB
+type Engine struct {
+    vectorStore  VectorStore       // Embedding storage
+    embedder     Embedder          // Embedding model
+    chunker      Chunker           // Document splitter
 }
 
-func (d *Downloader) Download(modelID string) error {
-    // 1. Try local peers first (free, fast)
-    if model, err := d.tryPeers(modelID); err == nil {
-        return d.installFromPeer(model)
-    }
-    
-    // 2. Try internet sources
-    if model, err := d.tryInternet(modelID); err == nil {
-        return d.installFromURL(model)
-    }
-    
-    // 3. Prompt for USB
-    return fmt.Errorf("model not found, please insert USB with model")
-}
+// Key methods
+func (e *Engine) AddDocument(path string) error
+func (e *Engine) Search(query string, k int) []Document
+func (e *Engine) BuildPrompt(query string, docs []Document) string
 ```
 
-### Phase 3: P2P Transfer
+**Flow:**
+1. Documents chunked into segments
+2. Chunks embedded via embedding model
+3. Embeddings stored in vector DB
+4. Query embedded and matched
+5. Relevant chunks injected into prompt
+
+### 3. Agent System (`internal/agents`)
+
+Autonomous task execution with tool use.
+
 ```go
-// internal/p2p/transfer.go
-type Transfer struct {
-    ModelID     string
-    SourcePeer  string
-    Progress    float64
-    BytesTotal  int64
-    BytesDone   int64
-    Resumable   bool
+type Agent struct {
+    model       string            // LLM for reasoning
+    tools       []Tool            // Available tools
+    maxSteps    int               // Iteration limit
 }
 
-// HTTP-based transfer with resume support
-func (t *Transfer) Start() error {
-    // Support Range requests for resumable downloads
-    // Chunk-based transfer with verification
-    // Bandwidth throttling (don't saturate network)
+// Key methods
+func (a *Agent) Execute(ctx context.Context, task string) (Result, error)
+func (a *Agent) RegisterTool(tool Tool) error
+```
+
+**Tool Types:**
+- File operations (read/write/list)
+- Web search
+- Code execution
+- MCP server tools
+- Custom tools
+
+### 4. Audio Service (`internal/audio`)
+
+Voice input/output capabilities.
+
+```go
+type Service struct {
+    whisper     *WhisperModel     // Speech-to-text
+    piper       *PiperEngine      // Text-to-speech
+}
+
+// Key methods
+func (s *Service) Transcribe(audio []byte, opts TranscribeOpts) (string, error)
+func (s *Service) Synthesize(text string, voice string) ([]byte, error)
+```
+
+**Supported:**
+- 18+ languages for STT
+- Multiple TTS voices
+- Streaming audio
+
+### 5. Session Manager (`internal/sessions`)
+
+Chat history and state persistence.
+
+```go
+type Manager struct {
+    sessions    map[string]*Session
+    storage     Storage
+}
+
+type Session struct {
+    ID          string
+    Messages    []Message
+    Model       string
+    CreatedAt   time.Time
 }
 ```
 
-## Cost Analysis
+---
 
-**Traditional Approach (Ollama-style):**
-- Need servers to host models
-- 7B model = ~4GB × 1000 downloads = 4TB transfer/month
-- AWS S3: ~$40/TB = $160/month minimum
-- Scaling costs with users
+## Data Flow
 
-**OffGrid Approach:**
-- Zero hosting costs (use HuggingFace CDN)
-- P2P reduces internet dependency
-- Physical media for extreme cases
-- Cost scales with USB drives, not bandwidth
+### Model Loading
 
-## Model Storage Locations
-
-### Default Paths
 ```
-Linux/Mac:   ~/.offgrid-llm/models/
-Windows:     %USERPROFILE%\.offgrid-llm\models\
-Custom:      Set OFFGRID_MODELS_DIR env variable
+1. User requests model load
+         │
+         ▼
+2. Check if model exists in ~/.offgrid-llm/models/
+         │
+         ├─── No: Return error (or trigger download)
+         │
+         ▼ Yes
+3. Initialize llama.cpp context
+         │
+         ▼
+4. Load model weights into memory
+         │
+         ├─── CPU: Load to RAM
+         │
+         └─── GPU: Offload layers to VRAM
+         │
+         ▼
+5. Model ready for inference
 ```
 
-### Shared Network Storage
+### RAG Pipeline
+
+```
+Document Input                    Query Processing
+     │                                  │
+     ▼                                  ▼
+┌─────────────┐                  ┌─────────────┐
+│   Chunker   │                  │   Embedder  │
+│  (split)    │                  │   (query)   │
+└──────┬──────┘                  └──────┬──────┘
+       │                                │
+       ▼                                ▼
+┌─────────────┐                  ┌─────────────┐
+│   Embedder  │                  │  VectorDB   │
+│  (chunks)   │                  │  (search)   │
+└──────┬──────┘                  └──────┬──────┘
+       │                                │
+       ▼                                ▼
+┌─────────────┐                  ┌─────────────┐
+│  VectorDB   │                  │   Results   │
+│  (store)    │                  │ (top-k docs)│
+└─────────────┘                  └──────┬──────┘
+                                        │
+                                        ▼
+                                 ┌─────────────┐
+                                 │   Prompt    │
+                                 │  Builder    │
+                                 └──────┬──────┘
+                                        │
+                                        ▼
+                                 ┌─────────────┐
+                                 │  Inference  │
+                                 └─────────────┘
+```
+
+---
+
+## Configuration
+
+### Environment Variables
+
 ```bash
-# Multiple machines sharing NFS/SMB
-export OFFGRID_MODELS_DIR=/mnt/shared/models
+# Server
+OFFGRID_PORT=11611              # HTTP port
+OFFGRID_HOST=0.0.0.0            # Bind address
 
-# All machines read from shared storage
-# No duplication needed
+# Paths
+OFFGRID_MODELS_DIR=~/.offgrid-llm/models
+OFFGRID_DATA_DIR=~/.offgrid-llm/data
+
+# Inference
+OFFGRID_GPU_LAYERS=0            # GPU layer count
+OFFGRID_THREADS=4               # CPU threads
+OFFGRID_CONTEXT_SIZE=4096       # Context window
+
+# Features
+OFFGRID_MULTI_USER=false        # Enable user management
+OFFGRID_REQUIRE_AUTH=false      # Require authentication
 ```
 
-### USB/External Storage
-```bash
-# Run directly from USB (portable mode)
-offgrid --models-dir /media/usb/models --portable
+### Config Files
 
-# No installation needed
-# Useful for demo/testing
+```
+~/.offgrid-llm/
+├── config.yaml                 # Main configuration
+├── models/                     # Model storage
+├── data/                       # Application data
+│   ├── vectorstore/            # RAG embeddings
+│   └── sessions/               # Chat history
+└── audio/                      # Voice models
+    ├── whisper/                # STT models
+    └── piper/                  # TTS voices
 ```
 
-## Security Considerations
+---
 
-1. **Model Verification:**
-   ```go
-   // Verify SHA256 before loading
-   func VerifyModel(path string, expectedHash string) error {
-       hash := sha256.Sum256(fileContent)
-       if hex.EncodeToString(hash[:]) != expectedHash {
-           return errors.New("model integrity check failed")
-       }
-   }
-   ```
+## Extension Points
 
-2. **P2P Trust:**
-   - Optional peer authentication
-   - Verify models match known hashes
-   - Reject unknown/modified files
+### Adding New Tools (Agents)
 
-3. **Sandboxing:**
-   - Models run in isolated processes
-   - No network access from inference engine
-   - Limited filesystem access
+```go
+// internal/tools/mytool.go
+type MyTool struct{}
 
-## Next Implementation Steps
+func (t *MyTool) Name() string {
+    return "my_tool"
+}
 
-1. **Model Catalog** - JSON file with trusted model sources
-2. **Download Manager** - Resume support, parallel chunks
-3. **P2P File Transfer** - HTTP-based with encryption option
-4. **USB Pack/Unpack** - Automated distribution package creation
-5. **Update System** - Diff-based updates for efficiency
+func (t *MyTool) Description() string {
+    return "Does something useful"
+}
 
-This approach makes OffGrid LLM viable for **truly offline** scenarios while remaining easy to use when internet is available.
+func (t *MyTool) Execute(ctx context.Context, params map[string]interface{}) (string, error) {
+    // Implementation
+    return "result", nil
+}
+
+// Register in agent
+agent.RegisterTool(&MyTool{})
+```
+
+### Adding New API Endpoints
+
+```go
+// internal/server/handlers.go
+func (s *Server) handleMyEndpoint(w http.ResponseWriter, r *http.Request) {
+    // Handle request
+}
+
+// internal/server/server.go (in route setup)
+mux.HandleFunc("/api/v1/myendpoint", s.handleMyEndpoint)
+```
+
+### Adding New Middleware
+
+```go
+// internal/server/middleware.go
+func (s *Server) myMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Pre-processing
+        next.ServeHTTP(w, r)
+        // Post-processing
+    })
+}
+```
+
+---
+
+## Related Documentation
+
+- [Distribution Strategy](distribution.md) - Offline model distribution
+- [Performance Tuning](performance.md) - Optimization guide
+- [Building from Source](building.md) - Compilation
+- [Contributing](../../dev/CONTRIBUTING.md) - Development guide

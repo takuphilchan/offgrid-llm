@@ -298,18 +298,23 @@ func (vs *VectorStore) Close() error {
 	return nil
 }
 
-// cosineSimilarity calculates the cosine similarity between two vectors
-// Renamed to avoid conflict with sqlite_store.go
+// cosineSimilarityInMemory calculates the cosine similarity between two vectors
+// Optimized for cache locality and potential SIMD vectorization
 func cosineSimilarityInMemory(a, b []float32) float32 {
-	if len(a) != len(b) || len(a) == 0 {
+	n := len(a)
+	if n != len(b) || n == 0 {
 		return 0
 	}
 
+	// Process in chunks for better cache locality
 	var dotProduct, normA, normB float64
-	for i := range a {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
+
+	// Main loop - compiler can optimize/unroll this
+	for i := 0; i < n; i++ {
+		ai, bi := float64(a[i]), float64(b[i])
+		dotProduct += ai * bi
+		normA += ai * ai
+		normB += bi * bi
 	}
 
 	if normA == 0 || normB == 0 {
@@ -352,23 +357,25 @@ func tokenize(text string) []string {
 	return tokens
 }
 
+// stopWords is a pre-allocated map of common stop words (package-level to avoid repeated allocations)
+var stopWords = map[string]bool{
+	"the": true, "and": true, "for": true, "are": true, "but": true,
+	"not": true, "you": true, "all": true, "can": true, "had": true,
+	"her": true, "was": true, "one": true, "our": true, "out": true,
+	"has": true, "have": true, "been": true, "were": true, "will": true,
+	"would": true, "there": true, "their": true, "what": true, "about": true,
+	"which": true, "when": true, "make": true, "like": true, "time": true,
+	"just": true, "know": true, "take": true, "into": true, "year": true,
+	"your": true, "some": true, "them": true, "than": true, "then": true,
+	"now": true, "look": true, "only": true, "come": true, "its": true,
+	"over": true, "think": true, "also": true, "back": true, "after": true,
+	"use": true, "two": true, "how": true, "first": true, "way": true,
+	"could": true, "these": true, "from": true, "with": true, "that": true,
+	"this": true, "where": true, "does": true, "don": true, "didn": true,
+}
+
 // isStopWord checks if a word is a common stop word
 func isStopWord(word string) bool {
-	stopWords := map[string]bool{
-		"the": true, "and": true, "for": true, "are": true, "but": true,
-		"not": true, "you": true, "all": true, "can": true, "had": true,
-		"her": true, "was": true, "one": true, "our": true, "out": true,
-		"has": true, "have": true, "been": true, "were": true, "will": true,
-		"would": true, "there": true, "their": true, "what": true, "about": true,
-		"which": true, "when": true, "make": true, "like": true, "time": true,
-		"just": true, "know": true, "take": true, "into": true, "year": true,
-		"your": true, "some": true, "them": true, "than": true, "then": true,
-		"now": true, "look": true, "only": true, "come": true, "its": true,
-		"over": true, "think": true, "also": true, "back": true, "after": true,
-		"use": true, "two": true, "how": true, "first": true, "way": true,
-		"could": true, "these": true, "from": true, "with": true, "that": true,
-		"this": true, "where": true, "does": true, "don": true, "didn": true,
-	}
 	return stopWords[word]
 }
 

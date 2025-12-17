@@ -307,7 +307,7 @@ The systemd service includes:
 
 ## See Also
 
-- [Installation Guide](INSTALLATION.md)
-- [HuggingFace Integration](guides/HUGGINGFACE_INTEGRATION.md)
+- [Installation Guide](installation.md)
+- [HuggingFace Integration](../guides/huggingface.md)
 - [Model Setup](MODEL_SETUP.md)
-- [Performance Tuning](PERFORMANCE.md)
+- [Performance Tuning](../advanced/performance.md)

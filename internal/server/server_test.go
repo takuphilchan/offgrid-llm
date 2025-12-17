@@ -31,6 +31,7 @@ func TestHandleRoot(t *testing.T) {
 	server := New()
 
 	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
 
 	server.handleRoot(w, req)

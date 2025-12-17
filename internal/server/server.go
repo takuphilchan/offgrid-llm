@@ -226,7 +226,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		startTime:            time.Now(),
 		downloadProgress:     make(map[string]*DownloadProgress),
 		exportProgress:       make(map[string]*ExportProgress),
-		modelCache:           inference.NewModelCache(3, cfg.NumGPULayers, filepath.Join(cfg.ModelsDir, "..", "bin")), // Cache up to 3 models, use configured GPU layers
+		modelCache:           createModelCache(cfg), // Use factory function for performance tuning
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
 		sessionHandlers:      sessionHandlers,
@@ -242,6 +242,17 @@ func NewWithConfig(cfg *config.Config) *Server {
 		offgridMetrics:       offgridMetrics,
 		wsHub:                wsHub,
 	}
+}
+
+// createModelCache creates a model cache with performance settings from config
+func createModelCache(cfg *config.Config) *inference.ModelCache {
+	cache := inference.NewModelCache(3, cfg.NumGPULayers, filepath.Join(cfg.ModelsDir, "..", "bin"))
+
+	// Apply performance tuning from config
+	cache.SetContextSize(cfg.MaxContextSize)
+	cache.SetBatchSize(cfg.BatchSize)
+
+	return cache
 }
 
 // startLlamaServer is deprecated - models are now loaded on-demand via cache
@@ -669,8 +680,19 @@ func (w *statusResponseWriter) Flush() {
 
 // Handler functions (placeholders for now)
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
-	// Serve the UI at root
+	// Serve the UI at root by default, but allow API clients to request JSON.
 	if r.URL.Path == "/" {
+		accept := r.Header.Get("Accept")
+		if strings.Contains(accept, "application/json") || r.URL.Query().Get("format") == "json" {
+			version := "unknown"
+			if versionData, err := os.ReadFile("VERSION"); err == nil {
+				version = strings.TrimSpace(string(versionData))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"%s","status":"running"}`, version)
+			return
+		}
+
 		uiPath := "/var/lib/offgrid/web/ui/index.html"
 		// Fallback to local development path if installed path doesn't exist
 		if _, err := os.Stat(uiPath); os.IsNotExist(err) {
@@ -681,8 +703,13 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// API info for other paths
+	version := "unknown"
+	if versionData, err := os.ReadFile("VERSION"); err == nil {
+		version = strings.TrimSpace(string(versionData))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.5","status":"running"}`)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"%s","status":"running"}`, version)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -698,10 +725,16 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(s.startTime)
 	uptimeStr := formatDuration(uptime)
 
+	// Read version from VERSION file if available
+	version := "unknown"
+	if versionData, err := os.ReadFile("VERSION"); err == nil {
+		version = strings.TrimSpace(string(versionData))
+	}
+
 	// Build detailed health response
 	health := map[string]interface{}{
 		"status":         "healthy",
-		"version":        "0.2.5",
+		"version":        version,
 		"uptime":         uptimeStr,
 		"uptime_seconds": int(uptime.Seconds()),
 		"timestamp":      time.Now().Unix(),
@@ -716,7 +749,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		},
 		"models": map[string]interface{}{
 			"available": len(models),
-			"loaded":    0, // TODO: Track loaded models
+			"loaded":    s.registry.CountLoadedModels(),
 		},
 		"config": map[string]interface{}{
 			"port":        s.config.ServerPort,

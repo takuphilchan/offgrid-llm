@@ -110,6 +110,19 @@ func (r *Registry) ListModels() []api.Model {
 	return models
 }
 
+// CountLoadedModels returns how many models are currently marked as loaded.
+func (r *Registry) CountLoadedModels() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	count := 0
+	for _, meta := range r.models {
+		if meta != nil && meta.IsLoaded {
+			count++
+		}
+	}
+	return count
+}
+
 // DeleteModel removes a model from the registry and deletes the file
 func (r *Registry) DeleteModel(modelID string) error {
 	r.mu.Lock()

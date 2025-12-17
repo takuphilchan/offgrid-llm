@@ -60,7 +60,7 @@ docker-compose up -d
 open http://localhost:11611
 ```
 
-**Done!** See [Docker Guide](DOCKER.md) for GPU support.
+**Done!** See [Docker Guide](docker.md) for GPU support.
 
 ---
 
@@ -341,16 +341,16 @@ export OFFGRID_PORT=8080
 ## Next Steps
 
 ### Learn More
--  [Full Documentation](README.md)
-- 🐳 [Docker Deployment](DOCKER.md)
--  [API Reference](API.md)
--  [Performance Tuning](docs/advanced/PERFORMANCE.md)
+-  [Full Documentation](../README.md)
+- 🐳 [Docker Deployment](docker.md)
+-  [API Reference](../reference/api.md)
+-  [Performance Tuning](../advanced/performance.md)
 
 ### Advanced Topics
-- [Custom Model Setup](docs/guides/MODEL_SETUP.md)
-- [GPU Acceleration](docs/CPU_OPTIMIZATION.md)
-- [Production Deployment](docs/advanced/DEPLOYMENT.md)
-- [Building from Source](docs/advanced/BUILDING.md)
+- [Custom Model Setup](../guides/models.md)
+- [GPU Acceleration](../advanced/cpu-tuning.md)
+- [Production Deployment](../advanced/deployment.md)
+- [Building from Source](../advanced/building.md)
 
 ### Get Help
 -  [GitHub Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)

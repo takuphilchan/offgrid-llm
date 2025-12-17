@@ -35,7 +35,7 @@ client.models.download("repo/model", "file.gguf")
 client.kb.add("document.txt")
 ```
 
-See [Python Library Documentation](../python/README.md) for full API reference.
+See [Python Library Documentation](../../python/README.md) for full API reference.
 
 ---
 
@@ -64,7 +64,7 @@ Enable with `OFFGRID_MULTI_USER=true`. Authentication can be configured with:
 curl -H "Authorization: Bearer og_YOUR_API_KEY" http://localhost:11611/v1/models
 ```
 
-See [Multi-User Mode Guide](guides/MULTI_USER_MODE.md) for details.
+See [Multi-User Mode Guide](../guides/multi-user.md) for details.
 
 ## Endpoints
 
@@ -93,7 +93,7 @@ Get basic server information.
 ```json
 {
   "name": "OffGrid LLM",
-  "version": "0.1.6",
+  "version": "0.2.7",
   "status": "running"
 }
 ```
@@ -163,7 +163,7 @@ Create a chat completion (multi-turn conversation).
 | `frequency_penalty` | float | No | 0.0 | Penalize frequent tokens (-2.0 to 2.0) |
 | `presence_penalty` | float | No | 0.0 | Penalize new tokens (-2.0 to 2.0) |
 | `stop` | array | No | - | Up to 4 sequences where generation stops |
-| `stream` | boolean | No | false | Stream responses (not yet implemented) |
+| `stream` | boolean | No | false | Stream responses via Server-Sent Events (SSE) in an OpenAI-compatible chunk format |
 
 **Message Object:**
 ```json
@@ -564,7 +564,7 @@ POST /v1/agents/mcp/test
 DELETE /v1/agents/mcp/{name}
 ```
 
-See [Agent Guide](guides/AGENT_GUIDE.md) for detailed documentation.
+See [Agent Guide](../guides/agents.md) for detailed documentation.
 
 ---
 
@@ -609,4 +609,4 @@ POST /v1/users/{id}/api-keys
 }
 ```
 
-See [Multi-User Mode Guide](guides/MULTI_USER_MODE.md) for detailed documentation.
+See [Multi-User Mode Guide](../guides/multi-user.md) for detailed documentation.

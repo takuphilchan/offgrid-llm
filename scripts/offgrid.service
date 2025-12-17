@@ -1,0 +1,144 @@
+# OffGrid LLM Enhanced Systemd Service
+# Production-ready service for edge deployments with resource limits,
+# auto-restart, and watchdog integration.
+#
+# Installation:
+#   sudo cp offgrid.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable offgrid
+#   sudo systemctl start offgrid
+#
+# View logs:
+#   sudo journalctl -u offgrid -f
+
+[Unit]
+Description=OffGrid LLM - Offline Language Model Server
+Documentation=https://github.com/yourusername/offgrid-llm
+After=network.target local-fs.target
+Wants=network.target
+
+# Wait for network if P2P is enabled
+# After=network-online.target
+# Wants=network-online.target
+
+# Conflict with any other LLM servers
+Conflicts=ollama.service
+
+[Service]
+Type=simple
+User=offgrid
+Group=offgrid
+
+# Working directory and binary
+WorkingDirectory=/opt/offgrid
+ExecStart=/opt/offgrid/bin/offgrid serve --config /etc/offgrid/config.yaml
+
+# Pre-start: verify models and warm up
+ExecStartPre=/opt/offgrid/bin/offgrid models verify --quiet
+ExecStartPre=/opt/offgrid/bin/offgrid status --check
+
+# Graceful reload on SIGHUP
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy for production
+Restart=always
+RestartSec=5
+RestartPreventExitStatus=0
+
+# Limit restart attempts (prevent restart loops)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# --- Resource Limits for Edge Devices ---
+
+# Memory limits (adjust based on your device)
+# For 4GB RAM devices:
+MemoryMax=3G
+MemoryHigh=2G
+
+# For 8GB RAM devices, use:
+# MemoryMax=6G
+# MemoryHigh=4G
+
+# CPU limits (uncomment to limit CPU usage)
+# CPUQuota=80%
+
+# IO Priority (best-effort, low priority for storage)
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
+
+# Process limits
+LimitNOFILE=65536
+LimitNPROC=4096
+LimitCORE=0
+
+# Disable OOM killer for critical deployment
+OOMScoreAdjust=-500
+
+# --- Security Hardening ---
+
+# Run with minimal privileges
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+
+# Allow only necessary paths
+ReadWritePaths=/var/lib/offgrid
+ReadWritePaths=/var/log/offgrid
+ReadWritePaths=/tmp/offgrid
+
+# Restrict network namespaces (comment out for P2P)
+# PrivateNetwork=false
+
+# Restrict kernel capabilities
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Restrict system calls
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallArchitectures=native
+
+# --- Logging ---
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=offgrid
+
+# --- Watchdog ---
+
+# Enable systemd watchdog (requires WatchdogSec support in offgrid)
+WatchdogSec=60
+
+# Notify systemd of startup completion
+Type=notify
+
+# --- Environment ---
+
+# Data directory
+Environment=OFFGRID_DATA_DIR=/var/lib/offgrid
+
+# Log level
+Environment=OFFGRID_LOG_LEVEL=info
+
+# Number of threads (adjust to your CPU)
+Environment=OFFGRID_THREADS=4
+
+# Disable GPU for CPU-only deployments
+Environment=OFFGRID_GPU_LAYERS=0
+
+# Enable memory mapping for low-RAM devices
+Environment=OFFGRID_MMAP=true
+
+# Load additional environment from file
+EnvironmentFile=-/etc/offgrid/environment
+
+[Install]
+WantedBy=multi-user.target

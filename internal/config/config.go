@@ -29,6 +29,16 @@ type Config struct {
 	EnableGPU    bool   `yaml:"enable_gpu" json:"enable_gpu"`
 	NumGPULayers int    `yaml:"num_gpu_layers" json:"num_gpu_layers"`
 
+	// Performance tuning for low-end hardware
+	BatchSize       int    `yaml:"batch_size" json:"batch_size"`             // Token batch size (lower = faster first token, default: 512)
+	FlashAttention  bool   `yaml:"flash_attention" json:"flash_attention"`   // Enable flash attention (faster, less memory)
+	KVCacheType     string `yaml:"kv_cache_type" json:"kv_cache_type"`       // KV cache quantization: f16, q8_0, q4_0 (default: q8_0)
+	UseMmap         bool   `yaml:"use_mmap" json:"use_mmap"`                 // Memory-map model file (good for low RAM)
+	UseMlock        bool   `yaml:"use_mlock" json:"use_mlock"`               // Lock model in RAM (good for high RAM)
+	ContBatching    bool   `yaml:"cont_batching" json:"cont_batching"`       // Continuous batching for multi-request throughput
+	LowMemoryMode   bool   `yaml:"low_memory_mode" json:"low_memory_mode"`   // Enable optimizations for <8GB RAM systems
+	AdaptiveContext bool   `yaml:"adaptive_context" json:"adaptive_context"` // Auto-adjust context size based on RAM
+
 	// P2P settings
 	EnableP2P     bool `yaml:"enable_p2p" json:"enable_p2p"`
 	P2PPort       int  `yaml:"p2p_port" json:"p2p_port"`
@@ -61,24 +71,32 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		ServerPort:     getEnvInt("OFFGRID_PORT", 11611),
-		ServerHost:     getEnv("OFFGRID_HOST", "localhost"),
-		ModelsDir:      getEnv("OFFGRID_MODELS_DIR", defaultModelsDir),
-		DefaultModel:   getEnv("OFFGRID_DEFAULT_MODEL", ""),
-		MaxContextSize: getEnvInt("OFFGRID_MAX_CONTEXT", 4096),
-		NumThreads:     getEnvInt("OFFGRID_NUM_THREADS", 4),
-		MaxMemoryMB:    uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
-		MaxModels:      getEnvInt("OFFGRID_MAX_MODELS", 3),
-		EnableGPU:      getEnvBool("OFFGRID_ENABLE_GPU", false),
-		NumGPULayers:   getEnvInt("OFFGRID_GPU_LAYERS", 0),
-		EnableP2P:      getEnvBool("OFFGRID_ENABLE_P2P", false),
-		P2PPort:        getEnvInt("OFFGRID_P2P_PORT", 9090),
-		DiscoveryPort:  getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
-		LogLevel:       getEnv("OFFGRID_LOG_LEVEL", "info"),
-		LogFile:        getEnv("OFFGRID_LOG_FILE", ""),
-		RequireAuth:    getEnvBool("OFFGRID_REQUIRE_AUTH", false),
-		GuestAccess:    getEnvBool("OFFGRID_GUEST_ACCESS", true),
-		MultiUserMode:  getEnvBool("OFFGRID_MULTI_USER", false), // Default: single-user mode
+		ServerPort:      getEnvInt("OFFGRID_PORT", 11611),
+		ServerHost:      getEnv("OFFGRID_HOST", "localhost"),
+		ModelsDir:       getEnv("OFFGRID_MODELS_DIR", defaultModelsDir),
+		DefaultModel:    getEnv("OFFGRID_DEFAULT_MODEL", ""),
+		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 4096),
+		NumThreads:      getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
+		MaxMemoryMB:     uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
+		MaxModels:       getEnvInt("OFFGRID_MAX_MODELS", 3),
+		EnableGPU:       getEnvBool("OFFGRID_ENABLE_GPU", false),
+		NumGPULayers:    getEnvInt("OFFGRID_GPU_LAYERS", 0),
+		BatchSize:       getEnvInt("OFFGRID_BATCH_SIZE", 512),
+		FlashAttention:  getEnvBool("OFFGRID_FLASH_ATTENTION", true),  // Enable by default - significant speedup
+		KVCacheType:     getEnv("OFFGRID_KV_CACHE_TYPE", "q8_0"),      // q8_0 is good balance of speed/quality
+		UseMmap:         getEnvBool("OFFGRID_USE_MMAP", true),         // Safer for low RAM
+		UseMlock:        getEnvBool("OFFGRID_USE_MLOCK", false),       // Only enable if you have enough RAM
+		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", true),    // Better throughput
+		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),      // User can enable for <8GB systems
+		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true), // Auto-adjust context size
+		EnableP2P:       getEnvBool("OFFGRID_ENABLE_P2P", false),
+		P2PPort:         getEnvInt("OFFGRID_P2P_PORT", 9090),
+		DiscoveryPort:   getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
+		LogLevel:        getEnv("OFFGRID_LOG_LEVEL", "info"),
+		LogFile:         getEnv("OFFGRID_LOG_FILE", ""),
+		RequireAuth:     getEnvBool("OFFGRID_REQUIRE_AUTH", false),
+		GuestAccess:     getEnvBool("OFFGRID_GUEST_ACCESS", true),
+		MultiUserMode:   getEnvBool("OFFGRID_MULTI_USER", false), // Default: single-user mode
 	}
 }
 
@@ -248,9 +266,7 @@ func (c *Config) applyDefaults() {
 	if c.MaxContextSize == 0 {
 		c.MaxContextSize = 4096
 	}
-	if c.NumThreads == 0 {
-		c.NumThreads = 4
-	}
+	// NumThreads 0 means auto-detect (don't override)
 	if c.MaxMemoryMB == 0 {
 		c.MaxMemoryMB = 4096
 	}
@@ -266,6 +282,15 @@ func (c *Config) applyDefaults() {
 	if c.LogLevel == "" {
 		c.LogLevel = "info"
 	}
+	// Performance tuning defaults
+	if c.BatchSize == 0 {
+		c.BatchSize = 512
+	}
+	if c.KVCacheType == "" {
+		c.KVCacheType = "q8_0"
+	}
+	// FlashAttention, ContBatching, AdaptiveContext default to true (set in LoadConfig)
+	// UseMmap defaults to true, UseMlock defaults to false (safer for low RAM)
 }
 
 // applyEnvOverrides overrides config with environment variables

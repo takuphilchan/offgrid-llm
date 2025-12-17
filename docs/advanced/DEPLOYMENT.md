@@ -586,5 +586,5 @@ curl http://localhost:11611/v1/models
 ## Next Steps
 
 - [API Documentation](API.md)
-- [Model Setup Guide](MODEL_SETUP.md)
-- [llama.cpp Integration](LLAMA_CPP_SETUP.md)
+- [Model Setup Guide](../guides/models.md)
+- [llama.cpp Integration](llama-cpp.md)

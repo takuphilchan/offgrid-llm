@@ -12,7 +12,7 @@ import (
 
 // Example demonstrating embedding functionality in OffGrid LLM
 func embedMain() {
-	fmt.Println("=== OffGrid LLM - Embeddings Demo ===\n")
+	fmt.Println("=== OffGrid LLM - Embeddings Demo ===")
 
 	// 1. Create embedding engine
 	fmt.Println("1. Creating Embedding Engine")

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,7 +15,7 @@ type CacheEntry struct {
 	Response  string    `json:"response"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
-	Hits      int       `json:"hits"`
+	Hits      int64     `json:"hits"` // Changed to int64 for atomic operations
 }
 
 // ResponseCache implements an LRU cache for model responses
@@ -23,7 +24,7 @@ type ResponseCache struct {
 	entries    map[string]*CacheEntry
 	maxEntries int
 	ttl        time.Duration
-	hits       int64
+	hits       int64 // Use atomic operations for thread-safe counters
 	misses     int64
 	enabled    bool
 }
@@ -63,27 +64,31 @@ func (c *ResponseCache) Get(model, prompt string, params map[string]interface{})
 	}
 
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	key := generateKey(model, prompt, params)
 	entry, exists := c.entries[key]
 
 	if !exists {
-		c.misses++
+		c.mu.RUnlock()
+		atomic.AddInt64(&c.misses, 1)
 		return "", false
 	}
 
 	// Check if expired
 	if time.Now().After(entry.ExpiresAt) {
-		c.misses++
+		c.mu.RUnlock()
+		atomic.AddInt64(&c.misses, 1)
 		return "", false
 	}
 
-	// Update hit count
-	entry.Hits++
-	c.hits++
+	// Get response while holding read lock
+	response := entry.Response
+	c.mu.RUnlock()
 
-	return entry.Response, true
+	// Update hit counts atomically (thread-safe without write lock)
+	atomic.AddInt64(&entry.Hits, 1)
+	atomic.AddInt64(&c.hits, 1)
+
+	return response, true
 }
 
 // Set stores a response in the cache
@@ -115,14 +120,15 @@ func (c *ResponseCache) Set(model, prompt, response string, params map[string]in
 func (c *ResponseCache) evictOldest() {
 	var oldestKey string
 	var oldestTime time.Time
-	var minHits int
+	var minHits int64
 
 	first := true
 	for key, entry := range c.entries {
+		hits := atomic.LoadInt64(&entry.Hits)
 		if first {
 			oldestKey = key
 			oldestTime = entry.CreatedAt
-			minHits = entry.Hits
+			minHits = hits
 			first = false
 			continue
 		}
@@ -131,11 +137,11 @@ func (c *ResponseCache) evictOldest() {
 		if time.Now().After(entry.ExpiresAt) {
 			oldestKey = key
 			break
-		} else if entry.Hits < minHits {
+		} else if hits < minHits {
 			oldestKey = key
-			minHits = entry.Hits
+			minHits = hits
 			oldestTime = entry.CreatedAt
-		} else if entry.Hits == minHits && entry.CreatedAt.Before(oldestTime) {
+		} else if hits == minHits && entry.CreatedAt.Before(oldestTime) {
 			oldestKey = key
 			oldestTime = entry.CreatedAt
 		}
@@ -150,28 +156,36 @@ func (c *ResponseCache) Clear() {
 	defer c.mu.Unlock()
 
 	c.entries = make(map[string]*CacheEntry)
-	c.hits = 0
-	c.misses = 0
+	atomic.StoreInt64(&c.hits, 0)
+	atomic.StoreInt64(&c.misses, 0)
 }
 
 // Stats returns cache statistics
 func (c *ResponseCache) Stats() map[string]interface{} {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
+	entryCount := len(c.entries)
+	maxEntries := c.maxEntries
+	ttl := c.ttl
+	enabled := c.enabled
+	c.mu.RUnlock()
+
+	// Read counters atomically
+	hits := atomic.LoadInt64(&c.hits)
+	misses := atomic.LoadInt64(&c.misses)
 
 	hitRate := 0.0
-	total := c.hits + c.misses
+	total := hits + misses
 	if total > 0 {
-		hitRate = float64(c.hits) / float64(total) * 100
+		hitRate = float64(hits) / float64(total) * 100
 	}
 
 	return map[string]interface{}{
-		"enabled":     c.enabled,
-		"entries":     len(c.entries),
-		"max_entries": c.maxEntries,
-		"ttl_seconds": c.ttl.Seconds(),
-		"hits":        c.hits,
-		"misses":      c.misses,
+		"enabled":     enabled,
+		"entries":     entryCount,
+		"max_entries": maxEntries,
+		"ttl_seconds": ttl.Seconds(),
+		"hits":        hits,
+		"misses":      misses,
 		"hit_rate":    fmt.Sprintf("%.2f%%", hitRate),
 	}
 }

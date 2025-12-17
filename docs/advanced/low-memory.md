@@ -110,6 +110,6 @@ This makes AI accessible regardless of economic constraints or hardware availabi
 
 ## Next Steps
 
-- [Model Setup Guide](MODEL_SETUP.md)
-- [Performance Tuning](advanced/PERFORMANCE.md)
-- [HuggingFace Integration](guides/HUGGINGFACE_INTEGRATION.md)
+- [Model Setup Guide](../guides/models.md)
+- [Performance Tuning](performance.md)
+- [HuggingFace Integration](../guides/huggingface.md)
