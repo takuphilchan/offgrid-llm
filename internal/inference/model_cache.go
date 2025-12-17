@@ -160,7 +160,6 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		"--cont-batching",        // Continuous batching for better throughput
 		"--cache-type-k", "q8_0", // Quantized KV cache - reduces memory ~50%
 		"--cache-type-v", "q8_0", // with minimal quality loss
-		"--cache-prompt", // Reuse prompt processing across requests (big speedup for chat)
 	}
 
 	if projectorPath != "" {
