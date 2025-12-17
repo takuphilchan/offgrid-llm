@@ -276,7 +276,8 @@ jobs:
       - name: Build whisper.cpp
         shell: bash
         run: |
-          git clone --depth 1 https://github.com/ggml-org/whisper.cpp /tmp/whisper.cpp
+          # Use stable release tag to avoid upstream bugs in main branch
+          git clone --depth 1 --branch v1.7.5 https://github.com/ggml-org/whisper.cpp /tmp/whisper.cpp
           cd /tmp/whisper.cpp
           echo "WHISPER_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           
