@@ -16,7 +16,7 @@ docs/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 | Document | Time | Description |
 |----------|------|-------------|
@@ -26,7 +26,7 @@ docs/
 
 ---
 
-## 📦 Setup & Installation
+## Setup & Installation
 
 | Document | Description |
 |----------|-------------|
@@ -37,7 +37,7 @@ docs/
 
 ---
 
-## 📖 User Guides
+## User Guides
 
 ### Core Features
 
@@ -59,7 +59,7 @@ docs/
 
 ---
 
-## 📚 Reference
+## Reference
 
 | Document | Description |
 |----------|-------------|
@@ -70,7 +70,7 @@ docs/
 
 ---
 
-## ⚙️ Advanced
+## Advanced
 
 ### Architecture & Development
 
@@ -95,7 +95,7 @@ docs/
 
 ---
 
-## 🔧 Quick Reference
+## Quick Reference
 
 ### Installation Methods
 

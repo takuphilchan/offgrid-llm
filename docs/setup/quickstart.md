@@ -29,7 +29,7 @@ Perfect for:
 
 Choose the method that fits your needs:
 
-### 🚀 Option 1: One-Line Install (Recommended)
+### Option 1: One-Line Install (Recommended)
 
 **Best for:** Most users - installs everything in one command
 
@@ -64,7 +64,7 @@ open http://localhost:11611
 
 ---
 
-### 💻 Option 3: Desktop App Only
+### Option 3: Desktop App Only
 
 **Best for:** Non-technical users who just want the app
 

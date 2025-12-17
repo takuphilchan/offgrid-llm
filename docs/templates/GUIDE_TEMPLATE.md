@@ -38,7 +38,7 @@ offgrid command --option value
 Output the user should see
 ```
 
-> 💡 **Tip:** Helpful tip related to this step.
+> **Tip:** Helpful tip related to this step.
 
 ## Step 2: [Second Step Title]
 
@@ -62,7 +62,7 @@ func example() {
 }
 ```
 
-> ⚠️ **Warning:** Important caution or common mistake to avoid.
+> **Warning:** Important caution or common mistake to avoid.
 
 ## Step 3: [Third Step Title]
 
@@ -147,9 +147,9 @@ func main() {
 ## Summary
 
 Recap of what was accomplished:
-- ✅ Accomplished goal 1
-- ✅ Learned concept 2
-- ✅ Can now do task 3
+- Accomplished goal 1
+- Learned concept 2
+- Can now do task 3
 
 ## See Also
 

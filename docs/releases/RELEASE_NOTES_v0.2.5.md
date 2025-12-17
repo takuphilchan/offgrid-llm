@@ -2,17 +2,17 @@
 
 **Release Date:** December 10, 2025
 
-## 🎨 UI Polish & Streaming Stability
+## UI Polish & Streaming Stability
 
 This release focuses on refining the user interface and improving the stability and smoothness of the chat experience. We've synchronized the design between the Web and Desktop versions and eliminated visual jitter during text generation.
 
 ---
 
-## ✨ Highlights
+## Highlights
 
-- 🖥️ **Unified UI Design**: Consistent "fluffy" aesthetic across Web and Desktop.
+- **Unified UI Design**: Consistent "fluffy" aesthetic across Web and Desktop.
 - 🌊 **Smoother Streaming**: New rendering engine eliminates jitter during generation.
-- 🐛 **Bug Fixes**: Resolved markdown parsing errors and theme inconsistencies.
+- **Bug Fixes**: Resolved markdown parsing errors and theme inconsistencies.
 
 ---
 

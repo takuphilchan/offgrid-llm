@@ -103,11 +103,11 @@ client = offgrid.Client()
 ### Callouts
 
 ```markdown
-> 💡 **Tip:** Helpful suggestion
+> **Tip:** Helpful suggestion
 
-> ⚠️ **Warning:** Important caution
+> **Warning:** Important caution
 
-> ❌ **Danger:** Critical warning
+> **Danger:** Critical warning
 
 > ℹ️ **Note:** Additional information
 ```
@@ -118,20 +118,20 @@ client = offgrid.Client()
 
 ### Do
 
-✅ Write for beginners - assume minimal context  
-✅ Be concise - respect reader's time  
-✅ Use examples - show, don't just tell  
-✅ Stay current - update when code changes  
-✅ Test instructions - verify steps work  
-✅ Use relative links - `../API.md` not absolute URLs  
+Write for beginners - assume minimal context  
+Be concise - respect reader's time  
+Use examples - show, don't just tell  
+Stay current - update when code changes  
+Test instructions - verify steps work  
+Use relative links - `../API.md` not absolute URLs  
 
 ### Don't
 
-❌ Assume prior knowledge  
-❌ Use jargon without explanation  
-❌ Leave outdated information  
-❌ Skip error handling in examples  
-❌ Use absolute file paths  
+Assume prior knowledge  
+Use jargon without explanation  
+Leave outdated information  
+Skip error handling in examples  
+Use absolute file paths  
 
 ---
 

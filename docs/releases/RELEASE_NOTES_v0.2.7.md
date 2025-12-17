@@ -8,7 +8,7 @@ Version 0.2.7 focuses on **documentation improvements**, **codebase cleanup**, a
 
 ---
 
-## 🆕 New Features
+## New Features
 
 ### Modular Web UI Architecture
 - **Refactored monolithic UI** - Split 10,650-line `index.html` into 16 JavaScript modules
@@ -24,7 +24,7 @@ Version 0.2.7 focuses on **documentation improvements**, **codebase cleanup**, a
 
 ---
 
-## 📚 Documentation Changes
+## Documentation Changes
 
 ### New Documentation Structure
 ```
@@ -58,7 +58,7 @@ docs/
 
 ---
 
-## 🧹 Codebase Cleanup
+## Codebase Cleanup
 
 ### Removed Files
 - Backup files (`.bak`, `.orig`)
@@ -72,7 +72,7 @@ docs/
 
 ---
 
-## 🔧 Technical Changes
+## Technical Changes
 
 ### Web UI Modules
 | Module | Purpose |
@@ -95,7 +95,7 @@ docs/
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### One-Line Install
 ```bash
@@ -118,7 +118,7 @@ go build -o offgrid ./cmd/offgrid
 
 ---
 
-## 🔄 Upgrade Notes
+## Upgrade Notes
 
 - No breaking API changes
 - Documentation paths have changed - update any bookmarks
@@ -126,7 +126,7 @@ go build -o offgrid ./cmd/offgrid
 
 ---
 
-## 📊 Stats
+## Stats
 
 - **Files changed:** 50+
 - **Documentation:** 57 markdown files

@@ -8,12 +8,12 @@ This release delivers a **complete offline voice assistant** with multi-language
 
 ---
 
-## ✨ Highlights
+## Highlights
 
 - 🌍 **18+ Languages** for speech recognition
-- 🎤 **Voice Assistant** with push-to-talk conversation
-- 📚 **Downloadable Model Library** for Whisper & Piper
-- 🎨 **Redesigned Audio Tab** with sub-tabs for better organization
+- **Voice Assistant** with push-to-talk conversation
+- **Downloadable Model Library** for Whisper & Piper
+- **Redesigned Audio Tab** with sub-tabs for better organization
 
 ---
 
@@ -129,7 +129,7 @@ print(client.audio.models())
 - `de_DE-thorsten-medium` - German, male
 - `fr_FR-siwis-medium` - French, female
 
-## 🐛 Bug Fixes
+## Bug Fixes
 
 - **Fixed voice selection**: Backend now correctly uses `req.Voice` parameter for TTS
 - **Fixed English-only STT**: Voice input now supports multiple languages with language dropdown
