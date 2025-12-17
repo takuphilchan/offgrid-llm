@@ -1,23 +1,15 @@
 # OffGrid LLM
 
-<p align="center">
-  <strong>Run powerful AI models completely offline on your own computer.</strong>
-</p>
+**Run powerful AI models completely offline on your own computer.**
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square" alt="License: MIT"></a>
-  <a href="https://github.com/takuphilchan/offgrid-llm/releases"><img src="https://img.shields.io/badge/Version-0.2.7-blue.svg?style=flat-square" alt="Version"></a>
-  <a href="https://github.com/takuphilchan/offgrid-llm/releases"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square" alt="Platform"></a>
-  <a href="https://pypi.org/project/offgrid/"><img src="https://img.shields.io/pypi/v/offgrid?style=flat-square&color=3776AB" alt="PyPI"></a>
-</p>
+[![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-0.2.7-blue.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
+[![PyPI](https://img.shields.io/pypi/v/offgrid?style=flat-square&color=3776AB)](https://pypi.org/project/offgrid/)
 
-<p align="center">
-  No cloud. No subscriptions. No data leaving your machine.
-</p>
+*No cloud. No subscriptions. No data leaving your machine.*
 
-<p align="center">
-  <img src="docs/images/chat-page.png" alt="OffGrid LLM Chat Interface" width="800"/>
-</p>
+![OffGrid LLM Chat Interface](docs/images/chat-page.png)
 
 ---
 
@@ -25,34 +17,34 @@
 
 | Problem | OffGrid Solution |
 |---------|------------------|
-| 🔒 **Privacy concerns** | All processing happens locally - your data never leaves your machine |
-| 💰 **Expensive API costs** | Free forever after download - no subscriptions or per-token fees |
-| 🌐 **Internet dependency** | Works completely offline - perfect for remote locations |
-| 🏢 **Enterprise restrictions** | Air-gapped deployment for sensitive environments |
-| 🎓 **Learning AI** | Experiment freely without cost or rate limits |
+| **Privacy concerns** | All processing happens locally - your data never leaves your machine |
+| **Expensive API costs** | Free forever after download - no subscriptions or per-token fees |
+| **Internet dependency** | Works completely offline - perfect for remote locations |
+| **Enterprise restrictions** | Air-gapped deployment for sensitive environments |
+| **Learning AI** | Experiment freely without cost or rate limits |
 
 ---
 
 ## Features at a Glance
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        OffGrid LLM                               │
-├─────────────────┬─────────────────┬─────────────────────────────┤
-│   🤖 AI Core    │   🎤 Voice      │   📚 Knowledge              │
-│   ───────────   │   ─────────     │   ─────────────             │
-│   • Chat UI     │   • Speech→Text │   • RAG/Embeddings          │
-│   • Streaming   │   • Text→Speech │   • Document ingestion      │
-│   • Sessions    │   • 18+ langs   │   • Semantic search         │
-│   • AI Agent    │   • Whisper     │   • Context injection       │
-├─────────────────┼─────────────────┼─────────────────────────────┤
-│   🔧 Tools      │   📊 Ops        │   🔌 Integration            │
-│   ───────────   │   ─────────     │   ─────────────             │
-│   • Model Hub   │   • Metrics     │   • REST API                │
-│   • Benchmarks  │   • Multi-user  │   • Python SDK              │
-│   • Terminal    │   • Monitoring  │   • OpenAI compatible       │
-│   • LoRA        │   • Auto-start  │   • USB transfer            │
-└─────────────────┴─────────────────┴─────────────────────────────┘
++-----------------------------------------------------------------+
+|                        OffGrid LLM                              |
++-----------------+-----------------+-----------------------------+
+|   AI Core       |   Voice         |   Knowledge                 |
+|   --------      |   -----         |   ---------                 |
+|   * Chat UI     |   * Speech>Text |   * RAG/Embeddings          |
+|   * Streaming   |   * Text>Speech |   * Document ingestion      |
+|   * Sessions    |   * 18+ langs   |   * Semantic search         |
+|   * AI Agent    |   * Whisper     |   * Context injection       |
++-----------------+-----------------+-----------------------------+
+|   Tools         |   Ops           |   Integration               |
+|   -----         |   ---           |   -----------               |
+|   * Model Hub   |   * Metrics     |   * REST API                |
+|   * Benchmarks  |   * Multi-user  |   * Python SDK              |
+|   * Terminal    |   * Monitoring  |   * OpenAI compatible       |
+|   * LoRA        |   * Auto-start  |   * USB transfer            |
++-----------------+-----------------+-----------------------------+
 ```
 
 ---
@@ -66,7 +58,7 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 ```
 
 <details>
-<summary>📦 Other installation methods</summary>
+<summary>Other installation methods</summary>
 
 **Interactive Install (choose components):**
 ```bash
@@ -289,9 +281,4 @@ MIT License - See [LICENSE](LICENSE)
 
 ---
 
-<p align="center">
-  <a href="docs/setup/quickstart.md">Quick Start</a> •
-  <a href="docs/README.md">Documentation</a> •
-  <a href="https://github.com/takuphilchan/offgrid-llm/issues">Issues</a> •
-  <a href="dev/CONTRIBUTING.md">Contributing</a>
-</p>
+[Quick Start](docs/setup/quickstart.md) | [Documentation](docs/README.md) | [Issues](https://github.com/takuphilchan/offgrid-llm/issues) | [Contributing](dev/CONTRIBUTING.md)
