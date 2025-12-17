@@ -27,25 +27,21 @@
 
 ## Features at a Glance
 
-```
-+-----------------------------------------------------------------+
-|                        OffGrid LLM                              |
-+-----------------+-----------------+-----------------------------+
-|   AI Core       |   Voice         |   Knowledge                 |
-|   --------      |   -----         |   ---------                 |
-|   * Chat UI     |   * Speech>Text |   * RAG/Embeddings          |
-|   * Streaming   |   * Text>Speech |   * Document ingestion      |
-|   * Sessions    |   * 18+ langs   |   * Semantic search         |
-|   * AI Agent    |   * Whisper     |   * Context injection       |
-+-----------------+-----------------+-----------------------------+
-|   Tools         |   Ops           |   Integration               |
-|   -----         |   ---           |   -----------               |
-|   * Model Hub   |   * Metrics     |   * REST API                |
-|   * Benchmarks  |   * Multi-user  |   * Python SDK              |
-|   * Terminal    |   * Monitoring  |   * OpenAI compatible       |
-|   * LoRA        |   * Auto-start  |   * USB transfer            |
-+-----------------+-----------------+-----------------------------+
-```
+### Features
+
+| AI Core | Voice | Knowledge |
+|---------|-------|-----------|
+| Chat UI | Speech-to-Text | RAG/Embeddings |
+| Streaming | Text-to-Speech | Document ingestion |
+| Sessions | 18+ languages | Semantic search |
+| AI Agent | Whisper | Context injection |
+
+| Tools | Ops | Integration |
+|-------|-----|-------------|
+| Model Hub | Metrics | REST API |
+| Benchmarks | Multi-user | Python SDK |
+| Terminal | Monitoring | OpenAI compatible |
+| LoRA | Auto-start | USB transfer |
 
 ---
 
