@@ -39,6 +39,13 @@ type Config struct {
 	LowMemoryMode   bool   `yaml:"low_memory_mode" json:"low_memory_mode"`   // Enable optimizations for <8GB RAM systems
 	AdaptiveContext bool   `yaml:"adaptive_context" json:"adaptive_context"` // Auto-adjust context size based on RAM
 
+	// Fast model switching (critical for <5s switch times)
+	PrewarmModels    bool `yaml:"prewarm_models" json:"prewarm_models"`         // Pre-warm models into OS page cache on startup
+	SmartMlock       bool `yaml:"smart_mlock" json:"smart_mlock"`               // Auto-enable mlock for small models (RAM > 4x model size)
+	ProtectDefault   bool `yaml:"protect_default" json:"protect_default"`       // Never evict default model from cache
+	FastSwitchMode   bool `yaml:"fast_switch_mode" json:"fast_switch_mode"`     // Enable all fast-switching optimizations
+	ModelLoadTimeout int  `yaml:"model_load_timeout" json:"model_load_timeout"` // Max seconds to wait for model load (default: 30)
+
 	// P2P settings
 	EnableP2P     bool `yaml:"enable_p2p" json:"enable_p2p"`
 	P2PPort       int  `yaml:"p2p_port" json:"p2p_port"`
@@ -89,14 +96,20 @@ func LoadConfig() *Config {
 		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", true),    // Better throughput
 		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),      // User can enable for <8GB systems
 		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true), // Auto-adjust context size
-		EnableP2P:       getEnvBool("OFFGRID_ENABLE_P2P", false),
-		P2PPort:         getEnvInt("OFFGRID_P2P_PORT", 9090),
-		DiscoveryPort:   getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
-		LogLevel:        getEnv("OFFGRID_LOG_LEVEL", "info"),
-		LogFile:         getEnv("OFFGRID_LOG_FILE", ""),
-		RequireAuth:     getEnvBool("OFFGRID_REQUIRE_AUTH", false),
-		GuestAccess:     getEnvBool("OFFGRID_GUEST_ACCESS", true),
-		MultiUserMode:   getEnvBool("OFFGRID_MULTI_USER", false), // Default: single-user mode
+		// Fast model switching - enabled by default for best UX
+		PrewarmModels:    getEnvBool("OFFGRID_PREWARM_MODELS", true),  // Pre-warm models into page cache
+		SmartMlock:       getEnvBool("OFFGRID_SMART_MLOCK", true),     // Auto mlock for small models
+		ProtectDefault:   getEnvBool("OFFGRID_PROTECT_DEFAULT", true), // Don't evict default model
+		FastSwitchMode:   getEnvBool("OFFGRID_FAST_SWITCH", true),     // Enable all fast-switch optimizations
+		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 30), // 30s timeout (was 120s)
+		EnableP2P:        getEnvBool("OFFGRID_ENABLE_P2P", false),
+		P2PPort:          getEnvInt("OFFGRID_P2P_PORT", 9090),
+		DiscoveryPort:    getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
+		LogLevel:         getEnv("OFFGRID_LOG_LEVEL", "info"),
+		LogFile:          getEnv("OFFGRID_LOG_FILE", ""),
+		RequireAuth:      getEnvBool("OFFGRID_REQUIRE_AUTH", false),
+		GuestAccess:      getEnvBool("OFFGRID_GUEST_ACCESS", true),
+		MultiUserMode:    getEnvBool("OFFGRID_MULTI_USER", false), // Default: single-user mode
 	}
 }
 
@@ -289,8 +302,27 @@ func (c *Config) applyDefaults() {
 	if c.KVCacheType == "" {
 		c.KVCacheType = "q8_0"
 	}
-	// FlashAttention, ContBatching, AdaptiveContext default to true (set in LoadConfig)
-	// UseMmap defaults to true, UseMlock defaults to false (safer for low RAM)
+
+	// Boolean defaults that should be TRUE for optimal experience
+	// These need special handling since Go defaults bools to false
+	// We use a sentinel approach: check if they were explicitly set in the config file
+	// For now, we ALWAYS enable these for best out-of-box experience
+	// Users can explicitly disable with env vars if needed
+	c.UseMmap = true         // Always use mmap for low RAM safety
+	c.FlashAttention = true  // Always enable for speed
+	c.ContBatching = true    // Always enable for throughput
+	c.AdaptiveContext = true // Always enable for auto-adjustment
+
+	// Fast model switching - CRITICAL for good UX, always enable
+	c.PrewarmModels = true  // Pre-warm models into page cache
+	c.SmartMlock = true     // Auto mlock for small models
+	c.ProtectDefault = true // Don't evict default model
+	c.FastSwitchMode = true // Enable all fast-switch optimizations
+
+	// Fast model switching defaults - enable by default for best UX
+	if c.ModelLoadTimeout == 0 {
+		c.ModelLoadTimeout = 30 // 30 seconds (was 120s)
+	}
 }
 
 // applyEnvOverrides overrides config with environment variables
@@ -348,5 +380,22 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if multiUser := os.Getenv("OFFGRID_MULTI_USER"); multiUser != "" {
 		c.MultiUserMode = getEnvBool("OFFGRID_MULTI_USER", false)
+	}
+
+	// Fast model switching overrides (allow disabling if explicitly set to false)
+	if prewarm := os.Getenv("OFFGRID_PREWARM_MODELS"); prewarm != "" {
+		c.PrewarmModels = getEnvBool("OFFGRID_PREWARM_MODELS", true)
+	}
+	if smartMlock := os.Getenv("OFFGRID_SMART_MLOCK"); smartMlock != "" {
+		c.SmartMlock = getEnvBool("OFFGRID_SMART_MLOCK", true)
+	}
+	if protect := os.Getenv("OFFGRID_PROTECT_DEFAULT"); protect != "" {
+		c.ProtectDefault = getEnvBool("OFFGRID_PROTECT_DEFAULT", true)
+	}
+	if fastSwitch := os.Getenv("OFFGRID_FAST_SWITCH"); fastSwitch != "" {
+		c.FastSwitchMode = getEnvBool("OFFGRID_FAST_SWITCH", true)
+	}
+	if timeout := getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 0); timeout != 0 {
+		c.ModelLoadTimeout = timeout
 	}
 }

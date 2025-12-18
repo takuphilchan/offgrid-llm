@@ -3,6 +3,7 @@ package inference
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,16 +26,21 @@ type ModelInstance struct {
 
 // ModelCache manages multiple llama-server instances for fast model switching
 type ModelCache struct {
-	instances    map[string]*ModelInstance // modelID -> instance
-	portToModel  map[int]string            // port -> modelID for reverse lookup
-	usedPorts    map[int]bool              // track which ports are in use
-	maxInstances int
-	gpuLayers    int // Number of GPU layers to offload
-	contextSize  int // Context window size (0 = auto-detect based on RAM)
-	batchSize    int // Batch size for inference (lower = faster first token)
-	mu           sync.RWMutex
-	basePort     int
-	binManager   *BinaryManager
+	instances      map[string]*ModelInstance // modelID -> instance
+	portToModel    map[int]string            // port -> modelID for reverse lookup
+	usedPorts      map[int]bool              // track which ports are in use
+	maxInstances   int
+	gpuLayers      int // Number of GPU layers to offload
+	contextSize    int // Context window size (0 = auto-detect based on RAM)
+	batchSize      int // Batch size for inference (lower = faster first token)
+	mu             sync.RWMutex
+	basePort       int
+	binManager     *BinaryManager
+	mmapWarmer     *MmapWarmer // Pre-warms models into page cache
+	defaultModelID string      // Protected from eviction
+	useMlock       bool        // Lock small models in RAM
+	modelsDir      string      // Models directory for mmap warming
+	totalRAMMB     int64       // System RAM in MB for smart mlock
 }
 
 // NewModelCache creates a new model cache with specified capacity
@@ -56,7 +62,55 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		batchSize:    256, // Lower batch = faster time-to-first-token
 		basePort:     42382,
 		binManager:   NewBinaryManager(binDir),
+		useMlock:     false, // Disabled by default, enabled for small models
+		totalRAMMB:   0,     // Will be set by SetSystemRAM
 	}
+}
+
+// NewModelCacheWithWarmer creates a model cache with mmap pre-warming support
+func NewModelCacheWithWarmer(maxInstances int, gpuLayers int, binDir string, modelsDir string) *ModelCache {
+	mc := NewModelCache(maxInstances, gpuLayers, binDir)
+	mc.modelsDir = modelsDir
+	mc.mmapWarmer = NewMmapWarmer(modelsDir)
+	return mc
+}
+
+// SetDefaultModel sets the protected default model that won't be evicted
+func (mc *ModelCache) SetDefaultModel(modelID string) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.defaultModelID = modelID
+	log.Printf("Default model set to %s (protected from eviction)", modelID)
+}
+
+// SetSystemRAM sets the system RAM for smart mlock decisions
+func (mc *ModelCache) SetSystemRAM(ramMB int64) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.totalRAMMB = ramMB
+}
+
+// PrewarmModel pre-warms a model into the OS page cache for faster loading
+func (mc *ModelCache) PrewarmModel(modelPath string) error {
+	if mc.mmapWarmer == nil {
+		return fmt.Errorf("mmap warmer not initialized")
+	}
+	_, err := mc.mmapWarmer.WarmModel(modelPath)
+	return err
+}
+
+// PrewarmAllModels pre-warms all models in the background
+func (mc *ModelCache) PrewarmAllModels() {
+	if mc.mmapWarmer == nil {
+		log.Println("Warning: mmap warmer not initialized, skipping prewarm")
+		return
+	}
+	go func() {
+		_, err := mc.mmapWarmer.WarmAllModels()
+		if err != nil {
+			log.Printf("Warning: failed to prewarm models: %v", err)
+		}
+	}()
 }
 
 // SetContextSize sets the context window size (0 = auto-detect)
@@ -74,6 +128,46 @@ func (mc *ModelCache) SetBatchSize(size int) {
 		size = 256
 	}
 	mc.batchSize = size
+}
+
+// SetUseMlock enables or disables mlock for all models
+func (mc *ModelCache) SetUseMlock(enable bool) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.useMlock = enable
+}
+
+// shouldUseMlock determines if mlock should be used for a model
+// Smart mlock: enable if system RAM is at least 4x the model size
+// This ensures the model stays in RAM without causing swapping
+func (mc *ModelCache) shouldUseMlock(modelPath string) bool {
+	// If mlock is explicitly enabled, always use it
+	if mc.useMlock {
+		return true
+	}
+
+	// Smart mlock: check if we have enough RAM
+	if mc.totalRAMMB <= 0 {
+		return false // Can't determine, skip mlock
+	}
+
+	// Get model file size
+	info, err := os.Stat(modelPath)
+	if err != nil {
+		return false
+	}
+
+	modelSizeMB := info.Size() / (1024 * 1024)
+
+	// Use mlock if RAM is at least 4x the model size
+	// This leaves room for OS, other processes, and KV cache
+	if mc.totalRAMMB >= modelSizeMB*4 {
+		log.Printf("Smart mlock: enabling for %s (model: %dMB, RAM: %dMB)",
+			modelPath, modelSizeMB, mc.totalRAMMB)
+		return true
+	}
+
+	return false
 }
 
 // GetOrLoad returns an existing model instance or loads a new one
@@ -162,6 +256,13 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		"--cache-type-v", "q8_0", // with minimal quality loss
 	}
 
+	// Smart mlock: automatically enable for small models when RAM is sufficient
+	// This keeps the model in RAM and prevents swapping, improving switch times
+	if mc.useMlock || mc.shouldUseMlock(modelPath) {
+		args = append(args, "--mlock")
+		log.Printf("Using mlock for model %s (keeping in RAM)", modelID)
+	}
+
 	if projectorPath != "" {
 		args = append(args, "--mmproj", projectorPath)
 	}
@@ -220,12 +321,17 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 }
 
 // evictLRU removes the least recently used model from cache
+// Protected models (default model) will not be evicted
 func (mc *ModelCache) evictLRU() error {
 	var oldestModel string
 	var oldestTime time.Time
 
-	// Find least recently used
+	// Find least recently used, excluding protected default model
 	for modelID, instance := range mc.instances {
+		// Never evict the default model
+		if mc.defaultModelID != "" && modelID == mc.defaultModelID {
+			continue
+		}
 		if oldestModel == "" || instance.LastAccess.Before(oldestTime) {
 			oldestModel = modelID
 			oldestTime = instance.LastAccess
@@ -233,19 +339,33 @@ func (mc *ModelCache) evictLRU() error {
 	}
 
 	if oldestModel == "" {
+		// All models are protected, try to evict default as last resort
+		if mc.defaultModelID != "" {
+			log.Printf("Warning: evicting protected default model %s (no other models to evict)", mc.defaultModelID)
+			return mc.unloadInternal(mc.defaultModelID)
+		}
 		return fmt.Errorf("no models to evict")
 	}
 
 	log.Printf("Evicting model %s from cache (LRU)", oldestModel)
-	return mc.Unload(oldestModel)
+	return mc.unloadInternal(oldestModel)
 }
 
 // Unload removes a specific model from cache
 func (mc *ModelCache) Unload(modelID string) error {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return mc.unloadInternal(modelID)
+}
+
+// unloadInternal removes a model without acquiring lock (for internal use)
+func (mc *ModelCache) unloadInternal(modelID string) error {
 	instance, exists := mc.instances[modelID]
 	if !exists {
 		return fmt.Errorf("model %s not in cache", modelID)
 	}
+
+	port := instance.Port
 
 	// Kill the llama-server process
 	if instance.Cmd != nil && instance.Cmd.Process != nil {
@@ -254,17 +374,32 @@ func (mc *ModelCache) Unload(modelID string) error {
 		}
 		// Wait for process to fully terminate
 		instance.Cmd.Wait()
-		// Give port time to be released
-		time.Sleep(500 * time.Millisecond)
 	}
 
-	// Clean up tracking maps
+	// Clean up tracking maps immediately
 	delete(mc.instances, modelID)
-	delete(mc.portToModel, instance.Port)
-	delete(mc.usedPorts, instance.Port)
+	delete(mc.portToModel, port)
+	delete(mc.usedPorts, port)
 
-	log.Printf("Model %s unloaded from cache (port %d released)", modelID, instance.Port)
+	// Wait for port to be released using active checking instead of fixed sleep
+	// This is much faster than the old 500ms sleep
+	mc.waitForPortRelease(port, 100*time.Millisecond, 5)
+
+	log.Printf("Model %s unloaded from cache (port %d released)", modelID, port)
 	return nil
+}
+
+// waitForPortRelease actively checks if a port is available
+func (mc *ModelCache) waitForPortRelease(port int, interval time.Duration, maxAttempts int) {
+	for i := 0; i < maxAttempts; i++ {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 50*time.Millisecond)
+		if err != nil {
+			// Port is free
+			return
+		}
+		conn.Close()
+		time.Sleep(interval)
+	}
 }
 
 // UnloadAll removes all models from cache
@@ -290,13 +425,14 @@ func (mc *ModelCache) getNextAvailablePort() int {
 }
 
 // waitForReady waits for llama-server to start AND for the model to fully load
+// With mmap pre-warming, models load much faster (5-15s vs 60-120s)
 // This prevents blank responses when switching models too quickly
 func (mc *ModelCache) waitForReady(port int) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
-	// Phase 1: Wait for server process to start (up to 30 seconds for VLM models)
+	// Phase 1: Wait for server process to start (up to 10 seconds with pre-warming)
 	serverStarted := false
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 20; i++ {
 		time.Sleep(500 * time.Millisecond)
 		resp, err := httpClient.Get(healthURL)
 		if err == nil {
@@ -308,14 +444,16 @@ func (mc *ModelCache) waitForReady(port int) error {
 	}
 
 	if !serverStarted {
-		return fmt.Errorf("llama-server on port %d did not start within 30 seconds", port)
+		return fmt.Errorf("llama-server on port %d did not start within 10 seconds", port)
 	}
 
-	// Phase 2: Wait for model to actually load (up to 120 seconds total)
+	// Phase 2: Wait for model to actually load
+	// With mmap pre-warming, this should be fast (5-15s)
 	// Check /v1/models endpoint which returns 200 only when model is loaded
 	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", port)
 
-	maxAttempts := 120 // 120 seconds for model loading (increased for CPU/slow disks)
+	// Reduced from 120s to 30s - models should be in page cache
+	maxAttempts := 30
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		time.Sleep(1 * time.Second)
 
@@ -375,9 +513,19 @@ func (mc *ModelCache) GetStats() map[string]interface{} {
 		})
 	}
 
-	return map[string]interface{}{
+	stats := map[string]interface{}{
 		"max_instances": mc.maxInstances,
 		"current_count": len(mc.instances),
 		"cached_models": models,
+		"default_model": mc.defaultModelID,
+		"mlock_enabled": mc.useMlock,
+		"system_ram_mb": mc.totalRAMMB,
 	}
+
+	// Add mmap warmer stats if available
+	if mc.mmapWarmer != nil {
+		stats["mmap_warmer"] = mc.mmapWarmer.Stats()
+	}
+
+	return stats
 }

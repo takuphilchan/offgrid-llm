@@ -67,9 +67,63 @@ async function loadChatModels() {
             handleModelChange();
         };
         console.log('[LOAD MODELS] Event listener attached to dropdown via onchange');
+        
+        // Proactive model warming: trigger current model to load in background
+        // This ensures the model is ready when user starts typing
+        if (currentModel) {
+            warmModelInBackground(currentModel);
+        }
     } catch (e) {
         console.error('Failed to load models:', e);
         document.getElementById('chatModel').innerHTML = '<option value="">Error loading models</option>';
+    }
+}
+
+// Warm up a model in the background so it's ready for instant use
+async function warmModelInBackground(modelName) {
+    console.log('[MODEL WARM] Starting background warm-up for:', modelName);
+    const statusBadge = document.getElementById('statusBadge');
+    
+    // Check if already cached - if so, skip warming
+    if (await isModelCached(modelName)) {
+        console.log('[MODEL WARM] Model already cached, ready instantly!');
+        statusBadge.className = 'badge badge-success';
+        statusBadge.textContent = `Ready (${modelName})`;
+        return;
+    }
+    
+    // Show warming status
+    statusBadge.className = 'text-xs font-medium text-yellow-400';
+    statusBadge.textContent = `Warming ${modelName}...`;
+    
+    try {
+        // Make a minimal request to trigger model loading
+        const resp = await fetch('/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: modelName,
+                messages: [{ role: 'user', content: 'hi' }],
+                stream: false,
+                max_tokens: 1,
+                temperature: 0
+            }),
+            signal: AbortSignal.timeout(30000)
+        });
+        
+        if (resp.ok) {
+            console.log('[MODEL WARM] Model warmed and ready!');
+            statusBadge.className = 'badge badge-success';
+            statusBadge.textContent = `Ready (${modelName})`;
+        } else {
+            console.warn('[MODEL WARM] Warm-up request returned:', resp.status);
+            statusBadge.className = 'badge badge-warning';
+            statusBadge.textContent = `${modelName}`;
+        }
+    } catch (e) {
+        console.warn('[MODEL WARM] Warm-up failed:', e.message);
+        statusBadge.className = 'badge badge-warning';
+        statusBadge.textContent = `${modelName}`;
     }
 }
 
@@ -274,81 +328,122 @@ function clearEmbedding() {
     currentEmbeddingData = null;
 }
 
-// Wait for model to be fully loaded and ready
+// Check if a model is already cached (instant switch)
+async function isModelCached(modelName) {
+    try {
+        const resp = await fetch('/v1/cache/stats', { signal: AbortSignal.timeout(2000) });
+        if (!resp.ok) return false;
+        const stats = await resp.json();
+        const cachedModels = stats.model_cache?.cached_models || [];
+        return cachedModels.some(m => m.model_id === modelName);
+    } catch (e) {
+        console.log('[CACHE CHECK] Error checking cache:', e.message);
+        return false;
+    }
+}
+
+// Wait for model to be fully loaded and ready (optimized version)
 async function waitForModelReady(modelName) {
     console.log('[HEALTH CHECK] Waiting for model to be ready:', modelName);
-    const maxAttempts = 60; // 60 seconds max wait
-    const pollInterval = 1000; // Check every second
+    
+    // FAST PATH: Check if model is already cached (instant switch!)
+    const wasCached = await isModelCached(modelName);
+    if (wasCached) {
+        console.log('[HEALTH CHECK] Model already cached - should be instant!');
+    }
+    
+    // Use faster polling for cached models, slower for cold loads
+    const pollInterval = wasCached ? 200 : 500;
+    const maxWaitTime = wasCached ? 5000 : 30000; // 5s for cached, 30s for cold
+    const maxAttempts = Math.ceil(maxWaitTime / pollInterval);
+    
+    console.log(`[HEALTH CHECK] Poll config: ${pollInterval}ms interval, max ${maxWaitTime}ms (${maxAttempts} attempts)`);
     
     // Check if this is an embedding model
     const resp = await fetch('/models');
     const data = await resp.json();
     const modelInfo = data.data.find(m => m.id === modelName);
-    // Check type from metadata, or fallback to name heuristics if metadata missing
     const isEmbeddingModel = modelInfo?.type === 'embedding' || 
                            modelName.toLowerCase().includes('embed') || 
                            modelName.toLowerCase().includes('bge') ||
                            modelName.toLowerCase().includes('nomic');
     console.log('[HEALTH CHECK] Model type:', modelInfo?.type, 'Is embedding:', isEmbeddingModel);
     
+    // Trigger the model load immediately with one request
+    const triggerLoad = async () => {
+        try {
+            if (isEmbeddingModel) {
+                return await fetch('/v1/embeddings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: modelName, input: 'hi' }),
+                    signal: AbortSignal.timeout(15000)
+                });
+            } else {
+                return await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [{ role: 'user', content: 'hi' }],
+                        stream: false,
+                        max_tokens: 1,
+                        temperature: 0
+                    }),
+                    signal: AbortSignal.timeout(15000)
+                });
+            }
+        } catch (e) {
+            return null;
+        }
+    };
+    
+    // For cached models, just make one request - it should work immediately
+    if (wasCached) {
+        console.log('[HEALTH CHECK] Triggering cached model...');
+        const result = await triggerLoad();
+        if (result?.ok) {
+            console.log('[HEALTH CHECK] Cached model ready instantly!');
+            return true;
+        }
+        // If cached model failed, fall through to polling
+        console.log('[HEALTH CHECK] Cached model not immediately ready, polling...');
+    }
+    
+    // Start the load in background
+    triggerLoad();
+    
+    // Poll until ready
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        
         try {
             console.log(`[HEALTH CHECK] Attempt ${attempt}/${maxAttempts}`);
             
-            let testResponse;
-            if (isEmbeddingModel) {
-                // For embedding models, use embeddings endpoint
-                testResponse = await fetch('/v1/embeddings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: modelName,
-                        input: 'test'
-                    }),
-                    signal: AbortSignal.timeout(5000)
-                });
-            } else {
-                // For LLM models, use chat completions endpoint
-                testResponse = await fetch('/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: modelName,
-                        messages: [{ role: 'user', content: 'test' }],
-                        stream: false,
-                        max_tokens: 1,
-                        temperature: 0.1
-                    }),
-                    signal: AbortSignal.timeout(5000)
-                });
+            // Quick cache check first (very fast)
+            if (await isModelCached(modelName)) {
+                // Model is in cache, try a quick inference test
+                const testResp = await triggerLoad();
+                if (testResp?.ok) {
+                    console.log('[HEALTH CHECK] Model is ready!');
+                    return true;
+                }
             }
-            
-            console.log('[HEALTH CHECK] Response status:', testResponse.status);
-            
-            // If we get 200, model is ready
-            if (testResponse.ok) {
-                console.log('[HEALTH CHECK] Model is ready!');
-                return true;
-            }
-            
-            // If we get 503 or 500, model is still loading
-            if (testResponse.status === 503 || testResponse.status === 500) {
-                const errorData = await testResponse.json().catch(() => ({}));
-                console.log('[HEALTH CHECK] Model loading:', errorData.error || 'Still initializing...');
-            }
-            
-            console.log(`[HEALTH CHECK] Not ready yet, waiting ${pollInterval}ms...`);
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
-            
         } catch (error) {
             console.log(`[HEALTH CHECK] Error on attempt ${attempt}:`, error.message);
-            // Network errors or timeouts are expected while loading
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
     }
     
-    console.warn('[HEALTH CHECK] Timeout after 60s - model may not be ready');
-    return false; // Return false if timeout
+    // Final attempt with longer timeout
+    console.log('[HEALTH CHECK] Final attempt with longer timeout...');
+    const finalResult = await triggerLoad();
+    if (finalResult?.ok) {
+        console.log('[HEALTH CHECK] Model is ready on final attempt!');
+        return true;
+    }
+    
+    console.warn(`[HEALTH CHECK] Timeout after ${maxWaitTime}ms - model may not be ready`);
+    return false;
 }
 
 // Handle model dropdown change
@@ -428,13 +523,22 @@ async function handleModelChange() {
     sendBtn.disabled = true;
     statusBadge.className = 'text-xs font-medium text-yellow-400';
     
-    // Show loading progress
-    let loadingSeconds = 0;
-    statusBadge.textContent = `Loading ${newModel}...`;
+    // Check if model is cached for better UX messaging
+    const isCached = await isModelCached(newModel);
+    
+    // Show loading progress with context
+    let loadingMs = 0;
+    const loadingStartTime = Date.now();
+    statusBadge.textContent = isCached ? `Switching to ${newModel}...` : `Loading ${newModel}...`;
     const loadingInterval = setInterval(() => {
-        loadingSeconds++;
-        statusBadge.textContent = `Loading ${newModel}... ${loadingSeconds}s`;
-    }, 1000);
+        loadingMs = Date.now() - loadingStartTime;
+        const seconds = (loadingMs / 1000).toFixed(1);
+        if (isCached) {
+            statusBadge.textContent = `Switching to ${newModel}... ${seconds}s`;
+        } else {
+            statusBadge.textContent = `Loading ${newModel}... ${seconds}s`;
+        }
+    }, 100); // Update every 100ms for smoother display
     
     console.log('[MODEL CHANGE] Starting health check for', newModel);
     

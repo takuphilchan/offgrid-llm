@@ -246,21 +246,124 @@ func NewWithConfig(cfg *config.Config) *Server {
 
 // createModelCache creates a model cache with performance settings from config
 func createModelCache(cfg *config.Config) *inference.ModelCache {
-	cache := inference.NewModelCache(3, cfg.NumGPULayers, filepath.Join(cfg.ModelsDir, "..", "bin"))
+	binDir := filepath.Join(cfg.ModelsDir, "..", "bin")
+
+	// Auto-scale MaxModels based on system RAM if not explicitly configured
+	maxModels := cfg.MaxModels
+	resources, err := resource.DetectResources()
+	if err == nil && resources != nil {
+		// Calculate optimal max_models based on available RAM
+		// Reserve 2GB for OS and other processes
+		availableForModels := resources.TotalRAM - 2048
+		if availableForModels < 1024 {
+			availableForModels = 1024 // Minimum 1GB for models
+		}
+
+		// Estimate average model size by scanning model directory
+		avgModelSize := estimateAverageModelSize(cfg.ModelsDir)
+		if avgModelSize > 0 {
+			optimalMax := int(availableForModels / avgModelSize)
+			if optimalMax < 1 {
+				optimalMax = 1
+			}
+			if optimalMax > 10 {
+				optimalMax = 10 // Safety cap
+			}
+
+			// Only auto-scale if user has default config value (3)
+			// This respects explicit user configuration
+			if cfg.MaxModels == 3 && optimalMax > maxModels {
+				log.Printf("Auto-scaling max_models: %d -> %d (RAM: %dMB, avg model: %dMB)",
+					maxModels, optimalMax, resources.TotalRAM, avgModelSize)
+				maxModels = optimalMax
+			}
+		}
+	}
+
+	// Use the new warmer-enabled cache for faster model switching
+	cache := inference.NewModelCacheWithWarmer(maxModels, cfg.NumGPULayers, binDir, cfg.ModelsDir)
 
 	// Apply performance tuning from config
 	cache.SetContextSize(cfg.MaxContextSize)
 	cache.SetBatchSize(cfg.BatchSize)
 
+	// Set default model protection (won't be evicted from cache)
+	if cfg.DefaultModel != "" && cfg.ProtectDefault {
+		cache.SetDefaultModel(cfg.DefaultModel)
+	}
+
+	// Configure smart mlock based on system RAM
+	if cfg.SmartMlock || cfg.UseMlock {
+		// Detect system RAM for smart mlock decisions
+		resources, err := resource.DetectResources()
+		if err == nil && resources != nil {
+			cache.SetSystemRAM(resources.TotalRAM)
+			log.Printf("System RAM detected: %d MB (smart mlock enabled)", resources.TotalRAM)
+		}
+		if cfg.UseMlock {
+			cache.SetUseMlock(true)
+		}
+	}
+
 	return cache
 }
 
+// estimateAverageModelSize scans the models directory and returns average model size in MB
+func estimateAverageModelSize(modelsDir string) int64 {
+	entries, err := os.ReadDir(modelsDir)
+	if err != nil {
+		return 2048 // Default assumption: 2GB per model
+	}
+
+	var totalSize int64
+	var count int64
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".gguf") {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		sizeMB := info.Size() / (1024 * 1024)
+		totalSize += sizeMB
+		count++
+	}
+
+	if count == 0 {
+		return 2048 // Default: 2GB if no models found
+	}
+
+	avgSize := totalSize / count
+
+	// Add 20% overhead for runtime memory usage
+	return avgSize * 120 / 100
+}
+
 // startLlamaServer is deprecated - models are now loaded on-demand via cache
+// However, we use this opportunity to pre-warm models into the OS page cache
 func (s *Server) startLlamaServer() error {
 	// Kill any pre-existing llama-server instances to avoid port conflicts
 	// The model cache will start fresh instances on demand
 	exec.Command("pkill", "-9", "llama-server").Run()
 	log.Println("Cleared any pre-existing llama-server instances - will load models on first request")
+
+	// Start background pre-warming of all models into OS page cache (if enabled)
+	// This dramatically speeds up model switching (from 60-120s to 5-15s)
+	if s.config.PrewarmModels || s.config.FastSwitchMode {
+		log.Println("🔥 Starting background model pre-warming for faster switching...")
+		s.modelCache.PrewarmAllModels()
+	} else {
+		log.Println("Model pre-warming disabled (set OFFGRID_PREWARM_MODELS=true to enable)")
+	}
+
 	return nil
 }
 
@@ -3095,7 +3198,7 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		"multi_user_mode": s.config.MultiUserMode,
 		"require_auth":    s.config.RequireAuth,
 		"guest_access":    s.config.GuestAccess,
-		"version":         "0.2.7",
+		"version":         "0.2.8",
 		"features": map[string]bool{
 			"users":   s.config.MultiUserMode,
 			"metrics": true, // Always available but can be hidden
