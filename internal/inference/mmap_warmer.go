@@ -64,7 +64,7 @@ func (w *MmapWarmer) WarmModel(modelPath string) (*WarmStatus, error) {
 	}
 
 	start := time.Now()
-	log.Printf("🔥 Warming model into page cache: %s", filepath.Base(modelPath))
+	log.Printf("Warming model into page cache: %s", filepath.Base(modelPath))
 
 	// Get file info
 	info, err := os.Stat(modelPath)
@@ -122,7 +122,7 @@ func (w *MmapWarmer) WarmModel(modelPath string) (*WarmStatus, error) {
 
 	// Calculate speed
 	speedMBps := float64(status.SizeMB) / status.WarmTime.Seconds()
-	log.Printf("✅ Model %s warmed in %v (%.1f MB, %.1f MB/s)",
+	log.Printf("Model %s warmed in %v (%.1f MB, %.1f MB/s)",
 		status.ModelName, status.WarmTime.Round(time.Millisecond), float64(status.SizeMB), speedMBps)
 
 	return status, nil
@@ -162,7 +162,7 @@ func (w *MmapWarmer) WarmAllModels() ([]*WarmStatus, error) {
 		return results, nil
 	}
 
-	log.Printf("🔥 Warming %d models into page cache...", len(modelPaths))
+	log.Printf("Warming %d models into page cache...", len(modelPaths))
 
 	// Warm models concurrently (but limit parallelism to avoid I/O saturation)
 	maxConcurrent := runtime.NumCPU()
@@ -198,7 +198,7 @@ func (w *MmapWarmer) WarmAllModels() ([]*WarmStatus, error) {
 		totalMB += s.SizeMB
 		totalTime += s.WarmTime
 	}
-	log.Printf("✅ Warmed %d models (%.1f GB total) in %v",
+	log.Printf("Warmed %d models (%.1f GB total) in %v",
 		len(results), float64(totalMB)/1024, totalTime.Round(time.Second))
 
 	return results, nil
@@ -218,7 +218,7 @@ func (w *MmapWarmer) WarmPriorityModels(defaultModel string, otherModels []strin
 		if defaultModel != "" {
 			defaultPath := w.findModelPath(defaultModel)
 			if defaultPath != "" {
-				log.Printf("🎯 Priority warming default model: %s", defaultModel)
+				log.Printf("Priority warming default model: %s", defaultModel)
 				w.WarmModel(defaultPath)
 			}
 		}

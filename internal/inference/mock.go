@@ -48,7 +48,7 @@ func (e *MockEngine) ChatCompletion(ctx context.Context, req *api.ChatCompletion
 	}
 
 	// Mock response
-	responseText := "🔧 MOCK MODE: Real inference temporarily disabled due to llama.cpp version compatibility. See docs/INFERENCE_TODO.md for details. All API endpoints are functional and ready for integration."
+	responseText := "MOCK MODE: Real inference temporarily disabled due to llama.cpp version compatibility. See docs/INFERENCE_TODO.md for details. All API endpoints are functional and ready for integration."
 
 	// Count tokens (very rough approximation)
 	promptTokens := len(strings.Fields(promptBuilder.String()))
@@ -84,7 +84,7 @@ func (e *MockEngine) ChatCompletionStream(ctx context.Context, req *api.ChatComp
 	}
 
 	// Mock streaming response - send token by token
-	responseText := "🔧 MOCK MODE: Real LLM inference is temporarily disabled while we resolve llama.cpp version compatibility. The API and all infrastructure are fully functional and ready. See docs/INFERENCE_TODO.md for the integration roadmap."
+	responseText := "MOCK MODE: Real LLM inference is temporarily disabled while we resolve llama.cpp version compatibility. The API and all infrastructure are fully functional and ready. See docs/INFERENCE_TODO.md for the integration roadmap."
 	words := strings.Fields(responseText)
 
 	for _, word := range words {
@@ -111,7 +111,7 @@ func (e *MockEngine) Completion(ctx context.Context, req *api.CompletionRequest)
 	}
 
 	// Mock response
-	responseText := "🔧 MOCK MODE: Real inference coming soon. API infrastructure is ready."
+	responseText := "MOCK MODE: Real inference coming soon. API infrastructure is ready."
 
 	promptTokens := len(strings.Fields(req.Prompt))
 	completionTokens := len(strings.Fields(responseText))

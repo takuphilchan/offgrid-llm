@@ -40,7 +40,7 @@ func NewLlamaEngine() *LlamaEngine {
 // Load delegates to HTTP engine
 func (e *LlamaEngine) Load(ctx context.Context, modelPath string, opts LoadOptions) error {
 	if err := e.httpEngine.Load(ctx, modelPath, opts); err != nil {
-		fmt.Println("⚠️  Warning: llama-server not reachable.")
+		fmt.Println(" Warning: llama-server not reachable.")
 		fmt.Println("   To enable real inference:")
 		fmt.Println("   1. Check llama-server status:")
 		fmt.Println("      sudo systemctl status llama-server")

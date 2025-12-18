@@ -358,7 +358,7 @@ func (s *Server) startLlamaServer() error {
 	// Start background pre-warming of all models into OS page cache (if enabled)
 	// This dramatically speeds up model switching (from 60-120s to 5-15s)
 	if s.config.PrewarmModels || s.config.FastSwitchMode {
-		log.Println("🔥 Starting background model pre-warming for faster switching...")
+		log.Println("Starting background model pre-warming for faster switching...")
 		s.modelCache.PrewarmAllModels()
 	} else {
 		log.Println("Model pre-warming disabled (set OFFGRID_PREWARM_MODELS=true to enable)")
@@ -1196,7 +1196,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	log.Printf("🔍 RAG Check: UseKnowledgeBase=%v, RAGEnabled=%v", req.UseKnowledgeBase, s.ragEngine.IsEnabled())
 	if req.UseKnowledgeBase != nil && *req.UseKnowledgeBase {
 		if !s.ragEngine.IsEnabled() {
-			log.Printf("⚠️ Knowledge Base requested but RAG is not enabled")
+			log.Printf("Knowledge Base requested but RAG is not enabled")
 		} else {
 			// Find the last user message
 			for i := len(req.Messages) - 1; i >= 0; i-- {
@@ -1205,13 +1205,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					log.Printf("🔍 RAG searching for: %s", userContent)
 					enhancedContent, ragCtx, err := s.ragEngine.EnhancePrompt(r.Context(), userContent)
 					if err != nil {
-						log.Printf("❌ RAG enhancement failed: %v", err)
+						log.Printf("RAG enhancement failed: %v", err)
 					} else if ragCtx != nil && len(ragCtx.Results) > 0 {
 						// Replace the user message with enhanced version
 						req.Messages[i].Content = enhancedContent
 						log.Printf("📚 RAG injected %d chunks for query (context length: %d chars)", len(ragCtx.Results), len(ragCtx.Context))
 					} else {
-						log.Printf("⚠️ RAG found no relevant results for query")
+						log.Printf("RAG found no relevant results for query")
 					}
 					break
 				}

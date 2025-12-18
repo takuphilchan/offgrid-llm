@@ -166,7 +166,7 @@ func (p *Prewarmer) WarmModels(ctx context.Context, models []string) (*WarmupRes
 			Status:    "warming",
 		}
 
-		log.Printf("🔥 Pre-warming model: %s", modelName)
+		log.Printf("Pre-warming model: %s", modelName)
 		warmStart := time.Now()
 
 		err = p.loader.LoadModel(modelPath)
@@ -176,13 +176,13 @@ func (p *Prewarmer) WarmModels(ctx context.Context, models []string) (*WarmupRes
 			status.Status = "failed"
 			status.Error = err.Error()
 			result.Failed++
-			log.Printf("❌ Failed to warm %s: %v", modelName, err)
+			log.Printf("Failed to warm %s: %v", modelName, err)
 		} else {
 			status.Status = "ready"
 			status.MemoryMB = p.loader.GetModelMemory(modelName) / (1024 * 1024)
 			totalMemory += status.MemoryMB * 1024 * 1024
 			result.Ready++
-			log.Printf("✅ Model %s warmed in %v", modelName, status.Duration)
+			log.Printf("Model %s warmed in %v", modelName, status.Duration)
 		}
 
 		result.Models = append(result.Models, status)
@@ -299,7 +299,7 @@ func (p *Prewarmer) listModels() ([]string, error) {
 
 // BootWarmup runs pre-warming as part of system boot
 func BootWarmup(ctx context.Context, config WarmupConfig, loader ModelLoader) error {
-	log.Println("🚀 Starting boot-time model pre-warming...")
+	log.Println("Starting boot-time model pre-warming...")
 
 	ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
@@ -314,16 +314,16 @@ func BootWarmup(ctx context.Context, config WarmupConfig, loader ModelLoader) er
 	} else if config.DefaultModel != "" {
 		result, err = prewarmer.WarmDefault(ctx)
 	} else {
-		log.Println("⚠️  No models configured for pre-warming")
+		log.Println(" No models configured for pre-warming")
 		return nil
 	}
 
 	if err != nil {
-		log.Printf("❌ Pre-warming failed: %v", err)
+		log.Printf("Pre-warming failed: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Pre-warming complete: %d ready, %d failed, %d skipped in %v",
+	log.Printf("Pre-warming complete: %d ready, %d failed, %d skipped in %v",
 		result.Ready, result.Failed, result.Skipped, result.TotalDuration)
 
 	return nil

@@ -145,7 +145,7 @@ func (tm *TransferManager) handleConnection(conn net.Conn) {
 		return
 	}
 
-	log.Printf("✅ Sent %d bytes to %s", written, conn.RemoteAddr())
+	log.Printf("Sent %d bytes to %s", written, conn.RemoteAddr())
 }
 
 // DownloadFromPeer downloads a file from a peer
@@ -271,7 +271,7 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 	progress.BytesTransferred = totalBytes
 	tm.notifyProgress(progress)
 
-	log.Printf("✅ Downloaded %s from %s", filename, peer.Address)
+	log.Printf("Downloaded %s from %s", filename, peer.Address)
 	return nil
 }
 

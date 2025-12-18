@@ -1232,7 +1232,7 @@ async function processVoiceChat(audioBlob) {
     } catch (e) {
         console.error('Voice chat error:', e);
         // Show error as a message in the conversation
-        addVoiceMessage('assistant', '⚠️ Error: ' + e.message);
+        addVoiceMessage('assistant', 'Error: ' + e.message);
         statusEl.textContent = 'Error - try again';
         setTimeout(() => { statusEl.textContent = 'Press and hold to speak'; }, 5000);
     }
