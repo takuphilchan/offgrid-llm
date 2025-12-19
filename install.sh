@@ -1246,8 +1246,17 @@ main() {
         echo "" >&2
         printf "    ${DIM}Web UI${NC}  http://localhost:11611/ui\n" >&2
         echo "" >&2
-        dim "Start server in background: offgrid serve &"
-        dim "Or install as service:      offgrid service install"
+        dim "Run in background: nohup offgrid serve > /dev/null 2>&1 &"
+        
+        # Show platform-specific service install hint
+        case "$os" in
+            linux)
+                dim "Auto-start:     Re-run installer interactively for systemd setup"
+                ;;
+            darwin)
+                dim "Auto-start:     Re-run installer interactively for launchd setup"
+                ;;
+        esac
     fi
     
     if [ "$INSTALL_DESKTOP" = "yes" ]; then
