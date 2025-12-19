@@ -634,7 +634,7 @@ install_audio() {
                 local build_end=$(date +%s)
                 local build_time=$((build_end - build_start))
                 whisper_installed=true
-                ok "Whisper built in ${build_time}s"
+                ok "Whisper ready (built in ${build_time}s)"
             else
                 warn "Whisper build failed - voice input will not be available"
                 dim "You can try later with: offgrid audio setup whisper"
@@ -1205,6 +1205,9 @@ main() {
         printf "    ${CYAN}\$${NC} offgrid run <model>   ${DIM}# Interactive chat${NC}\n" >&2
         echo "" >&2
         printf "    ${DIM}Web UI${NC}  http://localhost:11611/ui\n" >&2
+        echo "" >&2
+        dim "Start server in background: offgrid serve &"
+        dim "Or install as service:      offgrid service install"
     fi
     
     if [ "$INSTALL_DESKTOP" = "yes" ]; then
