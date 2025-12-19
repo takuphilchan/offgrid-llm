@@ -804,6 +804,183 @@ EOF
 }
 
 # ═══════════════════════════════════════════════════════════════
+# Auto-start Service Setup
+# ═══════════════════════════════════════════════════════════════
+setup_autostart() {
+    local os="$1"
+    
+    echo "" >&2
+    section "Auto-start"
+    
+    # Ask user
+    printf "    Install as system service? (starts on boot)\n" >&2
+    printf "    ${DIM}This lets OffGrid run in background automatically${NC}\n" >&2
+    echo "" >&2
+    
+    local install_service="no"
+    printf "    Install service? [y/N] " >&2
+    read -r response < /dev/tty 2>/dev/null || response="n"
+    case "$response" in
+        [yY]|[yY][eE][sS]) install_service="yes" ;;
+    esac
+    
+    if [ "$install_service" != "yes" ]; then
+        dim "Skipped. Run 'offgrid serve' manually when needed."
+        return 0
+    fi
+    
+    case "$os" in
+        linux)
+            setup_systemd_service
+            ;;
+        darwin)
+            setup_launchd_service
+            ;;
+        *)
+            warn "Auto-start not supported on $os"
+            dim "Run 'offgrid serve' manually"
+            ;;
+    esac
+}
+
+setup_systemd_service() {
+    local service_dir=""
+    local service_file=""
+    local user_mode=""
+    local offgrid_path=$(which offgrid 2>/dev/null || echo "/usr/local/bin/offgrid")
+    local data_dir="${OFFGRID_DATA:-$HOME/.offgrid}"
+    
+    # Prefer user service (no sudo required)
+    if [ -n "${XDG_CONFIG_HOME:-}" ]; then
+        service_dir="${XDG_CONFIG_HOME}/systemd/user"
+    else
+        service_dir="$HOME/.config/systemd/user"
+    fi
+    service_file="$service_dir/offgrid.service"
+    user_mode="--user"
+    
+    # Create service directory
+    mkdir -p "$service_dir"
+    
+    # Generate service file
+    cat > "$service_file" << EOF
+[Unit]
+Description=OffGrid LLM Server
+Documentation=https://github.com/safetorun/offgrid-llm
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$offgrid_path serve
+Environment=OFFGRID_DATA=$data_dir
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+    
+    step "Service file created"
+    
+    # Reload systemd and enable service
+    if systemctl $user_mode daemon-reload 2>/dev/null; then
+        step "Systemd reloaded"
+    fi
+    
+    if systemctl $user_mode enable offgrid 2>/dev/null; then
+        step "Service enabled (starts on login)"
+    fi
+    
+    # Ask to start now
+    printf "    Start OffGrid now? [Y/n] " >&2
+    read -r start_now < /dev/tty 2>/dev/null || start_now="y"
+    case "$start_now" in
+        [nN]|[nN][oO]) 
+            dim "Service will start on next login"
+            ;;
+        *)
+            if systemctl $user_mode start offgrid 2>/dev/null; then
+                ok "OffGrid is running"
+                dim "Check status: systemctl $user_mode status offgrid"
+            else
+                warn "Failed to start service"
+                dim "Try: systemctl $user_mode start offgrid"
+            fi
+            ;;
+    esac
+    
+    # Enable lingering so user services start at boot (not just login)
+    if command -v loginctl >/dev/null 2>&1; then
+        loginctl enable-linger "$(whoami)" 2>/dev/null || true
+    fi
+}
+
+setup_launchd_service() {
+    local plist_dir="$HOME/Library/LaunchAgents"
+    local plist_file="$plist_dir/com.offgrid.llm.plist"
+    local offgrid_path=$(which offgrid 2>/dev/null || echo "/usr/local/bin/offgrid")
+    local data_dir="${OFFGRID_DATA:-$HOME/.offgrid}"
+    local log_dir="$data_dir/logs"
+    
+    # Create directories
+    mkdir -p "$plist_dir"
+    mkdir -p "$log_dir"
+    
+    # Generate plist file
+    cat > "$plist_file" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.offgrid.llm</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$offgrid_path</string>
+        <string>serve</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>OFFGRID_DATA</key>
+        <string>$data_dir</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$log_dir/offgrid.log</string>
+    <key>StandardErrorPath</key>
+    <string>$log_dir/offgrid.err</string>
+</dict>
+</plist>
+EOF
+    
+    step "LaunchAgent created"
+    
+    # Ask to start now
+    printf "    Start OffGrid now? [Y/n] " >&2
+    read -r start_now < /dev/tty 2>/dev/null || start_now="y"
+    case "$start_now" in
+        [nN]|[nN][oO]) 
+            ok "Service will start on next login"
+            ;;
+        *)
+            # Unload first (in case already loaded)
+            launchctl unload "$plist_file" 2>/dev/null || true
+            
+            if launchctl load "$plist_file" 2>/dev/null; then
+                ok "OffGrid is running"
+                dim "Logs: $log_dir/offgrid.log"
+            else
+                warn "Failed to start service"
+                dim "Try: launchctl load $plist_file"
+            fi
+            ;;
+    esac
+}
+
+# ═══════════════════════════════════════════════════════════════
 # Main Installation Flow
 # ═══════════════════════════════════════════════════════════════
 main() {
@@ -971,6 +1148,11 @@ main() {
     # Success message
     echo "" >&2
     ok "Installation complete (${install_time}s)"
+    
+    # Ask about auto-start service (only for CLI installs)
+    if [ "$INSTALL_CLI" = "yes" ] && [ "$is_interactive" = "yes" ]; then
+        setup_autostart "$os"
+    fi
     
     if [ "$INSTALL_CLI" = "yes" ]; then
         section "Next Steps"
