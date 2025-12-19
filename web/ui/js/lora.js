@@ -66,13 +66,11 @@ function updateLoraScaleLabel() {
 }
 
 function showRegisterLoRAModal() {
-    document.getElementById('registerLoRAModal').classList.remove('hidden');
-    document.getElementById('registerLoRAModal').classList.add('flex');
+    document.getElementById('registerLoRAModal').classList.add('active');
 }
 
 function hideRegisterLoRAModal() {
-    document.getElementById('registerLoRAModal').classList.add('hidden');
-    document.getElementById('registerLoRAModal').classList.remove('flex');
+    document.getElementById('registerLoRAModal').classList.remove('active');
 }
 
 async function registerLoRA() {

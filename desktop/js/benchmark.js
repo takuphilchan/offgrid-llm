@@ -30,15 +30,14 @@ async function loadBenchmarkModels() {
 async function loadSystemInfo() {
     try {
         const response = await fetch('/v1/system/info');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         
-        // Format CPU - truncate if too long
-        let cpuName = data.cpu || 'Unknown';
-        if (cpuName.length > 40) {
-            cpuName = cpuName.substring(0, 37) + '...';
-        }
+        // Show full CPU name
+        const cpuName = data.cpu || 'Unknown';
         document.getElementById('sysInfoCPU').textContent = cpuName;
-        document.getElementById('sysInfoCPU').title = data.cpu || 'Unknown'; // Full name on hover
         
         // Format RAM
         if (data.total_memory) {
@@ -50,11 +49,8 @@ async function loadSystemInfo() {
             document.getElementById('sysInfoRAM').textContent = 'Unknown';
         }
         
-        // Format GPU
-        let gpuName = data.gpu || 'CPU only';
-        if (gpuName.length > 30) {
-            gpuName = gpuName.substring(0, 27) + '...';
-        }
+        // Show full GPU name
+        const gpuName = data.gpu || 'CPU only';
         document.getElementById('sysInfoGPU').textContent = gpuName;
         if (data.gpu_memory) {
             const gpuMemGB = (data.gpu_memory / 1024 / 1024 / 1024).toFixed(1);
@@ -64,13 +60,17 @@ async function loadSystemInfo() {
         }
         
         // Backend
-        document.getElementById('sysInfoBackend').textContent = data.backend || 'llama.cpp';
+        const backendEl = document.getElementById('sysInfoBackend');
+        if (backendEl) backendEl.textContent = data.backend || 'llama.cpp';
         
     } catch (e) {
         console.error('Failed to load system info:', e);
-        document.getElementById('sysInfoCPU').textContent = 'Error loading';
-        document.getElementById('sysInfoRAM').textContent = 'Error loading';
-        document.getElementById('sysInfoGPU').textContent = 'Error loading';
+        const cpuEl = document.getElementById('sysInfoCPU');
+        const ramEl = document.getElementById('sysInfoRAM');
+        const gpuEl = document.getElementById('sysInfoGPU');
+        if (cpuEl) cpuEl.textContent = 'Unavailable';
+        if (ramEl) ramEl.textContent = 'Unavailable';
+        if (gpuEl) gpuEl.textContent = 'Unavailable';
     }
 }
 
@@ -203,11 +203,9 @@ async function runBenchmark() {
 
 function renderBenchmarkHistory() {
     const table = document.getElementById('benchmarkHistoryTable');
-    const chart = document.getElementById('benchmarkChart');
     
     if (benchmarkHistory.length === 0) {
-        table.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-secondary">No benchmarks yet</td></tr>';
-        chart.innerHTML = '<p class="text-secondary text-sm text-center py-4">Run benchmarks to see comparison charts</p>';
+        table.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-secondary">Run a test to see results</td></tr>';
         return;
     }
     
@@ -218,25 +216,9 @@ function renderBenchmarkHistory() {
             <td class="text-right py-2 px-3 font-mono">${r.tokensPerSec}</td>
             <td class="text-right py-2 px-3 font-mono">${r.ttft}</td>
             <td class="text-right py-2 px-3 font-mono">${r.totalTime}s</td>
-            <td class="text-right py-2 px-3 font-mono">${r.memory}</td>
-            <td class="text-right py-2 px-3 text-secondary text-xs">${r.date}</td>
+            <td class="text-right py-2 px-3 font-mono hidden sm:table-cell">${r.memory}</td>
         </tr>
     `).join('');
-    
-    // Render simple bar chart for tokens/sec
-    const maxTokens = Math.max(...benchmarkHistory.map(r => parseFloat(r.tokensPerSec)));
-    chart.innerHTML = benchmarkHistory.slice(0, 5).map(r => {
-        const width = (parseFloat(r.tokensPerSec) / maxTokens) * 100;
-        return `
-            <div class="flex items-center gap-3">
-                <div class="w-32 truncate text-sm">${r.model.split('/').pop()}</div>
-                <div class="flex-1 bg-tertiary rounded-full h-4 overflow-hidden">
-                    <div class="bg-accent h-full rounded-full transition-all" style="width: ${width}%"></div>
-                </div>
-                <div class="w-20 text-right text-sm font-mono">${r.tokensPerSec} t/s</div>
-            </div>
-        `;
-    }).join('');
 }
 
 function clearBenchmarkHistory() {

@@ -4,6 +4,70 @@ function updateChatStats() {
     document.getElementById('tokenCount').textContent = `~${Math.ceil(totalTokens / 4)} tokens`;
 }
 
+// Update sidebar status display
+function updateSidebarStatus(state, modelName = '', extra = '') {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const modelBadge = document.getElementById('activeModelBadge');
+    const modelNameEl = document.getElementById('activeModelName');
+    
+    if (!statusDot || !statusText) return;
+    
+    switch (state) {
+        case 'ready':
+            statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+            statusText.className = 'text-xs font-medium text-emerald-400';
+            statusText.textContent = 'Ready';
+            if (modelName && modelBadge && modelNameEl) {
+                modelBadge.classList.remove('hidden');
+                modelNameEl.textContent = modelName;
+                modelNameEl.title = modelName;
+            }
+            break;
+        case 'loading':
+            statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
+            statusText.className = 'text-xs font-medium text-yellow-400';
+            statusText.textContent = extra ? `Loading... ${extra}` : 'Loading...';
+            if (modelName && modelBadge && modelNameEl) {
+                modelBadge.classList.remove('hidden');
+                modelNameEl.textContent = modelName;
+                modelNameEl.title = modelName;
+            }
+            break;
+        case 'switching':
+            statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
+            statusText.className = 'text-xs font-medium text-yellow-400';
+            statusText.textContent = extra ? `Switching... ${extra}` : 'Switching...';
+            if (modelName && modelBadge && modelNameEl) {
+                modelBadge.classList.remove('hidden');
+                modelNameEl.textContent = modelName;
+                modelNameEl.title = modelName;
+            }
+            break;
+        case 'warming':
+            statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
+            statusText.className = 'text-xs font-medium text-yellow-400';
+            statusText.textContent = 'Warming...';
+            if (modelName && modelBadge && modelNameEl) {
+                modelBadge.classList.remove('hidden');
+                modelNameEl.textContent = modelName;
+                modelNameEl.title = modelName;
+            }
+            break;
+        case 'error':
+            statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+            statusText.className = 'text-xs font-medium text-red-400';
+            statusText.textContent = 'Error';
+            break;
+        case 'offline':
+            statusDot.className = 'w-2 h-2 rounded-full bg-gray-500';
+            statusText.className = 'text-xs font-medium text-secondary';
+            statusText.textContent = 'Offline';
+            if (modelBadge) modelBadge.classList.add('hidden');
+            break;
+    }
+}
+
 // Load models for chat
 async function loadChatModels() {
     try {
@@ -68,6 +132,11 @@ async function loadChatModels() {
         };
         console.log('[LOAD MODELS] Event listener attached to dropdown via onchange');
         
+        // Update empty state UI
+        if (typeof updateEmptyState === 'function') {
+            updateEmptyState();
+        }
+        
         // Proactive model warming: trigger current model to load in background
         // This ensures the model is ready when user starts typing
         if (currentModel) {
@@ -82,13 +151,11 @@ async function loadChatModels() {
 // Warm up a model in the background so it's ready for instant use
 async function warmModelInBackground(modelName) {
     console.log('[MODEL WARM] Starting background warm-up for:', modelName);
-    const statusBadge = document.getElementById('statusBadge');
     
     // Check if already cached - if so, skip warming
     if (await isModelCached(modelName)) {
         console.log('[MODEL WARM] Model already cached, ready instantly!');
-        statusBadge.className = 'badge badge-success';
-        statusBadge.textContent = `Ready (${modelName})`;
+        updateSidebarStatus('ready', modelName);
         // Show cache indicator - KV cache will be reused
         if (typeof updateCacheIndicator === 'function') {
             updateCacheIndicator(true);
@@ -97,8 +164,7 @@ async function warmModelInBackground(modelName) {
     }
     
     // Show warming status
-    statusBadge.className = 'text-xs font-medium text-yellow-400';
-    statusBadge.textContent = `Warming ${modelName}...`;
+    updateSidebarStatus('warming', modelName);
     
     try {
         // Make a minimal request to trigger model loading
@@ -117,21 +183,18 @@ async function warmModelInBackground(modelName) {
         
         if (resp.ok) {
             console.log('[MODEL WARM] Model warmed and ready!');
-            statusBadge.className = 'badge badge-success';
-            statusBadge.textContent = `Ready (${modelName})`;
+            updateSidebarStatus('ready', modelName);
             // Show cache indicator - model is now warmed with active KV cache
             if (typeof updateCacheIndicator === 'function') {
                 updateCacheIndicator(true);
             }
         } else {
             console.warn('[MODEL WARM] Warm-up request returned:', resp.status);
-            statusBadge.className = 'badge badge-warning';
-            statusBadge.textContent = `${modelName}`;
+            updateSidebarStatus('ready', modelName);
         }
     } catch (e) {
         console.warn('[MODEL WARM] Warm-up failed:', e.message);
-        statusBadge.className = 'badge badge-warning';
-        statusBadge.textContent = `${modelName}`;
+        updateSidebarStatus('ready', modelName);
     }
 }
 
@@ -530,11 +593,9 @@ async function handleModelChange() {
     // Disable UI while loading model
     const chatInput = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
-    const statusBadge = document.getElementById('statusBadge');
     
     chatInput.disabled = true;
     sendBtn.disabled = true;
-    statusBadge.className = 'text-xs font-medium text-yellow-400';
     
     // Check if model is cached for better UX messaging
     const isCached = await isModelCached(newModel);
@@ -542,15 +603,13 @@ async function handleModelChange() {
     // Show loading progress with context
     let loadingMs = 0;
     const loadingStartTime = Date.now();
-    statusBadge.textContent = isCached ? `Switching to ${newModel}...` : `Loading ${newModel}...`;
+    const loadState = isCached ? 'switching' : 'loading';
+    updateSidebarStatus(loadState, newModel);
+    
     const loadingInterval = setInterval(() => {
         loadingMs = Date.now() - loadingStartTime;
-        const seconds = (loadingMs / 1000).toFixed(1);
-        if (isCached) {
-            statusBadge.textContent = `Switching to ${newModel}... ${seconds}s`;
-        } else {
-            statusBadge.textContent = `Loading ${newModel}... ${seconds}s`;
-        }
+        const seconds = (loadingMs / 1000).toFixed(1) + 's';
+        updateSidebarStatus(loadState, newModel, seconds);
     }, 100); // Update every 100ms for smoother display
     
     console.log('[MODEL CHANGE] Starting health check for', newModel);
@@ -563,18 +622,21 @@ async function handleModelChange() {
     
     if (isReady) {
         console.log('[MODEL CHANGE] Model ready - enabling UI');
-        statusBadge.className = 'badge badge-success';
-        statusBadge.textContent = `Ready (${newModel})`;
+        updateSidebarStatus('ready', newModel);
     } else {
         console.warn('[MODEL CHANGE] Model not confirmed ready - may have issues');
-        statusBadge.className = 'badge badge-warning';
-        statusBadge.textContent = `${newModel} (not confirmed)`;
+        updateSidebarStatus('ready', newModel);
     }
     
     // Re-enable UI
     chatInput.disabled = false;
     sendBtn.disabled = false;
     chatInput.focus();
+    
+    // Update empty state to show prompts
+    if (typeof updateEmptyState === 'function') {
+        updateEmptyState();
+    }
     
     console.log('[MODEL CHANGE] Model switch complete - ready for messages');
 }

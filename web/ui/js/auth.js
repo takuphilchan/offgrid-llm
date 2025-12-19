@@ -39,8 +39,7 @@ function setAuthUser(user) {
 }
 
 function showLoginModal() {
-    document.getElementById('loginModal').classList.remove('hidden');
-    document.getElementById('loginModal').classList.add('flex');
+    document.getElementById('loginModal').classList.add('active');
     document.getElementById('loginError').classList.add('hidden');
     document.getElementById('loginUsername').value = '';
     document.getElementById('loginPassword').value = '';
@@ -48,8 +47,7 @@ function showLoginModal() {
 }
 
 function hideLoginModal() {
-    document.getElementById('loginModal').classList.add('hidden');
-    document.getElementById('loginModal').classList.remove('flex');
+    document.getElementById('loginModal').classList.remove('active');
 }
 
 async function handleLogin() {

@@ -885,10 +885,16 @@ function stopChatVoiceInput() {
 }
 
 async function transcribeChatVoice(audioBlob) {
-    const statusBadge = document.getElementById('statusBadge');
-    const originalStatus = statusBadge.textContent;
-    statusBadge.textContent = 'Transcribing...';
-    statusBadge.className = 'text-xs font-medium text-yellow-400';
+    // Show transcribing status
+    const statusText = document.getElementById('statusText');
+    const statusDot = document.getElementById('statusDot');
+    if (statusText) {
+        statusText.textContent = 'Transcribing...';
+        statusText.className = 'text-xs font-medium text-yellow-400';
+    }
+    if (statusDot) {
+        statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
+    }
     
     try {
         // Use Chat tab voice settings
@@ -924,16 +930,24 @@ async function transcribeChatVoice(audioBlob) {
             autoResizeTextarea(input);
         }
         
-        statusBadge.textContent = 'Ready';
-        statusBadge.className = 'text-xs font-medium text-green-400';
+        // Show ready status
+        if (typeof updateSidebarStatus === 'function') {
+            updateSidebarStatus('ready', currentModel || '');
+        }
         
     } catch (e) {
         console.error('Voice transcription error:', e);
-        statusBadge.textContent = 'Transcription failed';
-        statusBadge.className = 'text-xs font-medium text-red-400';
+        if (statusText) {
+            statusText.textContent = 'Transcription failed';
+            statusText.className = 'text-xs font-medium text-red-400';
+        }
+        if (statusDot) {
+            statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+        }
         setTimeout(() => {
-            statusBadge.textContent = originalStatus;
-            statusBadge.className = 'text-xs font-medium';
+            if (typeof updateSidebarStatus === 'function') {
+                updateSidebarStatus('ready', currentModel || '');
+            }
         }, 2000);
     }
 }

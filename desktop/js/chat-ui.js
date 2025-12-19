@@ -50,13 +50,12 @@ async function sendChat() {
     if (!model) {
         console.log('[SEND CHAT] No model selected!');
         pendingRequest = false; // Clear flag
-        const statusBadge = document.getElementById('statusBadge');
-        statusBadge.className = 'badge badge-warning';
-        statusBadge.textContent = 'Select Model';
-        setTimeout(() => {
-            statusBadge.className = 'badge badge-success';
-            statusBadge.textContent = 'Ready';
-        }, 3000);
+        
+        // Flash warning then return to ready
+        if (typeof updateSidebarStatus === 'function') {
+            updateSidebarStatus('error');
+            setTimeout(() => updateSidebarStatus('ready', ''), 3000);
+        }
         return;
     }
 
@@ -119,21 +118,22 @@ async function sendChat() {
     // Show thinking indicator immediately after user message
     const thinkingIndicator = addThinkingIndicator();
 
-    const statusBadge = document.getElementById('statusBadge');
-    statusBadge.className = 'text-xs font-medium text-yellow-400';
-    
     // Show loading indicator with elapsed time
     let loadingInterval;
     let elapsedSeconds = 0;
-    statusBadge.textContent = 'Loading model...';
+    if (typeof updateSidebarStatus === 'function') {
+        updateSidebarStatus('loading', model);
+    }
     loadingInterval = setInterval(() => {
         elapsedSeconds++;
-        if (elapsedSeconds < 60) {
-            statusBadge.textContent = `Loading model... ${elapsedSeconds}s`;
-        } else {
-            const mins = Math.floor(elapsedSeconds / 60);
-            const secs = elapsedSeconds % 60;
-            statusBadge.textContent = `Loading model... ${mins}m ${secs}s`;
+        if (typeof updateSidebarStatus === 'function') {
+            if (elapsedSeconds < 60) {
+                updateSidebarStatus('loading', model, `${elapsedSeconds}s`);
+            } else {
+                const mins = Math.floor(elapsedSeconds / 60);
+                const secs = elapsedSeconds % 60;
+                updateSidebarStatus('loading', model, `${mins}m ${secs}s`);
+            }
         }
     }, 1000);
 
@@ -191,8 +191,9 @@ async function sendChat() {
             saveMessages();
             
             if (loadingInterval) clearInterval(loadingInterval);
-            statusBadge.className = 'text-xs font-medium text-green-400';
-            statusBadge.textContent = 'Ready';
+            if (typeof updateSidebarStatus === 'function') {
+                updateSidebarStatus('ready', model);
+            }
             isGenerating = false;
             pendingRequest = false;
             input.disabled = false;
@@ -266,7 +267,16 @@ async function sendChat() {
                             if (loadingInterval) {
                                 clearInterval(loadingInterval);
                                 loadingInterval = null;
-            statusBadge.textContent = 'Generating...';
+                                // Show generating status in sidebar
+                                const statusText = document.getElementById('statusText');
+                                if (statusText) {
+                                    statusText.textContent = 'Generating...';
+                                    statusText.className = 'text-xs font-medium text-blue-400';
+                                }
+                                const statusDot = document.getElementById('statusDot');
+                                if (statusDot) {
+                                    statusDot.className = 'w-2 h-2 rounded-full bg-blue-500 animate-pulse';
+                                }
                             }
                             
                             assistantMsg += content;
@@ -324,7 +334,16 @@ async function sendChat() {
             if (loadingInterval) {
                 clearInterval(loadingInterval);
                 loadingInterval = null;
-                statusBadge.textContent = 'Generating...';
+                // Show generating status
+                const statusText = document.getElementById('statusText');
+                if (statusText) {
+                    statusText.textContent = 'Generating...';
+                    statusText.className = 'text-xs font-medium text-blue-400';
+                }
+                const statusDot = document.getElementById('statusDot');
+                if (statusDot) {
+                    statusDot.className = 'w-2 h-2 rounded-full bg-blue-500 animate-pulse';
+                }
             }
             
             const result = await response.json();
@@ -349,8 +368,9 @@ async function sendChat() {
             clearInterval(loadingInterval);
             loadingInterval = null;
         }
-        statusBadge.className = 'text-xs font-medium text-green-400';
-        statusBadge.textContent = 'Ready';
+        if (typeof updateSidebarStatus === 'function') {
+            updateSidebarStatus('ready', model);
+        }
     } catch (error) {
         if (loadingInterval) {
             clearInterval(loadingInterval);
@@ -364,8 +384,9 @@ async function sendChat() {
         
         if (error.name === 'AbortError') {
             addChatMessage('assistant', '[Generation stopped by user]', null, startTime);
-            statusBadge.className = 'text-xs font-medium text-green-400';
-            statusBadge.textContent = 'Ready';
+            if (typeof updateSidebarStatus === 'function') {
+                updateSidebarStatus('ready', model);
+            }
         } else {
             const errorMsg = error.message || 'Unknown error occurred';
             console.error('Chat error:', error);
@@ -381,8 +402,9 @@ async function sendChat() {
             }
             
             addChatMessage('assistant', userMessage, null, startTime);
-            statusBadge.className = 'text-xs font-medium text-red-400';
-            statusBadge.textContent = 'Error';
+            if (typeof updateSidebarStatus === 'function') {
+                updateSidebarStatus('error');
+            }
         }
     } finally {
         if (loadingInterval) {

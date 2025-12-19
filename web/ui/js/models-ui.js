@@ -136,9 +136,9 @@ async function loadInstalledModels() {
             // But for now we'll just show the ID cleanly
             
             div.innerHTML = `
-                <div class="flex justify-between items-center gap-3">
+                <div class="flex justify-between items-start gap-3">
                     <div class="flex-1 min-w-0">
-                        <div class="font-semibold text-sm text-accent truncate" title="${model.id}">${model.id}</div>
+                        <div class="font-semibold text-sm text-accent break-words" title="${model.id}">${model.id}</div>
                         <div class="flex gap-2 mt-1">
                             <span class="text-xs bg-secondary px-1.5 py-0.5 rounded text-secondary font-mono">GGUF</span>
                         </div>

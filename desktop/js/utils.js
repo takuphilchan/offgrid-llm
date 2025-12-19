@@ -134,6 +134,36 @@ function loadMessages() {
     }
 }
 
+// Advanced nav toggle
+function toggleAdvancedNav() {
+    const nav = document.getElementById('advancedNav');
+    const arrow = document.getElementById('advancedNavArrow');
+    const isHidden = nav.classList.contains('hidden');
+    
+    if (isHidden) {
+        nav.classList.remove('hidden');
+        arrow.style.transform = 'rotate(180deg)';
+        localStorage.setItem('offgrid_advanced_nav', 'open');
+    } else {
+        nav.classList.add('hidden');
+        arrow.style.transform = 'rotate(0deg)';
+        localStorage.setItem('offgrid_advanced_nav', 'closed');
+    }
+}
+
+// Restore advanced nav state on load
+function restoreAdvancedNavState() {
+    const state = localStorage.getItem('offgrid_advanced_nav');
+    if (state === 'open') {
+        const nav = document.getElementById('advancedNav');
+        const arrow = document.getElementById('advancedNavArrow');
+        if (nav && arrow) {
+            nav.classList.remove('hidden');
+            arrow.style.transform = 'rotate(180deg)';
+        }
+    }
+}
+
 // Tab switching
 function switchTab(tab) {
     document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
@@ -197,6 +227,15 @@ function switchAudioSubTab(subTab) {
     document.getElementById('audio-content-' + subTab).classList.remove('hidden');
     // Add active class to selected sub-tab
     document.getElementById('audio-subtab-' + subTab).classList.add('active');
+}
+
+// Models sub-tab switching
+function switchModelsSubTab(subTab) {
+    // Hide all models sub-content
+    document.querySelectorAll('.models-subcontent').forEach(el => el.classList.add('hidden'));
+    // Show selected sub-content
+    const content = document.getElementById('models-content-' + subTab);
+    if (content) content.classList.remove('hidden');
 }
 
 // Chat keyboard handler
@@ -263,3 +302,112 @@ function autocompleteCommand(input) {
     }
 }
 
+// Power status monitoring
+let powerStatus = null;
+let powerPollInterval = null;
+
+async function fetchPowerStatus() {
+    try {
+        const resp = await fetch('/power');
+        if (!resp.ok) return;
+        powerStatus = await resp.json();
+        updatePowerDisplay();
+    } catch (e) {
+        // Power endpoint might not exist on older servers
+        console.debug('Power status not available:', e.message);
+    }
+}
+
+function updatePowerDisplay() {
+    const badge = document.getElementById('powerBadge');
+    const text = document.getElementById('powerText');
+    
+    if (!badge || !text || !powerStatus) return;
+    
+    // Only show badge if on battery
+    if (powerStatus.state === 'ac' || powerStatus.state === 'unknown') {
+        badge.classList.add('hidden');
+        return;
+    }
+    
+    badge.classList.remove('hidden');
+    
+    // Update text based on battery level
+    const percent = powerStatus.battery_percent;
+    if (percent > 0) {
+        text.textContent = `${percent}%`;
+    } else {
+        text.textContent = 'Battery';
+    }
+    
+    // Update badge color based on level
+    badge.className = 'badge';
+    switch (powerStatus.battery_level) {
+        case 'critical':
+            badge.classList.add('badge-error');
+            badge.title = `Critical battery (${percent}%) - Power saver active`;
+            break;
+        case 'low':
+            badge.classList.add('badge-warning');
+            badge.title = `Low battery (${percent}%) - Reduced performance`;
+            break;
+        case 'good':
+            badge.classList.add('badge-info');
+            badge.title = `Battery (${percent}%)`;
+            break;
+        default:
+            badge.classList.add('badge-secondary');
+            badge.title = `Battery (${percent}%)`;
+    }
+    
+    // Add charging indicator
+    if (powerStatus.is_charging) {
+        text.textContent = `⚡${percent}%`;
+        badge.title += ' - Charging';
+    }
+}
+
+function startPowerMonitoring() {
+    // Fetch immediately
+    fetchPowerStatus();
+    // Then poll every 30 seconds
+    powerPollInterval = setInterval(fetchPowerStatus, 30000);
+}
+
+// Start power monitoring when page loads
+document.addEventListener('DOMContentLoaded', startPowerMonitoring);
+
+// Restore advanced nav state when page loads
+document.addEventListener('DOMContentLoaded', restoreAdvancedNavState);
+
+// Toggle advanced settings in chat panel
+function toggleAdvancedSettings() {
+    const settings = document.getElementById('advancedSettings');
+    const arrow = document.getElementById('advSettingsArrow');
+    const isHidden = settings.classList.contains('hidden');
+    
+    if (isHidden) {
+        settings.classList.remove('hidden');
+        arrow.style.transform = 'rotate(180deg)';
+        localStorage.setItem('offgrid_adv_settings', 'open');
+    } else {
+        settings.classList.add('hidden');
+        arrow.style.transform = 'rotate(0deg)';
+        localStorage.setItem('offgrid_adv_settings', 'closed');
+    }
+}
+
+// Restore advanced settings state
+function restoreAdvancedSettingsState() {
+    const state = localStorage.getItem('offgrid_adv_settings');
+    if (state === 'open') {
+        const settings = document.getElementById('advancedSettings');
+        const arrow = document.getElementById('advSettingsArrow');
+        if (settings && arrow) {
+            settings.classList.remove('hidden');
+            arrow.style.transform = 'rotate(180deg)';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', restoreAdvancedSettingsState);

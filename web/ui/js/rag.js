@@ -43,6 +43,7 @@ async function loadRAGEmbeddingModels() {
         const statusResp = await fetch('/v1/rag/status');
         const status = await statusResp.json();
         const currentModel = status.embedding_model || '';
+        const isEnabled = status.enabled;
         
         const response = await fetch('/v1/models');
         const data = await response.json();
@@ -65,8 +66,8 @@ async function loadRAGEmbeddingModels() {
             select.appendChild(option);
         });
         
-        // Set the dropdown to show current model if RAG is enabled
-        if (currentModel) {
+        // Only set the dropdown value if RAG is actually enabled
+        if (isEnabled && currentModel) {
             select.value = currentModel;
         }
     } catch (e) {
@@ -97,7 +98,10 @@ async function onEmbeddingModelChange() {
             const err = await response.text();
             throw new Error(err);
         }
-        loadRAGStatus();
+        // Update local state immediately and refresh UI
+        ragEnabled = true;
+        await loadRAGStatus();
+        showAlert('Knowledge Base enabled with ' + model, 'success');
     } catch (e) {
         showAlert('Failed to enable RAG: ' + e.message, 'error');
     }
@@ -107,7 +111,9 @@ async function disableRAG() {
     try {
         await fetch('/v1/rag/disable', { method: 'POST' });
         document.getElementById('ragEmbeddingModel').value = '';
-        loadRAGStatus();
+        // Update local state immediately and refresh UI
+        ragEnabled = false;
+        await loadRAGStatus();
     } catch (e) {
         showAlert('Failed to disable RAG: ' + e.message, 'error');
     }

@@ -79,13 +79,11 @@ function togglePasswordVisibility(inputId, btn) {
 }
 
 function showCreateUserModal() {
-    document.getElementById('createUserModal').classList.remove('hidden');
-    document.getElementById('createUserModal').classList.add('flex');
+    document.getElementById('createUserModal').classList.add('active');
 }
 
 function hideCreateUserModal() {
-    document.getElementById('createUserModal').classList.add('hidden');
-    document.getElementById('createUserModal').classList.remove('flex');
+    document.getElementById('createUserModal').classList.remove('active');
 }
 
 async function createUser() {
@@ -228,16 +226,14 @@ async function showUserDetails(userId) {
             </div>
         `;
         
-        document.getElementById('userDetailsModal').classList.remove('hidden');
-        document.getElementById('userDetailsModal').classList.add('flex');
+        document.getElementById('userDetailsModal').classList.add('active');
     } catch (e) {
         showAlert('Failed to load user details: ' + e.message, { title: 'Error', type: 'error' });
     }
 }
 
 function hideUserDetailsModal() {
-    document.getElementById('userDetailsModal').classList.add('hidden');
-    document.getElementById('userDetailsModal').classList.remove('flex');
+    document.getElementById('userDetailsModal').classList.remove('active');
     currentUserDetails = null;
 }
 

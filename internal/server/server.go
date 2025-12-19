@@ -27,6 +27,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/p2p"
 	"github.com/takuphilchan/offgrid-llm/internal/platform"
+	"github.com/takuphilchan/offgrid-llm/internal/power"
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/stats"
@@ -72,6 +73,7 @@ type Server struct {
 	p2pTransfer    *p2p.TransferManager
 	offgridMetrics *metrics.OffGridMetrics
 	wsHub          *websocket.Hub
+	powerManager   *power.PowerManager
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -195,6 +197,28 @@ func NewWithConfig(cfg *config.Config) *Server {
 	ctx := context.Background()
 	go wsHub.Run(ctx)
 
+	// Initialize power manager for battery/power awareness
+	powerPolicy := power.DefaultPolicy()
+	powerManager := power.NewPowerManager(powerPolicy)
+	powerManager.Start()
+
+	// Log initial power status
+	powerStatus := powerManager.Status()
+	if powerStatus.State == power.PowerBattery {
+		log.Printf("⚡ Power: Battery %d%% → Power Saver mode recommended", powerStatus.BatteryPercent)
+	} else if powerStatus.State == power.PowerAC {
+		log.Printf("⚡ Power: AC connected → Full performance")
+	}
+
+	// Register power change callback
+	powerManager.OnChange(func(status power.PowerStatus) {
+		if status.State == power.PowerBattery {
+			log.Printf("⚡ Switched to battery (%d%%) - reducing resource usage", status.BatteryPercent)
+		} else if status.State == power.PowerAC {
+			log.Printf("⚡ AC power connected - full performance available")
+		}
+	})
+
 	// Initialize auth middleware
 	authMiddleware := users.NewMiddleware(userStore)
 	authMiddleware.SetRequireAuth(cfg.RequireAuth)
@@ -241,6 +265,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		p2pTransfer:          p2pTransfer,
 		offgridMetrics:       offgridMetrics,
 		wsHub:                wsHub,
+		powerManager:         powerManager,
 	}
 }
 
@@ -420,6 +445,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/livez", s.handleLiveness)   // Kubernetes-style
 	mux.HandleFunc("/readyz", s.handleReadiness) // Kubernetes-style
+	mux.HandleFunc("/power", s.handlePower)      // Power/battery status
 
 	// API v1 routes (OpenAI-compatible)
 	mux.HandleFunc("/v1/models", s.rateLimiter.Middleware(s.handleListModels))
@@ -850,6 +876,12 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			"disk_total_gb":   stats.DiskTotalGB,
 			"goroutines":      stats.NumGoroutines,
 		},
+		"power": map[string]interface{}{
+			"state":       string(s.powerManager.Status().State),
+			"battery":     s.powerManager.Status().BatteryPercent,
+			"mode":        s.getPowerMode(),
+			"max_context": s.powerManager.GetMaxContext(),
+		},
 		"models": map[string]interface{}{
 			"available": len(models),
 			"loaded":    s.registry.CountLoadedModels(),
@@ -866,6 +898,50 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(health); err != nil {
 		log.Printf("Error encoding health response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// handlePower returns current power/battery status
+func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	status := s.powerManager.Status()
+
+	response := map[string]interface{}{
+		"state":              string(status.State),
+		"battery_level":      string(status.BatteryLevel),
+		"battery_percent":    status.BatteryPercent,
+		"is_charging":        status.IsCharging,
+		"time_remaining":     status.TimeRemaining,
+		"power_save":         status.PowerSaveActive,
+		"max_context":        s.powerManager.GetMaxContext(),
+		"max_concurrent":     s.powerManager.GetMaxConcurrent(),
+		"embeddings_enabled": s.powerManager.ShouldEnableEmbeddings(),
+		"mode":               s.getPowerMode(),
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// getPowerMode returns a human-readable power mode string
+func (s *Server) getPowerMode() string {
+	status := s.powerManager.Status()
+
+	if status.State == power.PowerAC {
+		return "full"
+	}
+
+	switch status.BatteryLevel {
+	case power.BatteryFull:
+		return "full"
+	case power.BatteryGood:
+		return "normal"
+	case power.BatteryLow:
+		return "saver"
+	case power.BatteryCritical:
+		return "critical"
+	default:
+		return "unknown"
 	}
 }
 
@@ -1185,6 +1261,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		opts := inference.DefaultLoadOptions()
 		opts.NumThreads = s.config.NumThreads
 		opts.ContextSize = s.config.MaxContextSize
+
+		// Apply power-aware context limit
+		powerMaxContext := s.powerManager.GetMaxContext()
+		if powerMaxContext > 0 && powerMaxContext < opts.ContextSize {
+			log.Printf("⚡ Power saver: reducing context %d → %d", opts.ContextSize, powerMaxContext)
+			opts.ContextSize = powerMaxContext
+		}
 
 		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
 			writeError(w, fmt.Sprintf("Failed to load model into engine: %v", err), http.StatusInternalServerError)

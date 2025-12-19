@@ -1,3 +1,24 @@
+// Update empty state based on whether a model is selected
+function updateEmptyState() {
+    const noModelState = document.getElementById('noModelState');
+    const modelReadyState = document.getElementById('modelReadyState');
+    const examplePrompts = document.getElementById('examplePrompts');
+    
+    if (!noModelState || !modelReadyState || !examplePrompts) return;
+    
+    const hasModel = currentModel && currentModel.length > 0;
+    
+    if (hasModel) {
+        noModelState.classList.add('hidden');
+        modelReadyState.classList.remove('hidden');
+        examplePrompts.classList.remove('hidden');
+    } else {
+        noModelState.classList.remove('hidden');
+        modelReadyState.classList.add('hidden');
+        examplePrompts.classList.add('hidden');
+    }
+}
+
 function newChat() {
     if (messages.length === 0) {
         // No messages, just reset
@@ -11,17 +32,17 @@ function newChat() {
     const msgCount = messages.length;
     
     overlay.innerHTML = `
-        <div class="modal-dialog warning" style="max-width: 480px;">
-            <div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4 mx-auto">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                </svg>
+        <div class="modal-dialog">
+            <div class="modal-dialog-header">
+                <div class="modal-dialog-icon warning">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </div>
+                <div class="modal-dialog-title">Start New Chat?</div>
             </div>
-            <h3 class="text-lg font-bold mb-2 text-center" style="color: var(--text-primary)">Start New Chat?</h3>
-            <p class="text-center mb-4" style="color: var(--text-secondary)">You have <strong>${msgCount} messages</strong> in the current conversation.</p>
-            <div class="flex gap-2 justify-center">
+            <p class="modal-dialog-message">You have <strong>${msgCount} messages</strong> in the current conversation.</p>
+            <div class="modal-dialog-actions">
                 <button class="btn btn-secondary" data-action="cancel">Cancel</button>
                 <button class="btn btn-primary" data-action="save-new">Save & New</button>
                 <button class="btn btn-secondary" data-action="new">New Chat</button>
@@ -429,7 +450,7 @@ function renderSessions() {
         <div class="p-2 rounded bg-tertiary hover:bg-white/5 cursor-pointer transition-colors group" data-session-id="${session.id}">
             <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0" onclick="loadSession(${session.id})">
-                    <h4 class="font-medium text-sm text-accent truncate">${session.title}</h4>
+                    <h4 class="font-medium text-sm text-accent">${session.title}</h4>
                     <p class="text-xs text-secondary mt-0.5">
                         ${session.messageCount} messages • ${new Date(session.timestamp).toLocaleDateString()}
                     </p>
@@ -618,14 +639,14 @@ function resetChatState() {
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
     const chatInput = document.getElementById('chatInput');
-    const statusBadge = document.getElementById('statusBadge');
     
     if (sendBtn) sendBtn.disabled = false;
     if (stopBtn) stopBtn.classList.add('hidden');
     if (chatInput) chatInput.disabled = false;
-    if (statusBadge) {
-        statusBadge.className = 'badge badge-success';
-        statusBadge.textContent = currentModel ? `Ready (${currentModel})` : 'Ready';
+    
+    // Update sidebar status using helper if available
+    if (typeof updateSidebarStatus === 'function') {
+        updateSidebarStatus('ready', currentModel || '');
     }
     
     console.log('[RESET STATE] State reset complete');

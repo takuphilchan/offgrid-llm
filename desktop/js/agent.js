@@ -38,13 +38,13 @@ async function loadAgentTools() {
         
         count.textContent = data.enabled_count || tools.filter(t => t.enabled).length;
         list.innerHTML = tools.map(t => `
-            <div class="p-2 bg-tertiary rounded-lg flex items-center justify-between gap-2 ${!t.enabled ? 'opacity-50' : ''}">
+            <div class="p-2 bg-tertiary rounded-lg flex items-start justify-between gap-2 ${!t.enabled ? 'opacity-50' : ''}">
                 <div class="flex-1 min-w-0">
-                    <div class="font-medium text-sm flex items-center gap-2">
-                        <span class="truncate">${t.name}</span>
+                    <div class="font-medium text-sm flex items-center gap-2 flex-wrap">
+                        <span>${t.name}</span>
                         ${t.source && t.source !== 'builtin' ? `<span class="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400">${t.source}</span>` : ''}
                     </div>
-                    <div class="text-xs text-secondary mt-1 truncate">${t.description || 'No description'}</div>
+                    <div class="text-xs text-secondary mt-1">${t.description || 'No description'}</div>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                     <input type="checkbox" class="sr-only peer" ${t.enabled ? 'checked' : ''} onchange="toggleTool('${t.name}', this.checked)">
@@ -143,6 +143,7 @@ async function runAgent() {
     document.getElementById('runAgentBtn').classList.add('hidden');
     document.getElementById('stopAgentBtn').classList.remove('hidden');
     document.getElementById('agentOutput').innerHTML = '';
+    updateAgentStatus('Running...', 'running');
     
     agentAbortController = new AbortController();
     
@@ -174,13 +175,26 @@ async function runAgent() {
                     try {
                         const step = JSON.parse(data);
                         appendAgentStep(step);
+                        // Update status based on step type
+                        if (step.step_type === 'done' || step.type === 'done') {
+                            updateAgentStatus('Completed', 'success');
+                        } else if (step.step_type === 'error' || step.type === 'error') {
+                            updateAgentStatus('Error', 'error');
+                        } else if (step.step_type === 'action' || step.type === 'action') {
+                            updateAgentStatus(`Executing: ${step.tool_name || 'action'}`, 'running');
+                        } else if (step.step_type === 'thought' || step.type === 'thought') {
+                            updateAgentStatus('Thinking...', 'running');
+                        }
                     } catch (e) {}
                 }
             }
         }
     } catch (e) {
         if (e.name !== 'AbortError') {
-            document.getElementById('agentOutput').innerHTML += `<div class="text-red-400 p-2">Error: ${e.message}</div>`;
+            document.getElementById('agentOutput').innerHTML += `<div class="agent-step agent-step-error"><div class="agent-step-header"><span class="agent-step-indicator"></span><span class="agent-step-label">Error</span></div><div class="agent-step-content">${e.message}</div></div>`;
+            updateAgentStatus('Error', 'error');
+        } else {
+            updateAgentStatus('Stopped', 'idle');
         }
     } finally {
         document.getElementById('runAgentBtn').classList.remove('hidden');
@@ -189,9 +203,25 @@ async function runAgent() {
     }
 }
 
+// Update agent status display
+function updateAgentStatus(text, state) {
+    const el = document.getElementById('agentStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'text-xs';
+    if (state === 'running') {
+        el.classList.add('text-amber-400');
+    } else if (state === 'success') {
+        el.classList.add('text-emerald-400');
+    } else if (state === 'error') {
+        el.classList.add('text-red-400');
+    } else {
+        el.classList.add('text-secondary');
+    }
+}
+
 async function showAgentHistory() {
-    document.getElementById('agentHistoryModal').classList.remove('hidden');
-    document.getElementById('agentHistoryModal').classList.add('flex');
+    document.getElementById('agentHistoryModal').classList.add('active');
     
     const tbody = document.getElementById('agentHistoryList');
     tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-secondary">Loading...</td></tr>';
@@ -212,7 +242,7 @@ async function showAgentHistory() {
         tbody.innerHTML = tasks.map(t => `
             <tr class="border-b border-theme hover:bg-tertiary/50">
                 <td class="p-3 font-mono text-xs text-secondary">${t.id.substring(0, 8)}...</td>
-                <td class="p-3 truncate max-w-xs" title="${t.prompt}">${t.prompt}</td>
+                <td class="p-3" title="${t.prompt}">${t.prompt}</td>
                 <td class="p-3">
                     <span class="px-2 py-0.5 rounded text-xs ${
                         t.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -230,8 +260,7 @@ async function showAgentHistory() {
 }
 
 function hideAgentHistory() {
-    document.getElementById('agentHistoryModal').classList.add('hidden');
-    document.getElementById('agentHistoryModal').classList.remove('flex');
+    document.getElementById('agentHistoryModal').classList.remove('active');
 }
 
 
@@ -449,16 +478,13 @@ function stopAgent() {
 }
 
 function showAddMCPModal() {
-    document.getElementById('addMCPModal').classList.remove('hidden');
-    document.getElementById('addMCPModal').classList.add('flex');
+    document.getElementById('addMCPModal').classList.add('active');
     document.getElementById('mcpServerName').value = '';
     document.getElementById('mcpServerUrl').value = '';
-    document.getElementById('mcpCommandHint').classList.add('hidden');
 }
 
 function hideAddMCPModal() {
-    document.getElementById('addMCPModal').classList.add('hidden');
-    document.getElementById('addMCPModal').classList.remove('flex');
+    document.getElementById('addMCPModal').classList.remove('active');
     // Reset connection status
     document.getElementById('mcpConnectionStatus').classList.add('hidden');
 }
