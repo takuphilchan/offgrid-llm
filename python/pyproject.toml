@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "offgrid"
-version = "0.2.9"
+version = "0.1.8"
 description = "Python client for OffGrid LLM - Run AI models completely offline"
 readme = "README.md"
 license = {text = "MIT"}
