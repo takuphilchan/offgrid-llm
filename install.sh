@@ -497,61 +497,101 @@ install_cli() {
     
     # Stop any running offgrid processes before installing
     if [ "$os" != "windows" ]; then
-        local was_running=false
-        
-        # Check if offgrid is running
-        if pgrep -f "offgrid serve\|offgrid run\|llama-server" >/dev/null 2>&1; then
-            was_running=true
-            dim "Stopping running OffGrid processes..."
-            
-            # Try graceful stop first
-            pkill -f "offgrid serve" 2>/dev/null || true
-            pkill -f "offgrid run" 2>/dev/null || true
-            pkill -x "llama-server" 2>/dev/null || true
-            sleep 2
-            
-            # Force kill if still running
-            if pgrep -f "offgrid serve\|offgrid run\|llama-server" >/dev/null 2>&1; then
-                pkill -9 -f "offgrid serve" 2>/dev/null || true
-                pkill -9 -f "offgrid run" 2>/dev/null || true
-                pkill -9 -x "llama-server" 2>/dev/null || true
-                sleep 1
-            fi
-        fi
-        
-        # Also stop systemd service if running
-        if systemctl --user is-active offgrid >/dev/null 2>&1; then
-            dim "Stopping offgrid service..."
-            systemctl --user stop offgrid 2>/dev/null || true
-            sleep 1
-        fi
+        stop_running_processes "$use_sudo"
     fi
     
     # Copy binaries (with retry for "Text file busy")
-    local retries=3
+    local retries=5
     local copied=false
     
     for i in $(seq 1 $retries); do
-        if $use_sudo cp "$bundle_dir/offgrid${ext}" "$INSTALL_DIR/" 2>/dev/null && \
-           $use_sudo cp "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/" 2>/dev/null; then
+        if $use_sudo cp -f "$bundle_dir/offgrid${ext}" "$INSTALL_DIR/" 2>/dev/null && \
+           $use_sudo cp -f "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/" 2>/dev/null; then
             copied=true
             break
         fi
         
         if [ $i -lt $retries ]; then
-            dim "Waiting for file lock to release..."
+            dim "File busy, retrying ($i/$retries)..."
+            # Try killing again between retries
+            stop_running_processes "$use_sudo"
             sleep 2
         fi
     done
     
     if [ "$copied" != "true" ]; then
-        error "Failed to copy binaries. Please stop any running offgrid processes and try again."
+        echo "" >&2
+        error "Failed to copy binaries - file still in use"
+        echo "" >&2
+        dim "Please manually stop offgrid and try again:"
+        dim "  pkill -9 -f offgrid"
+        dim "  sudo pkill -9 -f offgrid"
+        dim "  Then re-run the installer"
         return 1
     fi
     
     $use_sudo chmod +x "$INSTALL_DIR/offgrid${ext}" "$INSTALL_DIR/llama-server${ext}"
     
     ok "CLI installed"
+}
+
+# Stop all running offgrid processes
+stop_running_processes() {
+    local use_sudo="$1"
+    
+    # Check what's running
+    local procs=$(pgrep -f "offgrid|llama-server" 2>/dev/null | wc -l)
+    if [ "$procs" -eq 0 ]; then
+        return 0
+    fi
+    
+    dim "Stopping $procs running process(es)..."
+    
+    # Stop systemd user service first
+    if systemctl --user is-active offgrid >/dev/null 2>&1; then
+        systemctl --user stop offgrid 2>/dev/null || true
+    fi
+    
+    # Stop system service if running
+    if $use_sudo systemctl is-active offgrid >/dev/null 2>&1; then
+        $use_sudo systemctl stop offgrid 2>/dev/null || true
+    fi
+    
+    # Kill by binary path (most reliable)
+    local target_binary="$INSTALL_DIR/offgrid"
+    if [ -f "$target_binary" ]; then
+        # Find PIDs using this exact binary
+        local pids=$(lsof "$target_binary" 2>/dev/null | awk 'NR>1 {print $2}' | sort -u)
+        if [ -n "$pids" ]; then
+            for pid in $pids; do
+                kill -TERM "$pid" 2>/dev/null || $use_sudo kill -TERM "$pid" 2>/dev/null || true
+            done
+            sleep 1
+            # Force kill any remaining
+            for pid in $pids; do
+                kill -9 "$pid" 2>/dev/null || $use_sudo kill -9 "$pid" 2>/dev/null || true
+            done
+        fi
+    fi
+    
+    # Also kill by name patterns (catch background processes)
+    pkill -TERM -f "offgrid serve" 2>/dev/null || true
+    pkill -TERM -f "offgrid run" 2>/dev/null || true
+    pkill -TERM -x "llama-server" 2>/dev/null || true
+    $use_sudo pkill -TERM -f "offgrid serve" 2>/dev/null || true
+    $use_sudo pkill -TERM -f "offgrid run" 2>/dev/null || true
+    $use_sudo pkill -TERM -x "llama-server" 2>/dev/null || true
+    
+    sleep 1
+    
+    # Force kill if still running
+    if pgrep -f "offgrid|llama-server" >/dev/null 2>&1; then
+        pkill -9 -f "offgrid" 2>/dev/null || true
+        pkill -9 -x "llama-server" 2>/dev/null || true
+        $use_sudo pkill -9 -f "offgrid" 2>/dev/null || true
+        $use_sudo pkill -9 -x "llama-server" 2>/dev/null || true
+        sleep 1
+    fi
 }
 
 install_audio() {
