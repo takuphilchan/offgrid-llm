@@ -495,16 +495,60 @@ install_cli() {
         use_sudo="sudo"
     fi
     
-    # Stop running processes
+    # Stop any running offgrid processes before installing
     if [ "$os" != "windows" ]; then
-        pkill -x offgrid 2>/dev/null || true
-        pkill -x llama-server 2>/dev/null || true
-        sleep 1
+        local was_running=false
+        
+        # Check if offgrid is running
+        if pgrep -f "offgrid serve\|offgrid run\|llama-server" >/dev/null 2>&1; then
+            was_running=true
+            dim "Stopping running OffGrid processes..."
+            
+            # Try graceful stop first
+            pkill -f "offgrid serve" 2>/dev/null || true
+            pkill -f "offgrid run" 2>/dev/null || true
+            pkill -x "llama-server" 2>/dev/null || true
+            sleep 2
+            
+            # Force kill if still running
+            if pgrep -f "offgrid serve\|offgrid run\|llama-server" >/dev/null 2>&1; then
+                pkill -9 -f "offgrid serve" 2>/dev/null || true
+                pkill -9 -f "offgrid run" 2>/dev/null || true
+                pkill -9 -x "llama-server" 2>/dev/null || true
+                sleep 1
+            fi
+        fi
+        
+        # Also stop systemd service if running
+        if systemctl --user is-active offgrid >/dev/null 2>&1; then
+            dim "Stopping offgrid service..."
+            systemctl --user stop offgrid 2>/dev/null || true
+            sleep 1
+        fi
     fi
     
-    # Copy binaries
-    $use_sudo cp "$bundle_dir/offgrid${ext}" "$INSTALL_DIR/"
-    $use_sudo cp "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/"
+    # Copy binaries (with retry for "Text file busy")
+    local retries=3
+    local copied=false
+    
+    for i in $(seq 1 $retries); do
+        if $use_sudo cp "$bundle_dir/offgrid${ext}" "$INSTALL_DIR/" 2>/dev/null && \
+           $use_sudo cp "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/" 2>/dev/null; then
+            copied=true
+            break
+        fi
+        
+        if [ $i -lt $retries ]; then
+            dim "Waiting for file lock to release..."
+            sleep 2
+        fi
+    done
+    
+    if [ "$copied" != "true" ]; then
+        error "Failed to copy binaries. Please stop any running offgrid processes and try again."
+        return 1
+    fi
+    
     $use_sudo chmod +x "$INSTALL_DIR/offgrid${ext}" "$INSTALL_DIR/llama-server${ext}"
     
     ok "CLI installed"
