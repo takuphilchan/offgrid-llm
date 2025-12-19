@@ -28,38 +28,32 @@ GITHUB_URL="https://github.com/${REPO}"
 INSTALL_DIR="/usr/local/bin"
 VERSION="${VERSION:-latest}"
 
-# Colors
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BOLD='\033[1m'
-DIM='\033[2m'
-NC='\033[0m'
+# Colors (disable if not a terminal)
+if [ -t 1 ]; then
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    GREEN='\033[32m'
+    RED='\033[31m'
+    YELLOW='\033[33m'
+    CYAN='\033[36m'
+    NC='\033[0m'
+else
+    BOLD='' DIM='' GREEN='' RED='' YELLOW='' CYAN='' NC=''
+fi
 
-# Icons (matching CLI)
-ICON_BOLT="⚡"
-ICON_CHECK="✓"
-ICON_CROSS="✗"
-ICON_ARROW="→"
-ICON_WARN="○"
-ICON_DOWN="↓"
-ICON_SPIN="◐"
-
-# ═══════════════════════════════════════════════════════════════
-# Helper Functions
-# ═══════════════════════════════════════════════════════════════
-log_info() { echo -e "  ${CYAN}${ICON_ARROW}${NC} $1" >&2; }
-log_success() { echo -e "  ${GREEN}${ICON_CHECK}${NC} $1" >&2; }
-log_error() { echo -e "  ${RED}${ICON_CROSS}${NC} $1" >&2; }
-log_warn() { echo -e "  ${YELLOW}${ICON_WARN}${NC} $1" >&2; }
-log_dim() { echo -e "    ${DIM}$1${NC}" >&2; }
-log_step() { echo -e "  ${CYAN}[$1]${NC} ${BOLD}$2${NC}" >&2; }
+# Helper Functions (matching CLI style)
+ok()      { printf "  ${GREEN}\xE2\x9C\x93${NC} %s\n" "$1" >&2; }
+error()   { printf "  ${RED}\xE2\x9C\x97${NC} %s\n" "$1" >&2; }
+warn()    { printf "  ${YELLOW}\xE2\x97\xA6${NC} %s\n" "$1" >&2; }
+info()    { printf "  ${CYAN}\xE2\x86\x92${NC} %s\n" "$1" >&2; }
+step()    { printf "  ${CYAN}\xE2\x87\xA3${NC} %s\n" "$1" >&2; }
+dim()     { printf "    ${DIM}%s${NC}\n" "$1" >&2; }
+section() { printf "\n  ${CYAN}\xE2\x97\x88${NC} ${BOLD}%s${NC}\n" "$1" >&2; }
 
 print_banner() {
     echo "" >&2
-    echo -e "  ${CYAN}${BOLD}${ICON_BOLT} OffGrid LLM Installer${NC}" >&2
-    echo -e "  ${DIM}Universal installer for CLI, Desktop & Audio${NC}" >&2
+    printf "  ${CYAN}\xE2\x97\x88${NC} ${BOLD}OffGrid LLM${NC} Installer\n" >&2
+    printf "  ${DIM}Universal installer for CLI, Desktop & Audio${NC}\n" >&2
     echo "" >&2
 }
 
@@ -74,7 +68,7 @@ detect_os() {
         linux*) echo "linux" ;;
         darwin*) echo "darwin" ;;
         mingw*|msys*|cygwin*) echo "windows" ;;
-        *) log_error "Unsupported operating system: $os"; exit 1 ;;
+        *) error "Unsupported operating system: $os"; exit 1 ;;
     esac
 }
 
@@ -85,7 +79,7 @@ detect_arch() {
     case "$arch" in
         x86_64|amd64) echo "amd64" ;;
         aarch64|arm64) echo "arm64" ;;
-        *) log_error "Unsupported architecture: $arch"; exit 1 ;;
+        *) error "Unsupported architecture: $arch"; exit 1 ;;
     esac
 }
 
@@ -141,7 +135,7 @@ get_latest_version() {
     version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     
     if [ -z "$version" ]; then
-        log_error "Failed to fetch latest version"
+        error "Failed to fetch latest version"
         exit 1
     fi
     
@@ -191,20 +185,16 @@ show_menu() {
     local os="$1"
     local has_gpu="$2"
     
+    section "Installation Options"
     echo "" >&2
-    echo -e "  ${BOLD}Select installation type${NC}" >&2
-    echo "" >&2
-    echo -e "    ${GREEN}1${NC}  ${BOLD}Full Installation${NC} ${GREEN}(Recommended)${NC}" >&2
-    echo -e "       ${DIM}CLI + Desktop + Voice (STT & TTS)${NC}" >&2
-    echo "" >&2
-    echo -e "    ${GREEN}2${NC}  ${BOLD}CLI + Voice${NC}" >&2
-    echo -e "       ${DIM}Command-line with voice support${NC}" >&2
-    echo "" >&2
-    echo -e "    ${GREEN}3${NC}  ${BOLD}CLI Only${NC}" >&2
-    echo -e "       ${DIM}Minimal installation${NC}" >&2
-    echo "" >&2
-    echo -e "    ${GREEN}4${NC}  ${BOLD}Custom${NC}" >&2
-    echo -e "       ${DIM}Choose components${NC}" >&2
+    printf "    ${GREEN}1.${NC} Full ${DIM}(recommended)${NC}\n" >&2
+    printf "       ${DIM}CLI + Desktop + Voice${NC}\n" >&2
+    printf "    ${GREEN}2.${NC} CLI + Voice\n" >&2
+    printf "       ${DIM}Command-line with speech recognition${NC}\n" >&2
+    printf "    ${GREEN}3.${NC} CLI only\n" >&2
+    printf "       ${DIM}Minimal install (~50MB)${NC}\n" >&2
+    printf "    ${GREEN}4.${NC} Custom\n" >&2
+    printf "       ${DIM}Choose individual components${NC}\n" >&2
     echo "" >&2
     
     read -p "  Enter choice [1-4] (default: 1): " choice
@@ -241,12 +231,12 @@ custom_menu() {
     local has_gpu="$1"
     
     echo "" >&2
-    echo -e "  ${BOLD}Custom Installation${NC}" >&2
+    echo "  Custom Installation" >&2
     echo "" >&2
     
     # CLI (always yes for custom, needed for everything)
     INSTALL_CLI="yes"
-    log_info "CLI tools will be installed (required)"
+    info "CLI tools will be installed (required)"
     
     # Desktop
     read -p "  Install Desktop app? [Y/n]: " desktop_choice
@@ -296,13 +286,16 @@ download_cli_bundle() {
     
     local download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
     
-    log_step "1/3" "Downloading CLI..."
-    log_dim "${bundle_name}${ext}"
+    section "Downloading"
+    step "CLI Bundle"
+    dim "${bundle_name}${ext}"
+    
+    local start_time=$(date +%s)
     
     if ! curl -fsSL -o "${tmp_dir}/bundle${ext}" "$download_url" 2>/dev/null; then
         # Fallback to CPU variant
         if [ "$variant" != "cpu" ]; then
-            log_dim "GPU variant unavailable, trying CPU..."
+            dim "GPU variant unavailable, trying CPU..."
             variant="cpu"
             bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
             download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
@@ -310,7 +303,7 @@ download_cli_bundle() {
             if ! curl -fsSL -o "${tmp_dir}/bundle${ext}" "$download_url" 2>/dev/null; then
                 # Fallback to AVX2
                 if [ "$cpu_features" = "avx512" ]; then
-                    log_dim "Trying AVX2 version..."
+                    dim "Trying AVX2 version..."
                     cpu_features="avx2"
                     bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
                     download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
@@ -324,13 +317,20 @@ download_cli_bundle() {
         fi
     fi
     
+    local end_time=$(date +%s)
+    local elapsed=$((end_time - start_time))
+    local size=$(du -h "${tmp_dir}/bundle${ext}" 2>/dev/null | cut -f1)
+    ok "Downloaded ${size} in ${elapsed}s"
+    
     # Extract
+    dim "Extracting..."
     cd "$tmp_dir"
     if [ "$os" = "windows" ]; then
         unzip -q "bundle${ext}"
     else
         tar -xzf "bundle${ext}"
     fi
+    ok "Extracted"
     
     echo "$bundle_name"
 }
@@ -368,13 +368,19 @@ download_desktop_app() {
             ;;
     esac
     
-    log_step "2/3" "Downloading Desktop app..."
-    log_dim "$app_name"
+    step "Desktop App"
+    dim "$app_name"
+    
+    local start_time=$(date +%s)
     
     if curl -fsSL -o "${tmp_dir}/${app_name}" "$download_url" 2>/dev/null; then
+        local end_time=$(date +%s)
+        local elapsed=$((end_time - start_time))
+        local size=$(du -h "${tmp_dir}/${app_name}" 2>/dev/null | cut -f1)
+        ok "Downloaded ${size} in ${elapsed}s"
         echo "${tmp_dir}/${app_name}"
     else
-        log_warn "Desktop app not available for this platform"
+        warn "Desktop app not available for this platform"
         echo ""
     fi
 }
@@ -394,8 +400,8 @@ build_whisper_from_source() {
     (command -v g++ >/dev/null 2>&1 || command -v clang++ >/dev/null 2>&1) || missing_tools="$missing_tools g++"
     
     if [ -n "$missing_tools" ]; then
-        log_warn "Missing build tools:$missing_tools"
-        log_info "Installing build dependencies..."
+        warn "Missing build tools:$missing_tools"
+        info "Installing build dependencies..."
         
         # Try to install missing tools
         if command -v apt-get >/dev/null 2>&1; then
@@ -408,7 +414,7 @@ build_whisper_from_source() {
         elif command -v pacman >/dev/null 2>&1; then
             sudo pacman -S --noconfirm git cmake base-devel
         else
-            log_error "Cannot install build tools automatically. Please install: git cmake g++ make"
+            error "Cannot install build tools automatically. Please install: git cmake g++ make"
             return 1
         fi
     fi
@@ -417,19 +423,19 @@ build_whisper_from_source() {
     rm -rf "$build_dir"
     mkdir -p "$build_dir"
     
-    log_dim "Cloning whisper.cpp..."
+    dim "Cloning whisper.cpp..."
     if ! git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git "$build_dir/whisper.cpp" 2>/dev/null; then
-        log_error "Failed to clone whisper.cpp"
+        error "Failed to clone whisper.cpp"
         rm -rf "$build_dir"
         return 1
     fi
     
     cd "$build_dir/whisper.cpp"
     
-    log_dim "Building whisper.cpp (this may take a few minutes)..."
+    dim "Building whisper.cpp (this may take a few minutes)..."
     # Build with static linking to avoid LD_LIBRARY_PATH issues
     if ! cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_CCACHE=OFF -DBUILD_SHARED_LIBS=OFF >/dev/null 2>&1; then
-        log_error "CMake configuration failed"
+        error "CMake configuration failed"
         cd - >/dev/null
         rm -rf "$build_dir"
         return 1
@@ -439,7 +445,7 @@ build_whisper_from_source() {
     num_cores=$(nproc 2>/dev/null || echo 4)
     
     if ! cmake --build build --config Release -j"$num_cores" >/dev/null 2>&1; then
-        log_error "Build failed"
+        error "Build failed"
         cd - >/dev/null
         rm -rf "$build_dir"
         return 1
@@ -454,7 +460,7 @@ build_whisper_from_source() {
     elif [ -f "build/bin/main" ]; then
         cp "build/bin/main" "$install_dir/whisper-cli"
     else
-        log_error "whisper-cli binary not found after build"
+        error "whisper-cli binary not found after build"
         cd - >/dev/null
         rm -rf "$build_dir"
         return 1
@@ -478,7 +484,7 @@ install_cli() {
     local bundle_dir="$1"
     local os="$2"
     
-    log_step "3/3" "Installing CLI..."
+    dim "Installing CLI tools..."
     
     local ext=""
     [ "$os" = "windows" ] && ext=".exe"
@@ -501,14 +507,14 @@ install_cli() {
     $use_sudo cp "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/"
     $use_sudo chmod +x "$INSTALL_DIR/offgrid${ext}" "$INSTALL_DIR/llama-server${ext}"
     
-    log_success "CLI installed to $INSTALL_DIR"
+    ok "CLI installed"
 }
 
 install_audio() {
     local bundle_dir="$1"
     local interactive="$2"
     
-    log_info "Installing Audio components..."
+    section "Audio Setup"
     
     local AUDIO_DIR="$HOME/.offgrid-llm/audio"
     mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
@@ -525,14 +531,13 @@ install_audio() {
         glibc_version=$(get_glibc_version)
         
         if [[ "$glibc_status" == incompatible* ]]; then
-            echo "" >&2
-            log_warn "GLIBC $glibc_version detected (2.38+ required for binaries)"
+            warn "GLIBC $glibc_version detected (2.38+ required for binaries)"
             echo "" >&2
             
             if [ "$interactive" = "yes" ]; then
-                echo -e "  ${BOLD}Audio Options${NC}" >&2
-                echo -e "    ${GREEN}1${NC}  Build from source ${DIM}(recommended, ~5 min)${NC}" >&2
-                echo -e "    ${GREEN}2${NC}  Skip audio ${DIM}(install later)${NC}" >&2
+                echo "  Audio options:" >&2
+                echo "    1) Build from source (recommended, ~5 min)" >&2
+                echo "    2) Skip (install later)" >&2
                 echo "" >&2
                 
                 local audio_choice
@@ -541,7 +546,7 @@ install_audio() {
                 
                 case "$audio_choice" in
                     2)
-                        log_dim "Skipped. Install later: offgrid audio setup"
+                        dim "Skipped. Run 'offgrid audio setup' later."
                         return 0
                         ;;
                     *)
@@ -549,79 +554,85 @@ install_audio() {
                         ;;
                 esac
             else
-                log_dim "Building audio from source..."
+                dim "Building audio from source..."
             fi
         else
-            log_dim "GLIBC $glibc_version — compatible with binaries"
+            dim "GLIBC $glibc_version — compatible with binaries"
         fi
     fi
     
     # Install Whisper (Speech-to-Text)
     local whisper_installed=false
+    step "Audio Components"
     
     if [ "$os" = "Linux" ]; then
         if [[ "$glibc_status" == "compatible" ]] && [ -d "$bundle_dir/audio/whisper" ]; then
             # Use pre-built binaries
-            log_info "Installing pre-built Whisper..."
+            dim "Installing Whisper (Speech-to-Text)..."
             cp -r "$bundle_dir/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
             chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
             
             # Test if it works
             if "$AUDIO_DIR/whisper/whisper-cli" --help >/dev/null 2>&1; then
                 whisper_installed=true
-                log_success "Whisper (Speech-to-Text) installed"
+                ok "Whisper ready"
             else
-                log_warn "Pre-built Whisper failed, building from source..."
+                warn "Pre-built Whisper failed, building from source..."
                 rm -rf "$AUDIO_DIR/whisper"/*
             fi
         fi
         
         if [ "$whisper_installed" = "false" ]; then
             # Build from source
-            log_info "Building Whisper from source (this may take a few minutes)..."
+            dim "Building Whisper from source (~2-5 min)..."
+            local build_start=$(date +%s)
             if build_whisper_from_source "$AUDIO_DIR/whisper"; then
+                local build_end=$(date +%s)
+                local build_time=$((build_end - build_start))
                 whisper_installed=true
-                log_success "Whisper (Speech-to-Text) built and installed"
+                ok "Whisper built in ${build_time}s"
             else
-                log_warn "Whisper build failed - voice input will not be available"
-                log_dim "You can try later with: offgrid audio setup whisper"
+                warn "Whisper build failed - voice input will not be available"
+                dim "You can try later with: offgrid audio setup whisper"
             fi
         fi
     elif [ -d "$bundle_dir/audio/whisper" ]; then
         # macOS/Windows: use pre-built binaries
+        dim "Installing Whisper (Speech-to-Text)..."
         cp -r "$bundle_dir/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
         chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
         whisper_installed=true
-        log_success "Whisper (Speech-to-Text) installed"
+        ok "Whisper ready"
     else
-        log_warn "Whisper binaries not in bundle - will build on first use"
+        warn "Whisper binaries not in bundle - will build on first use"
     fi
     
     # Install Piper (Text-to-Speech)
     local piper_installed=false
     
     if [ "$os" = "Linux" ]; then
-        log_info "Downloading Piper from official releases..."
+        dim "Downloading Piper (Text-to-Speech)..."
         if download_piper "$AUDIO_DIR/piper"; then
             # Test if it works
             if LD_LIBRARY_PATH="$AUDIO_DIR/piper:$LD_LIBRARY_PATH" "$AUDIO_DIR/piper/piper" --help >/dev/null 2>&1; then
                 piper_installed=true
-                log_success "Piper (Text-to-Speech) installed"
+                ok "Piper ready"
             else
-                log_warn "Piper binary not compatible with your system"
-                log_dim "Text-to-speech will not be available"
+                warn "Piper binary not compatible with your system"
+                dim "Text-to-speech will not be available"
                 rm -rf "$AUDIO_DIR/piper"/*
             fi
         else
-            log_warn "Piper download failed - voice output will not be available"
+            warn "Piper download failed - voice output will not be available"
         fi
     elif [ -d "$bundle_dir/audio/piper" ]; then
+        dim "Installing Piper (Text-to-Speech)..."
         cp -r "$bundle_dir/audio/piper/"* "$AUDIO_DIR/piper/" 2>/dev/null || true
         chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
         piper_installed=true
-        log_success "Piper (Text-to-Speech) installed"
+        ok "Piper ready"
     else
-        log_warn "Piper binaries not in bundle - will download on first use"
+        warn "Piper binaries not in bundle - will download on first use"
     fi
 }
 
@@ -640,7 +651,7 @@ download_piper() {
             piper_url="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz"
             ;;
         *)
-            log_warn "Unsupported architecture for Piper: $arch"
+            warn "Unsupported architecture for Piper: $arch"
             return 1
             ;;
     esac
@@ -648,13 +659,13 @@ download_piper() {
     local tmp_dir="/tmp/piper-download-$$"
     mkdir -p "$tmp_dir"
     
-    log_dim "Downloading Piper..."
+    dim "Downloading Piper..."
     if ! curl -fsSL -o "$tmp_dir/piper.tar.gz" "$piper_url" 2>/dev/null; then
         rm -rf "$tmp_dir"
         return 1
     fi
     
-    log_dim "Extracting Piper..."
+    dim "Extracting Piper..."
     if ! tar -xzf "$tmp_dir/piper.tar.gz" -C "$tmp_dir" 2>/dev/null; then
         rm -rf "$tmp_dir"
         return 1
@@ -685,7 +696,7 @@ download_piper() {
 install_webui() {
     local bundle_dir="$1"
     
-    log_info "Installing Web UI..."
+    dim "Installing Web UI..."
     
     local WEB_DIR="/var/lib/offgrid/web/ui"
     
@@ -699,34 +710,33 @@ install_webui() {
     
     if [ -d "$bundle_dir/web/ui" ]; then
         $use_sudo cp -r "$bundle_dir/web/ui/"* "$WEB_DIR/"
-        log_success "Web UI installed"
+        ok "Web UI ready"
     else
         # Download from GitHub
-        log_dim "Downloading Web UI..."
+        dim "Fetching latest Web UI..."
         local ui_tmp="/tmp/offgrid-ui-$$"
         mkdir -p "$ui_tmp"
         
         if curl -fsSL "${GITHUB_URL}/archive/refs/heads/main.tar.gz" | tar -xz -C "$ui_tmp" --strip-components=2 "offgrid-llm-main/web/ui" 2>/dev/null; then
             $use_sudo cp -r "$ui_tmp/"* "$WEB_DIR/"
             rm -rf "$ui_tmp"
-            log_success "Web UI installed"
+            ok "Web UI ready"
         else
             rm -rf "$ui_tmp"
-            log_warn "Web UI download failed"
+            warn "Web UI download failed"
         fi
     fi
 }
-
 install_desktop() {
     local app_path="$1"
     local os="$2"
     
     if [ -z "$app_path" ] || [ ! -f "$app_path" ]; then
-        log_warn "Desktop app not available"
+        warn "Desktop app not available"
         return
     fi
     
-    log_info "Installing Desktop app..."
+    info "Installing Desktop app..."
     
     case "$os" in
         linux)
@@ -739,7 +749,7 @@ install_desktop() {
             rm -rf "$app_dir"
             mkdir -p "$app_dir" "$bin_dir"
             
-            log_dim "Extracting AppImage..."
+            dim "Extracting AppImage..."
             chmod +x "$app_path"
             cd "$app_dir"
             "$app_path" --appimage-extract >/dev/null 2>&1 || true
@@ -755,7 +765,7 @@ LAUNCHER
                 chmod +x "$bin_dir/offgrid-desktop"
             else
                 # Extraction failed - try copying AppImage directly (requires FUSE)
-                log_dim "Using AppImage directly (requires FUSE)..."
+                dim "Using AppImage directly (requires FUSE)..."
                 cp "$app_path" "$bin_dir/offgrid-desktop"
                 chmod +x "$bin_dir/offgrid-desktop"
             fi
@@ -773,7 +783,7 @@ Type=Application
 Categories=Utility;Development;
 Terminal=false
 EOF
-            log_success "Desktop app installed"
+            ok "Desktop app installed"
             ;;
         darwin)
             # Mount DMG and copy app
@@ -781,14 +791,14 @@ EOF
             hdiutil attach "$app_path" -quiet
             cp -R "${mount_point}/OffGrid LLM.app" /Applications/
             hdiutil detach "$mount_point" -quiet
-            log_success "Desktop app installed to /Applications"
+            ok "Desktop app installed to /Applications"
             ;;
         windows)
             # Just save the installer
             local app_dir="$HOME/Desktop"
             cp "$app_path" "$app_dir/"
-            log_success "Desktop installer saved to Desktop"
-            log_dim "Run the installer to complete setup"
+            ok "Desktop installer saved to Desktop"
+            dim "Run the installer to complete setup"
             ;;
     esac
 }
@@ -833,7 +843,7 @@ main() {
     # Environment variable override
     if [ -n "${GPU:-}" ]; then
         gpu_variant="$GPU"
-        log_dim "GPU variant override: $gpu_variant"
+        dim "GPU variant override: $gpu_variant"
     fi
     
     # Check GLIBC for Vulkan builds on Linux (requires 2.38+)
@@ -841,20 +851,22 @@ main() {
         local glibc_check=$(check_glibc_version 2 38)
         if [ "$glibc_check" != "compatible" ]; then
             local current_glibc=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || echo "unknown")
-            log_warn "GLIBC $current_glibc < 2.38 - Vulkan requires Ubuntu 24.04+"
-            log_info "Falling back to CPU build"
+            warn "GLIBC $current_glibc < 2.38 - Vulkan requires Ubuntu 24.04+"
+            info "Falling back to CPU build"
             gpu_variant="cpu"
             has_gpu=false
         fi
     fi
     
-    echo -e "  ${DIM}System${NC}   ${BOLD}$os-$arch${NC} ${DIM}($cpu_features)${NC}" >&2
+    section "System"
+    printf "    ${DIM}OS${NC}        %s\n" "$os/$arch" >&2
+    printf "    ${DIM}CPU${NC}       %s\n" "$cpu_features" >&2
     
     # Get version
     if [ "$VERSION" = "latest" ]; then
         VERSION=$(get_latest_version)
     fi
-    echo -e "  ${DIM}Version${NC}  ${BOLD}$VERSION${NC}" >&2
+    printf "    ${DIM}Version${NC}   %s\n" "$VERSION" >&2
     
     # Check if running interactively (stdin is a terminal)
     local is_interactive="no"
@@ -876,7 +888,7 @@ main() {
         INSTALL_AUDIO="${AUDIO:-yes}"
         
         if [ "$is_interactive" != "yes" ]; then
-            log_dim "Non-interactive: Installing full system (CPU)"
+            dim "Non-interactive mode, using defaults"
         fi
     fi
     
@@ -886,19 +898,30 @@ main() {
     fi
     
     # Summary
-    echo "" >&2
-    echo -e "  ${BOLD}Components${NC}" >&2
-    [ "$INSTALL_CLI" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} CLI Tools" >&2 || echo -e "    ${DIM}○ CLI Tools${NC}" >&2
-    [ "$INSTALL_DESKTOP" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} Desktop App" >&2 || echo -e "    ${DIM}○ Desktop App${NC}" >&2
-    [ "$INSTALL_AUDIO" = "yes" ] && echo -e "    ${GREEN}${ICON_CHECK}${NC} Audio (STT/TTS)" >&2 || echo -e "    ${DIM}○ Audio (STT/TTS)${NC}" >&2
-    echo -e "  ${BOLD}Backend${NC}   ${DIM}$gpu_variant${NC}" >&2
+    section "Components"
+    if [ "$INSTALL_CLI" = "yes" ]; then
+        printf "    ${GREEN}\xE2\x9C\x93${NC} CLI Tools\n" >&2
+    else
+        printf "    ${DIM}\xE2\x97\xA6 CLI Tools${NC}\n" >&2
+    fi
+    if [ "$INSTALL_DESKTOP" = "yes" ]; then
+        printf "    ${GREEN}\xE2\x9C\x93${NC} Desktop App\n" >&2
+    else
+        printf "    ${DIM}\xE2\x97\xA6 Desktop App${NC}\n" >&2
+    fi
+    if [ "$INSTALL_AUDIO" = "yes" ]; then
+        printf "    ${GREEN}\xE2\x9C\x93${NC} Audio (STT/TTS)\n" >&2
+    else
+        printf "    ${DIM}\xE2\x97\xA6 Audio (STT/TTS)${NC}\n" >&2
+    fi
+    printf "    ${DIM}Backend${NC}   %s\n" "$gpu_variant" >&2
     echo "" >&2
     
     if [ "$is_interactive" = "yes" ]; then
         read -p "  Proceed? [Y/n]: " confirm
         confirm="${confirm:-Y}"
         if [[ ! "$confirm" =~ ^[Yy] ]]; then
-            log_info "Cancelled"
+            info "Cancelled"
             exit 0
         fi
     fi
@@ -909,12 +932,16 @@ main() {
     local tmp_dir=$(mktemp -d)
     trap "rm -rf $tmp_dir" EXIT
     
+    # Track installation start time
+    local install_start=$(date +%s)
+    local components_installed=0
+    
     # Download and install CLI bundle
     if [ "$INSTALL_CLI" = "yes" ]; then
         local bundle_name=$(download_cli_bundle "$os" "$arch" "$VERSION" "$gpu_variant" "$cpu_features" "$tmp_dir")
         
         if [ -z "$bundle_name" ]; then
-            log_error "Failed to download CLI bundle"
+            error "Failed to download CLI bundle"
             exit 1
         fi
         
@@ -922,9 +949,11 @@ main() {
         
         install_cli "$bundle_dir" "$os"
         install_webui "$bundle_dir"
+        components_installed=$((components_installed + 1))
         
         if [ "$INSTALL_AUDIO" = "yes" ]; then
             install_audio "$bundle_dir" "$is_interactive"
+            components_installed=$((components_installed + 1))
         fi
     fi
     
@@ -932,40 +961,40 @@ main() {
     if [ "$INSTALL_DESKTOP" = "yes" ]; then
         local app_path=$(download_desktop_app "$os" "$arch" "$VERSION" "$tmp_dir")
         install_desktop "$app_path" "$os"
+        components_installed=$((components_installed + 1))
     fi
+    
+    # Calculate total time
+    local install_end=$(date +%s)
+    local install_time=$((install_end - install_start))
     
     # Success message
     echo "" >&2
-    echo -e "  ${GREEN}${ICON_CHECK} Installation complete${NC}" >&2
-    echo "" >&2
+    ok "Installation complete (${install_time}s)"
     
     if [ "$INSTALL_CLI" = "yes" ]; then
-        echo -e "  ${BOLD}Quick Start${NC}" >&2
-        echo -e "    ${DIM}\$${NC} offgrid --version        ${DIM}# Verify install${NC}" >&2
-        echo -e "    ${DIM}\$${NC} offgrid init             ${DIM}# First-time setup${NC}" >&2
-        echo -e "    ${DIM}\$${NC} offgrid serve            ${DIM}# Start server${NC}" >&2
+        section "Next Steps"
+        printf "    ${CYAN}\$${NC} offgrid init          ${DIM}# Download your first model${NC}\n" >&2
+        printf "    ${CYAN}\$${NC} offgrid serve         ${DIM}# Start the server${NC}\n" >&2
+        printf "    ${CYAN}\$${NC} offgrid run <model>   ${DIM}# Interactive chat${NC}\n" >&2
         echo "" >&2
-        echo -e "  ${BOLD}Web UI${NC}  ${CYAN}http://localhost:11611/ui${NC}" >&2
-        echo "" >&2
+        printf "    ${DIM}Web UI${NC}  http://localhost:11611/ui\n" >&2
     fi
     
     if [ "$INSTALL_DESKTOP" = "yes" ]; then
-        echo -e "  ${BOLD}Desktop${NC}" >&2
-        case "$os" in
-            linux) echo -e "    Run ${CYAN}offgrid-desktop${NC} or find in app menu" >&2 ;;
-            darwin) echo -e "    Open ${CYAN}OffGrid LLM${NC} from Applications" >&2 ;;
-            windows) echo -e "    Run the installer on your Desktop" >&2 ;;
-        esac
         echo "" >&2
+        case "$os" in
+            linux) dim "Desktop: Run 'offgrid-desktop' or find in app menu" ;;
+            darwin) dim "Desktop: Open 'OffGrid LLM' from Applications" ;;
+            windows) dim "Desktop: Run the installer saved to Desktop" ;;
+        esac
     fi
     
     if [ "$INSTALL_AUDIO" = "yes" ]; then
-        echo -e "  ${BOLD}Voice${NC}" >&2
-        echo -e "    ${DIM}\$${NC} offgrid audio setup      ${DIM}# Download voice models${NC}" >&2
         echo "" >&2
+        dim "Voice: Run 'offgrid audio setup' to download models"
     fi
     
-    echo -e "  ${DIM}Docs: https://github.com/takuphilchan/offgrid-llm${NC}" >&2
     echo "" >&2
 }
 

@@ -127,7 +127,7 @@
             </div>
             <div class="flex items-center gap-2 nav-text">
                 <span id="statusBadge" class="badge badge-success">Ready</span>
-                <span class="text-xs text-secondary">v0.2.8</span>
+                <span class="text-xs text-secondary">v0.2.9</span>
             </div>
             <button id="theme-toggle" class="p-2 rounded-lg hover:bg-tertiary transition-colors text-secondary hover:text-primary" title="Toggle Theme">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -218,9 +218,19 @@
                                     </div>
                                     <div>
                                         <label class="text-xs text-secondary block mb-1">Max Tokens</label>
-                                        <input type="number" id="maxTokens" value="1000" step="100" min="100" max="4000" 
+                                        <input type="number" id="maxTokens" value="2048" step="256" min="256" max="8192" 
                                                class="w-full input-theme rounded px-2 py-1.5 text-sm">
                                     </div>
+                                </div>
+                                
+                                <!-- Performance Mode -->
+                                <div>
+                                    <label class="text-xs text-secondary block mb-1">Performance Mode</label>
+                                    <select id="performanceMode" onchange="applyPerformanceMode()" class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                        <option value="balanced">Balanced</option>
+                                        <option value="speed">Speed (Lower quality)</option>
+                                        <option value="quality">Quality (Slower)</option>
+                                    </select>
                                 </div>
                                 
                                 <!-- Streaming Toggle -->
@@ -287,6 +297,10 @@
                 
                 <!-- Active Indicators (shown when applicable) -->
                 <div id="chatIndicators" class="flex items-center gap-2 mt-2 empty:hidden">
+                    <span id="cacheIndicator" class="hidden text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 flex items-center gap-1" title="KV cache reuse enabled for faster responses">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        Cache Active
+                    </span>
                     <span id="ragIndicator" class="hidden text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
                         Knowledge Base
@@ -1082,7 +1096,7 @@
                         <button onclick="clearTerminal()" class="btn btn-secondary btn-sm">Clear</button>
                     </div>
                 </div>
-                <div class="terminal-output" id="terminalOutput"><pre class="terminal-pre" id="terminalPre"><span style="color: var(--accent-primary);">OffGrid Terminal v0.2.8</span>
+                <div class="terminal-output" id="terminalOutput"><pre class="terminal-pre" id="terminalPre"><span style="color: var(--accent-primary);">OffGrid Terminal v0.2.9</span>
 Connected to real offgrid binary
 Type 'help' for available commands or 'offgrid --help' for all options
 </pre></div>

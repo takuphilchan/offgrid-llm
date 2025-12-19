@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -170,6 +172,64 @@ func (mc *ModelCache) shouldUseMlock(modelPath string) bool {
 	return false
 }
 
+// autoDetectGPULayers determines optimal GPU layers based on available VRAM
+// This enables automatic GPU acceleration on consumer hardware
+func (mc *ModelCache) autoDetectGPULayers(modelPath string) int {
+	// Try to detect NVIDIA GPU VRAM
+	cmd := exec.Command("nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits")
+	output, err := cmd.Output()
+	if err != nil {
+		// No NVIDIA GPU available
+		return 0
+	}
+
+	// Parse free VRAM in MB
+	freeVRAM, err := strconv.ParseInt(strings.TrimSpace(string(output)), 10, 64)
+	if err != nil || freeVRAM < 1000 {
+		// Less than 1GB free, don't use GPU
+		return 0
+	}
+
+	// Get model file size to estimate layers
+	info, err := os.Stat(modelPath)
+	if err != nil {
+		return 0
+	}
+
+	modelSizeMB := info.Size() / (1024 * 1024)
+
+	// Estimate GPU layers based on model size and available VRAM
+	// Rule of thumb: each layer is roughly modelSize / 32 for most models
+	// Leave 500MB headroom for KV cache and other GPU operations
+	usableVRAM := freeVRAM - 500
+	if usableVRAM <= 0 {
+		return 0
+	}
+
+	// Calculate how much of the model can fit in VRAM
+	// If VRAM can fit the whole model, use 99 layers (all)
+	if usableVRAM >= modelSizeMB {
+		log.Printf("GPU auto-detect: Full model fits in VRAM (%dMB free, %dMB model) - using all layers",
+			freeVRAM, modelSizeMB)
+		return 99 // llama.cpp will cap at actual layer count
+	}
+
+	// Partial offload: estimate layers based on VRAM ratio
+	// Typical models have 24-32 layers, estimate based on percentage
+	layerPercentage := float64(usableVRAM) / float64(modelSizeMB)
+	estimatedLayers := int(layerPercentage * 32) // Assume 32 layers as baseline
+
+	if estimatedLayers < 4 {
+		// Too few layers to be worthwhile
+		log.Printf("GPU auto-detect: Only %d layers would fit, using CPU only", estimatedLayers)
+		return 0
+	}
+
+	log.Printf("GPU auto-detect: %dMB VRAM free, %dMB model - using %d layers",
+		freeVRAM, modelSizeMB, estimatedLayers)
+	return estimatedLayers
+}
+
 // GetOrLoad returns an existing model instance or loads a new one
 func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*ModelInstance, error) {
 	mc.mu.Lock()
@@ -250,10 +310,12 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		"-np", "1", // Limit to 1 parallel sequence for stability
 		"--no-warmup",                      // Skip warmup to save memory/time on load
 		"-b", fmt.Sprintf("%d", batchSize), // Adaptive batch size
-		"-nr",                    // Disable weight repacking to save memory
+		"-nr",       // Disable weight repacking to save memory
+		"-fa", "on", // Flash attention - 20-40% faster inference, less memory
 		"--cont-batching",        // Continuous batching for better throughput
 		"--cache-type-k", "q8_0", // Quantized KV cache - reduces memory ~50%
 		"--cache-type-v", "q8_0", // with minimal quality loss
+		"--cache-reuse", "256", // Reuse cached KV for repeated prompts
 	}
 
 	// Smart mlock: automatically enable for small models when RAM is sufficient
@@ -267,9 +329,15 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		args = append(args, "--mmproj", projectorPath)
 	}
 
-	// Add GPU layers if configured
-	if mc.gpuLayers > 0 {
-		args = append(args, "-ngl", fmt.Sprintf("%d", mc.gpuLayers))
+	// Add GPU layers - auto-detect if not explicitly configured
+	gpuLayersToUse := mc.gpuLayers
+	if gpuLayersToUse == 0 {
+		// Auto-detect GPU layers based on available VRAM
+		gpuLayersToUse = mc.autoDetectGPULayers(modelPath)
+	}
+	if gpuLayersToUse > 0 {
+		args = append(args, "-ngl", fmt.Sprintf("%d", gpuLayersToUse))
+		log.Printf("Using %d GPU layers for model %s", gpuLayersToUse, modelID)
 	} else {
 		args = append(args, "-ngl", "0")
 	}

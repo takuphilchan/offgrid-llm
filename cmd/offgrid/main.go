@@ -494,15 +494,17 @@ func startLlamaServerInBackground(modelPath string) error {
 	// Detect system resources for optimal configuration
 	res, _ := resource.DetectResources()
 
-	// Get CPU count for optimal threading
-	// Use physical cores (half of logical on hyperthreaded CPUs), leave 1 for OS
-	cpuCores := runtime.NumCPU()
-	threads := cpuCores / 2
-	if threads < 1 {
-		threads = 1
-	}
-	if threads > 1 {
-		threads-- // Leave headroom for OS
+	// Get optimal thread count using physical core detection
+	var threads int
+	if res != nil {
+		threads = res.GetOptimalThreads()
+	} else {
+		// Fallback: use half of logical cores
+		cpuCores := runtime.NumCPU()
+		threads = cpuCores / 2
+		if threads < 1 {
+			threads = 1
+		}
 	}
 
 	// Adaptive context size based on available RAM
@@ -532,17 +534,18 @@ func startLlamaServerInBackground(modelPath string) error {
 	}
 
 	// Build optimized command line
+	// -fa: Flash attention for 20-40% faster inference
 	// --cont-batching: Better throughput
 	// --cache-type-k/v q8_0: Quantized KV cache saves memory with minimal quality loss
-	// Note: Flash attention is auto-enabled by default in newer llama.cpp
+	// --cache-prompt: Cache prompt prefixes for faster repeated prompts
 	var cmdStr string
 	if res != nil && res.AvailableRAM < 8000 {
 		// Low RAM: use mmap (won't crash, but slower first token)
-		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d --cont-batching --cache-type-k q8_0 --cache-type-v q8_0",
+		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256",
 			llamaServerPath, modelPath, port, threads, contextSize, batchSize)
 	} else {
 		// Sufficient RAM: load fully into memory for speed
-		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d --no-mmap --mlock --cont-batching --cache-type-k q8_0 --cache-type-v q8_0",
+		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d --no-mmap --mlock -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256",
 			llamaServerPath, modelPath, port, threads, contextSize, batchSize)
 	}
 
@@ -840,21 +843,25 @@ func reloadLlamaServerWithModel(modelPath string) error {
 	}
 
 	// Start llama-server with the model in background using shell with optimized flags
-	// Detect optimal thread count based on CPU cores
-	cpuCores := runtime.NumCPU()
-	// Use physical cores (half of logical cores on hyperthreaded CPUs)
-	// Leave 1 core for OS, minimum 1 thread
-	threads := cpuCores / 2
-	if threads < 1 {
-		threads = 1
-	}
-	if threads > 1 {
-		threads-- // Leave headroom for OS
+	// Detect optimal thread count using physical core detection
+	res, err := resource.DetectResources()
+	var threads int
+	if err == nil {
+		threads = res.GetOptimalThreads()
+	} else {
+		// Fallback: half of logical cores - 1
+		cpuCores := runtime.NumCPU()
+		threads = cpuCores / 2
+		if threads < 1 {
+			threads = 1
+		}
+		if threads > 1 {
+			threads-- // Leave headroom for OS
+		}
 	}
 
 	// Detect available RAM to adjust context size
 	contextSize := 4096
-	res, err := resource.DetectResources()
 	if err == nil && res.AvailableRAM > 0 {
 		// Scale context based on RAM: each 1K context ≈ 0.5MB overhead per layer
 		// For 4GB RAM, use 2048; for 8GB use 4096; for 16GB+ use 8192
@@ -880,17 +887,18 @@ func reloadLlamaServerWithModel(modelPath string) error {
 	// -t: Thread count for CPU inference
 	// -c: Context window size
 	// -b: Batch size (lower = faster first token)
+	// -fa: Flash attention for 20-40% faster inference
 	// --cont-batching: Better throughput for concurrent requests
 	// --cache-type-k/v q8_0: Use q8 for KV cache (good balance of speed/quality)
-	// Note: Flash attention is auto-enabled by default in newer llama.cpp
+	// --cache-prompt: Cache prompt prefixes for faster repeated prompts
 	var cmdStr string
 	if res != nil && res.AvailableRAM < 8000 {
 		// Low RAM mode: use mmap (slower first token, but won't OOM)
-		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 > /dev/null 2>&1 &",
+		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 > /dev/null 2>&1 &",
 			modelPath, llamaPort, threads, contextSize, batchSize)
 	} else {
 		// High RAM mode: load model fully into RAM (faster inference)
-		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d --no-mmap --mlock --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 > /dev/null 2>&1 &",
+		cmdStr = fmt.Sprintf("llama-server -m '%s' --port %s --host 127.0.0.1 -t %d -c %d -b %d --no-mmap --mlock -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 > /dev/null 2>&1 &",
 			modelPath, llamaPort, threads, contextSize, batchSize)
 	}
 

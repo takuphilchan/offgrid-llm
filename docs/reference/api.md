@@ -93,7 +93,7 @@ Get basic server information.
 ```json
 {
   "name": "OffGrid LLM",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "status": "running"
 }
 ```

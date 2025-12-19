@@ -93,7 +93,7 @@ func TestDiscoveryLogic(t *testing.T) {
 		"node_id": "peer-1",
 		"port": 8081,
 		"models": ["llama-2-7b"],
-		"version": "0.2.8"
+		"version": "0.2.9"
 	}`
 
 	d.handleAnnouncement(announcementJSON, "192.168.1.50")

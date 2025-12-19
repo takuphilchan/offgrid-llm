@@ -89,6 +89,10 @@ async function warmModelInBackground(modelName) {
         console.log('[MODEL WARM] Model already cached, ready instantly!');
         statusBadge.className = 'badge badge-success';
         statusBadge.textContent = `Ready (${modelName})`;
+        // Show cache indicator - KV cache will be reused
+        if (typeof updateCacheIndicator === 'function') {
+            updateCacheIndicator(true);
+        }
         return;
     }
     
@@ -115,6 +119,10 @@ async function warmModelInBackground(modelName) {
             console.log('[MODEL WARM] Model warmed and ready!');
             statusBadge.className = 'badge badge-success';
             statusBadge.textContent = `Ready (${modelName})`;
+            // Show cache indicator - model is now warmed with active KV cache
+            if (typeof updateCacheIndicator === 'function') {
+                updateCacheIndicator(true);
+            }
         } else {
             console.warn('[MODEL WARM] Warm-up request returned:', resp.status);
             statusBadge.className = 'badge badge-warning';
@@ -493,6 +501,11 @@ async function handleModelChange() {
     
     currentModel = newModel;
     console.log('[MODEL CHANGE] Switching from', oldModel, 'to', newModel);
+    
+    // Hide cache indicator when switching models (new model needs to warm up)
+    if (typeof updateCacheIndicator === 'function') {
+        updateCacheIndicator(false);
+    }
 
     // Check if VLM and toggle upload button
     try {

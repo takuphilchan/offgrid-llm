@@ -69,7 +69,7 @@ sudo mv offgrid /usr/local/bin/
 
 ```bash
 offgrid version
-# Output: Version 0.2.8
+# Output: Version 0.2.9
 ```
 
 ---

@@ -270,6 +270,11 @@ window.addEventListener('DOMContentLoaded', () => {
     // Load chat models
     loadChatModels();
     
+    // Load saved performance mode
+    if (typeof loadPerformanceMode === 'function') {
+        loadPerformanceMode();
+    }
+    
     // Setup Knowledge Base toggle indicator
     const kbCheckbox = document.getElementById('useKnowledgeBase');
     const ragIndicator = document.getElementById('ragIndicator');

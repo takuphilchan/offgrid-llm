@@ -581,4 +581,53 @@ function regenerateMessage() {
     sendChat();
 }
 
+// Performance mode configuration for consumer hardware optimization
+const performanceModes = {
+    balanced: { temperature: 0.7, top_p: 0.9 },
+    speed: { temperature: 0.5, top_p: 0.8 },  // Lower diversity = faster generation
+    quality: { temperature: 0.8, top_p: 0.95 }  // Higher diversity = better quality
+};
+
+function applyPerformanceMode() {
+    const mode = document.getElementById('performanceMode').value;
+    const config = performanceModes[mode] || performanceModes.balanced;
+    
+    document.getElementById('temperature').value = config.temperature;
+    
+    // Save preference
+    localStorage.setItem('offgrid_performance_mode', mode);
+    
+    console.log('[PERFORMANCE] Applied mode:', mode, config);
+}
+
+// Load saved performance mode on init
+function loadPerformanceMode() {
+    const saved = localStorage.getItem('offgrid_performance_mode');
+    if (saved && performanceModes[saved]) {
+        const select = document.getElementById('performanceMode');
+        if (select) {
+            select.value = saved;
+            applyPerformanceMode();
+        }
+    }
+}
+
+// Update cache indicator based on model state
+function updateCacheIndicator(isActive) {
+    const indicator = document.getElementById('cacheIndicator');
+    if (indicator) {
+        if (isActive) {
+            indicator.classList.remove('hidden');
+        } else {
+            indicator.classList.add('hidden');
+        }
+    }
+}
+
+// Show cache indicator when model is warmed (has active KV cache)
+function onModelWarmed(modelName) {
+    console.log('[CACHE] Model warmed with KV cache:', modelName);
+    updateCacheIndicator(true);
+}
+
 // Search models

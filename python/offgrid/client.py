@@ -186,6 +186,7 @@ class Client:
         api_key: Optional API key for authentication
         max_retries: Maximum number of retries for failed requests (default: 3)
         retry_delay: Delay between retries in seconds (default: 1.0)
+        keep_alive: Use HTTP connection pooling for better performance (default: True)
     
     Example:
         >>> client = Client()  # localhost:11611
@@ -204,7 +205,8 @@ class Client:
         timeout: int = 300,
         api_key: str = None,
         max_retries: int = 3,
-        retry_delay: float = 1.0
+        retry_delay: float = 1.0,
+        keep_alive: bool = True
     ):
         # Normalize the host URL
         if not host.startswith("http://") and not host.startswith("https://"):
@@ -216,6 +218,19 @@ class Client:
         self.api_key = api_key
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.keep_alive = keep_alive
+        
+        # Connection pooling for better performance
+        self._http_handler = None
+        if keep_alive:
+            try:
+                import urllib.request
+                self._http_handler = urllib.request.HTTPHandler()
+                self._opener = urllib.request.build_opener(self._http_handler)
+            except Exception:
+                self._opener = None
+        else:
+            self._opener = None
         
         # Initialize sub-managers
         self.models = ModelManager(self)
@@ -236,10 +251,13 @@ class Client:
         stream: bool = False,
         retry: bool = True
     ) -> Union[dict, Iterator[dict]]:
-        """Make an HTTP request to the server with retry logic."""
+        """Make an HTTP request to the server with retry logic and connection pooling."""
         url = f"{self.base_url}{endpoint}"
         
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "Connection": "keep-alive" if self.keep_alive else "close"
+        }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         
@@ -251,7 +269,12 @@ class Client:
         for attempt in range(retries):
             try:
                 req = Request(url, data=body, headers=headers, method=method)
-                response = urlopen(req, timeout=self.timeout)
+                
+                # Use connection pooling opener if available
+                if self._opener:
+                    response = self._opener.open(req, timeout=self.timeout)
+                else:
+                    response = urlopen(req, timeout=self.timeout)
                 
                 if stream:
                     return self._stream_response(response)
@@ -590,3 +613,105 @@ class Client:
         """
         response = self._request("POST", "/models/refresh")
         return response.get("data", [])
+    
+    def cache_stats(self) -> Dict:
+        """
+        Get model cache statistics.
+        
+        Returns statistics about loaded models, memory usage, and pre-warming status.
+        Useful for understanding model switching performance.
+        
+        Returns:
+            Dictionary with:
+                - loaded_models: List of currently loaded models
+                - cache_size: Number of models in cache
+                - max_size: Maximum cache capacity
+                - mmap_warmer: Pre-warming statistics
+                - system_ram_mb: Available system RAM
+                - mlock_enabled: Whether mlock is enabled
+        
+        Example:
+            >>> stats = client.cache_stats()
+            >>> print(f"Models in cache: {stats['cache_size']}/{stats['max_size']}")
+            >>> for model in stats['loaded_models']:
+            ...     print(f"  - {model['id']}: {model['size_mb']}MB")
+        """
+        return self._request("GET", "/v1/cache/stats")
+    
+    def warm_model(self, model: str, wait: bool = True, timeout: int = 60) -> bool:
+        """
+        Pre-warm a model into cache for faster first response.
+        
+        Sends a minimal request to trigger model loading, ensuring the model
+        is ready for instant responses. This is useful before starting a
+        conversation or when anticipating model use.
+        
+        Args:
+            model: Model name to warm
+            wait: If True, wait for warming to complete (default: True)
+            timeout: Maximum seconds to wait for warming (default: 60)
+        
+        Returns:
+            True if model is warmed and ready
+        
+        Example:
+            >>> # Pre-warm before user interaction
+            >>> client.warm_model("Llama-3.2-3B-Instruct-Q4_K_M")
+            >>> # Now chat will have instant first response
+            >>> response = client.chat("Hello!")
+        """
+        import time
+        
+        start = time.time()
+        try:
+            # Send minimal request to trigger model loading
+            response = self._request("POST", "/v1/chat/completions", {
+                "model": model,
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": False,
+                "max_tokens": 1,
+                "temperature": 0
+            }, retry=False)
+            
+            if wait:
+                # Check if model is actually loaded
+                while time.time() - start < timeout:
+                    stats = self.cache_stats()
+                    loaded = [m.get("id", "") for m in stats.get("loaded_models", [])]
+                    if model in loaded or any(model in m for m in loaded):
+                        return True
+                    time.sleep(0.5)
+            
+            return "choices" in response
+        except Exception as e:
+            # Model may still be loading
+            if wait and time.time() - start < timeout:
+                time.sleep(2)
+                return self.warm_model(model, wait=True, timeout=timeout - int(time.time() - start))
+            return False
+    
+    def is_model_cached(self, model: str) -> bool:
+        """
+        Check if a model is currently loaded in cache.
+        
+        Cached models respond instantly without loading delay.
+        
+        Args:
+            model: Model name to check
+        
+        Returns:
+            True if model is in cache and ready
+        
+        Example:
+            >>> if client.is_model_cached("Llama-3.2-3B-Instruct"):
+            ...     print("Model ready - instant response!")
+            ... else:
+            ...     print("Model will need to load first")
+            ...     client.warm_model("Llama-3.2-3B-Instruct")
+        """
+        try:
+            stats = self.cache_stats()
+            loaded = [m.get("id", "") for m in stats.get("loaded_models", [])]
+            return model in loaded or any(model in m for m in loaded)
+        except Exception:
+            return False

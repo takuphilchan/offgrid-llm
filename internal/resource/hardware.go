@@ -11,14 +11,15 @@ import (
 
 // SystemResources represents available hardware resources
 type SystemResources struct {
-	TotalRAM     int64  // Total RAM in MB
-	AvailableRAM int64  // Available RAM in MB
-	GPUAvailable bool   // Whether GPU is available
-	GPUMemory    int64  // GPU VRAM in MB
-	GPUName      string // GPU model name
-	CPUCores     int    // Number of CPU cores
-	OS           string // Operating system
-	Arch         string // Architecture
+	TotalRAM      int64  // Total RAM in MB
+	AvailableRAM  int64  // Available RAM in MB
+	GPUAvailable  bool   // Whether GPU is available
+	GPUMemory     int64  // GPU VRAM in MB
+	GPUName       string // GPU model name
+	CPUCores      int    // Number of CPU cores (logical)
+	PhysicalCores int    // Number of physical CPU cores
+	OS            string // Operating system
+	Arch          string // Architecture
 }
 
 // DetectResources detects available system resources
@@ -29,6 +30,9 @@ func DetectResources() (*SystemResources, error) {
 		Arch:     runtime.GOARCH,
 	}
 
+	// Detect physical cores
+	res.PhysicalCores = detectPhysicalCores(res.CPUCores)
+
 	// Detect RAM
 	if err := detectRAM(res); err != nil {
 		return nil, fmt.Errorf("failed to detect RAM: %w", err)
@@ -38,6 +42,80 @@ func DetectResources() (*SystemResources, error) {
 	detectGPU(res)
 
 	return res, nil
+}
+
+// detectPhysicalCores attempts to detect the number of physical CPU cores
+// Falls back to logical cores / 2 if detection fails
+func detectPhysicalCores(logicalCores int) int {
+	if runtime.GOOS == "linux" {
+		// Try to read from /proc/cpuinfo
+		data, err := os.ReadFile("/proc/cpuinfo")
+		if err == nil {
+			// Count unique physical core IDs
+			coreIDs := make(map[string]bool)
+			lines := strings.Split(string(data), "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(line, "core id") {
+					parts := strings.Split(line, ":")
+					if len(parts) >= 2 {
+						coreIDs[strings.TrimSpace(parts[1])] = true
+					}
+				}
+			}
+			if len(coreIDs) > 0 {
+				return len(coreIDs)
+			}
+		}
+
+		// Alternative: use lscpu
+		cmd := exec.Command("lscpu", "-p=core")
+		output, err := cmd.Output()
+		if err == nil {
+			coreIDs := make(map[string]bool)
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line != "" && !strings.HasPrefix(line, "#") {
+					coreIDs[line] = true
+				}
+			}
+			if len(coreIDs) > 0 {
+				return len(coreIDs)
+			}
+		}
+	}
+
+	if runtime.GOOS == "darwin" {
+		// macOS: use sysctl
+		cmd := exec.Command("sysctl", "-n", "hw.physicalcpu")
+		output, err := cmd.Output()
+		if err == nil {
+			cores, err := strconv.Atoi(strings.TrimSpace(string(output)))
+			if err == nil && cores > 0 {
+				return cores
+			}
+		}
+	}
+
+	// Fallback: assume hyperthreading (2 threads per core)
+	physicalCores := logicalCores / 2
+	if physicalCores < 1 {
+		physicalCores = 1
+	}
+	return physicalCores
+}
+
+// GetOptimalThreads returns the optimal number of threads for inference
+// Uses physical cores - 1 to leave headroom for the OS
+func (res *SystemResources) GetOptimalThreads() int {
+	threads := res.PhysicalCores
+	if threads > 1 {
+		threads-- // Leave 1 core for OS
+	}
+	if threads < 1 {
+		threads = 1
+	}
+	return threads
 }
 
 // detectRAM detects total and available RAM
@@ -256,7 +334,8 @@ func (res *SystemResources) String() string {
 
 	fmt.Fprintf(&sb, "System Resources:\n")
 	fmt.Fprintf(&sb, "  OS: %s/%s\n", res.OS, res.Arch)
-	fmt.Fprintf(&sb, "  CPU Cores: %d\n", res.CPUCores)
+	fmt.Fprintf(&sb, "  CPU: %d physical cores (%d logical)\n", res.PhysicalCores, res.CPUCores)
+	fmt.Fprintf(&sb, "  Optimal threads: %d\n", res.GetOptimalThreads())
 	fmt.Fprintf(&sb, "  RAM: %d MB total, %d MB available\n", res.TotalRAM, res.AvailableRAM)
 
 	if res.GPUAvailable {
