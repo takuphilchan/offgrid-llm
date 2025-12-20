@@ -623,7 +623,6 @@ function clearChatSilent() {
 
 // Stop generation
 function stopGeneration() {
-    console.log('[STOP] Stopping generation...');
     if (abortController) {
         abortController.abort();
         abortController = null;
@@ -633,7 +632,6 @@ function stopGeneration() {
 
 // Reset chat state (useful for debugging stuck states)
 function resetChatState() {
-    console.log('[RESET STATE] Resetting all chat state flags');
     isGenerating = false;
     pendingRequest = false;
     const sendBtn = document.getElementById('sendBtn');
@@ -648,8 +646,6 @@ function resetChatState() {
     if (typeof updateSidebarStatus === 'function') {
         updateSidebarStatus('ready', currentModel || '');
     }
-    
-    console.log('[RESET STATE] State reset complete');
 }
 
 // Make resetChatState globally accessible for debugging
@@ -658,7 +654,6 @@ window.resetChatState = resetChatState;
 // Make handleModelChange globally accessible for manual testing
 window.handleModelChange = handleModelChange;
 window.testModelSwitch = function(modelName) {
-    console.log('[TEST] Manually switching to:', modelName);
     const select = document.getElementById('chatModel');
     select.value = modelName;
     handleModelChange();

@@ -5,15 +5,19 @@ let fileBrowserTarget = ''; // 'import' or 'export'
 async function browseForPath(target) {
     fileBrowserTarget = target;
     const modal = document.getElementById('fileBrowserModal');
-    modal.style.display = 'flex';
+    if (!modal) {
+        console.error('File browser modal not found');
+        return;
+    }
+    modal.classList.add('active');
     
     // Load common paths
     await loadCommonPaths();
     
-    // Browse to default path
+    // Browse to default path - use empty string to let server decide default
     const currentPath = target === 'import' 
-        ? document.getElementById('usbImportPath').value 
-        : document.getElementById('usbExportPath').value;
+        ? document.getElementById('usbImportPath')?.value 
+        : document.getElementById('usbExportPath')?.value;
     
     await browseTo(currentPath || '');
 }
@@ -125,13 +129,20 @@ function selectCurrentPath() {
 
 function closeFileBrowser() {
     const modal = document.getElementById('fileBrowserModal');
-    modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('active');
+    }
 }
 
 // Close modal when clicking outside
-document.getElementById('fileBrowserModal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'fileBrowserModal') {
-        closeFileBrowser();
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('fileBrowserModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target.id === 'fileBrowserModal') {
+                closeFileBrowser();
+            }
+        });
     }
 });
 

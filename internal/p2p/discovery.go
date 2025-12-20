@@ -72,7 +72,7 @@ func (d *Discovery) Start(ctx context.Context) error {
 	// Start peer cleanup
 	go d.cleanupStale(ctx)
 
-	log.Printf("🔍 P2P Discovery started on port %d", d.discoveryPort)
+	log.Printf("[P2P] Discovery started on port %d", d.discoveryPort)
 	return nil
 }
 

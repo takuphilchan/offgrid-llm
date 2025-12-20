@@ -185,7 +185,7 @@ async function runAgent() {
                         } else if (step.step_type === 'thought' || step.type === 'thought') {
                             updateAgentStatus('Thinking...', 'running');
                         }
-                    } catch (e) {}
+                    } catch (e) { /* Partial streaming data - ignore */ }
                 }
             }
         }

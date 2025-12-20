@@ -60,13 +60,13 @@ func main() {
 	}
 	testEmbedding(baseURL, req2)
 
-	fmt.Println("\n✅ Tests complete!")
+	fmt.Println("\n[OK] Tests complete!")
 }
 
 func testEmbedding(baseURL string, req EmbeddingRequest) {
 	jsonData, err := json.Marshal(req)
 	if err != nil {
-		fmt.Printf("❌ Error marshaling request: %v\n", err)
+		fmt.Printf("[ERROR] Error marshaling request: %v\n", err)
 		return
 	}
 
@@ -76,14 +76,14 @@ func testEmbedding(baseURL string, req EmbeddingRequest) {
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
-		fmt.Printf("❌ Error making request: %v\n", err)
+		fmt.Printf("[ERROR] Error making request: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("❌ Error reading response: %v\n", err)
+		fmt.Printf("[ERROR] Error reading response: %v\n", err)
 		return
 	}
 
@@ -96,12 +96,12 @@ func testEmbedding(baseURL string, req EmbeddingRequest) {
 		return
 	}
 
-	fmt.Printf("✅ Object: %s\n", embResp.Object)
-	fmt.Printf("✅ Model: %s\n", embResp.Model)
-	fmt.Printf("✅ Embeddings count: %d\n", len(embResp.Data))
+	fmt.Printf("[OK] Object: %s\n", embResp.Object)
+	fmt.Printf("[OK] Model: %s\n", embResp.Model)
+	fmt.Printf("[OK] Embeddings count: %d\n", len(embResp.Data))
 	if len(embResp.Data) > 0 {
-		fmt.Printf("✅ Dimensions: %d\n", len(embResp.Data[0].Embedding))
-		fmt.Printf("✅ First 5 values: %v\n", embResp.Data[0].Embedding[:5])
+		fmt.Printf("[OK] Dimensions: %d\n", len(embResp.Data[0].Embedding))
+		fmt.Printf("[OK] First 5 values: %v\n", embResp.Data[0].Embedding[:5])
 	}
-	fmt.Printf("✅ Total tokens: %d\n", embResp.Usage.TotalTokens)
+	fmt.Printf("[OK] Total tokens: %d\n", embResp.Usage.TotalTokens)
 }

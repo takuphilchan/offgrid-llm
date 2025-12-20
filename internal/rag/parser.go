@@ -3,10 +3,13 @@ package rag
 import (
 	"archive/zip"
 	"bytes"
+	"compress/zlib"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -42,16 +45,11 @@ func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*Pa
 	ext = strings.ToLower(ext)
 
 	switch ext {
-	case ".pdf":
-		return p.ParsePDF(content)
-	case ".docx":
-		return p.ParseDOCX(content)
-	case ".xlsx":
-		return p.ParseXLSX(content)
-	case ".pptx":
-		return p.ParsePPTX(content)
+	// Reliable text-based formats
 	case ".txt", ".md", ".markdown":
 		return p.ParsePlainText(content)
+	case ".docx":
+		return p.ParseDOCX(content)
 	case ".html", ".htm":
 		return p.ParseHTML(content)
 	case ".json":
@@ -62,8 +60,16 @@ func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*Pa
 		return p.ParseXML(content)
 	case ".rtf":
 		return p.ParseRTF(content)
+	// Code files
 	case ".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".rs", ".rb", ".php":
 		return p.ParseCode(content, ext)
+	// Unsupported complex binary formats
+	case ".pdf":
+		return nil, fmt.Errorf("PDF files are not currently supported. Please convert to TXT or DOCX first")
+	case ".xlsx":
+		return nil, fmt.Errorf("Excel files are not currently supported. Please export to CSV first")
+	case ".pptx":
+		return nil, fmt.Errorf("PowerPoint files are not currently supported. Please export to TXT or copy text content")
 	default:
 		// Try to parse as plain text if valid UTF-8
 		if utf8.Valid(content) {
@@ -74,37 +80,136 @@ func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*Pa
 }
 
 // ParsePDF extracts text from a PDF file
-// This is a basic implementation that extracts text streams
+// First tries pdftotext (poppler-utils) for best results, falls back to basic extraction
 func (p *DocumentParser) ParsePDF(content []byte) (*ParseResult, error) {
 	// Check PDF signature
 	if len(content) < 5 || string(content[:5]) != "%PDF-" {
 		return nil, fmt.Errorf("invalid PDF file: missing PDF header")
 	}
 
-	var textBuilder strings.Builder
-	pageCount := 0
+	// Try pdftotext first (best quality extraction)
+	text, err := p.extractPDFWithPdftotext(content)
+	if err == nil && text != "" {
+		text = cleanExtractedText(text)
+		if text != "" {
+			pageCount := countPDFPages(content)
+			return &ParseResult{
+				Content:     text,
+				ContentType: "application/pdf",
+				Metadata: map[string]string{
+					"format":     "pdf",
+					"page_count": fmt.Sprintf("%d", pageCount),
+					"extractor":  "pdftotext",
+				},
+				PageCount: pageCount,
+				WordCount: countWords(text),
+			}, nil
+		}
+	}
 
-	// Simple PDF text extraction - look for text streams
-	// This handles basic PDFs; complex PDFs may need external tools
+	// Fallback to basic extraction
+	text, err = p.extractPDFBasic(content)
+	if err != nil {
+		return nil, err
+	}
+
+	text = cleanExtractedText(text)
+	if text == "" {
+		return nil, fmt.Errorf("no text content extracted from PDF (may be scanned/image-based or using unsupported font encoding)")
+	}
+
+	pageCount := countPDFPages(content)
+	return &ParseResult{
+		Content:     text,
+		ContentType: "application/pdf",
+		Metadata: map[string]string{
+			"format":     "pdf",
+			"page_count": fmt.Sprintf("%d", pageCount),
+			"extractor":  "basic",
+		},
+		PageCount: pageCount,
+		WordCount: countWords(text),
+	}, nil
+}
+
+// extractPDFWithPdftotext uses the pdftotext command from poppler-utils
+func (p *DocumentParser) extractPDFWithPdftotext(content []byte) (string, error) {
+	// Check if pdftotext is available
+	_, err := exec.LookPath("pdftotext")
+	if err != nil {
+		return "", fmt.Errorf("pdftotext not found")
+	}
+
+	// Create temp file for the PDF
+	tmpFile, err := os.CreateTemp("", "pdf-*.pdf")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.Write(content); err != nil {
+		return "", err
+	}
+	tmpFile.Close()
+
+	// Run pdftotext with layout preservation
+	cmd := exec.Command("pdftotext", "-layout", "-enc", "UTF-8", tmpFile.Name(), "-")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(output), nil
+}
+
+// extractPDFBasic uses regex-based extraction for simple PDFs
+func (p *DocumentParser) extractPDFBasic(content []byte) (string, error) {
+	var textBuilder strings.Builder
 	contentStr := string(content)
 
-	// Find all stream objects
-	streamRegex := regexp.MustCompile(`stream\s*([\s\S]*?)\s*endstream`)
-	matches := streamRegex.FindAllStringSubmatch(contentStr, -1)
+	// Find stream objects with their dictionaries (to check for compression)
+	streamPattern := regexp.MustCompile(`<<([^>]*(?:>(?!>)[^>]*)*)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream`)
+	matches := streamPattern.FindAllSubmatchIndex(content, -1)
 
 	for _, match := range matches {
-		if len(match) > 1 {
-			streamContent := match[1]
-			// Extract text from stream (look for Tj and TJ operators)
-			text := extractPDFText(streamContent)
+		if len(match) >= 6 {
+			dictStart, dictEnd := match[2], match[3]
+			streamStart, streamEnd := match[4], match[5]
+
+			if dictStart < 0 || dictEnd < 0 || streamStart < 0 || streamEnd < 0 {
+				continue
+			}
+
+			dictContent := string(content[dictStart:dictEnd])
+			streamContent := content[streamStart:streamEnd]
+
+			// Check if stream is FlateDecode compressed
+			var decompressed []byte
+			if strings.Contains(dictContent, "FlateDecode") {
+				reader, err := zlib.NewReader(bytes.NewReader(streamContent))
+				if err != nil {
+					continue
+				}
+				decompressed, err = io.ReadAll(reader)
+				reader.Close()
+				if err != nil {
+					continue
+				}
+			} else {
+				decompressed = streamContent
+			}
+
+			// Extract text from the decompressed stream
+			text := extractPDFText(string(decompressed))
 			if text != "" {
 				textBuilder.WriteString(text)
-				textBuilder.WriteString("\n")
+				textBuilder.WriteString(" ")
 			}
 		}
 	}
 
-	// Also try to extract BT/ET text blocks
+	// Also try to extract BT/ET text blocks from the raw content
 	btRegex := regexp.MustCompile(`BT\s*([\s\S]*?)\s*ET`)
 	btMatches := btRegex.FindAllStringSubmatch(contentStr, -1)
 	for _, match := range btMatches {
@@ -112,34 +217,19 @@ func (p *DocumentParser) ParsePDF(content []byte) (*ParseResult, error) {
 			text := extractPDFTextFromBlock(match[1])
 			if text != "" {
 				textBuilder.WriteString(text)
-				textBuilder.WriteString("\n")
+				textBuilder.WriteString(" ")
 			}
 		}
 	}
 
-	// Count pages
+	return textBuilder.String(), nil
+}
+
+// countPDFPages counts pages in a PDF
+func countPDFPages(content []byte) int {
 	pageRegex := regexp.MustCompile(`/Type\s*/Page[^s]`)
-	pageMatches := pageRegex.FindAllString(contentStr, -1)
-	pageCount = len(pageMatches)
-
-	extractedText := strings.TrimSpace(textBuilder.String())
-	if extractedText == "" {
-		return nil, fmt.Errorf("no text content extracted from PDF (may be scanned/image-based)")
-	}
-
-	// Clean up the text
-	extractedText = cleanExtractedText(extractedText)
-
-	return &ParseResult{
-		Content:     extractedText,
-		ContentType: "application/pdf",
-		Metadata: map[string]string{
-			"format":     "pdf",
-			"page_count": fmt.Sprintf("%d", pageCount),
-		},
-		PageCount: pageCount,
-		WordCount: countWords(extractedText),
-	}, nil
+	matches := pageRegex.FindAll(content, -1)
+	return len(matches)
 }
 
 // extractPDFText extracts text from a PDF stream
@@ -709,18 +799,63 @@ func extractRTFText(rtf string) string {
 
 // cleanExtractedText cleans up extracted text
 func cleanExtractedText(text string) string {
+	// First, filter out non-printable and garbled characters
+	var cleaned strings.Builder
+	garbledCount := 0
+	totalCount := 0
+
+	for _, r := range text {
+		totalCount++
+		// Allow: printable ASCII, common Unicode (letters, digits, punctuation)
+		// Also allow common whitespace and newlines
+		if r == '\n' || r == '\r' || r == '\t' || r == ' ' {
+			cleaned.WriteRune(r)
+		} else if r >= 0x20 && r < 0x7F {
+			// Printable ASCII
+			cleaned.WriteRune(r)
+		} else if r >= 0x80 && r <= 0xFFFF {
+			// Check if it's a valid unicode letter/digit/punctuation
+			// Skip private use area and other problematic ranges
+			if (r >= 0x00A0 && r <= 0x024F) || // Latin Extended
+				(r >= 0x0400 && r <= 0x04FF) || // Cyrillic
+				(r >= 0x0600 && r <= 0x06FF) || // Arabic
+				(r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified Ideographs
+				(r >= 0x3000 && r <= 0x303F) || // CJK Punctuation
+				(r >= 0x3040 && r <= 0x309F) || // Hiragana
+				(r >= 0x30A0 && r <= 0x30FF) || // Katakana
+				(r >= 0xAC00 && r <= 0xD7AF) || // Korean Hangul
+				(r >= 0x2000 && r <= 0x206F) || // General Punctuation
+				(r >= 0x2010 && r <= 0x2027) || // Dashes and punctuation
+				(r >= 0x2030 && r <= 0x205E) { // Additional punctuation
+				cleaned.WriteRune(r)
+			} else {
+				garbledCount++
+			}
+		} else {
+			garbledCount++
+		}
+	}
+
+	result := cleaned.String()
+
+	// If more than 50% of characters were garbled, the extraction likely failed
+	if totalCount > 10 && float64(garbledCount)/float64(totalCount) > 0.5 {
+		// Return empty to signal extraction failure
+		return ""
+	}
+
 	// Normalize whitespace
 	wsRegex := regexp.MustCompile(`[ \t]+`)
-	text = wsRegex.ReplaceAllString(text, " ")
+	result = wsRegex.ReplaceAllString(result, " ")
 
 	// Normalize line breaks
 	nlRegex := regexp.MustCompile(`\n{3,}`)
-	text = nlRegex.ReplaceAllString(text, "\n\n")
+	result = nlRegex.ReplaceAllString(result, "\n\n")
 
 	// Decode HTML entities
-	text = decodeHTMLEntities(text)
+	result = decodeHTMLEntities(result)
 
-	return strings.TrimSpace(text)
+	return strings.TrimSpace(result)
 }
 
 // decodeHTMLEntities decodes common HTML entities
@@ -751,12 +886,16 @@ func countWords(text string) int {
 }
 
 // SupportedExtensions returns all supported file extensions
+// Only includes formats that can be reliably parsed without external tools
 func SupportedExtensions() []string {
 	return []string{
-		".pdf", ".docx", ".xlsx", ".pptx",
-		".txt", ".md", ".markdown",
+		// Documents
+		".docx", ".txt", ".md", ".markdown", ".rtf",
+		// Data
+		".json", ".csv", ".xml",
+		// Web
 		".html", ".htm",
-		".json", ".csv", ".xml", ".rtf",
+		// Code
 		".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".rs", ".rb", ".php",
 	}
 }

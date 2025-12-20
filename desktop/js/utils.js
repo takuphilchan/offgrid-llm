@@ -362,7 +362,7 @@ function updatePowerDisplay() {
     
     // Add charging indicator
     if (powerStatus.is_charging) {
-        text.textContent = `⚡${percent}%`;
+        text.textContent = `${percent}%+`;
         badge.title += ' - Charging';
     }
 }

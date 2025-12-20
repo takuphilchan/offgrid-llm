@@ -38,14 +38,12 @@ function runCommand() {
     if (terminalChatMode) {
         // Prevent sending while already processing
         if (terminalRunning || pendingRequest) {
-            console.log('Terminal chat request already in progress');
-            return; // Silently ignore, don't show error
+            return; // Silently ignore
         }
         
         // Throttle terminal chat requests
         const now = Date.now();
         if (now - lastRequestTime < requestCooldown) {
-            console.log('Throttling terminal chat request');
             return;
         }
         lastRequestTime = now;

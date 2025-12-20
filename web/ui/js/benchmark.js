@@ -7,7 +7,7 @@ async function loadBenchmarkModels() {
         const response = await fetch('/v1/models');
         const data = await response.json();
         const select = document.getElementById('benchmarkModel');
-        select.innerHTML = '<option value="">Choose a model...</option>';
+        select.innerHTML = '';
         
         // Filter for LLM models (not embeddings)
         const llmModels = data.data.filter(m => 
@@ -16,10 +16,16 @@ async function loadBenchmarkModels() {
             !m.id.toLowerCase().includes('bge')
         );
         
-        llmModels.forEach(model => {
+        if (llmModels.length === 0) {
+            select.innerHTML = '<option value="">No LLM models available</option>';
+            return;
+        }
+        
+        llmModels.forEach((model, i) => {
             const option = document.createElement('option');
             option.value = model.id;
             option.textContent = model.id;
+            if (i === 0) option.selected = true; // Auto-select first model
             select.appendChild(option);
         });
     } catch (e) {
@@ -153,7 +159,7 @@ async function runBenchmark() {
                             }
                             document.getElementById('benchLiveTotalTime').textContent = elapsed.toFixed(2);
                         }
-                    } catch (e) { }
+                    } catch (e) { /* Partial JSON chunk - ignore */ }
                 }
             }
         }
@@ -172,7 +178,7 @@ async function runBenchmark() {
                 memoryGB = (healthData.system.memory_mb / 1024).toFixed(2);
                 document.getElementById('benchLiveMemory').textContent = memoryGB;
             }
-        } catch (e) { }
+        } catch (e) { /* Health endpoint optional - continue */ }
         
         // Save to history
         const result = {

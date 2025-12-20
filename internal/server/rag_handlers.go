@@ -2,9 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
@@ -249,7 +251,29 @@ func (s *Server) handleFileUpload(r *http.Request) (*rag.Document, error) {
 		"content_type":      handler.Header.Get("Content-Type"),
 	}
 
-	return s.ragEngine.IngestText(r.Context(), handler.Filename, string(content), metadata)
+	// Get file extension and check if it needs parsing
+	ext := strings.ToLower(filepath.Ext(handler.Filename))
+
+	// Check if file extension is supported
+	if !rag.IsSupportedExtension(ext) {
+		return nil, fmt.Errorf("unsupported file type: %s. Supported: PDF, DOCX, XLSX, PPTX, RTF, TXT, MD, JSON, CSV, XML, HTML, and code files", ext)
+	}
+
+	// Use the document parser to extract text from binary files
+	parser := rag.NewDocumentParser()
+	result, err := parser.Parse(content, handler.Filename, ext)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s file: %w", ext, err)
+	}
+
+	// Add parser metadata
+	metadata["file_ext"] = ext
+	metadata["content_type"] = result.ContentType
+	for k, v := range result.Metadata {
+		metadata[k] = v
+	}
+
+	return s.ragEngine.IngestText(r.Context(), handler.Filename, result.Content, metadata)
 }
 
 // handleDocumentDelete deletes a document

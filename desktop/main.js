@@ -1,13 +1,30 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 
+// Single instance lock - prevent multiple instances
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Focus the existing window when user tries to open second instance
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 let mainWindow = null;
 let tray = null;
 let offgridProcess = null;
 let isQuitting = false;
+let serverCheckInterval = null;
 
 const APP_NAME = 'OffGrid LLM Desktop';
 const SERVER_PORT = 11611;
@@ -55,42 +72,60 @@ const paths = {
   }
 };
 
-// Wait for server to be ready (helper function)
+// Wait for server to be ready with exponential backoff
 function waitForServer(callback, maxAttempts = 60) {
   let attempts = 0;
+  let delay = 500;
+  const maxDelay = 3000;
+  
   const check = async () => {
     const ready = await checkServer();
     if (ready) {
       callback();
     } else if (attempts < maxAttempts) {
       attempts++;
-      setTimeout(check, 500);
+      delay = Math.min(delay * 1.2, maxDelay); // Exponential backoff
+      setTimeout(check, delay);
+    } else {
+      // Server didn't start - show error
+      if (mainWindow) {
+        dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          title: 'Server Timeout',
+          message: 'OffGrid server did not respond in time',
+          detail: 'The server may still be starting. Try refreshing the page in a few seconds.'
+        });
+      }
     }
   };
-  setTimeout(check, 1000); // Start checking after 1 second
+  setTimeout(check, 1000);
 }
 
 // Ensure directories exist
 function ensureDirectories() {
   const dirs = [
-
-
     paths.getConfigDir(),
     paths.getModelsDir(),
     paths.getDataDir()
   ];
   
-  dirs.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+  for (const dir of dirs) {
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    } catch (err) {
+      console.error(`Failed to create directory ${dir}:`, err.message);
     }
-  });
+  }
 }
 
-// Check if server is running
+// Check if server is running (with timeout and proper cleanup)
 function checkServer() {
   return new Promise((resolve) => {
     const req = http.get(`${SERVER_URL}/v1/health`, (res) => {
+      // Consume response data to free up memory
+      res.resume();
       resolve(res.statusCode === 200);
     });
     
@@ -193,23 +228,50 @@ async function startOffgridServer() {
   }
 }
 
-// Stop OffGrid server
+// Stop OffGrid server with proper cleanup
 function stopOffgridServer() {
-  if (offgridProcess) {
-    console.log('Stopping OffGrid server');
-    offgridProcess.kill('SIGTERM');
+  return new Promise((resolve) => {
+    if (!offgridProcess) {
+      resolve();
+      return;
+    }
     
-    // Force kill after 5 seconds if not stopped
-    setTimeout(() => {
+    console.log('Stopping OffGrid server...');
+    
+    // Set up a timeout for force kill
+    const forceKillTimeout = setTimeout(() => {
       if (offgridProcess) {
         console.log('Force killing OffGrid server');
-        offgridProcess.kill('SIGKILL');
+        try {
+          offgridProcess.kill('SIGKILL');
+        } catch (err) {
+          // Process may already be dead
+        }
+        offgridProcess = null;
+        resolve();
       }
     }, 5000);
-  }
+    
+    // Listen for the process to exit cleanly
+    offgridProcess.once('exit', () => {
+      clearTimeout(forceKillTimeout);
+      offgridProcess = null;
+      console.log('OffGrid server stopped');
+      resolve();
+    });
+    
+    // Send SIGTERM for graceful shutdown
+    try {
+      offgridProcess.kill('SIGTERM');
+    } catch (err) {
+      clearTimeout(forceKillTimeout);
+      offgridProcess = null;
+      resolve();
+    }
+  });
 }
 
-// Create main window
+// Create main window with optimized settings
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -220,7 +282,11 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
+      // Performance optimizations
+      backgroundThrottling: true,
+      spellcheck: false
     },
     icon: path.join(__dirname, 'assets/icon.png'),
     backgroundColor: '#1e1e1e',
@@ -228,19 +294,29 @@ function createWindow() {
     autoHideMenuBar: true
   });
 
-  // Load the web UI from the server once it's ready
-  // Show loading page first
-  mainWindow.loadFile('index.html');
+  // Load the lightweight loading page first
+  mainWindow.loadFile('loading.html');
 
-  // Show window when ready
+  // Show window when ready (avoids white flash)
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus();
     
     // Once server is ready, load the actual web UI
     waitForServer(() => {
-      mainWindow.loadURL(`${SERVER_URL}/ui/`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.loadURL(`${SERVER_URL}/ui/`);
+      }
     });
+  });
+
+  // Handle navigation errors gracefully
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Page load failed:', errorCode, errorDescription);
+    // Only show error for non-abort errors (user navigation cancels are -3)
+    if (errorCode !== -3) {
+      mainWindow.loadFile('loading.html');
+    }
   });
 
   // Prevent close, minimize to tray instead
@@ -249,13 +325,14 @@ function createWindow() {
       event.preventDefault();
       mainWindow.hide();
       
-      // Show notification on first minimize
+      // Show notification on first minimize (only once per session)
       if (!app.minimizedNotificationShown) {
         const { Notification } = require('electron');
         if (Notification.isSupported()) {
           new Notification({
             title: APP_NAME,
-            body: 'App is running in the background. Click the tray icon to open.'
+            body: 'Running in background. Click tray icon to restore.',
+            silent: true
           }).show();
         }
         app.minimizedNotificationShown = true;
@@ -267,25 +344,38 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Open DevTools in development
+  // Memory optimization: reduce renderer memory when hidden
+  mainWindow.on('hide', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.setBackgroundThrottling(true);
+    }
+  });
+
+  mainWindow.on('show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.setBackgroundThrottling(false);
+    }
+  });
+
+  // Open DevTools only in development
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();
   }
 }
 
-// Create system tray
+// Create system tray with optimized menu
 function createTray() {
   const iconPath = path.join(__dirname, 'assets/icon.png');
   let trayIcon;
   
   try {
     trayIcon = nativeImage.createFromPath(iconPath);
-    if (trayIcon.isEmpty()) {
-      // Fallback to default icon
-      trayIcon = nativeImage.createEmpty();
+    // Resize for optimal tray display
+    if (!trayIcon.isEmpty()) {
+      trayIcon = trayIcon.resize({ width: 16, height: 16 });
     }
   } catch (err) {
-    console.warn('Could not load tray icon:', err);
+    console.warn('Could not load tray icon:', err.message);
     trayIcon = nativeImage.createEmpty();
   }
 
@@ -324,13 +414,13 @@ function createTray() {
     {
       label: 'Open Config Folder',
       click: () => {
-        require('electron').shell.openPath(paths.getConfigDir());
+        shell.openPath(paths.getConfigDir());
       }
     },
     {
       label: 'Open Models Folder',
       click: () => {
-        require('electron').shell.openPath(paths.getModelsDir());
+        shell.openPath(paths.getModelsDir());
       }
     },
     { type: 'separator' },
@@ -392,15 +482,18 @@ ipcMain.handle('get-paths', () => {
 // App lifecycle
 app.whenReady().then(async () => {
   console.log(`${APP_NAME} starting...`);
-  console.log('App version:', app.getVersion());
-  console.log('Electron version:', process.versions.electron);
-  console.log('Platform:', process.platform);
-  console.log('Packaged:', app.isPackaged);
+  console.log(`Version: ${app.getVersion()} | Electron: ${process.versions.electron} | Platform: ${process.platform}`);
+  console.log(`Packaged: ${app.isPackaged}`);
+  
+  // Set app user model ID for Windows notifications
+  if (process.platform === 'win32') {
+    app.setAppUserModelId(APP_NAME);
+  }
   
   // Ensure directories exist
   ensureDirectories();
   
-  // Create tray
+  // Create tray first (so user sees app is starting)
   createTray();
   
   // Start server
@@ -410,10 +503,7 @@ app.whenReady().then(async () => {
     console.warn('Server may not have started successfully');
   }
   
-  // Wait a bit for server to stabilize
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // Create window
+  // Create window (it will show loading page and wait for server)
   createWindow();
 
   app.on('activate', () => {
@@ -426,30 +516,46 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Don't quit on window close - keep running in tray
-  if (process.platform === 'darwin') {
-    // On macOS, it's common to quit when all windows are closed
-    if (isQuitting) {
-      app.quit();
-    }
+  // Keep running in tray on Windows/Linux
+  // On macOS, only quit if explicitly quitting
+  if (process.platform === 'darwin' && isQuitting) {
+    app.quit();
   }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', async (event) => {
   isQuitting = true;
+  
+  // Clear any intervals
+  if (serverCheckInterval) {
+    clearInterval(serverCheckInterval);
+    serverCheckInterval = null;
+  }
 });
 
-app.on('will-quit', () => {
+app.on('will-quit', async (event) => {
+  event.preventDefault();
   console.log('App quitting, stopping server...');
-  stopOffgridServer();
+  await stopOffgridServer();
+  
+  // Destroy tray
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+  
+  app.exit(0);
 });
 
-// Handle uncaught errors
+// Handle uncaught errors gracefully
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
-  dialog.showErrorBox('Application Error', `An unexpected error occurred:\n\n${error.message}`);
+  // Only show dialog in packaged app (dev mode has better error handling)
+  if (app.isPackaged) {
+    dialog.showErrorBox('Application Error', `An unexpected error occurred:\n\n${error.message}`);
+  }
 });
 
-process.on('unhandledRejection', (error) => {
-  console.error('Unhandled promise rejection:', error);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled promise rejection at:', promise, 'reason:', reason);
 });

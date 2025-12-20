@@ -48,7 +48,7 @@ func (e *LlamaEngine) Load(ctx context.Context, modelPath string, opts LoadOptio
 		fmt.Println("   Note: llama-server runs on internal localhost-only port for security")
 		return err
 	}
-	fmt.Println("✓ Connected to llama-server - REAL INFERENCE ENABLED")
+	fmt.Println("[OK] Connected to llama-server - REAL INFERENCE ENABLED")
 	return nil
 }
 

@@ -48,11 +48,19 @@ async function loadLoRAModels() {
         const resp = await fetch('/v1/models');
         const data = await resp.json();
         const select = document.getElementById('loraBaseModel');
-        select.innerHTML = '<option value="">Select model...</option>';
-        data.data.forEach(m => {
+        select.innerHTML = '';
+        
+        const models = data.data || [];
+        if (models.length === 0) {
+            select.innerHTML = '<option value="">No models available</option>';
+            return;
+        }
+        
+        models.forEach((m, i) => {
             const opt = document.createElement('option');
             opt.value = m.id;
             opt.textContent = m.id;
+            if (i === 0) opt.selected = true; // Auto-select first model
             select.appendChild(opt);
         });
     } catch (e) {

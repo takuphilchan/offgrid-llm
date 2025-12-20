@@ -1,13 +1,61 @@
+// Helper to format error messages properly
+function formatError(error) {
+    if (typeof error === 'string') return error;
+    if (error && error.message) return error.message;
+    if (error && typeof error === 'object') {
+        try {
+            return JSON.stringify(error);
+        } catch (e) {
+            return 'Unknown error occurred';
+        }
+    }
+    return 'Unknown error occurred';
+}
+
+// Initialize USB paths based on server-detected OS
+async function initUSBPaths() {
+    try {
+        const response = await fetch('/v1/filesystem/common-paths');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.paths && data.paths.length > 0) {
+                // Find the first USB/removable path, or use home directory
+                const usbPath = data.paths.find(p => p.exists && (
+                    p.label.toLowerCase().includes('usb') || 
+                    p.label.toLowerCase().includes('volume') ||
+                    p.label.toLowerCase().includes('removable')
+                ));
+                
+                // Update hint with detected OS info
+                const hintEl = document.getElementById('usbPathHint');
+                if (hintEl && data.os) {
+                    const osHints = {
+                        'linux': 'Linux: Check /media or /mnt for USB drives',
+                        'darwin': 'macOS: Check /Volumes for USB drives',
+                        'windows': 'Windows: Use drive letters like D:\\ or E:\\'
+                    };
+                    hintEl.textContent = osHints[data.os] || 'Click the folder icon to browse';
+                }
+            }
+        }
+    } catch (e) {
+        // Could not initialize USB paths - non-critical
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', initUSBPaths);
+
 async function searchModels() {
     const query = document.getElementById('searchQuery').value.trim();
     if (!query) {
         const results = document.getElementById('searchResults');
-        results.innerHTML = '<p class="text-sm text-yellow-400">⚠ Please enter a search query</p>';
+        results.innerHTML = '<p class="text-sm text-orange-500">Please enter a search query</p>';
         return;
     }
 
     const results = document.getElementById('searchResults');
-    results.innerHTML = '<p class="text-sm text-secondary">🔍 Searching HuggingFace...</p>';
+    results.innerHTML = '<p class="text-sm text-secondary">Searching HuggingFace...</p>';
 
     try {
         // Add timeout to prevent hanging
@@ -64,7 +112,7 @@ async function searchModels() {
         if (error.name === 'AbortError' || error.message.includes('Timeout') || error.message.includes('exceeded')) {
             errorHtml = `
                 <div class="text-sm">
-                    <p class="text-red-400 mb-2">⚠ Search timeout: HuggingFace API not responding</p>
+                    <p class="text-red-400 mb-2">Search timeout: HuggingFace API not responding</p>
                     <p class="text-secondary mb-3">This usually means no internet connection or HuggingFace is slow.</p>
                     <div class="text-xs text-secondary">
                         <p class="font-semibold text-accent mb-2">Try instead:</p>
@@ -232,12 +280,12 @@ async function scanUSB() {
     const statusDiv = document.getElementById('usbImportStatus');
     
     if (!usbPath) {
-        statusDiv.innerHTML = '<span class="text-yellow-400">⚠ Please enter a USB path</span>';
+        statusDiv.innerHTML = '<span class="text-orange-500">Please select a path using the folder icon or enter a path manually</span>';
         return;
     }
     
     statusDiv.innerHTML = '';
-    resultsDiv.innerHTML = '<span class="text-accent">🔍 Scanning USB drive...</span>';
+    resultsDiv.innerHTML = '<span class="text-accent">Scanning for models...</span>';
     
     try {
         const response = await fetch('/v1/usb/scan', {
@@ -268,14 +316,14 @@ async function scanUSB() {
                     </div>
                 `;
             } else {
-                resultsDiv.innerHTML = '<span class="text-secondary">No GGUF models found</span>';
+                resultsDiv.innerHTML = '<span class="text-secondary">No GGUF models found in this location</span>';
             }
         } else {
-            const error = data.error || 'Scan failed';
-            resultsDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
+            const errorMsg = formatError(data.error) || 'Scan failed';
+            resultsDiv.innerHTML = `<span class="text-red-400">${errorMsg}</span>`;
         }
     } catch (error) {
-        resultsDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
+        resultsDiv.innerHTML = `<span class="text-red-400">Failed to scan: ${formatError(error)}</span>`;
     }
 }
 
@@ -287,7 +335,7 @@ async function importFromUSB() {
     const progressText = document.getElementById('usbImportProgressText');
     
     if (!usbPath) {
-        statusDiv.innerHTML = '<span class="text-yellow-400">⚠ Please enter a USB path</span>';
+        statusDiv.innerHTML = '<span class="text-orange-500">Please select a path using the folder icon or enter a path manually</span>';
         return;
     }
     
@@ -308,20 +356,20 @@ async function importFromUSB() {
         if (response.ok) {
             const count = data.imported_count || 0;
             progressBar.style.width = '100%';
-            progressText.innerHTML = `✓ Successfully imported ${count} model(s)`;
+            progressText.innerHTML = `Successfully imported ${count} model(s)`;
             setTimeout(() => {
                 progressDiv.classList.add('hidden');
-                statusDiv.innerHTML = `<span class="text-green-400">✓ Import complete - ${count} model(s) added</span>`;
+                statusDiv.innerHTML = `<span class="text-green-400">Import complete - ${count} model(s) added</span>`;
             }, 2000);
             loadInstalledModels(); // Refresh the models list
         } else {
-            const error = data.error || 'Import failed';
+            const errorMsg = formatError(data.error) || 'Import failed';
             progressDiv.classList.add('hidden');
-            statusDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
+            statusDiv.innerHTML = `<span class="text-red-400">${errorMsg}</span>`;
         }
     } catch (error) {
         progressDiv.classList.add('hidden');
-        statusDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
+        statusDiv.innerHTML = `<span class="text-red-400">Failed to import: ${formatError(error)}</span>`;
     }
 }
 
@@ -333,7 +381,7 @@ async function exportToUSB() {
     const progressText = document.getElementById('usbExportProgressText');
     
     if (!usbPath) {
-        statusDiv.innerHTML = '<span class="text-yellow-400">⚠ Please enter a USB path</span>';
+        statusDiv.innerHTML = '<span class="text-orange-500">Please select a path using the folder icon or enter a path manually</span>';
         return;
     }
     
@@ -355,12 +403,12 @@ async function exportToUSB() {
             const count = data.exported_count || 0;
             const size = data.total_size_gb || 0;
             progressBar.style.width = '100%';
-            progressText.innerHTML = `✓ Exported ${count} model(s) (${size.toFixed(2)} GB)`;
+            progressText.innerHTML = `Exported ${count} model(s) (${size.toFixed(2)} GB)`;
             setTimeout(() => {
                 progressDiv.classList.add('hidden');
                 statusDiv.innerHTML = `
                     <div class="p-2 bg-secondary rounded border border-green-500">
-                        <div class="text-green-400 font-medium">✓ Export Complete</div>
+                        <div class="text-green-400 font-medium">Export Complete</div>
                         <div class="text-xs text-secondary mt-1">
                             ${count} model(s) exported (${size.toFixed(2)} GB)<br>
                             Location: ${usbPath}/offgrid-models/<br>
@@ -370,13 +418,13 @@ async function exportToUSB() {
                 `;
             }, 2000);
         } else {
-            const error = data.error || 'Export failed';
+            const errorMsg = formatError(data.error) || 'Export failed';
             progressDiv.classList.add('hidden');
-            statusDiv.innerHTML = `<span class="text-red-400">✗ ${error}</span>`;
+            statusDiv.innerHTML = `<span class="text-red-400">${errorMsg}</span>`;
         }
     } catch (error) {
         progressDiv.classList.add('hidden');
-        statusDiv.innerHTML = `<span class="text-red-400">✗ Error: ${error.message}</span>`;
+        statusDiv.innerHTML = `<span class="text-red-400">Failed to export: ${formatError(error)}</span>`;
     }
 }
 

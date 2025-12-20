@@ -205,17 +205,17 @@ func NewWithConfig(cfg *config.Config) *Server {
 	// Log initial power status
 	powerStatus := powerManager.Status()
 	if powerStatus.State == power.PowerBattery {
-		log.Printf("⚡ Power: Battery %d%% → Power Saver mode recommended", powerStatus.BatteryPercent)
+		log.Printf("Power: Battery %d%% - Power Saver mode recommended", powerStatus.BatteryPercent)
 	} else if powerStatus.State == power.PowerAC {
-		log.Printf("⚡ Power: AC connected → Full performance")
+		log.Printf("Power: AC connected - Full performance")
 	}
 
 	// Register power change callback
 	powerManager.OnChange(func(status power.PowerStatus) {
 		if status.State == power.PowerBattery {
-			log.Printf("⚡ Switched to battery (%d%%) - reducing resource usage", status.BatteryPercent)
+			log.Printf("Switched to battery (%d%%) - reducing resource usage", status.BatteryPercent)
 		} else if status.State == power.PowerAC {
-			log.Printf("⚡ AC power connected - full performance available")
+			log.Printf("AC power connected - full performance available")
 		}
 	})
 
@@ -594,12 +594,25 @@ func (s *Server) Start() error {
 		log.Println("You may need to start llama-server manually")
 	}
 
-	// Auto-restore RAG state if there's persisted data
+	// Auto-enable RAG if an embedding model is available
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
+
+		// First try to restore persisted state
 		if err := s.ragEngine.AutoRestore(ctx); err != nil {
 			log.Printf("Warning: Failed to auto-restore RAG: %v", err)
+		}
+
+		// If not enabled yet, try to auto-enable with an available embedding model
+		if !s.ragEngine.IsEnabled() {
+			var modelNames []string
+			for _, m := range s.registry.ListModels() {
+				modelNames = append(modelNames, m.ID)
+			}
+			if err := s.ragEngine.AutoEnableWithModel(ctx, modelNames); err != nil {
+				log.Printf("Warning: Failed to auto-enable RAG: %v", err)
+			}
 		}
 	}()
 
@@ -1265,7 +1278,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// Apply power-aware context limit
 		powerMaxContext := s.powerManager.GetMaxContext()
 		if powerMaxContext > 0 && powerMaxContext < opts.ContextSize {
-			log.Printf("⚡ Power saver: reducing context %d → %d", opts.ContextSize, powerMaxContext)
+			log.Printf("Power saver: reducing context %d -> %d", opts.ContextSize, powerMaxContext)
 			opts.ContextSize = powerMaxContext
 		}
 
@@ -1276,7 +1289,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply RAG enhancement if enabled
-	log.Printf("🔍 RAG Check: UseKnowledgeBase=%v, RAGEnabled=%v", req.UseKnowledgeBase, s.ragEngine.IsEnabled())
+	log.Printf("[RAG] Check: UseKnowledgeBase=%v, RAGEnabled=%v", req.UseKnowledgeBase, s.ragEngine.IsEnabled())
 	if req.UseKnowledgeBase != nil && *req.UseKnowledgeBase {
 		if !s.ragEngine.IsEnabled() {
 			log.Printf("Knowledge Base requested but RAG is not enabled")
@@ -1285,14 +1298,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			for i := len(req.Messages) - 1; i >= 0; i-- {
 				if req.Messages[i].Role == "user" {
 					userContent := req.Messages[i].StringContent()
-					log.Printf("🔍 RAG searching for: %s", userContent)
+					log.Printf("[RAG] Searching for: %s", userContent)
 					enhancedContent, ragCtx, err := s.ragEngine.EnhancePrompt(r.Context(), userContent)
 					if err != nil {
 						log.Printf("RAG enhancement failed: %v", err)
 					} else if ragCtx != nil && len(ragCtx.Results) > 0 {
 						// Replace the user message with enhanced version
 						req.Messages[i].Content = enhancedContent
-						log.Printf("📚 RAG injected %d chunks for query (context length: %d chars)", len(ragCtx.Results), len(ragCtx.Context))
+						log.Printf("[RAG] Injected %d chunks from %d documents (context length: %d chars)",
+							len(ragCtx.Results), ragCtx.UniqueDocumentCount(), len(ragCtx.Context))
 					} else {
 						log.Printf("RAG found no relevant results for query")
 					}
@@ -2980,11 +2994,24 @@ func (s *Server) handleFilesystemBrowse(w http.ResponseWriter, r *http.Request) 
 	// Clean the path
 	browsePath = filepath.Clean(browsePath)
 
-	// Check if path exists
+	// Check if path exists, fallback to home or root if not
 	info, err := os.Stat(browsePath)
 	if err != nil {
-		writeError(w, fmt.Sprintf("Path does not exist: %s", browsePath), http.StatusBadRequest)
-		return
+		// Try home directory as fallback
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr == nil {
+			browsePath = homeDir
+			info, err = os.Stat(browsePath)
+		}
+		// If still failing, try root
+		if err != nil {
+			browsePath = "/"
+			info, err = os.Stat(browsePath)
+			if err != nil {
+				writeError(w, fmt.Sprintf("Cannot access filesystem: %v", err), http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 
 	// If it's a file, use its directory

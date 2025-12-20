@@ -48,7 +48,7 @@ async function loadRAGEmbeddingModels() {
         const response = await fetch('/v1/models');
         const data = await response.json();
         const select = document.getElementById('ragEmbeddingModel');
-        select.innerHTML = '<option value="">Select model to enable...</option>';
+        select.innerHTML = '';
         
         const embeddingModels = data.data.filter(m => 
             m.id.toLowerCase().includes('embed') || 
@@ -57,7 +57,12 @@ async function loadRAGEmbeddingModels() {
             m.id.toLowerCase().includes('nomic')
         );
         
-        let modelsToShow = embeddingModels.length > 0 ? embeddingModels : data.data;
+        let modelsToShow = embeddingModels.length > 0 ? embeddingModels : [];
+        
+        if (modelsToShow.length === 0) {
+            select.innerHTML = '<option value="">No embedding models available</option>';
+            return;
+        }
         
         modelsToShow.forEach(model => {
             const option = document.createElement('option');
@@ -66,12 +71,34 @@ async function loadRAGEmbeddingModels() {
             select.appendChild(option);
         });
         
-        // Only set the dropdown value if RAG is actually enabled
+        // If RAG is already enabled, set the dropdown to current model
         if (isEnabled && currentModel) {
             select.value = currentModel;
+        } else if (modelsToShow.length > 0) {
+            // Auto-select first embedding model and enable RAG
+            select.value = modelsToShow[0].id;
+            // Trigger enable (this will call onEmbeddingModelChange behavior)
+            await enableRAGWithModel(modelsToShow[0].id);
         }
     } catch (e) {
         console.error('Failed to load embedding models:', e);
+    }
+}
+
+// Helper to enable RAG silently (without showing alert on auto-enable)
+async function enableRAGWithModel(model) {
+    try {
+        const response = await fetch('/v1/rag/enable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ embedding_model: model })
+        });
+        if (response.ok) {
+            ragEnabled = true;
+            await loadRAGStatus();
+        }
+    } catch (e) {
+        // Silent failure for auto-enable
     }
 }
 

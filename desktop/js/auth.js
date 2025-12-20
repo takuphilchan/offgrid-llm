@@ -16,7 +16,7 @@ async function checkAuthStatus() {
             }
         }
     } catch (e) {
-        console.log('Auth check failed, treating as guest');
+        // Auth check failed - treat as guest
     }
     setAuthUser(null);
 }
@@ -109,7 +109,7 @@ async function loadSystemConfig() {
             applyFeatureFlags();
         }
     } catch (e) {
-        console.log('Using default config (single-user mode)');
+        // Using default config (single-user mode)
     }
 }
 

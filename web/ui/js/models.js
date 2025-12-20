@@ -25,8 +25,8 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
             }
             break;
         case 'loading':
-            statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
-            statusText.className = 'text-xs font-medium text-yellow-400';
+            statusDot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-pulse';
+            statusText.className = 'text-xs font-medium text-orange-500';
             statusText.textContent = extra ? `Loading... ${extra}` : 'Loading...';
             if (modelName && modelBadge && modelNameEl) {
                 modelBadge.classList.remove('hidden');
@@ -35,8 +35,8 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
             }
             break;
         case 'switching':
-            statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
-            statusText.className = 'text-xs font-medium text-yellow-400';
+            statusDot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-pulse';
+            statusText.className = 'text-xs font-medium text-orange-500';
             statusText.textContent = extra ? `Switching... ${extra}` : 'Switching...';
             if (modelName && modelBadge && modelNameEl) {
                 modelBadge.classList.remove('hidden');
@@ -45,8 +45,8 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
             }
             break;
         case 'warming':
-            statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
-            statusText.className = 'text-xs font-medium text-yellow-400';
+            statusDot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-pulse';
+            statusText.className = 'text-xs font-medium text-orange-500';
             statusText.textContent = 'Warming...';
             if (modelName && modelBadge && modelNameEl) {
                 modelBadge.classList.remove('hidden');
@@ -99,7 +99,6 @@ async function loadChatModels() {
         
         // Sort models alphabetically by ID
         models.sort((a, b) => a.id.localeCompare(b.id));
-        console.log('[LOAD MODELS] Sorted LLM models:', models.map(m => m.id));
         
         models.forEach(m => {
             const opt = document.createElement('option');
@@ -116,21 +115,17 @@ async function loadChatModels() {
             // Restore the previous selection
             currentModel = previousSelection;
             select.value = previousSelection;
-            console.log('[LOAD MODELS] Restored previous selection:', previousSelection);
         } else if (!currentModel && models.length > 0) {
             // First time - select first model
             currentModel = models[0].id;
             select.value = currentModel;
-            console.log('[LOAD MODELS] Auto-selected first model:', currentModel);
         }
 
         // Add change handler after models are loaded
         select.onchange = null; // Clear any existing handler
         select.onchange = function(e) {
-            console.log('[DROPDOWN] Change event fired! Value:', e.target.value);
             handleModelChange();
         };
-        console.log('[LOAD MODELS] Event listener attached to dropdown via onchange');
         
         // Update empty state UI
         if (typeof updateEmptyState === 'function') {
@@ -150,13 +145,9 @@ async function loadChatModels() {
 
 // Warm up a model in the background so it's ready for instant use
 async function warmModelInBackground(modelName) {
-    console.log('[MODEL WARM] Starting background warm-up for:', modelName);
-    
     // Check if already cached - if so, skip warming
     if (await isModelCached(modelName)) {
-        console.log('[MODEL WARM] Model already cached, ready instantly!');
         updateSidebarStatus('ready', modelName);
-        // Show cache indicator - KV cache will be reused
         if (typeof updateCacheIndicator === 'function') {
             updateCacheIndicator(true);
         }
@@ -182,18 +173,14 @@ async function warmModelInBackground(modelName) {
         });
         
         if (resp.ok) {
-            console.log('[MODEL WARM] Model warmed and ready!');
             updateSidebarStatus('ready', modelName);
-            // Show cache indicator - model is now warmed with active KV cache
             if (typeof updateCacheIndicator === 'function') {
                 updateCacheIndicator(true);
             }
         } else {
-            console.warn('[MODEL WARM] Warm-up request returned:', resp.status);
             updateSidebarStatus('ready', modelName);
         }
     } catch (e) {
-        console.warn('[MODEL WARM] Warm-up failed:', e.message);
         updateSidebarStatus('ready', modelName);
     }
 }
@@ -227,7 +214,6 @@ async function loadEmbeddingModels() {
         
         // Sort models alphabetically by ID
         models.sort((a, b) => a.id.localeCompare(b.id));
-        console.log('[LOAD EMBEDDING MODELS] Sorted models:', models.map(m => m.id));
         
         models.forEach(m => {
             const opt = document.createElement('option');
@@ -408,27 +394,19 @@ async function isModelCached(modelName) {
         const cachedModels = stats.model_cache?.cached_models || [];
         return cachedModels.some(m => m.model_id === modelName);
     } catch (e) {
-        console.log('[CACHE CHECK] Error checking cache:', e.message);
         return false;
     }
 }
 
 // Wait for model to be fully loaded and ready (optimized version)
 async function waitForModelReady(modelName) {
-    console.log('[HEALTH CHECK] Waiting for model to be ready:', modelName);
-    
     // FAST PATH: Check if model is already cached (instant switch!)
     const wasCached = await isModelCached(modelName);
-    if (wasCached) {
-        console.log('[HEALTH CHECK] Model already cached - should be instant!');
-    }
     
     // Use faster polling for cached models, slower for cold loads
     const pollInterval = wasCached ? 200 : 500;
     const maxWaitTime = wasCached ? 5000 : 30000; // 5s for cached, 30s for cold
     const maxAttempts = Math.ceil(maxWaitTime / pollInterval);
-    
-    console.log(`[HEALTH CHECK] Poll config: ${pollInterval}ms interval, max ${maxWaitTime}ms (${maxAttempts} attempts)`);
     
     // Check if this is an embedding model
     const resp = await fetch('/models');
@@ -438,7 +416,6 @@ async function waitForModelReady(modelName) {
                            modelName.toLowerCase().includes('embed') || 
                            modelName.toLowerCase().includes('bge') ||
                            modelName.toLowerCase().includes('nomic');
-    console.log('[HEALTH CHECK] Model type:', modelInfo?.type, 'Is embedding:', isEmbeddingModel);
     
     // Trigger the model load immediately with one request
     const triggerLoad = async () => {
@@ -471,14 +448,10 @@ async function waitForModelReady(modelName) {
     
     // For cached models, just make one request - it should work immediately
     if (wasCached) {
-        console.log('[HEALTH CHECK] Triggering cached model...');
         const result = await triggerLoad();
         if (result?.ok) {
-            console.log('[HEALTH CHECK] Cached model ready instantly!');
             return true;
         }
-        // If cached model failed, fall through to polling
-        console.log('[HEALTH CHECK] Cached model not immediately ready, polling...');
     }
     
     // Start the load in background
@@ -489,31 +462,25 @@ async function waitForModelReady(modelName) {
         await new Promise(resolve => setTimeout(resolve, pollInterval));
         
         try {
-            console.log(`[HEALTH CHECK] Attempt ${attempt}/${maxAttempts}`);
-            
             // Quick cache check first (very fast)
             if (await isModelCached(modelName)) {
                 // Model is in cache, try a quick inference test
                 const testResp = await triggerLoad();
                 if (testResp?.ok) {
-                    console.log('[HEALTH CHECK] Model is ready!');
                     return true;
                 }
             }
         } catch (error) {
-            console.log(`[HEALTH CHECK] Error on attempt ${attempt}:`, error.message);
+            // Continue polling
         }
     }
     
     // Final attempt with longer timeout
-    console.log('[HEALTH CHECK] Final attempt with longer timeout...');
     const finalResult = await triggerLoad();
     if (finalResult?.ok) {
-        console.log('[HEALTH CHECK] Model is ready on final attempt!');
         return true;
     }
     
-    console.warn(`[HEALTH CHECK] Timeout after ${maxWaitTime}ms - model may not be ready`);
     return false;
 }
 
@@ -522,26 +489,19 @@ async function handleModelChange() {
     const select = document.getElementById('chatModel');
     const newModel = select.value;
     
-    console.log('[MODEL CHANGE] Dropdown changed to:', newModel);
-    console.log('[MODEL CHANGE] Current model:', currentModel);
-    
     if (!newModel) {
-        console.log('[MODEL CHANGE] No model selected, ignoring');
         return;
     }
     
     // Don't switch if already on this model
     if (currentModel === newModel) {
-        console.log('[MODEL CHANGE] Already using this model');
         return;
     }
     
     const oldModel = currentModel;
     
     // If there are existing messages, ask user what to do
-    console.log('[MODEL CHANGE] Current message count:', messages.length);
     if (messages.length > 0) {
-        console.log('[MODEL CHANGE] Showing confirmation dialog...');
         showModal({
             type: 'warning',
             title: 'Clear Chat History?',
@@ -549,21 +509,15 @@ async function handleModelChange() {
             confirmText: 'Start Fresh',
             cancelText: 'Keep History',
             onConfirm: () => {
-                console.log('[MODEL CHANGE] User response: CLEAR');
-                console.log('[MODEL CHANGE] Clearing chat history');
                 clearChatSilent();
             },
             onCancel: () => {
-                console.log('[MODEL CHANGE] User response: KEEP');
-                console.log('[MODEL CHANGE] Keeping chat history');
+                // Keep history, do nothing
             }
         });
-    } else {
-        console.log('[MODEL CHANGE] No messages, skipping confirmation');
     }
     
     currentModel = newModel;
-    console.log('[MODEL CHANGE] Switching from', oldModel, 'to', newModel);
     
     // Hide cache indicator when switching models (new model needs to warm up)
     if (typeof updateCacheIndicator === 'function') {
@@ -612,8 +566,6 @@ async function handleModelChange() {
         updateSidebarStatus(loadState, newModel, seconds);
     }, 100); // Update every 100ms for smoother display
     
-    console.log('[MODEL CHANGE] Starting health check for', newModel);
-    
     // Wait for model to be ready before allowing messages
     const isReady = await waitForModelReady(newModel);
     
@@ -621,7 +573,6 @@ async function handleModelChange() {
     clearInterval(loadingInterval);
     
     if (isReady) {
-        console.log('[MODEL CHANGE] Model ready - enabling UI');
         updateSidebarStatus('ready', newModel);
     } else {
         console.warn('[MODEL CHANGE] Model not confirmed ready - may have issues');
@@ -637,8 +588,6 @@ async function handleModelChange() {
     if (typeof updateEmptyState === 'function') {
         updateEmptyState();
     }
-    
-    console.log('[MODEL CHANGE] Model switch complete - ready for messages');
 }
 
 // Modal dialog system

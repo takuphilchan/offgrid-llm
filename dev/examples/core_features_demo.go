@@ -21,9 +21,9 @@ func main() {
 
 	gpuMonitor := resource.NewGPUMonitor()
 	if gpuMonitor.IsAvailable() {
-		fmt.Printf("✓ GPU Type: %s\n", gpuMonitor.GetGPUType())
-		fmt.Printf("✓ Total VRAM: %d MB\n", gpuMonitor.GetTotalVRAM())
-		fmt.Printf("✓ Free VRAM: %d MB\n", gpuMonitor.GetFreeVRAM())
+		fmt.Printf("[OK] GPU Type: %s\n", gpuMonitor.GetGPUType())
+		fmt.Printf("[OK] Total VRAM: %d MB\n", gpuMonitor.GetTotalVRAM())
+		fmt.Printf("[OK] Free VRAM: %d MB\n", gpuMonitor.GetFreeVRAM())
 
 		gpuInfo := gpuMonitor.GetGPUInfo()
 		for i, gpu := range gpuInfo {
@@ -39,12 +39,12 @@ func main() {
 
 		// Check if we have enough VRAM for a typical model (4GB)
 		if hasEnough, err := gpuMonitor.HasEnoughVRAM(4096); hasEnough {
-			fmt.Println("✓ Sufficient VRAM for 4GB model")
+			fmt.Println("[OK] Sufficient VRAM for 4GB model")
 		} else {
-			fmt.Printf("✗ Insufficient VRAM: %v\n", err)
+			fmt.Printf("[FAIL] Insufficient VRAM: %v\n", err)
 		}
 	} else {
-		fmt.Println("✗ No GPU detected (CPU-only mode)")
+		fmt.Println("[--] No GPU detected (CPU-only mode)")
 	}
 
 	fmt.Println()
@@ -71,7 +71,7 @@ func main() {
 		for modelName, result := range results {
 			if result.Valid {
 				validCount++
-				fmt.Printf("✓ %s (%.2f MB) - Valid GGUF\n",
+				fmt.Printf("[OK] %s (%.2f MB) - Valid GGUF\n",
 					modelName, float64(result.FileSize)/(1024*1024))
 				if result.SHA256Hash != "" {
 					fmt.Printf("  SHA256: %s...%s\n",
@@ -79,7 +79,7 @@ func main() {
 				}
 			} else {
 				corruptedCount++
-				fmt.Printf("✗ %s - %v\n", modelName, result.Errors)
+				fmt.Printf("[FAIL] %s - %v\n", modelName, result.Errors)
 			}
 		}
 
@@ -92,9 +92,9 @@ func main() {
 		fmt.Printf("\nValidating: %s\n", testModelPath)
 		result, _ := validator.ValidateModel(testModelPath)
 		if result.Valid {
-			fmt.Println("✓ Model validated successfully")
+			fmt.Println("[OK] Model validated successfully")
 		} else {
-			fmt.Printf("✗ Validation failed: %v\n", result.Errors)
+			fmt.Printf("[FAIL] Validation failed: %v\n", result.Errors)
 		}
 	}
 
@@ -133,22 +133,22 @@ func main() {
 	fmt.Printf("  Running: %d/%d\n", stats.CurrentRunning, queueConfig.MaxConcurrent)
 
 	// Show dynamic concurrency adjustment capability
-	fmt.Printf("\n✓ Queue supports dynamic concurrency adjustment\n")
-	fmt.Printf("✓ Memory-aware request rejection\n")
-	fmt.Printf("✓ Priority-based request scheduling\n")
-	fmt.Printf("✓ Timeout protection\n")
+	fmt.Printf("\n[OK] Queue supports dynamic concurrency adjustment\n")
+	fmt.Printf("[OK] Memory-aware request rejection\n")
+	fmt.Printf("[OK] Priority-based request scheduling\n")
+	fmt.Printf("[OK] Timeout protection\n")
 
 	fmt.Println()
 
 	// Summary
 	fmt.Println("=== Summary ===")
 	fmt.Println("Core improvements implemented:")
-	fmt.Println("✓ GPU detection for NVIDIA/AMD with VRAM monitoring")
-	fmt.Println("✓ Model integrity validation with SHA256 verification")
-	fmt.Println("✓ GGUF file format validation")
-	fmt.Println("✓ Request queue with concurrency limits")
-	fmt.Println("✓ Memory-aware request handling")
-	fmt.Println("✓ Priority-based scheduling")
+	fmt.Println("[OK] GPU detection for NVIDIA/AMD with VRAM monitoring")
+	fmt.Println("[OK] Model integrity validation with SHA256 verification")
+	fmt.Println("[OK] GGUF file format validation")
+	fmt.Println("[OK] Request queue with concurrency limits")
+	fmt.Println("[OK] Memory-aware request handling")
+	fmt.Println("[OK] Priority-based scheduling")
 	fmt.Println("\nThese features provide essential reliability and")
 	fmt.Println("resource management for edge/offline deployments.")
 }

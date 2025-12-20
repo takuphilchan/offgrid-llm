@@ -31,7 +31,7 @@
     "files": [
       "main.js",
       "preload.js",
-      "index.html",
+      "loading.html",
       "package.json"
     ],
     "linux": {
@@ -148,10 +148,6 @@
     "portable": {
       "artifactName": "${productName}-${version}-Portable.${ext}"
     }
-  },
-  "dependencies": {
-    "electron-store": "^8.1.0",
-    "axios": "^1.6.0"
   },
   "devDependencies": {
     "electron": "^27.0.0",

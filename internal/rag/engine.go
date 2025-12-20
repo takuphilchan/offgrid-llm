@@ -86,6 +86,42 @@ func (e *Engine) AutoRestore(ctx context.Context) error {
 	return e.Enable(ctx, model)
 }
 
+// AutoEnableWithModel auto-enables RAG if an embedding model is available
+// It looks for models with names containing "embed", "bge", "minilm", or "nomic"
+func (e *Engine) AutoEnableWithModel(ctx context.Context, availableModels []string) error {
+	// Already enabled, nothing to do
+	if e.IsEnabled() {
+		return nil
+	}
+
+	// Priority order for embedding models
+	prefixes := []string{"bge", "nomic", "embed", "minilm"}
+
+	var embeddingModel string
+
+	// First pass: look for models with known embedding prefixes
+	for _, prefix := range prefixes {
+		for _, model := range availableModels {
+			lower := strings.ToLower(model)
+			if strings.Contains(lower, prefix) {
+				embeddingModel = model
+				break
+			}
+		}
+		if embeddingModel != "" {
+			break
+		}
+	}
+
+	if embeddingModel == "" {
+		log.Printf("[RAG] No embedding model found, RAG will remain disabled until manually enabled")
+		return nil
+	}
+
+	log.Printf("[RAG] Auto-enabling with embedding model: %s", embeddingModel)
+	return e.Enable(ctx, embeddingModel)
+}
+
 // Enable enables RAG with the specified embedding model
 func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
 	e.mu.Lock()
@@ -212,7 +248,7 @@ func (e *Engine) IngestText(ctx context.Context, name, content string, metadata 
 	// 	log.Printf("Warning: failed to save RAG data to disk: %v", err)
 	// }
 
-	log.Printf("📄 Ingested document '%s' with %d chunks (%d embeddings)", name, len(chunks), len(allEmbeddings))
+	log.Printf("[RAG] Ingested document '%s' with %d chunks (%d embeddings)", name, len(chunks), len(allEmbeddings))
 	return doc, nil
 }
 

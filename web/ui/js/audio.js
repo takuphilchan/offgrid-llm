@@ -154,7 +154,7 @@ function renderVoices(voices) {
                                     <span class="text-secondary">${v.quality}</span>
                                 </span>
                                 ${v.installed 
-                                    ? '<span class="text-green-400 flex-shrink-0">✓</span>'
+                                    ? '<span class="text-green-400 flex-shrink-0">OK</span>'
                                     : `<button onclick="downloadVoice('${v.name}')" class="text-cyan-400 hover:text-cyan-300 flex-shrink-0 p-0.5" title="Download">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                                        </button>`
@@ -487,13 +487,14 @@ async function loadVoiceAssistantModels() {
             select.appendChild(opt);
         });
         
-        // Try to restore saved selection
+        // Try to restore saved selection, otherwise auto-select first
         const saved = localStorage.getItem('voiceAssistantModel');
         if (saved && llmModels.some(m => m.id === saved)) {
             select.value = saved;
+        } else if (llmModels.length > 0) {
+            select.value = llmModels[0].id;
+            localStorage.setItem('voiceAssistantModel', llmModels[0].id);
         }
-        
-        console.log('[VOICE] Loaded models:', llmModels.length);
     } catch (e) {
         console.error('Failed to load voice assistant models:', e);
         select.innerHTML = '<option value="">Error loading models</option>';
@@ -504,7 +505,6 @@ function onVoiceModelChange() {
     const select = document.getElementById('voiceAssistantModel');
     if (select && select.value) {
         localStorage.setItem('voiceAssistantModel', select.value);
-        console.log('[VOICE] Model changed to:', select.value);
     }
 }
 
@@ -521,28 +521,33 @@ async function refreshAudioStatus() {
             const whisperModels = status.asr?.models || [];
             
             const whisperStatus = document.getElementById('whisperStatus');
+            const toolsWhisperStatus = document.getElementById('toolsWhisperStatus');
             const whisperModelsDiv = document.getElementById('whisperModels');
             const whisperSetup = document.getElementById('whisperSetup');
+            const toolsWhisperSetup = document.getElementById('toolsWhisperSetup');
             
-            if (whisperStatus) {
-                if (asrAvailable) {
-                    whisperStatus.className = 'badge badge-success';
-                    whisperStatus.textContent = 'Ready';
-                } else if (whisperPath) {
-                    whisperStatus.className = 'badge badge-warning';
-                    whisperStatus.textContent = 'No models';
-                } else {
-                    whisperStatus.className = 'badge badge-error';
-                    whisperStatus.textContent = 'Not installed';
+            // Update both whisper status badges (header and tools section)
+            [whisperStatus, toolsWhisperStatus].forEach(el => {
+                if (el) {
+                    if (asrAvailable) {
+                        el.className = 'badge badge-success';
+                        el.textContent = 'Ready';
+                    } else if (whisperPath) {
+                        el.className = 'badge badge-warning';
+                        el.textContent = 'No models';
+                    } else {
+                        el.className = 'badge badge-error';
+                        el.textContent = 'Not installed';
+                    }
                 }
-            }
+            });
             
             if (whisperModelsDiv) {
                 if (asrAvailable && whisperModels.length > 0) {
                     whisperModelsDiv.innerHTML = whisperModels.map(m => `
                         <div class="flex items-center justify-between">
                             <span>${m}</span>
-                            <span class="text-green-400">✓</span>
+                            <span class="text-green-400">OK</span>
                         </div>
                     `).join('');
                 } else if (whisperPath) {
@@ -596,9 +601,10 @@ async function refreshAudioStatus() {
                 voiceWhisperSelect.innerHTML = '<option value="">No models installed</option>';
             }
             
-            if (whisperSetup) {
-                whisperSetup.classList.toggle('hidden', !!whisperPath);
-            }
+            // Toggle setup buttons visibility
+            [whisperSetup, toolsWhisperSetup].forEach(el => {
+                if (el) el.classList.toggle('hidden', !!whisperPath);
+            });
             
             // Update TTS status
             const ttsAvailable = status.tts?.available || false;
@@ -606,21 +612,26 @@ async function refreshAudioStatus() {
             const piperVoicesCount = status.tts?.voices || 0;
             
             const piperStatus = document.getElementById('piperStatus');
+            const toolsPiperStatus = document.getElementById('toolsPiperStatus');
             const piperVoicesDiv = document.getElementById('piperVoices');
             const piperSetup = document.getElementById('piperSetup');
+            const toolsPiperSetup = document.getElementById('toolsPiperSetup');
             
-            if (piperStatus) {
-                if (ttsAvailable) {
-                    piperStatus.className = 'badge badge-success';
-                    piperStatus.textContent = `${piperVoicesCount} voice${piperVoicesCount !== 1 ? 's' : ''}`;
-                } else if (piperPath) {
-                    piperStatus.className = 'badge badge-warning';
-                    piperStatus.textContent = 'No voices';
-                } else {
-                    piperStatus.className = 'badge badge-error';
-                    piperStatus.textContent = 'Not installed';
+            // Update both piper status badges (header and tools section)
+            [piperStatus, toolsPiperStatus].forEach(el => {
+                if (el) {
+                    if (ttsAvailable) {
+                        el.className = 'badge badge-success';
+                        el.textContent = `${piperVoicesCount} voice${piperVoicesCount !== 1 ? 's' : ''}`;
+                    } else if (piperPath) {
+                        el.className = 'badge badge-warning';
+                        el.textContent = 'No voices';
+                    } else {
+                        el.className = 'badge badge-error';
+                        el.textContent = 'Not installed';
+                    }
                 }
-            }
+            });
             
             if (piperVoicesDiv) {
                 if (ttsAvailable) {
@@ -632,9 +643,10 @@ async function refreshAudioStatus() {
                 }
             }
             
-            if (piperSetup) {
-                piperSetup.classList.toggle('hidden', !!piperPath);
-            }
+            // Toggle piper setup buttons visibility
+            [piperSetup, toolsPiperSetup].forEach(el => {
+                if (el) el.classList.toggle('hidden', !!piperPath);
+            });
             
             // Enable/disable transcribe button
             const transcribeBtn = document.getElementById('transcribeBtn');
@@ -1182,7 +1194,6 @@ async function processVoiceChat(audioBlob) {
         
         // Get the selected model from the Voice Assistant dropdown
         const selectedModel = document.getElementById('voiceAssistantModel')?.value;
-        console.log('[VOICE CHAT] Using model:', selectedModel);
         
         if (!selectedModel) {
             throw new Error('No model selected. Please select a model above.');
@@ -1199,8 +1210,6 @@ async function processVoiceChat(audioBlob) {
             ...voiceChatHistory.slice(-10) // Keep last 10 messages for context
         ];
         
-        console.log('[VOICE CHAT] Sending request with messages:', JSON.stringify(messages));
-        
         const chatResp = await fetch('/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1213,8 +1222,6 @@ async function processVoiceChat(audioBlob) {
             })
         });
         
-        console.log('[VOICE CHAT] Response status:', chatResp.status);
-        
         if (!chatResp.ok) {
             const errText = await chatResp.text();
             console.error('[VOICE CHAT] Error response:', errText);
@@ -1222,12 +1229,11 @@ async function processVoiceChat(audioBlob) {
             try {
                 const errData = JSON.parse(errText);
                 errMsg = errData.error?.message || errMsg;
-            } catch(e) {}
+            } catch(e) { /* Use default error message */ }
             throw new Error(errMsg + ` (${chatResp.status})`);
         }
         
         const chatData = await chatResp.json();
-        console.log('[VOICE CHAT] Response data:', chatData);
         const assistantText = chatData.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
         
         // Show assistant message

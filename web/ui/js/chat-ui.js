@@ -1,7 +1,4 @@
 async function sendChat() {
-    console.log('[SEND CHAT] Function called');
-    console.log('[SEND CHAT] Flags - isGenerating:', isGenerating, 'pendingRequest:', pendingRequest);
-    
     const input = document.getElementById('chatInput');
     const msg = input.value.trim();
 
@@ -25,30 +22,21 @@ async function sendChat() {
     
     lastRequestTime = Date.now();
     pendingRequest = true;
-    console.log('[SEND CHAT] Set pendingRequest = true');
 
     const model = document.getElementById('chatModel').value;
-    console.log('[SEND CHAT] Selected model from dropdown:', model);
-    console.log('[SEND CHAT] Current model variable:', currentModel);
-    console.log('[SEND CHAT] Dropdown element value:', document.getElementById('chatModel').value);
     
     // Check if this is an embedding model
     const resp = await fetch('/models');
     const data = await resp.json();
-    console.log('[SEND CHAT] ALL MODELS DATA:', JSON.stringify(data.data, null, 2));
     const modelInfo = data.data.find(m => m.id === model);
-    console.log('[SEND CHAT] Found model info:', JSON.stringify(modelInfo, null, 2));
     // Check type from metadata, or fallback to name heuristics if metadata missing
     const isEmbeddingModel = modelInfo?.type === 'embedding' || 
                            model.toLowerCase().includes('embed') || 
                            model.toLowerCase().includes('bge') ||
                            model.toLowerCase().includes('nomic');
-    console.log('[SEND CHAT] Model type:', modelInfo?.type, 'Is embedding:', isEmbeddingModel);
     const supportsVision = modelSupportsVision(modelInfo, model);
-    console.log('[SEND CHAT] Supports vision:', supportsVision);
     
     if (!model) {
-        console.log('[SEND CHAT] No model selected!');
         pendingRequest = false; // Clear flag
         
         // Flash warning then return to ready
@@ -61,7 +49,6 @@ async function sendChat() {
 
     // ALWAYS sync currentModel with dropdown before sending
     currentModel = model;
-    console.log('[SEND CHAT] Synced currentModel to:', currentModel);
 
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -152,7 +139,6 @@ async function sendChat() {
     try {
         // If it's an embedding model, use embeddings API
         if (isEmbeddingModel) {
-            console.log('[SEND CHAT] Routing to embeddings API for embedding model');
             const embeddingResponse = await fetch('/v1/embeddings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -211,10 +197,6 @@ async function sendChat() {
             max_tokens: maxTokens,
             use_knowledge_base: document.getElementById('useKnowledgeBase').checked
         };
-        
-        console.log('[SEND CHAT] REQUEST PAYLOAD:', JSON.stringify(requestPayload, null, 2));
-        console.log('[SEND CHAT] Model being sent:', model);
-        console.log('[SEND CHAT] Knowledge Base enabled:', document.getElementById('useKnowledgeBase').checked);
         
         const response = await fetch('/v1/chat/completions', {
             method: 'POST',
@@ -392,13 +374,13 @@ async function sendChat() {
             console.error('Chat error:', error);
             
             // Better error messages for common issues
-            let userMessage = `⚠ Error: ${errorMsg}`;
+            let userMessage = `Error: ${errorMsg}`;
             if (error.code === 'missing_mmproj') {
-                userMessage = '⚠ This vision model is missing its mmproj adapter. Download the matching .mmproj file, place it next to the GGUF, reload the model, and try again.';
+                userMessage = 'This vision model is missing its mmproj adapter. Download the matching .mmproj file, place it next to the GGUF, reload the model, and try again.';
             } else if (errorMsg.includes('503') || errorMsg.includes('Failed to load model')) {
-                userMessage = `⚠ Model is taking longer than expected to load.\n\nThis can happen on slower systems. Please try again in a few moments.`;
+                userMessage = `Model is taking longer than expected to load.\n\nThis can happen on slower systems. Please try again in a few moments.`;
             } else if (errorMsg.includes('500')) {
-                userMessage = `⚠ Server error occurred.\n\nThe model may still be loading. Please wait a moment and try again.`;
+                userMessage = `Server error occurred.\n\nThe model may still be loading. Please wait a moment and try again.`;
             }
             
             addChatMessage('assistant', userMessage, null, startTime);
@@ -412,7 +394,6 @@ async function sendChat() {
         }
         isGenerating = false;
         pendingRequest = false;
-        console.log('[SEND CHAT] Cleaned up - pendingRequest = false, isGenerating = false');
         abortController = null;
         input.disabled = false;
         sendBtn.disabled = false;
@@ -618,8 +599,6 @@ function applyPerformanceMode() {
     
     // Save preference
     localStorage.setItem('offgrid_performance_mode', mode);
-    
-    console.log('[PERFORMANCE] Applied mode:', mode, config);
 }
 
 // Load saved performance mode on init
@@ -648,7 +627,6 @@ function updateCacheIndicator(isActive) {
 
 // Show cache indicator when model is warmed (has active KV cache)
 function onModelWarmed(modelName) {
-    console.log('[CACHE] Model warmed with KV cache:', modelName);
     updateCacheIndicator(true);
 }
 

@@ -21,7 +21,7 @@ func embedMain() {
 	if engine == nil {
 		log.Fatal("Failed to create embedding engine")
 	}
-	fmt.Println("✓ Embedding engine created")
+	fmt.Println("[OK] Embedding engine created")
 	fmt.Println()
 
 	// 2. Load embedding model
@@ -42,7 +42,7 @@ func embedMain() {
 	}
 
 	info := engine.GetModelInfo()
-	fmt.Printf("✓ Model loaded\n")
+	fmt.Printf("[OK] Model loaded\n")
 	fmt.Printf("  Dimensions: %d\n", info["dimensions"])
 	fmt.Printf("  Batch size: %d\n", info["batch_size"])
 	fmt.Println()
@@ -63,7 +63,7 @@ func embedMain() {
 	}
 
 	fmt.Printf("Input: \"%s\"\n", singleText)
-	fmt.Printf("✓ Generated embedding\n")
+	fmt.Printf("[OK] Generated embedding\n")
 	fmt.Printf("  Dimensions: %d\n", len(response.Data[0].Embedding))
 	fmt.Printf("  First 5 values: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
 		response.Data[0].Embedding[0],
@@ -99,7 +99,7 @@ func embedMain() {
 	for i, text := range texts {
 		fmt.Printf("  %d. \"%s\"\n", i+1, text)
 	}
-	fmt.Printf("✓ Total tokens: %d\n", batchResponse.Usage.TotalTokens)
+	fmt.Printf("[OK] Total tokens: %d\n", batchResponse.Usage.TotalTokens)
 	fmt.Println()
 
 	// 5. Semantic Similarity
@@ -196,10 +196,10 @@ func embedMain() {
 	// 7. Summary
 	fmt.Println("=== Summary ===")
 	fmt.Println("Demonstrated features:")
-	fmt.Println("✓ Single text embedding generation")
-	fmt.Println("✓ Batch embedding generation")
-	fmt.Println("✓ Semantic similarity calculation")
-	fmt.Println("✓ Semantic search over documents")
+	fmt.Println("[OK] Single text embedding generation")
+	fmt.Println("[OK] Batch embedding generation")
+	fmt.Println("[OK] Semantic similarity calculation")
+	fmt.Println("[OK] Semantic search over documents")
 	fmt.Println()
 	fmt.Println("Use cases:")
 	fmt.Println("  • Document similarity and clustering")

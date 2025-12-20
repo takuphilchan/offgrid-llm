@@ -104,26 +104,57 @@ type RAGContext struct {
 }
 
 // FormatContext formats search results into a context string for LLM injection
+// Groups chunks by their source document to avoid confusion
 func (rc *RAGContext) FormatContext() string {
 	if len(rc.Results) == 0 {
 		rc.Context = ""
 		return ""
 	}
 
+	// Group chunks by document
+	docChunks := make(map[string][]SearchResult)
+	docOrder := []string{} // Preserve order of first appearance
+
+	for _, result := range rc.Results {
+		docID := result.DocumentID
+		if _, exists := docChunks[docID]; !exists {
+			docOrder = append(docOrder, docID)
+		}
+		docChunks[docID] = append(docChunks[docID], result)
+	}
+
 	var sb strings.Builder
 	sb.WriteString("<knowledge_base>\n")
 	sb.WriteString("The following information was retrieved from the user's knowledge base and may be relevant:\n\n")
 
-	for i, result := range rc.Results {
-		sb.WriteString(fmt.Sprintf("[Document %d: %s | Relevance: %.0f%%]\n",
-			i+1, result.DocName, result.Score*100))
-		sb.WriteString(result.Chunk.Content)
-		sb.WriteString("\n\n")
+	for i, docID := range docOrder {
+		chunks := docChunks[docID]
+		docName := chunks[0].DocName
+
+		// Calculate average relevance for the document
+		var totalScore float32
+		for _, c := range chunks {
+			totalScore += c.Score
+		}
+		avgScore := totalScore / float32(len(chunks))
+
+		sb.WriteString(fmt.Sprintf("[Source %d: %s | Relevance: %.0f%%]\n",
+			i+1, docName, avgScore*100))
+
+		// Combine chunks from the same document
+		for j, chunk := range chunks {
+			if len(chunks) > 1 {
+				sb.WriteString(fmt.Sprintf("--- Section %d ---\n", j+1))
+			}
+			sb.WriteString(chunk.Chunk.Content)
+			sb.WriteString("\n")
+		}
+		sb.WriteString("\n")
 	}
 
 	sb.WriteString("</knowledge_base>\n\n")
 	sb.WriteString("Instructions: Use the knowledge base above to inform your response. ")
-	sb.WriteString("Cite sources when using specific information. ")
+	sb.WriteString("Cite sources by name when using specific information. ")
 	sb.WriteString("If the knowledge base doesn't contain relevant information for the question, say so and answer based on your general knowledge.\n\n")
 
 	rc.Context = sb.String()
@@ -154,4 +185,13 @@ func (rc *RAGContext) TruncateContext(maxLen int) {
 		}
 		rc.FormatContext()
 	}
+}
+
+// UniqueDocumentCount returns the number of unique documents in the results
+func (rc *RAGContext) UniqueDocumentCount() int {
+	seen := make(map[string]bool)
+	for _, r := range rc.Results {
+		seen[r.DocumentID] = true
+	}
+	return len(seen)
 }
