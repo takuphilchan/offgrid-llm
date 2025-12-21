@@ -1525,6 +1525,37 @@
                 <!-- Voice Chat Tab -->
                 <div id="audio-content-assistant" class="audio-subcontent">
                     <div class="card-static">
+                        <!-- Hands-free Mode Header -->
+                        <div class="flex items-center justify-between mb-4 pb-4 border-b border-theme">
+                            <div class="flex items-center gap-3">
+                                <button id="jarvisToggleBtn" 
+                                        onclick="toggleJarvisMode()" 
+                                        class="w-10 h-10 rounded-full bg-tertiary flex items-center justify-center transition-all hover:scale-105 hover:bg-cyan-500/20"
+                                        title="Toggle Hands-Free Mode">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+                                </button>
+                                <div>
+                                    <span class="font-medium">Hands-free Mode</span>
+                                    <p id="jarvisStatus" class="text-xs text-secondary">Off</p>
+                                </div>
+                            </div>
+                            <span class="text-xs text-secondary hidden sm:inline">Auto-detects speech</span>
+                        </div>
+                        
+                        <!-- Volume Indicator (shown when active) -->
+                        <div id="jarvisIndicator" class="hidden mb-4 p-3 rounded-lg bg-tertiary/50">
+                            <div class="flex items-center justify-between text-xs text-secondary mb-2">
+                                <span class="flex items-center gap-2">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                                    Input Level
+                                </span>
+                                <span id="jarvisStateLabel" class="text-cyan-500">Listening</span>
+                            </div>
+                            <div class="h-1.5 bg-tertiary rounded-full overflow-hidden">
+                                <div id="jarvisVolumeBar" class="h-full bg-gray-500 rounded-full transition-all duration-75" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
                         <!-- Settings Row -->
                         <div class="flex flex-wrap items-end gap-3 mb-6">
                             <div class="form-group flex-1 min-w-32" style="margin-bottom: 0;">
@@ -1566,7 +1597,7 @@
                         
                         <!-- Push-to-Talk -->
                         <div class="flex flex-col items-center py-6">
-                            <span id="voiceAssistantStatus" class="text-sm text-secondary mb-4">Hold to speak</span>
+                            <span id="voiceAssistantStatus" class="text-sm text-secondary mb-4">Hold to speak, or enable hands-free mode</span>
                             
                             <button id="voicePTTBtn" 
                                     onmousedown="startVoiceChat()" 
@@ -2190,6 +2221,6 @@
     <script src="/ui/js/metrics.js?v=0.2.9"></script>
     <script src="/ui/js/lora.js?v=0.2.9"></script>
     <script src="/ui/js/audio.js?v=0.2.9"></script>
-    <script src="/ui/js/file-browser.js?v=0.2.10"></script>
+    <script src="/ui/js/file-browser.js?v=0.2.9"></script>
 </body>
 </html>

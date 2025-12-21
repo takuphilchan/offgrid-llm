@@ -1279,44 +1279,121 @@ function addVoiceMessage(role, text) {
     conversationEl.scrollTop = conversationEl.scrollHeight;
 }
 
+// Track if TTS is currently speaking (to pause VAD)
+let isSpeaking = false;
+
+// Clean text for natural TTS output - remove LLM artifacts
+function cleanTextForTTS(text) {
+    if (!text) return '';
+    
+    return text
+        // Remove markdown formatting
+        .replace(/\*\*([^*]+)\*\*/g, '$1')     // **bold** -> bold
+        .replace(/\*([^*]+)\*/g, '$1')          // *italic* -> italic
+        .replace(/__([^_]+)__/g, '$1')          // __bold__ -> bold
+        .replace(/_([^_]+)_/g, '$1')            // _italic_ -> italic
+        .replace(/~~([^~]+)~~/g, '$1')          // ~~strike~~ -> strike
+        .replace(/`([^`]+)`/g, '$1')            // `code` -> code
+        .replace(/```[\s\S]*?```/g, '')         // Remove code blocks
+        // Remove markdown links and images
+        .replace(/!?\[([^\]]+)\]\([^)]+\)/g, '$1')
+        // Remove headers
+        .replace(/^#{1,6}\s*/gm, '')
+        // Remove bullet points and numbers
+        .replace(/^[\-\*\+]\s+/gm, '')
+        .replace(/^\d+\.\s+/gm, '')
+        // Remove special characters that sound bad
+        .replace(/[#@&<>|{}\[\]\\^~]/g, '')
+        // Clean up quotes
+        .replace(/["'`]/g, '')
+        // Remove emoji (common ranges)
+        .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+        .replace(/[\u{2600}-\u{26FF}]/gu, '')
+        // Remove thinking/action markers
+        .replace(/\*[^*]+\*/g, '')              // *thinking* style
+        .replace(/<[^>]+>/g, '')                // <action> style
+        // Clean up punctuation
+        .replace(/\.{2,}/g, '.')                // ... -> .
+        .replace(/!{2,}/g, '!')                 // !!! -> !
+        .replace(/\?{2,}/g, '?')                // ??? -> ?
+        // Normalize whitespace
+        .replace(/\s+/g, ' ')
+        .replace(/\s([.,!?])/g, '$1')           // Remove space before punctuation
+        .trim();
+}
+
 async function speakText(text) {
     try {
+        // Clean text for natural speech
+        const cleanText = cleanTextForTTS(text);
+        if (!cleanText || cleanText.length < 2) {
+            console.log('[TTS] Text too short after cleaning, skipping');
+            return;
+        }
+        
         // Use Voice Assistant's voice dropdown, fallback to TTS section dropdown
         const voice = document.getElementById('voiceAssistantVoice')?.value || 
                       document.getElementById('ttsVoice')?.value || 
                       'en_US-amy-medium';
+        
+        console.log('[TTS] Speaking:', cleanText.substring(0, 50) + '...');
+        
+        if (!voice) {
+            console.error('[TTS] No voice selected');
+            return;
+        }
+        
+        isSpeaking = true;  // Block VAD during TTS generation + playback
+        
         const resp = await fetch('/v1/audio/speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                input: text,
+                input: cleanText,
                 voice: voice,
                 response_format: 'wav'
             })
         });
         
         if (!resp.ok) {
-            console.error('TTS failed');
+            const errText = await resp.text();
+            console.error('[TTS] Failed:', resp.status, errText);
+            isSpeaking = false;
             return;
         }
         
         const audioBlob = await resp.blob();
+        if (audioBlob.size < 100) {
+            console.error('[TTS] Response too small, likely empty');
+            isSpeaking = false;
+            return;
+        }
+        
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         
         return new Promise((resolve) => {
             audio.onended = () => {
+                isSpeaking = false;
                 URL.revokeObjectURL(audioUrl);
+                console.log('[TTS] Playback complete');
                 resolve();
             };
-            audio.onerror = () => {
+            audio.onerror = (e) => {
+                isSpeaking = false;
                 URL.revokeObjectURL(audioUrl);
+                console.error('[TTS] Playback error:', e);
                 resolve();
             };
-            audio.play();
+            audio.play().catch(e => {
+                isSpeaking = false;
+                console.error('[TTS] Play failed:', e);
+                resolve();
+            });
         });
     } catch (e) {
-        console.error('TTS error:', e);
+        isSpeaking = false;
+        console.error('[TTS] Error:', e);
     }
 }
 
@@ -1372,5 +1449,714 @@ async function setupPiper() {
     } catch (e) {
         showAlert('Setup failed: ' + e.message, { title: 'Error', type: 'error' });
     }
+}
+
+// ========================================
+// JARVIS MODE - Hands-Free Voice Assistant
+// ========================================
+
+let jarvisMode = false;
+let jarvisStream = null;
+let jarvisAudioContext = null;
+let jarvisAnalyser = null;
+let jarvisVADInterval = null;
+let jarvisRecording = false;
+let jarvisSilenceTimer = null;
+let jarvisChunks = [];
+let jarvisRecorder = null;
+
+// VAD Configuration - tuned for natural, responsive speech detection
+const VAD_CONFIG = {
+    silenceThreshold: 0.02,       // Volume threshold for voice detection (lower = more sensitive)
+    voiceFreqMin: 80,             // Minimum voice frequency (Hz)
+    voiceFreqMax: 3500,           // Maximum voice frequency (Hz)
+    voiceRatioMin: 0.25,          // Minimum voice-band energy ratio
+    silenceTimeout: 1200,         // ms of silence before stopping (comfortable pause)
+    minRecordingTime: 500,        // Minimum recording time before processing
+    minRecordingSize: 2000,       // Minimum blob size in bytes
+    maxRecordingTime: 30000,      // Maximum recording time (30 seconds)
+    sampleInterval: 30,           // Check volume frequently (30ms)
+    cooldownTime: 300,            // Time to wait after processing
+    voiceConfidenceThreshold: 2,  // Consecutive voice detections to start (faster response)
+    silenceConfidenceThreshold: 8,// Consecutive silence detections to stop (more forgiving)
+    autoRetryOnError: true,       // Auto-recover from errors
+    maxRetries: 2,                // Max retries on failure
+    retryDelay: 1000              // Delay before retry (ms)
+};
+
+// Track retry state
+let jarvisRetryCount = 0;
+
+let jarvisRecordingStartTime = null;
+let jarvisVoiceConfidence = 0;    // Track consecutive voice detections
+let jarvisSilenceConfidence = 0;  // Track consecutive silence detections
+let jarvisProcessing = false;     // Prevent overlap
+
+// Initialize Jarvis Mode listeners
+function initJarvisMode() {
+    // Listen for global shortcut from Electron
+    if (window.electron && window.electron.onToggleVoice) {
+        window.electron.onToggleVoice(() => {
+            toggleJarvisMode();
+        });
+    }
+    
+    // Load saved settings
+    const savedMode = localStorage.getItem('jarvisModeEnabled');
+    const savedShortcut = localStorage.getItem('jarvisShortcut') || 'CommandOrControl+Shift+Space';
+    
+    // Set up the shortcut in Electron
+    if (window.electron && window.electron.setVoiceShortcut) {
+        window.electron.setVoiceShortcut(savedShortcut);
+    }
+    
+    // Update UI if elements exist
+    const shortcutSelect = document.getElementById('jarvisShortcut');
+    if (shortcutSelect) {
+        shortcutSelect.value = savedShortcut;
+    }
+}
+
+// Toggle Jarvis (hands-free) mode on/off
+function toggleJarvisMode() {
+    if (jarvisMode) {
+        stopJarvisMode();
+    } else {
+        startJarvisMode();
+    }
+}
+
+// Start continuous listening mode
+async function startJarvisMode() {
+    if (jarvisMode) return;
+    
+    try {
+        // Request microphone access
+        jarvisStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            } 
+        });
+        
+        // Set up audio context for VAD
+        jarvisAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        jarvisAnalyser = jarvisAudioContext.createAnalyser();
+        jarvisAnalyser.fftSize = 512;
+        jarvisAnalyser.smoothingTimeConstant = 0.8;
+        
+        const source = jarvisAudioContext.createMediaStreamSource(jarvisStream);
+        source.connect(jarvisAnalyser);
+        
+        jarvisMode = true;
+        jarvisRecording = false;
+        
+        // Update UI
+        updateJarvisUI(true);
+        
+        // Start VAD monitoring
+        startVADMonitoring();
+        
+        console.log('[JARVIS] Hands-free mode activated');
+        
+    } catch (e) {
+        console.error('[JARVIS] Failed to start:', e);
+        showAlert('Could not access microphone: ' + e.message, { title: 'Microphone Error', type: 'error' });
+    }
+}
+
+// Stop continuous listening mode
+function stopJarvisMode() {
+    if (!jarvisMode) return;
+    
+    // Stop VAD
+    if (jarvisVADInterval) {
+        clearInterval(jarvisVADInterval);
+        jarvisVADInterval = null;
+    }
+    
+    // Stop any active recording
+    if (jarvisRecorder && jarvisRecorder.state === 'recording') {
+        jarvisRecorder.stop();
+    }
+    
+    // Clean up timers
+    if (jarvisSilenceTimer) {
+        clearTimeout(jarvisSilenceTimer);
+        jarvisSilenceTimer = null;
+    }
+    
+    // Clean up audio context
+    if (jarvisAudioContext) {
+        jarvisAudioContext.close();
+        jarvisAudioContext = null;
+    }
+    
+    // Stop stream
+    if (jarvisStream) {
+        jarvisStream.getTracks().forEach(t => t.stop());
+        jarvisStream = null;
+    }
+    
+    jarvisMode = false;
+    jarvisRecording = false;
+    jarvisProcessing = false;
+    jarvisRecordingStartTime = null;
+    jarvisVoiceConfidence = 0;
+    
+    // Update UI
+    updateJarvisUI(false);
+    
+    console.log('[JARVIS] Hands-free mode deactivated');
+}
+
+// Start Voice Activity Detection monitoring
+function startVADMonitoring() {
+    const bufferLength = jarvisAnalyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    jarvisVADInterval = setInterval(() => {
+        if (!jarvisMode) return;
+        
+        // Don't listen while TTS is speaking (avoid feedback loop)
+        if (isSpeaking) {
+            updateVolumeIndicator(0);
+            return;
+        }
+        
+        jarvisAnalyser.getByteFrequencyData(dataArray);
+        
+        // Calculate voice-band energy (focus on human voice frequencies)
+        const sampleRate = jarvisAudioContext.sampleRate;
+        const binSize = sampleRate / jarvisAnalyser.fftSize;
+        const minBin = Math.floor(VAD_CONFIG.voiceFreqMin / binSize);
+        const maxBin = Math.min(Math.ceil(VAD_CONFIG.voiceFreqMax / binSize), bufferLength);
+        
+        let voiceSum = 0;
+        let totalSum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            const val = dataArray[i] * dataArray[i];
+            totalSum += val;
+            if (i >= minBin && i <= maxBin) {
+                voiceSum += val;
+            }
+        }
+        
+        const totalRms = Math.sqrt(totalSum / bufferLength) / 255;
+        const voiceRms = Math.sqrt(voiceSum / (maxBin - minBin + 1)) / 255;
+        
+        // Voice ratio - how much of the sound is in voice frequency range
+        const voiceRatio = totalSum > 0 ? voiceSum / totalSum : 0;
+        
+        // Update volume indicator with voice-band energy
+        updateVolumeIndicator(voiceRms);
+        
+        // Skip if we're processing a previous recording
+        if (jarvisProcessing) return;
+        
+        // Check max recording time
+        if (jarvisRecording && jarvisRecordingStartTime) {
+            const recordingDuration = Date.now() - jarvisRecordingStartTime;
+            if (recordingDuration > VAD_CONFIG.maxRecordingTime) {
+                console.log('[JARVIS] Max recording time reached, stopping');
+                stopJarvisRecording();
+                return;
+            }
+        }
+        
+        // Voice activity detection - require both volume AND voice-frequency content
+        const isVoice = voiceRms > VAD_CONFIG.silenceThreshold && voiceRatio > VAD_CONFIG.voiceRatioMin;
+        
+        if (isVoice) {
+            jarvisVoiceConfidence = Math.min(jarvisVoiceConfidence + 1, 10);
+            jarvisSilenceConfidence = 0;  // Reset silence counter
+            
+            if (!jarvisRecording && jarvisVoiceConfidence >= VAD_CONFIG.voiceConfidenceThreshold) {
+                startJarvisRecording();
+            } else if (jarvisRecording) {
+                // Cancel silence timer while voice is active
+                if (jarvisSilenceTimer) {
+                    clearTimeout(jarvisSilenceTimer);
+                    jarvisSilenceTimer = null;
+                }
+            }
+        } else {
+            jarvisVoiceConfidence = Math.max(jarvisVoiceConfidence - 2, 0);  // Decay faster
+            jarvisSilenceConfidence++;
+            
+            // If recording and sustained silence detected, stop immediately
+            if (jarvisRecording) {
+                const recordingDuration = jarvisRecordingStartTime ? Date.now() - jarvisRecordingStartTime : 0;
+                
+                // After minimum recording time, use quick silence detection
+                if (recordingDuration >= VAD_CONFIG.minRecordingTime && 
+                    jarvisSilenceConfidence >= VAD_CONFIG.silenceConfidenceThreshold) {
+                    console.log('[JARVIS] Silence detected, stopping recording');
+                    stopJarvisRecording();
+                } else if (!jarvisSilenceTimer) {
+                    // Fallback: start silence timer
+                    jarvisSilenceTimer = setTimeout(() => {
+                        stopJarvisRecording();
+                    }, VAD_CONFIG.silenceTimeout);
+                }
+            }
+        }
+        
+    }, VAD_CONFIG.sampleInterval);
+}
+
+// Start recording when voice is detected
+function startJarvisRecording() {
+    if (jarvisRecording || jarvisProcessing) return;
+    
+    jarvisRecording = true;
+    jarvisRecordingStartTime = Date.now();
+    jarvisChunks = [];
+    
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : 'audio/webm';
+    
+    jarvisRecorder = new MediaRecorder(jarvisStream, { mimeType });
+    
+    jarvisRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) jarvisChunks.push(e.data);
+    };
+    
+    jarvisRecorder.onstop = async () => {
+        if (jarvisChunks.length === 0) {
+            jarvisRecording = false;
+            updateJarvisState('Active');
+            return;
+        }
+        
+        const blob = new Blob(jarvisChunks, { type: mimeType });
+        const recordingDuration = jarvisRecordingStartTime ? Date.now() - jarvisRecordingStartTime : 0;
+        
+        console.log('[JARVIS] Recording complete:', blob.size, 'bytes,', recordingDuration, 'ms');
+        
+        // Ignore recordings that are too short or too small
+        if (blob.size < VAD_CONFIG.minRecordingSize || recordingDuration < VAD_CONFIG.minRecordingTime) {
+            console.log('[JARVIS] Recording too short/small, ignoring (min:', VAD_CONFIG.minRecordingSize, 'bytes,', VAD_CONFIG.minRecordingTime, 'ms)');
+            jarvisRecording = false;
+            updateJarvisState('Active');
+            return;
+        }
+        
+        // Set processing flag before async work
+        jarvisProcessing = true;
+        jarvisRecording = false;
+        
+        try {
+            // Process the voice input
+            await processJarvisVoice(blob);
+        } finally {
+            // Reset after cooldown
+            setTimeout(() => {
+                jarvisProcessing = false;
+                jarvisVoiceConfidence = 0;
+                jarvisSilenceConfidence = 0;
+                if (jarvisMode) updateJarvisState('Active');
+            }, VAD_CONFIG.cooldownTime);
+        }
+    };
+    
+    jarvisRecorder.start(50);  // Smaller chunks for faster processing
+    
+    // Update UI to show recording with visual feedback
+    updateJarvisState('🎤 Listening...');
+    
+    // Add visual pulse to indicate active recording
+    const btn = document.getElementById('jarvisToggleBtn');
+    if (btn) btn.classList.add('ring-4', 'ring-cyan-400/50', 'animate-pulse');
+    
+    console.log('[JARVIS] Recording started');
+}
+
+// Stop recording after silence detected
+function stopJarvisRecording() {
+    if (!jarvisRecording) return;
+    
+    // Clear all timers
+    if (jarvisSilenceTimer) {
+        clearTimeout(jarvisSilenceTimer);
+        jarvisSilenceTimer = null;
+    }
+    
+    jarvisVoiceConfidence = 0;
+    jarvisSilenceConfidence = 0;
+    
+    // Remove recording visual feedback
+    const btn = document.getElementById('jarvisToggleBtn');
+    if (btn) btn.classList.remove('animate-pulse');
+    
+    if (jarvisRecorder && jarvisRecorder.state === 'recording') {
+        jarvisRecorder.stop();
+    }
+    
+    console.log('[JARVIS] Recording stopped');
+}
+
+// Process recorded voice
+async function processJarvisVoice(audioBlob) {
+    const conversationEl = document.getElementById('voiceConversation');
+    let transcribeController = null;
+    let chatController = null;
+    
+    try {
+        // Step 1: Transcribe
+        updateJarvisState('Transcribing...');
+        
+        // Prefer tiny.en for speed, fallback to base
+        const model = document.getElementById('voiceAssistantWhisper')?.value || 'tiny.en';
+        const language = document.getElementById('voiceAssistantLang')?.value || 'en';
+        
+        console.log('[JARVIS] Transcribing audio:', audioBlob.size, 'bytes, type:', audioBlob.type);
+        
+        const formData = new FormData();
+        formData.append('file', new File([audioBlob], 'voice.webm', { type: audioBlob.type }));
+        formData.append('model', model);
+        if (language && language !== 'auto') {
+            formData.append('language', language);
+        }
+        
+        // Add timeout for transcription (90 seconds max - increased for slower systems)
+        transcribeController = new AbortController();
+        const transcribeTimeout = setTimeout(() => {
+            console.warn('[JARVIS] Transcription timeout after 90s');
+            transcribeController.abort();
+        }, 90000);
+        
+        updateJarvisState('🎤 Transcribing...');
+        
+        let transcribeResp;
+        try {
+            transcribeResp = await fetch('/v1/audio/transcriptions', {
+                method: 'POST',
+                body: formData,
+                signal: transcribeController.signal
+            });
+        } catch (fetchError) {
+            clearTimeout(transcribeTimeout);
+            if (fetchError.name === 'AbortError') {
+                throw fetchError; // Re-throw abort errors
+            }
+            console.error('[JARVIS] Network error during transcription:', fetchError);
+            throw new Error('Transcription failed: Network error');
+        }
+        clearTimeout(transcribeTimeout);
+        
+        if (!transcribeResp.ok) {
+            const errorText = await transcribeResp.text().catch(() => '');
+            console.error('[JARVIS] Transcription failed:', transcribeResp.status, errorText);
+            throw new Error(`Transcription failed: ${transcribeResp.status}`);
+        }
+        
+        const transcription = await transcribeResp.json();
+        console.log('[JARVIS] Raw transcription:', transcription.text);
+        
+        // Clean up transcription - remove timestamps and Whisper artifacts
+        let userText = (transcription.text || '')
+            .replace(/\[\d+:\d+:\d+\.\d+ --> \d+:\d+:\d+\.\d+\]\s*/g, '')  // Remove timestamps
+            .replace(/\[BLANK_AUDIO\]/gi, '')  // Remove blank audio markers
+            .replace(/\[NO_SPEECH\]/gi, '')    // Remove no speech markers
+            .replace(/\[MUSIC\]/gi, '')        // Remove music markers
+            .replace(/\[NOISE\]/gi, '')        // Remove noise markers
+            .replace(/\*[^*]+\*/g, '')         // Remove *actions*
+            .replace(/\([^)]+\)/g, '')         // Remove (descriptions)
+            .replace(/\s+/g, ' ')              // Normalize whitespace
+            .trim();
+        
+        // Skip if no meaningful text
+        if (!userText || userText.length < 3) {
+            console.log('[JARVIS] No speech detected, ignoring');
+            updateJarvisState('Active');
+            return;
+        }
+        
+        // Show user message
+        if (conversationEl) {
+            conversationEl.classList.remove('hidden');
+            addVoiceMessage('user', userText);
+        }
+        voiceChatHistory.push({ role: 'user', content: userText });
+        
+        // Step 2: Get AI response
+        updateJarvisState('Processing...');
+        
+        const selectedModel = document.getElementById('voiceAssistantModel')?.value;
+        if (!selectedModel) throw new Error('No model selected');
+        
+        const messages = [
+            { 
+                role: 'system', 
+                content: 'Be brief. Reply in 1 short sentence. No markdown.'
+            },
+            ...voiceChatHistory.slice(-2)  // Minimal history for speed
+        ];
+        
+        // Add timeout for chat (90 seconds max for slower models)
+        updateJarvisState('🤔 Thinking...');
+        const chatController = new AbortController();
+        const chatTimeout = setTimeout(() => {
+            console.warn('[JARVIS] Chat timeout after 90s');
+            chatController.abort();
+        }, 90000);
+        
+        let chatResp;
+        try {
+            chatResp = await fetch('/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: selectedModel,
+                    messages: messages,
+                    stream: false,
+                    max_tokens: 50,           // Very short for fast response
+                    temperature: 0.3,         // Lower = faster, more deterministic
+                    top_p: 0.85,
+                    repeat_penalty: 1.0       // Disable for speed
+                }),
+                signal: chatController.signal
+            });
+        } catch (fetchError) {
+            clearTimeout(chatTimeout);
+            if (fetchError.name === 'AbortError') {
+                throw fetchError;
+            }
+            console.error('[JARVIS] Network error during chat:', fetchError);
+            throw new Error('Chat failed: Network error');
+        }
+        clearTimeout(chatTimeout);
+        
+        if (!chatResp.ok) {
+            const errText = await chatResp.text();
+            console.error('[JARVIS] Chat error:', chatResp.status, errText);
+            throw new Error('Chat failed: ' + chatResp.status);
+        }
+        
+        const chatData = await chatResp.json();
+        const assistantText = chatData.choices?.[0]?.message?.content || 'Sorry, I could not respond.';
+        
+        console.log('[JARVIS] Response:', assistantText.substring(0, 50) + '...');
+        
+        // Show assistant message
+        if (conversationEl) addVoiceMessage('assistant', assistantText);
+        voiceChatHistory.push({ role: 'assistant', content: assistantText });
+        
+        // Step 3: Speak response
+        const autoSpeak = document.getElementById('voiceAutoSpeak')?.checked ?? true;
+        if (autoSpeak) {
+            updateJarvisState('Speaking...');
+            await speakText(assistantText);
+        }
+        
+        updateJarvisState('Active');
+        
+    } catch (e) {
+        // Handle different error types with appropriate UX
+        if (e.name === 'AbortError') {
+            console.warn('[JARVIS] Request timed out - will retry if enabled');
+            updateJarvisState('⏱ Timeout');
+            
+            // Auto-retry on timeout if configured
+            if (VAD_CONFIG.autoRetryOnError && jarvisRetryCount < VAD_CONFIG.maxRetries) {
+                jarvisRetryCount++;
+                console.log(`[JARVIS] Retrying (${jarvisRetryCount}/${VAD_CONFIG.maxRetries})...`);
+                updateJarvisState(`Retrying ${jarvisRetryCount}/${VAD_CONFIG.maxRetries}...`);
+                setTimeout(() => {
+                    if (jarvisMode) processJarvisVoice(audioBlob);
+                }, VAD_CONFIG.retryDelay);
+                return;
+            }
+        } else if (e.message?.includes('Transcription failed')) {
+            console.error('[JARVIS] Transcription error:', e);
+            updateJarvisState('🎤 Mic Error');
+            showJarvisToast('Could not transcribe audio. Please try again.', 'warning');
+        } else if (e.message?.includes('Chat failed') || e.message?.includes('500')) {
+            console.error('[JARVIS] AI error:', e);
+            updateJarvisState('🤖 AI Error');
+            showJarvisToast('AI is busy or unavailable. Retrying...', 'warning');
+            
+            // Auto-retry on server errors
+            if (VAD_CONFIG.autoRetryOnError && jarvisRetryCount < VAD_CONFIG.maxRetries) {
+                jarvisRetryCount++;
+                setTimeout(() => {
+                    if (jarvisMode) updateJarvisState('Ready');
+                }, VAD_CONFIG.retryDelay);
+                return;
+            }
+        } else {
+            console.error('[JARVIS] Unexpected error:', e);
+            updateJarvisState('❌ Error');
+        }
+        
+        // Reset retry count on final failure
+        jarvisRetryCount = 0;
+        
+        // Clear problematic history if there was an error
+        if (voiceChatHistory.length > 2) {
+            voiceChatHistory = voiceChatHistory.slice(-2);
+        }
+        
+        setTimeout(() => {
+            if (jarvisMode) {
+                updateJarvisState('Ready');
+                updateJarvisUI(true);
+            }
+        }, 2500);
+    }
+}
+
+// Show non-intrusive toast notification for JARVIS
+function showJarvisToast(message, type = 'info') {
+    const existing = document.getElementById('jarvisToast');
+    if (existing) existing.remove();
+    
+    const toast = document.createElement('div');
+    toast.id = 'jarvisToast';
+    toast.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 text-sm transition-all duration-300 ${
+        type === 'warning' ? 'bg-yellow-500/90 text-white' :
+        type === 'error' ? 'bg-red-500/90 text-white' :
+        type === 'success' ? 'bg-green-500/90 text-white' :
+        'bg-gray-800/90 text-white'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Helper to update status consistently with visual feedback
+function updateJarvisState(state) {
+    const statusEl = document.getElementById('jarvisStatus');
+    const stateLabel = document.getElementById('jarvisStateLabel');
+    const indicator = document.getElementById('jarvisIndicator');
+    
+    // Map states to user-friendly display
+    const stateMap = {
+        'Active': '🟢 Ready',
+        'Ready': '🟢 Ready',
+        'Listening...': '🎤 Listening...',
+        'Transcribing...': '🎤 Transcribing...',
+        'Processing...': '🤔 Thinking...',
+        'Speaking...': '🔊 Speaking...',
+        'Off': '⚫ Off',
+        'Error': '❌ Error',
+        'Timeout': '⏱ Timeout'
+    };
+    
+    const displayState = stateMap[state] || state;
+    
+    if (statusEl) statusEl.textContent = displayState;
+    if (stateLabel) stateLabel.textContent = displayState;
+    
+    // Pulse animation for active states
+    if (indicator) {
+        if (state.includes('Listening') || state.includes('Transcribing') || state.includes('Thinking')) {
+            indicator.classList.add('animate-pulse');
+        } else {
+            indicator.classList.remove('animate-pulse');
+        }
+    }
+    
+    // Reset retry count on success states
+    if (state === 'Active' || state === 'Ready') {
+        jarvisRetryCount = 0;
+    }
+}
+
+// Update UI for Jarvis mode
+function updateJarvisUI(enabled) {
+    const btn = document.getElementById('jarvisToggleBtn');
+    const statusEl = document.getElementById('jarvisStatus');
+    const indicator = document.getElementById('jarvisIndicator');
+    
+    if (btn) {
+        if (enabled) {
+            btn.classList.add('bg-cyan-500', 'text-white', 'ring-4', 'ring-cyan-500/30');
+            btn.classList.remove('bg-tertiary');
+            btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>';
+        } else {
+            btn.classList.remove('bg-cyan-500', 'text-white', 'ring-4', 'ring-cyan-500/30');
+            btn.classList.add('bg-tertiary');
+            btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>';
+        }
+    }
+    
+    if (statusEl) {
+        statusEl.textContent = enabled ? 'Active' : 'Off';
+        if (enabled) {
+            statusEl.classList.add('text-cyan-500');
+            statusEl.classList.remove('text-secondary');
+        } else {
+            statusEl.classList.remove('text-cyan-500');
+            statusEl.classList.add('text-secondary');
+        }
+    }
+    
+    if (indicator) {
+        indicator.classList.toggle('hidden', !enabled);
+    }
+}
+
+// Update volume indicator visualization with smooth transitions
+let volumeSmoothed = 0;
+function updateVolumeIndicator(level) {
+    const indicator = document.getElementById('jarvisVolumeBar');
+    const stateLabel = document.getElementById('jarvisStateLabel');
+    const volumeRing = document.getElementById('jarvisVolumeRing');
+    
+    // Smooth the volume for less jittery display
+    volumeSmoothed = volumeSmoothed * 0.7 + level * 0.3;
+    
+    if (indicator) {
+        const percent = Math.min(volumeSmoothed * 400, 100); // Scale for visibility
+        indicator.style.width = percent + '%';
+        indicator.style.transition = 'width 0.05s ease-out';
+        
+        // Color based on threshold - use cyan for active detection
+        const isVoice = level > VAD_CONFIG.silenceThreshold;
+        if (isVoice) {
+            indicator.classList.add('bg-cyan-500');
+            indicator.classList.remove('bg-gray-500', 'bg-gray-600');
+            if (stateLabel && jarvisRecording) stateLabel.textContent = '🎤 Capturing...';
+        } else {
+            indicator.classList.remove('bg-cyan-500');
+            indicator.classList.add('bg-gray-500');
+            if (stateLabel && !jarvisRecording && !jarvisProcessing && !isSpeaking) {
+                stateLabel.textContent = '🟢 Ready';
+            }
+        }
+    }
+    
+    // Optional: animate a ring around the mic button
+    if (volumeRing) {
+        const scale = 1 + (volumeSmoothed * 0.5);
+        volumeRing.style.transform = `scale(${scale})`;
+        volumeRing.style.opacity = volumeSmoothed > VAD_CONFIG.silenceThreshold ? '1' : '0.3';
+    }
+}
+
+// Save Jarvis shortcut preference
+function saveJarvisShortcut() {
+    const shortcut = document.getElementById('jarvisShortcut')?.value || 'CommandOrControl+Shift+Space';
+    localStorage.setItem('jarvisShortcut', shortcut);
+    
+    if (window.electron && window.electron.setVoiceShortcut) {
+        window.electron.setVoiceShortcut(shortcut);
+        showAlert(`Voice shortcut set to: ${shortcut.replace('CommandOrControl', 'Ctrl/Cmd')}`, { title: 'Shortcut Updated', type: 'success' });
+    }
+}
+
+// Initialize on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initJarvisMode);
+} else {
+    initJarvisMode();
 }
 
