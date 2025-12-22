@@ -21,11 +21,11 @@ Version 0.2.10 focuses on **stability and performance** improvements, especially
 - Better context cancellation handling throughout inference pipeline
 - Graceful SIGTERM shutdown before force-killing llama-server processes
 
-### Single-Instance Mode
-- Default to single model instance (`MaxModels=1`) for robustness
+### Single-Instance Mode (Optional)
+- Set `OFFGRID_MAX_MODELS=1` for low-RAM systems (<8GB)
 - Automatic cleanup of existing instances before loading new model
 - Port conflict detection and resolution
-- Prevents memory exhaustion from multiple loaded models
+- Use `OFFGRID_LOW_MEMORY=true` for aggressive memory savings
 
 ## Performance Optimizations
 
@@ -49,11 +49,10 @@ Version 0.2.10 focuses on **stability and performance** improvements, especially
 ## Configuration Changes
 
 ### Default Values Updated
-- `MaxModels`: 3 → 1 (single-instance mode)
-- `BatchSize`: 512 → 256 (faster first token)
-- `ContBatching`: true → false (can cause issues on low-end)
-- `ProtectDefault`: true → false (not needed in single-instance mode)
-- `ModelLoadTimeout`: 30 → 60 seconds (for slow machines)
+- `BatchSize`: 512 (optimized for throughput)
+- `ContBatching`: true (continuous batching enabled)
+- `ProtectDefault`: true (default model stays in cache)
+- `ModelLoadTimeout`: 30 seconds
 - `MaxTokens` slider: max 8192 → 16384
 
 ### New Settings
@@ -102,12 +101,13 @@ Added automatic mmproj fallbacks for additional VLM architectures:
 
 ## Upgrade Notes
 
-This release changes several defaults for stability. If you were relying on:
-- Multiple concurrent models: Set `OFFGRID_MAX_MODELS=3`
-- Continuous batching: Set `OFFGRID_CONT_BATCHING=true`
-- Higher batch size: Set `OFFGRID_BATCH_SIZE=512`
+For low-RAM systems (<8GB), you can enable single-instance mode:
+```bash
+export OFFGRID_MAX_MODELS=1
+export OFFGRID_LOW_MEMORY=true
+```
 
-The new defaults prioritize stability on consumer hardware over maximum throughput.
+This prioritizes stability over fast model switching.
 
 ---
 

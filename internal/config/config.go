@@ -85,23 +85,23 @@ func LoadConfig() *Config {
 		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 4096),
 		NumThreads:      getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
 		MaxMemoryMB:     uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
-		MaxModels:       getEnvInt("OFFGRID_MAX_MODELS", 1), // Single-instance mode by default for robustness
+		MaxModels:       getEnvInt("OFFGRID_MAX_MODELS", 3), // Cache up to 3 models for fast switching
 		EnableGPU:       getEnvBool("OFFGRID_ENABLE_GPU", false),
 		NumGPULayers:    getEnvInt("OFFGRID_GPU_LAYERS", 0),
-		BatchSize:       getEnvInt("OFFGRID_BATCH_SIZE", 256), // Lower batch for faster first token
+		BatchSize:       getEnvInt("OFFGRID_BATCH_SIZE", 512), // Higher batch for throughput
 		FlashAttention:  getEnvBool("OFFGRID_FLASH_ATTENTION", true),
 		KVCacheType:     getEnv("OFFGRID_KV_CACHE_TYPE", "q8_0"),
 		UseMmap:         getEnvBool("OFFGRID_USE_MMAP", true),
 		UseMlock:        getEnvBool("OFFGRID_USE_MLOCK", false),
-		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", false), // Disabled - can cause issues on low-end
+		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", true), // Better throughput
 		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),
 		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true),
 		// Fast model switching
 		PrewarmModels:    getEnvBool("OFFGRID_PREWARM_MODELS", true),
 		SmartMlock:       getEnvBool("OFFGRID_SMART_MLOCK", true),
-		ProtectDefault:   getEnvBool("OFFGRID_PROTECT_DEFAULT", false), // Not needed in single-instance mode
+		ProtectDefault:   getEnvBool("OFFGRID_PROTECT_DEFAULT", true), // Keep default model in cache
 		FastSwitchMode:   getEnvBool("OFFGRID_FAST_SWITCH", true),
-		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 60), // 60s for low-end machines
+		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 30), // 30s timeout
 		EnableP2P:        getEnvBool("OFFGRID_ENABLE_P2P", false),
 		P2PPort:          getEnvInt("OFFGRID_P2P_PORT", 9090),
 		DiscoveryPort:    getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),

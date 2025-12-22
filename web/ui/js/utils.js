@@ -81,9 +81,31 @@ function modelSupportsVision(modelInfo, fallbackId = '') {
         return true;
     }
 
+    // Fallback: check model name for known VLM patterns
+    // Be careful: 'qwen' alone is NOT a VLM, only 'qwen-vl', 'qwen2-vl' are
     const identifier = (fallbackId || modelInfo?.id || '').toLowerCase();
-    const keywords = ['llava', 'bakllava', 'vision', 'yi-vl', 'vlm', 'qwen', 'moondream', 'minicpm', 'minicpm-v', 'pixtral'];
-    return keywords.some(keyword => identifier.includes(keyword));
+    
+    // Exact VLM model families (these are definitely VLMs)
+    const vlmPatterns = [
+        'llava',           // LLaVA family
+        'bakllava',        // BakLLaVA
+        'yi-vl',           // Yi-VL
+        'moondream',       // Moondream
+        'minicpm-v',       // MiniCPM-V (note: minicpm alone is NOT vlm)
+        'pixtral',         // Pixtral
+        'qwen-vl',         // Qwen-VL (note: qwen alone is NOT vlm)
+        'qwen2-vl',        // Qwen2-VL
+        'internvl',        // InternVL
+        'cogvlm',          // CogVLM
+        'idefics',         // IDEFICS
+        'paligemma',       // PaliGemma
+        'phi-3-vision',    // Phi-3 Vision
+        'phi3-vision',     // Phi-3 Vision alternate
+        'llama-3.2-vision',// Llama 3.2 Vision
+        'molmo',           // Molmo
+    ];
+    
+    return vlmPatterns.some(pattern => identifier.includes(pattern));
 }
 
 async function buildAPIError(response) {
