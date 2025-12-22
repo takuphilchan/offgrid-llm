@@ -376,7 +376,9 @@ async function sendChat() {
             // Better error messages for common issues
             let userMessage = `Error: ${errorMsg}`;
             if (error.code === 'missing_mmproj') {
-                userMessage = 'This vision model is missing its mmproj adapter. Download the matching .mmproj file, place it next to the GGUF, reload the model, and try again.';
+                userMessage = `**Vision adapter missing**\n\nThis vision model needs an mmproj file to process images.\n\n**To fix:** Re-download the model using the CLI:\n\`offgrid download <model-name>\`\n\nThe vision adapter will be downloaded automatically.`;
+            } else if (errorMsg.includes('EOF') || errorMsg.includes('interrupted')) {
+                userMessage = `Generation was interrupted.\n\nThis often happens due to memory pressure. Try:\n• Using a smaller model (Q4 instead of Q8)\n• Reducing context length in settings\n• Closing other applications`;
             } else if (errorMsg.includes('503') || errorMsg.includes('Failed to load model')) {
                 userMessage = `Model is taking longer than expected to load.\n\nThis can happen on slower systems. Please try again in a few moments.`;
             } else if (errorMsg.includes('500')) {
@@ -611,23 +613,6 @@ function loadPerformanceMode() {
             applyPerformanceMode();
         }
     }
-}
-
-// Update cache indicator based on model state
-function updateCacheIndicator(isActive) {
-    const indicator = document.getElementById('cacheIndicator');
-    if (indicator) {
-        if (isActive) {
-            indicator.classList.remove('hidden');
-        } else {
-            indicator.classList.add('hidden');
-        }
-    }
-}
-
-// Show cache indicator when model is warmed (has active KV cache)
-function onModelWarmed(modelName) {
-    updateCacheIndicator(true);
 }
 
 // Search models

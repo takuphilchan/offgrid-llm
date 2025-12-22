@@ -22,6 +22,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/cache"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
+	"github.com/takuphilchan/offgrid-llm/internal/degradation"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/metrics"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
@@ -74,12 +75,15 @@ type Server struct {
 	offgridMetrics *metrics.OffGridMetrics
 	wsHub          *websocket.Hub
 	powerManager   *power.PowerManager
+	degradationMgr *degradation.Manager // Graceful degradation under resource pressure
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
 	tokensGenerated    int64
 	errorsTotal        int64
 	totalLatencyMicros int64 // For calculating average latency
+	// Cached values (read once at startup)
+	version string // Cached VERSION file content
 }
 
 type DownloadProgress struct {
@@ -219,6 +223,15 @@ func NewWithConfig(cfg *config.Config) *Server {
 		}
 	})
 
+	// Initialize degradation manager for graceful performance under resource pressure
+	degradationMgr := degradation.NewManager(degradation.DefaultConfig())
+	degradationMgr.Start()
+	// Register callback to log degradation level changes
+	degradationMgr.OnLevelChange(func(level degradation.DegradationLevel) {
+		log.Printf("Resource pressure changed: %s (max context: %d, max concurrent: %d)",
+			level.String(), degradationMgr.MaxContextSize(), degradationMgr.MaxConcurrentRequests())
+	})
+
 	// Initialize auth middleware
 	authMiddleware := users.NewMiddleware(userStore)
 	authMiddleware.SetRequireAuth(cfg.RequireAuth)
@@ -266,6 +279,8 @@ func NewWithConfig(cfg *config.Config) *Server {
 		offgridMetrics:       offgridMetrics,
 		wsHub:                wsHub,
 		powerManager:         powerManager,
+		degradationMgr:       degradationMgr,
+		version:              readVersionOnce(), // Cache VERSION file at startup
 	}
 }
 
@@ -276,6 +291,11 @@ func createModelCache(cfg *config.Config) *inference.ModelCache {
 	// Auto-scale MaxModels based on system RAM if not explicitly configured
 	maxModels := cfg.MaxModels
 	resources, err := resource.DetectResources()
+
+	// Low memory mode is opt-in via config only
+	// Auto-detection was removed as it can cause more problems than it solves
+	lowMemoryMode := cfg.LowMemoryMode
+
 	if err == nil && resources != nil {
 		// Calculate optimal max_models based on available RAM
 		// Reserve 2GB for OS and other processes
@@ -308,9 +328,28 @@ func createModelCache(cfg *config.Config) *inference.ModelCache {
 	// Use the new warmer-enabled cache for faster model switching
 	cache := inference.NewModelCacheWithWarmer(maxModels, cfg.NumGPULayers, binDir, cfg.ModelsDir)
 
+	// Always set system RAM for auto-detection of context size
+	if resources != nil {
+		cache.SetSystemRAM(resources.TotalRAM)
+	}
+
 	// Apply performance tuning from config
 	cache.SetContextSize(cfg.MaxContextSize)
 	cache.SetBatchSize(cfg.BatchSize)
+	cache.SetNumThreads(cfg.NumThreads)
+	cache.SetKVCacheType(cfg.KVCacheType)
+	cache.SetFlashAttention(cfg.FlashAttention)
+
+	// Apply low memory mode optimizations only when explicitly enabled
+	if lowMemoryMode {
+		log.Println("Low memory mode enabled (explicit): single model, reduced batch, 1 parallel slot, q4_0 KV cache")
+		cache.SetBatchSize(128)      // Smaller batches
+		cache.SetMaxInstances(1)     // Force single instance
+		cache.SetParallelSlots(1)    // Single slot to reduce KV cache memory
+		cache.SetKVCacheType("q4_0") // Max memory savings in low memory mode
+		cache.SetCacheReuse(0)       // Disable cache reuse to save memory
+		// Note: Context size is NOT reduced - let user control this via max_context_size config
+	}
 
 	// Set default model protection (won't be evicted from cache)
 	if cfg.DefaultModel != "" && cfg.ProtectDefault {
@@ -319,10 +358,7 @@ func createModelCache(cfg *config.Config) *inference.ModelCache {
 
 	// Configure smart mlock based on system RAM
 	if cfg.SmartMlock || cfg.UseMlock {
-		// Detect system RAM for smart mlock decisions
-		resources, err := resource.DetectResources()
-		if err == nil && resources != nil {
-			cache.SetSystemRAM(resources.TotalRAM)
+		if resources != nil {
 			log.Printf("System RAM detected: %d MB (smart mlock enabled)", resources.TotalRAM)
 		}
 		if cfg.UseMlock {
@@ -370,6 +406,14 @@ func estimateAverageModelSize(modelsDir string) int64 {
 
 	// Add 20% overhead for runtime memory usage
 	return avgSize * 120 / 100
+}
+
+// readVersionOnce reads the VERSION file once at startup and caches the result
+func readVersionOnce() string {
+	if versionData, err := os.ReadFile("VERSION"); err == nil {
+		return strings.TrimSpace(string(versionData))
+	}
+	return "unknown"
 }
 
 // startLlamaServer is deprecated - models are now loaded on-demand via cache
@@ -826,12 +870,8 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		accept := r.Header.Get("Accept")
 		if strings.Contains(accept, "application/json") || r.URL.Query().Get("format") == "json" {
-			version := "unknown"
-			if versionData, err := os.ReadFile("VERSION"); err == nil {
-				version = strings.TrimSpace(string(versionData))
-			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"%s","status":"running"}`, version)
+			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
 			return
 		}
 
@@ -845,13 +885,8 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// API info for other paths
-	version := "unknown"
-	if versionData, err := os.ReadFile("VERSION"); err == nil {
-		version = strings.TrimSpace(string(versionData))
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"%s","status":"running"}`, version)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -867,16 +902,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(s.startTime)
 	uptimeStr := formatDuration(uptime)
 
-	// Read version from VERSION file if available
-	version := "unknown"
-	if versionData, err := os.ReadFile("VERSION"); err == nil {
-		version = strings.TrimSpace(string(versionData))
-	}
-
 	// Build detailed health response
 	health := map[string]interface{}{
 		"status":         "healthy",
-		"version":        version,
+		"version":        s.version,
 		"uptime":         uptimeStr,
 		"uptime_seconds": int(uptime.Seconds()),
 		"timestamp":      time.Now().Unix(),
@@ -1070,18 +1099,12 @@ func (s *Server) handleStatsV1(w http.ResponseWriter, r *http.Request) {
 	// Calculate uptime
 	uptime := time.Since(s.startTime)
 
-	// Read version from VERSION file if available
-	version := "unknown"
-	if versionData, err := os.ReadFile("VERSION"); err == nil {
-		version = strings.TrimSpace(string(versionData))
-	}
-
 	response := map[string]interface{}{
 		"server": map[string]interface{}{
 			"uptime":         uptime.String(),
 			"uptime_seconds": int64(uptime.Seconds()),
 			"start_time":     s.startTime.Format(time.RFC3339),
-			"version":        version,
+			"version":        s.version,
 			"current_model":  s.currentModelID,
 		},
 		"inference": map[string]interface{}{
@@ -1224,6 +1247,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check degradation level - reject if in emergency mode
+	if s.degradationMgr != nil && !s.degradationMgr.RequestStart() {
+		writeError(w, "Server under heavy load, please try again later", http.StatusServiceUnavailable)
+		return
+	}
+	if s.degradationMgr != nil {
+		defer s.degradationMgr.RequestEnd()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 
 	// Parse request
@@ -1280,6 +1312,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		if powerMaxContext > 0 && powerMaxContext < opts.ContextSize {
 			log.Printf("Power saver: reducing context %d -> %d", opts.ContextSize, powerMaxContext)
 			opts.ContextSize = powerMaxContext
+		}
+
+		// Apply degradation-aware context limit
+		if s.degradationMgr != nil {
+			degradationMaxContext := s.degradationMgr.MaxContextSize()
+			if degradationMaxContext > 0 && degradationMaxContext < opts.ContextSize {
+				log.Printf("Resource pressure: reducing context %d -> %d", opts.ContextSize, degradationMaxContext)
+				opts.ContextSize = degradationMaxContext
+			}
 		}
 
 		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
@@ -1421,6 +1462,18 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 			} else {
 				log.Printf("Failed to reload model during retry: %v", reloadErr)
 			}
+		}
+	}
+
+	// If we already sent tokens and then the stream was interrupted,
+	// gracefully end instead of showing an error to the user.
+	// The partial response is still useful, and errors mid-generation are often OOM.
+	if err != nil && tokenIndex > 0 {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "EOF") || strings.Contains(errMsg, "interrupted") || strings.Contains(errMsg, "connection") {
+			log.Printf("Stream interrupted after %d tokens (possible OOM or server crash): %v", tokenIndex, err)
+			// Don't send error - just end gracefully with what we have
+			err = nil
 		}
 	}
 

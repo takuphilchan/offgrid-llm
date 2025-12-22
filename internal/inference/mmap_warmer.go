@@ -88,8 +88,19 @@ func (w *MmapWarmer) WarmModel(modelPath string) (*WarmStatus, error) {
 	defer f.Close()
 
 	// Read file in chunks to populate page cache
-	// Use a reasonable chunk size (4MB) to balance memory usage and speed
-	chunkSize := 4 * 1024 * 1024
+	// Use smaller chunks on low-RAM systems to avoid memory pressure
+	chunkSize := 4 * 1024 * 1024 // 4MB default
+
+	// Detect available RAM and use smaller buffer for low-RAM systems
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	availableMB := int64(m.Sys-m.HeapInuse) / (1024 * 1024)
+	if availableMB < 1024 {
+		chunkSize = 1 * 1024 * 1024 // 1MB for <1GB available
+	} else if availableMB < 2048 {
+		chunkSize = 2 * 1024 * 1024 // 2MB for <2GB available
+	}
+
 	buf := make([]byte, chunkSize)
 	var totalRead int64
 

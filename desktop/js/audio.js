@@ -1465,23 +1465,23 @@ let jarvisSilenceTimer = null;
 let jarvisChunks = [];
 let jarvisRecorder = null;
 
-// VAD Configuration - tuned for natural, responsive speech detection
+// VAD Configuration - balanced for natural speech with quick response
 const VAD_CONFIG = {
-    silenceThreshold: 0.02,       // Volume threshold for voice detection (lower = more sensitive)
-    voiceFreqMin: 80,             // Minimum voice frequency (Hz)
-    voiceFreqMax: 3500,           // Maximum voice frequency (Hz)
-    voiceRatioMin: 0.25,          // Minimum voice-band energy ratio
-    silenceTimeout: 1200,         // ms of silence before stopping (comfortable pause)
-    minRecordingTime: 500,        // Minimum recording time before processing
-    minRecordingSize: 2000,       // Minimum blob size in bytes
-    maxRecordingTime: 30000,      // Maximum recording time (30 seconds)
-    sampleInterval: 30,           // Check volume frequently (30ms)
-    cooldownTime: 300,            // Time to wait after processing
-    voiceConfidenceThreshold: 2,  // Consecutive voice detections to start (faster response)
-    silenceConfidenceThreshold: 8,// Consecutive silence detections to stop (more forgiving)
-    autoRetryOnError: true,       // Auto-recover from errors
-    maxRetries: 2,                // Max retries on failure
-    retryDelay: 1000              // Delay before retry (ms)
+    silenceThreshold: 0.035,      // HIGHER = less sensitive (prevents long recordings)
+    voiceFreqMin: 100,            // Tighter voice band (ignore low noise)
+    voiceFreqMax: 2500,           // Tighter voice band
+    voiceRatioMin: 0.30,          // Require more voice-like signal
+    silenceTimeout: 500,          // 500ms silence = done speaking
+    minRecordingTime: 400,        // Minimum 400ms recording
+    minRecordingSize: 2000,       // Minimum size
+    maxRecordingTime: 10000,      // MAX 10 seconds (shorter = faster transcription)
+    sampleInterval: 50,           // 50ms polling
+    cooldownTime: 200,            // 200ms cooldown
+    voiceConfidenceThreshold: 2,  // Need 2 consecutive detections to start
+    silenceConfidenceThreshold: 4,// 4 samples = 200ms silence to stop
+    autoRetryOnError: true,
+    maxRetries: 1,
+    retryDelay: 500
 };
 
 // Track retry state
@@ -1616,6 +1616,7 @@ function startVADMonitoring() {
     const bufferLength = jarvisAnalyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     
+    // Use 50ms interval (20fps) instead of default ~16ms (60fps) to reduce CPU
     jarvisVADInterval = setInterval(() => {
         if (!jarvisMode) return;
         
@@ -1762,10 +1763,10 @@ function startJarvisRecording() {
         }
     };
     
-    jarvisRecorder.start(50);  // Smaller chunks for faster processing
+    jarvisRecorder.start(100);  // 100ms chunks (standard)
     
     // Update UI to show recording with visual feedback
-    updateJarvisState('🎤 Listening...');
+    updateJarvisState('Listening...');
     
     // Add visual pulse to indicate active recording
     const btn = document.getElementById('jarvisToggleBtn');
@@ -1821,14 +1822,14 @@ async function processJarvisVoice(audioBlob) {
             formData.append('language', language);
         }
         
-        // Add timeout for transcription (90 seconds max - increased for slower systems)
+        // Add timeout for transcription (60 seconds for slow machines)
         transcribeController = new AbortController();
         const transcribeTimeout = setTimeout(() => {
-            console.warn('[JARVIS] Transcription timeout after 90s');
+            console.warn('[JARVIS] Transcription timeout after 60s');
             transcribeController.abort();
-        }, 90000);
+        }, 60000);
         
-        updateJarvisState('🎤 Transcribing...');
+        updateJarvisState('Transcribing...');
         
         let transcribeResp;
         try {
@@ -1896,13 +1897,13 @@ async function processJarvisVoice(audioBlob) {
             ...voiceChatHistory.slice(-2)  // Minimal history for speed
         ];
         
-        // Add timeout for chat (90 seconds max for slower models)
-        updateJarvisState('🤔 Thinking...');
+        // Add timeout for chat (45 seconds max)
+        updateJarvisState('Thinking...');
         const chatController = new AbortController();
         const chatTimeout = setTimeout(() => {
-            console.warn('[JARVIS] Chat timeout after 90s');
+            console.warn('[JARVIS] Chat timeout after 45s');
             chatController.abort();
-        }, 90000);
+        }, 45000);
         
         let chatResp;
         try {
@@ -1958,13 +1959,13 @@ async function processJarvisVoice(audioBlob) {
         // Handle different error types with appropriate UX
         if (e.name === 'AbortError') {
             console.warn('[JARVIS] Request timed out - will retry if enabled');
-            updateJarvisState('⏱ Timeout');
+            updateJarvisState('Timeout');
             
             // Auto-retry on timeout if configured
             if (VAD_CONFIG.autoRetryOnError && jarvisRetryCount < VAD_CONFIG.maxRetries) {
                 jarvisRetryCount++;
                 console.log(`[JARVIS] Retrying (${jarvisRetryCount}/${VAD_CONFIG.maxRetries})...`);
-                updateJarvisState(`Retrying ${jarvisRetryCount}/${VAD_CONFIG.maxRetries}...`);
+                updateJarvisState(`Retry ${jarvisRetryCount}...`);
                 setTimeout(() => {
                     if (jarvisMode) processJarvisVoice(audioBlob);
                 }, VAD_CONFIG.retryDelay);
@@ -1972,11 +1973,11 @@ async function processJarvisVoice(audioBlob) {
             }
         } else if (e.message?.includes('Transcription failed')) {
             console.error('[JARVIS] Transcription error:', e);
-            updateJarvisState('🎤 Mic Error');
+            updateJarvisState('Mic Error');
             showJarvisToast('Could not transcribe audio. Please try again.', 'warning');
         } else if (e.message?.includes('Chat failed') || e.message?.includes('500')) {
             console.error('[JARVIS] AI error:', e);
-            updateJarvisState('🤖 AI Error');
+            updateJarvisState('AI Error');
             showJarvisToast('AI is busy or unavailable. Retrying...', 'warning');
             
             // Auto-retry on server errors
@@ -1989,7 +1990,7 @@ async function processJarvisVoice(audioBlob) {
             }
         } else {
             console.error('[JARVIS] Unexpected error:', e);
-            updateJarvisState('❌ Error');
+            updateJarvisState('Error');
         }
         
         // Reset retry count on final failure
@@ -2037,17 +2038,17 @@ function updateJarvisState(state) {
     const stateLabel = document.getElementById('jarvisStateLabel');
     const indicator = document.getElementById('jarvisIndicator');
     
-    // Map states to user-friendly display
+    // Map states to user-friendly display (no emojis for cleaner look)
     const stateMap = {
-        'Active': '🟢 Ready',
-        'Ready': '🟢 Ready',
-        'Listening...': '🎤 Listening...',
-        'Transcribing...': '🎤 Transcribing...',
-        'Processing...': '🤔 Thinking...',
-        'Speaking...': '🔊 Speaking...',
-        'Off': '⚫ Off',
-        'Error': '❌ Error',
-        'Timeout': '⏱ Timeout'
+        'Active': 'Ready',
+        'Ready': 'Ready',
+        'Listening...': 'Listening...',
+        'Transcribing...': 'Transcribing...',
+        'Processing...': 'Thinking...',
+        'Speaking...': 'Speaking...',
+        'Off': 'Off',
+        'Error': 'Error',
+        'Timeout': 'Timeout'
     };
     
     const displayState = stateMap[state] || state;
@@ -2124,12 +2125,12 @@ function updateVolumeIndicator(level) {
         if (isVoice) {
             indicator.classList.add('bg-cyan-500');
             indicator.classList.remove('bg-gray-500', 'bg-gray-600');
-            if (stateLabel && jarvisRecording) stateLabel.textContent = '🎤 Capturing...';
+            if (stateLabel && jarvisRecording) stateLabel.textContent = 'Capturing...';
         } else {
             indicator.classList.remove('bg-cyan-500');
             indicator.classList.add('bg-gray-500');
             if (stateLabel && !jarvisRecording && !jarvisProcessing && !isSpeaking) {
-                stateLabel.textContent = '🟢 Ready';
+                stateLabel.textContent = 'Ready';
             }
         }
     }

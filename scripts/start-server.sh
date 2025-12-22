@@ -26,11 +26,14 @@ NC='\033[0m' # No Color
 # Comprehensive cleanup function
 cleanup_processes() {
     # Kill anything using port 11611 (main server port)
+    # Try with sudo if available to catch processes from other sessions
     if command -v lsof &> /dev/null; then
         lsof -ti:11611 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+        sudo lsof -ti:11611 2>/dev/null | xargs -r sudo kill -9 2>/dev/null || true
     fi
     if command -v fuser &> /dev/null; then
         fuser -k -9 11611/tcp 2>/dev/null || true
+        sudo fuser -k -9 11611/tcp 2>/dev/null || true
     fi
     
     # Kill llama-server processes on ports 42382-42391 (model cache ports)
@@ -88,7 +91,66 @@ fi
 echo -e "${GREEN}Starting OffGrid server from bin/offgrid...${NC}"
 echo ""
 
-# Handle signals to ensure cleanup on exit
-trap 'echo ""; echo "Shutting down..."; cleanup_processes; exit 0' INT TERM
+# Store the server PID so we can properly clean it up
+SERVER_PID=""
 
-./bin/offgrid serve
+# Handle signals to ensure cleanup on exit
+cleanup_and_exit() {
+    echo ""
+    echo "Shutting down..."
+    
+    # If server is running, send SIGTERM first for graceful shutdown
+    if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "Sending SIGTERM to offgrid server (PID: $SERVER_PID)..."
+        kill -TERM "$SERVER_PID" 2>/dev/null || true
+        
+        # Wait up to 5 seconds for graceful shutdown
+        for i in $(seq 1 50); do
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+                echo "Server stopped gracefully"
+                break
+            fi
+            sleep 0.1
+        done
+        
+        # Force kill if still running
+        if kill -0 "$SERVER_PID" 2>/dev/null; then
+            echo "Force killing server..."
+            kill -9 "$SERVER_PID" 2>/dev/null || true
+            wait "$SERVER_PID" 2>/dev/null || true
+        fi
+    fi
+    
+    # Final cleanup of any remaining processes
+    cleanup_processes
+    
+    exit 0
+}
+
+# Trap all signals that should trigger cleanup:
+# INT = Ctrl+C, TERM = kill, HUP = terminal closed, EXIT = script exit
+# Note: TSTP (Ctrl+Z) is handled specially - we convert it to a full exit
+trap 'cleanup_and_exit' INT TERM HUP EXIT
+
+# Disable Ctrl+Z (SIGTSTP) - force users to use Ctrl+C for clean shutdown
+# This prevents zombie processes from Ctrl+Z suspending
+trap 'echo ""; echo "Use Ctrl+C to stop the server (Ctrl+Z disabled)"; ' TSTP
+
+# Start server in background so we can capture its PID
+./bin/offgrid serve &
+SERVER_PID=$!
+
+# Wait for the server process
+wait $SERVER_PID
+EXIT_CODE=$?
+
+# Clear the EXIT trap before normal exit to avoid double cleanup
+trap - EXIT
+
+# Server exited on its own
+if [ $EXIT_CODE -ne 0 ]; then
+    echo -e "${RED}Server exited with code $EXIT_CODE${NC}"
+fi
+
+cleanup_processes
+exit $EXIT_CODE

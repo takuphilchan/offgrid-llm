@@ -1,6 +1,7 @@
 package rag
 
 import (
+	"container/heap"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -189,8 +190,7 @@ func (s *SQLiteStore) DeleteDocument(id string) error {
 }
 
 // Search performs a semantic search using cosine similarity
-// Note: This is a naive implementation that scans all chunks.
-// For production with >10k chunks, we should use sqlite-vec or similar extension.
+// Uses a min-heap for efficient top-k selection (O(n log k) vs O(n log n) for full sort)
 func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float32) ([]SearchResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -207,7 +207,9 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 	}
 	defer rows.Close()
 
-	var results []SearchResult
+	// Use a min-heap to maintain top-k results efficiently
+	h := &searchResultHeap{}
+	heap.Init(h)
 
 	for rows.Next() {
 		var chunk Chunk
@@ -225,30 +227,50 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 
 		score := cosineSimilarity(queryEmbedding, embedding)
 		if score >= minScore {
-			results = append(results, SearchResult{
-				Chunk:      &chunk,
+			result := SearchResult{
+				Chunk:      &Chunk{ID: chunk.ID, DocumentID: chunk.DocumentID, Content: chunk.Content, Index: chunk.Index, StartChar: chunk.StartChar, EndChar: chunk.EndChar},
 				Score:      score,
 				DocumentID: chunk.DocumentID,
 				DocName:    docName,
-			})
-		}
-	}
+			}
 
-	// Sort by score descending
-	// Simple bubble sort for small k
-	for i := 0; i < len(results); i++ {
-		for j := i + 1; j < len(results); j++ {
-			if results[i].Score < results[j].Score {
-				results[i], results[j] = results[j], results[i]
+			// Maintain a heap of size limit (min-heap by score)
+			if h.Len() < limit {
+				heap.Push(h, result)
+			} else if score > (*h)[0].Score {
+				// Replace the minimum element if current score is higher
+				heap.Pop(h)
+				heap.Push(h, result)
 			}
 		}
 	}
 
-	if len(results) > limit {
-		results = results[:limit]
+	// Extract results from heap in descending order
+	results := make([]SearchResult, h.Len())
+	for i := len(results) - 1; i >= 0; i-- {
+		results[i] = heap.Pop(h).(SearchResult)
 	}
 
 	return results, nil
+}
+
+// searchResultHeap implements a min-heap for SearchResult based on Score
+type searchResultHeap []SearchResult
+
+func (h searchResultHeap) Len() int           { return len(h) }
+func (h searchResultHeap) Less(i, j int) bool { return h[i].Score < h[j].Score } // Min-heap
+func (h searchResultHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *searchResultHeap) Push(x interface{}) {
+	*h = append(*h, x.(SearchResult))
+}
+
+func (h *searchResultHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
 }
 
 // Stats returns statistics about the store
@@ -268,7 +290,7 @@ func (s *SQLiteStore) Stats() map[string]interface{} {
 }
 
 // cosineSimilarity calculates cosine similarity between two embedding vectors
-// Optimized: uses float64 accumulator to avoid precision loss with many dimensions
+// Optimized with 4x loop unrolling for better CPU pipeline utilization
 func cosineSimilarity(a, b []float32) float32 {
 	n := len(a)
 	if n != len(b) || n == 0 {
@@ -277,7 +299,20 @@ func cosineSimilarity(a, b []float32) float32 {
 
 	// Use float64 for accumulation to avoid precision issues with high-dimensional vectors
 	var dot, normA, normB float64
-	for i := 0; i < n; i++ {
+
+	// Process 4 elements at a time (loop unrolling)
+	i := 0
+	for ; i <= n-4; i += 4 {
+		a0, a1, a2, a3 := float64(a[i]), float64(a[i+1]), float64(a[i+2]), float64(a[i+3])
+		b0, b1, b2, b3 := float64(b[i]), float64(b[i+1]), float64(b[i+2]), float64(b[i+3])
+
+		dot += a0*b0 + a1*b1 + a2*b2 + a3*b3
+		normA += a0*a0 + a1*a1 + a2*a2 + a3*a3
+		normB += b0*b0 + b1*b1 + b2*b2 + b3*b3
+	}
+
+	// Handle remaining elements
+	for ; i < n; i++ {
 		ai, bi := float64(a[i]), float64(b[i])
 		dot += ai * bi
 		normA += ai * ai

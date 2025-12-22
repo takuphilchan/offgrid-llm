@@ -374,8 +374,24 @@ function startPowerMonitoring() {
     powerPollInterval = setInterval(fetchPowerStatus, 30000);
 }
 
+function stopPowerMonitoring() {
+    if (powerPollInterval) {
+        clearInterval(powerPollInterval);
+        powerPollInterval = null;
+    }
+}
+
 // Start power monitoring when page loads
 document.addEventListener('DOMContentLoaded', startPowerMonitoring);
+
+// Pause polling when tab is hidden to save CPU
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopPowerMonitoring();
+    } else {
+        startPowerMonitoring();
+    }
+});
 
 // Restore advanced nav state when page loads
 document.addEventListener('DOMContentLoaded', restoreAdvancedNavState);

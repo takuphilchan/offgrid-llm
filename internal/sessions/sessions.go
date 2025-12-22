@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -25,15 +26,30 @@ type Session struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// SessionManager handles session persistence
+// SessionMeta contains lightweight session metadata for fast listing
+type SessionMeta struct {
+	Name         string    `json:"name"`
+	ModelID      string    `json:"model_id"`
+	MessageCount int       `json:"message_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	ModTime      time.Time `json:"-"` // File modification time for cache invalidation
+}
+
+// SessionManager handles session persistence with metadata caching
 type SessionManager struct {
 	sessionsDir string
+	mu          sync.RWMutex
+	metaCache   map[string]*SessionMeta // Cache of session metadata keyed by name
+	cacheValid  bool                    // Whether the cache is valid
 }
 
 // NewSessionManager creates a new session manager
 func NewSessionManager(sessionsDir string) *SessionManager {
 	return &SessionManager{
 		sessionsDir: sessionsDir,
+		metaCache:   make(map[string]*SessionMeta),
+		cacheValid:  false,
 	}
 }
 
@@ -54,6 +70,18 @@ func (sm *SessionManager) Save(session *Session) error {
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
+
+	// Update metadata cache
+	sm.mu.Lock()
+	sm.metaCache[session.Name] = &SessionMeta{
+		Name:         session.Name,
+		ModelID:      session.ModelID,
+		MessageCount: len(session.Messages),
+		CreatedAt:    session.CreatedAt,
+		UpdatedAt:    session.UpdatedAt,
+		ModTime:      time.Now(),
+	}
+	sm.mu.Unlock()
 
 	return nil
 }
@@ -78,7 +106,7 @@ func (sm *SessionManager) Load(name string) (*Session, error) {
 	return &session, nil
 }
 
-// List lists all available sessions
+// List lists all available sessions (returns full sessions for backward compatibility)
 func (sm *SessionManager) List() ([]Session, error) {
 	if _, err := os.Stat(sm.sessionsDir); os.IsNotExist(err) {
 		return []Session{}, nil
@@ -111,6 +139,85 @@ func (sm *SessionManager) List() ([]Session, error) {
 	return sessions, nil
 }
 
+// ListMeta returns lightweight metadata for all sessions (faster than List)
+// Uses caching with file modification time validation
+func (sm *SessionManager) ListMeta() ([]SessionMeta, error) {
+	if _, err := os.Stat(sm.sessionsDir); os.IsNotExist(err) {
+		return []SessionMeta{}, nil
+	}
+
+	entries, err := os.ReadDir(sm.sessionsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read sessions directory: %w", err)
+	}
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	var result []SessionMeta
+	currentFiles := make(map[string]bool)
+
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+
+		name := entry.Name()[:len(entry.Name())-5] // Remove .json
+		currentFiles[name] = true
+
+		// Get file info for modification time
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		modTime := info.ModTime()
+
+		// Check if we have valid cached metadata
+		if cached, ok := sm.metaCache[name]; ok && cached.ModTime.Equal(modTime) {
+			result = append(result, *cached)
+			continue
+		}
+
+		// Need to load and parse the session
+		filePath := filepath.Join(sm.sessionsDir, entry.Name())
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+
+		var session Session
+		if err := json.Unmarshal(data, &session); err != nil {
+			continue
+		}
+
+		// Update cache
+		meta := &SessionMeta{
+			Name:         session.Name,
+			ModelID:      session.ModelID,
+			MessageCount: len(session.Messages),
+			CreatedAt:    session.CreatedAt,
+			UpdatedAt:    session.UpdatedAt,
+			ModTime:      modTime,
+		}
+		sm.metaCache[name] = meta
+		result = append(result, *meta)
+	}
+
+	// Clean up cache for deleted files
+	for name := range sm.metaCache {
+		if !currentFiles[name] {
+			delete(sm.metaCache, name)
+		}
+	}
+
+	// Sort by updated time (most recent first)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].UpdatedAt.After(result[j].UpdatedAt)
+	})
+
+	return result, nil
+}
+
 // Delete deletes a session
 func (sm *SessionManager) Delete(name string) error {
 	filePath := filepath.Join(sm.sessionsDir, name+".json")
@@ -121,6 +228,11 @@ func (sm *SessionManager) Delete(name string) error {
 		}
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
+
+	// Remove from metadata cache
+	sm.mu.Lock()
+	delete(sm.metaCache, name)
+	sm.mu.Unlock()
 
 	return nil
 }

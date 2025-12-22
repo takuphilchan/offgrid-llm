@@ -1459,8 +1459,11 @@ func handleHuggingFaceDownload(modelID, quantFilter, filename string, skipConfir
 	if projectorSource != nil {
 		projPath := filepath.Join(cfg.ModelsDir, projectorSource.File.Filename)
 		fmt.Printf("  %sDownloading vision adapter...%s\n", brandMuted, colorReset)
-		if err := hf.DownloadGGUF(modelID, projectorSource.File.Filename, projPath, nil); err != nil {
+		// Use projectorSource.ModelID - this may be a fallback repo like koboldcpp/mmproj
+		if err := hf.DownloadGGUF(projectorSource.ModelID, projectorSource.File.Filename, projPath, nil); err != nil {
 			printWarning(fmt.Sprintf("Could not download vision adapter: %v", err))
+			fmt.Printf("  %sTry manually:%s offgrid download %s --file %s\n",
+				brandMuted, colorReset, projectorSource.ModelID, projectorSource.File.Filename)
 		} else {
 			fmt.Println("  ✓ Vision adapter downloaded")
 		}

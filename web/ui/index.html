@@ -138,7 +138,7 @@
                         <div id="statusDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                         <span id="statusText" class="text-xs font-medium text-emerald-400">Ready</span>
                     </div>
-                    <span class="text-xs text-secondary opacity-60">v0.2.9</span>
+                    <span class="text-xs text-secondary opacity-60">v0.2.10</span>
                 </div>
                 
                 <!-- Model Badge - Full Width -->
@@ -265,8 +265,8 @@
                                         </div>
                                         <div>
                                             <label class="text-xs text-secondary block mb-1">Max Length</label>
-                                            <input type="number" id="maxTokens" value="2048" step="256" min="256" max="8192" 
-                                                   class="w-full input-theme rounded px-2 py-1.5 text-sm">
+                                            <input type="number" id="maxTokens" value="2048" step="256" min="256" max="16384" 
+                                                   class="w-full input-theme rounded px-2 py-1.5 text-sm" title="Maximum output tokens">
                                         </div>
                                     </div>
                                     
@@ -333,10 +333,6 @@
                 
                 <!-- Active Indicators (shown when applicable) -->
                 <div id="chatIndicators" class="flex items-center gap-2 mt-2 empty:hidden">
-                    <span id="cacheIndicator" class="hidden text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 flex items-center gap-1" title="KV cache reuse enabled for faster responses">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        Cache Active
-                    </span>
                     <span id="ragIndicator" class="hidden text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
                         Knowledge Base
@@ -1000,7 +996,7 @@
                     <h2>Terminal</h2>
                     <p>Run OffGrid CLI commands directly</p>
                 </div>
-                <span class="badge badge-info">v0.2.9</span>
+                <span class="badge badge-info">v0.2.10</span>
             </div>
             
             <!-- Terminal Container -->

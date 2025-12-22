@@ -3,8 +3,9 @@ package cache
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,6 +28,7 @@ type ResponseCache struct {
 	hits       int64 // Use atomic operations for thread-safe counters
 	misses     int64
 	enabled    bool
+	stopChan   chan struct{} // For stopping cleanup goroutine
 }
 
 // NewResponseCache creates a new response cache
@@ -39,21 +41,38 @@ func NewResponseCache(maxEntries int, ttl time.Duration) *ResponseCache {
 	}
 }
 
-// generateKey creates a cache key from model and prompt
+// generateKey creates a cache key from model and prompt using efficient string concatenation
+// This is much faster than JSON marshaling for key generation
 func generateKey(model, prompt string, params map[string]interface{}) string {
-	// Create a deterministic key from model, prompt, and parameters
-	data := struct {
-		Model  string                 `json:"model"`
-		Prompt string                 `json:"prompt"`
-		Params map[string]interface{} `json:"params"`
-	}{
-		Model:  model,
-		Prompt: prompt,
-		Params: params,
+	// Use a strings.Builder for efficient string concatenation
+	var sb strings.Builder
+	// Pre-allocate approximate size: model + prompt + params overhead
+	sb.Grow(len(model) + len(prompt) + 256)
+
+	sb.WriteString(model)
+	sb.WriteByte('|')
+	sb.WriteString(prompt)
+	sb.WriteByte('|')
+
+	// Sort params keys for deterministic ordering (params are usually small)
+	if len(params) > 0 {
+		keys := make([]string, 0, len(params))
+		for k := range params {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for i, k := range keys {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteString(k)
+			sb.WriteByte(':')
+			sb.WriteString(fmt.Sprint(params[k]))
+		}
 	}
 
-	jsonData, _ := json.Marshal(data)
-	hash := sha256.Sum256(jsonData)
+	hash := sha256.Sum256([]byte(sb.String()))
 	return hex.EncodeToString(hash[:])
 }
 
@@ -224,13 +243,28 @@ func (c *ResponseCache) CleanExpired() int {
 
 // StartCleanupRoutine runs periodic cleanup of expired entries
 func (c *ResponseCache) StartCleanupRoutine(interval time.Duration) {
+	c.stopChan = make(chan struct{})
 	ticker := time.NewTicker(interval)
 	go func() {
-		for range ticker.C {
-			removed := c.CleanExpired()
-			if removed > 0 {
-				fmt.Printf("Cache cleanup: removed %d expired entries\n", removed)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				removed := c.CleanExpired()
+				if removed > 0 {
+					fmt.Printf("Cache cleanup: removed %d expired entries\n", removed)
+				}
+			case <-c.stopChan:
+				return
 			}
 		}
 	}()
+}
+
+// StopCleanupRoutine stops the cleanup goroutine
+func (c *ResponseCache) StopCleanupRoutine() {
+	if c.stopChan != nil {
+		close(c.stopChan)
+		c.stopChan = nil
+	}
 }

@@ -297,17 +297,28 @@ func (r *Registry) Unregister(name string) {
 	delete(r.metrics, name)
 }
 
-// Collect collects all metrics
+// Collect collects all metrics using a strings.Builder for efficiency
 func (r *Registry) Collect() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var lines []string
-	for _, m := range r.metrics {
-		lines = append(lines, m.Collect()...)
-	}
+	var sb strings.Builder
+	// Pre-allocate reasonable capacity to minimize allocations
+	sb.Grow(4096)
 
-	return strings.Join(lines, "\n") + "\n"
+	first := true
+	for _, m := range r.metrics {
+		for _, line := range m.Collect() {
+			if !first {
+				sb.WriteByte('\n')
+			}
+			sb.WriteString(line)
+			first = false
+		}
+	}
+	sb.WriteByte('\n')
+
+	return sb.String()
 }
 
 // Handler returns an HTTP handler for the metrics endpoint

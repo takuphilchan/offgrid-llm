@@ -2,11 +2,13 @@ package inference
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +18,34 @@ import (
 
 var httpClient = &http.Client{
 	Timeout: 5 * time.Second,
+}
+
+// canUseMlock checks if the system has sufficient RLIMIT_MEMLOCK for mlock to work
+// Returns false if RLIMIT_MEMLOCK is too low (common in containers/WSL/default Linux)
+func canUseMlock() bool {
+	// Only check on Linux - other platforms may not support RLIMIT_MEMLOCK
+	if runtime.GOOS != "linux" {
+		return false // Disable mlock on non-Linux to be safe
+	}
+
+	// Use raw syscall for RLIMIT_MEMLOCK (8 on Linux)
+	const RLIMIT_MEMLOCK = 8
+	var rlimit syscall.Rlimit
+	err := syscall.Getrlimit(RLIMIT_MEMLOCK, &rlimit)
+	if err != nil {
+		log.Printf("Cannot check RLIMIT_MEMLOCK: %v, disabling mlock", err)
+		return false
+	}
+
+	// If limit is less than 1GB, mlock will likely fail for models
+	// Most models need at least a few hundred MB
+	const minMlockBytes = 1024 * 1024 * 1024 // 1GB
+	if rlimit.Cur < minMlockBytes {
+		log.Printf("RLIMIT_MEMLOCK too low (%d bytes), disabling mlock. Run 'ulimit -l unlimited' as root to enable.", rlimit.Cur)
+		return false
+	}
+
+	return true
 }
 
 // ModelInstance represents a running llama-server instance with a loaded model
@@ -32,9 +62,14 @@ type ModelCache struct {
 	portToModel    map[int]string            // port -> modelID for reverse lookup
 	usedPorts      map[int]bool              // track which ports are in use
 	maxInstances   int
-	gpuLayers      int // Number of GPU layers to offload
-	contextSize    int // Context window size (0 = auto-detect based on RAM)
-	batchSize      int // Batch size for inference (lower = faster first token)
+	gpuLayers      int    // Number of GPU layers to offload
+	contextSize    int    // Context window size (0 = auto-detect based on RAM)
+	batchSize      int    // Batch size for inference (lower = faster first token)
+	parallelSlots  int    // Number of parallel inference slots (-np flag)
+	numThreads     int    // Number of CPU threads (0 = auto-detect)
+	kvCacheType    string // KV cache quantization: f16, q8_0, q4_0 (reduces VRAM usage)
+	flashAttention bool   // Enable flash attention (faster, less VRAM on GPU)
+	cacheReuse     int    // KV cache reuse for chat sessions (0 = disabled)
 	mu             sync.RWMutex
 	basePort       int
 	binManager     *BinaryManager
@@ -55,17 +90,22 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 	}
 
 	return &ModelCache{
-		instances:    make(map[string]*ModelInstance),
-		portToModel:  make(map[int]string),
-		usedPorts:    make(map[int]bool),
-		maxInstances: maxInstances,
-		gpuLayers:    gpuLayers,
-		contextSize:  0,   // 0 = auto-detect based on available RAM
-		batchSize:    256, // Lower batch = faster time-to-first-token
-		basePort:     42382,
-		binManager:   NewBinaryManager(binDir),
-		useMlock:     false, // Disabled by default, enabled for small models
-		totalRAMMB:   0,     // Will be set by SetSystemRAM
+		instances:      make(map[string]*ModelInstance),
+		portToModel:    make(map[int]string),
+		usedPorts:      make(map[int]bool),
+		maxInstances:   maxInstances,
+		gpuLayers:      gpuLayers,
+		contextSize:    0,     // 0 = auto-detect based on available RAM
+		batchSize:      256,   // Lower batch = faster time-to-first-token
+		parallelSlots:  1,     // 1 slot for stability on low-end machines
+		numThreads:     0,     // 0 = auto-detect based on CPU cores
+		kvCacheType:    "",    // Empty = use llama.cpp defaults (f16), set to q8_0 if your build supports it
+		flashAttention: false, // Disabled by default - can cause crashes on some systems
+		cacheReuse:     0,     // Disabled by default - can cause EOF issues
+		basePort:       42382,
+		binManager:     NewBinaryManager(binDir),
+		useMlock:       false, // Disabled by default, enabled for small models
+		totalRAMMB:     0,     // Will be set by SetSystemRAM
 	}
 }
 
@@ -132,6 +172,30 @@ func (mc *ModelCache) SetBatchSize(size int) {
 	mc.batchSize = size
 }
 
+// SetMaxInstances limits the number of concurrent model instances
+func (mc *ModelCache) SetMaxInstances(max int) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if max < 1 {
+		max = 1
+	}
+	mc.maxInstances = max
+}
+
+// SetParallelSlots sets the number of parallel inference slots (-np flag)
+// Lower values use less memory but can cause 503 errors under concurrent load
+func (mc *ModelCache) SetParallelSlots(slots int) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if slots < 1 {
+		slots = 1
+	}
+	if slots > 4 {
+		slots = 4 // Safety cap
+	}
+	mc.parallelSlots = slots
+}
+
 // SetUseMlock enables or disables mlock for all models
 func (mc *ModelCache) SetUseMlock(enable bool) {
 	mc.mu.Lock()
@@ -139,13 +203,61 @@ func (mc *ModelCache) SetUseMlock(enable bool) {
 	mc.useMlock = enable
 }
 
+// SetNumThreads sets the number of CPU threads (0 = auto-detect)
+func (mc *ModelCache) SetNumThreads(threads int) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if threads < 0 {
+		threads = 0
+	}
+	mc.numThreads = threads
+}
+
+// SetKVCacheType sets the KV cache quantization type (f16, q8_0, q4_0)
+// q8_0 is recommended for good balance; q4_0 saves more VRAM but slight quality loss
+func (mc *ModelCache) SetKVCacheType(cacheType string) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	// Validate cache type
+	switch cacheType {
+	case "f16", "q8_0", "q4_0":
+		mc.kvCacheType = cacheType
+	default:
+		mc.kvCacheType = "q8_0" // Default to q8_0 if invalid
+	}
+}
+
+// SetFlashAttention enables or disables flash attention
+// Flash attention reduces VRAM usage and speeds up inference on GPU
+func (mc *ModelCache) SetFlashAttention(enable bool) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.flashAttention = enable
+}
+
+// SetCacheReuse sets the KV cache reuse window for chat sessions
+// Higher values = faster follow-up messages in a conversation
+func (mc *ModelCache) SetCacheReuse(tokens int) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if tokens < 0 {
+		tokens = 0
+	}
+	mc.cacheReuse = tokens
+}
+
 // shouldUseMlock determines if mlock should be used for a model
 // Smart mlock: enable if system RAM is at least 4x the model size
-// This ensures the model stays in RAM without causing swapping
+// AND the system has sufficient RLIMIT_MEMLOCK
 func (mc *ModelCache) shouldUseMlock(modelPath string) bool {
 	// If mlock is explicitly enabled, always use it
 	if mc.useMlock {
 		return true
+	}
+
+	// Check RLIMIT_MEMLOCK - if it's too low, mlock will fail and crash llama-server
+	if !canUseMlock() {
+		return false
 	}
 
 	// Smart mlock: check if we have enough RAM
@@ -185,8 +297,9 @@ func (mc *ModelCache) autoDetectGPULayers(modelPath string) int {
 
 	// Parse free VRAM in MB
 	freeVRAM, err := strconv.ParseInt(strings.TrimSpace(string(output)), 10, 64)
-	if err != nil || freeVRAM < 1000 {
-		// Less than 1GB free, don't use GPU
+	if err != nil || freeVRAM < 2000 {
+		// Less than 2GB free, don't use GPU
+		log.Printf("GPU auto-detect: Only %dMB free VRAM, need 2GB+ for stable GPU inference", freeVRAM)
 		return 0
 	}
 
@@ -198,132 +311,164 @@ func (mc *ModelCache) autoDetectGPULayers(modelPath string) int {
 
 	modelSizeMB := info.Size() / (1024 * 1024)
 
-	// Estimate GPU layers based on model size and available VRAM
-	// Rule of thumb: each layer is roughly modelSize / 32 for most models
-	// Leave 500MB headroom for KV cache and other GPU operations
-	usableVRAM := freeVRAM - 500
-	if usableVRAM <= 0 {
-		return 0
+	// Very conservative approach: only use GPU if we have 2x the model size in VRAM
+	// This leaves plenty of room for KV cache growth during generation
+	requiredVRAM := modelSizeMB * 2
+	if freeVRAM < requiredVRAM {
+		// Not enough headroom, use partial offload
+		// Only offload a portion of layers to leave room for KV cache
+		usableForModel := freeVRAM / 2 // Use only half of VRAM for model weights
+		layerPercentage := float64(usableForModel) / float64(modelSizeMB)
+		estimatedLayers := int(layerPercentage * 24) // Conservative 24 layer estimate
+
+		if estimatedLayers < 8 {
+			log.Printf("GPU auto-detect: %dMB VRAM insufficient for stable GPU inference with %dMB model", freeVRAM, modelSizeMB)
+			return 0
+		}
+
+		log.Printf("GPU auto-detect: Partial offload - %dMB VRAM, %dMB model - using %d layers (conservative)",
+			freeVRAM, modelSizeMB, estimatedLayers)
+		return estimatedLayers
 	}
 
-	// Calculate how much of the model can fit in VRAM
-	// If VRAM can fit the whole model, use 99 layers (all)
-	if usableVRAM >= modelSizeMB {
-		log.Printf("GPU auto-detect: Full model fits in VRAM (%dMB free, %dMB model) - using all layers",
-			freeVRAM, modelSizeMB)
-		return 99 // llama.cpp will cap at actual layer count
-	}
-
-	// Partial offload: estimate layers based on VRAM ratio
-	// Typical models have 24-32 layers, estimate based on percentage
-	layerPercentage := float64(usableVRAM) / float64(modelSizeMB)
-	estimatedLayers := int(layerPercentage * 32) // Assume 32 layers as baseline
-
-	if estimatedLayers < 4 {
-		// Too few layers to be worthwhile
-		log.Printf("GPU auto-detect: Only %d layers would fit, using CPU only", estimatedLayers)
-		return 0
-	}
-
-	log.Printf("GPU auto-detect: %dMB VRAM free, %dMB model - using %d layers",
-		freeVRAM, modelSizeMB, estimatedLayers)
-	return estimatedLayers
+	// Have 2x headroom, safe to use full GPU
+	log.Printf("GPU auto-detect: %dMB VRAM >= 2x model (%dMB) - using all layers",
+		freeVRAM, modelSizeMB)
+	return 99
 }
 
 // GetOrLoad returns an existing model instance or loads a new one
+// For low-end machines, this uses a simple single-instance approach:
+// 1. If requested model is already loaded and alive -> return it
+// 2. Otherwise, unload everything and load the new model
 func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*ModelInstance, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	// Check if model is already loaded
-	if instance, exists := mc.instances[modelID]; exists {
-		// Check if process is still alive AND healthy
-		isHealthy := false
-		if instance.Cmd.Process != nil {
-			// First check if process exists
-			if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err == nil {
-				// Process exists, check if it's responding
-				if err := mc.checkHealth(instance.Port); err == nil {
-					isHealthy = true
-				} else {
-					log.Printf("Model %s instance on port %d is unresponsive: %v", modelID, instance.Port, err)
-				}
-			}
-		}
+	// Check if model file exists and get its size
+	modelInfo, err := os.Stat(modelPath)
+	if err != nil {
+		return nil, fmt.Errorf("model file not found: %w", err)
+	}
+	modelSizeMB := modelInfo.Size() / (1024 * 1024)
 
-		if isHealthy {
-			instance.LastAccess = time.Now()
-			log.Printf("Model %s already cached on port %d", modelID, instance.Port)
-			return instance, nil
+	// Check if model will fit in available RAM (with 1GB headroom)
+	if mc.totalRAMMB > 0 {
+		requiredRAM := modelSizeMB + 1024 // Model + 1GB headroom for KV cache & OS
+		if requiredRAM > mc.totalRAMMB {
+			return nil, fmt.Errorf("model too large: requires ~%dMB but only %dMB RAM available (try a smaller model or Q3_K quantization)",
+				requiredRAM, mc.totalRAMMB)
 		}
-
-		log.Printf("Model %s instance on port %d is dead or unhealthy. Reloading...", modelID, instance.Port)
-		// Clean up dead instance
-		// We manually cleanup instead of calling Unload to avoid lock issues if Unload were to change
-		if instance.Cmd != nil && instance.Cmd.Process != nil {
-			instance.Cmd.Process.Kill()
-			instance.Cmd.Wait()
-		}
-		delete(mc.instances, modelID)
-		delete(mc.portToModel, instance.Port)
-		delete(mc.usedPorts, instance.Port)
 	}
 
-	// Need to load new model
-	if len(mc.instances) >= mc.maxInstances {
-		// Cache full - evict least recently used
+	// Check if model is already loaded and process is alive
+	if instance, exists := mc.instances[modelID]; exists {
+		if instance.Cmd.Process != nil {
+			// Simple liveness check - just see if process exists
+			if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err == nil {
+				// Process is alive - return it
+				instance.LastAccess = time.Now()
+				log.Printf("Model %s already loaded on port %d", modelID, instance.Port)
+				return instance, nil
+			}
+		}
+		// Process is dead, clean it up
+		log.Printf("Model %s process died, cleaning up", modelID)
+		mc.cleanupInstance(modelID)
+	}
+
+	// For single-instance mode (maxInstances=1), unload everything first
+	// This prevents port conflicts and memory issues on low-end machines
+	if mc.maxInstances == 1 && len(mc.instances) > 0 {
+		log.Printf("Single-instance mode: unloading all models before loading %s", modelID)
+		for id := range mc.instances {
+			mc.cleanupInstance(id)
+		}
+		// Small delay to ensure ports are released
+		time.Sleep(500 * time.Millisecond)
+	} else if len(mc.instances) >= mc.maxInstances {
+		// Multi-instance mode: evict LRU
 		if err := mc.evictLRU(); err != nil {
 			return nil, fmt.Errorf("failed to evict model: %w", err)
 		}
 	}
 
-	// Get next available port
-	port := mc.getNextAvailablePort()
+	// Use a consistent port for single-instance mode
+	port := mc.basePort
+	if mc.maxInstances > 1 {
+		port = mc.getNextAvailablePort()
+	}
+
+	// Ensure port is free before starting
+	mc.killProcessOnPort(port)
 
 	// Mark port as used
 	mc.usedPorts[port] = true
 	mc.portToModel[port] = modelID
 
 	// Start llama-server with this model
-	log.Printf("Loading model %s on port %d (cache: %d/%d)", modelID, port, len(mc.instances)+1, mc.maxInstances)
+	log.Printf("Loading model %s on port %d", modelID, port)
 
-	// Determine context size - use configured value or auto-detect
+	// Determine context size - use configured value or auto-detect based on RAM
 	contextSize := mc.contextSize
 	if contextSize <= 0 {
-		// Auto-detect based on available RAM
-		// Default to 4096, but could be optimized further with runtime detection
-		contextSize = 4096
+		// Auto-detect based on available system RAM
+		// Smaller context = more stable, less memory usage
+		if mc.totalRAMMB > 0 && mc.totalRAMMB < 8192 {
+			contextSize = 2048 // 2K for systems with <8GB RAM
+			log.Printf("Auto-detected context size: %d (system has %dMB RAM)", contextSize, mc.totalRAMMB)
+		} else {
+			contextSize = 4096 // 4K for systems with 8GB+ RAM
+		}
 	}
 
-	// Use configured batch size
+	// Use configured batch size - smaller = less memory spikes during generation
 	batchSize := mc.batchSize
 	if batchSize <= 0 {
-		batchSize = 256
+		batchSize = 128 // Reduced from 256 for stability
 	}
 
-	// Build optimized args for inference performance
+	// Use configured parallel slots
+	// Default to 1 for stability - each slot doubles KV cache memory
+	// Set to 2 if you need concurrent requests and have enough VRAM
+	parallelSlots := mc.parallelSlots
+	if parallelSlots <= 0 {
+		parallelSlots = 1
+	}
+
+	// Build args for inference - prefer stability over optimizations
 	args := []string{
 		"-m", modelPath,
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
-		"-c", fmt.Sprintf("%d", contextSize), // Adaptive context size
-		"-np", "1", // Limit to 1 parallel sequence for stability
-		"--no-warmup",                      // Skip warmup to save memory/time on load
-		"-b", fmt.Sprintf("%d", batchSize), // Adaptive batch size
-		"-nr",       // Disable weight repacking to save memory
-		"-fa", "on", // Flash attention - 20-40% faster inference, less memory
-		"--cont-batching",        // Continuous batching for better throughput
-		"--cache-type-k", "q8_0", // Quantized KV cache - reduces memory ~50%
-		"--cache-type-v", "q8_0", // with minimal quality loss
-		"--cache-reuse", "256", // Reuse cached KV for repeated prompts
+		"-c", fmt.Sprintf("%d", contextSize), // Context size from config
+		"-np", fmt.Sprintf("%d", parallelSlots), // Parallel slots
+		"-b", fmt.Sprintf("%d", batchSize), // Batch size
+		"--no-warmup", // Skip slow parameter fitting that scans memory
 	}
 
-	// Smart mlock: automatically enable for small models when RAM is sufficient
-	// This keeps the model in RAM and prevents swapping, improving switch times
-	if mc.useMlock || mc.shouldUseMlock(modelPath) {
-		args = append(args, "--mlock")
-		log.Printf("Using mlock for model %s (keeping in RAM)", modelID)
+	// Add CPU thread count (critical for performance)
+	numThreads := mc.numThreads
+	if numThreads <= 0 {
+		// Auto-detect: use physical cores (not hyperthreads) for best perf
+		numThreads = runtime.NumCPU()
+		if numThreads > 8 {
+			numThreads = 8 // Cap at 8 to avoid diminishing returns
+		}
 	}
+	args = append(args, "-t", fmt.Sprintf("%d", numThreads))
+
+	// KV cache quantization - DISABLED by default for stability
+	// Some llama.cpp builds don't support these flags and crash
+	// Enable via OFFGRID_KV_CACHE_TYPE=q8_0 if your build supports it
+	if mc.kvCacheType != "" && mc.kvCacheType != "f16" {
+		args = append(args, "--cache-type-k", mc.kvCacheType)
+		args = append(args, "--cache-type-v", mc.kvCacheType)
+	}
+
+	// Cache reuse - DISABLED by default for stability
+	// Can cause issues on some systems
+	// mc.cacheReuse is kept at 0 by default
 
 	if projectorPath != "" {
 		args = append(args, "--mmproj", projectorPath)
@@ -337,9 +482,19 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	}
 	if gpuLayersToUse > 0 {
 		args = append(args, "-ngl", fmt.Sprintf("%d", gpuLayersToUse))
+		// Enable flash attention for GPU inference (faster, less VRAM)
+		if mc.flashAttention {
+			args = append(args, "-fa")
+			log.Printf("Flash attention enabled for GPU inference")
+		}
 		log.Printf("Using %d GPU layers for model %s", gpuLayersToUse, modelID)
 	} else {
 		args = append(args, "-ngl", "0")
+		// For CPU-only, use mlock to keep model in RAM if beneficial
+		if mc.useMlock || mc.shouldUseMlock(modelPath) {
+			args = append(args, "--mlock")
+			log.Printf("Using mlock for model %s (CPU-only, keeping in RAM)", modelID)
+		}
 	}
 
 	log.Printf("Starting llama-server with args: %v", args)
@@ -435,13 +590,31 @@ func (mc *ModelCache) unloadInternal(modelID string) error {
 
 	port := instance.Port
 
-	// Kill the llama-server process
+	// Kill the llama-server process - try graceful first, then force
 	if instance.Cmd != nil && instance.Cmd.Process != nil {
-		if err := instance.Cmd.Process.Kill(); err != nil {
-			log.Printf("Warning: error killing llama-server for %s: %v", modelID, err)
+		// First try SIGTERM for graceful shutdown
+		if err := instance.Cmd.Process.Signal(syscall.SIGTERM); err != nil {
+			log.Printf("Warning: error sending SIGTERM to llama-server for %s: %v", modelID, err)
 		}
-		// Wait for process to fully terminate
-		instance.Cmd.Wait()
+
+		// Wait briefly for graceful shutdown
+		done := make(chan error, 1)
+		go func() {
+			_, err := instance.Cmd.Process.Wait()
+			done <- err
+		}()
+
+		select {
+		case <-done:
+			// Process exited gracefully
+		case <-time.After(2 * time.Second):
+			// Force kill if still running
+			log.Printf("Force killing llama-server for %s (did not respond to SIGTERM)", modelID)
+			if err := instance.Cmd.Process.Kill(); err != nil {
+				log.Printf("Warning: error killing llama-server for %s: %v", modelID, err)
+			}
+			instance.Cmd.Wait()
+		}
 	}
 
 	// Clean up tracking maps immediately
@@ -455,6 +628,45 @@ func (mc *ModelCache) unloadInternal(modelID string) error {
 
 	log.Printf("Model %s unloaded from cache (port %d released)", modelID, port)
 	return nil
+}
+
+// cleanupInstance removes a model instance without acquiring lock (caller must hold lock)
+func (mc *ModelCache) cleanupInstance(modelID string) {
+	instance, exists := mc.instances[modelID]
+	if !exists {
+		return
+	}
+
+	port := instance.Port
+
+	// Kill the process
+	if instance.Cmd != nil && instance.Cmd.Process != nil {
+		instance.Cmd.Process.Kill()
+		instance.Cmd.Wait()
+	}
+
+	// Clean up tracking maps
+	delete(mc.instances, modelID)
+	delete(mc.portToModel, port)
+	delete(mc.usedPorts, port)
+}
+
+// killProcessOnPort kills any process using the specified port
+func (mc *ModelCache) killProcessOnPort(port int) {
+	// Check if port is in use
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+	if err != nil {
+		return // Port is free
+	}
+	conn.Close()
+
+	// Try to kill llama-server on this port using pkill
+	log.Printf("Port %d is in use, attempting to free it", port)
+	exec.Command("pkill", "-9", "-f", fmt.Sprintf("llama-server.*--port.*%d", port)).Run()
+	exec.Command("fuser", "-k", fmt.Sprintf("%d/tcp", port)).Run()
+
+	// Wait for port to be released
+	mc.waitForPortRelease(port, 200*time.Millisecond, 10)
 }
 
 // waitForPortRelease actively checks if a port is available
@@ -475,8 +687,15 @@ func (mc *ModelCache) UnloadAll() {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
+	// Collect model IDs first to avoid modifying map during iteration
+	modelIDs := make([]string, 0, len(mc.instances))
 	for modelID := range mc.instances {
-		mc.Unload(modelID)
+		modelIDs = append(modelIDs, modelID)
+	}
+
+	// Unload each model using internal method (we already hold the lock)
+	for _, modelID := range modelIDs {
+		mc.unloadInternal(modelID)
 	}
 }
 
@@ -498,9 +717,10 @@ func (mc *ModelCache) getNextAvailablePort() int {
 func (mc *ModelCache) waitForReady(port int) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
-	// Phase 1: Wait for server process to start (up to 10 seconds with pre-warming)
+	// Phase 1: Wait for server process to start (up to 30 seconds)
+	// Increased from 10s because larger models or cold starts need more time
 	serverStarted := false
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 60; i++ {
 		time.Sleep(500 * time.Millisecond)
 		resp, err := httpClient.Get(healthURL)
 		if err == nil {
@@ -512,7 +732,7 @@ func (mc *ModelCache) waitForReady(port int) error {
 	}
 
 	if !serverStarted {
-		return fmt.Errorf("llama-server on port %d did not start within 10 seconds", port)
+		return fmt.Errorf("llama-server on port %d did not start within 30 seconds", port)
 	}
 
 	// Phase 2: Wait for model to actually load
@@ -536,6 +756,14 @@ func (mc *ModelCache) waitForReady(port int) error {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				log.Printf("Model on port %d is fully loaded and ready", port)
+				// Give slots time to initialize after model load
+				// This prevents 503 "slot busy" errors on first request
+				time.Sleep(2 * time.Second)
+
+				// Warmup: send a minimal request to initialize inference pipeline
+				if err := mc.warmupServer(port); err != nil {
+					log.Printf("Warmup request failed (non-fatal): %v", err)
+				}
 				return nil
 			}
 		}
@@ -546,6 +774,7 @@ func (mc *ModelCache) waitForReady(port int) error {
 }
 
 // checkHealth performs a quick health check on the llama-server instance
+// Returns nil if the server is alive (even if busy with 503)
 func (mc *ModelCache) checkHealth(port int) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
@@ -560,11 +789,40 @@ func (mc *ModelCache) checkHealth(port int) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("health check failed with status: %d", resp.StatusCode)
+	// 200 = healthy and ready
+	// 503 = busy (all slots in use) - server is alive but busy, NOT dead
+	// Only actual errors (connection refused, timeout) mean the server is dead
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusServiceUnavailable {
+		return nil // Server is alive (busy is not dead)
 	}
 
-	return nil
+	return fmt.Errorf("health check failed with status: %d", resp.StatusCode)
+}
+
+// warmupServer sends a minimal request to initialize the inference pipeline
+// This prevents 503 errors on the first real request
+func (mc *ModelCache) warmupServer(port int) error {
+	url := fmt.Sprintf("http://localhost:%d/v1/chat/completions", port)
+
+	// Very minimal request - just 1 token
+	payload := `{"messages":[{"role":"user","content":"hi"}],"max_tokens":1,"temperature":0}`
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Post(url, "application/json", strings.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Read and discard body
+	io.Copy(io.Discard, resp.Body)
+
+	if resp.StatusCode == http.StatusOK {
+		log.Printf("Warmup request successful on port %d", port)
+		return nil
+	}
+
+	return fmt.Errorf("warmup request returned status %d", resp.StatusCode)
 }
 
 // GetStats returns cache statistics

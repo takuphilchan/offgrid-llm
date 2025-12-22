@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// Maximum number of rate limit buckets to prevent memory exhaustion under DDoS
+const maxRateLimitBuckets = 10000
+
 // RateLimiter implements a token bucket rate limiter per IP/endpoint
 type RateLimiter struct {
 	mu       sync.RWMutex
@@ -45,15 +48,37 @@ func NewRateLimiter(rate int, interval time.Duration, burst int) *RateLimiter {
 func (rl *RateLimiter) Allow(key string) bool {
 	rl.mu.RLock()
 	bucket, exists := rl.buckets[key]
+	bucketCount := len(rl.buckets)
 	rl.mu.RUnlock()
 
 	if !exists {
 		rl.mu.Lock()
-		bucket = &TokenBucket{
-			tokens:     rl.burst,
-			lastRefill: time.Now(),
+		// Double-check after acquiring write lock
+		bucket, exists = rl.buckets[key]
+		if !exists {
+			// Check if we've hit the maximum bucket count (DDoS protection)
+			if bucketCount >= maxRateLimitBuckets {
+				// Find and evict the oldest bucket
+				var oldestKey string
+				var oldestTime time.Time
+				first := true
+				for k, b := range rl.buckets {
+					if first || b.lastRefill.Before(oldestTime) {
+						oldestKey = k
+						oldestTime = b.lastRefill
+						first = false
+					}
+				}
+				if oldestKey != "" {
+					delete(rl.buckets, oldestKey)
+				}
+			}
+			bucket = &TokenBucket{
+				tokens:     rl.burst,
+				lastRefill: time.Now(),
+			}
+			rl.buckets[key] = bucket
 		}
-		rl.buckets[key] = bucket
 		rl.mu.Unlock()
 	}
 

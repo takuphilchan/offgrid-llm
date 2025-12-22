@@ -321,10 +321,20 @@ func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, e
 		return nil, fmt.Errorf("whisper model not found: %s", model)
 	}
 
+	// Get number of CPU threads (use most available for speed)
+	numCPU := runtime.NumCPU()
+	if numCPU > 4 {
+		numCPU = 4 // Cap at 4 for low-end machines
+	}
+	if numCPU < 1 {
+		numCPU = 1
+	}
+
 	args := []string{
 		"-m", modelPath,
 		"-f", wavPath,
-		"-oj", // Output JSON
+		"-oj",                           // Output JSON
+		"-t", fmt.Sprintf("%d", numCPU), // Use multiple threads
 	}
 
 	if req.Language != "" {

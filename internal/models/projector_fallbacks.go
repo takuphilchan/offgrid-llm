@@ -178,6 +178,61 @@ var defaultProjectorFallbacks = []projectorFallback{
 		Filename:   "minicpm-mmproj-model-f16.gguf",
 		Reason:     "Fallback to MiniCPM projector (koboldcpp/mmproj)",
 	},
+	{
+		Matchers: []string{
+			"llava-v1.6-mistral-7b",
+			"llava-1.6-mistral",
+			"llava-mistral-7b",
+		},
+		Repository: "koboldcpp/mmproj",
+		Filename:   "llava-v1.6-mistral-7b-mmproj-f16.gguf",
+		Reason:     "Fallback to LLaVA v1.6 Mistral 7B projector (koboldcpp/mmproj)",
+	},
+	{
+		Matchers: []string{
+			"llava-v1.6-vicuna-7b",
+			"llava-1.6-vicuna-7b",
+		},
+		Repository: "koboldcpp/mmproj",
+		Filename:   "llava-v1.6-vicuna-7b-mmproj-f16.gguf",
+		Reason:     "Fallback to LLaVA v1.6 Vicuna 7B projector (koboldcpp/mmproj)",
+	},
+	{
+		Matchers: []string{
+			"llava-v1.6-vicuna-13b",
+			"llava-1.6-vicuna-13b",
+		},
+		Repository: "koboldcpp/mmproj",
+		Filename:   "llava-v1.6-vicuna-13b-mmproj-f16.gguf",
+		Reason:     "Fallback to LLaVA v1.6 Vicuna 13B projector (koboldcpp/mmproj)",
+	},
+	{
+		Matchers: []string{
+			"moondream2",
+			"moondream-2",
+		},
+		Repository: "vikhyatk/moondream2",
+		Filename:   "moondream2-mmproj-f16.gguf",
+		Reason:     "Moondream2 vision projector from official repo",
+	},
+	{
+		Matchers: []string{
+			"nanollava",
+			"nano-llava",
+		},
+		Repository: "koboldcpp/mmproj",
+		Filename:   "nanollava-mmproj-f16.gguf",
+		Reason:     "Fallback to NanoLLaVA projector (koboldcpp/mmproj)",
+	},
+	{
+		Matchers: []string{
+			"bakllava",
+			"bak-llava",
+		},
+		Repository: "koboldcpp/mmproj",
+		Filename:   "bakllava-mmproj-f16.gguf",
+		Reason:     "Fallback to BakLLaVA projector (koboldcpp/mmproj)",
+	},
 }
 
 func findProjectorFallback(modelID, filename string) *projectorFallback {

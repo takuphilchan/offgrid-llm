@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -102,9 +103,16 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Retry logic for model loading (503 errors)
-	maxRetries := 60
+	// Simple retry logic for 503 (slots busy) with exponential backoff
+	maxRetries := 15
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Check if context was cancelled before making request
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", e.baseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
@@ -113,17 +121,32 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 
 		resp, err := e.httpClient.Do(httpReq)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, fmt.Errorf("request to llama-server failed: %w", err)
 		}
 
-		// Check for 503 (model still loading)
+		// Check for 503 (slots busy - wait and retry with exponential backoff)
 		if resp.StatusCode == http.StatusServiceUnavailable {
 			resp.Body.Close()
 			if attempt < maxRetries {
-				time.Sleep(1 * time.Second)
+				if attempt == 0 {
+					fmt.Printf("Waiting for inference slot...\n")
+				}
+				// Exponential backoff: 500ms, 1s, 2s, capped at 3s
+				waitTime := time.Duration(500<<attempt) * time.Millisecond
+				if waitTime > 3*time.Second {
+					waitTime = 3 * time.Second
+				}
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(waitTime):
+				}
 				continue
 			}
-			return nil, fmt.Errorf("model failed to load within 60 seconds")
+			return nil, fmt.Errorf("all inference slots busy, please try again")
 		}
 
 		if resp.StatusCode != http.StatusOK {
@@ -176,9 +199,18 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Retry logic for model loading (503 errors)
-	maxRetries := 60 // 60 retries = up to 60 seconds for model loading
+	// Retry logic for 503 (slots busy) with exponential backoff
+	// Model should already be loaded by the time we get here
+	// Just wait for a slot to become available
+	maxRetries := 15
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Check if context was cancelled before making request
+		select {
+		case <-ctx.Done():
+			return nil // Client disconnected, not an error
+		default:
+		}
+
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", e.baseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
 		if err != nil {
 			return fmt.Errorf("failed to create request: %w", err)
@@ -188,17 +220,33 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 
 		resp, err := e.httpClient.Do(httpReq)
 		if err != nil {
+			// If context was cancelled, just return without error (client disconnected)
+			if ctx.Err() != nil {
+				return nil
+			}
 			return fmt.Errorf("request to llama-server failed: %w", err)
 		}
 
-		// Check for 503 (model still loading)
+		// Check for 503 (slots busy - wait and retry with exponential backoff)
 		if resp.StatusCode == http.StatusServiceUnavailable {
 			resp.Body.Close()
 			if attempt < maxRetries {
-				time.Sleep(1 * time.Second)
-				continue // Retry
+				if attempt == 0 {
+					fmt.Printf("Waiting for inference slot...\n")
+				}
+				// Exponential backoff: 500ms, 1s, 2s, capped at 3s
+				waitTime := time.Duration(500<<attempt) * time.Millisecond
+				if waitTime > 3*time.Second {
+					waitTime = 3 * time.Second
+				}
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(waitTime):
+				}
+				continue
 			}
-			return fmt.Errorf("model failed to load within 60 seconds")
+			return fmt.Errorf("all inference slots busy, please try again")
 		}
 
 		if resp.StatusCode != http.StatusOK {
@@ -211,6 +259,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 
 		// Read SSE stream
 		scanner := bufio.NewScanner(resp.Body)
+		receivedTokens := false
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -228,6 +277,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 					Delta struct {
 						Content string `json:"content"`
 					} `json:"delta"`
+					FinishReason string `json:"finish_reason"`
 				} `json:"choices"`
 			}
 
@@ -235,14 +285,39 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 				continue // Skip malformed chunks
 			}
 
-			if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
-				if err := callback(chunk.Choices[0].Delta.Content); err != nil {
-					return err
+			if len(chunk.Choices) > 0 {
+				// Check for normal completion
+				if chunk.Choices[0].FinishReason == "stop" || chunk.Choices[0].FinishReason == "length" {
+					break // Clean completion
+				}
+				if chunk.Choices[0].Delta.Content != "" {
+					receivedTokens = true
+					if err := callback(chunk.Choices[0].Delta.Content); err != nil {
+						// Callback error (likely client disconnected) - not an error if we sent tokens
+						if receivedTokens {
+							return nil
+						}
+						return err
+					}
 				}
 			}
 		}
 
-		return scanner.Err()
+		// Check for scanner errors (including unexpected EOF)
+		if err := scanner.Err(); err != nil {
+			// If client disconnected (context cancelled), not an error
+			if ctx.Err() != nil {
+				return nil
+			}
+			// If we already sent tokens, treat as success (partial response is better than error)
+			if receivedTokens {
+				log.Printf("Stream ended after sending tokens (possible EOF): %v", err)
+				return nil // Not an error - user got their response
+			}
+			return fmt.Errorf("generation failed: %w (try reducing context size or using a smaller model)", err)
+		}
+
+		return nil
 	}
 
 	return fmt.Errorf("unexpected: exceeded max retries")

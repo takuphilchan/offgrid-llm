@@ -68,19 +68,35 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
     }
 }
 
+// Cache for models to avoid redundant fetches
+let cachedModels = null;
+let lastModelsRefresh = 0;
+const MODELS_CACHE_TTL = 60000; // 1 minute cache
+
+// Refresh models from server (called once, results cached)
+async function refreshModelsCache(force = false) {
+    const now = Date.now();
+    if (!force && cachedModels && (now - lastModelsRefresh) < MODELS_CACHE_TTL) {
+        return cachedModels;
+    }
+    
+    try {
+        await fetch('/models/refresh', { method: 'POST' });
+    } catch (e) {
+        console.warn('Failed to refresh models, using cached list:', e);
+    }
+    
+    const resp = await fetch('/models');
+    const data = await resp.json();
+    cachedModels = data.data || [];
+    lastModelsRefresh = now;
+    return cachedModels;
+}
+
 // Load models for chat
 async function loadChatModels() {
     try {
-        // Force refresh models from filesystem
-        try {
-            await fetch('/models/refresh', { method: 'POST' });
-        } catch (e) {
-            console.warn('Failed to refresh models, using cached list:', e);
-        }
-        
-        const resp = await fetch('/models');
-        const data = await resp.json();
-        const models = data.data || [];
+        const models = await refreshModelsCache();
         
         // Load all models - both LLM and embedding models
         // We'll detect type and route to correct API when sending
@@ -188,16 +204,8 @@ async function warmModelInBackground(modelName) {
 // Load embedding models
 async function loadEmbeddingModels() {
     try {
-        // Force refresh models from filesystem
-        try {
-            await fetch('/models/refresh', { method: 'POST' });
-        } catch (e) {
-            console.warn('Failed to refresh models, using cached list:', e);
-        }
-        
-        const resp = await fetch('/models');
-        const data = await resp.json();
-        const allModels = data.data || [];
+        // Use cached models - no need to refresh again
+        const allModels = await refreshModelsCache();
         
         // Filter only embedding models
         const models = allModels.filter(m => {
@@ -398,37 +406,46 @@ async function isModelCached(modelName) {
     }
 }
 
-// Wait for model to be fully loaded and ready (optimized version)
+// Wait for model to be fully loaded and ready (simplified version)
 async function waitForModelReady(modelName) {
-    // FAST PATH: Check if model is already cached (instant switch!)
-    const wasCached = await isModelCached(modelName);
+    // In single-instance mode, we need to trigger a request to load the model
+    // The server will unload the current model and load the new one
     
-    // Use faster polling for cached models, slower for cold loads
-    const pollInterval = wasCached ? 200 : 500;
-    const maxWaitTime = wasCached ? 5000 : 30000; // 5s for cached, 30s for cold
+    const pollInterval = 1000; // Poll every 1s
+    const maxWaitTime = 120000; // 120s max wait for cold loads
     const maxAttempts = Math.ceil(maxWaitTime / pollInterval);
     
     // Check if this is an embedding model
-    const resp = await fetch('/models');
-    const data = await resp.json();
-    const modelInfo = data.data.find(m => m.id === modelName);
-    const isEmbeddingModel = modelInfo?.type === 'embedding' || 
+    let isEmbeddingModel = false;
+    try {
+        const resp = await fetch('/models');
+        const data = await resp.json();
+        const modelInfo = data.data.find(m => m.id === modelName);
+        isEmbeddingModel = modelInfo?.type === 'embedding' || 
                            modelName.toLowerCase().includes('embed') || 
                            modelName.toLowerCase().includes('bge') ||
                            modelName.toLowerCase().includes('nomic');
+    } catch (e) {
+        console.warn('[MODEL] Could not determine model type:', e);
+    }
     
-    // Trigger the model load immediately with one request
+    // Send a single request to trigger the model load
+    // This kicks off the loading process on the server
+    const loadController = new AbortController();
+    const loadTimeout = setTimeout(() => loadController.abort(), maxWaitTime);
+    
     const triggerLoad = async () => {
         try {
             if (isEmbeddingModel) {
-                return await fetch('/v1/embeddings', {
+                const resp = await fetch('/v1/embeddings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: modelName, input: 'hi' }),
-                    signal: AbortSignal.timeout(15000)
+                    body: JSON.stringify({ model: modelName, input: 'test' }),
+                    signal: loadController.signal
                 });
+                return resp.ok;
             } else {
-                return await fetch('/v1/chat/completions', {
+                const resp = await fetch('/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -438,49 +455,31 @@ async function waitForModelReady(modelName) {
                         max_tokens: 1,
                         temperature: 0
                     }),
-                    signal: AbortSignal.timeout(15000)
+                    signal: loadController.signal
                 });
+                return resp.ok;
             }
         } catch (e) {
-            return null;
+            if (e.name === 'AbortError') {
+                console.warn('[MODEL] Load request timed out');
+            }
+            return false;
+        } finally {
+            clearTimeout(loadTimeout);
         }
     };
     
-    // For cached models, just make one request - it should work immediately
-    if (wasCached) {
-        const result = await triggerLoad();
-        if (result?.ok) {
-            return true;
-        }
-    }
+    // The request will block until the model is loaded
+    // This is the simplest and most reliable approach
+    console.log('[MODEL] Triggering model load for:', modelName);
+    const success = await triggerLoad();
     
-    // Start the load in background
-    triggerLoad();
-    
-    // Poll until ready
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-        
-        try {
-            // Quick cache check first (very fast)
-            if (await isModelCached(modelName)) {
-                // Model is in cache, try a quick inference test
-                const testResp = await triggerLoad();
-                if (testResp?.ok) {
-                    return true;
-                }
-            }
-        } catch (error) {
-            // Continue polling
-        }
-    }
-    
-    // Final attempt with longer timeout
-    const finalResult = await triggerLoad();
-    if (finalResult?.ok) {
+    if (success) {
+        console.log('[MODEL] Model ready:', modelName);
         return true;
     }
     
+    console.warn('[MODEL] Model load may have failed:', modelName);
     return false;
 }
 
@@ -500,21 +499,14 @@ async function handleModelChange() {
     
     const oldModel = currentModel;
     
-    // If there are existing messages, ask user what to do
-    if (messages.length > 0) {
-        showModal({
-            type: 'warning',
-            title: 'Clear Chat History?',
-            message: `Switching from <strong>${oldModel || 'no model'}</strong> to <strong>${newModel}</strong>.<br><br>Clear chat history? The new model won't have context from previous messages.`,
-            confirmText: 'Start Fresh',
-            cancelText: 'Keep History',
-            onConfirm: () => {
-                clearChatSilent();
-            },
-            onCancel: () => {
-                // Keep history, do nothing
-            }
-        });
+    // If there are existing messages, ask user what to do (non-blocking)
+    const shouldClearChat = messages.length > 0;
+    if (shouldClearChat) {
+        // Just show a quick toast notification - don't block the switch
+        if (typeof showToast === 'function') {
+            showToast('Chat history cleared for new model', 'info');
+        }
+        clearChatSilent();
     }
     
     currentModel = newModel;

@@ -85,23 +85,23 @@ func LoadConfig() *Config {
 		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 4096),
 		NumThreads:      getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
 		MaxMemoryMB:     uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
-		MaxModels:       getEnvInt("OFFGRID_MAX_MODELS", 3),
+		MaxModels:       getEnvInt("OFFGRID_MAX_MODELS", 1), // Single-instance mode by default for robustness
 		EnableGPU:       getEnvBool("OFFGRID_ENABLE_GPU", false),
 		NumGPULayers:    getEnvInt("OFFGRID_GPU_LAYERS", 0),
-		BatchSize:       getEnvInt("OFFGRID_BATCH_SIZE", 512),
-		FlashAttention:  getEnvBool("OFFGRID_FLASH_ATTENTION", true),  // Enable by default - significant speedup
-		KVCacheType:     getEnv("OFFGRID_KV_CACHE_TYPE", "q8_0"),      // q8_0 is good balance of speed/quality
-		UseMmap:         getEnvBool("OFFGRID_USE_MMAP", true),         // Safer for low RAM
-		UseMlock:        getEnvBool("OFFGRID_USE_MLOCK", false),       // Only enable if you have enough RAM
-		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", true),    // Better throughput
-		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),      // User can enable for <8GB systems
-		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true), // Auto-adjust context size
-		// Fast model switching - enabled by default for best UX
-		PrewarmModels:    getEnvBool("OFFGRID_PREWARM_MODELS", true),  // Pre-warm models into page cache
-		SmartMlock:       getEnvBool("OFFGRID_SMART_MLOCK", true),     // Auto mlock for small models
-		ProtectDefault:   getEnvBool("OFFGRID_PROTECT_DEFAULT", true), // Don't evict default model
-		FastSwitchMode:   getEnvBool("OFFGRID_FAST_SWITCH", true),     // Enable all fast-switch optimizations
-		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 30), // 30s timeout (was 120s)
+		BatchSize:       getEnvInt("OFFGRID_BATCH_SIZE", 256), // Lower batch for faster first token
+		FlashAttention:  getEnvBool("OFFGRID_FLASH_ATTENTION", true),
+		KVCacheType:     getEnv("OFFGRID_KV_CACHE_TYPE", "q8_0"),
+		UseMmap:         getEnvBool("OFFGRID_USE_MMAP", true),
+		UseMlock:        getEnvBool("OFFGRID_USE_MLOCK", false),
+		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", false), // Disabled - can cause issues on low-end
+		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),
+		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true),
+		// Fast model switching
+		PrewarmModels:    getEnvBool("OFFGRID_PREWARM_MODELS", true),
+		SmartMlock:       getEnvBool("OFFGRID_SMART_MLOCK", true),
+		ProtectDefault:   getEnvBool("OFFGRID_PROTECT_DEFAULT", false), // Not needed in single-instance mode
+		FastSwitchMode:   getEnvBool("OFFGRID_FAST_SWITCH", true),
+		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 60), // 60s for low-end machines
 		EnableP2P:        getEnvBool("OFFGRID_ENABLE_P2P", false),
 		P2PPort:          getEnvInt("OFFGRID_P2P_PORT", 9090),
 		DiscoveryPort:    getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
@@ -109,7 +109,7 @@ func LoadConfig() *Config {
 		LogFile:          getEnv("OFFGRID_LOG_FILE", ""),
 		RequireAuth:      getEnvBool("OFFGRID_REQUIRE_AUTH", false),
 		GuestAccess:      getEnvBool("OFFGRID_GUEST_ACCESS", true),
-		MultiUserMode:    getEnvBool("OFFGRID_MULTI_USER", false), // Default: single-user mode
+		MultiUserMode:    getEnvBool("OFFGRID_MULTI_USER", false),
 	}
 }
 
