@@ -60,7 +60,7 @@ async function searchModels() {
     try {
         // Add timeout to prevent hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 second timeout (backend has 30s)
+        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minute timeout for low-end machines
         
         const resp = await fetch(`/v1/search?query=${encodeURIComponent(query)}`, {
             signal: controller.signal

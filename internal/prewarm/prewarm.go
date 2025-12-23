@@ -28,7 +28,7 @@ type WarmupConfig struct {
 func DefaultWarmupConfig(dataDir string) WarmupConfig {
 	return WarmupConfig{
 		ModelsDir:   filepath.Join(dataDir, "models"),
-		Timeout:     5 * time.Minute,
+		Timeout:     15 * time.Minute,       // Increased for low-end machines
 		MaxModels:   1,                      // Only warm default model by default
 		MemoryLimit: 2 * 1024 * 1024 * 1024, // 2GB
 	}

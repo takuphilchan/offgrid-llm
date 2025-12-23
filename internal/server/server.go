@@ -624,9 +624,9 @@ func (s *Server) Start() error {
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.config.ServerPort),
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 300 * time.Second, // Long timeout for LLM inference
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  5 * time.Minute,  // Increased for low-end machines
+		WriteTimeout: 15 * time.Minute, // Long timeout for LLM inference on low-end machines
+		IdleTimeout:  5 * time.Minute,  // Increased for low-end machines
 	}
 
 	// Graceful shutdown handler
@@ -3841,7 +3841,7 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		MaxIterations:  maxIter,
 		MaxTokens:      2048,
 		Temperature:    0.7,
-		TimeoutPerStep: 300 * time.Second, // 5 minutes per step for model loading and slow operations
+		TimeoutPerStep: 10 * time.Minute, // 10 minutes per step for model loading and slow operations on low-end machines
 	}
 
 	// Check if streaming is requested

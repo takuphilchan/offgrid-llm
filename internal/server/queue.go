@@ -82,10 +82,10 @@ type QueueConfig struct {
 // DefaultQueueConfig returns sensible defaults
 func DefaultQueueConfig() QueueConfig {
 	return QueueConfig{
-		MaxConcurrent:   2,   // Safe for edge devices
-		MaxQueueSize:    10,  // Prevent unbounded growth
-		MemoryThreshold: 512, // Require at least 512MB free
-		QueueTimeout:    5 * time.Minute,
+		MaxConcurrent:   2,                // Safe for edge devices
+		MaxQueueSize:    10,               // Prevent unbounded growth
+		MemoryThreshold: 512,              // Require at least 512MB free
+		QueueTimeout:    15 * time.Minute, // Increased for low-end machines
 	}
 }
 

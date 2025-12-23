@@ -3847,15 +3847,12 @@ func handleRun(args []string) {
 	// Check if llama-server is running and start it if needed
 	if err := ensureLlamaServerRunning(); err != nil {
 		fmt.Println()
-		fmt.Printf("%sStarting llama-server%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("%sModel:%s %s\n", colorDim, colorReset, filepath.Base(model.Path))
-		fmt.Printf("%sFlags:%s --no-mmap --mlock --cont-batching (optimized)\n", colorDim, colorReset)
+		fmt.Printf("  %s%s◉ OffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
 		fmt.Println()
-		fmt.Printf("%sKeep server running for instant responses:%s\n", colorDim, colorReset)
-		fmt.Printf("  %ssudo systemctl enable --now llama-server%s\n", brandSecondary, colorReset)
-		fmt.Println()
+		fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, filepath.Base(model.Path))
+		fmt.Printf("  %sStatus:%s  Loading...", brandMuted, colorReset) // No newline - will be overwritten
 		if err := startLlamaServerInBackground(model.Path); err != nil {
-			fmt.Println()
+			fmt.Println() // Add newline before error
 			printError("Failed to start llama-server")
 			fmt.Println()
 			fmt.Printf("%sℹ Start manually:%s\n", colorDim, colorReset)
@@ -3864,7 +3861,6 @@ func handleRun(args []string) {
 			os.Exit(1)
 		}
 		// Wait for llama-server to load the model
-		fmt.Printf("%sLoading model...%s ", colorDim, colorReset)
 
 		// Read llama-server port from config
 		llamaPort := "42382"
@@ -3872,13 +3868,21 @@ func handleRun(args []string) {
 			llamaPort = strings.TrimSpace(string(portBytes))
 		}
 
-		// Use the new robust readiness check
-		if err := waitForModelReady(llamaPort, 120); err != nil {
-			fmt.Printf("%s✗%s\n", brandError, colorReset)
+		// Use the new robust readiness check (10 minutes for low-end machines and larger models)
+		if err := waitForModelReady(llamaPort, 600); err != nil {
+			fmt.Printf("\r  %sStatus:%s  %s✗ Failed%s\n", brandMuted, colorReset, brandError, colorReset)
 			printError(fmt.Sprintf("Model failed to load: %v", err))
 			os.Exit(1)
 		}
-		fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
+		fmt.Printf("\r  %sStatus:%s  %s✓ Ready%s  \n", brandMuted, colorReset, brandSuccess, colorReset)
+		fmt.Println()
+	} else {
+		// llama-server already running, show header
+		fmt.Println()
+		fmt.Printf("  %s%s◉ OffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, modelName)
+		fmt.Printf("  %sStatus:%s  %s✓ Ready%s\n", brandMuted, colorReset, brandSuccess, colorReset)
 		fmt.Println()
 	}
 
@@ -3926,26 +3930,16 @@ func handleRun(args []string) {
 		fmt.Println()
 	}
 
-	fmt.Println()
-	fmt.Printf("  %s%s Chat%s %s· %s%s\n", brandPrimary+colorBold, iconCircle, colorReset, brandMuted, modelName, colorReset)
-	fmt.Println()
+	fmt.Printf("  %sCommands:%s  exit · clear · rag · help\n", brandMuted, colorReset)
 	if currentSession != nil {
-		fmt.Printf("    %sSession:%s %s %s(auto-saving)%s\n", brandMuted, colorReset, currentSession.Name, brandMuted, colorReset)
+		fmt.Printf("  %sSession:%s   %s\n", brandMuted, colorReset, currentSession.Name)
 	}
 	if useKnowledgeBase {
-		fmt.Printf("    %sRAG:%s Enabled\n", brandMuted, colorReset)
+		fmt.Printf("  %sRAG:%s       Enabled\n", brandMuted, colorReset)
 	}
-	fmt.Printf("    %sCommands:%s %sexit%s %s·%s %sclear%s %s·%s %srag%s\n",
-		brandMuted, colorReset,
-		colorBold, colorReset, brandMuted, colorReset,
-		colorBold, colorReset, brandMuted, colorReset,
-		colorBold, colorReset)
 	fmt.Println()
 
 	// Start chat session
-	spinner := NewSpinner("Connecting to server...")
-	spinner.Start()
-
 	// Import required packages for HTTP client
 	client := &http.Client{
 		Timeout: 300 * time.Second,
@@ -3955,7 +3949,6 @@ func handleRun(args []string) {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", cfg.ServerPort)
 	resp, err := client.Get(healthURL)
 	if err != nil {
-		spinner.Stop(false)
 		fmt.Println()
 		printError("Server not running")
 		fmt.Println()
@@ -3966,11 +3959,6 @@ func handleRun(args []string) {
 		os.Exit(1)
 	}
 	resp.Body.Close()
-
-	// Give server a moment to be fully ready (especially after model load)
-	time.Sleep(1 * time.Second)
-
-	spinner.Stop(true)
 
 	// Refresh server's model list to pick up newly downloaded models
 	refreshURL := fmt.Sprintf("http://localhost:%d/models/refresh", cfg.ServerPort)

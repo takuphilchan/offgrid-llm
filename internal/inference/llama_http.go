@@ -37,7 +37,7 @@ func NewLlamaHTTPEngine(llamaServerURL string) *LlamaHTTPEngine {
 	return &LlamaHTTPEngine{
 		baseURL: llamaServerURL,
 		httpClient: &http.Client{
-			Timeout: 5 * time.Minute, // Increased for slow model loading on low-end systems
+			Timeout: 15 * time.Minute, // Increased for slow model loading on low-end systems
 			Transport: &http.Transport{
 				Proxy: func(req *http.Request) (*url.URL, error) {
 					return nil, nil // Explicitly bypass all proxies for localhost

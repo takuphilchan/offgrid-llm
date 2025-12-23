@@ -1120,9 +1120,9 @@
             font-size: 14px;
             line-height: 1.7;
             color: #e6edf3;
-            white-space: pre;
-            word-wrap: normal;
-            overflow-wrap: normal;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         .terminal-welcome {

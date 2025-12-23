@@ -101,7 +101,7 @@ func LoadConfig() *Config {
 		SmartMlock:       getEnvBool("OFFGRID_SMART_MLOCK", true),
 		ProtectDefault:   getEnvBool("OFFGRID_PROTECT_DEFAULT", true), // Keep default model in cache
 		FastSwitchMode:   getEnvBool("OFFGRID_FAST_SWITCH", true),
-		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 30), // 30s timeout
+		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 300), // 5 minute timeout for low-end machines
 		EnableP2P:        getEnvBool("OFFGRID_ENABLE_P2P", false),
 		P2PPort:          getEnvInt("OFFGRID_P2P_PORT", 9090),
 		DiscoveryPort:    getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
@@ -321,7 +321,7 @@ func (c *Config) applyDefaults() {
 
 	// Fast model switching defaults - enable by default for best UX
 	if c.ModelLoadTimeout == 0 {
-		c.ModelLoadTimeout = 30 // 30 seconds (was 120s)
+		c.ModelLoadTimeout = 300 // 5 minutes for low-end machines
 	}
 }
 

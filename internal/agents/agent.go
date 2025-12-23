@@ -54,7 +54,7 @@ func DefaultAgentConfig() AgentConfig {
 		MaxIterations:  10,
 		MaxTokens:      2048,
 		Temperature:    0.7,
-		TimeoutPerStep: 60 * time.Second,
+		TimeoutPerStep: 5 * time.Minute, // Increased for low-end machines
 		EnableMemory:   true,
 		ReasoningStyle: "react",
 	}

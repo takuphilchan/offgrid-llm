@@ -185,7 +185,7 @@ async function warmModelInBackground(modelName) {
                 max_tokens: 1,
                 temperature: 0
             }),
-            signal: AbortSignal.timeout(30000)
+            signal: AbortSignal.timeout(300000) // 5 minutes for low-end machines
         });
         
         if (resp.ok) {

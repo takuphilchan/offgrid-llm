@@ -456,7 +456,7 @@ func (e *Engine) Speak(req SpeechRequest) (io.Reader, error) {
 
 	modelPath := e.findPiperModelPath(model)
 	if modelPath == "" {
-		return nil, fmt.Errorf("piper model not found: %s", model)
+		return nil, fmt.Errorf("piper model not found: %s (requires both .onnx and .onnx.json files). Try running: offgrid setup piper --voice %s", model, model)
 	}
 
 	// Build piper command
@@ -496,6 +496,7 @@ func (e *Engine) Speak(req SpeechRequest) (io.Reader, error) {
 }
 
 // findPiperModelPath finds the full path to a piper model
+// Returns empty string if either the .onnx or .onnx.json file is missing
 func (e *Engine) findPiperModelPath(model string) string {
 	patterns := []string{
 		filepath.Join(e.piperDir, model+".onnx"),
@@ -505,7 +506,11 @@ func (e *Engine) findPiperModelPath(model string) string {
 
 	for _, path := range patterns {
 		if _, err := os.Stat(path); err == nil {
-			return path
+			// Also verify the JSON config exists (required by Piper)
+			jsonPath := path + ".json"
+			if _, err := os.Stat(jsonPath); err == nil {
+				return path
+			}
 		}
 	}
 

@@ -505,11 +505,12 @@ func (e *Engine) DownloadPiperVoice(name string, progress DownloadProgressFunc) 
 		return err
 	}
 
-	// Download JSON config
+	// Download JSON config (required for Piper to work)
 	jsonPath := filepath.Join(e.piperDir, name+".onnx.json")
 	if err := downloadFile(voice.JSONUrl, jsonPath, nil); err != nil {
-		// JSON is optional, don't fail
-		fmt.Printf("Warning: could not download voice config: %v\n", err)
+		// JSON config is required - clean up the ONNX file and return error
+		os.Remove(destPath)
+		return fmt.Errorf("failed to download voice config: %w", err)
 	}
 
 	return nil

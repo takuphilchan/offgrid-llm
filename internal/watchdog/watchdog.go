@@ -116,7 +116,7 @@ func (w *Watchdog) Register(config ProcessConfig) error {
 		config.RestartWindow = 5 * time.Minute
 	}
 	if config.GracefulTimeout == 0 {
-		config.GracefulTimeout = 30 * time.Second
+		config.GracefulTimeout = 3 * time.Minute // Increased for low-end machines
 	}
 
 	w.processes[config.Name] = &monitoredProcess{
@@ -402,12 +402,12 @@ func DefaultLlamaServerConfig(port int, modelPath string) ProcessConfig {
 	return ProcessConfig{
 		Name:            "llama-server",
 		HealthEndpoint:  fmt.Sprintf("http://localhost:%d/health", port),
-		HealthTimeout:   5 * time.Second,
-		CheckInterval:   10 * time.Second,
-		RestartDelay:    5 * time.Second,
+		HealthTimeout:   30 * time.Second, // Increased for low-end machines
+		CheckInterval:   30 * time.Second, // Increased for low-end machines
+		RestartDelay:    10 * time.Second, // Increased for low-end machines
 		MaxRestarts:     5,
-		RestartWindow:   5 * time.Minute,
-		GracefulTimeout: 30 * time.Second,
+		RestartWindow:   10 * time.Minute, // Increased for low-end machines
+		GracefulTimeout: 3 * time.Minute,  // Increased for low-end machines
 		StartCommand:    "llama-server",
 		StartArgs: []string{
 			"-m", modelPath,

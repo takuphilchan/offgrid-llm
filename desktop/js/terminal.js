@@ -8,7 +8,7 @@ function clearTerminal() {
     terminalOutputBuffer = ''; // Clear any buffered output
     userScrolledUp = false;
     const pre = document.getElementById('terminalPre');
-    pre.textContent = 'OffGrid Terminal \nConnected to real offgrid binary\nType \'help\' for available commands\n';
+    pre.textContent = 'OffGrid Terminal v0.2.9\nConnected to real offgrid binary\nType \'help\' for available commands\n';
 }
 
 function killCommand() {
@@ -260,9 +260,8 @@ async function handleOffgridCommand(args) {
             terminalChatModel = modelName;
             terminalChatHistory = [];
             addTerminalOutput('', 'normal');
-            addTerminalOutput('Chat mode enabled. Type your messages below.', 'success');
-            addTerminalOutput('Commands: "exit" to quit, "clear" to reset screen', 'success');
-            addTerminalOutput('> ', 'success');
+            addTerminalOutput(`Chat ready (${modelName})`, 'success');
+            addTerminalOutput('Type your message, or "exit" to quit', 'normal');
         }
 
         if (exitCode !== 0) {
@@ -329,15 +328,8 @@ async function sendTerminalChat(message) {
         
         terminalChatHistory.push({ role: 'assistant', content: assistantMsg });
         
-        // Show model info if different from expected
-        if (actualModel !== terminalChatModel) {
-            addTerminalOutput(`[Using model: ${actualModel}]`, 'error');
-        }
-        
         addTerminalOutput('', 'normal');
         addTerminalOutput(assistantMsg, 'success');
-        addTerminalOutput('', 'normal');
-        addTerminalOutput('> ', 'success');
         
     } catch (error) {
         addTerminalOutput(`Error: ${error.message}`, 'error');
