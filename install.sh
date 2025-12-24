@@ -45,16 +45,16 @@ dim()     { printf "    ${DIM}%s${NC}\n" "$1" >&2; }
 section() { printf "\n  ${BOLD}%s${NC}\n" "$1" >&2; }
 
 spin() {
-    printf "\r  ${CYAN}${SPINNER[$SPIN_IDX]}${NC} %s" "$1" >&2
+    printf "\r\033[K  ${CYAN}${SPINNER[$SPIN_IDX]}${NC} %s" "$1" >&2
     SPIN_IDX=$(( (SPIN_IDX + 1) % ${#SPINNER[@]} ))
 }
 
 spin_done() {
-    printf "\r  ${GREEN}✓${NC} %s\n" "$1" >&2
+    printf "\r\033[K  ${GREEN}✓${NC} %s\n" "$1" >&2
 }
 
 spin_fail() {
-    printf "\r  ${RED}✗${NC} %s\n" "$1" >&2
+    printf "\r\033[K  ${RED}✗${NC} %s\n" "$1" >&2
 }
 
 print_banner() {
@@ -160,7 +160,7 @@ download_cli_bundle() {
     local download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
     
     if download_with_progress "$download_url" "${tmp_dir}/bundle${ext}" "Downloading OffGrid..."; then
-        spin_done "Downloaded"
+        spin_done "Downloaded OffGrid"
     else
         # Fallback to AVX2
         if [ "$cpu_features" = "avx512" ]; then
@@ -188,7 +188,7 @@ download_cli_bundle() {
     else
         tar -xzf "bundle${ext}" 2>/dev/null
     fi
-    spin_done "Extracted"
+    spin_done "Extracted bundle"
     cd - >/dev/null
     
     echo "$bundle_name"
@@ -222,7 +222,7 @@ download_desktop_app() {
     local download_url="${GITHUB_URL}/releases/download/${version}/${app_name}"
     
     if download_with_progress "$download_url" "${tmp_dir}/${app_name}" "Downloading Desktop app..."; then
-        spin_done "Desktop app ready"
+        spin_done "Downloaded Desktop app"
         echo "${tmp_dir}/${app_name}"
     else
         # Desktop is optional, don't fail
@@ -278,7 +278,7 @@ install_webui() {
         spin "Installing Web UI..."
         $use_sudo mkdir -p "$WEB_DIR" 2>/dev/null
         $use_sudo cp -r "$bundle_dir/web/ui/"* "$WEB_DIR/" 2>/dev/null
-        spin_done "Web UI installed"
+        spin_done "Installed Web UI"
     fi
 }
 
@@ -321,7 +321,7 @@ Type=Application
 Categories=Utility;Development;
 Terminal=false
 EOF
-                spin_done "Desktop app installed"
+                spin_done "Installed Desktop app"
             else
                 spin_fail "Desktop extraction failed"
             fi
@@ -333,12 +333,12 @@ EOF
                 unzip -q "$app_path" -d "$tmp_extract"
                 cp -R "$tmp_extract/"*.app /Applications/ 2>/dev/null
                 rm -rf "$tmp_extract"
-                spin_done "Desktop app installed → /Applications"
+                spin_done "Installed Desktop app → /Applications"
             fi
             ;;
         windows)
             cp "$app_path" "$USERPROFILE/Desktop/" 2>/dev/null || cp "$app_path" "$HOME/Desktop/" 2>/dev/null
-            spin_done "Installer saved to Desktop"
+            spin_done "Saved installer to Desktop"
             ;;
     esac
 }
@@ -353,14 +353,14 @@ install_audio() {
         spin "Setting up Whisper (Speech-to-Text)..."
         cp -r "$bundle_dir/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
         chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
-        spin_done "Whisper ready"
+        spin_done "Whisper ready (Speech-to-Text)"
     fi
     
     if [ -d "$bundle_dir/audio/piper" ]; then
         spin "Setting up Piper (Text-to-Speech)..."
         cp -r "$bundle_dir/audio/piper/"* "$AUDIO_DIR/piper/" 2>/dev/null || true
         chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
-        spin_done "Piper ready"
+        spin_done "Piper ready (Text-to-Speech)"
     elif [ "$(uname -s)" = "Linux" ]; then
         download_piper "$AUDIO_DIR/piper"
     fi
@@ -386,7 +386,7 @@ download_piper() {
         mkdir -p "$install_dir"
         [ -d "$tmp_dir/piper" ] && cp -r "$tmp_dir/piper/"* "$install_dir/"
         chmod +x "$install_dir/piper" 2>/dev/null || true
-        spin_done "Piper ready"
+        spin_done "Piper ready (Text-to-Speech)"
     fi
     
     rm -rf "$tmp_dir"
@@ -412,7 +412,7 @@ main() {
     if [ "$VERSION" = "latest" ]; then
         VERSION=$(get_latest_version)
     fi
-    spin_done "Version $VERSION"
+    spin_done "Found version $VERSION"
     
     # Create temp directory
     local tmp_dir=$(mktemp -d)
