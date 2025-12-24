@@ -164,7 +164,9 @@ type Model struct {
 	Permission []string `json:"permission,omitempty"`
 	Root       string   `json:"root,omitempty"`
 	Parent     string   `json:"parent,omitempty"`
-	Type       string   `json:"type,omitempty"` // "llm" or "embedding"
+	Type       string   `json:"type,omitempty"`    // "llm" or "embedding"
+	Size       int64    `json:"size,omitempty"`    // Size in bytes
+	SizeGB     string   `json:"size_gb,omitempty"` // Human-readable size
 }
 
 // ModelListResponse represents the response for listing models

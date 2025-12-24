@@ -50,19 +50,34 @@ async function loadLoRAModels() {
         const select = document.getElementById('loraBaseModel');
         select.innerHTML = '';
         
-        const models = data.data || [];
+        // Filter for LLM models (exclude embedding models)
+        const models = (data.data || []).filter(m => 
+            !m.id.toLowerCase().includes('embed') && 
+            !m.id.toLowerCase().includes('minilm') &&
+            !m.id.toLowerCase().includes('bge')
+        );
+        
         if (models.length === 0) {
             select.innerHTML = '<option value="">No models available</option>';
             return;
         }
         
-        models.forEach((m, i) => {
+        models.forEach((m) => {
             const opt = document.createElement('option');
             opt.value = m.id;
             opt.textContent = m.id;
-            if (i === 0) opt.selected = true; // Auto-select first model
             select.appendChild(opt);
         });
+        
+        // Sync with currently active model (from Chat or global state)
+        if (typeof currentModel !== 'undefined' && currentModel) {
+            const option = Array.from(select.options).find(opt => opt.value === currentModel);
+            if (option) {
+                select.value = currentModel;
+            }
+        } else if (models.length > 0) {
+            select.value = models[0].id;
+        }
     } catch (e) {
         console.error('Failed to load models for LoRA:', e);
     }
@@ -90,6 +105,14 @@ async function registerLoRA() {
         return;
     }
     
+    // Show loading state on button
+    const btn = document.querySelector('[onclick="registerLoRA()"]');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<svg class="w-4 h-4 mr-1 animate-spin inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>Registering...';
+    }
+    
     try {
         const resp = await fetch('/v1/lora/adapters', {
             method: 'POST',
@@ -97,12 +120,22 @@ async function registerLoRA() {
             body: JSON.stringify({ name, path })
         });
         
-        if (!resp.ok) throw new Error('Failed to register adapter');
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to register adapter');
+        }
         
         hideRegisterLoRAModal();
         loadLoRAAdapters();
+        showAlert('LoRA adapter registered successfully!', { title: 'Success', type: 'success' });
     } catch (e) {
         showAlert('Failed to register adapter: ' + e.message, { title: 'Error', type: 'error' });
+    } finally {
+        // Restore button state
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
 }
 

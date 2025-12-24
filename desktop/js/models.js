@@ -76,29 +76,176 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
     }
 }
 
+// Track current model switch to cancel previous ones
+let currentSwitchController = null;
+let currentSwitchModelId = null;
+
+// Unified model switch function - use this from any page that has a model selector
+// This ensures the model is loaded and the footer/status is updated consistently
+async function switchToModel(modelId, sourceSelectId = null) {
+    if (!modelId) return;
+    
+    // Don't switch if already on this model
+    if (typeof currentModel !== 'undefined' && currentModel === modelId) {
+        console.log('[MODEL] Already on model:', modelId, '- skipping switch');
+        // Just sync the dropdowns and ensure footer shows ready
+        syncModelSelects(modelId, sourceSelectId);
+        updateSidebarStatus('ready', modelId);
+        return true;
+    }
+    
+    // Cancel any previous pending switch
+    if (currentSwitchController) {
+        console.log('[MODEL] Cancelling previous switch to:', currentSwitchModelId);
+        currentSwitchController.abort();
+    }
+    
+    // Create new abort controller for this switch
+    currentSwitchController = new AbortController();
+    currentSwitchModelId = modelId;
+    const thisController = currentSwitchController;
+    
+    console.log('[MODEL] switchToModel called:', modelId, 'from:', sourceSelectId);
+    
+    // Update footer status immediately to show loading
+    updateSidebarStatus('loading', modelId);
+    
+    // Sync selection across all model dropdowns
+    syncModelSelects(modelId, sourceSelectId);
+    
+    // Check if this switch was cancelled
+    if (thisController.signal.aborted) return false;
+    
+    // Check if model is already loaded (cached)
+    const isCached = await isModelCached(modelId);
+    
+    // Check if this switch was cancelled
+    if (thisController.signal.aborted) return false;
+    
+    const loadState = isCached ? 'switching' : 'loading';
+    
+    let loadingMs = 0;
+    const loadingStartTime = Date.now();
+    updateSidebarStatus(loadState, modelId);
+    
+    const loadingInterval = setInterval(() => {
+        // Stop updating if this switch was cancelled
+        if (thisController.signal.aborted) {
+            clearInterval(loadingInterval);
+            return;
+        }
+        loadingMs = Date.now() - loadingStartTime;
+        const seconds = (loadingMs / 1000).toFixed(1) + 's';
+        updateSidebarStatus(loadState, modelId, seconds);
+    }, 100);
+    
+    // Wait for model to be ready
+    const isReady = await waitForModelReady(modelId);
+    
+    clearInterval(loadingInterval);
+    
+    // Check if this switch was cancelled (another switch took over)
+    if (thisController.signal.aborted) {
+        console.log('[MODEL] Switch cancelled, ignoring result for:', modelId);
+        return false;
+    }
+    
+    // Clear the controller since we're done
+    if (currentSwitchController === thisController) {
+        currentSwitchController = null;
+        currentSwitchModelId = null;
+    }
+    
+    if (isReady) {
+        updateSidebarStatus('ready', modelId);
+        // Update global currentModel if it exists
+        if (typeof currentModel !== 'undefined') {
+            currentModel = modelId;
+        }
+    } else {
+        updateSidebarStatus('ready', modelId); // Still show as ready, may have issues
+    }
+    
+    return isReady;
+}
+
+// Sync model selection across all model dropdowns (keeps UI consistent)
+function syncModelSelects(modelId, sourceSelectId = null) {
+    const modelSelectIds = ['chatModel', 'agentModel', 'benchmarkModel', 'loraBaseModel', 'voiceAssistantModel'];
+    
+    for (const selectId of modelSelectIds) {
+        if (selectId === sourceSelectId) continue; // Skip the source
+        
+        const select = document.getElementById(selectId);
+        if (select) {
+            // Check if option exists
+            const option = Array.from(select.options).find(opt => opt.value === modelId);
+            if (option) {
+                select.value = modelId;
+            }
+        }
+    }
+}
+
+// Handle model change from Agent page
+async function handleAgentModelChange() {
+    const select = document.getElementById('agentModel');
+    console.log('[MODEL] Agent model change triggered:', select?.value);
+    if (select && select.value) {
+        await switchToModel(select.value, 'agentModel');
+    }
+}
+
+// Handle model change from Benchmark page
+async function handleBenchmarkModelChange() {
+    const select = document.getElementById('benchmarkModel');
+    console.log('[MODEL] Benchmark model change triggered:', select?.value);
+    if (select && select.value) {
+        await switchToModel(select.value, 'benchmarkModel');
+    }
+}
+
+// Handle model change from LoRA page
+async function handleLoraModelChange() {
+    const select = document.getElementById('loraBaseModel');
+    console.log('[MODEL] LoRA model change triggered:', select?.value);
+    if (select && select.value) {
+        await switchToModel(select.value, 'loraBaseModel');
+    }
+}
+
 // Cache for models to avoid redundant fetches
 let cachedModels = null;
 let lastModelsRefresh = 0;
-const MODELS_CACHE_TTL = 60000; // 1 minute cache
+const MODELS_CACHE_TTL = 30000; // 30 second cache
 
 // Refresh models from server (called once, results cached)
 async function refreshModelsCache(force = false) {
     const now = Date.now();
-    if (!force && cachedModels && (now - lastModelsRefresh) < MODELS_CACHE_TTL) {
+    
+    // Return cache if valid and not empty
+    if (!force && cachedModels && cachedModels.length > 0 && (now - lastModelsRefresh) < MODELS_CACHE_TTL) {
         return cachedModels;
     }
     
     try {
-        await fetch('/models/refresh', { method: 'POST' });
+        await fetch('/models/refresh', { method: 'POST', signal: AbortSignal.timeout(5000) });
     } catch (e) {
         console.warn('Failed to refresh models, using cached list:', e);
     }
     
-    const resp = await fetch('/models');
-    const data = await resp.json();
-    cachedModels = data.data || [];
-    lastModelsRefresh = now;
-    return cachedModels;
+    try {
+        const resp = await fetch('/models', { signal: AbortSignal.timeout(10000) });
+        const data = await resp.json();
+        if (data.data && data.data.length > 0) {
+            cachedModels = data.data;
+            lastModelsRefresh = now;
+        }
+    } catch (e) {
+        console.error('Failed to fetch models:', e);
+    }
+    
+    return cachedModels || [];
 }
 
 // Load models for chat
@@ -171,8 +318,24 @@ async function loadChatModels() {
 
 // Warm up a model in the background so it's ready for instant use
 async function warmModelInBackground(modelName) {
+    // Skip if no model specified
+    if (!modelName) {
+        console.log('[MODEL] warmModelInBackground: No model specified, skipping');
+        return;
+    }
+    
+    // Skip embedding models - they use a different API and don't need warming
+    const lowerName = modelName.toLowerCase();
+    if (lowerName.includes('embed') || lowerName.includes('bge') || lowerName.includes('minilm') || lowerName.includes('nomic')) {
+        console.log('[MODEL] warmModelInBackground: Skipping embedding model:', modelName);
+        return;
+    }
+    
     // Check if already cached - if so, skip warming
-    if (await isModelCached(modelName)) {
+    const cached = await isModelCached(modelName);
+    console.log('[MODEL] warmModelInBackground:', modelName, 'cached:', cached);
+    
+    if (cached) {
         updateSidebarStatus('ready', modelName);
         if (typeof updateCacheIndicator === 'function') {
             updateCacheIndicator(true);
@@ -223,6 +386,10 @@ async function loadEmbeddingModels() {
         });
         
         const select = document.getElementById('embeddingModel');
+        if (!select) {
+            // Element doesn't exist on this page, skip
+            return;
+        }
         select.innerHTML = '';
         
         if (models.length === 0) {
@@ -249,7 +416,10 @@ async function loadEmbeddingModels() {
     } catch (e) {
        
         console.error('Failed to load embedding models:', e);
-        document.getElementById('embeddingModel').innerHTML = '<option value="">Error loading models</option>';
+        const select = document.getElementById('embeddingModel');
+        if (select) {
+            select.innerHTML = '<option value="">Error loading models</option>';
+        }
     }
 }
 
@@ -405,13 +575,27 @@ function clearEmbedding() {
 
 // Check if a model is already cached (instant switch)
 async function isModelCached(modelName) {
+    if (!modelName) return false;
+    
     try {
         const resp = await fetch('/v1/cache/stats', { signal: AbortSignal.timeout(2000) });
-        if (!resp.ok) return false;
+        if (!resp.ok) {
+            console.log('[MODEL] isModelCached: cache/stats returned', resp.status);
+            return false;
+        }
         const stats = await resp.json();
+        
+        // Check both model_cache and loaded_models
         const cachedModels = stats.model_cache?.cached_models || [];
-        return cachedModels.some(m => m.model_id === modelName);
+        const loadedModels = stats.loaded_models || [];
+        
+        const inCache = cachedModels.some(m => m.model_id === modelName || m.id === modelName);
+        const isLoaded = loadedModels.some(m => m === modelName || m.model_id === modelName);
+        
+        console.log('[MODEL] isModelCached:', modelName, 'inCache:', inCache, 'isLoaded:', isLoaded);
+        return inCache || isLoaded;
     } catch (e) {
+        console.log('[MODEL] isModelCached error:', e.message);
         return false;
     }
 }
@@ -520,6 +704,9 @@ async function handleModelChange() {
     }
     
     currentModel = newModel;
+    
+    // Sync selection across other model dropdowns
+    syncModelSelects(newModel, 'chatModel');
     
     // Hide cache indicator when switching models (new model needs to warm up)
     if (typeof updateCacheIndicator === 'function') {

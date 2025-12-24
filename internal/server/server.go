@@ -52,6 +52,7 @@ type Server struct {
 	startTime            time.Time
 	downloadProgress     map[string]*DownloadProgress
 	downloadMutex        sync.RWMutex
+	downloadCancelFuncs  map[string]context.CancelFunc // Cancel functions for active downloads
 	exportProgress       map[string]*ExportProgress
 	exportMutex          sync.RWMutex
 	modelCache           *inference.ModelCache
@@ -91,7 +92,9 @@ type DownloadProgress struct {
 	BytesTotal int64   `json:"bytes_total"`
 	BytesDone  int64   `json:"bytes_done"`
 	Percent    float64 `json:"percent"`
-	Status     string  `json:"status"` // "downloading", "complete", "failed"
+	Speed      float64 `json:"speed"`      // bytes per second
+	StartedAt  int64   `json:"started_at"` // unix timestamp
+	Status     string  `json:"status"`     // "downloading", "complete", "failed"
 	Error      string  `json:"error,omitempty"`
 }
 
@@ -263,6 +266,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		cache:                responseCache,
 		startTime:            time.Now(),
 		downloadProgress:     make(map[string]*DownloadProgress),
+		downloadCancelFuncs:  make(map[string]context.CancelFunc),
 		exportProgress:       make(map[string]*ExportProgress),
 		modelCache:           createModelCache(cfg), // Use factory function for performance tuning
 		rateLimiter:          rateLimiter,
@@ -497,6 +501,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/models/delete", s.rateLimiter.Middleware(s.handleDeleteModel))
 	mux.HandleFunc("/v1/models/download", s.rateLimiter.Middleware(s.handleDownloadModel))
 	mux.HandleFunc("/v1/models/download/progress", s.handleDownloadProgress)
+	mux.HandleFunc("/v1/models/download/cancel", s.handleCancelDownload)
 
 	// Inference endpoints with strict rate limiting
 	mux.HandleFunc("/v1/chat/completions", s.inferenceRateLimiter.Middleware(s.handleChatCompletions))
@@ -2128,10 +2133,24 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		hf := models.NewHuggingFaceClient()
 		modelInfo, err := hf.GetModelInfo(req.Repository)
 		if err == nil {
+			quantUpper := strings.ToUpper(req.Quantization)
+			// Extract base quant type (e.g., "Q4" from "Q4_K_M")
+			baseQuant := quantUpper
+			if idx := strings.Index(quantUpper, "_"); idx > 0 {
+				baseQuant = quantUpper[:idx]
+			}
+
 			// Find GGUF file with matching quantization
 			for _, sibling := range modelInfo.Siblings {
-				if strings.HasSuffix(sibling.Filename, ".gguf") &&
-					strings.Contains(strings.ToUpper(sibling.Filename), req.Quantization) {
+				if !strings.HasSuffix(sibling.Filename, ".gguf") {
+					continue
+				}
+				fnameUpper := strings.ToUpper(sibling.Filename)
+				// Try exact match first, then base quant match
+				if strings.Contains(fnameUpper, quantUpper) ||
+					strings.Contains(fnameUpper, "-"+baseQuant+".") ||
+					strings.Contains(fnameUpper, "_"+baseQuant+".") ||
+					strings.Contains(fnameUpper, "-"+baseQuant+"_") {
 					req.FileName = sibling.Filename
 					break
 				}
@@ -2144,8 +2163,34 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if model already exists
+	destFileName := filepath.Base(req.FileName)
+	if !strings.HasSuffix(destFileName, ".gguf") {
+		destFileName += ".gguf"
+	}
+	destPath := filepath.Join(s.config.ModelsDir, destFileName)
+	if _, err := os.Stat(destPath); err == nil {
+		// Model already exists
+		response := map[string]interface{}{
+			"success":   false,
+			"exists":    true,
+			"message":   fmt.Sprintf("Model %s already exists", destFileName),
+			"file_name": destFileName,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Error encoding response: %v", err)
+		}
+		return
+	}
+
+	// Create cancellable context for this download
+	ctx, cancel := context.WithCancel(context.Background())
+	s.downloadMutex.Lock()
+	s.downloadCancelFuncs[req.FileName] = cancel
+	s.downloadMutex.Unlock()
+
 	// Start download in background
-	go s.downloadModelAsync(req.Repository, req.FileName)
+	go s.downloadModelAsync(ctx, req.Repository, req.FileName)
 
 	response := map[string]interface{}{
 		"success": true,
@@ -2158,17 +2203,26 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) downloadModelAsync(repository, fileName string) {
+func (s *Server) downloadModelAsync(ctx context.Context, repository, fileName string) {
 	// Ensure fileName doesn't have double .gguf extension
 	fileName = strings.TrimSuffix(fileName, ".gguf") + ".gguf"
+
+	// Clean up cancel func when done
+	defer func() {
+		s.downloadMutex.Lock()
+		delete(s.downloadCancelFuncs, fileName)
+		s.downloadMutex.Unlock()
+	}()
 
 	log.Printf("Starting download: %s/%s", repository, fileName)
 
 	// Initialize progress tracking
+	startTime := time.Now()
 	s.downloadMutex.Lock()
 	s.downloadProgress[fileName] = &DownloadProgress{
-		FileName: fileName,
-		Status:   "downloading",
+		FileName:  fileName,
+		Status:    "downloading",
+		StartedAt: startTime.Unix(),
 	}
 	s.downloadMutex.Unlock()
 
@@ -2251,6 +2305,20 @@ func (s *Server) downloadModelAsync(repository, fileName string) {
 	lastLog := time.Now()
 
 	for {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			log.Printf("Download cancelled: %s", fileName)
+			out.Close()
+			os.Remove(destPath) // Clean up partial file
+			s.downloadMutex.Lock()
+			s.downloadProgress[fileName].Status = "cancelled"
+			s.downloadProgress[fileName].Error = "Download cancelled by user"
+			s.downloadMutex.Unlock()
+			return
+		default:
+		}
+
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
 			_, writeErr := out.Write(buffer[:n])
@@ -2264,11 +2332,16 @@ func (s *Server) downloadModelAsync(repository, fileName string) {
 			}
 			downloaded += int64(n)
 
-			// Update progress
+			// Update progress with speed calculation
 			s.downloadMutex.Lock()
 			s.downloadProgress[fileName].BytesDone = downloaded
 			if total > 0 {
 				s.downloadProgress[fileName].Percent = float64(downloaded) / float64(total) * 100
+			}
+			// Calculate speed based on elapsed time since start
+			elapsed := time.Since(startTime).Seconds()
+			if elapsed > 0 {
+				s.downloadProgress[fileName].Speed = float64(downloaded) / elapsed
 			}
 			s.downloadMutex.Unlock()
 
@@ -2325,6 +2398,59 @@ func (s *Server) handleDownloadProgress(w http.ResponseWriter, r *http.Request) 
 	if err := json.NewEncoder(w).Encode(progress); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+}
+
+// handleCancelDownload cancels an active download
+func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		FileName string `json:"file_name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	s.downloadMutex.Lock()
+	// Find and cancel matching download
+	canceled := false
+	for fileName, cancelFunc := range s.downloadCancelFuncs {
+		// Match by exact name or if request is empty (cancel all)
+		if req.FileName == "" || fileName == req.FileName || strings.Contains(fileName, req.FileName) {
+			cancelFunc()
+			delete(s.downloadCancelFuncs, fileName)
+			// Update progress status
+			if progress, ok := s.downloadProgress[fileName]; ok {
+				progress.Status = "cancelled"
+				progress.Error = "Download cancelled by user"
+			}
+			canceled = true
+			log.Printf("Cancelled download: %s", fileName)
+			if req.FileName != "" {
+				break // Only cancel specific file
+			}
+		}
+	}
+	s.downloadMutex.Unlock()
+
+	response := map[string]interface{}{
+		"success":   canceled,
+		"cancelled": canceled,
+	}
+	if !canceled && req.FileName != "" {
+		response["message"] = "No active download found for: " + req.FileName
+	} else if canceled {
+		response["message"] = "Download cancelled"
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 // handleModelCatalog returns the curated model catalog

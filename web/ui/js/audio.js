@@ -7,6 +7,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 let ttsAudioBlob = null;
+let whisperWarmedUp = false;
 
 // Initialize audio tab when switched to
 function initAudioTab() {
@@ -14,6 +15,88 @@ function initAudioTab() {
     loadVoiceAssistantModels();
     loadAvailableVoices();
     loadAvailableWhisperModels();
+    
+    // Pre-warm whisper in background for faster first transcription
+    if (!whisperWarmedUp) {
+        preWarmWhisper();
+    }
+}
+
+// Pre-warm whisper by doing a tiny transcription in the background
+async function preWarmWhisper() {
+    try {
+        const model = document.getElementById('voiceAssistantWhisper')?.value || 'tiny.en';
+        console.log('[AUDIO] Pre-warming whisper model:', model);
+        
+        // Create a tiny silent audio blob (100ms of silence)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const buffer = audioContext.createBuffer(1, 1600, 16000); // 100ms at 16kHz
+        const wavBlob = await audioBufferToWav(buffer);
+        
+        const formData = new FormData();
+        formData.append('file', new File([wavBlob], 'warmup.wav', { type: 'audio/wav' }));
+        formData.append('model', model);
+        
+        // Fire and forget - don't block UI
+        fetch('/v1/audio/transcriptions', {
+            method: 'POST',
+            body: formData
+        }).then(() => {
+            console.log('[AUDIO] Whisper pre-warmed successfully');
+            whisperWarmedUp = true;
+        }).catch(e => {
+            console.log('[AUDIO] Whisper pre-warm failed (will warm on first use):', e.message);
+        });
+    } catch (e) {
+        console.log('[AUDIO] Could not pre-warm whisper:', e.message);
+    }
+}
+
+// Convert AudioBuffer to WAV blob
+function audioBufferToWav(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    const dataLength = buffer.length * blockAlign;
+    const bufferLength = 44 + dataLength;
+    
+    const arrayBuffer = new ArrayBuffer(bufferLength);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, bufferLength - 8, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+    
+    // Write audio data (silence)
+    const offset = 44;
+    const channelData = buffer.getChannelData(0);
+    for (let i = 0; i < buffer.length; i++) {
+        const sample = Math.max(-1, Math.min(1, channelData[i]));
+        view.setInt16(offset + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+    }
+    
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
+}
+
+function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
 }
 
 // Global voice data for filtering
@@ -187,7 +270,9 @@ async function downloadVoice(name) {
         if (btn) btn.innerHTML = '<span class="animate-pulse">⏳</span>';
     }
     
-    showAlert(`Downloading voice: ${formatVoiceName(name)}... This may take a moment.`, { title: 'Downloading', type: 'info' });
+    // Show download modal with progress animation
+    const displayName = formatVoiceName(name);
+    showVoiceDownloadModal(displayName);
     
     try {
         const resp = await fetch('/v1/audio/download', {
@@ -201,9 +286,11 @@ async function downloadVoice(name) {
             throw new Error(err.error?.message || 'Download failed');
         }
         
-        showAlert(`Voice "${formatVoiceName(name)}" downloaded successfully!`, { title: 'Success', type: 'success' });
+        hideVoiceDownloadModal();
+        showAlert(`Voice "${displayName}" downloaded successfully!`, { title: 'Success', type: 'success' });
         loadAvailableVoices(); // Refresh the list
     } catch (e) {
+        hideVoiceDownloadModal();
         showAlert(`Failed to download voice: ${e.message}`, { title: 'Error', type: 'error' });
         // Remove downloading state on error
         if (voiceCard) {
@@ -212,6 +299,56 @@ async function downloadVoice(name) {
             if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
         }
     }
+}
+
+// Voice download modal helpers
+function showVoiceDownloadModal(voiceName) {
+    // Remove any existing modal
+    hideVoiceDownloadModal();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'voiceDownloadModal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-dialog" style="max-width: 400px;">
+            <div class="modal-dialog-header">
+                <div class="modal-dialog-icon info">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                </div>
+                <div class="modal-dialog-title">Downloading Voice</div>
+            </div>
+            <div class="text-center py-4">
+                <p class="text-sm mb-3">Downloading <strong>${voiceName}</strong> voice...</p>
+                <div class="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                    <div class="h-full bg-accent rounded-full animate-pulse" style="width: 100%; animation: voicePulse 1.5s ease-in-out infinite;"></div>
+                </div>
+                <p class="text-xs text-secondary mt-3">This usually takes a few seconds</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    // Add animation style if not exists
+    if (!document.getElementById('voicePulseStyle')) {
+        const style = document.createElement('style');
+        style.id = 'voicePulseStyle';
+        style.textContent = `
+            @keyframes voicePulse {
+                0%, 100% { opacity: 0.4; width: 30%; }
+                50% { opacity: 1; width: 100%; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+function hideVoiceDownloadModal() {
+    const modal = document.getElementById('voiceDownloadModal');
+    if (modal) modal.remove();
 }
 
 // ========================================
@@ -358,7 +495,8 @@ async function downloadWhisperModel(name) {
         }
     }
     
-    showAlert(`Downloading whisper model: ${name}... This may take a while depending on model size.`, { title: 'Downloading', type: 'info' });
+    // Show download modal with progress animation
+    showWhisperDownloadModal(name);
     
     try {
         const resp = await fetch('/v1/audio/download', {
@@ -372,10 +510,12 @@ async function downloadWhisperModel(name) {
             throw new Error(err.error?.message || 'Download failed');
         }
         
+        hideWhisperDownloadModal();
         showAlert(`Whisper model "${name}" downloaded successfully!`, { title: 'Success', type: 'success' });
         loadAvailableWhisperModels();
         refreshAudioStatus();
     } catch (e) {
+        hideWhisperDownloadModal();
         showAlert(`Failed to download model: ${e.message}`, { title: 'Error', type: 'error' });
         if (card) {
             const btn = card.querySelector('button');
@@ -385,6 +525,54 @@ async function downloadWhisperModel(name) {
             }
         }
     }
+}
+
+// Whisper download modal helpers
+function showWhisperDownloadModal(modelName) {
+    hideWhisperDownloadModal();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'whisperDownloadModal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-dialog" style="max-width: 400px;">
+            <div class="modal-dialog-header">
+                <div class="modal-dialog-icon info">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                </div>
+                <div class="modal-dialog-title">Downloading Whisper Model</div>
+            </div>
+            <div class="text-center py-4">
+                <p class="text-sm mb-3">Downloading <strong>${modelName}</strong> model...</p>
+                <div class="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                    <div class="h-full bg-accent rounded-full" style="animation: whisperPulse 1.5s ease-in-out infinite;"></div>
+                </div>
+                <p class="text-xs text-secondary mt-3">Larger models may take a minute or two</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    if (!document.getElementById('whisperPulseStyle')) {
+        const style = document.createElement('style');
+        style.id = 'whisperPulseStyle';
+        style.textContent = `
+            @keyframes whisperPulse {
+                0%, 100% { opacity: 0.4; width: 30%; }
+                50% { opacity: 1; width: 100%; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+function hideWhisperDownloadModal() {
+    const modal = document.getElementById('whisperDownloadModal');
+    if (modal) modal.remove();
 }
 
 function onVoiceVoiceChange() {
@@ -419,7 +607,7 @@ function onVoiceWhisperChange() {
 
 function checkWhisperModelCompatibility() {
     const lang = document.getElementById('voiceAssistantLang')?.value || 'en';
-    const model = document.getElementById('voiceAssistantWhisper')?.value || 'base';
+    const model = document.getElementById('voiceAssistantWhisper')?.value || 'tiny.en';
     const hint = document.getElementById('whisperModelHint');
     
     // Show warning if non-English language selected with English-only model
@@ -487,13 +675,19 @@ async function loadVoiceAssistantModels() {
             select.appendChild(opt);
         });
         
-        // Try to restore saved selection, otherwise auto-select first
-        const saved = localStorage.getItem('voiceAssistantModel');
-        if (saved && llmModels.some(m => m.id === saved)) {
-            select.value = saved;
-        } else if (llmModels.length > 0) {
-            select.value = llmModels[0].id;
-            localStorage.setItem('voiceAssistantModel', llmModels[0].id);
+        // Sync with currently active model (from Chat or global state)
+        if (typeof currentModel !== 'undefined' && currentModel && llmModels.some(m => m.id === currentModel)) {
+            select.value = currentModel;
+            localStorage.setItem('voiceAssistantModel', currentModel);
+        } else {
+            // Try to restore saved selection, otherwise auto-select first
+            const saved = localStorage.getItem('voiceAssistantModel');
+            if (saved && llmModels.some(m => m.id === saved)) {
+                select.value = saved;
+            } else if (llmModels.length > 0) {
+                select.value = llmModels[0].id;
+                localStorage.setItem('voiceAssistantModel', llmModels[0].id);
+            }
         }
     } catch (e) {
         console.error('Failed to load voice assistant models:', e);
@@ -501,10 +695,14 @@ async function loadVoiceAssistantModels() {
     }
 }
 
-function onVoiceModelChange() {
+async function onVoiceModelChange() {
     const select = document.getElementById('voiceAssistantModel');
     if (select && select.value) {
         localStorage.setItem('voiceAssistantModel', select.value);
+        // Switch model and update footer/status like other pages
+        if (typeof switchToModel === 'function') {
+            await switchToModel(select.value, 'voiceAssistantModel');
+        }
     }
 }
 
@@ -785,6 +983,16 @@ function stopRecording() {
     }
 }
 
+// Abort controller for STT
+let sttAbortController = null;
+
+function cancelTranscription() {
+    if (sttAbortController) {
+        sttAbortController.abort();
+        sttAbortController = null;
+    }
+}
+
 async function transcribeAudio() {
     if (!audioFile) {
         showAlert('Please select or record an audio file first', { title: 'No Audio', type: 'warning' });
@@ -801,14 +1009,34 @@ async function transcribeAudio() {
     }
     
     const btn = document.getElementById('transcribeBtn');
+    const cancelBtn = document.getElementById('cancelTranscribeBtn');
     btn.disabled = true;
-    btn.innerHTML = '<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Transcribing...';
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
+    
+    // Create abort controller
+    sttAbortController = new AbortController();
+    
+    // Progress indicator for slow first-time loads
+    let transcribeSeconds = 0;
+    const progressInterval = setInterval(() => {
+        transcribeSeconds++;
+        if (transcribeSeconds <= 5) {
+            btn.innerHTML = '<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Loading Whisper...';
+        } else {
+            btn.innerHTML = `<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Transcribing... ${transcribeSeconds}s`;
+        }
+    }, 1000);
+    
+    btn.innerHTML = '<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Loading Whisper...';
     
     try {
         const resp = await fetch('/v1/audio/transcriptions', {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: sttAbortController.signal
         });
+        
+        clearInterval(progressInterval);
         
         if (!resp.ok) {
             const err = await resp.json();
@@ -819,10 +1047,18 @@ async function transcribeAudio() {
         document.getElementById('transcriptionText').textContent = data.text;
         document.getElementById('transcriptionResult').classList.remove('hidden');
     } catch (e) {
-        showAlert('Transcription failed: ' + e.message, { title: 'Error', type: 'error' });
+        clearInterval(progressInterval);
+        if (e.name === 'AbortError') {
+            showAlert('Transcription cancelled', { title: 'Cancelled', type: 'info' });
+        } else {
+            showAlert('Transcription failed: ' + e.message, { title: 'Error', type: 'error' });
+        }
     } finally {
+        clearInterval(progressInterval);
+        sttAbortController = null;
         btn.disabled = false;
         btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path></svg> Transcribe';
+        if (cancelBtn) cancelBtn.classList.add('hidden');
     }
 }
 
@@ -910,7 +1146,7 @@ async function transcribeChatVoice(audioBlob) {
     
     try {
         // Use Chat tab voice settings
-        const whisperModel = document.getElementById('chatWhisperModel')?.value || localStorage.getItem('chatWhisperModel') || 'base';
+        const whisperModel = document.getElementById('chatWhisperModel')?.value || localStorage.getItem('chatWhisperModel') || 'tiny.en';
         const language = document.getElementById('chatVoiceLang')?.value || localStorage.getItem('chatVoiceLang') || 'en';
         const formData = new FormData();
         formData.append('file', new File([audioBlob], 'voice.webm', { type: audioBlob.type }));
@@ -1031,6 +1267,16 @@ function updateTTSSpeedLabel() {
     document.getElementById('ttsSpeedLabel').textContent = parseFloat(val).toFixed(1) + 'x';
 }
 
+// Abort controller for TTS
+let ttsAbortController = null;
+
+function cancelSpeechGeneration() {
+    if (ttsAbortController) {
+        ttsAbortController.abort();
+        ttsAbortController = null;
+    }
+}
+
 async function generateSpeech() {
     const text = document.getElementById('ttsText').value.trim();
     if (!text) {
@@ -1042,7 +1288,20 @@ async function generateSpeech() {
     const speed = parseFloat(document.getElementById('ttsSpeed').value);
     
     const btn = document.getElementById('speakBtn');
+    const cancelBtn = document.getElementById('cancelSpeakBtn');
     btn.disabled = true;
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
+    
+    // Create abort controller
+    ttsAbortController = new AbortController();
+    
+    // Progress indicator
+    let genSeconds = 0;
+    const progressInterval = setInterval(() => {
+        genSeconds++;
+        btn.innerHTML = `<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating... ${genSeconds}s`;
+    }, 1000);
+    
     btn.innerHTML = '<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...';
     
     try {
@@ -1054,8 +1313,11 @@ async function generateSpeech() {
                 voice: voice,
                 speed: speed,
                 response_format: 'wav'
-            })
+            }),
+            signal: ttsAbortController.signal
         });
+        
+        clearInterval(progressInterval);
         
         if (!resp.ok) {
             const err = await resp.json();
@@ -1070,10 +1332,18 @@ async function generateSpeech() {
         document.getElementById('ttsPlayer').classList.remove('hidden');
         audioEl.play();
     } catch (e) {
-        showAlert('Speech generation failed: ' + e.message, { title: 'Error', type: 'error' });
+        clearInterval(progressInterval);
+        if (e.name === 'AbortError') {
+            showAlert('Speech generation cancelled', { title: 'Cancelled', type: 'info' });
+        } else {
+            showAlert('Speech generation failed: ' + e.message, { title: 'Error', type: 'error' });
+        }
     } finally {
+        clearInterval(progressInterval);
+        ttsAbortController = null;
         btn.disabled = false;
         btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg> Generate Speech';
+        if (cancelBtn) cancelBtn.classList.add('hidden');
     }
 }
 
@@ -1154,7 +1424,7 @@ async function processVoiceChat(audioBlob) {
     try {
         // Step 1: Transcribe audio
         statusEl.textContent = 'Transcribing...';
-        const model = document.getElementById('voiceAssistantWhisper')?.value || 'base';
+        const model = document.getElementById('voiceAssistantWhisper')?.value || 'tiny.en';
         const language = document.getElementById('voiceAssistantLang')?.value || 'en';
         const formData = new FormData();
         formData.append('file', new File([audioBlob], 'voice.webm', { type: audioBlob.type }));
@@ -1464,6 +1734,7 @@ let jarvisRecording = false;
 let jarvisSilenceTimer = null;
 let jarvisChunks = [];
 let jarvisRecorder = null;
+let jarvisAbortController = null;  // For cancelling in-flight requests
 
 // VAD Configuration - balanced for natural speech with quick response
 const VAD_CONFIG = {
@@ -1569,6 +1840,12 @@ async function startJarvisMode() {
 // Stop continuous listening mode
 function stopJarvisMode() {
     if (!jarvisMode) return;
+    
+    // Abort any in-flight requests
+    if (jarvisAbortController) {
+        jarvisAbortController.abort();
+        jarvisAbortController = null;
+    }
     
     // Stop VAD
     if (jarvisVADInterval) {
@@ -1802,10 +2079,18 @@ function stopJarvisRecording() {
 // Process recorded voice
 async function processJarvisVoice(audioBlob) {
     const conversationEl = document.getElementById('voiceConversation');
-    let transcribeController = null;
-    let chatController = null;
+    
+    // Create abort controller for this session
+    jarvisAbortController = new AbortController();
+    const signal = jarvisAbortController.signal;
     
     try {
+        // Check if mode was stopped
+        if (!jarvisMode) {
+            console.log('[JARVIS] Mode stopped, aborting processing');
+            return;
+        }
+        
         // Step 1: Transcribe
         updateJarvisState('Transcribing...');
         
@@ -1822,31 +2107,46 @@ async function processJarvisVoice(audioBlob) {
             formData.append('language', language);
         }
         
-        // Add timeout for transcription (60 seconds for slow machines)
-        transcribeController = new AbortController();
-        const transcribeTimeout = setTimeout(() => {
-            console.warn('[JARVIS] Transcription timeout after 60s');
-            transcribeController.abort();
-        }, 60000);
+        // Progress indicator
+        let transcribeSeconds = 0;
+        const transcribeInterval = setInterval(() => {
+            if (signal.aborted) {
+                clearInterval(transcribeInterval);
+                return;
+            }
+            transcribeSeconds++;
+            if (transcribeSeconds <= 10) {
+                updateJarvisState('Loading Whisper...');
+            } else {
+                updateJarvisState(`Transcribing... ${transcribeSeconds}s`);
+            }
+        }, 1000);
         
-        updateJarvisState('Transcribing...');
+        updateJarvisState('Loading Whisper...');
         
         let transcribeResp;
         try {
             transcribeResp = await fetch('/v1/audio/transcriptions', {
                 method: 'POST',
                 body: formData,
-                signal: transcribeController.signal
+                signal: signal
             });
         } catch (fetchError) {
-            clearTimeout(transcribeTimeout);
+            clearInterval(transcribeInterval);
             if (fetchError.name === 'AbortError') {
-                throw fetchError; // Re-throw abort errors
+                console.log('[JARVIS] Transcription aborted');
+                return; // Just return, don't throw
             }
             console.error('[JARVIS] Network error during transcription:', fetchError);
             throw new Error('Transcription failed: Network error');
         }
-        clearTimeout(transcribeTimeout);
+        clearInterval(transcribeInterval);
+        
+        // Check if mode was stopped during transcription
+        if (!jarvisMode || signal.aborted) {
+            console.log('[JARVIS] Mode stopped during transcription, aborting');
+            return;
+        }
         
         if (!transcribeResp.ok) {
             const errorText = await transcribeResp.text().catch(() => '');
@@ -1855,6 +2155,7 @@ async function processJarvisVoice(audioBlob) {
         }
         
         const transcription = await transcribeResp.json();
+        console.log('[JARVIS] Transcription result:', transcription.text);
         console.log('[JARVIS] Raw transcription:', transcription.text);
         
         // Clean up transcription - remove timestamps and Whisper artifacts
@@ -1886,6 +2187,12 @@ async function processJarvisVoice(audioBlob) {
         // Step 2: Get AI response
         updateJarvisState('Processing...');
         
+        // Check if mode was stopped
+        if (!jarvisMode || signal.aborted) {
+            console.log('[JARVIS] Mode stopped before chat, aborting');
+            return;
+        }
+        
         const selectedModel = document.getElementById('voiceAssistantModel')?.value;
         if (!selectedModel) throw new Error('No model selected');
         
@@ -1897,13 +2204,8 @@ async function processJarvisVoice(audioBlob) {
             ...voiceChatHistory.slice(-2)  // Minimal history for speed
         ];
         
-        // Add timeout for chat (45 seconds max)
+        // Get AI response
         updateJarvisState('Thinking...');
-        const chatController = new AbortController();
-        const chatTimeout = setTimeout(() => {
-            console.warn('[JARVIS] Chat timeout after 45s');
-            chatController.abort();
-        }, 45000);
         
         let chatResp;
         try {
@@ -1919,17 +2221,22 @@ async function processJarvisVoice(audioBlob) {
                     top_p: 0.85,
                     repeat_penalty: 1.0       // Disable for speed
                 }),
-                signal: chatController.signal
+                signal: signal
             });
         } catch (fetchError) {
-            clearTimeout(chatTimeout);
             if (fetchError.name === 'AbortError') {
-                throw fetchError;
+                console.log('[JARVIS] Chat aborted');
+                return;
             }
             console.error('[JARVIS] Network error during chat:', fetchError);
             throw new Error('Chat failed: Network error');
         }
-        clearTimeout(chatTimeout);
+        
+        // Check if mode was stopped
+        if (!jarvisMode || signal.aborted) {
+            console.log('[JARVIS] Mode stopped after chat, aborting');
+            return;
+        }
         
         if (!chatResp.ok) {
             const errText = await chatResp.text();

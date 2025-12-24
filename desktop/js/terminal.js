@@ -228,7 +228,8 @@ async function handleOffgridCommand(args) {
                     if (eLine.startsWith('event:')) {
                         eventType = eLine.substring(6).trim();
                     } else if (eLine.startsWith('data:')) {
-                        dataLines.push(eLine.substring(5).trim());
+                        // Don't trim - preserve \r for progress bar handling
+                        dataLines.push(eLine.substring(5));
                     }
                 }
                 
@@ -443,7 +444,7 @@ let terminalProgressLine = null;
 function addTerminalRawOutput(text) {
     const pre = document.getElementById('terminalPre');
     
-    // Simple escape function
+    // Simple escape function for innerHTML
     function esc(str) {
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
@@ -454,27 +455,36 @@ function addTerminalRawOutput(text) {
     // Combine with any buffered text
     let currentText = terminalOutputBuffer + processedText;
     
-    // Check for carriage return at the start (progress update pattern)
+    // Check for progress bar pattern: starts with \r or contains [====>  ] style bars
     // This handles "\r  Progress: XX%" style updates
-    if (currentText.includes('\r') && !currentText.includes('\n')) {
-        // This is a progress update - show in real-time
-        const parts = currentText.split('\r');
-        const lastPart = parts[parts.length - 1];
-        const clean = stripAnsiCodes(lastPart);
+    const isProgressUpdate = currentText.includes('\r') || 
+        /\[=*>?\s*\]\s*\d+\.?\d*%/.test(currentText);
+    
+    if (isProgressUpdate && !currentText.includes('\n')) {
+        // This is a progress update - show in real-time, updating in place
+        // Take the last part after any \r
+        let progressText = currentText;
+        if (currentText.includes('\r')) {
+            const parts = currentText.split('\r');
+            progressText = parts[parts.length - 1];
+        }
+        const clean = stripAnsiCodes(progressText);
         
         if (clean.trim()) {
             // Create or update progress line element
             if (!terminalProgressLine) {
-                terminalProgressLine = document.createElement('span');
+                terminalProgressLine = document.createElement('div');
                 terminalProgressLine.className = 'terminal-progress';
+                terminalProgressLine.style.cssText = 'font-family: monospace; white-space: pre;';
                 pre.appendChild(terminalProgressLine);
             }
-            terminalProgressLine.textContent = esc(clean);
+            // Use textContent (no escaping needed - textContent auto-escapes)
+            terminalProgressLine.textContent = clean;
             scrollTerminalToBottom();
         }
         
-        // Keep the last part in buffer (will be replaced by next \r)
-        terminalOutputBuffer = currentText;
+        // Keep buffer empty for progress lines - they overwrite themselves
+        terminalOutputBuffer = '';
         return;
     }
     

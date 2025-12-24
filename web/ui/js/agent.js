@@ -6,19 +6,56 @@ let agentAbortController = null;
 
 async function loadAgentModels() {
     try {
-        const resp = await fetch('/v1/models');
+        // Fetch models directly to ensure we always get fresh data
+        const resp = await fetch('/models');
         const data = await resp.json();
+        const allModels = data.data || [];
+        
         const select = document.getElementById('agentModel');
+        if (!select) {
+            console.error('[AGENT] agentModel select not found');
+            return;
+        }
+        
         select.innerHTML = '';
-        data.data.forEach((m, i) => {
+        
+        // Filter for LLM models (exclude embedding models)
+        const llmModels = allModels.filter(m => 
+            m.type !== 'embedding' &&
+            !m.id.toLowerCase().includes('embed') && 
+            !m.id.toLowerCase().includes('minilm') &&
+            !m.id.toLowerCase().includes('bge')
+        );
+        
+        if (llmModels.length === 0) {
+            select.innerHTML = '<option value="">No models available</option>';
+            return;
+        }
+        
+        llmModels.forEach((m) => {
             const opt = document.createElement('option');
             opt.value = m.id;
             opt.textContent = m.id;
-            if (i === 0) opt.selected = true; // Auto-select first model
             select.appendChild(opt);
         });
+        
+        // Sync with currently active model (from Chat or global state)
+        if (typeof currentModel !== 'undefined' && currentModel) {
+            const option = Array.from(select.options).find(opt => opt.value === currentModel);
+            if (option) {
+                select.value = currentModel;
+            }
+        } else if (llmModels.length > 0) {
+            select.value = llmModels[0].id;
+        }
+        
+        console.log('[AGENT] Loaded', llmModels.length, 'models, selected:', select.value);
     } catch (e) {
         console.error('Failed to load agent models:', e);
+        const select = document.getElementById('agentModel');
+        if (select) {
+            select.innerHTML = '<option value="">Error loading models</option>';
+        }
     }
 }
 
@@ -109,16 +146,16 @@ async function loadMCPServers() {
 }
 
 async function removeMCPServer(name) {
-    if (!confirm(`Are you sure you want to remove the MCP server "${name}"?`)) return;
-    
-    try {
-        // Note: DELETE endpoint not yet implemented in backend, so this is a placeholder
-        // In a real implementation, we would call:
-        // await fetch('/v1/agents/mcp?name=' + name, { method: 'DELETE' });
-        showAlert('Removing MCP servers is not yet supported in this version.', { type: 'info' });
-    } catch (e) {
-        showAlert('Failed to remove server: ' + e.message, { type: 'error' });
-    }
+    showConfirm(`Are you sure you want to remove the MCP server "${name}"?`, async () => {
+        try {
+            // Note: DELETE endpoint not yet implemented in backend, so this is a placeholder
+            // In a real implementation, we would call:
+            // await fetch('/v1/agents/mcp?name=' + name, { method: 'DELETE' });
+            showAlert('Removing MCP servers is not yet supported in this version.', { type: 'info' });
+        } catch (e) {
+            showAlert('Failed to remove server: ' + e.message, { type: 'error' });
+        }
+    }, { title: 'Remove MCP Server?', type: 'warning', confirmText: 'Remove', cancelText: 'Cancel' });
 }
 
 async function runAgent() {
@@ -210,7 +247,7 @@ function updateAgentStatus(text, state) {
     el.textContent = text;
     el.className = 'text-xs';
     if (state === 'running') {
-        el.classList.add('text-amber-400');
+        el.classList.add('text-emerald-400'); // Green for running
     } else if (state === 'success') {
         el.classList.add('text-emerald-400');
     } else if (state === 'error') {

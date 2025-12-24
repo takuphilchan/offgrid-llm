@@ -84,6 +84,16 @@ async function searchModels() {
             return;
         }
 
+        // Get list of installed models to check for duplicates
+        let installedModels = [];
+        try {
+            const installedResp = await fetch('/models');
+            const installedData = await installedResp.json();
+            installedModels = (installedData.data || []).map(m => m.id.toLowerCase());
+        } catch (e) {
+            // Ignore - we'll just show all as downloadable
+        }
+
         results.innerHTML = '';
         models.slice(0, 10).forEach(model => {
             const div = document.createElement('div');
@@ -93,13 +103,26 @@ async function searchModels() {
             const quantInfo = model.best_quant ? ` · ${model.best_quant}` : '';
             const escapedCmd = downloadCmd.replace(/'/g, "\\'");
             
+            // Check if this model is already installed (by checking if best_file matches any installed model)
+            const bestFile = (model.best_file || '').replace('.gguf', '').toLowerCase();
+            const modelName = (model.name || model.id || '').toLowerCase();
+            const isInstalled = installedModels.some(installed => 
+                installed.includes(bestFile) || 
+                bestFile.includes(installed) ||
+                installed.includes(modelName.split('/').pop())
+            );
+            
+            const buttonHtml = isInstalled 
+                ? `<span class="text-xs text-green-400 px-2 py-1">Installed</span>`
+                : `<button onclick="downloadModelWithCommand('${escapedCmd}', this)" class="btn btn-primary btn-sm">Download</button>`;
+            
             div.innerHTML = `
                 <div class="flex justify-between items-center">
                     <div class="flex-1">
                         <div class="font-semibold text-sm text-accent">${model.name || model.id}</div>
                         <div class="text-xs text-secondary mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
                     </div>
-                    <button onclick="downloadModelWithCommand('${escapedCmd}')" class="btn btn-primary btn-sm">Download</button>
+                    ${buttonHtml}
                 </div>
             `;
             results.appendChild(div);
@@ -134,20 +157,158 @@ async function searchModels() {
     }
 }
 
-// Download model with specific command
-async function downloadModelWithCommand(command) {
-    // Switch to terminal tab and execute download command
-    switchTab('terminal');
-    document.getElementById('terminalInput').value = command;
-    runCommand();
+// Download model with specific command - uses download modal like quick start
+async function downloadModelWithCommand(command, buttonEl) {
+    // Parse command to extract repository, file_name, and quantization
+    // Examples: 
+    //   offgrid download TheBloke/Llama-2-7B-Chat-GGUF --quant Q4_K_M
+    //   offgrid download nomic-ai/nomic-embed-text-v1.5-GGUF --file nomic-embed-text-v1.5.Q4_K_M.gguf
+    const parts = command.split(' ');
+    const downloadIdx = parts.indexOf('download');
+    const repository = downloadIdx >= 0 ? parts[downloadIdx + 1] : '';
+    
+    // Check for --file flag first (exact filename)
+    const fileIdx = parts.indexOf('--file');
+    const fileName = fileIdx >= 0 ? parts[fileIdx + 1] : '';
+    
+    // Check for --quant flag
+    const quantIdx = parts.indexOf('--quant');
+    const quantization = quantIdx >= 0 ? parts[quantIdx + 1] : (fileName ? '' : 'Q4_K_M');
+    
+    const modelName = repository.split('/').pop() || repository;
+    
+    if (!repository) {
+        showModal({ type: 'error', title: 'Error', message: 'Invalid download command', confirmText: 'OK' });
+        return;
+    }
+    
+    // Disable button
+    if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.innerHTML = 'Starting...';
+    }
+    
+    // Show download modal (from onboarding.js)
+    if (typeof showDownloadModal === 'function') {
+        showDownloadModal(modelName, 'Calculating...');
+    }
+    
+    try {
+        // Build request body - prefer file_name over quantization
+        const requestBody = { repository };
+        if (fileName) {
+            requestBody.file_name = fileName;
+        } else if (quantization) {
+            requestBody.quantization = quantization;
+        }
+        
+        // Start download via API
+        const startResp = await fetch('/v1/models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!startResp.ok) {
+            const err = await startResp.json().catch(() => ({}));
+            if (typeof showDownloadError === 'function') {
+                showDownloadError(err.error || `Failed to start download: HTTP ${startResp.status}`);
+            } else {
+                showModal({ type: 'error', title: 'Download Failed', message: err.error || 'Failed to start download', confirmText: 'OK' });
+            }
+            if (buttonEl) { buttonEl.disabled = false; buttonEl.innerHTML = 'Download'; }
+            return;
+        }
+
+        const startData = await startResp.json();
+        
+        // Check if model already exists
+        if (startData.exists) {
+            if (typeof hideDownloadModal === 'function') {
+                hideDownloadModal();
+            }
+            showModal({
+                type: 'info',
+                title: 'Model Already Installed',
+                message: `<strong>${startData.file_name || modelName}</strong> is already installed.<br><br>You can use it right away from the Chat tab.`,
+                confirmText: 'OK'
+            });
+            if (buttonEl) { buttonEl.disabled = false; buttonEl.innerHTML = 'Download'; }
+            return;
+        }
+        
+        if (!startData.success) {
+            if (typeof showDownloadError === 'function') {
+                showDownloadError(startData.message || 'Failed to start download');
+            }
+            if (buttonEl) { buttonEl.disabled = false; buttonEl.innerHTML = 'Download'; }
+            return;
+        }
+
+        // Poll for progress
+        let completed = false;
+        while (!completed) {
+            await new Promise(r => setTimeout(r, 300));
+            
+            // Check if download was cancelled via currentDownloadAbort
+            if (typeof currentDownloadAbort !== 'undefined' && currentDownloadAbort?.signal?.aborted) {
+                completed = true;
+                break;
+            }
+            
+            try {
+                const progressResp = await fetch('/v1/models/download/progress');
+                if (!progressResp.ok) continue;
+                
+                const progress = await progressResp.json();
+                
+                for (const [filename, p] of Object.entries(progress)) {
+                    if (p.status === 'downloading') {
+                        if (p.bytes_total > 0 && typeof updateDownloadProgress === 'function') {
+                            updateDownloadProgress(p.bytes_done, p.bytes_total, p.speed || 0);
+                        }
+                    } else if (p.status === 'complete' && p.percent >= 99) {
+                        completed = true;
+                        if (typeof showDownloadComplete === 'function') {
+                            showDownloadComplete();
+                        }
+                        // Refresh model list
+                        await loadInstalledModels();
+                        break;
+                    } else if (p.status === 'failed') {
+                        if (typeof showDownloadError === 'function') {
+                            showDownloadError(p.error || 'Download failed');
+                        }
+                        completed = true;
+                        break;
+                    } else if (p.status === 'cancelled') {
+                        // Download was cancelled, just exit the loop
+                        completed = true;
+                        break;
+                    }
+                }
+            } catch (e) {
+                // Ignore polling errors
+            }
+        }
+    } catch (error) {
+        if (typeof showDownloadError === 'function') {
+            showDownloadError(error.message);
+        } else {
+            showModal({ type: 'error', title: 'Download Failed', message: error.message, confirmText: 'OK' });
+        }
+    }
+    
+    // Reset button
+    if (buttonEl) {
+        buttonEl.disabled = false;
+        buttonEl.innerHTML = 'Download';
+    }
 }
 
 // Download model (fallback for installed models)
-async function downloadModel(modelName) {
-    // Switch to terminal tab and execute download command
-    switchTab('terminal');
-    document.getElementById('terminalInput').value = `offgrid download ${modelName}`;
-    runCommand();
+async function downloadModel(modelName, buttonEl) {
+    downloadModelWithCommand(`offgrid download ${modelName}`, buttonEl);
 }
 
 // Load installed models
@@ -179,16 +340,16 @@ async function loadInstalledModels() {
             div.className = 'model-card model-item';
             const modelId = (model.id || '').replace(/'/g, "\\'");
             
-            // Format size if available (assuming it might be in metadata)
-            // Since the API might not return size directly in the root object, we check
-            // But for now we'll just show the ID cleanly
+            // Format size display
+            const sizeDisplay = model.size_gb || '';
             
             div.innerHTML = `
                 <div class="flex justify-between items-start gap-3">
                     <div class="flex-1 min-w-0">
                         <div class="font-semibold text-sm text-accent break-words" title="${model.id}">${model.id}</div>
-                        <div class="flex gap-2 mt-1">
+                        <div class="flex gap-2 mt-1 flex-wrap">
                             <span class="text-xs bg-secondary px-1.5 py-0.5 rounded text-secondary font-mono">GGUF</span>
+                            ${sizeDisplay ? `<span class="text-xs text-secondary">${sizeDisplay}</span>` : ''}
                         </div>
                     </div>
                     <button onclick="removeModel('${modelId}')" class="btn btn-danger btn-sm flex-shrink-0">Remove</button>
@@ -217,7 +378,7 @@ async function removeModel(modelId) {
     });
 }
 
-// Execute the actual removal via terminal
+// Execute the actual removal via API
 async function confirmRemoveModel(modelId) {
     try {
         // Clear saved model if it's the one being deleted
@@ -226,18 +387,35 @@ async function confirmRemoveModel(modelId) {
             localStorage.removeItem('offgrid_current_model');
         }
         
-        // Switch to terminal tab to show progress
-        switchTab('terminal');
+        // Call delete API
+        const resp = await fetch('/v1/models/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: modelId })
+        });
         
-        // Execute remove command
-        const input = document.getElementById('terminalInput');
-        input.value = `offgrid remove ${modelId} --yes`;
+        const data = await resp.json();
         
-        // Trigger the command
-        const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13 });
-        input.dispatchEvent(event);
+        if (!resp.ok || !data.success) {
+            showModal({
+                type: 'error',
+                title: 'Remove Failed',
+                message: data.error || data.message || 'Failed to remove model',
+                confirmText: 'OK'
+            });
+            return;
+        }
         
-        // Note: Model list refresh happens in handleOffgridCommand after command completes
+        // Success - refresh model list
+        showModal({
+            type: 'success',
+            title: 'Model Removed',
+            message: `${modelId} has been deleted.`,
+            confirmText: 'OK'
+        });
+        
+        await loadInstalledModels();
+        
     } catch (error) {
         showModal({
             type: 'error',

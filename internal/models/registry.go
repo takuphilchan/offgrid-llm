@@ -98,12 +98,20 @@ func (r *Registry) ListModels() []api.Model {
 
 	models := make([]api.Model, 0, len(r.models))
 	for _, meta := range r.models {
+		// Format size in GB
+		sizeGB := fmt.Sprintf("%.2f GB", float64(meta.Size)/(1024*1024*1024))
+		if meta.Size < 1024*1024*1024 {
+			sizeGB = fmt.Sprintf("%.0f MB", float64(meta.Size)/(1024*1024))
+		}
+
 		models = append(models, api.Model{
 			ID:      meta.ID,
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "offgrid-llm",
 			Type:    meta.Type,
+			Size:    meta.Size,
+			SizeGB:  sizeGB,
 		})
 	}
 

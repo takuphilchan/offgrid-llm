@@ -159,25 +159,248 @@ function skipOnboarding() {
     hideOnboardingWizard();
 }
 
-// Quick install model from onboarding
+// =====================================================
+// DOWNLOAD MODAL
+// =====================================================
+
+let currentDownloadAbort = null;
+let downloadStartTime = null;
+
+// Show download modal
+function showDownloadModal(modelName, size) {
+    const modal = document.getElementById('downloadModal');
+    document.getElementById('downloadModelName').textContent = modelName;
+    document.getElementById('downloadModelSize').textContent = `Size: ${size}`;
+    document.getElementById('downloadProgressBar').style.width = '0%';
+    document.getElementById('downloadProgressText').textContent = '0%';
+    document.getElementById('downloadSpeedText').textContent = '-- MB/s';
+    document.getElementById('downloadDownloaded').textContent = '0 MB';
+    document.getElementById('downloadTotal').textContent = size;
+    document.getElementById('downloadETA').textContent = 'ETA: calculating...';
+    document.getElementById('downloadCancelBtn').classList.remove('hidden');
+    document.getElementById('downloadDoneBtn').classList.add('hidden');
+    document.getElementById('downloadStatus').classList.add('hidden');
+    modal.classList.add('active');
+    downloadStartTime = Date.now();
+}
+
+// Hide download modal
+function hideDownloadModal() {
+    const modal = document.getElementById('downloadModal');
+    modal.classList.remove('active');
+    currentDownloadAbort = null;
+}
+
+// Cancel download
+async function cancelDownload() {
+    // Call server to cancel the download
+    try {
+        await fetch('/v1/models/download/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}) // Cancel any active download
+        });
+    } catch (e) {
+        console.warn('Failed to cancel download on server:', e);
+    }
+    
+    // Also abort client-side polling
+    if (currentDownloadAbort) {
+        currentDownloadAbort.abort();
+    }
+    hideDownloadModal();
+    showAlert('Download cancelled', { title: 'Cancelled', type: 'info' });
+}
+
+// Update download progress
+function updateDownloadProgress(downloaded, total, speed) {
+    const percent = total > 0 ? (downloaded / total * 100).toFixed(1) : 0;
+    document.getElementById('downloadProgressBar').style.width = `${percent}%`;
+    document.getElementById('downloadProgressText').textContent = `${percent}%`;
+    document.getElementById('downloadDownloaded').textContent = formatBytes(downloaded);
+    document.getElementById('downloadTotal').textContent = formatBytes(total);
+    
+    if (speed > 0) {
+        document.getElementById('downloadSpeedText').textContent = `${(speed / 1024 / 1024).toFixed(1)} MB/s`;
+        const remaining = (total - downloaded) / speed;
+        if (remaining < 60) {
+            document.getElementById('downloadETA').textContent = `ETA: ${Math.ceil(remaining)}s`;
+        } else if (remaining < 3600) {
+            document.getElementById('downloadETA').textContent = `ETA: ${Math.floor(remaining / 60)}m ${Math.ceil(remaining % 60)}s`;
+        } else {
+            document.getElementById('downloadETA').textContent = `ETA: ${Math.floor(remaining / 3600)}h ${Math.floor((remaining % 3600) / 60)}m`;
+        }
+    }
+}
+
+// Show download complete
+function showDownloadComplete() {
+    document.getElementById('downloadProgressBar').style.width = '100%';
+    document.getElementById('downloadProgressText').textContent = '100%';
+    document.getElementById('downloadSpeedText').textContent = 'Complete';
+    document.getElementById('downloadETA').textContent = '';
+    document.getElementById('downloadCancelBtn').classList.add('hidden');
+    document.getElementById('downloadDoneBtn').classList.remove('hidden');
+    document.getElementById('downloadModalTitle').textContent = 'Download Complete';
+    
+    // Refresh models list
+    setTimeout(() => {
+        if (typeof loadInstalledModels === 'function') loadInstalledModels();
+        if (typeof loadChatModels === 'function') loadChatModels();
+    }, 1000);
+}
+
+// Show download error
+function showDownloadError(message) {
+    document.getElementById('downloadStatus').classList.remove('hidden');
+    document.getElementById('downloadStatusText').textContent = message;
+    document.getElementById('downloadStatus').querySelector('svg').classList.add('hidden');
+    document.getElementById('downloadCancelBtn').textContent = 'Close';
+    document.getElementById('downloadModalTitle').textContent = 'Download Failed';
+}
+
+// Format bytes helper
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+// Quick install model from onboarding - uses API with progress polling
 async function quickInstallModel(downloadCmd, buttonEl) {
+    // Parse model info from command
+    // Format: offgrid download <repo> --quant <quant>
+    const parts = downloadCmd.split(' ');
+    const repoIndex = parts.indexOf('download') + 1;
+    const repository = parts[repoIndex] || '';
+    const quantIndex = parts.indexOf('--quant');
+    const quantization = quantIndex >= 0 ? parts[quantIndex + 1] : 'Q4_K_M';
+    const modelName = repository.split('/').pop() || repository;
+    
+    // Find model info from quickStartModels
+    const modelInfo = quickStartModels.find(m => downloadCmd.includes(m.downloadCmd.split(' ')[2]));
+    const size = modelInfo ? modelInfo.size : 'Unknown';
+    
     // Update button state
     if (buttonEl) {
         buttonEl.disabled = true;
         buttonEl.innerHTML = `
             <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2v4m0 12v4m-8-8h4m12 0h4"/>
+                <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
             </svg>
-            Installing...
+            Starting...
         `;
     }
     
-    // Switch to terminal and run download
+    // Show download modal
     hideOnboardingWizard();
     completeOnboarding();
-    switchTab('terminal');
-    document.getElementById('terminalInput').value = downloadCmd;
-    runCommand();
+    showDownloadModal(modelName, size);
+    
+    currentDownloadAbort = new AbortController();
+    let downloadFileName = null;
+    
+    try {
+        // Start download via API
+        const startResp = await fetch('/v1/models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                repository: repository,
+                quantization: quantization
+            })
+        });
+
+        if (!startResp.ok) {
+            const err = await startResp.json().catch(() => ({}));
+            showDownloadError(err.error || `Failed to start download: HTTP ${startResp.status}`);
+            return;
+        }
+
+        const startData = await startResp.json();
+        
+        // Check if model already exists
+        if (startData.exists) {
+            hideDownloadModal();
+            showModal({
+                type: 'info',
+                title: 'Model Already Installed',
+                message: `<strong>${startData.file_name || modelName}</strong> is already installed.<br><br>You can use it right away from the Chat tab.`,
+                confirmText: 'OK'
+            });
+            return;
+        }
+        
+        if (!startData.success) {
+            showDownloadError(startData.message || 'Failed to start download');
+            return;
+        }
+
+        // Poll for progress
+        let completed = false;
+        let lastPercent = 0;
+        
+        while (!completed && !currentDownloadAbort.signal.aborted) {
+            await new Promise(r => setTimeout(r, 300)); // Poll every 300ms
+            
+            try {
+                const progressResp = await fetch('/v1/models/download/progress');
+                if (!progressResp.ok) continue;
+                
+                const progress = await progressResp.json();
+                
+                // Find active download (most recent one that's downloading)
+                for (const [filename, p] of Object.entries(progress)) {
+                    if (p.status === 'downloading') {
+                        downloadFileName = filename;
+                        if (p.bytes_total > 0) {
+                            updateDownloadProgress(p.bytes_done, p.bytes_total, p.speed || 0);
+                            lastPercent = p.percent;
+                        }
+                    } else if (p.status === 'complete' && p.percent >= 99) {
+                        completed = true;
+                        showDownloadComplete();
+                        break;
+                    } else if (p.status === 'failed') {
+                        showDownloadError(p.error || 'Download failed');
+                        completed = true;
+                        break;
+                    }
+                }
+            } catch (e) {
+                // Ignore polling errors
+            }
+        }
+        
+        // If we exited but didn't complete, check one more time
+        if (!completed && lastPercent > 95) {
+            showDownloadComplete();
+        }
+
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            showDownloadError(error.message);
+        }
+    }
+    
+    // Reset button
+    if (buttonEl) {
+        buttonEl.disabled = false;
+        buttonEl.innerHTML = 'Download';
+    }
+}
+
+// Parse size string to bytes
+function parseSize(value, unit) {
+    const num = parseFloat(value);
+    switch (unit.toUpperCase()) {
+        case 'KB': return num * 1024;
+        case 'MB': return num * 1024 * 1024;
+        case 'GB': return num * 1024 * 1024 * 1024;
+        default: return num;
+    }
 }
 
 // =====================================================
@@ -365,18 +588,134 @@ function renderQuickStartModels() {
     }).join('');
 }
 
-// Quick install from models page
-function quickInstallFromModelsPage(downloadCmd, cardEl) {
-    // Visual feedback
+// Quick install from models page - uses download modal
+async function quickInstallFromModelsPage(downloadCmd, cardEl) {
+    // Parse model info from command
+    const parts = downloadCmd.split(' ');
+    const modelIdIndex = parts.indexOf('download') + 1;
+    const modelId = parts[modelIdIndex] || 'Model';
+    const modelName = modelId.split('/').pop() || modelId;
+    
+    // Extract repository and quantization from command
+    // Example: offgrid download microsoft/Phi-3-mini-4k-instruct-gguf --quant Q4_K_M
+    const repository = modelId;
+    const quantIndex = parts.indexOf('--quant');
+    const quantization = quantIndex > 0 ? parts[quantIndex + 1] : 'Q4_K_M';
+    
+    // Find model info from quickStartModels
+    const modelInfo = quickStartModels.find(m => downloadCmd.includes(m.downloadCmd.split(' ')[2]));
+    const size = modelInfo ? modelInfo.size : 'Unknown';
+    
+    // Visual feedback on card
     if (cardEl) {
         cardEl.style.opacity = '0.7';
         cardEl.style.pointerEvents = 'none';
     }
     
-    // Switch to terminal and run download
-    switchTab('terminal');
-    document.getElementById('terminalInput').value = downloadCmd;
-    runCommand();
+    // Show download modal
+    showDownloadModal(modelName, size);
+    
+    currentDownloadAbort = new AbortController();
+    
+    try {
+        // Start download via API
+        const startResp = await fetch('/v1/models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                repository: repository,
+                quantization: quantization
+            })
+        });
+
+        if (!startResp.ok) {
+            const err = await startResp.json().catch(() => ({}));
+            showDownloadError(err.error || `Failed to start download: HTTP ${startResp.status}`);
+            if (cardEl) {
+                cardEl.style.opacity = '1';
+                cardEl.style.pointerEvents = 'auto';
+            }
+            return;
+        }
+
+        const startData = await startResp.json();
+        
+        // Check if model already exists
+        if (startData.exists) {
+            hideDownloadModal();
+            showModal({
+                type: 'info',
+                title: 'Model Already Installed',
+                message: `<strong>${startData.file_name || modelName}</strong> is already installed.<br><br>You can use it right away from the Chat tab.`,
+                confirmText: 'OK'
+            });
+            if (cardEl) {
+                cardEl.style.opacity = '1';
+                cardEl.style.pointerEvents = 'auto';
+            }
+            return;
+        }
+        
+        if (!startData.success) {
+            showDownloadError(startData.message || 'Failed to start download');
+            if (cardEl) {
+                cardEl.style.opacity = '1';
+                cardEl.style.pointerEvents = 'auto';
+            }
+            return;
+        }
+
+        // Poll for progress
+        let completed = false;
+        let lastPercent = 0;
+        
+        while (!completed && !currentDownloadAbort.signal.aborted) {
+            await new Promise(r => setTimeout(r, 300)); // Poll every 300ms
+            
+            try {
+                const progressResp = await fetch('/v1/models/download/progress');
+                if (!progressResp.ok) continue;
+                
+                const progress = await progressResp.json();
+                
+                // Find active download
+                for (const [filename, p] of Object.entries(progress)) {
+                    if (p.status === 'downloading') {
+                        if (p.bytes_total > 0) {
+                            updateDownloadProgress(p.bytes_done, p.bytes_total, p.speed || 0);
+                            lastPercent = p.percent;
+                        }
+                    } else if (p.status === 'complete' && p.percent >= 99) {
+                        completed = true;
+                        showDownloadComplete();
+                        break;
+                    } else if (p.status === 'failed') {
+                        showDownloadError(p.error || 'Download failed');
+                        completed = true;
+                        break;
+                    }
+                }
+            } catch (e) {
+                // Ignore polling errors
+            }
+        }
+        
+        // If we exited but didn't complete, check one more time
+        if (!completed && lastPercent > 95) {
+            showDownloadComplete();
+        }
+
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            showDownloadError(error.message);
+        }
+    }
+    
+    // Reset card
+    if (cardEl) {
+        cardEl.style.opacity = '1';
+        cardEl.style.pointerEvents = 'auto';
+    }
 }
 
 // =====================================================

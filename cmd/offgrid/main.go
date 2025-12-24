@@ -196,7 +196,59 @@ func printInfo(message string) {
 }
 
 func printWarning(message string) {
-	fmt.Printf("%s⚠%s %s\n", brandAccent, colorReset, message)
+	fmt.Printf("%s!%s %s\n", brandAccent, colorReset, message)
+}
+
+// printProgressBar renders a clean progress bar for downloads
+// Format: [=========>          ] 45.2% | 1.8 GB / 4.0 GB | 12.3 MB/s | ETA 2m30s
+func printProgressBar(current, total int64, speed float64, width int) {
+	if total == 0 {
+		return
+	}
+	percent := float64(current) / float64(total) * 100
+	filled := int(float64(width) * percent / 100)
+	if filled > width {
+		filled = width
+	}
+
+	// Build progress bar
+	bar := strings.Repeat("=", filled)
+	if filled < width {
+		bar += ">"
+		bar += strings.Repeat(" ", width-filled-1)
+	}
+
+	// Calculate ETA
+	eta := ""
+	if speed > 0 && current < total {
+		remaining := float64(total-current) / speed
+		if remaining < 60 {
+			eta = fmt.Sprintf("%ds", int(remaining))
+		} else if remaining < 3600 {
+			mins := int(remaining) / 60
+			secs := int(remaining) % 60
+			eta = fmt.Sprintf("%dm%ds", mins, secs)
+		} else {
+			hours := int(remaining) / 3600
+			mins := (int(remaining) % 3600) / 60
+			eta = fmt.Sprintf("%dh%dm", hours, mins)
+		}
+	} else if current >= total {
+		eta = "done"
+	}
+
+	// Format sizes
+	currentStr := formatBytes(current)
+	totalStr := formatBytes(total)
+	speedStr := fmt.Sprintf("%.1f MB/s", speed/(1024*1024))
+
+	// Print the line (carriage return to overwrite)
+	fmt.Printf("\r  [%s%s%s] %s%.1f%%%s | %s / %s | %s | %s      ",
+		brandPrimary, bar, colorReset,
+		colorBold, percent, colorReset,
+		currentStr, totalStr,
+		speedStr, eta)
+	os.Stdout.Sync()
 }
 
 func printHelpfulError(err error, context string) {
@@ -1267,29 +1319,30 @@ func handleDownload(args []string) {
 	}
 
 	// Set progress callback
+	var startTime time.Time
 	downloader.SetProgressCallback(func(p models.DownloadProgress) {
 		if p.Status == "complete" {
 			fmt.Println()
-			fmt.Println("  ✓ Download complete")
+			fmt.Printf("  %s%s%s Download complete\n", brandSuccess, iconCheck, colorReset)
 		} else if p.Status == "verifying" {
 			fmt.Println()
-			fmt.Println("  🔍 Verifying checksum...")
+			fmt.Printf("  %sVerifying checksum...%s\n", brandMuted, colorReset)
 		} else {
-			fmt.Printf("\r  ⏬ %.1f%% · %s / %.1f MB · %.1f MB/s          ",
-				p.Percent,
-				formatBytes(p.BytesDone), float64(p.BytesTotal)/(1024*1024),
-				float64(p.Speed)/(1024*1024))
+			if startTime.IsZero() {
+				startTime = time.Now()
+			}
+			printProgressBar(p.BytesDone, p.BytesTotal, float64(p.Speed), 30)
 		}
 		os.Stdout.Sync()
 	})
 
 	fmt.Println()
-	fmt.Printf("  %s◈ Downloading Model%s\n", brandPrimary+colorBold, colorReset)
-	fmt.Printf("  %s%s%s · %s%s%s\n", brandPrimary, modelEntry.Name, colorReset, brandMuted, quantization, colorReset)
+	fmt.Printf("  %s%s Download Model%s\n", brandPrimary+colorBold, iconBolt, colorReset)
+	fmt.Printf("  %s%s%s %s%s%s\n", brandPrimary, modelEntry.Name, colorReset, brandMuted, quantization, colorReset)
 	fmt.Println()
 
 	if err := downloader.Download(modelEntry.ID, quantization); err != nil {
-		fmt.Fprintf(os.Stderr, "\n  ✗ Download failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\n  %sX%s Download failed: %v\n", brandError, colorReset, err)
 		os.Exit(1)
 	}
 
@@ -1426,33 +1479,29 @@ func handleHuggingFaceDownload(modelID, quantFilter, filename string, skipConfir
 	fmt.Printf("    %sDestination:%s %s\n", colorDim, colorReset, destPath)
 	fmt.Println()
 
-	var lastProgress int64
 	lastUpdate := time.Now()
+	startTime := time.Now()
 	if err := hf.DownloadGGUF(modelID, selectedFile.Filename, destPath, func(current, total int64) {
 		now := time.Now()
 		elapsed := now.Sub(lastUpdate)
-		if elapsed < 500*time.Millisecond && current < total {
+		if elapsed < 200*time.Millisecond && current < total {
 			return
 		}
-		percent := float64(current) / float64(total) * 100
+		// Calculate average speed over the entire download for smoother display
+		totalElapsed := now.Sub(startTime).Seconds()
 		var speed float64
-		if elapsed.Seconds() > 0 {
-			speed = float64(current-lastProgress) / elapsed.Seconds()
+		if totalElapsed > 0 {
+			speed = float64(current) / totalElapsed
 		}
-		fmt.Printf("\r  ⏬ %.1f%% · %s / %.2f GB · %.1f MB/s          ",
-			percent,
-			formatBytes(current), selectedFile.SizeGB,
-			speed/(1024*1024))
-		os.Stdout.Sync()
-		lastProgress = current
+		printProgressBar(current, total, speed, 30)
 		lastUpdate = now
 	}); err != nil {
-		fmt.Fprintf(os.Stderr, "\n  ✗ Download failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\n  %sX%s Download failed: %v\n", brandError, colorReset, err)
 		os.Exit(1)
 	}
 
 	fmt.Println() // New line after progress
-	fmt.Println("  ✓ Download complete")
+	fmt.Printf("  %s%s%s Download complete\n", brandSuccess, iconCheck, colorReset)
 	fmt.Println()
 
 	// Download projector if available
@@ -1465,7 +1514,7 @@ func handleHuggingFaceDownload(modelID, quantFilter, filename string, skipConfir
 			fmt.Printf("  %sTry manually:%s offgrid download %s --file %s\n",
 				brandMuted, colorReset, projectorSource.ModelID, projectorSource.File.Filename)
 		} else {
-			fmt.Println("  ✓ Vision adapter downloaded")
+			fmt.Printf("  %s%s%s Vision adapter downloaded\n", brandSuccess, iconCheck, colorReset)
 		}
 		fmt.Println()
 	}
@@ -1512,11 +1561,11 @@ func handleImport(args []string) {
 	// Check if path is a specific file or directory
 	info, err := os.Stat(usbPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "✗ Path not found: %s\n\n", usbPath)
+		fmt.Fprintf(os.Stderr, "%s%s%s Path not found: %s\n\n", brandError, iconCross, colorReset, usbPath)
 		fmt.Fprintf(os.Stderr, "Common USB/SD mount points:\n")
-		fmt.Fprintf(os.Stderr, "  • Linux:   /media/<username>/<device>\n")
-		fmt.Fprintf(os.Stderr, "  • macOS:   /Volumes/<device>\n")
-		fmt.Fprintf(os.Stderr, "  • Windows: D:\\ E:\\ F:\\\n")
+		fmt.Fprintf(os.Stderr, "  - Linux:   /media/<username>/<device>\n")
+		fmt.Fprintf(os.Stderr, "  - macOS:   /Volumes/<device>\n")
+		fmt.Fprintf(os.Stderr, "  - Windows: D:\\ E:\\ F:\\\n")
 		fmt.Fprintf(os.Stderr, "\nTip: Use 'ls /media' or 'mount' to find your device\n\n")
 		os.Exit(1)
 	}
@@ -1527,19 +1576,19 @@ func handleImport(args []string) {
 
 		modelFiles, err := importer.ScanUSBDrive(usbPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  ✗ Scan error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  %s%s%s Scan error: %v\n", brandError, iconCross, colorReset, err)
 			os.Exit(1)
 		}
 
 		if len(modelFiles) == 0 {
-			fmt.Println("✗ No GGUF model files found in", usbPath)
+			fmt.Printf("%s%s%s No GGUF model files found in %s\n", brandError, iconCross, colorReset, usbPath)
 			fmt.Println()
 			fmt.Println("Looking for files matching: *.gguf")
 			fmt.Println()
 			fmt.Println("Make sure your models:")
-			fmt.Println("  • Have .gguf file extension")
-			fmt.Println("  • Are in GGUF format (not safetensors or PyTorch)")
-			fmt.Println("  • Are readable (check permissions)")
+			fmt.Println("  - Have .gguf file extension")
+			fmt.Println("  - Are in GGUF format (not safetensors or PyTorch)")
+			fmt.Println("  - Are readable (check permissions)")
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -1548,7 +1597,7 @@ func handleImport(args []string) {
 		for i, file := range modelFiles {
 			modelID, quant := importer.GetModelInfo(filepath.Base(file))
 			size := getFileSize(file)
-			fmt.Printf("  %d. %s (%s) · %s\n", i+1, modelID, quant, formatBytes(size))
+			fmt.Printf("  %d. %s (%s) - %s\n", i+1, modelID, quant, formatBytes(size))
 		}
 		fmt.Println()
 
@@ -1557,21 +1606,20 @@ func handleImport(args []string) {
 		fmt.Println()
 		imported, err := importer.ImportAll(usbPath, func(p models.ImportProgress) {
 			if p.Status == "copying" {
-				fmt.Printf("\r  %s: %.1f%% · %s",
-					p.FileName, p.Percent, formatBytes(p.BytesDone))
+				printProgressBar(p.BytesDone, p.BytesTotal, 0, 25)
 			} else if p.Status == "verifying" {
 				fmt.Printf("\r  Verifying %s...          ", p.FileName)
 			} else if p.Status == "complete" {
-				fmt.Printf("\r  ✓ %s\n", p.FileName)
+				fmt.Printf("\r  %s%s%s %s\n", brandSuccess, iconCheck, colorReset, p.FileName)
 			}
 		})
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\n  ✗ Import failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "\n  %s%s%s Import failed: %v\n", brandError, iconCross, colorReset, err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("\n  ✓ Imported %d model(s) to %s\n", imported, cfg.ModelsDir)
+		fmt.Printf("\n  %s%s%s Imported %d model(s) to %s\n", brandSuccess, iconCheck, colorReset, imported, cfg.ModelsDir)
 
 		// Reload llama-server with imported models
 		if imported > 0 {
@@ -1590,21 +1638,20 @@ func handleImport(args []string) {
 
 		err := importer.ImportModel(usbPath, "", func(p models.ImportProgress) {
 			if p.Status == "copying" {
-				fmt.Printf("\r  Progress: %.1f%% · %s / %s",
-					p.Percent, formatBytes(p.BytesDone), formatBytes(p.BytesTotal))
+				printProgressBar(p.BytesDone, p.BytesTotal, 0, 25)
 			} else if p.Status == "verifying" {
 				fmt.Print("\r  Verifying integrity...          ")
 			} else if p.Status == "complete" {
-				fmt.Print("\r  ✓ Import complete                \n")
+				fmt.Printf("\r  %s%s%s Import complete                \n", brandSuccess, iconCheck, colorReset)
 			}
 		})
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "\n  ✗ Import failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "\n  %s%s%s Import failed: %v\n", brandError, iconCross, colorReset, err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("\n  ✓ Model imported to %s\n", cfg.ModelsDir)
+		fmt.Printf("\n  %s%s%s Model imported to %s\n", brandSuccess, iconCheck, colorReset, cfg.ModelsDir)
 
 		// Reload llama-server with the imported model
 		// Construct the destination path where the model was imported

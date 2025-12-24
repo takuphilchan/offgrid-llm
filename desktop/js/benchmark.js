@@ -21,13 +21,22 @@ async function loadBenchmarkModels() {
             return;
         }
         
-        llmModels.forEach((model, i) => {
+        llmModels.forEach((model) => {
             const option = document.createElement('option');
             option.value = model.id;
             option.textContent = model.id;
-            if (i === 0) option.selected = true; // Auto-select first model
             select.appendChild(option);
         });
+        
+        // Sync with currently active model (from Chat or global state)
+        if (typeof currentModel !== 'undefined' && currentModel) {
+            const option = Array.from(select.options).find(opt => opt.value === currentModel);
+            if (option) {
+                select.value = currentModel;
+            }
+        } else if (llmModels.length > 0) {
+            select.value = llmModels[0].id;
+        }
     } catch (e) {
         console.error('Failed to load models:', e);
     }

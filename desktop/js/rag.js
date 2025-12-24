@@ -12,25 +12,31 @@ async function loadRAGStatus() {
         const disableBtn = document.getElementById('ragDisableBtn');
         const modelSelect = document.getElementById('ragEmbeddingModel');
         
+        // Skip if elements don't exist on this page
+        if (!badge) return;
+        
         if (data.enabled) {
             badge.className = 'badge badge-success';
             badge.textContent = 'Enabled';
-            disableBtn.classList.remove('hidden');
+            if (disableBtn) disableBtn.classList.remove('hidden');
             // Set the current model in the dropdown
-            if (data.embedding_model) {
+            if (data.embedding_model && modelSelect) {
                 modelSelect.value = data.embedding_model;
             }
         } else {
             badge.className = 'badge badge-secondary';
             badge.textContent = 'Disabled';
-            disableBtn.classList.add('hidden');
+            if (disableBtn) disableBtn.classList.add('hidden');
         }
         
         // Update stats
         if (data.stats) {
-            document.getElementById('ragDocCount').textContent = data.stats.document_count || 0;
-            document.getElementById('ragChunkCount').textContent = data.stats.chunk_count || 0;
-            document.getElementById('ragEmbeddingCount').textContent = data.stats.embedding_count || 0;
+            const docCount = document.getElementById('ragDocCount');
+            const chunkCount = document.getElementById('ragChunkCount');
+            const embeddingCount = document.getElementById('ragEmbeddingCount');
+            if (docCount) docCount.textContent = data.stats.document_count || 0;
+            if (chunkCount) chunkCount.textContent = data.stats.chunk_count || 0;
+            if (embeddingCount) embeddingCount.textContent = data.stats.embedding_count || 0;
         }
     } catch (e) {
         console.error('Failed to load RAG status:', e);
@@ -219,6 +225,14 @@ async function ingestRAGText() {
         return;
     }
     
+    // Show loading state on button
+    const btn = document.querySelector('[onclick="ingestRAGText()"]');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<svg class="w-4 h-4 mr-1 animate-spin inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>Adding...';
+    }
+    
     try {
         const response = await fetch('/v1/documents/ingest', {
             method: 'POST',
@@ -237,6 +251,12 @@ async function ingestRAGText() {
         showAlert('Document added successfully!', 'success');
     } catch (e) {
         showAlert('Failed to ingest document: ' + e.message, 'error');
+    } finally {
+        // Restore button state
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
 }
 

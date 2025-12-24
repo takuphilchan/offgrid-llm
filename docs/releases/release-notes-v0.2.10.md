@@ -172,6 +172,24 @@ Added automatic mmproj fallbacks for additional VLM architectures:
 - Fixed `UnloadAll()` modifying map during iteration
 - Fixed health check treating 503 (busy) as dead server
 - Fixed start-server.sh not handling Ctrl+Z properly (now disabled)
+- Fixed embedding models being warmed via chat API (now skipped)
+- Fixed null pointer errors on RAG status elements
+- Fixed null pointer errors on embedding model dropdown
+- Fixed deprecated `apple-mobile-web-app-capable` meta tag warning
+- Fixed missing PWA icon (added SVG fallback)
+- Fixed model dropdown sync across all pages (Chat, Agent, Benchmark, LoRA, Voice)
+- Fixed Agent page not showing models (now uses shared model cache)
+- Fixed Agent "Running" status color (changed from amber to green)
+
+## Voice Improvements
+
+- **Whisper Pre-warming**: Automatically pre-loads whisper model when Voice tab opens
+- **Faster Defaults**: Changed default whisper model from `base` to `tiny.en` (2x faster)
+- **Extended Timeout**: Increased transcription timeout from 60s to 180s for first-time loads
+- **Cancel Buttons**: Added cancel buttons for STT and TTS operations
+- **Progress Indicators**: Show elapsed time during transcription/generation
+- **Better Abort Handling**: Hands-free mode properly cancels in-flight requests when stopped
+- **Model Switch Cancellation**: Multiple rapid model switches now cancel previous ones
 
 ## Installer Improvements
 

@@ -352,6 +352,11 @@
             color: #c084fc;
         }
         
+        .modal-box-header .modal-icon.cyan {
+            background: rgba(6, 182, 212, 0.15);
+            color: #22d3ee;
+        }
+        
         .modal-close-btn {
             width: 32px;
             height: 32px;
