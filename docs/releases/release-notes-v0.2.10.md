@@ -1,6 +1,17 @@
 # Release Notes v0.2.10
 
-Version 0.2.10 focuses on **stability and performance** improvements, especially for low-end and consumer hardware. This release fixes critical issues with mlock failures, reduces memory pressure, and optimizes hot paths throughout the codebase.
+**Release Date:** December 24, 2025
+
+Version 0.2.10 is a major update focusing on **UI/UX polish**, **stability**, and **performance** improvements. This release adds an onboarding wizard for new users, system status bar, keyboard shortcuts, mobile navigation, and fixes critical bugs including invisible voice buttons and broken RAM display.
+
+## Highlights
+
+- 🎯 **Onboarding Wizard** - Welcome experience for first-time users
+- 📊 **System Status Bar** - Real-time RAM and model status at a glance
+- ⌨️ **Keyboard Shortcuts** - Power user efficiency (Shift+? to see all)
+- 📱 **Mobile Navigation** - Touch-friendly bottom nav bar
+- 🎤 **Voice Page Redesign** - Better styling and light/dark mode support
+- 🔧 **Installer Rewrite** - Cleaner UX, 63% less code
 
 ## Stability Fixes
 
@@ -79,6 +90,61 @@ Added automatic mmproj fallbacks for additional VLM architectures:
 
 ## UI/UX Improvements
 
+### New System Status Bar
+- Fixed status bar at the bottom showing connection status, active model, and RAM usage
+- Real-time RAM monitoring with color-coded usage (green/amber/red)
+- Privacy badge indicator ("Private" with lock icon)
+- Hidden on mobile for cleaner interface
+
+### Onboarding Wizard
+- First-time user welcome experience with 3-step wizard
+- Hardware-aware model recommendations
+- Quick tips for power features (documents, voice, shortcuts)
+- Progress dots and skip option
+- Won't show again after completion (localStorage)
+
+### Keyboard Shortcuts
+- `Shift+?` - Show all keyboard shortcuts
+- `Ctrl+N` - New chat
+- `Ctrl+K` - Quick model switch
+- `Ctrl+/` - Focus chat input
+- `Ctrl+1/2/3` - Switch tabs (Chat/Models/Documents)
+- `Escape` - Stop generation or close modals
+
+### Quick Start Models
+- New "Quick Start" section on Models page
+- Curated list of recommended models with tags
+- One-click download directly from cards
+- Shows model size and RAM requirements
+
+### Mobile Navigation
+- Bottom navigation bar on mobile devices
+- "More" menu for additional tabs
+- Safe area padding for notched phones
+- Touch-optimized button sizes
+
+### Voice Page Redesign
+- Push-to-talk button now visible in light AND dark mode
+- New `.voice-ptt-btn` CSS class with proper cyan gradient
+- Recording state shows red pulsing effect
+- Conversation messages with chat bubble styling
+- Slide-in animation for new messages
+- Cleaner settings grid layout
+
+### Streaming Metrics
+- Real-time tokens/second display during generation
+- Token count and elapsed time
+- Animated indicator bar below chat header
+- Auto-hides 3 seconds after completion
+
+### Visual Polish
+- Terminal command highlighting changed to cyan (matches theme)
+- Enhanced empty state with quick action buttons
+- Better error cards with recovery options
+- Copy button success animation
+- Button lift effects on hover
+- Skeleton loading animations
+
 ### JARVIS Mode
 - Cleaner state labels without emojis (Ready, Listening, Thinking, etc.)
 - Reduced timeouts (60s transcription, 45s chat) for faster failure detection
@@ -90,14 +156,32 @@ Added automatic mmproj fallbacks for additional VLM architectures:
 - Better error messages with markdown formatting and bullet points
 - Max tokens slider extended to 16384
 
+### PWA Support
+- Added `manifest.json` for installable web app
+- Service worker for offline caching
+- Theme color and app icons configured
+
 ## Bug Fixes
 
+- Fixed Voice button invisible in light mode (CSS variable issue)
+- Fixed RAM display showing 0/0 (now uses correct `/v1/stats` endpoint)
+- Fixed rate limiting too aggressive for local use (increased 10x)
 - Fixed projector download using wrong repository ID for fallback sources
 - Fixed rate limiter memory leak under DDoS conditions
 - Fixed cache cleanup goroutine not stoppable (added `StopCleanupRoutine()`)
 - Fixed `UnloadAll()` modifying map during iteration
 - Fixed health check treating 503 (busy) as dead server
 - Fixed start-server.sh not handling Ctrl+Z properly (now disabled)
+
+## Installer Improvements
+
+### Complete Rewrite
+- Reduced from 1,280 lines to 471 lines
+- Animated spinner progress indicators
+- Auto-installs CLI, Desktop app, and Voice components
+- Cleaner, more readable output
+- Removed unnecessary prompts and options
+- Better error handling with clear messages
 
 ## Upgrade Notes
 
