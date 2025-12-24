@@ -60,6 +60,11 @@ async function sendChat() {
     input.disabled = true;
     sendBtn.disabled = true;
     stopBtn.classList.remove('hidden');
+    
+    // Add generating animation to stop button
+    if (typeof setSendButtonGenerating === 'function') {
+        setSendButtonGenerating(true);
+    }
 
     // Handle VLM content
     let messageContent = msg;
@@ -72,6 +77,9 @@ async function sendChat() {
             input.disabled = false;
             sendBtn.disabled = false;
             stopBtn.classList.add('hidden');
+            if (typeof setSendButtonGenerating === 'function') {
+                setSendButtonGenerating(false);
+            }
             return;
         }
         inlineImages = imageAttachments.map(att => att.url);
@@ -216,6 +224,11 @@ async function sendChat() {
             let msgDiv = null;
             let firstTokenReceived = false;
             let lastRender = 0;
+            
+            // Start streaming metrics tracking
+            if (typeof startStreamingMetrics === 'function') {
+                startStreamingMetrics();
+            }
 
             while (true) {
                 const { value, done } = await reader.read();
@@ -261,6 +274,11 @@ async function sendChat() {
                                 }
                             }
                             
+                            // Record token for streaming metrics
+                            if (typeof recordToken === 'function') {
+                                recordToken(content);
+                            }
+                            
                             assistantMsg += content;
                             if (!msgDiv) {
                                 msgDiv = addChatMessage('assistant', '', null, startTime);
@@ -302,6 +320,11 @@ async function sendChat() {
             // Remove thinking indicator if still present
             if (thinkingIndicator) {
                 thinkingIndicator.remove();
+            }
+            
+            // Stop streaming metrics tracking
+            if (typeof stopStreamingMetrics === 'function') {
+                stopStreamingMetrics();
             }
 
             if (assistantMsg) {
@@ -393,6 +416,14 @@ async function sendChat() {
     } finally {
         if (loadingInterval) {
             clearInterval(loadingInterval);
+        }
+        // Ensure streaming metrics are stopped
+        if (typeof stopStreamingMetrics === 'function') {
+            stopStreamingMetrics();
+        }
+        // Reset button state
+        if (typeof setSendButtonGenerating === 'function') {
+            setSendButtonGenerating(false);
         }
         isGenerating = false;
         pendingRequest = false;

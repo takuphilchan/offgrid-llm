@@ -29,6 +29,19 @@ let lastRequestTime = 0;
 let requestCooldown = 300; // Minimum 300ms between requests
 let pendingRequest = false;
 
+// Format file size in human-readable format
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let unitIndex = 0;
+    let size = bytes;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+    return `${size.toFixed(unitIndex > 1 ? 1 : 0)} ${units[unitIndex]}`;
+}
+
 // Save messages to localStorage
 function saveMessages() {
     try {

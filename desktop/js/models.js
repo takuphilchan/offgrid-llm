@@ -11,6 +11,14 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
     const modelBadge = document.getElementById('activeModelBadge');
     const modelNameEl = document.getElementById('activeModelName');
     
+    // Also update system status bar model name
+    const statusModelName = document.getElementById('statusModelName');
+    if (statusModelName && modelName) {
+        // Extract short model name (last part after /)
+        const shortName = modelName.split('/').pop().split(':')[0];
+        statusModelName.textContent = shortName || modelName;
+    }
+    
     if (!statusDot || !statusText) return;
     
     switch (state) {
@@ -119,9 +127,11 @@ async function loadChatModels() {
         models.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m.id;
-            // Format display name: replace underscores and hyphens with spaces for readability
+            // Format display name with size info if available
             const displayName = m.id.replace(/_/g, ' ').replace(/-/g, ' ');
-            opt.textContent = displayName;
+            // Add size info if available from model metadata
+            const sizeInfo = m.size ? ` (${formatFileSize(m.size)})` : '';
+            opt.textContent = displayName + sizeInfo;
             opt.title = m.id; // Show original name on hover
             select.appendChild(opt);
         });

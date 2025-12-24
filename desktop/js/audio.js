@@ -1261,21 +1261,21 @@ async function processVoiceChat(audioBlob) {
 function addVoiceMessage(role, text) {
     const conversationEl = document.getElementById('voiceConversation');
     const msgDiv = document.createElement('div');
-    msgDiv.className = role === 'user' 
-        ? 'bg-tertiary rounded-lg p-3 ml-8'
-        : 'bg-accent-alpha rounded-lg p-3 mr-8 border border-accent';
+    msgDiv.className = 'voice-msg ' + (role === 'user' ? 'voice-msg-user' : 'voice-msg-assistant');
     
     const roleLabel = document.createElement('div');
-    roleLabel.className = 'text-xs font-medium mb-1 ' + (role === 'user' ? 'text-secondary' : 'text-accent');
+    roleLabel.className = 'voice-msg-role';
     roleLabel.textContent = role === 'user' ? 'You' : 'Assistant';
     
     const textP = document.createElement('p');
-    textP.className = 'text-sm';
+    textP.className = 'voice-msg-text';
     textP.textContent = text;
     
     msgDiv.appendChild(roleLabel);
     msgDiv.appendChild(textP);
     conversationEl.appendChild(msgDiv);
+    conversationEl.classList.remove('hidden');
+    document.getElementById('voiceClearBtn').classList.remove('hidden');
     conversationEl.scrollTop = conversationEl.scrollHeight;
 }
 

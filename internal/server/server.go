@@ -148,11 +148,12 @@ func NewWithConfig(cfg *config.Config) *Server {
 	monitor.Start()
 
 	// Initialize rate limiters
-	// General API: 60 requests per minute with burst of 10
-	rateLimiter := NewRateLimiter(60, time.Minute, 10)
+	// General API: 600 requests per minute with burst of 60 (generous for local use)
+	rateLimiter := NewRateLimiter(600, time.Minute, 60)
 
-	// Inference endpoints: max 2 concurrent per IP, 3 global concurrent
-	inferenceRateLimiter := NewInferenceRateLimiter(2, 3)
+	// Inference endpoints: max 10 concurrent per IP, 20 global concurrent
+	// These limits are generous for local/self-hosted usage
+	inferenceRateLimiter := NewInferenceRateLimiter(10, 20)
 
 	// Initialize RAG engine
 	ragEngine := rag.NewEngine(embeddingEngine, cfg.ModelsDir)
