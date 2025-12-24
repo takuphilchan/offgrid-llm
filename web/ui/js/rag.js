@@ -48,20 +48,26 @@ async function loadRAGEmbeddingModels() {
         // First get current RAG status to know which model is active
         const statusResp = await fetch('/v1/rag/status');
         const status = await statusResp.json();
-        const currentModel = status.embedding_model || '';
+        const ragCurrentModel = status.embedding_model || '';
         const isEnabled = status.enabled;
         
-        const response = await fetch('/v1/models');
-        const data = await response.json();
         const select = document.getElementById('ragEmbeddingModel');
         select.innerHTML = '';
         
-        const embeddingModels = data.data.filter(m => 
-            m.id.toLowerCase().includes('embed') || 
-            m.id.toLowerCase().includes('minilm') ||
-            m.id.toLowerCase().includes('bge') ||
-            m.id.toLowerCase().includes('nomic')
-        );
+        // Use ModelManager if available
+        let embeddingModels = [];
+        if (typeof ModelManager !== 'undefined') {
+            embeddingModels = await ModelManager.getEmbeddingModels();
+        } else {
+            const response = await fetch('/v1/models');
+            const data = await response.json();
+            embeddingModels = data.data.filter(m => 
+                m.id.toLowerCase().includes('embed') || 
+                m.id.toLowerCase().includes('minilm') ||
+                m.id.toLowerCase().includes('bge') ||
+                m.id.toLowerCase().includes('nomic')
+            );
+        }
         
         let modelsToShow = embeddingModels.length > 0 ? embeddingModels : [];
         
@@ -78,8 +84,8 @@ async function loadRAGEmbeddingModels() {
         });
         
         // If RAG is already enabled, set the dropdown to current model
-        if (isEnabled && currentModel) {
-            select.value = currentModel;
+        if (isEnabled && ragCurrentModel) {
+            select.value = ragCurrentModel;
         } else if (modelsToShow.length > 0) {
             // Auto-select first embedding model and enable RAG
             select.value = modelsToShow[0].id;

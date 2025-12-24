@@ -653,12 +653,23 @@ async function loadVoiceAssistantModels() {
     const select = document.getElementById('voiceAssistantModel');
     if (!select) return;
     
+    // Use ModelManager if available
+    if (typeof ModelManager !== 'undefined') {
+        await ModelManager.populateLLMSelect('voiceAssistantModel', onVoiceModelChange);
+        // Also restore saved selection
+        const saved = localStorage.getItem('voiceAssistantModel');
+        if (saved && Array.from(select.options).some(o => o.value === saved)) {
+            select.value = saved;
+        }
+        return;
+    }
+    
+    // Legacy fallback
     try {
         const resp = await fetch('/models');
         const data = await resp.json();
         const models = data.data || [];
         
-        // Filter to only LLM models (not embedding models)
         const llmModels = models.filter(m => m.type !== 'embedding');
         
         select.innerHTML = '';
@@ -675,12 +686,10 @@ async function loadVoiceAssistantModels() {
             select.appendChild(opt);
         });
         
-        // Sync with currently active model (from Chat or global state)
         if (typeof currentModel !== 'undefined' && currentModel && llmModels.some(m => m.id === currentModel)) {
             select.value = currentModel;
             localStorage.setItem('voiceAssistantModel', currentModel);
         } else {
-            // Try to restore saved selection, otherwise auto-select first
             const saved = localStorage.getItem('voiceAssistantModel');
             if (saved && llmModels.some(m => m.id === saved)) {
                 select.value = saved;

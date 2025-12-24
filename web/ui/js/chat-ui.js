@@ -25,21 +25,29 @@ async function sendChat() {
 
     const model = document.getElementById('chatModel').value;
     
-    // Check if this is an embedding model
-    const resp = await fetch('/models');
-    const data = await resp.json();
-    const modelInfo = data.data.find(m => m.id === model);
-    // Check type from metadata, or fallback to name heuristics if metadata missing
-    const isEmbeddingModel = modelInfo?.type === 'embedding' || 
-                           model.toLowerCase().includes('embed') || 
-                           model.toLowerCase().includes('bge') ||
-                           model.toLowerCase().includes('nomic');
-    const supportsVision = modelSupportsVision(modelInfo, model);
+    // Check model type - use ModelManager cache if available
+    let modelInfo = null;
+    let isEmbeddingModel = false;
+    let supportsVision = false;
+    
+    if (typeof ModelManager !== 'undefined') {
+        const models = await ModelManager.getModels();
+        modelInfo = models.find(m => m.id === model);
+    } else {
+        const resp = await fetch('/models');
+        const data = await resp.json();
+        modelInfo = data.data.find(m => m.id === model);
+    }
+    
+    isEmbeddingModel = modelInfo?.type === 'embedding' || 
+                       model.toLowerCase().includes('embed') || 
+                       model.toLowerCase().includes('bge') ||
+                       model.toLowerCase().includes('nomic');
+    supportsVision = typeof modelSupportsVision === 'function' && modelSupportsVision(modelInfo, model);
     
     if (!model) {
-        pendingRequest = false; // Clear flag
+        pendingRequest = false;
         
-        // Flash warning then return to ready
         if (typeof updateSidebarStatus === 'function') {
             updateSidebarStatus('error');
             setTimeout(() => updateSidebarStatus('ready', ''), 3000);
@@ -113,23 +121,16 @@ async function sendChat() {
     // Show thinking indicator immediately after user message
     const thinkingIndicator = addThinkingIndicator();
 
-    // Show loading indicator with elapsed time
+    // Show generating status (not loading - model is already loaded)
     let loadingInterval;
     let elapsedSeconds = 0;
     if (typeof updateSidebarStatus === 'function') {
-        updateSidebarStatus('loading', model);
+        // Use 'ready' with generating indicator, not 'loading'
+        updateSidebarStatus('ready', model);
     }
+    // Track generation time in thinking indicator, not status bar
     loadingInterval = setInterval(() => {
         elapsedSeconds++;
-        if (typeof updateSidebarStatus === 'function') {
-            if (elapsedSeconds < 60) {
-                updateSidebarStatus('loading', model, `${elapsedSeconds}s`);
-            } else {
-                const mins = Math.floor(elapsedSeconds / 60);
-                const secs = elapsedSeconds % 60;
-                updateSidebarStatus('loading', model, `${mins}m ${secs}s`);
-            }
-        }
     }, 1000);
 
     abortController = new AbortController();

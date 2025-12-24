@@ -23,6 +23,7 @@ type MmapWarmer struct {
 	warmedModels sync.Map // map[string]*WarmStatus
 	warmingNow   sync.Map // map[string]bool - currently warming
 	totalWarmed  int64    // atomic counter
+	paused       int32    // atomic flag - paused during active model loading
 	mu           sync.RWMutex
 }
 
@@ -45,9 +46,32 @@ func NewMmapWarmer(modelsDir string) *MmapWarmer {
 	}
 }
 
+// Pause temporarily pauses warming operations to reduce I/O contention
+// during active model loading
+func (w *MmapWarmer) Pause() {
+	atomic.StoreInt32(&w.paused, 1)
+	log.Println("MmapWarmer paused for active model loading")
+}
+
+// Resume resumes warming operations after model loading completes
+func (w *MmapWarmer) Resume() {
+	atomic.StoreInt32(&w.paused, 0)
+	log.Println("MmapWarmer resumed")
+}
+
+// IsPaused returns whether the warmer is currently paused
+func (w *MmapWarmer) IsPaused() bool {
+	return atomic.LoadInt32(&w.paused) == 1
+}
+
 // WarmModel reads a model file into the OS page cache.
 // This makes subsequent loads by llama-server nearly instant.
 func (w *MmapWarmer) WarmModel(modelPath string) (*WarmStatus, error) {
+	// Skip if paused (active model loading in progress)
+	if w.IsPaused() {
+		return nil, fmt.Errorf("warming paused during active model loading")
+	}
+
 	// Check if already warming
 	if _, warming := w.warmingNow.LoadOrStore(modelPath, true); warming {
 		return nil, fmt.Errorf("model %s is already being warmed", modelPath)
@@ -105,6 +129,13 @@ func (w *MmapWarmer) WarmModel(modelPath string) (*WarmStatus, error) {
 	var totalRead int64
 
 	for {
+		// Check if paused during long reads
+		if w.IsPaused() {
+			log.Printf("Warming of %s interrupted (paused for active load)", filepath.Base(modelPath))
+			status.Error = "interrupted"
+			return status, fmt.Errorf("warming interrupted")
+		}
+
 		n, err := f.Read(buf)
 		if err != nil {
 			if err == io.EOF {

@@ -218,6 +218,29 @@ func (mc *ModelCache) SetCacheReuse(tokens int) {
 	mc.cacheReuse = tokens
 }
 
+// IsModelAlive checks if a specific model's llama-server process is still running
+// This is a fast check that doesn't acquire the write lock
+func (mc *ModelCache) IsModelAlive(modelID string) bool {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	instance, exists := mc.instances[modelID]
+	if !exists {
+		return false
+	}
+
+	if instance.Cmd == nil || instance.Cmd.Process == nil {
+		return false
+	}
+
+	// Signal 0 checks if process exists without actually sending a signal
+	if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		return false
+	}
+
+	return true
+}
+
 // shouldUseMlock determines if mlock should be used for a model
 // Smart mlock: enable if system RAM is at least 4x the model size
 // AND the system has sufficient RLIMIT_MEMLOCK
@@ -416,7 +439,8 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		"-c", fmt.Sprintf("%d", contextSize), // Context size from config
 		"-np", fmt.Sprintf("%d", parallelSlots), // Parallel slots
 		"-b", fmt.Sprintf("%d", batchSize), // Batch size
-		"--no-warmup", // Skip slow parameter fitting that scans memory
+		"--no-warmup", // Skip token generation warmup
+		"-fit", "off", // Skip slow memory fitting (saves 20-30s on startup)
 	}
 
 	// Add CPU thread count (critical for performance)
@@ -689,6 +713,12 @@ func (mc *ModelCache) getNextAvailablePort() int {
 func (mc *ModelCache) waitForReady(port int) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
+	// Pause background warming during active model loading to avoid I/O contention
+	if mc.mmapWarmer != nil {
+		mc.mmapWarmer.Pause()
+		defer mc.mmapWarmer.Resume()
+	}
+
 	// Phase 1: Wait for server process to start (up to 30 seconds)
 	// Increased from 10s because larger models or cold starts need more time
 	serverStarted := false
@@ -712,8 +742,8 @@ func (mc *ModelCache) waitForReady(port int) error {
 	// Check /v1/models endpoint which returns 200 only when model is loaded
 	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", port)
 
-	// Reduced from 120s to 30s - models should be in page cache
-	maxAttempts := 30
+	// Wait up to 60 seconds for model to load
+	maxAttempts := 60
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		time.Sleep(1 * time.Second)
 
@@ -727,22 +757,23 @@ func (mc *ModelCache) waitForReady(port int) error {
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				log.Printf("Model on port %d is fully loaded and ready", port)
-				// Give slots time to initialize after model load
-				// This prevents 503 "slot busy" errors on first request
-				time.Sleep(2 * time.Second)
+				log.Printf("Model on port %d is fully loaded and ready (took %ds)", port, attempt+1)
+				// Minimal delay for slot initialization
+				time.Sleep(500 * time.Millisecond)
 
-				// Warmup: send a minimal request to initialize inference pipeline
-				if err := mc.warmupServer(port); err != nil {
-					log.Printf("Warmup request failed (non-fatal): %v", err)
-				}
+				// Warmup in background - don't block the request
+				go func(p int) {
+					if err := mc.warmupServer(p); err != nil {
+						log.Printf("Background warmup failed (non-fatal): %v", err)
+					}
+				}(port)
 				return nil
 			}
 		}
 	}
 
 	// If we get here, model didn't load in time
-	return fmt.Errorf("model on port %d did not load within 120 seconds", port)
+	return fmt.Errorf("model on port %d did not load within %d seconds", port, maxAttempts)
 }
 
 // checkHealth performs a quick health check on the llama-server instance

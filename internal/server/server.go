@@ -447,8 +447,16 @@ func (s *Server) switchModel(modelID string) error {
 	s.modelMutex.Lock()
 	defer s.modelMutex.Unlock()
 
-	// Always check model status via cache to ensure process is still alive
-	// The cache will handle liveness checks and reloading if needed
+	// Fast path: if model is already loaded and active, skip reload
+	if s.currentModelID == modelID && s.currentPort > 0 {
+		// Verify the cached instance is still alive
+		if s.modelCache.IsModelAlive(modelID) {
+			log.Printf("Model %s already loaded on port %d, skipping reload", modelID, s.currentPort)
+			return nil
+		}
+		log.Printf("Model %s was loaded but process died, reloading...", modelID)
+	}
+
 	log.Printf("Switching to model: %s", modelID)
 
 	// Get model metadata

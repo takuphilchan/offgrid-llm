@@ -272,6 +272,10 @@ async function downloadModelWithCommand(command, buttonEl) {
                         if (typeof showDownloadComplete === 'function') {
                             showDownloadComplete();
                         }
+                        // Invalidate ModelManager cache so new model appears
+                        if (typeof ModelManager !== 'undefined') {
+                            ModelManager.invalidateCache();
+                        }
                         // Refresh model list
                         await loadInstalledModels();
                         break;
@@ -406,7 +410,11 @@ async function confirmRemoveModel(modelId) {
             return;
         }
         
-        // Success - refresh model list
+        // Success - invalidate cache and refresh model list
+        if (typeof ModelManager !== 'undefined') {
+            ModelManager.invalidateCache();
+        }
+        
         showModal({
             type: 'success',
             title: 'Model Removed',

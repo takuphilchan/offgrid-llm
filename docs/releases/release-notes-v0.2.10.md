@@ -1,17 +1,19 @@
 # Release Notes v0.2.10
 
-**Release Date:** December 24, 2025
+**Release Date:** December 25, 2025
 
 Version 0.2.10 is a major update focusing on **UI/UX polish**, **stability**, and **performance** improvements. This release adds an onboarding wizard for new users, system status bar, keyboard shortcuts, mobile navigation, and fixes critical bugs including invisible voice buttons and broken RAM display.
 
 ## Highlights
 
 - **Onboarding Wizard** - Welcome experience for first-time users
-- **System Status Bar** - Real-time RAM and model status at a glance
+- **System Status Bar** - Real-time RAM and model status at a glance  
 - **Keyboard Shortcuts** - Power user efficiency (Shift+? to see all)
 - **Mobile Navigation** - Touch-friendly bottom nav bar
 - **Voice Page Redesign** - Better styling and light/dark mode support
 - **Installer Rewrite** - Cleaner UX, 63% less code
+- **Fast Model Loading** - Eliminated 30s startup delay, instant model switching
+- **Centralized Model Manager** - Single source of truth for model state across all UI tabs
 
 ## Stability Fixes
 
@@ -39,6 +41,22 @@ Version 0.2.10 is a major update focusing on **UI/UX polish**, **stability**, an
 - Use `OFFGRID_LOW_MEMORY=true` for aggressive memory savings
 
 ## Performance Optimizations
+
+### Model Loading & Switching (NEW)
+- **Eliminated 30s startup delay**: Added `-fit off` flag to skip llama.cpp memory fitting scan
+- **Instant model switching**: Added `IsModelAlive()` check to skip reload when model already active
+- **No redundant reloads**: Chat requests no longer trigger full model reload on every message
+- **I/O contention prevention**: Background mmap warming pauses during active model loading
+- **Async warmup**: Model warmup runs in background, doesn't block first request
+- **Reduced slot init delay**: 500ms instead of 2 seconds after model loads
+
+### Frontend Model Manager (NEW)
+- **Centralized ModelManager**: Single source of truth for model state across all UI tabs
+- **60-second model cache**: Avoids redundant `/models` API calls on tab switches
+- **Request deduplication**: Multiple simultaneous load requests coalesced into one
+- **Abort controller**: Previous load requests cancelled when switching models rapidly
+- **Subscriber pattern**: UI components get notified of model state changes
+- **Backward compatible**: Legacy functions still work via wrapper layer
 
 ### Server-Side
 - **VERSION file caching**: Read once at startup instead of per-request disk I/O

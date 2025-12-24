@@ -199,7 +199,11 @@ function restoreAdvancedNavState() {
     }
 }
 
-// Tab switching
+// Track last tab switch to prevent redundant loads
+let _lastTabSwitchTime = {};
+const TAB_SWITCH_DEBOUNCE = 500; // Don't reload within 500ms
+
+// Tab switching - optimized to avoid redundant API calls
 function switchTab(tab) {
     document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -209,31 +213,60 @@ function switchTab(tab) {
     // Save current tab to localStorage
     localStorage.setItem('offgrid_active_tab', tab);
     
+    // Debounce: skip if we just switched to this tab
+    const now = Date.now();
+    const lastSwitch = _lastTabSwitchTime[tab] || 0;
+    const isRecent = (now - lastSwitch) < TAB_SWITCH_DEBOUNCE;
+    _lastTabSwitchTime[tab] = now;
+    
+    if (isRecent) {
+        return; // Skip redundant loads
+    }
+    
+    // Use ModelManager for efficient model loading (no redundant fetches)
     if (tab === 'models') {
         loadInstalledModels();
-        // Clear search input
         document.getElementById('searchQuery').value = '';
         document.getElementById('searchResults').innerHTML = '';
     }
     if (tab === 'chat') {
-        loadChatModels();
+        // Use ModelManager - no separate API call
+        if (typeof ModelManager !== 'undefined') {
+            ModelManager.populateLLMSelect('chatModel', handleModelChange);
+        } else {
+            loadChatModels();
+        }
         updateChatStats();
-        renderSessions(); // Load sessions panel within chat
-        loadChatVoiceSettings(); // Load voice settings for chat
+        renderSessions();
+        loadChatVoiceSettings();
     }
     if (tab === 'knowledge') {
         loadRAGStatus();
         loadRAGEmbeddingModels();
         refreshRAGDocuments();
-        loadEmbeddingModels(); // Load embedding models for embeddings section
+        if (typeof ModelManager !== 'undefined') {
+            ModelManager.populateEmbeddingSelect('embeddingModel');
+        } else {
+            loadEmbeddingModels();
+        }
     }
     if (tab === 'benchmark') {
-        loadBenchmarkModels();
+        // Use ModelManager - no separate API call
+        if (typeof ModelManager !== 'undefined') {
+            ModelManager.populateLLMSelect('benchmarkModel', handleBenchmarkModelChange);
+        } else {
+            loadBenchmarkModels();
+        }
         loadSystemInfo();
         renderBenchmarkHistory();
     }
     if (tab === 'agent') {
-        loadAgentModels();
+        // Use ModelManager - no separate API call
+        if (typeof ModelManager !== 'undefined') {
+            ModelManager.populateLLMSelect('agentModel', handleAgentModelChange);
+        } else {
+            loadAgentModels();
+        }
         loadAgentTools();
         loadMCPServers();
     }
@@ -245,7 +278,12 @@ function switchTab(tab) {
     }
     if (tab === 'lora') {
         loadLoRAAdapters();
-        loadLoRAModels();
+        // Use ModelManager - no separate API call
+        if (typeof ModelManager !== 'undefined') {
+            ModelManager.populateLLMSelect('loraBaseModel', handleLoraModelChange);
+        } else {
+            loadLoRAModels();
+        }
     }
     if (tab === 'audio') {
         initAudioTab();

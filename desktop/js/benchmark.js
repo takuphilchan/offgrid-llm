@@ -3,13 +3,19 @@
 let benchmarkHistory = JSON.parse(localStorage.getItem('offgrid_benchmarks') || '[]');
 
 async function loadBenchmarkModels() {
+    // Use ModelManager if available (no redundant API calls)
+    if (typeof ModelManager !== 'undefined') {
+        await ModelManager.populateLLMSelect('benchmarkModel', handleBenchmarkModelChange);
+        return;
+    }
+    
+    // Legacy fallback
     try {
         const response = await fetch('/v1/models');
         const data = await response.json();
         const select = document.getElementById('benchmarkModel');
         select.innerHTML = '';
         
-        // Filter for LLM models (not embeddings)
         const llmModels = data.data.filter(m => 
             !m.id.toLowerCase().includes('embed') && 
             !m.id.toLowerCase().includes('minilm') &&
@@ -28,7 +34,6 @@ async function loadBenchmarkModels() {
             select.appendChild(option);
         });
         
-        // Sync with currently active model (from Chat or global state)
         if (typeof currentModel !== 'undefined' && currentModel) {
             const option = Array.from(select.options).find(opt => opt.value === currentModel);
             if (option) {

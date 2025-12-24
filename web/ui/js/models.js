@@ -77,97 +77,9 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
 }
 
 // Track current model switch to cancel previous ones
+// NOTE: These are kept for backward compatibility, actual logic is in ModelManager
 let currentSwitchController = null;
 let currentSwitchModelId = null;
-
-// Unified model switch function - use this from any page that has a model selector
-// This ensures the model is loaded and the footer/status is updated consistently
-async function switchToModel(modelId, sourceSelectId = null) {
-    if (!modelId) return;
-    
-    // Don't switch if already on this model
-    if (typeof currentModel !== 'undefined' && currentModel === modelId) {
-        console.log('[MODEL] Already on model:', modelId, '- skipping switch');
-        // Just sync the dropdowns and ensure footer shows ready
-        syncModelSelects(modelId, sourceSelectId);
-        updateSidebarStatus('ready', modelId);
-        return true;
-    }
-    
-    // Cancel any previous pending switch
-    if (currentSwitchController) {
-        console.log('[MODEL] Cancelling previous switch to:', currentSwitchModelId);
-        currentSwitchController.abort();
-    }
-    
-    // Create new abort controller for this switch
-    currentSwitchController = new AbortController();
-    currentSwitchModelId = modelId;
-    const thisController = currentSwitchController;
-    
-    console.log('[MODEL] switchToModel called:', modelId, 'from:', sourceSelectId);
-    
-    // Update footer status immediately to show loading
-    updateSidebarStatus('loading', modelId);
-    
-    // Sync selection across all model dropdowns
-    syncModelSelects(modelId, sourceSelectId);
-    
-    // Check if this switch was cancelled
-    if (thisController.signal.aborted) return false;
-    
-    // Check if model is already loaded (cached)
-    const isCached = await isModelCached(modelId);
-    
-    // Check if this switch was cancelled
-    if (thisController.signal.aborted) return false;
-    
-    const loadState = isCached ? 'switching' : 'loading';
-    
-    let loadingMs = 0;
-    const loadingStartTime = Date.now();
-    updateSidebarStatus(loadState, modelId);
-    
-    const loadingInterval = setInterval(() => {
-        // Stop updating if this switch was cancelled
-        if (thisController.signal.aborted) {
-            clearInterval(loadingInterval);
-            return;
-        }
-        loadingMs = Date.now() - loadingStartTime;
-        const seconds = (loadingMs / 1000).toFixed(1) + 's';
-        updateSidebarStatus(loadState, modelId, seconds);
-    }, 100);
-    
-    // Wait for model to be ready
-    const isReady = await waitForModelReady(modelId);
-    
-    clearInterval(loadingInterval);
-    
-    // Check if this switch was cancelled (another switch took over)
-    if (thisController.signal.aborted) {
-        console.log('[MODEL] Switch cancelled, ignoring result for:', modelId);
-        return false;
-    }
-    
-    // Clear the controller since we're done
-    if (currentSwitchController === thisController) {
-        currentSwitchController = null;
-        currentSwitchModelId = null;
-    }
-    
-    if (isReady) {
-        updateSidebarStatus('ready', modelId);
-        // Update global currentModel if it exists
-        if (typeof currentModel !== 'undefined') {
-            currentModel = modelId;
-        }
-    } else {
-        updateSidebarStatus('ready', modelId); // Still show as ready, may have issues
-    }
-    
-    return isReady;
-}
 
 // Sync model selection across all model dropdowns (keeps UI consistent)
 function syncModelSelects(modelId, sourceSelectId = null) {
@@ -215,12 +127,18 @@ async function handleLoraModelChange() {
 }
 
 // Cache for models to avoid redundant fetches
+// NOTE: Prefer using ModelManager.getModels() instead
 let cachedModels = null;
 let lastModelsRefresh = 0;
 const MODELS_CACHE_TTL = 30000; // 30 second cache
 
-// Refresh models from server (called once, results cached)
+// Refresh models from server - delegates to ModelManager if available
 async function refreshModelsCache(force = false) {
+    // Use ModelManager if available
+    if (typeof ModelManager !== 'undefined') {
+        return ModelManager.getModels(force);
+    }
+    
     const now = Date.now();
     
     // Return cache if valid and not empty
@@ -248,17 +166,29 @@ async function refreshModelsCache(force = false) {
     return cachedModels || [];
 }
 
-// Load models for chat
+// Load models for chat - uses ModelManager for efficient caching
 async function loadChatModels() {
+    // Use ModelManager if available (preferred - no redundant API calls)
+    if (typeof ModelManager !== 'undefined') {
+        const selectedModel = await ModelManager.populateLLMSelect('chatModel', handleModelChange);
+        
+        // Update empty state UI
+        if (typeof updateEmptyState === 'function') {
+            updateEmptyState();
+        }
+        
+        // Warm model in background if not already loaded
+        if (selectedModel && !ModelManager.isModelLoaded(selectedModel)) {
+            ModelManager.warmModel(selectedModel);
+        }
+        return;
+    }
+    
+    // Legacy fallback
     try {
         const models = await refreshModelsCache();
         
-        // Load all models - both LLM and embedding models
-        // We'll detect type and route to correct API when sending
-        
         const select = document.getElementById('chatModel');
-        
-        // Remember the current selection before clearing
         const previousSelection = select.value || currentModel;
         
         select.innerHTML = '';
@@ -268,45 +198,35 @@ async function loadChatModels() {
             return;
         }
         
-        // Sort models alphabetically by ID
         models.sort((a, b) => a.id.localeCompare(b.id));
         
         models.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m.id;
-            // Format display name with size info if available
             const displayName = m.id.replace(/_/g, ' ').replace(/-/g, ' ');
-            // Add size info if available from model metadata
             const sizeInfo = m.size ? ` (${formatFileSize(m.size)})` : '';
             opt.textContent = displayName + sizeInfo;
-            opt.title = m.id; // Show original name on hover
+            opt.title = m.id;
             select.appendChild(opt);
         });
         
-        // Restore previous selection, or auto-select first model if none selected
         if (previousSelection && models.some(m => m.id === previousSelection)) {
-            // Restore the previous selection
             currentModel = previousSelection;
             select.value = previousSelection;
         } else if (!currentModel && models.length > 0) {
-            // First time - select first model
             currentModel = models[0].id;
             select.value = currentModel;
         }
 
-        // Add change handler after models are loaded
-        select.onchange = null; // Clear any existing handler
+        select.onchange = null;
         select.onchange = function(e) {
             handleModelChange();
         };
         
-        // Update empty state UI
         if (typeof updateEmptyState === 'function') {
             updateEmptyState();
         }
         
-        // Proactive model warming: trigger current model to load in background
-        // This ensures the model is ready when user starts typing
         if (currentModel) {
             warmModelInBackground(currentModel);
         }
@@ -316,9 +236,14 @@ async function loadChatModels() {
     }
 }
 
-// Warm up a model in the background so it's ready for instant use
+// Warm up a model in the background - delegates to ModelManager if available
 async function warmModelInBackground(modelName) {
-    // Skip if no model specified
+    // Use ModelManager if available
+    if (typeof ModelManager !== 'undefined') {
+        return ModelManager.warmModel(modelName);
+    }
+    
+    // Legacy fallback
     if (!modelName) {
         console.log('[MODEL] warmModelInBackground: No model specified, skipping');
         return;
@@ -374,20 +299,24 @@ async function warmModelInBackground(modelName) {
     }
 }
 
-// Load embedding models
+// Load embedding models - uses ModelManager for efficient caching
 async function loadEmbeddingModels() {
+    // Use ModelManager if available
+    if (typeof ModelManager !== 'undefined') {
+        await ModelManager.populateEmbeddingSelect('embeddingModel');
+        return;
+    }
+    
+    // Legacy fallback
     try {
-        // Use cached models - no need to refresh again
         const allModels = await refreshModelsCache();
         
-        // Filter only embedding models
         const models = allModels.filter(m => {
             return m.type === 'embedding' || m.tags?.includes('embedding');
         });
         
         const select = document.getElementById('embeddingModel');
         if (!select) {
-            // Element doesn't exist on this page, skip
             return;
         }
         select.innerHTML = '';
@@ -397,7 +326,6 @@ async function loadEmbeddingModels() {
             return;
         }
         
-        // Sort models alphabetically by ID
         models.sort((a, b) => a.id.localeCompare(b.id));
         
         models.forEach(m => {
@@ -409,12 +337,10 @@ async function loadEmbeddingModels() {
             select.appendChild(opt);
         });
         
-        // Auto-select first model
         if (models.length > 0) {
             select.value = models[0].id;
         }
     } catch (e) {
-       
         console.error('Failed to load embedding models:', e);
         const select = document.getElementById('embeddingModel');
         if (select) {
@@ -677,7 +603,7 @@ async function waitForModelReady(modelName) {
     return false;
 }
 
-// Handle model dropdown change
+// Handle model dropdown change - uses ModelManager for efficient loading
 async function handleModelChange() {
     const select = document.getElementById('chatModel');
     const newModel = select.value;
@@ -691,24 +617,58 @@ async function handleModelChange() {
         return;
     }
     
-    const oldModel = currentModel;
-    
-    // If there are existing messages, ask user what to do (non-blocking)
-    const shouldClearChat = messages.length > 0;
-    if (shouldClearChat) {
-        // Just show a quick toast notification - don't block the switch
+    // If there are existing messages, clear them
+    if (typeof messages !== 'undefined' && messages.length > 0) {
         if (typeof showToast === 'function') {
             showToast('Chat history cleared for new model', 'info');
         }
-        clearChatSilent();
+        if (typeof clearChatSilent === 'function') {
+            clearChatSilent();
+        }
     }
     
-    currentModel = newModel;
+    // Use ModelManager for efficient loading (deduplicates, cancels previous, tracks state)
+    if (typeof ModelManager !== 'undefined') {
+        // Disable UI while loading
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        if (chatInput) chatInput.disabled = true;
+        if (sendBtn) sendBtn.disabled = true;
+        
+        // Check VLM support
+        const models = await ModelManager.getModels();
+        const modelInfo = models.find(m => m.id === newModel);
+        const isVLM = typeof modelSupportsVision === 'function' && modelSupportsVision(modelInfo, newModel);
+        
+        const imageUploadBtn = document.getElementById('imageUploadBtn');
+        if (imageUploadBtn) {
+            if (isVLM) {
+                imageUploadBtn.classList.remove('hidden');
+            } else {
+                imageUploadBtn.classList.add('hidden');
+                if (typeof clearAllImages === 'function') clearAllImages();
+            }
+        }
+        
+        // Let ModelManager handle loading with proper state tracking
+        await ModelManager.selectModel(newModel, { source: 'chatModel' });
+        ModelManager.syncAllSelects('chatModel');
+        
+        // Re-enable UI
+        if (chatInput) chatInput.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+        if (chatInput) chatInput.focus();
+        
+        if (typeof updateEmptyState === 'function') {
+            updateEmptyState();
+        }
+        return;
+    }
     
-    // Sync selection across other model dropdowns
+    // Legacy fallback
+    currentModel = newModel;
     syncModelSelects(newModel, 'chatModel');
     
-    // Hide cache indicator when switching models (new model needs to warm up)
     if (typeof updateCacheIndicator === 'function') {
         updateCacheIndicator(false);
     }
@@ -718,7 +678,7 @@ async function handleModelChange() {
         const resp = await fetch('/models');
         const data = await resp.json();
         const modelInfo = data.data.find(m => m.id === newModel);
-        const isVLM = modelSupportsVision(modelInfo, newModel);
+        const isVLM = typeof modelSupportsVision === 'function' && modelSupportsVision(modelInfo, newModel);
         
         const imageUploadBtn = document.getElementById('imageUploadBtn');
         if (imageUploadBtn) {
@@ -726,7 +686,7 @@ async function handleModelChange() {
                 imageUploadBtn.classList.remove('hidden');
             } else {
                 imageUploadBtn.classList.add('hidden');
-                clearAllImages(); // Clear any pending image if switching away from VLM
+                if (typeof clearAllImages === 'function') clearAllImages();
             }
         }
     } catch (e) {
@@ -737,13 +697,11 @@ async function handleModelChange() {
     const chatInput = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
     
-    chatInput.disabled = true;
-    sendBtn.disabled = true;
+    if (chatInput) chatInput.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
     
-    // Check if model is cached for better UX messaging
     const isCached = await isModelCached(newModel);
     
-    // Show loading progress with context
     let loadingMs = 0;
     const loadingStartTime = Date.now();
     const loadState = isCached ? 'switching' : 'loading';
@@ -753,12 +711,10 @@ async function handleModelChange() {
         loadingMs = Date.now() - loadingStartTime;
         const seconds = (loadingMs / 1000).toFixed(1) + 's';
         updateSidebarStatus(loadState, newModel, seconds);
-    }, 100); // Update every 100ms for smoother display
+    }, 100);
     
-    // Wait for model to be ready before allowing messages
     const isReady = await waitForModelReady(newModel);
     
-    // Clear loading interval
     clearInterval(loadingInterval);
     
     if (isReady) {
@@ -768,12 +724,10 @@ async function handleModelChange() {
         updateSidebarStatus('ready', newModel);
     }
     
-    // Re-enable UI
-    chatInput.disabled = false;
-    sendBtn.disabled = false;
-    chatInput.focus();
+    if (chatInput) chatInput.disabled = false;
+    if (sendBtn) sendBtn.disabled = false;
+    if (chatInput) chatInput.focus();
     
-    // Update empty state to show prompts
     if (typeof updateEmptyState === 'function') {
         updateEmptyState();
     }

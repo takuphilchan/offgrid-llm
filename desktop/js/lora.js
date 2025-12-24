@@ -44,13 +44,19 @@ async function loadLoRAAdapters() {
 }
 
 async function loadLoRAModels() {
+    // Use ModelManager if available (no redundant API calls)
+    if (typeof ModelManager !== 'undefined') {
+        await ModelManager.populateLLMSelect('loraBaseModel', handleLoraModelChange);
+        return;
+    }
+    
+    // Legacy fallback
     try {
         const resp = await fetch('/v1/models');
         const data = await resp.json();
         const select = document.getElementById('loraBaseModel');
         select.innerHTML = '';
         
-        // Filter for LLM models (exclude embedding models)
         const models = (data.data || []).filter(m => 
             !m.id.toLowerCase().includes('embed') && 
             !m.id.toLowerCase().includes('minilm') &&
@@ -69,7 +75,6 @@ async function loadLoRAModels() {
             select.appendChild(opt);
         });
         
-        // Sync with currently active model (from Chat or global state)
         if (typeof currentModel !== 'undefined' && currentModel) {
             const option = Array.from(select.options).find(opt => opt.value === currentModel);
             if (option) {

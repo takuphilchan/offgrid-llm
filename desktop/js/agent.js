@@ -5,8 +5,15 @@
 let agentAbortController = null;
 
 async function loadAgentModels() {
+    // Use ModelManager if available (no redundant API calls)
+    if (typeof ModelManager !== 'undefined') {
+        await ModelManager.populateLLMSelect('agentModel', handleAgentModelChange);
+        console.log('[AGENT] Loaded models via ModelManager');
+        return;
+    }
+    
+    // Legacy fallback
     try {
-        // Fetch models directly to ensure we always get fresh data
         const resp = await fetch('/models');
         const data = await resp.json();
         const allModels = data.data || [];
@@ -19,7 +26,6 @@ async function loadAgentModels() {
         
         select.innerHTML = '';
         
-        // Filter for LLM models (exclude embedding models)
         const llmModels = allModels.filter(m => 
             m.type !== 'embedding' &&
             !m.id.toLowerCase().includes('embed') && 
@@ -39,7 +45,6 @@ async function loadAgentModels() {
             select.appendChild(opt);
         });
         
-        // Sync with currently active model (from Chat or global state)
         if (typeof currentModel !== 'undefined' && currentModel) {
             const option = Array.from(select.options).find(opt => opt.value === currentModel);
             if (option) {
