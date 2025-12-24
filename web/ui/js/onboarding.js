@@ -15,7 +15,7 @@ const quickStartModels = [
         id: 'Phi-3-mini-4k-instruct-GGUF',
         name: 'Phi-3 Mini',
         description: 'Fast & capable, great for most tasks',
-        size: '2.4 GB',
+        size: '2.2 GB',
         ramRequired: '4 GB',
         tags: ['recommended', 'fast'],
         downloadCmd: 'offgrid download microsoft/Phi-3-mini-4k-instruct-gguf --quant Q4_K_M'

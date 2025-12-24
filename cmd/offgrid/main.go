@@ -3655,12 +3655,32 @@ func extractQuantFromFilename(filename string) string {
 		"Q4_0", "Q4_1", "Q4_K_S", "Q4_K_M",
 		"Q5_0", "Q5_1", "Q5_K_S", "Q5_K_M",
 		"Q6_K", "Q8_0", "F16", "F32",
+		"IQ1_S", "IQ1_M", "IQ2_XXS", "IQ2_XS", "IQ2_S", "IQ2_M",
+		"IQ3_XXS", "IQ3_XS", "IQ3_S", "IQ3_M",
+		"IQ4_XS", "IQ4_NL",
 	}
 
 	upper := strings.ToUpper(filename)
 	for _, pattern := range patterns {
 		if strings.Contains(upper, pattern) {
 			return pattern
+		}
+	}
+
+	// Handle simplified quant names (e.g., Microsoft's "q4" naming)
+	// Match patterns like "-q4." or "_q4." at end of filename before .gguf
+	lower := strings.ToLower(filename)
+	simplifiedPatterns := map[string]string{
+		"-q2.": "Q2_K", "_q2.": "Q2_K",
+		"-q3.": "Q3_K_M", "_q3.": "Q3_K_M",
+		"-q4.": "Q4_K_M", "_q4.": "Q4_K_M",
+		"-q5.": "Q5_K_M", "_q5.": "Q5_K_M",
+		"-q6.": "Q6_K", "_q6.": "Q6_K",
+		"-q8.": "Q8_0", "_q8.": "Q8_0",
+	}
+	for pattern, quant := range simplifiedPatterns {
+		if strings.Contains(lower, pattern) {
+			return quant
 		}
 	}
 
