@@ -6,12 +6,12 @@ Version 0.2.10 is a major update focusing on **UI/UX polish**, **stability**, an
 
 ## Highlights
 
-- 🎯 **Onboarding Wizard** - Welcome experience for first-time users
-- 📊 **System Status Bar** - Real-time RAM and model status at a glance
-- ⌨️ **Keyboard Shortcuts** - Power user efficiency (Shift+? to see all)
-- 📱 **Mobile Navigation** - Touch-friendly bottom nav bar
-- 🎤 **Voice Page Redesign** - Better styling and light/dark mode support
-- 🔧 **Installer Rewrite** - Cleaner UX, 63% less code
+- **Onboarding Wizard** - Welcome experience for first-time users
+- **System Status Bar** - Real-time RAM and model status at a glance
+- **Keyboard Shortcuts** - Power user efficiency (Shift+? to see all)
+- **Mobile Navigation** - Touch-friendly bottom nav bar
+- **Voice Page Redesign** - Better styling and light/dark mode support
+- **Installer Rewrite** - Cleaner UX, 63% less code
 
 ## Stability Fixes
 
