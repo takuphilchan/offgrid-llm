@@ -379,12 +379,47 @@ func extractQuantization(filename string) string {
 		"Q4_0", "Q4_1", "Q4_K_S", "Q4_K_M",
 		"Q5_0", "Q5_1", "Q5_K_S", "Q5_K_M",
 		"Q6_K", "Q8_0", "F16", "F32",
+		"IQ1_S", "IQ1_M", "IQ2_XXS", "IQ2_XS", "IQ2_S", "IQ2_M",
+		"IQ3_XXS", "IQ3_XS", "IQ3_S", "IQ3_M",
+		"IQ4_XS", "IQ4_NL",
 	}
 
 	upper := strings.ToUpper(filename)
 	for _, pattern := range patterns {
 		if strings.Contains(upper, pattern) {
 			return pattern
+		}
+	}
+
+	// Handle simplified quant names (e.g., Microsoft's "q4" naming)
+	lower := strings.ToLower(filename)
+	base := strings.TrimSuffix(lower, ".gguf")
+
+	// Check for simplified patterns
+	simplifiedPatterns := []struct {
+		suffix string
+		quant  string
+	}{
+		// Check longer patterns first (more specific)
+		{"-q4_0", "Q4_0"}, {"_q4_0", "Q4_0"}, {".q4_0", "Q4_0"},
+		{"-q4_1", "Q4_1"}, {"_q4_1", "Q4_1"}, {".q4_1", "Q4_1"},
+		{"-q5_0", "Q5_0"}, {"_q5_0", "Q5_0"}, {".q5_0", "Q5_0"},
+		{"-q5_1", "Q5_1"}, {"_q5_1", "Q5_1"}, {".q5_1", "Q5_1"},
+		{"-q8_0", "Q8_0"}, {"_q8_0", "Q8_0"}, {".q8_0", "Q8_0"},
+		// Then simpler patterns
+		{"-q2", "Q2_K"}, {"_q2", "Q2_K"}, {".q2", "Q2_K"},
+		{"-q3", "Q3_K_M"}, {"_q3", "Q3_K_M"}, {".q3", "Q3_K_M"},
+		{"-q4", "Q4_K_M"}, {"_q4", "Q4_K_M"}, {".q4", "Q4_K_M"},
+		{"-q5", "Q5_K_M"}, {"_q5", "Q5_K_M"}, {".q5", "Q5_K_M"},
+		{"-q6", "Q6_K"}, {"_q6", "Q6_K"}, {".q6", "Q6_K"},
+		{"-q8", "Q8_0"}, {"_q8", "Q8_0"}, {".q8", "Q8_0"},
+	}
+	for _, p := range simplifiedPatterns {
+		if strings.HasSuffix(base, p.suffix) {
+			return p.quant
+		}
+		if strings.Contains(base, p.suffix+"-") || strings.Contains(base, p.suffix+"_") || strings.Contains(base, p.suffix+".") {
+			return p.quant
 		}
 	}
 

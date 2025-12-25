@@ -3715,19 +3715,39 @@ func extractQuantFromFilename(filename string) string {
 	}
 
 	// Handle simplified quant names (e.g., Microsoft's "q4" naming)
-	// Match patterns like "-q4." or "_q4." at end of filename before .gguf
+	// Match patterns like "-q4", "_q4", "-q4.", "_q4." etc.
 	lower := strings.ToLower(filename)
-	simplifiedPatterns := map[string]string{
-		"-q2.": "Q2_K", "_q2.": "Q2_K",
-		"-q3.": "Q3_K_M", "_q3.": "Q3_K_M",
-		"-q4.": "Q4_K_M", "_q4.": "Q4_K_M",
-		"-q5.": "Q5_K_M", "_q5.": "Q5_K_M",
-		"-q6.": "Q6_K", "_q6.": "Q6_K",
-		"-q8.": "Q8_0", "_q8.": "Q8_0",
+
+	// Remove .gguf extension for easier matching
+	base := strings.TrimSuffix(lower, ".gguf")
+
+	// Check for simplified patterns at end of filename or before other extensions
+	simplifiedPatterns := []struct {
+		suffix string
+		quant  string
+	}{
+		// Check longer patterns first (more specific)
+		{"-q4_0", "Q4_0"}, {"_q4_0", "Q4_0"}, {".q4_0", "Q4_0"},
+		{"-q4_1", "Q4_1"}, {"_q4_1", "Q4_1"}, {".q4_1", "Q4_1"},
+		{"-q5_0", "Q5_0"}, {"_q5_0", "Q5_0"}, {".q5_0", "Q5_0"},
+		{"-q5_1", "Q5_1"}, {"_q5_1", "Q5_1"}, {".q5_1", "Q5_1"},
+		{"-q8_0", "Q8_0"}, {"_q8_0", "Q8_0"}, {".q8_0", "Q8_0"},
+		// Then simpler patterns
+		{"-q2", "Q2_K"}, {"_q2", "Q2_K"}, {".q2", "Q2_K"},
+		{"-q3", "Q3_K_M"}, {"_q3", "Q3_K_M"}, {".q3", "Q3_K_M"},
+		{"-q4", "Q4_K_M"}, {"_q4", "Q4_K_M"}, {".q4", "Q4_K_M"},
+		{"-q5", "Q5_K_M"}, {"_q5", "Q5_K_M"}, {".q5", "Q5_K_M"},
+		{"-q6", "Q6_K"}, {"_q6", "Q6_K"}, {".q6", "Q6_K"},
+		{"-q8", "Q8_0"}, {"_q8", "Q8_0"}, {".q8", "Q8_0"},
 	}
-	for pattern, quant := range simplifiedPatterns {
-		if strings.Contains(lower, pattern) {
-			return quant
+	for _, p := range simplifiedPatterns {
+		// Check if base ends with this pattern
+		if strings.HasSuffix(base, p.suffix) {
+			return p.quant
+		}
+		// Also check if it contains the pattern followed by a delimiter
+		if strings.Contains(base, p.suffix+"-") || strings.Contains(base, p.suffix+"_") || strings.Contains(base, p.suffix+".") {
+			return p.quant
 		}
 	}
 
