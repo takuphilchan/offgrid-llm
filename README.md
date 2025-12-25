@@ -181,9 +181,9 @@ The browser-based UI at `http://localhost:11611` provides:
 
 | RAM | Recommended Models | Use Case |
 |-----|-------------------|----------|
-| **4GB** | TinyLlama, Phi-2 | Basic tasks, low-end devices |
-| **8GB** | Llama 3.2 3B, Mistral 7B | General use, most users |
-| **16GB** | Llama 3 8B, CodeLlama 13B | Professional work, coding |
+| **4GB** | Qwen2.5-1.5B, SmolLM2-1.7B | Basic tasks, low-end devices |
+| **8GB** | Llama 3.2 3B, Qwen2.5-3B | General use, most users |
+| **16GB** | Llama 3 8B, Qwen2.5-7B | Professional work, coding |
 | **32GB+** | Llama 3 70B, Mixtral | Research, complex tasks |
 
 **GPU:** Optional but recommended. Supports NVIDIA (CUDA), AMD (ROCm), Apple Silicon (Metal), and Vulkan.

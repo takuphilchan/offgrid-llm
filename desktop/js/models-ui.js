@@ -140,7 +140,7 @@ async function searchModels() {
                     <div class="text-xs text-secondary">
                         <p class="font-semibold text-accent mb-2">Try instead:</p>
                         <p class="mb-1">• Use the terminal: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid search llama</span></p>
-                        <p class="mb-1">• Download directly: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid download TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF</span></p>
+                        <p class="mb-1">• Download directly: <span class="font-mono bg-secondary px-2 py-1 rounded">offgrid download Qwen/Qwen2.5-3B-Instruct-GGUF</span></p>
                     </div>
                 </div>
             `;

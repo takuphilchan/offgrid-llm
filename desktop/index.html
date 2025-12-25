@@ -24,6 +24,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for XSS prevention -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
     <!-- Terminal Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -411,7 +413,7 @@
                 
                 <!-- Main Chat Area -->
                 <div class="flex-1 flex flex-col overflow-hidden">
-                    <div id="chatMessages" class="flex-1 scrollable px-4 py-4">
+                    <div id="chatMessages" class="flex-1 scrollable px-4 py-4" role="log" aria-live="polite" aria-label="Chat messages">
                         <div id="emptyStatePrompts" class="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-4">
                             <!-- No model loaded state - Enhanced -->
                             <div id="noModelState" class="text-center mb-8 hidden">
@@ -2352,13 +2354,13 @@
                         <p class="text-secondary">Pick one to get started (you can download more later)</p>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
-                        <div class="p-4 rounded-xl border border-theme hover:border-accent bg-tertiary cursor-pointer transition-all" onclick="quickInstallModel('offgrid download microsoft/Phi-3-mini-4k-instruct-gguf --quant Q4_K_M', this)">
+                        <div class="p-4 rounded-xl border border-theme hover:border-accent bg-tertiary cursor-pointer transition-all" onclick="quickInstallModel('offgrid download Qwen/Qwen2.5-3B-Instruct-GGUF --quant Q4_K_M', this)">
                             <div class="flex justify-between items-start mb-2">
-                                <h4 class="font-semibold">Phi-3 Mini</h4>
+                                <h4 class="font-semibold">Qwen 2.5 3B</h4>
                                 <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">Recommended</span>
                             </div>
                             <p class="text-sm text-secondary mb-2">Fast & capable for most tasks</p>
-                            <div class="text-xs text-secondary">2.4 GB • Works on 4GB RAM</div>
+                            <div class="text-xs text-secondary">2.0 GB • Works on 4GB RAM</div>
                         </div>
                         <div class="p-4 rounded-xl border border-theme hover:border-accent bg-tertiary cursor-pointer transition-all" onclick="quickInstallModel('offgrid download bartowski/Llama-3.2-3B-Instruct-GGUF --quant Q4_K_M', this)">
                             <div class="flex justify-between items-start mb-2">

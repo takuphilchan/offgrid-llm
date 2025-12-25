@@ -351,15 +351,15 @@ async function detectHardwareAndRecommend() {
             recommendation.message = 'Your system can run large models with excellent performance.';
         } else if (ramGB >= 16) {
             recommendation.tier = 'mid-range';
-            recommendation.models = ['Qwen2.5-7B', 'Llama-3.2-3B', 'Phi-3-mini'];
+            recommendation.models = ['Qwen2.5-7B', 'Llama-3.2-3B', 'Qwen2.5-3B'];
             recommendation.message = 'Your system can run most 7B models comfortably.';
         } else if (ramGB >= 8) {
             recommendation.tier = 'standard';
-            recommendation.models = ['Phi-3-mini', 'Llama-3.2-3B', 'TinyLlama'];
+            recommendation.models = ['Qwen2.5-3B', 'Llama-3.2-3B', 'SmolLM2-1.7B'];
             recommendation.message = 'We recommend smaller models (3B-4B) for best performance.';
         } else {
             recommendation.tier = 'basic';
-            recommendation.models = ['Phi-3-mini', 'TinyLlama'];
+            recommendation.models = ['SmolLM2-1.7B', 'Qwen2.5-1.5B'];
             recommendation.message = 'For your system, we recommend lightweight models.';
         }
         

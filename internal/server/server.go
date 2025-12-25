@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +22,7 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/audit"
 	"github.com/takuphilchan/offgrid-llm/internal/cache"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/degradation"
@@ -77,6 +80,7 @@ type Server struct {
 	wsHub          *websocket.Hub
 	powerManager   *power.PowerManager
 	degradationMgr *degradation.Manager // Graceful degradation under resource pressure
+	auditLogger    *audit.AuditLogger   // Enterprise audit logging (optional)
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -236,6 +240,27 @@ func NewWithConfig(cfg *config.Config) *Server {
 			level.String(), degradationMgr.MaxContextSize(), degradationMgr.MaxConcurrentRequests())
 	})
 
+	// Initialize audit logger if enabled (enterprise feature)
+	var auditLogger *audit.AuditLogger
+	if cfg.EnableAuditLog {
+		auditDir := cfg.AuditLogDir
+		if auditDir == "" {
+			auditDir = filepath.Join(dataDir, "audit")
+		}
+		auditConfig := audit.AuditConfig{
+			LogDir:        auditDir,
+			MaxFileSize:   50, // 50MB per file
+			RetentionDays: 365,
+		}
+		var auditErr error
+		auditLogger, auditErr = audit.NewAuditLogger(auditConfig)
+		if auditErr != nil {
+			log.Printf("Warning: Failed to initialize audit logger: %v", auditErr)
+		} else {
+			log.Printf("Audit logging enabled: %s", auditDir)
+		}
+	}
+
 	// Initialize auth middleware
 	authMiddleware := users.NewMiddleware(userStore)
 	authMiddleware.SetRequireAuth(cfg.RequireAuth)
@@ -285,6 +310,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		wsHub:                wsHub,
 		powerManager:         powerManager,
 		degradationMgr:       degradationMgr,
+		auditLogger:          auditLogger,
 		version:              readVersionOnce(), // Cache VERSION file at startup
 	}
 }
@@ -820,10 +846,40 @@ func (s *Server) collectSystemMetrics() {
 // loggingMiddleware logs all HTTP requests
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Generate request ID for tracing (if enabled)
+		requestID := ""
+		if s.config.EnableRequestID {
+			// Check if client provided one, otherwise generate
+			requestID = r.Header.Get("X-Request-ID")
+			if requestID == "" {
+				idBytes := make([]byte, 8)
+				rand.Read(idBytes)
+				requestID = hex.EncodeToString(idBytes)
+			}
+			w.Header().Set("X-Request-ID", requestID)
+		}
+
 		// Set CORS headers for browser access
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// If CORS origins configured, validate; otherwise allow all (simple mode)
+		origin := r.Header.Get("Origin")
+		if s.config.CORSOrigins != "" {
+			// Enterprise mode: validate against allowed origins
+			allowed := false
+			for _, allowedOrigin := range strings.Split(s.config.CORSOrigins, ",") {
+				if strings.TrimSpace(allowedOrigin) == origin {
+					allowed = true
+					break
+				}
+			}
+			if allowed {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			}
+		} else {
+			// Simple mode: allow all origins (default for local/edge use)
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID")
 
 		// Handle preflight requests
 		if r.Method == "OPTIONS" {
@@ -856,7 +912,12 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		atomic.AddInt64(&s.requestCount, 1)
 		atomic.AddInt64(&s.totalLatencyMicros, duration.Microseconds())
 
-		log.Printf("%s %s %d · %.2fms", r.Method, r.URL.Path, wrapped.statusCode, float64(duration.Microseconds())/1000)
+		// Log with request ID if enabled
+		if requestID != "" {
+			log.Printf("[%s] %s %s %d · %.2fms", requestID, r.Method, r.URL.Path, wrapped.statusCode, float64(duration.Microseconds())/1000)
+		} else {
+			log.Printf("%s %s %d · %.2fms", r.Method, r.URL.Path, wrapped.statusCode, float64(duration.Microseconds())/1000)
+		}
 	})
 }
 
@@ -875,6 +936,29 @@ func (w *statusResponseWriter) WriteHeader(code int) {
 func (w *statusResponseWriter) Flush() {
 	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
+	}
+}
+
+// auditLog logs an event if audit logging is enabled (enterprise feature)
+func (s *Server) auditLog(eventType audit.EventType, action string, user string, source string, details map[string]string, success bool) {
+	if s.auditLogger == nil {
+		return
+	}
+	event := audit.AuditEvent{
+		Type:    eventType,
+		Action:  action,
+		User:    user,
+		Source:  source,
+		Details: details,
+		Success: success,
+	}
+	if success {
+		event.Severity = audit.SeverityInfo
+	} else {
+		event.Severity = audit.SeverityWarning
+	}
+	if err := s.auditLogger.LogEvent(event); err != nil {
+		log.Printf("Warning: Failed to write audit log: %v", err)
 	}
 }
 
@@ -2199,6 +2283,17 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 
 	// Start download in background
 	go s.downloadModelAsync(ctx, req.Repository, req.FileName)
+
+	// Audit model download initiation
+	user := users.GetUser(r)
+	userName := "anonymous"
+	if user != nil {
+		userName = user.Username
+	}
+	s.auditLog(audit.EventTypeModel, "model_download_started", userName, r.RemoteAddr, map[string]string{
+		"repository": req.Repository,
+		"file_name":  req.FileName,
+	}, true)
 
 	response := map[string]interface{}{
 		"success": true,
@@ -3680,6 +3775,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, ok := s.userStore.ValidatePassword(req.Username, req.Password)
 	if !ok {
+		s.auditLog(audit.EventTypeAuth, "login_failed", req.Username, r.RemoteAddr, map[string]string{
+			"reason": "invalid_credentials",
+		}, false)
 		http.Error(w, `{"error": "invalid credentials"}`, http.StatusUnauthorized)
 		return
 	}
@@ -3690,6 +3788,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error": "failed to create session"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// Audit successful login
+	s.auditLog(audit.EventTypeAuth, "login_success", user.Username, r.RemoteAddr, map[string]string{
+		"user_id": user.ID,
+		"role":    string(user.Role),
+	}, true)
 
 	// Set session cookie
 	http.SetCookie(w, &http.Cookie{

@@ -4,6 +4,7 @@ package audit
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -106,10 +107,10 @@ func NewAuditLogger(config AuditConfig) (*AuditLogger, error) {
 		if data, err := os.ReadFile(keyPath); err == nil {
 			hmacKey = data
 		} else {
-			// Generate new key
+			// Generate new key using cryptographically secure random
 			hmacKey = make([]byte, 32)
-			for i := range hmacKey {
-				hmacKey[i] = byte(time.Now().UnixNano() >> (i * 8))
+			if _, err := rand.Read(hmacKey); err != nil {
+				return nil, fmt.Errorf("failed to generate HMAC key: %w", err)
 			}
 			os.WriteFile(keyPath, hmacKey, 0600)
 		}

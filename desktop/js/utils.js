@@ -11,6 +11,171 @@ let terminalChatModel = '';
 let terminalChatHistory = [];
 let userScrolledUp = false;
 
+// ============================================
+// SECURITY UTILITIES (Enterprise-grade)
+// ============================================
+
+/**
+ * Escape HTML to prevent XSS attacks
+ * Use this for any user-provided text inserted into the DOM
+ */
+function escapeHtml(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
+/**
+ * Sanitize HTML using DOMPurify (for markdown/rich content)
+ * Falls back to escapeHtml if DOMPurify not available
+ */
+function sanitizeHtml(html) {
+    if (typeof DOMPurify !== 'undefined') {
+        return DOMPurify.sanitize(html, {
+            ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 
+                          'code', 'pre', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                          'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'span', 'div'],
+            ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'id'],
+            ALLOW_DATA_ATTR: false,
+            ADD_ATTR: ['target'], // Allow target="_blank" for links
+        });
+    }
+    // Fallback: escape everything if DOMPurify not loaded
+    console.warn('DOMPurify not available, falling back to escapeHtml');
+    return escapeHtml(html);
+}
+
+/**
+ * Safe innerHTML setter - sanitizes before inserting
+ */
+function safeSetInnerHTML(element, html) {
+    if (element) {
+        element.innerHTML = sanitizeHtml(html);
+    }
+}
+
+/**
+ * Parse and sanitize markdown content
+ */
+function safeMarkdown(markdownText) {
+    if (typeof marked !== 'undefined') {
+        const rawHtml = marked.parse(markdownText || '');
+        return sanitizeHtml(rawHtml);
+    }
+    return escapeHtml(markdownText);
+}
+
+// ============================================
+// GLOBAL ERROR BOUNDARY
+// ============================================
+
+// Catch unhandled errors and show user-friendly message
+window.onerror = function(message, source, lineno, colno, error) {
+    console.error('Global error:', { message, source, lineno, colno, error });
+    // Don't show modal for every error, just log - show only for critical failures
+    if (message && message.includes('Script error')) {
+        return true; // Ignore cross-origin script errors
+    }
+    // For critical errors that would break the UI
+    if (error && error.name === 'TypeError' && source && source.includes('/ui/js/')) {
+        showToast('Something went wrong. Try refreshing the page.', 'error');
+    }
+    return false;
+};
+
+// Catch unhandled promise rejections
+window.onunhandledrejection = function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    // Only show toast for network errors that users should know about
+    if (event.reason && event.reason.name === 'TypeError' && 
+        event.reason.message && event.reason.message.includes('fetch')) {
+        showToast('Network error. Check your connection.', 'error');
+    }
+};
+
+// ============================================
+// NETWORK UTILITIES (with retry logic)
+// ============================================
+
+/**
+ * Fetch with automatic retry for transient failures
+ * @param {string} url - URL to fetch
+ * @param {object} options - Fetch options
+ * @param {number} maxRetries - Max retry attempts (default: 3)
+ * @param {number} baseDelay - Base delay in ms (default: 500, doubles each retry)
+ */
+async function fetchWithRetry(url, options = {}, maxRetries = 3, baseDelay = 500) {
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            
+            // Retry on 503 (server busy) or 429 (rate limited)
+            if (response.status === 503 || response.status === 429) {
+                if (attempt < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, attempt);
+                    console.log(`[fetchWithRetry] ${response.status} on attempt ${attempt + 1}, retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
+            }
+            
+            return response;
+        } catch (error) {
+            lastError = error;
+            
+            // Only retry on network errors, not aborts
+            if (error.name === 'AbortError') {
+                throw error;
+            }
+            
+            if (attempt < maxRetries) {
+                const delay = baseDelay * Math.pow(2, attempt);
+                console.log(`[fetchWithRetry] Network error on attempt ${attempt + 1}, retrying in ${delay}ms...`, error.message);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    
+    throw lastError;
+}
+
+/**
+ * Check if the server is reachable
+ */
+async function isServerOnline() {
+    try {
+        const response = await fetch('/health', { 
+            method: 'GET',
+            signal: AbortSignal.timeout(5000)
+        });
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
+// Track online/offline status
+let _isOnline = true;
+function updateOnlineStatus() {
+    const wasOnline = _isOnline;
+    _isOnline = navigator.onLine;
+    
+    if (!_isOnline && wasOnline) {
+        showToast('You are offline. Some features may not work.', 'warning');
+    } else if (_isOnline && !wasOnline) {
+        showToast('Connection restored.', 'success');
+    }
+}
+
+// Listen for online/offline events
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+}
+
 // Session management
 let sessions = JSON.parse(localStorage.getItem('offgrid_sessions') || '[]');
 let currentSessionId = null;

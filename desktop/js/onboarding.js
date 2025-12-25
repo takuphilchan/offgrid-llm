@@ -12,13 +12,13 @@ const ONBOARDING_VERSION = 1; // Increment to show wizard again after major upda
 // Quick Start recommended models for different hardware profiles
 const quickStartModels = [
     {
-        id: 'Phi-3-mini-4k-instruct-GGUF',
-        name: 'Phi-3 Mini',
+        id: 'Qwen2.5-3B-Instruct-GGUF',
+        name: 'Qwen 2.5 3B',
         description: 'Fast & capable, great for most tasks',
-        size: '2.2 GB',
+        size: '2.0 GB',
         ramRequired: '4 GB',
         tags: ['recommended', 'fast'],
-        downloadCmd: 'offgrid download microsoft/Phi-3-mini-4k-instruct-gguf --quant Q4_K_M'
+        downloadCmd: 'offgrid download Qwen/Qwen2.5-3B-Instruct-GGUF --quant Q4_K_M'
     },
     {
         id: 'Llama-3.2-3B-Instruct-GGUF',
@@ -597,7 +597,7 @@ async function quickInstallFromModelsPage(downloadCmd, cardEl) {
     const modelName = modelId.split('/').pop() || modelId;
     
     // Extract repository and quantization from command
-    // Example: offgrid download microsoft/Phi-3-mini-4k-instruct-gguf --quant Q4_K_M
+    // Example: offgrid download Qwen/Qwen2.5-3B-Instruct-GGUF --quant Q4_K_M
     const repository = modelId;
     const quantIndex = parts.indexOf('--quant');
     const quantization = quantIndex > 0 ? parts[quantIndex + 1] : 'Q4_K_M';

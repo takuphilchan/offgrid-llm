@@ -59,6 +59,12 @@ type Config struct {
 	RequireAuth   bool `yaml:"require_auth" json:"require_auth"`       // Require authentication for API access
 	GuestAccess   bool `yaml:"guest_access" json:"guest_access"`       // Allow guest access when auth not required
 	MultiUserMode bool `yaml:"multi_user_mode" json:"multi_user_mode"` // Enable multi-user features (Users tab, quotas)
+
+	// Enterprise Security (opt-in)
+	CORSOrigins     string `yaml:"cors_origins" json:"cors_origins"`           // Comma-separated allowed origins (empty = allow all)
+	EnableAuditLog  bool   `yaml:"enable_audit_log" json:"enable_audit_log"`   // Enable tamper-evident audit logging
+	AuditLogDir     string `yaml:"audit_log_dir" json:"audit_log_dir"`         // Directory for audit logs
+	EnableRequestID bool   `yaml:"enable_request_id" json:"enable_request_id"` // Add X-Request-ID header to all responses
 }
 
 // LoadConfig loads configuration from environment variables
@@ -110,6 +116,11 @@ func LoadConfig() *Config {
 		RequireAuth:      getEnvBool("OFFGRID_REQUIRE_AUTH", false),
 		GuestAccess:      getEnvBool("OFFGRID_GUEST_ACCESS", true),
 		MultiUserMode:    getEnvBool("OFFGRID_MULTI_USER", false),
+		// Enterprise Security (opt-in, disabled by default for simple use)
+		CORSOrigins:     getEnv("OFFGRID_CORS_ORIGINS", ""),      // Empty = allow all (simple mode)
+		EnableAuditLog:  getEnvBool("OFFGRID_AUDIT_LOG", false),  // Disabled by default
+		AuditLogDir:     getEnv("OFFGRID_AUDIT_LOG_DIR", ""),     // Default set in applyDefaults
+		EnableRequestID: getEnvBool("OFFGRID_REQUEST_ID", false), // Disabled by default
 	}
 }
 
@@ -397,5 +408,19 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if timeout := getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 0); timeout != 0 {
 		c.ModelLoadTimeout = timeout
+	}
+
+	// Enterprise Security overrides
+	if cors := getEnv("OFFGRID_CORS_ORIGINS", ""); cors != "" {
+		c.CORSOrigins = cors
+	}
+	if audit := os.Getenv("OFFGRID_AUDIT_LOG"); audit != "" {
+		c.EnableAuditLog = getEnvBool("OFFGRID_AUDIT_LOG", false)
+	}
+	if auditDir := getEnv("OFFGRID_AUDIT_LOG_DIR", ""); auditDir != "" {
+		c.AuditLogDir = auditDir
+	}
+	if reqID := os.Getenv("OFFGRID_REQUEST_ID"); reqID != "" {
+		c.EnableRequestID = getEnvBool("OFFGRID_REQUEST_ID", false)
 	}
 }

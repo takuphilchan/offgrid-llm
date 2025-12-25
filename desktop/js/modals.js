@@ -1,6 +1,10 @@
 function showModal({ type = 'info', title, message, confirmText = 'OK', cancelText, onConfirm, onCancel }) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'modal-title');
+    overlay.setAttribute('aria-describedby', 'modal-message');
     
     // Icon SVGs based on type
     const iconSvgs = {
@@ -10,39 +14,81 @@ function showModal({ type = 'info', title, message, confirmText = 'OK', cancelTe
         info: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>'
     };
     const iconSvg = iconSvgs[type] || iconSvgs.info;
-    const cancelButton = cancelText ? `<button class="btn btn-secondary" data-action="cancel">${cancelText}</button>` : '';
+    
+    // Escape text content for security
+    const safeTitle = typeof escapeHtml === 'function' ? escapeHtml(title) : title;
+    const safeMessage = typeof escapeHtml === 'function' ? escapeHtml(message) : message;
+    const safeConfirmText = typeof escapeHtml === 'function' ? escapeHtml(confirmText) : confirmText;
+    const safeCancelText = cancelText ? (typeof escapeHtml === 'function' ? escapeHtml(cancelText) : cancelText) : '';
+    
+    const cancelButton = cancelText ? `<button class="btn btn-secondary" data-action="cancel">${safeCancelText}</button>` : '';
     
     overlay.innerHTML = `
         <div class="modal-dialog">
             <div class="modal-dialog-header">
-                <div class="modal-dialog-icon ${type}">${iconSvg}</div>
-                <div class="modal-dialog-title">${title}</div>
+                <div class="modal-dialog-icon ${type}" aria-hidden="true">${iconSvg}</div>
+                <div class="modal-dialog-title" id="modal-title">${safeTitle}</div>
             </div>
-            <p class="modal-dialog-message">${message}</p>
+            <p class="modal-dialog-message" id="modal-message">${safeMessage}</p>
             <div class="modal-dialog-actions">
                 ${cancelButton}
-                <button class="btn ${type === 'error' ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmText}</button>
+                <button class="btn ${type === 'error' ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${safeConfirmText}</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(overlay);
     
+    // Store previously focused element to restore later
+    const previouslyFocused = document.activeElement;
+    
+    // Focus first button (trap focus in modal)
+    const firstButton = overlay.querySelector('button');
+    if (firstButton) firstButton.focus();
+    
+    // Focus trap - keep focus within modal
+    const focusableElements = overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    const firstFocusable = focusableElements[0];
+    const lastFocusable = focusableElements[focusableElements.length - 1];
+    
+    function trapFocus(e) {
+        if (e.key === 'Tab') {
+            if (e.shiftKey && document.activeElement === firstFocusable) {
+                e.preventDefault();
+                lastFocusable.focus();
+            } else if (!e.shiftKey && document.activeElement === lastFocusable) {
+                e.preventDefault();
+                firstFocusable.focus();
+            }
+        }
+        if (e.key === 'Escape') {
+            closeModal();
+        }
+    }
+    
+    function closeModal() {
+        document.removeEventListener('keydown', trapFocus);
+        overlay.remove();
+        if (previouslyFocused) previouslyFocused.focus();
+    }
+    
+    document.addEventListener('keydown', trapFocus);
+    
     // Handle clicks
     overlay.addEventListener('click', (e) => {
         if (e.target.classList.contains('modal-overlay')) {
-            overlay.remove();
+            closeModal();
             if (onCancel) onCancel();
         }
     });
     
     overlay.querySelector('[data-action="confirm"]')?.addEventListener('click', () => {
-        overlay.remove();
+        closeModal();
         if (onConfirm) onConfirm();
     });
     
     overlay.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
-        overlay.remove();
+        closeModal();
         if (onCancel) onCancel();
     });
 }

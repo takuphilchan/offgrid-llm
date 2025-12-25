@@ -267,10 +267,10 @@ func (res *SystemResources) RecommendedModels() []ModelRecommendation {
 			UseGPU:       useGPU,
 		})
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "phi-3.5-mini-instruct",
+			ModelID:      "qwen2.5-3b-instruct",
 			Quantization: "Q4_K_M",
-			Reason:       "Microsoft's efficient model with strong reasoning",
-			SizeGB:       2.2,
+			Reason:       "Fast and reliable 3B model with excellent quality",
+			SizeGB:       2.0,
 			Priority:     1,
 			UseGPU:       useGPU,
 		})
@@ -286,10 +286,10 @@ func (res *SystemResources) RecommendedModels() []ModelRecommendation {
 			UseGPU:       useGPU,
 		})
 		recommendations = append(recommendations, ModelRecommendation{
-			ModelID:      "tinyllama-1.1b-chat",
+			ModelID:      "smollm2-1.7b-instruct",
 			Quantization: "Q4_K_M",
 			Reason:       "Compact and fast for resource-constrained environments",
-			SizeGB:       0.6,
+			SizeGB:       1.0,
 			Priority:     2,
 			UseGPU:       useGPU,
 		})
