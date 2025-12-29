@@ -316,6 +316,68 @@ func (qm *QuotaManager) ResetUserQuota(userID string) {
 	}
 }
 
+// SetUserQuotaLimit sets or updates a specific quota limit for a user
+func (qm *QuotaManager) SetUserQuotaLimit(userID string, qtype QuotaType, period QuotaPeriod, limit int64) error {
+	qm.mu.Lock()
+	defer qm.mu.Unlock()
+
+	quota, ok := qm.quotas[userID]
+	if !ok {
+		// Initialize quota for this user
+		quota = &UserQuota{
+			UserID:    userID,
+			Limits:    []QuotaLimit{},
+			UpdatedAt: time.Now(),
+		}
+		qm.quotas[userID] = quota
+	}
+
+	// Find existing limit or create new one
+	found := false
+	for i := range quota.Limits {
+		if quota.Limits[i].Type == qtype && quota.Limits[i].Period == period {
+			quota.Limits[i].Limit = limit
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		quota.Limits = append(quota.Limits, QuotaLimit{
+			Type:    qtype,
+			Period:  period,
+			Limit:   limit,
+			Current: 0,
+			Reset:   calculateNextReset(period),
+		})
+	}
+
+	quota.UpdatedAt = time.Now()
+	qm.save()
+	return nil
+}
+
+// RemoveUserQuotaLimit removes a specific quota limit for a user
+func (qm *QuotaManager) RemoveUserQuotaLimit(userID string, qtype QuotaType, period QuotaPeriod) {
+	qm.mu.Lock()
+	defer qm.mu.Unlock()
+
+	quota, ok := qm.quotas[userID]
+	if !ok {
+		return
+	}
+
+	newLimits := make([]QuotaLimit, 0, len(quota.Limits))
+	for _, l := range quota.Limits {
+		if !(l.Type == qtype && l.Period == period) {
+			newLimits = append(newLimits, l)
+		}
+	}
+	quota.Limits = newLimits
+	quota.UpdatedAt = time.Now()
+	qm.save()
+}
+
 // DeleteUserQuota deletes a user's quota
 func (qm *QuotaManager) DeleteUserQuota(userID string) {
 	qm.mu.Lock()

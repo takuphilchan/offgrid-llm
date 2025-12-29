@@ -1,5 +1,7 @@
 # Inference Status / TODO (December 2025)
 
+> **Note:** This document covers technical inference details. For the full project roadmap, see [ROADMAP.md](../ROADMAP.md).
+
 This document explains the current inference modes in OffGrid LLM and the remaining work to make **real inference** the default, production-grade experience.
 
 ## Current State

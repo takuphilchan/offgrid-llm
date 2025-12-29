@@ -13,16 +13,52 @@ import (
 
 // BinaryManager handles the lifecycle of the llama-server binary
 type BinaryManager struct {
-	version string
-	binDir  string
+	version   string
+	binDir    string
+	hasNVIDIA bool
+	hasAMD    bool
 }
 
 // NewBinaryManager creates a new binary manager
 func NewBinaryManager(binDir string) *BinaryManager {
-	return &BinaryManager{
+	bm := &BinaryManager{
 		version: "b4320", // Pinned version for stability
 		binDir:  binDir,
 	}
+	bm.detectGPU()
+	return bm
+}
+
+// detectGPU checks for available GPU acceleration
+func (bm *BinaryManager) detectGPU() {
+	// Check for NVIDIA
+	if _, err := exec.LookPath("nvidia-smi"); err == nil {
+		cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader")
+		if output, err := cmd.Output(); err == nil && len(output) > 0 {
+			bm.hasNVIDIA = true
+		}
+	}
+
+	// Check for AMD ROCm
+	if _, err := exec.LookPath("rocm-smi"); err == nil {
+		bm.hasAMD = true
+	}
+}
+
+// HasGPU returns true if GPU acceleration is available
+func (bm *BinaryManager) HasGPU() bool {
+	return bm.hasNVIDIA || bm.hasAMD
+}
+
+// GPUType returns the detected GPU type
+func (bm *BinaryManager) GPUType() string {
+	if bm.hasNVIDIA {
+		return "nvidia"
+	}
+	if bm.hasAMD {
+		return "amd"
+	}
+	return "cpu"
 }
 
 // GetLlamaServer returns the path to the llama-server binary
@@ -73,7 +109,17 @@ func (bm *BinaryManager) downloadBinary(destPath string) error {
 		return err
 	}
 
-	fmt.Printf("Downloading llama-server from %s...\n", url)
+	fmt.Println()
+	fmt.Printf("  ⇣ Downloading llama-server (one-time setup)...\n")
+	fmt.Printf("    Source: %s\n", url)
+	if bm.hasNVIDIA {
+		fmt.Printf("    GPU:    NVIDIA (CUDA acceleration enabled)\n")
+	} else if bm.hasAMD {
+		fmt.Printf("    GPU:    AMD (ROCm acceleration enabled)\n")
+	} else {
+		fmt.Printf("    GPU:    None (CPU mode)\n")
+	}
+	fmt.Println()
 
 	// Download zip to temp file
 	tmpFile, err := os.CreateTemp("", "llama-server-*.zip")
@@ -85,45 +131,88 @@ func (bm *BinaryManager) downloadBinary(destPath string) error {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return err
+		return fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
+		return fmt.Errorf("download failed: HTTP %s", resp.Status)
 	}
 
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
-		return err
+	// Get content length for progress
+	contentLength := resp.ContentLength
+
+	// Download with progress
+	var downloaded int64
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := tmpFile.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			downloaded += int64(n)
+			if contentLength > 0 {
+				percent := float64(downloaded) / float64(contentLength) * 100
+				fmt.Printf("\r    Progress: %.1f%% (%d MB / %d MB)", percent, downloaded/(1024*1024), contentLength/(1024*1024))
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
 	}
+	fmt.Println()
+	fmt.Printf("    ✓ Download complete\n")
 
 	// Extract zip
-	return bm.extractZip(tmpFile.Name(), destPath)
+	fmt.Printf("    Extracting binary...\n")
+	if err := bm.extractZip(tmpFile.Name(), destPath); err != nil {
+		return err
+	}
+	fmt.Printf("    ✓ Installed to %s\n", destPath)
+	fmt.Println()
+
+	return nil
 }
 
 func (bm *BinaryManager) getDownloadURL() (string, error) {
 	baseURL := "https://github.com/ggerganov/llama.cpp/releases/download"
 
-	// Map OS/Arch to asset name
-	// Note: These names are based on recent llama.cpp release conventions
-	// We might need to update this if they change
+	// Map OS/Arch/GPU to asset name
+	// Based on llama.cpp release conventions as of late 2024
 	var assetName string
 
 	switch runtime.GOOS {
 	case "linux":
 		if runtime.GOARCH == "amd64" {
-			assetName = fmt.Sprintf("llama-%s-bin-ubuntu-x64.zip", bm.version)
+			if bm.hasNVIDIA {
+				// CUDA build for NVIDIA GPUs
+				assetName = fmt.Sprintf("llama-%s-bin-ubuntu-x64.zip", bm.version)
+				// Note: The CUDA version is in a separate asset, but the ubuntu build
+				// typically includes CUDA support if nvidia drivers are present
+			} else {
+				assetName = fmt.Sprintf("llama-%s-bin-ubuntu-x64.zip", bm.version)
+			}
 		}
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
+			// Apple Silicon with Metal support
 			assetName = fmt.Sprintf("llama-%s-bin-macos-arm64.zip", bm.version)
 		} else if runtime.GOARCH == "amd64" {
 			assetName = fmt.Sprintf("llama-%s-bin-macos-x64.zip", bm.version)
 		}
 	case "windows":
 		if runtime.GOARCH == "amd64" {
-			// Default to AVX2 for Windows x64
-			assetName = fmt.Sprintf("llama-%s-bin-win-avx2-x64.zip", bm.version)
+			if bm.hasNVIDIA {
+				// CUDA build for Windows with NVIDIA
+				assetName = fmt.Sprintf("llama-%s-bin-win-cuda-cu12.2.0-x64.zip", bm.version)
+			} else {
+				// AVX2 CPU build for Windows
+				assetName = fmt.Sprintf("llama-%s-bin-win-avx2-x64.zip", bm.version)
+			}
 		}
 	}
 
@@ -132,6 +221,38 @@ func (bm *BinaryManager) getDownloadURL() (string, error) {
 	}
 
 	return fmt.Sprintf("%s/%s/%s", baseURL, bm.version, assetName), nil
+}
+
+// GetVersion returns the pinned llama.cpp version
+func (bm *BinaryManager) GetVersion() string {
+	return bm.version
+}
+
+// IsInstalled checks if llama-server is already installed
+func (bm *BinaryManager) IsInstalled() bool {
+	binaryName := "llama-server"
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+	localPath := filepath.Join(bm.binDir, binaryName)
+	_, err := os.Stat(localPath)
+	return err == nil
+}
+
+// GetInstalledPath returns the path to the installed binary, or empty if not installed
+func (bm *BinaryManager) GetInstalledPath() string {
+	binaryName := "llama-server"
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+	localPath := filepath.Join(bm.binDir, binaryName)
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath
+	}
+	if path, err := exec.LookPath("llama-server"); err == nil {
+		return path
+	}
+	return ""
 }
 
 func (bm *BinaryManager) extractZip(zipPath, destPath string) error {

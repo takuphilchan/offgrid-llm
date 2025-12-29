@@ -95,6 +95,11 @@ func (d *Discovery) GetPeers() []*Peer {
 	return peers
 }
 
+// GetNodeID returns the unique identifier for this node
+func (d *Discovery) GetNodeID() string {
+	return d.nodeID
+}
+
 // FindModelOnPeers searches for a model across peers
 func (d *Discovery) FindModelOnPeers(modelID string) []*Peer {
 	d.mu.RLock()
@@ -188,7 +193,7 @@ func (d *Discovery) broadcast() {
 		NodeID:  d.nodeID,
 		Port:    d.localPort,
 		Models:  d.localModels,
-		Version: "0.2.10",
+		Version: "0.2.11",
 	}
 	d.mu.RUnlock()
 

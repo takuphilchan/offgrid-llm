@@ -6,12 +6,15 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -529,4 +532,106 @@ func (l *AuditLogger) ExportForCompliance(outputPath string, filter QueryFilter)
 	}
 
 	return encoder.Encode(report)
+}
+
+// ExportToCSV exports audit logs in CSV format for spreadsheet analysis
+func (l *AuditLogger) ExportToCSV(outputPath string, filter QueryFilter) error {
+	events, err := l.Query(filter)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{
+		"ID", "Timestamp", "Type", "Severity", "Action",
+		"User", "Source", "Target", "Success", "Error", "Details",
+	}
+	if err := writer.Write(header); err != nil {
+		return err
+	}
+
+	// Write events
+	for _, event := range events {
+		// Flatten details map to string
+		detailParts := make([]string, 0, len(event.Details))
+		keys := make([]string, 0, len(event.Details))
+		for k := range event.Details {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			detailParts = append(detailParts, fmt.Sprintf("%s=%s", k, event.Details[k]))
+		}
+		detailsStr := strings.Join(detailParts, "; ")
+
+		row := []string{
+			event.ID,
+			event.Timestamp,
+			string(event.Type),
+			string(event.Severity),
+			event.Action,
+			event.User,
+			event.Source,
+			event.Target,
+			fmt.Sprintf("%t", event.Success),
+			event.ErrorMessage,
+			detailsStr,
+		}
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetStats returns summary statistics for audit logs
+func (l *AuditLogger) GetStats(filter QueryFilter) (*AuditStats, error) {
+	events, err := l.Query(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := &AuditStats{
+		TotalEvents:  len(events),
+		ByType:       make(map[EventType]int),
+		BySeverity:   make(map[EventSeverity]int),
+		ByUser:       make(map[string]int),
+		SuccessCount: 0,
+		FailureCount: 0,
+	}
+
+	for _, event := range events {
+		stats.ByType[event.Type]++
+		stats.BySeverity[event.Severity]++
+		if event.User != "" {
+			stats.ByUser[event.User]++
+		}
+		if event.Success {
+			stats.SuccessCount++
+		} else {
+			stats.FailureCount++
+		}
+	}
+
+	return stats, nil
+}
+
+// AuditStats contains summary statistics
+type AuditStats struct {
+	TotalEvents  int                   `json:"total_events"`
+	ByType       map[EventType]int     `json:"by_type"`
+	BySeverity   map[EventSeverity]int `json:"by_severity"`
+	ByUser       map[string]int        `json:"by_user"`
+	SuccessCount int                   `json:"success_count"`
+	FailureCount int                   `json:"failure_count"`
 }

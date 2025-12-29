@@ -1,54 +1,13 @@
         :root {
-            /* Light Theme - Clean & Crisp */
-            --bg-primary: #ffffff;
-            --bg-secondary: #f9fafb;
-            --bg-tertiary: #f3f4f6;
-            --text-primary: #111827;
-            --text-secondary: #6b7280;
-            --accent-primary: #06b6d4; /* Cyan 500 */
-            --accent-primary-rgb: 6, 182, 212;
-            --accent-hover: #0891b2; /* Cyan 600 */
-            --accent-primary-alpha: rgba(6, 182, 212, 0.15);
-            --border-color: #e5e7eb;
-            --card-bg: #ffffff;
-            --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
-            --card-shadow-hover: 0 10px 40px -10px rgba(0, 0, 0, 0.1), 0 4px 12px -4px rgba(0, 0, 0, 0.05);
-            --input-bg: #ffffff;
-            --input-border: #e5e7eb;
-            --code-bg: #f9fafb;
-            --code-inline-bg: #f3f4f6;
-            --header-bg: rgba(255, 255, 255, 0.85);
-            --nav-bg: #f9fafb;
-            --message-user-bg: #f3f4f6;
-            --message-assistant-bg: transparent;
-            --scrollbar-track: transparent;
-            --scrollbar-thumb: #d1d5db;
-            --scrollbar-thumb-hover: #9ca3af;
-            --terminal-bg: #111827;
-            --terminal-text: #e5e7eb;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #ea580c; /* Orange 600 - visible in both modes */
-            --loading-color: #ea580c;
-            
-            /* Refined Radius */
-            --radius-sm: 6px;
-            --radius-md: 10px;
-            --radius-lg: 14px;
-            --radius-xl: 20px;
-            --radius-full: 9999px;
-        }
-
-        [data-theme="dark"] {
-            /* Dark Theme - True Neutral */
+            /* Dark Theme - Default */
             --bg-primary: #0a0a0a;
             --bg-secondary: #171717;
             --bg-tertiary: #262626;
             --text-primary: #fafafa;
             --text-secondary: #a3a3a3;
-            --accent-primary: #06b6d4;
+            --accent-primary: #06b6d4; /* Cyan 500 */
             --accent-primary-rgb: 6, 182, 212;
-            --accent-hover: #0891b2;
+            --accent-hover: #0891b2; /* Cyan 600 */
             --accent-primary-alpha: rgba(6, 182, 212, 0.15);
             --border-color: #262626;
             --card-bg: #171717;
@@ -71,6 +30,47 @@
             --danger-color: #f87171;
             --warning-color: #fb923c; /* Orange 400 - visible in both modes */
             --loading-color: #fb923c;
+            
+            /* Refined Radius */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-xl: 20px;
+            --radius-full: 9999px;
+        }
+
+        [data-theme="light"] {
+            /* Light Theme - Clean & Crisp */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --bg-tertiary: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --accent-primary: #06b6d4;
+            --accent-primary-rgb: 6, 182, 212;
+            --accent-hover: #0891b2;
+            --accent-primary-alpha: rgba(6, 182, 212, 0.15);
+            --border-color: #e5e7eb;
+            --card-bg: #ffffff;
+            --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+            --card-shadow-hover: 0 10px 40px -10px rgba(0, 0, 0, 0.1), 0 4px 12px -4px rgba(0, 0, 0, 0.05);
+            --input-bg: #ffffff;
+            --input-border: #e5e7eb;
+            --code-bg: #f9fafb;
+            --code-inline-bg: #f3f4f6;
+            --header-bg: rgba(255, 255, 255, 0.85);
+            --nav-bg: #f9fafb;
+            --message-user-bg: #f3f4f6;
+            --message-assistant-bg: transparent;
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: #d1d5db;
+            --scrollbar-thumb-hover: #9ca3af;
+            --terminal-bg: #111827;
+            --terminal-text: #e5e7eb;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #ea580c; /* Orange 600 - visible in both modes */
+            --loading-color: #ea580c;
         }
 
         * { 

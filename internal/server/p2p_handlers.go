@@ -22,6 +22,45 @@ func (s *Server) handleP2PPeers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(peers)
 }
 
+// handleP2PStatus returns the P2P network status including shared models
+func (s *Server) handleP2PStatus(w http.ResponseWriter, r *http.Request) {
+	type P2PStatus struct {
+		Enabled      bool     `json:"enabled"`
+		NodeID       string   `json:"node_id"`
+		PeerCount    int      `json:"peer_count"`
+		SharedModels []string `json:"shared_models"`
+		RemoteModels int      `json:"remote_models"`
+	}
+
+	status := P2PStatus{
+		Enabled:      s.config.EnableP2P,
+		SharedModels: []string{},
+	}
+
+	if s.config.EnableP2P && s.p2pDiscovery != nil {
+		peers := s.p2pDiscovery.GetPeers()
+		status.PeerCount = len(peers)
+		status.NodeID = s.p2pDiscovery.GetNodeID()
+
+		// Get shared models from registry
+		for _, m := range s.registry.ListModels() {
+			status.SharedModels = append(status.SharedModels, m.ID)
+		}
+
+		// Count unique remote models
+		remoteModels := make(map[string]bool)
+		for _, peer := range peers {
+			for _, model := range peer.Models {
+				remoteModels[model] = true
+			}
+		}
+		status.RemoteModels = len(remoteModels)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
+}
+
 // handleP2PDownload initiates a download from a peer
 func (s *Server) handleP2PDownload(w http.ResponseWriter, r *http.Request) {
 	if !s.config.EnableP2P {

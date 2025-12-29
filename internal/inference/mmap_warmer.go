@@ -364,3 +364,111 @@ func (w *MmapWarmer) Stats() map[string]interface{} {
 		"lifetime_warmups": atomic.LoadInt64(&w.totalWarmed),
 	}
 }
+
+// FastWarmModel uses aggressive read-ahead for faster warming on 12GB+ RAM systems.
+// This reads the file in larger chunks with concurrent I/O for maximum speed.
+func (w *MmapWarmer) FastWarmModel(modelPath string) (*WarmStatus, error) {
+	// Skip if paused
+	if w.IsPaused() {
+		return nil, fmt.Errorf("warming paused")
+	}
+
+	// Check if already warming
+	if _, warming := w.warmingNow.LoadOrStore(modelPath, true); warming {
+		return nil, fmt.Errorf("already warming")
+	}
+	defer w.warmingNow.Delete(modelPath)
+
+	// Check if recently warmed
+	if status, ok := w.warmedModels.Load(modelPath); ok {
+		ws := status.(*WarmStatus)
+		if time.Since(ws.WarmedAt) < 5*time.Minute {
+			return ws, nil // Still warm
+		}
+	}
+
+	start := time.Now()
+	log.Printf("Fast warming: %s", filepath.Base(modelPath))
+
+	info, err := os.Stat(modelPath)
+	if err != nil {
+		return nil, err
+	}
+
+	status := &WarmStatus{
+		ModelPath: modelPath,
+		ModelName: filepath.Base(modelPath),
+		SizeBytes: info.Size(),
+		SizeMB:    info.Size() / (1024 * 1024),
+	}
+
+	f, err := os.Open(modelPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	// Use large 16MB chunks for sequential read-ahead
+	chunkSize := 16 * 1024 * 1024
+
+	// Read with multiple concurrent readers for maximum throughput
+	numReaders := 4
+	chunksChan := make(chan int64, numReaders*2)
+	var wg sync.WaitGroup
+
+	// Producer: queue up chunks to read
+	go func() {
+		fileSize := info.Size()
+		for offset := int64(0); offset < fileSize; offset += int64(chunkSize) {
+			chunksChan <- offset
+		}
+		close(chunksChan)
+	}()
+
+	// Consumers: read chunks concurrently
+	for i := 0; i < numReaders; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, chunkSize)
+			for offset := range chunksChan {
+				if w.IsPaused() {
+					return
+				}
+				f.ReadAt(buf, offset)
+				// Touch first and last byte to ensure in cache
+				_ = buf[0]
+				if len(buf) > 1 {
+					_ = buf[len(buf)-1]
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	status.WarmTime = time.Since(start)
+	status.WarmedAt = time.Now()
+	status.InPageCache = true
+
+	w.warmedModels.Store(modelPath, status)
+	atomic.AddInt64(&w.totalWarmed, 1)
+
+	speedMBps := float64(status.SizeMB) / status.WarmTime.Seconds()
+	log.Printf("Fast warm complete: %s in %v (%.1f MB/s)",
+		status.ModelName, status.WarmTime.Round(time.Millisecond), speedMBps)
+
+	return status, nil
+}
+
+// WarmOnDemand immediately warms a model for an imminent load operation.
+// This is called when user hovers over a model in the UI.
+func (w *MmapWarmer) WarmOnDemand(modelPath string) {
+	go func() {
+		// Use fast warming for on-demand requests
+		if _, err := w.FastWarmModel(modelPath); err != nil {
+			// Fall back to normal warming
+			w.WarmModel(modelPath)
+		}
+	}()
+}

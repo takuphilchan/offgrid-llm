@@ -175,10 +175,48 @@ let currentUserDetails = null;
 
 async function showUserDetails(userId) {
     try {
-        const resp = await fetch(`/v1/users/${userId}`);
-        if (!resp.ok) throw new Error('Failed to fetch user');
-        const user = await resp.json();
+        const [userResp, quotaResp] = await Promise.all([
+            fetch(`/v1/users/${userId}`),
+            fetch(`/v1/quota/${userId}`)
+        ]);
+        
+        if (!userResp.ok) throw new Error('Failed to fetch user');
+        const user = await userResp.json();
+        const quotaData = quotaResp.ok ? await quotaResp.json() : { quotas: [] };
         currentUserDetails = user;
+        
+        const quotas = quotaData.quotas || [];
+        let quotaHTML = '';
+        
+        if (quotas.length > 0) {
+            quotaHTML = quotas.map(q => {
+                const percent = q.limit > 0 ? Math.min(100, Math.round((q.current / q.limit) * 100)) : 0;
+                const barColor = percent >= 90 ? 'bg-red-500' : percent >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
+                return `
+                    <div class="bg-tertiary rounded-lg p-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-medium capitalize">${q.type.replace(/_/g, ' ')}</span>
+                            <span class="text-xs text-secondary">per ${q.period}</span>
+                        </div>
+                        <div class="flex items-baseline gap-1 mb-2">
+                            <span class="text-lg font-bold">${formatNumber(q.current)}</span>
+                            <span class="text-xs text-secondary">/ ${formatNumber(q.limit)}</span>
+                        </div>
+                        <div class="h-1.5 bg-primary rounded-full overflow-hidden">
+                            <div class="h-full ${barColor} transition-all" style="width: ${percent}%"></div>
+                        </div>
+                        ${q.exceeded ? '<span class="text-xs text-red-400 mt-1 block">Quota exceeded</span>' : ''}
+                    </div>
+                `;
+            }).join('');
+        } else {
+            quotaHTML = `
+                <div class="col-span-2 text-center py-4">
+                    <p class="text-secondary text-sm">No quotas configured</p>
+                    <p class="text-xs text-secondary mt-1">Default role-based limits apply</p>
+                </div>
+            `;
+        }
         
         const content = document.getElementById('userDetailsContent');
         content.innerHTML = `
@@ -212,16 +250,15 @@ async function showUserDetails(userId) {
             </div>
             
             <div class="pt-4 border-t border-theme">
-                <h5 class="text-sm font-semibold mb-3">Quota & Usage</h5>
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-tertiary rounded-lg p-3">
-                        <div class="text-2xl font-bold text-accent">${user.tokens_used || 0}</div>
-                        <div class="text-xs text-secondary">Tokens Used</div>
+                <div class="flex justify-between items-center mb-3">
+                    <h5 class="text-sm font-semibold">Quota & Usage</h5>
+                    <div class="flex gap-2">
+                        <button onclick="showSetQuotaModal('${user.id}')" class="text-xs text-accent hover:underline">Set Quota</button>
+                        <button onclick="resetUserQuota('${user.id}')" class="text-xs text-amber-400 hover:underline">Reset Usage</button>
                     </div>
-                    <div class="bg-tertiary rounded-lg p-3">
-                        <div class="text-2xl font-bold text-emerald-400">${user.requests_count || 0}</div>
-                        <div class="text-xs text-secondary">Requests Made</div>
-                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    ${quotaHTML}
                 </div>
             </div>
         `;
@@ -346,3 +383,105 @@ function showInputPrompt(message, onSubmit, options = {}) {
     });
 }
 
+// Helper function to format numbers with K/M suffixes
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+// Reset user quota usage
+async function resetUserQuota(userId) {
+    showConfirm('Reset all quota usage counters for this user? This will not change the limits.', async () => {
+        try {
+            const resp = await fetch(`/v1/quota/${userId}?action=reset`, {
+                method: 'DELETE'
+            });
+            if (!resp.ok) throw new Error('Failed to reset quota');
+            showAlert('Quota usage reset successfully', { title: 'Reset Complete', type: 'success' });
+            showUserDetails(userId); // Refresh the modal
+        } catch (e) {
+            showAlert('Failed to reset quota: ' + e.message, { title: 'Error', type: 'error' });
+        }
+    }, { title: 'Reset Quota Usage?', type: 'warning', confirmText: 'Reset', cancelText: 'Cancel' });
+}
+
+// Show modal to set quota
+function showSetQuotaModal(userId) {
+    const modal = document.createElement('div');
+    modal.id = 'setQuotaModal';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[100]';
+    modal.innerHTML = `
+        <div class="bg-card border border-theme rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+            <h3 class="text-lg font-semibold mb-4">Set Quota Limit</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-secondary block mb-1">Quota Type</label>
+                    <select id="quotaType" class="w-full input-theme rounded-lg px-3 py-2">
+                        <option value="requests">Requests</option>
+                        <option value="tokens_input">Input Tokens</option>
+                        <option value="tokens_output">Output Tokens</option>
+                        <option value="tokens_total">Total Tokens</option>
+                        <option value="documents">Documents</option>
+                        <option value="rag_queries">RAG Queries</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-secondary block mb-1">Period</label>
+                    <select id="quotaPeriod" class="w-full input-theme rounded-lg px-3 py-2">
+                        <option value="minute">Per Minute</option>
+                        <option value="hour">Per Hour</option>
+                        <option value="day" selected>Per Day</option>
+                        <option value="month">Per Month</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-secondary block mb-1">Limit</label>
+                    <input type="number" id="quotaLimit" min="1" value="1000" class="w-full input-theme rounded-lg px-3 py-2">
+                </div>
+            </div>
+            
+            <div class="flex gap-3 mt-6">
+                <button onclick="document.getElementById('setQuotaModal').remove()" class="btn btn-secondary flex-1">Cancel</button>
+                <button onclick="submitQuotaLimit('${userId}')" class="btn btn-primary flex-1">Set Limit</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+// Submit quota limit
+async function submitQuotaLimit(userId) {
+    const type = document.getElementById('quotaType').value;
+    const period = document.getElementById('quotaPeriod').value;
+    const limit = parseInt(document.getElementById('quotaLimit').value, 10);
+    
+    if (!limit || limit <= 0) {
+        showAlert('Please enter a valid limit', { title: 'Invalid Input', type: 'warning' });
+        return;
+    }
+    
+    try {
+        const resp = await fetch(`/v1/quota/${userId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, period, limit })
+        });
+        
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.error || 'Failed to set quota');
+        }
+        
+        document.getElementById('setQuotaModal').remove();
+        showAlert(`Quota set: ${formatNumber(limit)} ${type.replace(/_/g, ' ')} per ${period}`, { title: 'Quota Updated', type: 'success' });
+        showUserDetails(userId); // Refresh the modal
+    } catch (e) {
+        showAlert('Failed to set quota: ' + e.message, { title: 'Error', type: 'error' });
+    }
+}

@@ -625,3 +625,507 @@ async function addMCPServer() {
     }
 }
 
+// ============================================
+// CUSTOM TOOL CREATION
+// ============================================
+
+function showCreateToolModal() {
+    document.getElementById('createToolModal').classList.add('show');
+    document.getElementById('customToolName').value = '';
+    document.getElementById('customToolDesc').value = '';
+    document.getElementById('customToolType').value = 'shell';
+    document.getElementById('customToolCommand').value = '';
+    document.getElementById('customToolUrl').value = '';
+    toggleToolTypeFields();
+}
+
+function hideCreateToolModal() {
+    document.getElementById('createToolModal').classList.remove('show');
+}
+
+function toggleToolTypeFields() {
+    const type = document.getElementById('customToolType').value;
+    const shellFields = document.getElementById('shellToolFields');
+    const httpFields = document.getElementById('httpToolFields');
+    
+    if (type === 'shell') {
+        shellFields.classList.remove('hidden');
+        httpFields.classList.add('hidden');
+    } else {
+        shellFields.classList.add('hidden');
+        httpFields.classList.remove('hidden');
+    }
+}
+
+function fillToolTemplate(name, description, type, commandOrUrl) {
+    document.getElementById('customToolName').value = name;
+    document.getElementById('customToolDesc').value = description;
+    document.getElementById('customToolType').value = type;
+    toggleToolTypeFields();
+    
+    if (type === 'shell') {
+        document.getElementById('customToolCommand').value = commandOrUrl;
+    } else {
+        document.getElementById('customToolUrl').value = commandOrUrl;
+    }
+}
+
+async function createCustomTool() {
+    const name = document.getElementById('customToolName').value.trim();
+    const description = document.getElementById('customToolDesc').value.trim();
+    const type = document.getElementById('customToolType').value;
+    const command = document.getElementById('customToolCommand').value.trim();
+    const url = document.getElementById('customToolUrl').value.trim();
+    
+    // Validation
+    if (!name) {
+        showAlert('Please enter a tool name', { title: 'Missing Information', type: 'warning' });
+        return;
+    }
+    
+    if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+        showAlert('Tool name must start with a letter and contain only lowercase letters, numbers, and underscores', { title: 'Invalid Name', type: 'warning' });
+        return;
+    }
+    
+    if (!description) {
+        showAlert('Please enter a description', { title: 'Missing Information', type: 'warning' });
+        return;
+    }
+    
+    if (type === 'shell' && !command) {
+        showAlert('Please enter a shell command', { title: 'Missing Information', type: 'warning' });
+        return;
+    }
+    
+    if (type === 'http' && !url) {
+        showAlert('Please enter a URL', { title: 'Missing Information', type: 'warning' });
+        return;
+    }
+    
+    try {
+        const payload = {
+            name,
+            description,
+            type,
+            parameters: {}
+        };
+        
+        if (type === 'shell') {
+            payload.command = command;
+        } else {
+            payload.url = url;
+        }
+        
+        const resp = await fetch('/v1/agents/tools', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await resp.json();
+        
+        if (resp.ok) {
+            showAlert(`Custom tool "${name}" created successfully!`, { title: 'Tool Created', type: 'success' });
+            hideCreateToolModal();
+            loadAgentTools();
+        } else {
+            throw new Error(data.error || 'Failed to create tool');
+        }
+    } catch (e) {
+        showAlert('Failed to create tool: ' + e.message, { title: 'Error', type: 'error' });
+    }
+}
+
+// ============================================
+// MULTI-AGENT ORCHESTRATION
+// ============================================
+
+const orchestrationModeDescriptions = {
+    'sequential': 'Agents run one after another, passing context',
+    'parallel': 'All agents work simultaneously on the task',
+    'debate': 'Agents discuss and refine their answers',
+    'voting': 'Agents vote on the best answer',
+    'hierarchy': 'Supervisor delegates to specialist agents'
+};
+
+// Update mode description when selection changes
+document.addEventListener('DOMContentLoaded', function() {
+    const modeSelect = document.getElementById('orchestrationMode');
+    if (modeSelect) {
+        modeSelect.addEventListener('change', function() {
+            const desc = document.getElementById('orchestrationModeDesc');
+            if (desc) {
+                desc.textContent = orchestrationModeDescriptions[this.value] || '';
+            }
+        });
+    }
+});
+
+async function runOrchestration() {
+    const task = document.getElementById('agentTask')?.value?.trim();
+    if (!task) {
+        showAlert('Please enter a task first', { type: 'warning' });
+        return;
+    }
+    
+    const mode = document.getElementById('orchestrationMode')?.value || 'sequential';
+    const model = document.getElementById('agentModel')?.value;
+    
+    if (!model) {
+        showAlert('Please select a model first', { type: 'warning' });
+        return;
+    }
+    
+    // Show progress
+    const output = document.getElementById('agentOutput');
+    const status = document.getElementById('agentStatus');
+    
+    output.innerHTML = `
+        <div class="p-4">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="animate-spin w-5 h-5 border-2 border-accent border-t-transparent rounded-full"></div>
+                <span class="text-accent font-medium">Running multi-agent orchestration (${mode})...</span>
+            </div>
+            <div class="text-sm text-secondary">
+                Multiple agents are collaborating on your task. This may take a few minutes.
+            </div>
+        </div>
+    `;
+    status.textContent = `Multi-agent: ${mode}`;
+    
+    // Define default agents based on mode
+    const defaultAgents = [
+        { name: 'Researcher', template: 'researcher', description: 'Research and analysis specialist' },
+        { name: 'Coder', template: 'coder', description: 'Code implementation specialist' }
+    ];
+    
+    // For debate/voting, add a third agent for more perspectives
+    if (mode === 'debate' || mode === 'voting') {
+        defaultAgents.push({ name: 'Analyst', template: 'analyst', description: 'Critical analysis specialist' });
+    }
+    
+    // For hierarchy, mark first as supervisor
+    if (mode === 'hierarchy') {
+        defaultAgents[0].priority = 0;
+        defaultAgents[1].priority = 1;
+    }
+    
+    try {
+        const resp = await fetch('/v1/agents/orchestrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: task,
+                mode: mode,
+                agents: defaultAgents,
+                config: {
+                    mode: mode,
+                    max_rounds: 3,
+                    voting_quorum: 0.5,
+                    supervisor: mode === 'hierarchy' ? 'Researcher' : '',
+                    final_aggregator: 'combine'
+                }
+            })
+        });
+        
+        const result = await resp.json();
+        
+        if (result.error) {
+            output.innerHTML = `
+                <div class="p-4">
+                    <div class="text-red-400 font-medium mb-2">Orchestration Error</div>
+                    <div class="text-sm text-secondary">${result.error}</div>
+                </div>
+            `;
+            status.textContent = 'Error';
+            return;
+        }
+        
+        // Display results
+        output.innerHTML = renderOrchestrationResult(result);
+        status.textContent = `Complete (${(result.total_duration / 1000000000).toFixed(1)}s)`;
+        
+    } catch (e) {
+        output.innerHTML = `
+            <div class="p-4">
+                <div class="text-red-400 font-medium mb-2">Request Failed</div>
+                <div class="text-sm text-secondary">${e.message}</div>
+            </div>
+        `;
+        status.textContent = 'Error';
+    }
+}
+
+function renderOrchestrationResult(result) {
+    let html = '<div class="space-y-4 p-4">';
+    
+    // Mode badge
+    html += `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="px-2 py-1 rounded bg-accent/20 text-accent font-medium">${result.mode}</span>
+            <span class="text-secondary">${result.agent_results?.length || 0} agents participated</span>
+        </div>
+    `;
+    
+    // Consensus for voting mode
+    if (result.mode === 'voting' && result.consensus !== undefined) {
+        const consensusPercent = Math.round(result.consensus * 100);
+        html += `
+            <div class="p-3 bg-tertiary rounded-lg">
+                <div class="text-sm font-medium mb-1">Consensus: ${consensusPercent}%</div>
+                <div class="w-full bg-gray-600 rounded-full h-2">
+                    <div class="bg-accent h-2 rounded-full" style="width: ${consensusPercent}%"></div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Debate rounds
+    if (result.debate_rounds && result.debate_rounds.length > 0) {
+        html += '<div class="space-y-2">';
+        result.debate_rounds.forEach(round => {
+            html += `
+                <div class="p-3 bg-tertiary rounded-lg">
+                    <div class="text-xs text-secondary mb-2">Round ${round.round}</div>
+                    <div class="space-y-2">
+                        ${round.arguments.map(arg => `
+                            <div class="border-l-2 border-accent/50 pl-3">
+                                <div class="font-medium text-sm">${arg.agent_name}</div>
+                                <div class="text-xs text-secondary mt-1">${arg.position.substring(0, 200)}...</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+    
+    // Agent results (for non-debate modes)
+    if (result.agent_results && result.agent_results.length > 0 && (!result.debate_rounds || result.debate_rounds.length === 0)) {
+        html += '<div class="space-y-2">';
+        result.agent_results.forEach(ar => {
+            html += `
+                <div class="p-3 bg-tertiary rounded-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium text-sm">${ar.agent_name}</span>
+                        <span class="text-xs text-secondary">${(ar.duration / 1000000000).toFixed(1)}s</span>
+                    </div>
+                    <div class="text-xs text-secondary">${ar.result.substring(0, 300)}...</div>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+    
+    // Final result
+    if (result.final_result) {
+        html += `
+            <div class="p-4 bg-accent/10 border border-accent/30 rounded-lg">
+                <div class="font-medium text-accent mb-2">Final Result</div>
+                <div class="text-sm prose prose-invert max-w-none">
+                    ${formatMarkdown(result.final_result)}
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    return html;
+}
+
+function formatMarkdown(text) {
+    // Simple markdown formatting
+    if (!text) return '';
+    return text
+        .replace(/^### (.*$)/gm, '<h4 class="font-medium mt-3 mb-1">$1</h4>')
+        .replace(/^## (.*$)/gm, '<h3 class="font-medium mt-4 mb-2">$1</h3>')
+        .replace(/^# (.*$)/gm, '<h2 class="font-bold mt-4 mb-2">$1</h2>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code class="px-1 py-0.5 bg-gray-700 rounded text-xs">$1</code>')
+        .replace(/\n/g, '<br>');
+}
+
+// ============================================
+// MCP MARKETPLACE FUNCTIONS
+// ============================================
+
+let mcpMarketplaceData = [];
+
+async function showMCPMarketplace() {
+    document.getElementById('mcpMarketplaceModal').classList.add('show');
+    await loadMCPMarketplace();
+}
+
+function hideMCPMarketplace() {
+    document.getElementById('mcpMarketplaceModal').classList.remove('show');
+}
+
+async function loadMCPMarketplace(category = '', search = '') {
+    try {
+        let url = '/v1/agents/mcp/marketplace';
+        const params = new URLSearchParams();
+        if (category) params.append('category', category);
+        if (search) params.append('search', search);
+        if (params.toString()) url += '?' + params.toString();
+        
+        const resp = await fetch(url);
+        const data = await resp.json();
+        
+        mcpMarketplaceData = data.servers || [];
+        document.getElementById('mcpMarketplaceInstalledCount').textContent = data.installed_count || 0;
+        
+        renderMCPMarketplace();
+    } catch (e) {
+        console.error('Failed to load MCP marketplace:', e);
+        document.getElementById('mcpMarketplaceList').innerHTML = 
+            '<div class="text-center py-8 text-red-400">Failed to load servers</div>';
+    }
+}
+
+function renderMCPMarketplace() {
+    const container = document.getElementById('mcpMarketplaceList');
+    if (!mcpMarketplaceData || mcpMarketplaceData.length === 0) {
+        container.innerHTML = '<div class="col-span-2 text-center py-8 text-secondary">No servers found</div>';
+        return;
+    }
+    
+    container.innerHTML = mcpMarketplaceData.map(server => `
+        <div class="p-4 bg-secondary rounded-xl border border-transparent hover:border-accent/30 transition-colors">
+            <div class="flex items-start justify-between mb-2">
+                <div>
+                    <h4 class="font-medium text-sm">${server.name}</h4>
+                    <span class="text-xs px-1.5 py-0.5 bg-tertiary rounded">${server.category}</span>
+                </div>
+                ${server.installed 
+                    ? `<span class="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full">Installed</span>`
+                    : `<button onclick="installMCPServer('${server.id}')" class="btn btn-primary btn-sm">Install</button>`
+                }
+            </div>
+            <p class="text-xs text-secondary mb-2 line-clamp-2">${server.description || ''}</p>
+            <div class="flex flex-wrap gap-1 mt-2">
+                ${(server.tags || []).slice(0, 3).map(tag => 
+                    `<span class="text-xs px-1.5 py-0.5 bg-tertiary rounded">${tag}</span>`
+                ).join('')}
+            </div>
+            ${server.tools && server.tools.length > 0 ? `
+                <div class="text-xs text-secondary mt-2">
+                    <span class="text-accent">${server.tools.length}</span> tools: ${server.tools.slice(0, 3).join(', ')}${server.tools.length > 3 ? '...' : ''}
+                </div>
+            ` : ''}
+            ${server.installed ? `
+                <div class="flex gap-2 mt-3">
+                    <button onclick="configureMCPServer('${server.id}')" class="btn btn-secondary btn-sm text-xs">Configure</button>
+                    <button onclick="uninstallMCPServer('${server.id}')" class="btn btn-danger btn-sm text-xs">Uninstall</button>
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function searchMCPMarketplace(query) {
+    loadMCPMarketplace('', query);
+}
+
+function filterMCPMarketplace(category) {
+    loadMCPMarketplace(category, '');
+}
+
+async function installMCPServer(serverId) {
+    try {
+        // Check if server needs environment variables
+        const serverResp = await fetch(`/v1/agents/mcp/marketplace/${serverId}`);
+        const serverData = await serverResp.json();
+        
+        let env = {};
+        if (serverData.server && serverData.server.env) {
+            // Server needs API keys - prompt user
+            const envKeys = Object.keys(serverData.server.env);
+            if (envKeys.length > 0) {
+                for (const key of envKeys) {
+                    const value = prompt(`Enter value for ${key}:`, '');
+                    if (value !== null && value !== '') {
+                        env[key] = value;
+                    }
+                }
+            }
+        }
+        
+        const resp = await fetch(`/v1/agents/mcp/marketplace/${serverId}/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ env })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showToast && showToast(`Installed ${serverId}`, 'success');
+            await loadMCPMarketplace();
+            await loadAgentTools(); // Refresh tools
+        } else {
+            showToast && showToast(data.error || 'Installation failed', 'error');
+        }
+    } catch (e) {
+        console.error('Failed to install MCP server:', e);
+        showToast && showToast('Installation failed: ' + e.message, 'error');
+    }
+}
+
+async function uninstallMCPServer(serverId) {
+    if (!confirm(`Uninstall ${serverId}?`)) return;
+    
+    try {
+        const resp = await fetch(`/v1/agents/mcp/marketplace/${serverId}/uninstall`, {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showToast && showToast(`Uninstalled ${serverId}`, 'success');
+            await loadMCPMarketplace();
+            await loadAgentTools();
+        } else {
+            showToast && showToast(data.error || 'Uninstall failed', 'error');
+        }
+    } catch (e) {
+        console.error('Failed to uninstall MCP server:', e);
+    }
+}
+
+async function configureMCPServer(serverId) {
+    try {
+        const resp = await fetch(`/v1/agents/mcp/marketplace/${serverId}`);
+        const data = await resp.json();
+        
+        if (!data.config || !data.config.env) {
+            showToast && showToast('No configuration options', 'info');
+            return;
+        }
+        
+        // Simple prompt-based configuration
+        const env = data.config.env || {};
+        const envKeys = Object.keys(env);
+        
+        for (const key of envKeys) {
+            const currentValue = env[key] || '';
+            const newValue = prompt(`${key}:`, currentValue);
+            if (newValue !== null && newValue !== currentValue) {
+                env[key] = newValue;
+            }
+        }
+        
+        // Save updated env
+        await fetch(`/v1/agents/mcp/marketplace/${serverId}/configure`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ env })
+        });
+        
+        showToast && showToast('Configuration saved', 'success');
+    } catch (e) {
+        console.error('Failed to configure MCP server:', e);
+    }
+}
+

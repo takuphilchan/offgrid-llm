@@ -63,13 +63,13 @@ func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*Pa
 	// Code files
 	case ".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".rs", ".rb", ".php":
 		return p.ParseCode(content, ext)
-	// Unsupported complex binary formats
+	// Document formats
 	case ".pdf":
-		return nil, fmt.Errorf("PDF files are not currently supported. Please convert to TXT or DOCX first")
-	case ".xlsx":
-		return nil, fmt.Errorf("Excel files are not currently supported. Please export to CSV first")
+		return p.ParsePDF(content)
+	case ".xlsx", ".xls":
+		return p.ParseXLSX(content)
 	case ".pptx":
-		return nil, fmt.Errorf("PowerPoint files are not currently supported. Please export to TXT or copy text content")
+		return p.ParsePPTX(content)
 	default:
 		// Try to parse as plain text if valid UTF-8
 		if utf8.Valid(content) {
@@ -79,30 +79,44 @@ func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*Pa
 	}
 }
 
-// ParsePDF extracts text from a PDF file
+// ParsePDF extracts text from a PDF file with layout awareness
 // First tries pdftotext (poppler-utils) for best results, falls back to basic extraction
+// Also detects images and provides metadata about document structure
 func (p *DocumentParser) ParsePDF(content []byte) (*ParseResult, error) {
 	// Check PDF signature
 	if len(content) < 5 || string(content[:5]) != "%PDF-" {
 		return nil, fmt.Errorf("invalid PDF file: missing PDF header")
 	}
 
-	// Try pdftotext first (best quality extraction)
+	// Detect images in PDF
+	imageCount := countPDFImages(content)
+	hasImages := imageCount > 0
+
+	// Try pdftotext first (best quality extraction with layout)
 	text, err := p.extractPDFWithPdftotext(content)
 	if err == nil && text != "" {
 		text = cleanExtractedText(text)
 		if text != "" {
 			pageCount := countPDFPages(content)
+			metadata := map[string]string{
+				"format":      "pdf",
+				"page_count":  fmt.Sprintf("%d", pageCount),
+				"extractor":   "pdftotext",
+				"has_images":  fmt.Sprintf("%t", hasImages),
+				"image_count": fmt.Sprintf("%d", imageCount),
+			}
+
+			// Add warning if images detected
+			if hasImages {
+				metadata["note"] = "PDF contains images - text from images not extracted"
+			}
+
 			return &ParseResult{
 				Content:     text,
 				ContentType: "application/pdf",
-				Metadata: map[string]string{
-					"format":     "pdf",
-					"page_count": fmt.Sprintf("%d", pageCount),
-					"extractor":  "pdftotext",
-				},
-				PageCount: pageCount,
-				WordCount: countWords(text),
+				Metadata:    metadata,
+				PageCount:   pageCount,
+				WordCount:   countWords(text),
 			}, nil
 		}
 	}
@@ -115,20 +129,31 @@ func (p *DocumentParser) ParsePDF(content []byte) (*ParseResult, error) {
 
 	text = cleanExtractedText(text)
 	if text == "" {
-		return nil, fmt.Errorf("no text content extracted from PDF (may be scanned/image-based or using unsupported font encoding)")
+		if hasImages {
+			return nil, fmt.Errorf("no text content extracted from PDF (contains %d images - may be scanned/image-based)", imageCount)
+		}
+		return nil, fmt.Errorf("no text content extracted from PDF (may be using unsupported font encoding)")
 	}
 
 	pageCount := countPDFPages(content)
+	metadata := map[string]string{
+		"format":      "pdf",
+		"page_count":  fmt.Sprintf("%d", pageCount),
+		"extractor":   "basic",
+		"has_images":  fmt.Sprintf("%t", hasImages),
+		"image_count": fmt.Sprintf("%d", imageCount),
+	}
+
+	if hasImages {
+		metadata["note"] = "PDF contains images - text from images not extracted"
+	}
+
 	return &ParseResult{
 		Content:     text,
 		ContentType: "application/pdf",
-		Metadata: map[string]string{
-			"format":     "pdf",
-			"page_count": fmt.Sprintf("%d", pageCount),
-			"extractor":  "basic",
-		},
-		PageCount: pageCount,
-		WordCount: countWords(text),
+		Metadata:    metadata,
+		PageCount:   pageCount,
+		WordCount:   countWords(text),
 	}, nil
 }
 
@@ -230,6 +255,23 @@ func countPDFPages(content []byte) int {
 	pageRegex := regexp.MustCompile(`/Type\s*/Page[^s]`)
 	matches := pageRegex.FindAll(content, -1)
 	return len(matches)
+}
+
+// countPDFImages counts images in a PDF by looking for image XObjects
+func countPDFImages(content []byte) int {
+	count := 0
+
+	// Look for image XObject subtype declarations
+	imageSubtype := regexp.MustCompile(`/Subtype\s*/Image`)
+	matches := imageSubtype.FindAll(content, -1)
+	count += len(matches)
+
+	// Also look for inline images (BI...ID...EI)
+	inlineImage := regexp.MustCompile(`\bBI\b[\s\S]*?\bID\b`)
+	inlineMatches := inlineImage.FindAll(content, -1)
+	count += len(inlineMatches)
+
+	return count
 }
 
 // extractPDFText extracts text from a PDF stream
@@ -886,11 +928,11 @@ func countWords(text string) int {
 }
 
 // SupportedExtensions returns all supported file extensions
-// Only includes formats that can be reliably parsed without external tools
+// Includes formats that can be parsed with built-in or optional external tools
 func SupportedExtensions() []string {
 	return []string{
 		// Documents
-		".docx", ".txt", ".md", ".markdown", ".rtf",
+		".docx", ".pdf", ".pptx", ".xlsx", ".xls", ".txt", ".md", ".markdown", ".rtf",
 		// Data
 		".json", ".csv", ".xml",
 		// Web

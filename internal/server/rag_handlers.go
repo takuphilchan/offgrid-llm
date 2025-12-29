@@ -378,3 +378,191 @@ func (s *Server) handleDocumentSearch(w http.ResponseWriter, r *http.Request) {
 		Context: ragContext.Context,
 	})
 }
+
+// handleDocumentIngestURL ingests a web page URL into the knowledge base
+func (s *Server) handleDocumentIngestURL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.ragEngine == nil {
+		http.Error(w, "RAG engine not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	if !s.ragEngine.IsEnabled() {
+		http.Error(w, "RAG is not enabled. Enable it first in the Knowledge Base tab.", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		URL      string            `json:"url"`
+		Name     string            `json:"name,omitempty"`
+		Metadata map[string]string `json:"metadata,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.URL == "" {
+		http.Error(w, "url is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate URL
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		http.Error(w, "URL must start with http:// or https://", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch the web page
+	client := &http.Client{
+		Timeout: 30 * 1000000000, // 30 seconds
+	}
+
+	httpReq, err := http.NewRequestWithContext(r.Context(), "GET", req.URL, nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid URL: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Set a browser-like user agent to avoid being blocked
+	httpReq.Header.Set("User-Agent", "Mozilla/5.0 (compatible; OffGridLLM/1.0; +https://github.com/takuphilchan/offgrid-llm)")
+	httpReq.Header.Set("Accept", "text/html,application/xhtml+xml,text/plain")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch URL: %s", err.Error()), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, fmt.Sprintf("URL returned status %d", resp.StatusCode), http.StatusBadGateway)
+		return
+	}
+
+	// Check content type
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "text/html") &&
+		!strings.Contains(contentType, "text/plain") &&
+		!strings.Contains(contentType, "application/json") {
+		http.Error(w, fmt.Sprintf("Unsupported content type: %s", contentType), http.StatusBadRequest)
+		return
+	}
+
+	// Read body (limit to 5MB)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read URL content: %s", err.Error()), http.StatusBadGateway)
+		return
+	}
+
+	// Extract text content from HTML
+	content := extractTextFromHTML(string(body))
+	if len(content) < 50 {
+		http.Error(w, "Could not extract meaningful content from the page", http.StatusBadRequest)
+		return
+	}
+
+	// Use URL as name if not provided
+	name := req.Name
+	if name == "" {
+		name = req.URL
+		// Try to extract title from content
+		if title := extractTitleFromHTML(string(body)); title != "" {
+			name = title
+		}
+	}
+
+	// Add URL to metadata
+	if req.Metadata == nil {
+		req.Metadata = make(map[string]string)
+	}
+	req.Metadata["source_url"] = req.URL
+	req.Metadata["content_type"] = contentType
+
+	// Ingest the content
+	doc, err := s.ragEngine.IngestText(r.Context(), name, content, req.Metadata)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to ingest content: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(IngestResponse{
+		Success:  true,
+		Document: doc,
+		Message:  fmt.Sprintf("Successfully ingested %d characters from %s", len(content), req.URL),
+	})
+}
+
+// extractTextFromHTML extracts readable text from HTML content
+func extractTextFromHTML(html string) string {
+	// Remove script and style elements
+	scriptRe := strings.NewReplacer(
+		"<script", "<!--script",
+		"</script>", "</script-->",
+		"<style", "<!--style",
+		"</style>", "</style-->",
+	)
+	html = scriptRe.Replace(html)
+
+	// Remove HTML comments
+	result := html
+	for {
+		start := strings.Index(result, "<!--")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(result[start:], "-->")
+		if end == -1 {
+			break
+		}
+		result = result[:start] + result[start+end+3:]
+	}
+
+	// Remove all HTML tags
+	var text strings.Builder
+	inTag := false
+	for _, char := range result {
+		if char == '<' {
+			inTag = true
+			text.WriteRune(' ') // Add space for tag boundaries
+		} else if char == '>' {
+			inTag = false
+		} else if !inTag {
+			text.WriteRune(char)
+		}
+	}
+
+	// Clean up whitespace
+	content := text.String()
+	lines := strings.Split(content, "\n")
+	var cleanLines []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			cleanLines = append(cleanLines, line)
+		}
+	}
+
+	return strings.Join(cleanLines, "\n")
+}
+
+// extractTitleFromHTML extracts the title from HTML
+func extractTitleFromHTML(html string) string {
+	titleStart := strings.Index(strings.ToLower(html), "<title>")
+	if titleStart == -1 {
+		return ""
+	}
+	titleEnd := strings.Index(strings.ToLower(html[titleStart:]), "</title>")
+	if titleEnd == -1 {
+		return ""
+	}
+	title := html[titleStart+7 : titleStart+titleEnd]
+	return strings.TrimSpace(title)
+}

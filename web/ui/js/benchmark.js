@@ -314,28 +314,5 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Theme Toggle Logic
-const themeToggleBtn = document.getElementById('theme-toggle');
-const htmlElement = document.documentElement;
-
-// Check for saved theme preference or system preference
-const savedTheme = localStorage.getItem('theme');
-const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-
-// Set initial theme
-if (savedTheme === 'dark' || (!savedTheme && systemTheme === 'dark')) {
-    htmlElement.setAttribute('data-theme', 'dark');
-} else {
-    htmlElement.removeAttribute('data-theme');
-}
-
-themeToggleBtn.addEventListener('click', () => {
-    if (htmlElement.getAttribute('data-theme') === 'dark') {
-        htmlElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'light');
-    } else {
-        htmlElement.setAttribute('data-theme', 'dark');
-        localStorage.setItem('theme', 'dark');
-    }
-});
+// Theme toggle is now handled by themes.js - removed duplicate logic
 

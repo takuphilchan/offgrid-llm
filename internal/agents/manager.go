@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +49,7 @@ type Manager struct {
 	maxParallel int
 	running     int
 	logger      func(string, ...interface{})
+	dataDir     string // Directory for persisting tasks
 }
 
 // NewManager creates a new agent manager
@@ -58,6 +61,33 @@ func NewManager(tools []api.Tool, executor ToolExecutor, llmCaller LLMCaller) *M
 		llmCaller:   llmCaller,
 		maxParallel: 3,
 		logger:      func(format string, args ...interface{}) {},
+	}
+}
+
+// NewManagerWithPersistence creates a new agent manager with disk persistence
+func NewManagerWithPersistence(tools []api.Tool, executor ToolExecutor, llmCaller LLMCaller, dataDir string) *Manager {
+	m := &Manager{
+		tasks:       make(map[string]*Task),
+		tools:       tools,
+		executor:    executor,
+		llmCaller:   llmCaller,
+		maxParallel: 3,
+		logger:      func(format string, args ...interface{}) {},
+		dataDir:     dataDir,
+	}
+	// Load existing tasks from disk
+	m.loadTasks()
+	return m
+}
+
+// SetDataDir sets the data directory for persistence
+func (m *Manager) SetDataDir(dataDir string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dataDir = dataDir
+	if dataDir != "" {
+		os.MkdirAll(filepath.Join(dataDir, "agent_tasks"), 0755)
+		m.loadTasks()
 	}
 }
 
@@ -164,6 +194,10 @@ func (m *Manager) CompleteTask(id string, result string, err error) error {
 		task.Status = TaskCompleted
 		task.Result = result
 	}
+
+	// Save to disk for persistence
+	m.saveTask(task)
+
 	return nil
 }
 
@@ -307,7 +341,7 @@ func (m *Manager) CancelTask(id string) error {
 	return nil
 }
 
-// DeleteTask removes a task
+// DeleteTask removes a task from memory and disk
 func (m *Manager) DeleteTask(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -324,6 +358,12 @@ func (m *Manager) DeleteTask(id string) error {
 	}
 
 	delete(m.tasks, id)
+
+	// Delete from disk if persistence is enabled
+	if m.dataDir != "" {
+		os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json"))
+	}
+
 	return nil
 }
 
@@ -573,4 +613,80 @@ func (e *WorkflowEngine) evaluateCondition(condition string, vars map[string]any
 		}
 	}
 	return false
+}
+
+// ============================================================================
+// Task Persistence
+// ============================================================================
+
+// saveTask saves a task to disk
+func (m *Manager) saveTask(task *Task) {
+	if m.dataDir == "" {
+		return
+	}
+
+	tasksDir := filepath.Join(m.dataDir, "agent_tasks")
+	os.MkdirAll(tasksDir, 0755)
+
+	// Only save completed or failed tasks (not running ones)
+	if task.Status != TaskCompleted && task.Status != TaskFailed {
+		return
+	}
+
+	data, err := json.MarshalIndent(task, "", "  ")
+	if err != nil {
+		return
+	}
+
+	filename := filepath.Join(tasksDir, task.ID+".json")
+	os.WriteFile(filename, data, 0644)
+}
+
+// loadTasks loads all tasks from disk
+func (m *Manager) loadTasks() {
+	if m.dataDir == "" {
+		return
+	}
+
+	tasksDir := filepath.Join(m.dataDir, "agent_tasks")
+	entries, err := os.ReadDir(tasksDir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(tasksDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+
+		var task Task
+		if err := json.Unmarshal(data, &task); err != nil {
+			continue
+		}
+
+		m.tasks[task.ID] = &task
+	}
+}
+
+// ClearHistory clears all completed/failed tasks
+func (m *Manager) ClearHistory() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	count := 0
+	for id, task := range m.tasks {
+		if task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled {
+			delete(m.tasks, id)
+			if m.dataDir != "" {
+				os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json"))
+			}
+			count++
+		}
+	}
+	return count
 }

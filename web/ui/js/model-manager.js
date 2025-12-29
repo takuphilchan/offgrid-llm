@@ -219,17 +219,40 @@ const ModelManager = {
         this._abortController = new AbortController();
         
         const startTime = Date.now();
-        this._notify('loading', modelId);
+        this._notify('loading', modelId, '0%');
         
-        // Progress updater
-        const progressInterval = setInterval(() => {
+        // Use server-side progress tracking for accurate feedback
+        let cleanupProgress = null;
+        try {
+            cleanupProgress = this.monitorLoadingProgress((progress) => {
+                if (this._loadingModel !== modelId) return;
+                
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1) + 's';
+                const pct = progress.progress || 0;
+                const phase = progress.phase || 'loading';
+                const msg = progress.message || 'Loading...';
+                
+                // Provide detailed feedback
+                this._notify('loading', modelId, `${pct}% - ${msg} (${elapsed})`);
+            });
+        } catch (e) {
+            // Fallback to simple timer if SSE not available
+            console.warn('[ModelManager] Progress monitoring unavailable, using fallback');
+        }
+        
+        // Fallback progress updater (in case SSE fails)
+        const progressInterval = setInterval(async () => {
             if (!this._isLoading || this._loadingModel !== modelId) {
                 clearInterval(progressInterval);
                 return;
             }
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1) + 's';
-            this._notify('loading', modelId, elapsed);
-        }, 100);
+            // Try to get snapshot
+            const progress = await this.getLoadingProgress();
+            if (progress.phase !== 'idle') {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1) + 's';
+                this._notify('loading', modelId, `${progress.progress}% (${elapsed})`);
+            }
+        }, 500);
         
         // Create loading promise
         this._loadingPromise = this._loadModel(modelId, this._abortController.signal);
@@ -237,6 +260,7 @@ const ModelManager = {
         try {
             const success = await this._loadingPromise;
             clearInterval(progressInterval);
+            if (cleanupProgress) cleanupProgress();
             
             if (success && this._loadingModel === modelId) {
                 this._loadedModel = modelId;
@@ -248,6 +272,7 @@ const ModelManager = {
             return success;
         } catch (e) {
             clearInterval(progressInterval);
+            if (cleanupProgress) cleanupProgress();
             if (e.name !== 'AbortError') {
                 console.error('[ModelManager] Load failed:', e);
                 this._notify('error', modelId);
@@ -370,6 +395,84 @@ const ModelManager = {
         return resp.ok;
     },
     
+    /**
+     * Monitor loading progress using SSE stream
+     * @param {function} onProgress - (progress) => void
+     * @returns {function} Cleanup function
+     */
+    monitorLoadingProgress(onProgress) {
+        const eventSource = new EventSource('/v1/loading/progress/stream');
+        
+        eventSource.onmessage = (event) => {
+            try {
+                const progress = JSON.parse(event.data);
+                onProgress(progress);
+                
+                // Close when done
+                if (progress.phase === 'ready' || progress.phase === 'failed') {
+                    eventSource.close();
+                }
+            } catch (e) {
+                console.warn('[ModelManager] Error parsing progress:', e);
+            }
+        };
+        
+        eventSource.onerror = () => {
+            eventSource.close();
+        };
+        
+        return () => eventSource.close();
+    },
+    
+    /**
+     * Get current loading progress snapshot
+     */
+    async getLoadingProgress() {
+        try {
+            const resp = await fetch('/v1/loading/progress', {
+                signal: AbortSignal.timeout(2000)
+            });
+            if (resp.ok) {
+                return await resp.json();
+            }
+        } catch (e) {
+            // Ignore
+        }
+        return { phase: 'idle', progress: 0 };
+    },
+    
+    /**
+     * Pre-warm a model by path for faster switching (uses aggressive read-ahead)
+     */
+    async prewarmModelByPath(modelPath) {
+        try {
+            // Use the new fast prewarm endpoint with concurrent I/O
+            await fetch('/v1/loading/prewarm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_path: modelPath })
+            });
+        } catch (e) {
+            console.warn('[ModelManager] Fast prewarm failed:', e);
+        }
+    },
+    
+    /**
+     * Pre-warm a model by ID for faster switching
+     */
+    async warmModel(modelId) {
+        try {
+            // Find the model to get its path
+            const models = await this.getModels();
+            const model = models.find(m => m.id === modelId);
+            if (model && model.path) {
+                await this.prewarmModelByPath(model.path);
+            }
+        } catch (e) {
+            console.warn('[ModelManager] Warm model failed:', e);
+        }
+    },
+    
     // =========================================
     // UI UPDATES & SUBSCRIPTIONS
     // =========================================
@@ -424,6 +527,8 @@ const ModelManager = {
             opt.value = m.id;
             opt.textContent = m.id;
             opt.title = m.id;
+            // Store model info for hover pre-warming
+            opt.dataset.modelId = m.id;
             select.appendChild(opt);
         }
         
@@ -442,7 +547,48 @@ const ModelManager = {
             select.onchange = onChange;
         }
         
+        // Add focus handler for pre-warming on hover/focus
+        // When user opens dropdown, pre-warm hovered model
+        this._setupPrewarmOnHover(select);
+        
         return select.value;
+    },
+    
+    /**
+     * Set up pre-warming when user hovers over model options
+     */
+    _setupPrewarmOnHover(select) {
+        let prewarmTimeout = null;
+        let lastPrewarmed = null;
+        
+        // Pre-warm on focus (when dropdown opens)
+        select.addEventListener('focus', () => {
+            // Mark that dropdown is open
+            select.dataset.dropdownOpen = 'true';
+        });
+        
+        select.addEventListener('blur', () => {
+            select.dataset.dropdownOpen = 'false';
+            if (prewarmTimeout) {
+                clearTimeout(prewarmTimeout);
+                prewarmTimeout = null;
+            }
+        });
+        
+        // Pre-warm on mouseover of options (works in some browsers)
+        select.addEventListener('mouseover', (e) => {
+            if (e.target.tagName === 'OPTION') {
+                const modelId = e.target.value;
+                if (modelId && modelId !== this._loadedModel && modelId !== lastPrewarmed) {
+                    // Debounce to avoid spamming
+                    if (prewarmTimeout) clearTimeout(prewarmTimeout);
+                    prewarmTimeout = setTimeout(() => {
+                        lastPrewarmed = modelId;
+                        this.warmModel(modelId).catch(() => {});
+                    }, 300);
+                }
+            }
+        });
     },
     
     /**

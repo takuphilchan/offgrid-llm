@@ -384,6 +384,61 @@ async function ingestRAGText() {
     }
 }
 
+async function ingestRAGUrl() {
+    const url = document.getElementById('ragUrlInput').value.trim();
+    const name = document.getElementById('ragUrlName').value.trim();
+    
+    if (!url) {
+        showAlert('Please enter a URL', 'warning');
+        return;
+    }
+    
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        showAlert('URL must start with http:// or https://', 'warning');
+        return;
+    }
+    
+    if (!ragEnabled) {
+        showAlert('Please enable RAG first by selecting an embedding model', 'warning');
+        return;
+    }
+    
+    // Show loading state on button
+    const btn = document.querySelector('[onclick="ingestRAGUrl()"]');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<svg class="w-4 h-4 mr-1 animate-spin inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>Importing...';
+    }
+    
+    try {
+        const response = await fetch('/v1/documents/ingest-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, name: name || undefined })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to import web page');
+        }
+        
+        const result = await response.json();
+        document.getElementById('ragUrlInput').value = '';
+        document.getElementById('ragUrlName').value = '';
+        refreshRAGDocuments();
+        showAlert(result.message || 'Web page imported successfully!', 'success');
+    } catch (e) {
+        showAlert('Failed to import web page: ' + e.message, 'error');
+    } finally {
+        // Restore button state
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+}
+
 async function deleteRAGDocument(docId) {
     showConfirm('Are you sure you want to delete this document?', async () => {
         try {

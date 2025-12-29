@@ -34,10 +34,11 @@ type Chunk struct {
 
 // SearchResult represents a search result with relevance score
 type SearchResult struct {
-	Chunk      *Chunk  `json:"chunk"`
-	Score      float32 `json:"score"` // Cosine similarity score (0-1)
-	DocumentID string  `json:"document_id"`
-	DocName    string  `json:"document_name"`
+	Chunk      *Chunk            `json:"chunk"`
+	Score      float32           `json:"score"` // Cosine similarity score (0-1)
+	DocumentID string            `json:"document_id"`
+	DocName    string            `json:"document_name"`
+	Metadata   map[string]string `json:"metadata,omitempty"` // Source URL, author, etc.
 }
 
 // GenerateDocumentID creates a unique ID for a document based on content hash
@@ -76,6 +77,198 @@ func LargeDocumentChunkingOptions() ChunkingOptions {
 		ChunkOverlap: 256,  // 25% overlap
 		Separator:    "\n\n",
 	}
+}
+
+// DocumentAnalysis contains analysis results for automatic chunking tuning
+type DocumentAnalysis struct {
+	TotalChars      int             `json:"total_chars"`
+	TotalWords      int             `json:"total_words"`
+	TotalParagraphs int             `json:"total_paragraphs"`
+	TotalSentences  int             `json:"total_sentences"`
+	AvgWordsPerPara float64         `json:"avg_words_per_para"`
+	AvgWordsPerSent float64         `json:"avg_words_per_sent"`
+	DocumentType    string          `json:"document_type"` // prose, technical, code, list, mixed
+	RecommendedOpts ChunkingOptions `json:"recommended_options"`
+	Reasoning       string          `json:"reasoning"`
+}
+
+// AutoTuneChunkingOptions analyzes document and returns optimized chunking options
+func AutoTuneChunkingOptions(content string) (ChunkingOptions, DocumentAnalysis) {
+	analysis := analyzeDocument(content)
+
+	// Determine optimal chunk size based on document characteristics
+	var opts ChunkingOptions
+	var reasoning string
+
+	switch analysis.DocumentType {
+	case "code":
+		// Code: smaller chunks, respect function boundaries
+		opts = ChunkingOptions{
+			ChunkSize:    384, // ~96 tokens - function-sized chunks
+			ChunkOverlap: 64,  // Small overlap, code is more self-contained
+			Separator:    "\n\n",
+		}
+		reasoning = "Code detected: using smaller chunks for function-level granularity"
+
+	case "technical":
+		// Technical docs: medium chunks, preserve sections
+		opts = ChunkingOptions{
+			ChunkSize:    768, // ~192 tokens - section-sized chunks
+			ChunkOverlap: 192, // 25% overlap for cross-reference context
+			Separator:    "\n\n",
+		}
+		reasoning = "Technical document detected: medium chunks for section preservation"
+
+	case "list":
+		// Lists/data: very small chunks, each item standalone
+		opts = ChunkingOptions{
+			ChunkSize:    256, // ~64 tokens - item-sized chunks
+			ChunkOverlap: 32,  // Minimal overlap
+			Separator:    "\n",
+		}
+		reasoning = "List/structured data detected: small chunks for item-level retrieval"
+
+	case "prose":
+		// Prose: larger chunks for narrative flow
+		if analysis.TotalWords > 5000 {
+			opts = ChunkingOptions{
+				ChunkSize:    1024, // ~256 tokens - larger for long narratives
+				ChunkOverlap: 256,  // 25% overlap
+				Separator:    "\n\n",
+			}
+			reasoning = "Long prose document: larger chunks for narrative context"
+		} else {
+			opts = ChunkingOptions{
+				ChunkSize:    512, // ~128 tokens
+				ChunkOverlap: 128, // 25% overlap
+				Separator:    "\n\n",
+			}
+			reasoning = "Prose document: standard chunks for balanced retrieval"
+		}
+
+	default: // mixed
+		// Mixed content: balanced approach
+		opts = DefaultChunkingOptions()
+		reasoning = "Mixed content: using balanced default settings"
+	}
+
+	// Adjust for very short or very long documents
+	expectedChunks := float64(analysis.TotalChars) / float64(opts.ChunkSize)
+	if expectedChunks < 3 && analysis.TotalChars > 200 {
+		// Too few chunks - reduce size for better granularity
+		opts.ChunkSize = analysis.TotalChars / 4
+		if opts.ChunkSize < 128 {
+			opts.ChunkSize = 128
+		}
+		opts.ChunkOverlap = opts.ChunkSize / 4
+		reasoning += "; reduced chunk size for short document"
+	} else if expectedChunks > 100 {
+		// Too many chunks - increase size
+		opts.ChunkSize = 1024
+		opts.ChunkOverlap = 256
+		reasoning += "; increased chunk size for large document"
+	}
+
+	analysis.RecommendedOpts = opts
+	analysis.Reasoning = reasoning
+
+	return opts, analysis
+}
+
+// analyzeDocument analyzes content to determine its characteristics
+func analyzeDocument(content string) DocumentAnalysis {
+	analysis := DocumentAnalysis{
+		TotalChars: len(content),
+	}
+
+	// Count words
+	words := strings.Fields(content)
+	analysis.TotalWords = len(words)
+
+	// Count paragraphs
+	paragraphs := strings.Split(content, "\n\n")
+	nonEmpty := 0
+	for _, p := range paragraphs {
+		if strings.TrimSpace(p) != "" {
+			nonEmpty++
+		}
+	}
+	analysis.TotalParagraphs = nonEmpty
+
+	// Count sentences (rough approximation)
+	sentenceCount := 0
+	for _, c := range content {
+		if c == '.' || c == '!' || c == '?' {
+			sentenceCount++
+		}
+	}
+	analysis.TotalSentences = sentenceCount
+
+	// Calculate averages
+	if analysis.TotalParagraphs > 0 {
+		analysis.AvgWordsPerPara = float64(analysis.TotalWords) / float64(analysis.TotalParagraphs)
+	}
+	if analysis.TotalSentences > 0 {
+		analysis.AvgWordsPerSent = float64(analysis.TotalWords) / float64(analysis.TotalSentences)
+	}
+
+	// Detect document type
+	analysis.DocumentType = detectDocumentType(content, analysis)
+
+	return analysis
+}
+
+// detectDocumentType determines the type of document based on its characteristics
+func detectDocumentType(content string, analysis DocumentAnalysis) string {
+	// Check for code indicators
+	codeIndicators := []string{
+		"func ", "function ", "def ", "class ", "import ", "package ",
+		"var ", "let ", "const ", "return ", "if ", "for ", "while ",
+		"{", "}", "//", "/*", "*/", "->", "=>",
+	}
+	codeScore := 0
+	for _, indicator := range codeIndicators {
+		codeScore += strings.Count(content, indicator)
+	}
+	codeRatio := float64(codeScore) / float64(analysis.TotalWords+1)
+	if codeRatio > 0.05 {
+		return "code"
+	}
+
+	// Check for list indicators
+	listIndicators := []string{
+		"\n- ", "\n* ", "\n1.", "\n2.", "\n3.", "\n| ", "\t",
+	}
+	listScore := 0
+	for _, indicator := range listIndicators {
+		listScore += strings.Count(content, indicator)
+	}
+	listRatio := float64(listScore) / float64(analysis.TotalParagraphs+1)
+	if listRatio > 0.3 {
+		return "list"
+	}
+
+	// Check for technical document indicators
+	technicalIndicators := []string{
+		"##", "###", "API", "endpoint", "parameter", "configuration",
+		"install", "usage", "example", "documentation", "reference",
+	}
+	techScore := 0
+	contentLower := strings.ToLower(content)
+	for _, indicator := range technicalIndicators {
+		techScore += strings.Count(contentLower, strings.ToLower(indicator))
+	}
+	techRatio := float64(techScore) / float64(analysis.TotalParagraphs+1)
+	if techRatio > 0.2 {
+		return "technical"
+	}
+
+	// Check for prose (longer sentences, narrative structure)
+	if analysis.AvgWordsPerSent > 12 && analysis.AvgWordsPerPara > 40 {
+		return "prose"
+	}
+
+	return "mixed"
 }
 
 // SearchOptions configures search behavior
@@ -153,9 +346,30 @@ func (rc *RAGContext) FormatContext() string {
 	}
 
 	sb.WriteString("</knowledge_base>\n\n")
+
+	// Add citation references section
+	sb.WriteString("Citations:\n")
+	for i, docID := range docOrder {
+		chunks := docChunks[docID]
+		docName := chunks[0].DocName
+		metadata := chunks[0].Metadata
+
+		sb.WriteString(fmt.Sprintf("[%d] %s", i+1, docName))
+		if metadata != nil {
+			if url, ok := metadata["source_url"]; ok && url != "" {
+				sb.WriteString(fmt.Sprintf(" <%s>", url))
+			}
+			if author, ok := metadata["author"]; ok && author != "" {
+				sb.WriteString(fmt.Sprintf(" by %s", author))
+			}
+		}
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+
 	sb.WriteString("Instructions: Use the knowledge base above to inform your response. ")
-	sb.WriteString("Cite sources by name when using specific information. ")
-	sb.WriteString("If the knowledge base doesn't contain relevant information for the question, say so and answer based on your general knowledge.\n\n")
+	sb.WriteString("Cite sources using [N] format when referencing specific information. ")
+	sb.WriteString("If the knowledge base doesn't contain relevant information, say so and answer based on your general knowledge.\n\n")
 
 	rc.Context = sb.String()
 	return rc.Context

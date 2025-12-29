@@ -18,7 +18,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/audio"
+	"github.com/takuphilchan/offgrid-llm/internal/audit"
 	"github.com/takuphilchan/offgrid-llm/internal/batch"
 	"github.com/takuphilchan/offgrid-llm/internal/completions"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
@@ -30,6 +32,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 // Version is set via ldflags during build
@@ -537,10 +540,14 @@ func waitForModelReady(port string, maxWaitSeconds int) error {
 
 // startLlamaServerInBackground starts llama-server with the specified model
 func startLlamaServerInBackground(modelPath string) error {
-	// Check if llama-server exists
-	llamaServerPath, err := exec.LookPath("llama-server")
+	// Get llama-server binary via BinaryManager (auto-downloads if needed)
+	homeDir, _ := os.UserHomeDir()
+	binDir := filepath.Join(homeDir, ".offgrid-llm", "bin")
+	bm := inference.NewBinaryManager(binDir)
+
+	llamaServerPath, err := bm.GetLlamaServer()
 	if err != nil {
-		return fmt.Errorf("llama-server not found in PATH: %w", err)
+		return fmt.Errorf("llama-server not available: %w", err)
 	}
 
 	// Detect system resources for optimal configuration
@@ -585,6 +592,12 @@ func startLlamaServerInBackground(modelPath string) error {
 		port = strings.TrimSpace(string(portBytes))
 	}
 
+	// Determine GPU layers based on detection
+	gpuLayers := 0
+	if bm.HasGPU() {
+		gpuLayers = 99 // Offload all layers to GPU
+	}
+
 	// Build optimized command line
 	// -fa: Flash attention for 20-40% faster inference
 	// --cont-batching: Better throughput
@@ -593,12 +606,12 @@ func startLlamaServerInBackground(modelPath string) error {
 	var cmdStr string
 	if res != nil && res.AvailableRAM < 8000 {
 		// Low RAM: use mmap (won't crash, but slower first token)
-		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256",
-			llamaServerPath, modelPath, port, threads, contextSize, batchSize)
+		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d -ngl %d -b %d -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256",
+			llamaServerPath, modelPath, port, threads, contextSize, gpuLayers, batchSize)
 	} else {
 		// Sufficient RAM: load fully into memory for speed
-		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d --n-gpu-layers 0 -b %d --no-mmap --mlock -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256",
-			llamaServerPath, modelPath, port, threads, contextSize, batchSize)
+		cmdStr = fmt.Sprintf("%s -m %s --port %s --host 127.0.0.1 -t %d -c %d -ngl %d -b %d --no-mmap --mlock -fa on --cont-batching --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256",
+			llamaServerPath, modelPath, port, threads, contextSize, gpuLayers, batchSize)
 	}
 
 	// Start llama-server in background using shell with nohup
@@ -1148,6 +1161,9 @@ func main() {
 		case "config":
 			handleConfig(os.Args[2:])
 			return
+		case "peers", "p2p":
+			handlePeers(os.Args[2:])
+			return
 		case "alias":
 			handleAlias(os.Args[2:])
 			return
@@ -1171,6 +1187,9 @@ func main() {
 			return
 		case "users", "user":
 			handleUsers(os.Args[2:])
+			return
+		case "audit":
+			handleAudit(os.Args[2:])
 			return
 		case "metrics":
 			handleMetrics(os.Args[2:])
@@ -2743,9 +2762,32 @@ func handleList(args []string) {
 		fmt.Println()
 		fmt.Printf("    %sNo models installed%s\n", brandMuted, colorReset)
 		fmt.Println()
-		fmt.Printf("    %sGet started:%s\n", colorBold, colorReset)
-		fmt.Printf("      %s$%s offgrid recommend     %s# Find models for your system%s\n", brandMuted, colorReset, brandMuted, colorReset)
-		fmt.Printf("      %s$%s offgrid search llama  %s# Search HuggingFace%s\n", brandMuted, colorReset, brandMuted, colorReset)
+
+		// Show quick-start recommendations based on system RAM
+		res, _ := resource.DetectResources()
+		ramGB := res.AvailableRAM / 1024
+
+		fmt.Printf("    %sQuick start — just run:%s\n\n", colorBold, colorReset)
+
+		if ramGB >= 16 {
+			// 16GB+ RAM - show larger models
+			fmt.Printf("      %s$%s offgrid run llama3       %s# Llama 3.2 3B — great all-rounder%s\n", brandMuted, colorReset, brandMuted, colorReset)
+			fmt.Printf("      %s$%s offgrid run qwen         %s# Qwen 2.5 7B — powerful reasoning%s\n", brandMuted, colorReset, brandMuted, colorReset)
+			fmt.Printf("      %s$%s offgrid run codellama    %s# Code Llama 7B — for programming%s\n", brandMuted, colorReset, brandMuted, colorReset)
+		} else if ramGB >= 8 {
+			// 8-16GB RAM
+			fmt.Printf("      %s$%s offgrid run llama3       %s# Llama 3.2 3B — best for 8GB RAM%s\n", brandMuted, colorReset, brandMuted, colorReset)
+			fmt.Printf("      %s$%s offgrid run phi          %s# Phi 3 Mini — fast & capable%s\n", brandMuted, colorReset, brandMuted, colorReset)
+			fmt.Printf("      %s$%s offgrid run gemma        %s# Gemma 2 2B — Google's compact model%s\n", brandMuted, colorReset, brandMuted, colorReset)
+		} else {
+			// <8GB RAM - show tiny models
+			fmt.Printf("      %s$%s offgrid run tiny         %s# TinyLlama 1.1B — runs anywhere%s\n", brandMuted, colorReset, brandMuted, colorReset)
+			fmt.Printf("      %s$%s offgrid run smollm       %s# SmolLM 360M — ultra lightweight%s\n", brandMuted, colorReset, brandMuted, colorReset)
+		}
+
+		fmt.Println()
+		fmt.Printf("    %sModels download automatically on first run.%s\n", brandMuted, colorReset)
+		fmt.Printf("    %sSee all options: %soffgrid alias list%s\n", brandMuted, colorReset+colorBold, colorReset)
 		fmt.Println()
 		return
 	}
@@ -3100,6 +3142,7 @@ func printHelp() {
 				{"doctor", "Run system diagnostics"},
 				{"info", "System information"},
 				{"config <action>", "Manage configuration"},
+				{"peers", "P2P network status & model sharing"},
 				{"benchmark <id>", "Performance testing"},
 			},
 		},
@@ -3108,9 +3151,10 @@ func printHelp() {
 			icon:  iconStar,
 			cmds: []cmdEntry{
 				{"lora <cmd>", "LoRA adapter management"},
-				{"agent <cmd>", "AI agent workflows"},
+				{"agent <cmd>", "AI agent workflows (6 templates)"},
 				{"audio <cmd>", "Speech-to-text & TTS"},
 				{"users <cmd>", "Multi-user management"},
+				{"audit <cmd>", "Security audit logs (export CSV/JSON)"},
 			},
 		},
 	}
@@ -3138,10 +3182,10 @@ func printHelp() {
 
 	// Quick start examples in a more compact format
 	fmt.Printf("  %s%s Quick Start%s\n", brandPrimary, iconArrow, colorReset)
-	fmt.Printf("    %s$%s offgrid init                     %s# First-time setup%s\n", brandMuted, colorReset, brandMuted, colorReset)
-	fmt.Printf("    %s$%s offgrid recommend                %s# Get model suggestions%s\n", brandMuted, colorReset, brandMuted, colorReset)
-	fmt.Printf("    %s$%s offgrid download-hf <model>      %s# Download a model%s\n", brandMuted, colorReset, brandMuted, colorReset)
-	fmt.Printf("    %s$%s offgrid run <model>              %s# Start chatting%s\n", brandMuted, colorReset, brandMuted, colorReset)
+	fmt.Printf("    %s$%s offgrid run llama3               %s# Llama 3.2 3B (auto-downloads)%s\n", brandMuted, colorReset, brandMuted, colorReset)
+	fmt.Printf("    %s$%s offgrid run qwen                 %s# Qwen 2.5 3B%s\n", brandMuted, colorReset, brandMuted, colorReset)
+	fmt.Printf("    %s$%s offgrid run mistral              %s# Mistral 7B%s\n", brandMuted, colorReset, brandMuted, colorReset)
+	fmt.Printf("    %s$%s offgrid alias list               %s# See all model shortcuts%s\n", brandMuted, colorReset, brandMuted, colorReset)
 	fmt.Println()
 
 	// Footer with helpful info
@@ -3152,13 +3196,27 @@ func printHelp() {
 
 func handleVersion() {
 	version := getVersion()
+
+	// Detect GPU for enhanced info
+	var gpuName string
+	var gpuMemory int64
+	if res, err := resource.DetectResources(); err == nil && res.GPUAvailable {
+		gpuName = res.GPUName
+		gpuMemory = res.GPUMemory
+	}
+
 	if output.JSONMode {
-		output.PrintJSON(map[string]interface{}{
+		data := map[string]interface{}{
 			"version": version,
 			"go":      runtime.Version(),
 			"os":      runtime.GOOS,
 			"arch":    runtime.GOARCH,
-		})
+		}
+		if gpuName != "" {
+			data["gpu"] = gpuName
+			data["gpu_memory_mb"] = gpuMemory
+		}
+		output.PrintJSON(data)
 		return
 	}
 
@@ -3166,8 +3224,89 @@ func handleVersion() {
 	fmt.Printf("  %s%s OffGrid LLM%s\n", brandPrimary+colorBold, iconBolt, colorReset)
 	fmt.Println()
 	printKeyValue("Version", version)
-	printKeyValue("Go", runtime.Version())
 	printKeyValue("Platform", fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH))
+	if gpuName != "" {
+		printKeyValue("GPU", fmt.Sprintf("%s (%dMB)", gpuName, gpuMemory))
+	} else {
+		printKeyValue("Device", "CPU only")
+	}
+	fmt.Println()
+}
+
+// handlePeers shows P2P peer discovery status and available peers
+func handlePeers(args []string) {
+	cfg := config.LoadConfig()
+
+	fmt.Println()
+	fmt.Printf("  %s%s P2P Network%s\n", brandPrimary+colorBold, "📡", colorReset)
+	fmt.Println()
+
+	if !cfg.EnableP2P {
+		fmt.Printf("    %sP2P is disabled.%s\n\n", brandMuted, colorReset)
+		fmt.Printf("    %sEnable P2P to share models with other OffGrid instances%s\n", colorDim, colorReset)
+		fmt.Printf("    %son your local network without internet access.%s\n\n", colorDim, colorReset)
+		fmt.Printf("    %sTo enable:%s\n", colorBold, colorReset)
+		fmt.Printf("      %s$%s offgrid config set p2p.enabled true\n", brandMuted, colorReset)
+		fmt.Printf("      %s$%s offgrid serve  %s# Restart server%s\n", brandMuted, colorReset, brandMuted, colorReset)
+		fmt.Println()
+		fmt.Printf("    %sP2P allows you to:%s\n", colorBold, colorReset)
+		fmt.Printf("      %s•%s Discover other OffGrid nodes on your network\n", brandPrimary, colorReset)
+		fmt.Printf("      %s•%s Transfer models directly between machines\n", brandPrimary, colorReset)
+		fmt.Printf("      %s•%s Share models in air-gapped environments\n", brandPrimary, colorReset)
+		fmt.Println()
+		return
+	}
+
+	// Query running server for peer info
+	serverURL := fmt.Sprintf("http://%s:%d", cfg.ServerHost, cfg.ServerPort)
+	resp, err := http.Get(serverURL + "/v1/p2p/peers")
+	if err != nil {
+		fmt.Printf("    %sServer not running.%s\n\n", brandMuted, colorReset)
+		fmt.Printf("    Start the server first:\n")
+		fmt.Printf("      %s$%s offgrid serve\n", brandMuted, colorReset)
+		fmt.Println()
+		return
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Peers []struct {
+			ID       string   `json:"id"`
+			Address  string   `json:"address"`
+			Port     int      `json:"port"`
+			Models   []string `json:"models"`
+			LastSeen string   `json:"last_seen"`
+		} `json:"peers"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		printError(fmt.Sprintf("Failed to parse response: %v", err))
+		return
+	}
+
+	fmt.Printf("    %sStatus%s       P2P enabled (port %d, discovery %d)\n", brandMuted, colorReset, cfg.P2PPort, cfg.DiscoveryPort)
+
+	if len(result.Peers) == 0 {
+		fmt.Printf("    %sPeers%s        No peers discovered yet\n", brandMuted, colorReset)
+		fmt.Println()
+		fmt.Printf("    %sWaiting for other OffGrid instances on your network...%s\n", colorDim, colorReset)
+		fmt.Printf("    %sEnsure they have P2P enabled and are on the same subnet.%s\n", colorDim, colorReset)
+	} else {
+		fmt.Printf("    %sPeers%s        %d node(s) discovered\n", brandMuted, colorReset, len(result.Peers))
+		fmt.Println()
+
+		for _, peer := range result.Peers {
+			fmt.Printf("    %s◆%s %s%s%s\n", brandPrimary, colorReset, colorBold, peer.ID, colorReset)
+			fmt.Printf("      %sAddress%s  %s:%d\n", brandMuted, colorReset, peer.Address, peer.Port)
+			if len(peer.Models) > 0 {
+				fmt.Printf("      %sModels%s   %s\n", brandMuted, colorReset, strings.Join(peer.Models, ", "))
+			}
+		}
+	}
+
+	fmt.Println()
+	fmt.Printf("    %sTransfer a model from a peer:%s\n", colorBold, colorReset)
+	fmt.Printf("      %s$%s offgrid peers download <model> <peer-id>\n", brandMuted, colorReset)
 	fmt.Println()
 }
 
@@ -3766,18 +3905,22 @@ func handleRun(args []string) {
 		fmt.Println()
 		fmt.Printf("  %sUsage%s  offgrid run %s<model>%s %s[options]%s\n", colorBold, colorReset, brandPrimary, colorReset, brandMuted, colorReset)
 		fmt.Println()
+		fmt.Printf("  %sQuick Start (auto-downloads if needed)%s\n", colorBold, colorReset)
+		fmt.Printf("    %s$%s offgrid run %sllama3%s       %s# Llama 3.2 3B (~4GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
+		fmt.Printf("    %s$%s offgrid run %sqwen%s         %s# Qwen 2.5 3B (~4GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
+		fmt.Printf("    %s$%s offgrid run %smistral%s      %s# Mistral 7B (~8GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
+		fmt.Printf("    %s$%s offgrid run %stiny%s         %s# TinyLlama 1.1B (~2GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
+		fmt.Println()
 		fmt.Printf("  %sOptions%s\n", colorBold, colorReset)
 		fmt.Printf("    %s--save%s <name>      Save conversation to session\n", brandPrimary, colorReset)
 		fmt.Printf("    %s--load%s <name>      Load and continue existing session\n", brandPrimary, colorReset)
 		fmt.Printf("    %s--image%s <path>     Attach an image (for VLM models)\n", brandPrimary, colorReset)
 		fmt.Printf("    %s--rag%s              Enable knowledge base (RAG)\n", brandPrimary, colorReset)
 		fmt.Println()
-		fmt.Printf("  %sExamples%s\n", colorBold, colorReset)
-		fmt.Printf("    %s$%s offgrid run llama-3.1-8b-instruct\n", brandMuted, colorReset)
-		fmt.Printf("    %s$%s offgrid run llava --image photo.jpg\n", brandMuted, colorReset)
-		fmt.Printf("    %s$%s offgrid run llama --save my-project\n", brandMuted, colorReset)
+		fmt.Printf("  %sMore Aliases%s\n", colorBold, colorReset)
+		fmt.Printf("    %sphi%s, %sgemma%s, %sqwen2.5-coder%s, %scodellama%s, %sllava%s (vision)\n", brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset)
 		fmt.Println()
-		fmt.Printf("  %sTip:%s Use %soffgrid list%s to see installed models\n", brandMuted, colorReset, colorBold, colorReset)
+		fmt.Printf("  %sTip:%s Run %soffgrid alias list%s to see all shortcuts\n", brandMuted, colorReset, colorBold, colorReset)
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -3815,18 +3958,118 @@ func handleRun(args []string) {
 		os.Exit(1)
 	}
 
-	// Find the model
+	// Try to resolve the model name (could be alias, partial name, or full name)
+	resolvedModelPath := ""
+	resolvedModelName := modelName
+
+	// 1. First check if it's a direct model match
 	model, err := registry.GetModel(modelName)
-	if err != nil || model == nil {
-		fmt.Printf("Model not found: %s\n", modelName)
-		fmt.Println("Use 'offgrid list' to see available models")
-		os.Exit(1)
+	if err == nil && model != nil {
+		resolvedModelPath = model.Path
+		resolvedModelName = model.ID
+	} else {
+		// 2. Check if it's a built-in alias
+		if alias, ok := models.GetBuiltInAlias(modelName); ok {
+			// Try to find a local model matching this alias
+			localPath, err := models.FindLocalModelByAlias(cfg.ModelsDir, modelName)
+			if err == nil {
+				resolvedModelPath = localPath
+				resolvedModelName = filepath.Base(localPath)
+			} else {
+				// Model not found locally - offer to download
+				fmt.Println()
+				fmt.Printf("  %s%s Model Not Found%s\n", brandPrimary+colorBold, iconModel, colorReset)
+				fmt.Println()
+				fmt.Printf("  %s'%s'%s is an alias for %s%s%s\n", brandSecondary, modelName, colorReset, brandPrimary, alias.Pattern, colorReset)
+				fmt.Printf("  %sRecommended:%s %s/%s\n", colorDim, colorReset, alias.HFRepo, alias.HFFile)
+				fmt.Printf("  %sRAM needed:%s  ~%dGB\n", colorDim, colorReset, alias.RAM)
+				fmt.Println()
+				fmt.Printf("  %sDownload now?%s (Y/n): ", brandPrimary, colorReset)
+
+				var response string
+				fmt.Scanln(&response)
+				response = strings.ToLower(strings.TrimSpace(response))
+				if response == "" || response == "y" || response == "yes" {
+					fmt.Println()
+					// Download the model
+					downloadArgs := []string{alias.HFRepo, alias.HFFile}
+					handleDownloadHF(downloadArgs)
+
+					// Re-scan and find the model
+					registry.ScanModels()
+					localPath, err = models.FindLocalModelByAlias(cfg.ModelsDir, modelName)
+					if err != nil {
+						fmt.Println()
+						printError("Failed to find downloaded model")
+						os.Exit(1)
+					}
+					resolvedModelPath = localPath
+					resolvedModelName = filepath.Base(localPath)
+				} else {
+					fmt.Println()
+					printInfo("Aborted. To download manually:")
+					fmt.Printf("  %s$%s offgrid download-hf %s %s\n", brandMuted, colorReset, alias.HFRepo, alias.HFFile)
+					fmt.Println()
+					os.Exit(0)
+				}
+			}
+		} else {
+			// 3. Try fuzzy matching against local models
+			localModels := registry.ListModels()
+			var matches []string
+			searchTerm := strings.ToLower(modelName)
+			for _, m := range localModels {
+				if strings.Contains(strings.ToLower(m.ID), searchTerm) {
+					matches = append(matches, m.ID)
+				}
+			}
+
+			if len(matches) == 1 {
+				// Exact single match
+				model, _ := registry.GetModel(matches[0])
+				resolvedModelPath = model.Path
+				resolvedModelName = model.ID
+			} else if len(matches) > 1 {
+				fmt.Println()
+				printInfo(fmt.Sprintf("Multiple models match '%s':", modelName))
+				for _, m := range matches {
+					fmt.Printf("  • %s\n", m)
+				}
+				fmt.Println()
+				printInfo("Please specify the full model name")
+				os.Exit(1)
+			} else {
+				// No matches - show available aliases
+				fmt.Println()
+				fmt.Printf("  %s%s Model Not Found: %s%s\n", brandError, iconCross, modelName, colorReset)
+				fmt.Println()
+				fmt.Printf("  %sAvailable shortcuts:%s\n", colorBold, colorReset)
+				fmt.Printf("    %sllama3%s      Llama 3.2 3B (~4GB RAM)\n", brandPrimary, colorReset)
+				fmt.Printf("    %sqwen%s        Qwen 2.5 3B (~4GB RAM)\n", brandPrimary, colorReset)
+				fmt.Printf("    %sphi%s         Phi 3.5 mini (~4GB RAM)\n", brandPrimary, colorReset)
+				fmt.Printf("    %smistral%s    Mistral 7B (~8GB RAM)\n", brandPrimary, colorReset)
+				fmt.Printf("    %stiny%s        TinyLlama 1.1B (~2GB RAM)\n", brandPrimary, colorReset)
+				fmt.Println()
+				fmt.Printf("  %sExample:%s offgrid run llama3\n", colorDim, colorReset)
+				fmt.Printf("  %sList all:%s offgrid alias list\n", colorDim, colorReset)
+				fmt.Println()
+				os.Exit(1)
+			}
+		}
+	}
+
+	// Create a temporary model struct for the rest of the function
+	if model == nil {
+		model = &api.ModelMetadata{
+			ID:   resolvedModelName,
+			Path: resolvedModelPath,
+		}
 	}
 
 	// Check for vision model
-	isVLM := strings.Contains(strings.ToLower(modelName), "llava") ||
-		strings.Contains(strings.ToLower(modelName), "vision") ||
-		strings.Contains(strings.ToLower(modelName), "vlm")
+	isVLM := strings.Contains(strings.ToLower(resolvedModelName), "llava") ||
+		strings.Contains(strings.ToLower(resolvedModelName), "vision") ||
+		strings.Contains(strings.ToLower(resolvedModelName), "vlm")
 
 	// Find projector file if this is a VLM
 	var projectorPath string
@@ -3962,14 +4205,32 @@ func handleRun(args []string) {
 			os.Exit(1)
 		}
 		fmt.Printf("\r  %sStatus:%s  %s✓ Ready%s  \n", brandMuted, colorReset, brandSuccess, colorReset)
+
+		// Show hardware info after loading
+		if sysInfo, err := resource.DetectResources(); err == nil {
+			if sysInfo.GPUAvailable {
+				fmt.Printf("  %sGPU:%s     %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
+			} else {
+				fmt.Printf("  %sDevice:%s  CPU (%d cores)\n", brandMuted, colorReset, sysInfo.CPUCores)
+			}
+		}
 		fmt.Println()
 	} else {
 		// llama-server already running, show header
 		fmt.Println()
 		fmt.Printf("  %s%s◉ OffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
 		fmt.Println()
-		fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, modelName)
+		fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, resolvedModelName)
 		fmt.Printf("  %sStatus:%s  %s✓ Ready%s\n", brandMuted, colorReset, brandSuccess, colorReset)
+
+		// Show hardware info
+		if sysInfo, err := resource.DetectResources(); err == nil {
+			if sysInfo.GPUAvailable {
+				fmt.Printf("  %sGPU:%s     %s%s%s (%dMB VRAM)\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset, sysInfo.GPUMemory)
+			} else {
+				fmt.Printf("  %sDevice:%s  CPU (%d cores, %dMB RAM available)\n", brandMuted, colorReset, sysInfo.CPUCores, sysInfo.AvailableRAM)
+			}
+		}
 		fmt.Println()
 	}
 
@@ -4586,19 +4847,45 @@ func handleAlias(args []string) {
 
 	switch args[0] {
 	case "list", "ls":
-		aliases := am.ListAliases()
-		if len(aliases) == 0 {
-			fmt.Println()
-			fmt.Printf("%sℹ No aliases defined%s\n", colorDim, colorReset)
-			fmt.Println()
-			return
-		}
+		// Show built-in aliases first
+		builtIn := models.ListBuiltInAliases()
+		userAliases := am.ListAliases()
 
 		fmt.Println()
-		fmt.Printf("%sAliases%s\n", brandPrimary+colorBold, colorReset)
-		for alias, modelID := range aliases {
-			fmt.Printf("%s%-20s%s %s·%s %s\n", brandSecondary, alias, colorReset, brandMuted, colorReset, modelID)
+		fmt.Printf("  %s%s Built-in Shortcuts%s\n", brandPrimary+colorBold, iconStar, colorReset)
+		fmt.Printf("  %sUse these with 'offgrid run <alias>' - auto-downloads if needed%s\n", colorDim, colorReset)
+		fmt.Println()
+
+		// Group by category
+		categories := map[string][]string{
+			"Chat Models":      {"llama3", "llama3.2", "llama3.1", "qwen", "qwen2.5", "mistral", "phi", "phi3", "gemma", "gemma2"},
+			"Small/Fast":       {"tiny", "smol", "llama3.2-1b", "qwen2.5-3b"},
+			"Coding":           {"qwen2.5-coder", "codellama", "deepseek-coder", "starcoder"},
+			"Vision":           {"llava", "moondream"},
+			"Embeddings (RAG)": {"embed", "nomic"},
 		}
+
+		for category, aliases := range categories {
+			fmt.Printf("  %s%s%s\n", colorBold, category, colorReset)
+			for _, alias := range aliases {
+				if info, ok := builtIn[alias]; ok {
+					fmt.Printf("    %s%-18s%s %s~%dGB RAM%s  %s\n", brandPrimary, alias, colorReset, colorDim, info.RAM, colorReset, info.Pattern)
+				}
+			}
+			fmt.Println()
+		}
+
+		// Show user-defined aliases
+		if len(userAliases) > 0 {
+			fmt.Printf("  %s%s Custom Aliases%s\n", brandSecondary+colorBold, iconDiamond, colorReset)
+			fmt.Println()
+			for alias, modelID := range userAliases {
+				fmt.Printf("    %s%-18s%s → %s\n", brandSecondary, alias, colorReset, modelID)
+			}
+			fmt.Println()
+		}
+
+		fmt.Printf("  %sCreate custom alias:%s offgrid alias set <name> <model-file>\n", colorDim, colorReset)
 		fmt.Println()
 
 	case "set", "create", "add":
@@ -4896,16 +5183,18 @@ func handleBatch(args []string) {
 	printInfo(fmt.Sprintf("Processing: %s to %s (concurrency=%d)", inputPath, outputPath, concurrency))
 	fmt.Println()
 
-	// Load config
-	configPath := os.Getenv("OFFGRID_CONFIG")
-	_, err := config.LoadWithPriority(configPath)
-	if err != nil {
-		printError(fmt.Sprintf("Failed to load config: %v", err))
-		return
+	// Ensure server is running for batch processing
+	if err := ensureOffgridServerRunning(); err != nil {
+		printWarning("Server not running. Starting server...")
+		if err := startOffgridServerInBackground(); err != nil {
+			printError("Failed to start server. Please run 'offgrid serve' first.")
+			return
+		}
+		time.Sleep(2 * time.Second)
 	}
 
-	// Create inference engine
-	engine := inference.NewMockEngine()
+	// Create inference engine that connects to the running server
+	engine := inference.NewLlamaHTTPEngine("http://localhost:11611")
 
 	// Create batch processor
 	processor := batch.NewProcessor(engine, concurrency)
@@ -6189,6 +6478,275 @@ func handleBenchmarkCompare(args []string) {
 	fmt.Println()
 }
 
+// handleAudit handles audit log commands
+func handleAudit(args []string) {
+	// Data dir is parent of models dir
+	homeDir, _ := os.UserHomeDir()
+	dataDir := filepath.Join(homeDir, ".offgrid-llm")
+	auditDir := filepath.Join(dataDir, "audit")
+
+	// Check for help flag or no args
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+		fmt.Println()
+		fmt.Printf("  %s◈ Audit Log%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %sSecurity audit logging for compliance and monitoring%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sCommands%s\n", colorBold, colorReset)
+		fmt.Printf("    %-22s %sShow recent audit events%s\n", "show", colorDim, colorReset)
+		fmt.Printf("    %-22s %sExport to JSON (compliance format)%s\n", "export-json <file>", colorDim, colorReset)
+		fmt.Printf("    %-22s %sExport to CSV (spreadsheet format)%s\n", "export-csv <file>", colorDim, colorReset)
+		fmt.Printf("    %-22s %sShow audit statistics%s\n", "stats", colorDim, colorReset)
+		fmt.Printf("    %-22s %sVerify log chain integrity%s\n", "verify", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sFilters%s\n", colorBold, colorReset)
+		fmt.Printf("    %-22s %sFilter by event type (AUTH, QUERY, MODEL, etc.)%s\n", "--type <type>", colorDim, colorReset)
+		fmt.Printf("    %-22s %sFilter by severity (INFO, WARNING, CRITICAL)%s\n", "--severity <level>", colorDim, colorReset)
+		fmt.Printf("    %-22s %sFilter by username%s\n", "--user <name>", colorDim, colorReset)
+		fmt.Printf("    %-22s %sStart date (YYYY-MM-DD)%s\n", "--from <date>", colorDim, colorReset)
+		fmt.Printf("    %-22s %sEnd date (YYYY-MM-DD)%s\n", "--to <date>", colorDim, colorReset)
+		fmt.Printf("    %-22s %sLimit number of results%s\n", "--limit <n>", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sExamples%s\n", colorBold, colorReset)
+		fmt.Printf("    %s$%s offgrid audit show --type AUTH --limit 50\n", colorDim, colorReset)
+		fmt.Printf("    %s$%s offgrid audit export-csv report.csv --from 2025-01-01\n", colorDim, colorReset)
+		fmt.Printf("    %s$%s offgrid audit stats --severity CRITICAL\n", colorDim, colorReset)
+		fmt.Println()
+		return
+	}
+
+	// Create audit logger
+	auditCfg := audit.DefaultAuditConfig(dataDir)
+	logger, err := audit.NewAuditLogger(auditCfg)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to open audit log: %v", err))
+		return
+	}
+	defer logger.Close()
+
+	// Parse filter flags
+	filter := audit.QueryFilter{Limit: 100}
+	subCmd := args[0]
+	args = args[1:]
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--type":
+			if i+1 < len(args) {
+				filter.Types = append(filter.Types, audit.EventType(strings.ToUpper(args[i+1])))
+				i++
+			}
+		case "--severity":
+			if i+1 < len(args) {
+				filter.Severities = append(filter.Severities, audit.EventSeverity(strings.ToUpper(args[i+1])))
+				i++
+			}
+		case "--user":
+			if i+1 < len(args) {
+				filter.User = args[i+1]
+				i++
+			}
+		case "--from":
+			if i+1 < len(args) {
+				if t, err := time.Parse("2006-01-02", args[i+1]); err == nil {
+					filter.StartTime = t
+				}
+				i++
+			}
+		case "--to":
+			if i+1 < len(args) {
+				if t, err := time.Parse("2006-01-02", args[i+1]); err == nil {
+					filter.EndTime = t.Add(24 * time.Hour) // End of day
+				}
+				i++
+			}
+		case "--limit":
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%d", &filter.Limit)
+				i++
+			}
+		}
+	}
+
+	switch subCmd {
+	case "show", "list":
+		events, err := logger.Query(filter)
+		if err != nil {
+			printError(fmt.Sprintf("Query failed: %v", err))
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("  %s◈ Audit Events%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %s%d events%s\n", brandMuted, len(events), colorReset)
+		fmt.Println()
+
+		if len(events) == 0 {
+			fmt.Printf("    %sNo events found%s\n", brandMuted, colorReset)
+			fmt.Println()
+			return
+		}
+
+		// Print table header
+		fmt.Printf("    %s%-20s  %-8s  %-8s  %-20s  %-15s%s\n",
+			brandMuted, "TIMESTAMP", "TYPE", "SEVERITY", "ACTION", "USER", colorReset)
+		fmt.Printf("    %s%s%s\n", brandMuted, strings.Repeat("─", 75), colorReset)
+
+		for _, event := range events {
+			// Parse and format timestamp
+			ts := event.Timestamp
+			if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+				ts = t.Format("01-02 15:04:05")
+			}
+
+			// Color code severity
+			sevColor := brandMuted
+			switch event.Severity {
+			case audit.SeverityWarning:
+				sevColor = colorYellow
+			case audit.SeverityCritical:
+				sevColor = brandError
+			}
+
+			// Truncate action if needed
+			action := event.Action
+			if len(action) > 20 {
+				action = action[:17] + "..."
+			}
+
+			user := event.User
+			if user == "" {
+				user = "-"
+			}
+
+			fmt.Printf("    %-20s  %-8s  %s%-8s%s  %-20s  %-15s\n",
+				ts, event.Type, sevColor, event.Severity, colorReset, action, user)
+		}
+		fmt.Println()
+
+	case "export-json":
+		if len(args) == 0 || strings.HasPrefix(args[0], "--") {
+			printError("Usage: offgrid audit export-json <output-file>")
+			return
+		}
+		outputPath := args[0]
+		if !strings.HasSuffix(outputPath, ".json") {
+			outputPath += ".json"
+		}
+
+		if err := logger.ExportForCompliance(outputPath, filter); err != nil {
+			printError(fmt.Sprintf("Export failed: %v", err))
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("  %s%s%s Exported to %s\n", brandSuccess, iconCheck, colorReset, outputPath)
+		fmt.Println()
+
+	case "export-csv":
+		if len(args) == 0 || strings.HasPrefix(args[0], "--") {
+			printError("Usage: offgrid audit export-csv <output-file>")
+			return
+		}
+		outputPath := args[0]
+		if !strings.HasSuffix(outputPath, ".csv") {
+			outputPath += ".csv"
+		}
+
+		if err := logger.ExportToCSV(outputPath, filter); err != nil {
+			printError(fmt.Sprintf("Export failed: %v", err))
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("  %s%s%s Exported to %s\n", brandSuccess, iconCheck, colorReset, outputPath)
+		fmt.Println()
+
+	case "stats":
+		stats, err := logger.GetStats(filter)
+		if err != nil {
+			printError(fmt.Sprintf("Failed to get stats: %v", err))
+			return
+		}
+
+		fmt.Println()
+		fmt.Printf("  %s◈ Audit Statistics%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+
+		fmt.Printf("    %sTotal Events%s     %d\n", colorBold, colorReset, stats.TotalEvents)
+		fmt.Printf("    %sSuccessful%s       %s%d%s\n", colorBold, colorReset, brandSuccess, stats.SuccessCount, colorReset)
+		fmt.Printf("    %sFailed%s           %s%d%s\n", colorBold, colorReset, brandError, stats.FailureCount, colorReset)
+		fmt.Println()
+
+		if len(stats.ByType) > 0 {
+			fmt.Printf("    %sBy Type%s\n", colorBold, colorReset)
+			for t, count := range stats.ByType {
+				fmt.Printf("      %-12s  %d\n", t, count)
+			}
+			fmt.Println()
+		}
+
+		if len(stats.BySeverity) > 0 {
+			fmt.Printf("    %sBy Severity%s\n", colorBold, colorReset)
+			for s, count := range stats.BySeverity {
+				fmt.Printf("      %-12s  %d\n", s, count)
+			}
+			fmt.Println()
+		}
+
+		if len(stats.ByUser) > 0 {
+			fmt.Printf("    %sBy User%s\n", colorBold, colorReset)
+			for u, count := range stats.ByUser {
+				fmt.Printf("      %-12s  %d\n", u, count)
+			}
+			fmt.Println()
+		}
+
+	case "verify":
+		fmt.Println()
+		fmt.Printf("  %s◈ Verifying Audit Chain Integrity%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Println()
+
+		files, _ := filepath.Glob(filepath.Join(auditDir, "audit_*.jsonl"))
+		if len(files) == 0 {
+			fmt.Printf("    %sNo audit logs found%s\n", brandMuted, colorReset)
+			fmt.Println()
+			return
+		}
+
+		totalVerified := 0
+		var allErrors []string
+
+		for _, f := range files {
+			verified, errors, _ := logger.VerifyChain(f)
+			totalVerified += verified
+			allErrors = append(allErrors, errors...)
+
+			basename := filepath.Base(f)
+			if len(errors) == 0 {
+				fmt.Printf("    %s%s%s  %s (%d events)\n", brandSuccess, iconCheck, colorReset, basename, verified)
+			} else {
+				fmt.Printf("    %s%s%s  %s (%d errors)\n", brandError, iconCross, colorReset, basename, len(errors))
+			}
+		}
+
+		fmt.Println()
+		if len(allErrors) == 0 {
+			fmt.Printf("  %s%s All %d events verified - chain integrity intact%s\n",
+				brandSuccess, iconCheck, totalVerified, colorReset)
+		} else {
+			fmt.Printf("  %s%s %d integrity errors detected%s\n",
+				brandError, iconCross, len(allErrors), colorReset)
+			for _, e := range allErrors {
+				fmt.Printf("    %s• %s%s\n", brandError, e, colorReset)
+			}
+		}
+		fmt.Println()
+
+	default:
+		printError(fmt.Sprintf("Unknown audit command: %s", subCmd))
+	}
+}
+
 // handleUsers handles user management commands
 func handleUsers(args []string) {
 	cfg := config.LoadConfig()
@@ -6904,6 +7462,28 @@ func handleAgent(args []string) {
 		}
 		fmt.Println()
 		fmt.Printf("  %sAdd MCP tools:%s offgrid agent mcp add <url>\n", colorDim, colorReset)
+		fmt.Println()
+
+	case "templates", "template":
+		// List available agent templates
+		templates := agents.BuiltInTemplates()
+
+		fmt.Println()
+		fmt.Printf("  %s◈ Agent Templates%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %sPre-configured AI personas with specialized system prompts%s\n", colorDim, colorReset)
+		fmt.Println()
+
+		for _, t := range templates {
+			fmt.Printf("    %s%s %s%s\n", t.Icon, colorBold, t.Name, colorReset)
+			fmt.Printf("       %sID:%s %s%s%s\n", colorDim, colorReset, brandPrimary, t.ID, colorReset)
+			fmt.Printf("       %s%s%s\n", colorDim, t.Description, colorReset)
+			fmt.Printf("       %sStyle:%s %s  %sTools:%s %s\n",
+				colorDim, colorReset, t.Config.ReasoningStyle,
+				colorDim, colorReset, strings.Join(t.Tools, ", "))
+			fmt.Println()
+		}
+
+		fmt.Printf("  %sUsage:%s offgrid agent run \"your task\" --template researcher --model llama3\n", colorDim, colorReset)
 		fmt.Println()
 
 	case "mcp":

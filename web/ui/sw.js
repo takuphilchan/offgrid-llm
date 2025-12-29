@@ -1,7 +1,7 @@
 // OffGrid LLM Service Worker
 // Enables offline capability and caching
 
-const CACHE_NAME = 'offgrid-v0.2.10';
+const CACHE_NAME = 'offgrid-v0.2.11';
 const STATIC_ASSETS = [
     '/ui/',
     '/ui/index.html',

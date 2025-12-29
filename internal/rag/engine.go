@@ -27,6 +27,7 @@ type Engine struct {
 	hybridAlpha     float32 // Weight for semantic vs keyword search (0=keyword only, 1=semantic only)
 	maxContextLen   int     // Maximum context length in characters
 	reranking       bool    // Enable MMR-based reranking for diversity
+	autoTuneChunks  bool    // Enable automatic chunking parameter tuning
 }
 
 // Store defines the interface for vector storage
@@ -37,6 +38,7 @@ type Store interface {
 	ListDocuments() ([]*Document, error)
 	DeleteDocument(id string) error
 	Search(queryEmbedding []float32, limit int, minScore float32) ([]SearchResult, error)
+	HybridSearch(queryEmbedding []float32, query string, limit int, minScore float32, alpha float32) ([]SearchResult, error)
 	Stats() map[string]interface{}
 	Close() error
 }
@@ -64,6 +66,7 @@ func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engi
 		hybridAlpha:     0.7,  // 70% semantic, 30% keyword by default
 		maxContextLen:   4000, // ~1000 tokens of context
 		reranking:       true, // Enable diversity reranking
+		autoTuneChunks:  true, // Enable automatic chunking tuning by default
 	}
 }
 
@@ -166,6 +169,28 @@ func (e *Engine) IsEnabled() bool {
 	return e.enabled
 }
 
+// SetAutoTuning enables or disables automatic chunking tuning
+func (e *Engine) SetAutoTuning(enabled bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.autoTuneChunks = enabled
+	log.Printf("[RAG] Automatic chunking tuning: %v", enabled)
+}
+
+// IsAutoTuningEnabled returns whether auto-tuning is enabled
+func (e *Engine) IsAutoTuningEnabled() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.autoTuneChunks
+}
+
+// AnalyzeDocument analyzes a document and returns chunking recommendations
+// This is useful for previewing what settings would be used before ingestion
+func (e *Engine) AnalyzeDocument(content string) DocumentAnalysis {
+	_, analysis := AutoTuneChunkingOptions(content)
+	return analysis
+}
+
 // IngestText ingests plain text content
 func (e *Engine) IngestText(ctx context.Context, name, content string, metadata map[string]string) (*Document, error) {
 	e.mu.Lock()
@@ -203,8 +228,26 @@ func (e *Engine) IngestText(ctx context.Context, name, content string, metadata 
 		UpdatedAt:   time.Now(),
 	}
 
+	// Use auto-tuned chunking if enabled
+	var chunker *Chunker
+	if e.autoTuneChunks {
+		opts, analysis := AutoTuneChunkingOptions(content)
+		chunker = NewChunker(opts)
+		log.Printf("[RAG] Auto-tuned chunking for '%s': type=%s, chunk_size=%d, reasoning=%s",
+			name, analysis.DocumentType, opts.ChunkSize, analysis.Reasoning)
+		// Store analysis in metadata
+		if doc.Metadata == nil {
+			doc.Metadata = make(map[string]string)
+		}
+		doc.Metadata["doc_type"] = analysis.DocumentType
+		doc.Metadata["chunk_size"] = fmt.Sprintf("%d", opts.ChunkSize)
+		doc.Metadata["auto_tuned"] = "true"
+	} else {
+		chunker = e.chunker
+	}
+
 	// Chunk the document
-	chunks := e.chunker.ChunkText(docID, content)
+	chunks := chunker.ChunkText(docID, content)
 	if len(chunks) == 0 {
 		return nil, fmt.Errorf("no chunks generated from content")
 	}
@@ -326,11 +369,14 @@ func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (
 		}
 	}
 
-	// Note: SQLite implementation currently only supports semantic search
-	// We'll add hybrid search later when we integrate FTS5
-	results, err := e.store.Search(embeddings[0], searchOpts.TopK, searchOpts.MinScore)
+	// Use hybrid search combining semantic similarity with keyword matching
+	results, err := e.store.HybridSearch(embeddings[0], query, searchOpts.TopK, searchOpts.MinScore, e.hybridAlpha)
 	if err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
+		// Fall back to pure semantic search if hybrid fails
+		results, err = e.store.Search(embeddings[0], searchOpts.TopK, searchOpts.MinScore)
+		if err != nil {
+			return nil, fmt.Errorf("search failed: %w", err)
+		}
 	}
 
 	// Apply MMR (Maximal Marginal Relevance) reranking for diversity

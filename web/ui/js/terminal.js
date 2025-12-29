@@ -8,7 +8,7 @@ function clearTerminal() {
     terminalOutputBuffer = ''; // Clear any buffered output
     userScrolledUp = false;
     const pre = document.getElementById('terminalPre');
-    pre.textContent = 'OffGrid Terminal v0.2.10\nConnected to real offgrid binary\nType \'help\' for available commands\n';
+    pre.textContent = 'OffGrid Terminal v0.2.11\nConnected to real offgrid binary\nType \'help\' for available commands\n';
 }
 
 function killCommand() {

@@ -85,7 +85,7 @@ docker run -d \
 ### Build with Custom Tag
 
 ```bash
-docker build -t myregistry/offgrid-llm:v0.2.10 .
+docker build -t myregistry/offgrid-llm:v0.2.11 .
 ```
 
 ### Multi-Platform Build

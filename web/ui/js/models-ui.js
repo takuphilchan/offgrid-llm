@@ -561,6 +561,7 @@ async function importFromUSB() {
 
 async function exportToUSB() {
     const usbPath = document.getElementById('usbExportPath').value.trim();
+    const includeInstaller = document.getElementById('includeInstaller')?.checked || false;
     const statusDiv = document.getElementById('usbExportStatus');
     const progressDiv = document.getElementById('usbExportProgress');
     const progressBar = document.getElementById('usbExportProgressBar');
@@ -580,7 +581,10 @@ async function exportToUSB() {
         const response = await fetch('/v1/usb/export', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: usbPath })
+            body: JSON.stringify({ 
+                path: usbPath,
+                include_installer: includeInstaller
+            })
         });
         
         const data = await response.json();
@@ -588,6 +592,7 @@ async function exportToUSB() {
         if (response.ok) {
             const count = data.exported_count || 0;
             const size = data.total_size_gb || 0;
+            const hasInstaller = data.installer_included || false;
             progressBar.style.width = '100%';
             progressText.innerHTML = `Exported ${count} model(s) (${size.toFixed(2)} GB)`;
             setTimeout(() => {
@@ -598,6 +603,7 @@ async function exportToUSB() {
                         <div class="text-xs text-secondary mt-1">
                             ${count} model(s) exported (${size.toFixed(2)} GB)<br>
                             Location: ${usbPath}/offgrid-models/<br>
+                            ${hasInstaller ? 'Installer included in /installer/<br>' : ''}
                             Manifest and README included
                         </div>
                     </div>

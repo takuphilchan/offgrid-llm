@@ -1,280 +1,203 @@
 # OffGrid LLM
 
-**Run powerful AI models completely offline on your own computer.**
+Run AI models locally. No cloud. No API keys. Complete privacy.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.2.7-blue.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-0078D4.svg?style=flat-square)](https://github.com/takuphilchan/offgrid-llm/releases)
-[![PyPI](https://img.shields.io/pypi/v/offgrid?style=flat-square&color=3776AB)](https://pypi.org/project/offgrid/)
-
-*No cloud. No subscriptions. No data leaving your machine.*
-
-![OffGrid LLM Chat Interface](docs/images/chat-page.png)
+[![Version](https://img.shields.io/badge/Version-0.2.11-blue.svg)](https://github.com/takuphilchan/offgrid-llm/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/offgrid)](https://pypi.org/project/offgrid/)
 
 ---
 
-## Why OffGrid LLM?
-
-| Problem | OffGrid Solution |
-|---------|------------------|
-| **Privacy concerns** | All processing happens locally - your data never leaves your machine |
-| **Expensive API costs** | Free forever after download - no subscriptions or per-token fees |
-| **Internet dependency** | Works completely offline - perfect for remote locations |
-| **Enterprise restrictions** | Air-gapped deployment for sensitive environments |
-| **Learning AI** | Experiment freely without cost or rate limits |
-
----
-
-## Features at a Glance
-
-### Features
-
-| AI Core | Voice | Knowledge |
-|---------|-------|-----------|
-| Chat UI | Speech-to-Text | RAG/Embeddings |
-| Streaming | Text-to-Speech | Document ingestion |
-| Sessions | 18+ languages | Semantic search |
-| AI Agent | Whisper | Context injection |
-
-| Tools | Ops | Integration |
-|-------|-----|-------------|
-| Model Hub | Metrics | REST API |
-| Benchmarks | Multi-user | Python SDK |
-| Terminal | Monitoring | OpenAI compatible |
-| LoRA | Auto-start | USB transfer |
-
----
-
-## Quick Start
-
-### 1. Install
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
-<details>
-<summary>Other installation methods</summary>
+## Run
 
-**Interactive Install (choose components):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh -o install.sh
-bash install.sh
+offgrid run llama3
 ```
 
-**Docker:**
-```bash
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm && docker-compose up -d
-```
+That's it. The model downloads automatically and you start chatting.
 
-**Python library only:**
-```bash
-pip install offgrid
-```
+---
 
-**From source:**
-```bash
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm && go build -o bin/offgrid ./cmd/offgrid
-```
+## Why OffGrid?
 
-</details>
+| Feature | OffGrid | Ollama | LM Studio |
+|---------|:-------:|:------:|:---------:|
+| Air-gapped USB deployment | Yes | - | - |
+| P2P model sharing | Yes | - | - |
+| Built-in RAG | Yes | - | - |
+| Multi-user + audit logs | Yes | - | - |
+| AI Agents with MCP | Yes | - | Partial |
+| Voice assistant | Yes | - | - |
+| OpenAI-compatible API | Yes | Yes | Yes |
 
-### 2. Start Server
+**Built for:**
+- Healthcare (HIPAA) - patient data never leaves
+- Government - air-gapped deployment
+- Enterprise - audit logging and multi-user
+- Remote sites - ships, rigs, expeditions
+- Research - unlimited use, zero API costs
+
+---
+
+## Quick Start
+
+### Web UI
 
 ```bash
 offgrid serve
 ```
 
-### 3. Open Browser
+Open http://localhost:11611
 
-Navigate to **http://localhost:11611**
+### CLI Chat
 
-That's it! Download a model from the Models tab and start chatting.
+```bash
+offgrid run llama3           # Chat with Llama 3
+offgrid run mistral          # Chat with Mistral
+offgrid run codellama        # Chat with Code Llama
+```
 
----
+### Python
 
-## Usage Examples
-
-### Python Library
+```bash
+pip install offgrid
+```
 
 ```python
 import offgrid
 
-# Connect to server
-client = offgrid.Client()  # defaults to localhost:11611
-
-# Simple chat
-response = client.chat("Explain quantum computing in simple terms")
+client = offgrid.Client()
+response = client.chat("Hello!")
 print(response)
-
-# Streaming response
-for chunk in client.chat("Tell me a story", stream=True):
-    print(chunk, end="", flush=True)
-
-# With options
-response = client.chat(
-    "Write a haiku about coding",
-    model="Llama-3.2-3B-Instruct",
-    temperature=0.9,
-    max_tokens=100
-)
 ```
+
+---
+
+## Models
+
+Built-in shortcuts:
+
+| Alias | Model | RAM |
+|-------|-------|-----|
+| `tiny` | TinyLlama 1.1B | 2 GB |
+| `phi` | Phi 3 Mini | 4 GB |
+| `llama3` | Llama 3.2 3B | 4 GB |
+| `qwen` | Qwen 2.5 3B | 4 GB |
+| `mistral` | Mistral 7B | 8 GB |
+| `codellama` | Code Llama 7B | 8 GB |
+
+```bash
+offgrid alias list           # See all shortcuts
+offgrid search llama         # Search HuggingFace
+offgrid list                 # Show installed
+```
+
+---
+
+## Features
+
+### AI Agents
+
+Autonomous task execution with tool use:
+
+```bash
+offgrid agent chat --template coder
+offgrid agent run "Analyze this data and create a chart"
+```
+
+Templates: `researcher`, `coder`, `analyst`, `writer`, `sysadmin`, `planner`
 
 ### Knowledge Base (RAG)
 
-```python
-# Add your documents
-client.kb.add("meeting_notes.txt")
-client.kb.add_directory("./company_docs")
-
-# Chat with document context
-response = client.chat("What were the action items from the meeting?", use_kb=True)
-```
-
-### Voice Assistant
-
-```python
-# Speech to text
-text = client.audio.transcribe("recording.wav")
-print(text["text"])
-
-# Text to speech
-audio = client.audio.speak("Hello! How can I help you today?")
-with open("greeting.wav", "wb") as f:
-    f.write(audio)
-```
-
-### Command Line
+Chat with your documents:
 
 ```bash
-offgrid list                           # List downloaded models
-offgrid search "llama 3" --ram 8       # Search models for 8GB RAM
-offgrid download-hf repo/model file    # Download from HuggingFace
-offgrid run model-name                 # Interactive chat
-offgrid audio transcribe recording.wav # Transcribe audio
+offgrid kb add ./documents/
+offgrid kb search "project requirements"
 ```
 
----
+### Voice
 
-## Web Interface
+Speech-to-text and text-to-speech:
 
-The browser-based UI at `http://localhost:11611` provides:
-
-| Tab | Description |
-|-----|-------------|
-| **Chat** | Conversational AI with session history and markdown rendering |
-| **Voice** | Push-to-talk voice assistant with transcription |
-| **Agent** | Autonomous AI that can execute multi-step tasks |
-| **Models** | Browse HuggingFace, download, and manage models |
-| **Knowledge** | Upload documents for RAG-powered conversations |
-| **LoRA** | Load fine-tuned adapters for specialized tasks |
-| **Benchmark** | Compare model performance metrics |
-| **Terminal** | Run CLI commands from the browser |
-| **Users** | Multi-user management with API keys |
-| **Metrics** | Real-time server statistics and monitoring |
-
----
-
-## System Requirements
-
-| RAM | Recommended Models | Use Case |
-|-----|-------------------|----------|
-| **4GB** | Qwen2.5-1.5B, SmolLM2-1.7B | Basic tasks, low-end devices |
-| **8GB** | Llama 3.2 3B, Qwen2.5-3B | General use, most users |
-| **16GB** | Llama 3 8B, Qwen2.5-7B | Professional work, coding |
-| **32GB+** | Llama 3 70B, Mixtral | Research, complex tasks |
-
-**GPU:** Optional but recommended. Supports NVIDIA (CUDA), AMD (ROCm), Apple Silicon (Metal), and Vulkan.
-
----
-
-## Project Structure
-
+```bash
+offgrid audio transcribe recording.wav
+offgrid audio speak "Hello world" --output hello.wav
 ```
-offgrid-llm/
-├── cmd/offgrid/        # CLI application entry point
-├── internal/           # Core Go packages (30+ modules)
-│   ├── server/         # HTTP API server
-│   ├── inference/      # LLM inference engine
-│   ├── agents/         # AI agent orchestration
-│   ├── rag/            # Vector search & embeddings
-│   └── ...             # Audio, metrics, config, etc.
-├── web/ui/             # Browser interface (modular JS)
-├── desktop/            # Electron desktop app
-├── python/             # Python SDK
-├── docs/               # Documentation
-├── scripts/            # Build & deployment scripts
-└── docker/             # Container configurations
+
+### Offline Transfer
+
+Export models to USB for air-gapped systems:
+
+```bash
+offgrid export llama3 /media/usb
+offgrid import /media/usb
+```
+
+### Audit Logs
+
+Tamper-evident security logging:
+
+```bash
+offgrid audit show
+offgrid audit export-csv report.csv
+offgrid audit verify
 ```
 
 ---
 
 ## Documentation
 
-### Getting Started
-- [Quick Start](docs/setup/quickstart.md) - 3-minute setup
-- [Getting Started Guide](docs/guides/getting-started.md) - Complete walkthrough
-- [Installation](docs/setup/installation.md) - All installation methods
-
-### User Guides
-- [Python Library](python/README.md) - Full Python API
-- [API Reference](docs/reference/api.md) - REST endpoints
-- [CLI Reference](docs/reference/cli.md) - Command-line usage
-- [Models](docs/guides/models.md) - Choosing models
-- [Features](docs/guides/features.md) - All features
-- [Embeddings](docs/guides/embeddings.md) - RAG setup
-- [Agents](docs/guides/agents.md) - AI agent usage
-
-### Advanced
-- [Architecture](docs/advanced/architecture.md) - System design
-- [Performance](docs/advanced/performance.md) - Optimization
-- [Docker](docs/setup/docker.md) - Container setup
-- [Building](docs/advanced/building.md) - Custom builds
-
-### Contributing
-- [Contribution Guide](dev/CONTRIBUTING.md) - How to contribute
-- [Code Style](dev/CONTRIBUTING.md#code-style-guide) - Coding standards
-- [Web UI Guide](web/ui/README.md) - Frontend development
+| Guide | Description |
+|-------|-------------|
+| [Quick Start](docs/setup/quickstart.md) | Get running in 3 minutes |
+| [CLI Reference](docs/reference/cli.md) | All commands |
+| [API Reference](docs/reference/api.md) | REST endpoints |
+| [Python SDK](python/README.md) | Python library |
+| [Agents](docs/guides/agents.md) | AI agent system |
+| [RAG](docs/guides/embeddings.md) | Knowledge base |
+| [Docker](docs/setup/docker.md) | Container deployment |
 
 ---
 
-## Troubleshooting
+## System Requirements
 
-| Issue | Solution |
-|-------|----------|
-| **FUSE error (Linux)** | `sudo apt install libfuse2` |
-| **Voice not working** | `rm -rf ~/.offgrid-llm/audio && offgrid audio setup whisper` |
-| **Model loading slow** | Use quantized models (Q4_K_M recommended) |
-| **Out of memory** | Try smaller model or increase swap |
-| **Server won't start** | Check if port 11611 is in use |
+| RAM | Models |
+|-----|--------|
+| 4 GB | TinyLlama, SmolLM, Phi 3 Mini |
+| 8 GB | Llama 3.2 3B, Qwen 2.5 3B, Gemma 2B |
+| 16 GB | Mistral 7B, Llama 3.1 8B, Code Llama |
+| 32 GB+ | Llama 3 70B, Mixtral, DeepSeek |
 
-See [docs/setup/installation.md](docs/setup/installation.md#troubleshooting) for detailed troubleshooting.
+GPU optional. Supports NVIDIA (CUDA), AMD (ROCm), Apple Silicon (Metal).
 
 ---
 
 ## Contributing
 
-We welcome contributions! See our [Contributing Guide](dev/CONTRIBUTING.md) for details.
-
 ```bash
-# Quick setup for contributors
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
-go mod download
-make build
-./bin/offgrid serve --verbose
+go build -o bin/offgrid ./cmd/offgrid
+./bin/offgrid serve
 ```
+
+See [Contributing Guide](dev/CONTRIBUTING.md).
 
 ---
 
 ## License
 
-MIT License - See [LICENSE](LICENSE)
+MIT - See [LICENSE](LICENSE)
 
-**Built with [llama.cpp](https://github.com/ggerganov/llama.cpp)**
+Built with [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
 ---
 
-[Quick Start](docs/setup/quickstart.md) | [Documentation](docs/README.md) | [Issues](https://github.com/takuphilchan/offgrid-llm/issues) | [Contributing](dev/CONTRIBUTING.md)
+[Documentation](docs/README.md) | [Issues](https://github.com/takuphilchan/offgrid-llm/issues) | [Roadmap](docs/ROADMAP.md)

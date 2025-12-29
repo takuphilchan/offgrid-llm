@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/degradation"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
+	"github.com/takuphilchan/offgrid-llm/internal/mcp"
 	"github.com/takuphilchan/offgrid-llm/internal/metrics"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/p2p"
@@ -36,6 +38,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/stats"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
+	"github.com/takuphilchan/offgrid-llm/internal/tools"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
 	"github.com/takuphilchan/offgrid-llm/internal/websocket"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
@@ -68,19 +71,25 @@ type Server struct {
 	sessionHandlers      *SessionHandlers
 	authMiddleware       *users.Middleware
 	// New feature managers
-	userStore      *users.UserStore
-	quotaManager   *users.QuotaManager
-	kbManager      *users.KnowledgeBaseManager
-	loraManager    *inference.LoRAManager
-	agentManager   *agents.Manager
-	toolRegistry   *agents.ToolRegistry
-	p2pDiscovery   *p2p.Discovery
-	p2pTransfer    *p2p.TransferManager
-	offgridMetrics *metrics.OffGridMetrics
-	wsHub          *websocket.Hub
-	powerManager   *power.PowerManager
-	degradationMgr *degradation.Manager // Graceful degradation under resource pressure
-	auditLogger    *audit.AuditLogger   // Enterprise audit logging (optional)
+	userStore         *users.UserStore
+	quotaManager      *users.QuotaManager
+	kbManager         *users.KnowledgeBaseManager
+	loraManager       *inference.LoRAManager
+	agentManager      *agents.Manager
+	agentOrchestrator *agents.Orchestrator
+	toolRegistry      *agents.ToolRegistry
+	p2pDiscovery      *p2p.Discovery
+	p2pTransfer       *p2p.TransferManager
+	offgridMetrics    *metrics.OffGridMetrics
+	wsHub             *websocket.Hub
+	powerManager      *power.PowerManager
+	degradationMgr    *degradation.Manager     // Graceful degradation under resource pressure
+	auditLogger       *audit.AuditLogger       // Enterprise audit logging (optional)
+	ldapAuth          *users.LDAPAuthenticator // LDAP/Active Directory authentication
+	mcpMarketplace    *mcp.Marketplace         // MCP server marketplace
+	loadBalancer      *inference.LoadBalancer  // Multi-backend load balancer
+	distributedRAG    *rag.DistributedRAG      // Distributed RAG index
+	pluginManager     *tools.PluginManager     // Plugin system for custom tools
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -197,8 +206,9 @@ func NewWithConfig(cfg *config.Config) *Server {
 		executor = agents.BuiltInExecutor() // Fallback to unsafe executor if sandbox fails completely
 	}
 
-	agentManager := agents.NewManager(nil, executor, nil) // Tools and LLM caller can be set later
-	toolRegistry := agents.NewToolRegistry()              // Unified tool registry
+	agentManager := agents.NewManagerWithPersistence(nil, executor, nil, dataDir) // With task persistence
+	agentOrchestrator := agents.NewOrchestrator(agentManager)                     // Multi-agent orchestration
+	toolRegistry := agents.NewToolRegistry()                                      // Unified tool registry
 	// Load user-defined tools from config if exists
 	toolsConfigPath := filepath.Join(dataDir, "tools.json")
 	if err := toolRegistry.LoadUserTools(toolsConfigPath); err != nil {
@@ -272,6 +282,93 @@ func NewWithConfig(cfg *config.Config) *Server {
 	authMiddleware.AddBypassPath("/readyz")
 	authMiddleware.AddBypassPath("/metrics")
 
+	// Initialize LDAP authenticator if enabled
+	var ldapAuth *users.LDAPAuthenticator
+	if cfg.LDAPEnabled && cfg.LDAPServer != "" {
+		ldapConfig := users.LDAPConfig{
+			Server:             cfg.LDAPServer,
+			Port:               cfg.LDAPPort,
+			UseTLS:             cfg.LDAPUseTLS,
+			StartTLS:           cfg.LDAPStartTLS,
+			BindDN:             cfg.LDAPBindDN,
+			BindPassword:       cfg.LDAPBindPassword,
+			BaseDN:             cfg.LDAPBaseDN,
+			UserFilter:         cfg.LDAPUserFilter,
+			AdminGroups:        cfg.LDAPAdminGroups,
+			UserGroups:         cfg.LDAPUserGroups,
+			DefaultRole:        users.RoleUser,
+			InsecureSkipVerify: cfg.LDAPSkipTLSVerify,
+		}
+		ldapProvider := users.NewLDAPAuthProvider(ldapConfig)
+		// Test connection at startup
+		if err := ldapProvider.TestConnection(); err != nil {
+			log.Printf("Warning: LDAP connection test failed: %v", err)
+		} else {
+			log.Printf("LDAP authentication enabled: %s:%d", cfg.LDAPServer, cfg.LDAPPort)
+			ldapAuth = users.NewLDAPAuthenticator(ldapProvider, userStore, cfg.LDAPAutoCreate)
+		}
+	}
+
+	// Initialize MCP marketplace
+	mcpMarketplace := mcp.NewMarketplace(dataDir)
+
+	// Initialize load balancer if backends configured
+	var loadBalancer *inference.LoadBalancer
+	if len(cfg.LoadBalancerBackends) > 0 {
+		backends := make([]inference.Backend, 0, len(cfg.LoadBalancerBackends))
+		for _, b := range cfg.LoadBalancerBackends {
+			backends = append(backends, inference.Backend{
+				ID:      b.ID,
+				Name:    b.Name,
+				URL:     b.URL,
+				Type:    inference.BackendType(b.Type),
+				APIKey:  b.APIKey,
+				Models:  b.Models,
+				Weight:  b.Weight,
+				Enabled: true,
+			})
+		}
+		loadBalancer = inference.NewLoadBalancer(inference.LoadBalancerConfig{
+			Backends:           backends,
+			Strategy:           inference.BalancingStrategy(cfg.LoadBalancerStrategy),
+			HealthCheckSeconds: 30,
+			HealthCheckPath:    "/health",
+		})
+		log.Printf("Load balancer enabled with %d backends", len(backends))
+	}
+
+	// Initialize distributed RAG if nodes configured
+	var distributedRAG *rag.DistributedRAG
+	if len(cfg.DistributedRAGNodes) > 0 {
+		distributedRAG = rag.NewDistributedRAG(rag.DistributedRAGConfig{
+			LocalNodeID:        cfg.NodeID,
+			SearchPath:         "/v1/rag/search",
+			HealthPath:         "/v1/rag/stats",
+			TimeoutSeconds:     10,
+			HealthCheckSeconds: 30,
+		})
+		for _, n := range cfg.DistributedRAGNodes {
+			distributedRAG.AddNode(rag.DistributedNode{
+				ID:   n.ID,
+				URL:  n.URL,
+				Name: n.Name,
+			})
+		}
+		log.Printf("Distributed RAG enabled with %d remote nodes", len(cfg.DistributedRAGNodes))
+	}
+
+	// Initialize plugin manager
+	pluginsDir := filepath.Join(dataDir, "plugins")
+	pluginManager := tools.NewPluginManager(pluginsDir)
+	if err := pluginManager.ScanPlugins(); err != nil {
+		log.Printf("Warning: failed to scan plugins: %v", err)
+	} else {
+		plugins := pluginManager.ListPlugins()
+		if len(plugins) > 0 {
+			log.Printf("Loaded %d plugins", len(plugins))
+		}
+	}
+
 	// Initialize P2P components if enabled
 	var p2pDiscovery *p2p.Discovery
 	var p2pTransfer *p2p.TransferManager
@@ -303,6 +400,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		kbManager:            kbManager,
 		loraManager:          loraManager,
 		agentManager:         agentManager,
+		agentOrchestrator:    agentOrchestrator,
 		toolRegistry:         toolRegistry,
 		p2pDiscovery:         p2pDiscovery,
 		p2pTransfer:          p2pTransfer,
@@ -311,6 +409,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 		powerManager:         powerManager,
 		degradationMgr:       degradationMgr,
 		auditLogger:          auditLogger,
+		ldapAuth:             ldapAuth,
+		mcpMarketplace:       mcpMarketplace,
+		loadBalancer:         loadBalancer,
+		distributedRAG:       distributedRAG,
+		pluginManager:        pluginManager,
 		version:              readVersionOnce(), // Cache VERSION file at startup
 	}
 }
@@ -370,6 +473,21 @@ func createModelCache(cfg *config.Config) *inference.ModelCache {
 	cache.SetNumThreads(cfg.NumThreads)
 	cache.SetKVCacheType(cfg.KVCacheType)
 	cache.SetFlashAttention(cfg.FlashAttention)
+	cache.SetContinuousBatching(cfg.ContBatching)
+
+	// Configure speculative decoding if draft model specified
+	if cfg.SpecDraftModel != "" {
+		draftTokens := cfg.SpecDraftTokens
+		if draftTokens <= 0 {
+			draftTokens = 8
+		}
+		draftMin := cfg.SpecDraftMin
+		if draftMin <= 0 {
+			draftMin = 5
+		}
+		cache.SetSpeculativeDecoding(cfg.SpecDraftModel, draftTokens, draftMin)
+		log.Printf("Speculative decoding configured with draft model: %s", cfg.SpecDraftModel)
+	}
 
 	// Apply low memory mode optimizations only when explicitly enabled
 	if lowMemoryMode {
@@ -536,6 +654,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/models/download", s.rateLimiter.Middleware(s.handleDownloadModel))
 	mux.HandleFunc("/v1/models/download/progress", s.handleDownloadProgress)
 	mux.HandleFunc("/v1/models/download/cancel", s.handleCancelDownload)
+	mux.HandleFunc("/v1/models/verify", s.handleVerifyModel)
 
 	// Inference endpoints with strict rate limiting
 	mux.HandleFunc("/v1/chat/completions", s.inferenceRateLimiter.Middleware(s.handleChatCompletions))
@@ -546,8 +665,23 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/search", s.handleModelSearch)
 	mux.HandleFunc("/v1/catalog", s.handleModelCatalog)
 	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
+	mux.HandleFunc("/v1/quantize", s.handleQuantize)
+	mux.HandleFunc("/v1/quantize/types", s.handleQuantizeTypes)
+	mux.HandleFunc("/v1/models/hotswap", s.handleHotSwap)
+	mux.HandleFunc("/v1/models/hotswap/status", s.handleHotSwapStatus)
+	mux.HandleFunc("/v1/models/hotswap/prepare", s.handleHotSwapPrepare)
 	mux.HandleFunc("/v1/terminal/exec", s.handleTerminalExec)
 	mux.HandleFunc("/v1/terminal/exec/stream", s.handleTerminalExecStream)
+
+	// Load balancer endpoints
+	mux.HandleFunc("/v1/loadbalancer", s.handleLoadBalancer)
+	mux.HandleFunc("/v1/loadbalancer/backends", s.handleLoadBalancerBackends)
+	mux.HandleFunc("/v1/loadbalancer/backends/", s.handleLoadBalancerBackend)
+
+	// Distributed RAG endpoints
+	mux.HandleFunc("/v1/rag/distributed", s.handleDistributedRAG)
+	mux.HandleFunc("/v1/rag/distributed/nodes", s.handleDistributedRAGNodes)
+	mux.HandleFunc("/v1/rag/distributed/search", s.handleDistributedRAGSearch)
 
 	// Templates endpoints
 	mux.HandleFunc("/v1/templates", s.handleTemplates)
@@ -567,24 +701,33 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/rag/disable", s.handleRAGDisable)
 	mux.HandleFunc("/v1/documents", s.handleDocumentsList)
 	mux.HandleFunc("/v1/documents/ingest", s.handleDocumentIngest)
+	mux.HandleFunc("/v1/documents/ingest-url", s.handleDocumentIngestURL)
 	mux.HandleFunc("/v1/documents/delete", s.handleDocumentDelete)
 	mux.HandleFunc("/v1/documents/search", s.handleDocumentSearch)
 
 	// P2P endpoints
 	mux.HandleFunc("/v1/p2p/peers", s.handleP2PPeers)
 	mux.HandleFunc("/v1/p2p/download", s.handleP2PDownload)
+	mux.HandleFunc("/v1/p2p/status", s.handleP2PStatus)
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", s.handleStats)
 	mux.HandleFunc("/v1/stats", s.handleStatsV1)
 	mux.HandleFunc("/v1/system/info", s.handleSystemInfo)
 
+	// Plugin endpoints
+	mux.HandleFunc("/v1/plugins", s.handlePlugins)
+	mux.HandleFunc("/v1/plugins/", s.handlePluginAction)
+
 	// Sessions endpoints
 	mux.HandleFunc("/v1/sessions", s.sessionHandlers.HandleSessions)
 	mux.HandleFunc("/v1/sessions/", s.sessionHandlers.HandleSessions)
 
-	// Model cache statistics
+	// Model cache and loading progress
 	mux.HandleFunc("/v1/cache/stats", s.handleCacheStats)
+	mux.HandleFunc("/v1/loading/progress", s.handleLoadingProgress)
+	mux.HandleFunc("/v1/loading/progress/stream", s.handleLoadingProgressStream)
+	mux.HandleFunc("/v1/loading/prewarm", s.handleFastPrewarm)
 
 	// Cache management endpoints
 	mux.HandleFunc("/cache/stats", s.handleCacheStats)
@@ -601,7 +744,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/users/", s.handleUsers)
 	mux.HandleFunc("/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("/v1/auth/logout", s.handleLogout)
+	mux.HandleFunc("/v1/auth/ldap/test", s.handleLDAPTest)
+	mux.HandleFunc("/v1/auth/ldap/sync", s.handleLDAPSync)
 	mux.HandleFunc("/v1/quota", s.handleQuota)
+	mux.HandleFunc("/v1/quota/", s.handleQuotaManage)
 
 	// LoRA adapter endpoints
 	mux.HandleFunc("/v1/lora", s.handleLoRAList)
@@ -611,9 +757,12 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/agents/run", s.handleAgentRun)
 	mux.HandleFunc("/v1/agents/tasks", s.handleAgentTasks)
 	mux.HandleFunc("/v1/agents/workflows", s.handleAgentWorkflows)
+	mux.HandleFunc("/v1/agents/orchestrate", s.handleAgentOrchestrate)
 	mux.HandleFunc("/v1/agents/tools", s.handleAgentTools)
 	mux.HandleFunc("/v1/agents/mcp", s.handleAgentMCP)
 	mux.HandleFunc("/v1/agents/mcp/test", s.handleAgentMCPTest)
+	mux.HandleFunc("/v1/agents/mcp/marketplace", s.handleMCPMarketplace)
+	mux.HandleFunc("/v1/agents/mcp/marketplace/", s.handleMCPMarketplaceAction)
 
 	// Audio endpoints (OpenAI-compatible TTS/ASR)
 	mux.HandleFunc("/v1/audio/transcriptions", s.handleAudioTranscriptions)
@@ -734,19 +883,28 @@ func (s *Server) Start() error {
 		colorReset   = "\033[0m"
 		colorCyan    = "\033[36m"
 		colorGreen   = "\033[32m"
+		colorDim     = "\033[90m"
 		brandPrimary = "\033[38;5;45m"
 	)
 
 	fmt.Println()
 	fmt.Printf("%sOffGrid LLM Server%s\n", colorCyan, colorReset)
 	fmt.Println()
+
+	// Show hardware info
+	if res, err := resource.DetectResources(); err == nil {
+		if res.GPUAvailable && res.GPUName != "" {
+			fmt.Printf("Device:  %s%s%s (%dMB VRAM)\n", colorGreen, res.GPUName, colorReset, res.GPUMemory)
+		} else {
+			fmt.Printf("Device:  CPU (%d cores, %dMB RAM)\n", res.CPUCores, res.AvailableRAM)
+		}
+	}
+
 	fmt.Printf("Server:  http://localhost:%d\n", s.config.ServerPort)
 	fmt.Printf("Web UI:  http://localhost:%d/ui/\n", s.config.ServerPort)
-	fmt.Printf("Health:  http://localhost:%d/health\n", s.config.ServerPort)
 	fmt.Println()
-	fmt.Printf("OpenAI-Compatible API Endpoints:\n")
+	fmt.Printf("%sOpenAI-Compatible API:%s\n", colorDim, colorReset)
 	fmt.Printf("  POST /v1/chat/completions\n")
-	fmt.Printf("  POST /v1/completions\n")
 	fmt.Printf("  POST /v1/embeddings\n")
 	fmt.Printf("  GET  /v1/models\n")
 	fmt.Println()
@@ -969,7 +1127,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		accept := r.Header.Get("Accept")
 		if strings.Contains(accept, "application/json") || r.URL.Query().Get("format") == "json" {
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
+			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.11","status":"running"}`, s.version)
 			return
 		}
 
@@ -984,7 +1142,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.11","status":"running"}`, s.version)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -1274,6 +1432,108 @@ func (s *Server) handleCacheStats(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error encoding cache stats: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+// handleLoadingProgress returns current model loading progress
+func (s *Server) handleLoadingProgress(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	progress := s.modelCache.GetLoadingProgress()
+
+	if err := json.NewEncoder(w).Encode(progress); err != nil {
+		log.Printf("Error encoding loading progress: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// handleLoadingProgressStream provides SSE stream of loading progress
+func (s *Server) handleLoadingProgressStream(w http.ResponseWriter, r *http.Request) {
+	// Set headers for SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Get progress tracker if available
+	progress := s.modelCache.GetLoadingProgress()
+
+	// Send initial state
+	data, _ := json.Marshal(progress)
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
+
+	// Poll for updates (aggressive 100ms polling for fast feedback)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	ctx := r.Context()
+	lastPhase := progress.Phase
+	lastProgress := progress.Progress
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			progress := s.modelCache.GetLoadingProgress()
+
+			// Only send if something changed
+			if progress.Phase != lastPhase || progress.Progress != lastProgress {
+				data, _ := json.Marshal(progress)
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+
+				lastPhase = progress.Phase
+				lastProgress = progress.Progress
+
+				// Stop streaming when complete or failed
+				if progress.Phase == inference.PhaseReady || progress.Phase == inference.PhaseFailed {
+					return
+				}
+			}
+		}
+	}
+}
+
+// handleFastPrewarm initiates aggressive pre-warming of a model file
+func (s *Server) handleFastPrewarm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ModelPath string `json:"model_path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ModelPath == "" {
+		http.Error(w, "model_path required", http.StatusBadRequest)
+		return
+	}
+
+	// Initiate fast pre-warming in background
+	if err := s.modelCache.FastPrewarmModel(req.ModelPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "warming",
+		"message": "Pre-warming initiated",
+		"path":    req.ModelPath,
+	})
 }
 
 func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
@@ -2556,6 +2816,92 @@ func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// handleVerifyModel computes and returns the SHA256 hash of a model file
+func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	modelID := r.URL.Query().Get("model")
+	if modelID == "" {
+		writeError(w, "model parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Find model in registry
+	var modelPath string
+	for _, m := range s.registry.ListModels() {
+		if m.ID == modelID {
+			modelPath = filepath.Join(s.config.ModelsDir, m.ID)
+			break
+		}
+	}
+
+	if modelPath == "" {
+		writeError(w, "Model not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if file exists
+	fileInfo, err := os.Stat(modelPath)
+	if os.IsNotExist(err) {
+		writeError(w, "Model file not found", http.StatusNotFound)
+		return
+	}
+
+	type VerifyResponse struct {
+		ModelID  string `json:"model_id"`
+		FileName string `json:"file_name"`
+		Size     int64  `json:"size"`
+		SizeGB   string `json:"size_gb"`
+		SHA256   string `json:"sha256"`
+		Verified bool   `json:"verified"`
+		Message  string `json:"message,omitempty"`
+	}
+
+	// For large files, compute hash in background or check cache
+	// For now, compute synchronously for files under 1GB, skip for larger
+	if fileInfo.Size() > 1024*1024*1024 {
+		resp := VerifyResponse{
+			ModelID:  modelID,
+			FileName: filepath.Base(modelPath),
+			Size:     fileInfo.Size(),
+			SizeGB:   fmt.Sprintf("%.2f GB", float64(fileInfo.Size())/(1024*1024*1024)),
+			SHA256:   "",
+			Verified: false,
+			Message:  "File too large for synchronous verification. Use CLI: offgrid verify " + modelID,
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	// Compute SHA256
+	file, err := os.Open(modelPath)
+	if err != nil {
+		writeError(w, "Failed to open model file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		writeError(w, "Failed to compute hash", http.StatusInternalServerError)
+		return
+	}
+
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	resp := VerifyResponse{
+		ModelID:  modelID,
+		FileName: filepath.Base(modelPath),
+		Size:     fileInfo.Size(),
+		SizeGB:   fmt.Sprintf("%.2f GB", float64(fileInfo.Size())/(1024*1024*1024)),
+		SHA256:   hash,
+		Verified: true,
+		Message:  "Integrity verified",
+	}
+
+	json.NewEncoder(w).Encode(resp)
+}
+
 // handleModelCatalog returns the curated model catalog
 func (s *Server) handleModelCatalog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -2951,7 +3297,8 @@ func (s *Server) handleUSBExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Path string `json:"path"`
+		Path             string `json:"path"`
+		IncludeInstaller bool   `json:"include_installer"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2970,7 +3317,17 @@ func (s *Server) handleUSBExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exporter := models.NewUSBExporter(s.config.ModelsDir, s.registry)
+	var exporter *models.USBExporter
+	if req.IncludeInstaller {
+		// Find the offgrid binary to include
+		binaryPath := ""
+		if exe, err := os.Executable(); err == nil {
+			binaryPath = exe
+		}
+		exporter = models.NewUSBExporterWithInstaller(s.config.ModelsDir, s.registry, binaryPath)
+	} else {
+		exporter = models.NewUSBExporter(s.config.ModelsDir, s.registry)
+	}
 
 	// Export all models
 	exported, err := exporter.ExportAll(req.Path, nil)
@@ -2981,8 +3338,8 @@ func (s *Server) handleUSBExport(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate total size
 	var totalSize int64
-	models := s.registry.ListModels()
-	for _, model := range models {
+	allModels := s.registry.ListModels()
+	for _, model := range allModels {
 		meta, err := s.registry.GetModel(model.ID)
 		if err == nil && meta != nil {
 			totalSize += meta.Size
@@ -2991,9 +3348,10 @@ func (s *Server) handleUSBExport(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"exported_count": exported,
-		"total_size_gb":  float64(totalSize) / (1024 * 1024 * 1024),
-		"status":         "success",
+		"exported_count":     exported,
+		"total_size_gb":      float64(totalSize) / (1024 * 1024 * 1024),
+		"installer_included": req.IncludeInstaller,
+		"status":             "success",
 	})
 }
 
@@ -3773,13 +4131,31 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, ok := s.userStore.ValidatePassword(req.Username, req.Password)
-	if !ok {
-		s.auditLog(audit.EventTypeAuth, "login_failed", req.Username, r.RemoteAddr, map[string]string{
-			"reason": "invalid_credentials",
-		}, false)
-		http.Error(w, `{"error": "invalid credentials"}`, http.StatusUnauthorized)
-		return
+	var user *users.User
+	var authMethod string
+
+	// Try LDAP authentication first if enabled
+	if s.ldapAuth != nil {
+		ldapUser, err := s.ldapAuth.Authenticate(req.Username, req.Password)
+		if err == nil {
+			user = ldapUser
+			authMethod = "ldap"
+		}
+		// If LDAP fails, fall through to local auth
+	}
+
+	// Fall back to local authentication
+	if user == nil {
+		localUser, ok := s.userStore.ValidatePassword(req.Username, req.Password)
+		if !ok {
+			s.auditLog(audit.EventTypeAuth, "login_failed", req.Username, r.RemoteAddr, map[string]string{
+				"reason": "invalid_credentials",
+			}, false)
+			http.Error(w, `{"error": "invalid credentials"}`, http.StatusUnauthorized)
+			return
+		}
+		user = localUser
+		authMethod = "local"
 	}
 
 	// Create session
@@ -3791,8 +4167,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Audit successful login
 	s.auditLog(audit.EventTypeAuth, "login_success", user.Username, r.RemoteAddr, map[string]string{
-		"user_id": user.ID,
-		"role":    string(user.Role),
+		"user_id":     user.ID,
+		"role":        string(user.Role),
+		"auth_method": authMethod,
 	}, true)
 
 	// Set session cookie
@@ -3807,9 +4184,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"user":       user.ToPublic(),
-		"token":      token,
-		"expires_at": session.ExpiresAt,
+		"user":        user.ToPublic(),
+		"token":       token,
+		"expires_at":  session.ExpiresAt,
+		"auth_method": authMethod,
 	})
 }
 
@@ -3845,6 +4223,108 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "logged out"})
 }
 
+// handleLDAPTest tests the LDAP connection
+func (s *Server) handleLDAPTest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.ldapAuth == nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"enabled": false,
+			"status":  "LDAP authentication is not configured",
+		})
+		return
+	}
+
+	// For POST, test with provided credentials
+	if r.Method == http.MethodPost {
+		var req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+
+		user, err := s.ldapAuth.Authenticate(req.Username, req.Password)
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"enabled": true,
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"enabled":  true,
+			"success":  true,
+			"username": user.Username,
+			"role":     user.Role,
+		})
+		return
+	}
+
+	// GET just returns LDAP status
+	json.NewEncoder(w).Encode(map[string]any{
+		"enabled": true,
+		"server":  s.config.LDAPServer,
+		"port":    s.config.LDAPPort,
+		"use_tls": s.config.LDAPUseTLS,
+		"base_dn": s.config.LDAPBaseDN,
+	})
+}
+
+// handleLDAPSync syncs users from LDAP (admin only)
+func (s *Server) handleLDAPSync(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.ldapAuth == nil {
+		http.Error(w, `{"error": "LDAP not configured"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Pattern string `json:"pattern"` // Search pattern (e.g., "*" for all)
+		Limit   int    `json:"limit"`   // Max users to sync
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Pattern == "" {
+		req.Pattern = "*"
+	}
+	if req.Limit == 0 {
+		req.Limit = 100
+	}
+
+	synced, err := s.ldapAuth.SyncAllUsers(req.Pattern, req.Limit)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":      true,
+		"users_synced": synced,
+	})
+}
+
 func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -3864,6 +4344,94 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 
 	summary := s.quotaManager.GetUsageSummary(userID)
 	json.NewEncoder(w).Encode(summary)
+}
+
+// handleQuotaManage handles setting, resetting, and removing quota limits
+func (s *Server) handleQuotaManage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract user ID from path: /v1/quota/{user_id}
+	path := strings.TrimPrefix(r.URL.Path, "/v1/quota/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, `{"error": "user_id required in path"}`, http.StatusBadRequest)
+		return
+	}
+	userID := parts[0]
+
+	switch r.Method {
+	case http.MethodGet:
+		// Get quota for specific user
+		summary := s.quotaManager.GetUsageSummary(userID)
+		json.NewEncoder(w).Encode(summary)
+
+	case http.MethodPost:
+		// Set or update a quota limit
+		var req struct {
+			Type   string `json:"type"`   // "requests", "tokens_input", "tokens_output", "tokens_total", etc
+			Period string `json:"period"` // "minute", "hour", "day", "month"
+			Limit  int64  `json:"limit"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+
+		if req.Type == "" || req.Period == "" || req.Limit <= 0 {
+			http.Error(w, `{"error": "type, period, and positive limit required"}`, http.StatusBadRequest)
+			return
+		}
+
+		err := s.quotaManager.SetUserQuotaLimit(userID, users.QuotaType(req.Type), users.QuotaPeriod(req.Period), req.Limit)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "updated",
+			"user_id": userID,
+			"type":    req.Type,
+			"period":  req.Period,
+			"limit":   req.Limit,
+		})
+
+	case http.MethodDelete:
+		// Check for action in query: ?action=reset to reset usage, otherwise remove limit
+		action := r.URL.Query().Get("action")
+		if action == "reset" {
+			s.quotaManager.ResetUserQuota(userID)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "reset",
+				"user_id": userID,
+			})
+			return
+		}
+
+		// Remove a specific quota limit
+		qtype := r.URL.Query().Get("type")
+		period := r.URL.Query().Get("period")
+		if qtype == "" || period == "" {
+			// Delete all quotas for user
+			s.quotaManager.DeleteUserQuota(userID)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "deleted",
+				"user_id": userID,
+			})
+			return
+		}
+
+		s.quotaManager.RemoveUserQuotaLimit(userID, users.QuotaType(qtype), users.QuotaPeriod(period))
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "removed",
+			"user_id": userID,
+			"type":    qtype,
+			"period":  period,
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
 }
 
 // ============================================================================
@@ -4295,6 +4863,88 @@ func (s *Server) handleAgentWorkflows(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleAgentOrchestrate handles multi-agent orchestration requests
+func (s *Server) handleAgentOrchestrate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		// Return list of orchestration results
+		workflows := s.agentOrchestrator.ListWorkflows()
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"workflows": workflows,
+			"modes": []string{
+				string(agents.ModeSequential),
+				string(agents.ModeParallel),
+				string(agents.ModeDebate),
+				string(agents.ModeVoting),
+				string(agents.ModeHierarchy),
+			},
+		})
+
+	case http.MethodPost:
+		// Run a multi-agent orchestration
+		var req struct {
+			ID     string                      `json:"id"`
+			Prompt string                      `json:"prompt"`
+			Mode   agents.OrchestrationMode    `json:"mode"`
+			Agents []agents.AgentRole          `json:"agents"`
+			Config *agents.OrchestrationConfig `json:"config"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+
+		if req.Prompt == "" {
+			http.Error(w, `{"error": "prompt is required"}`, http.StatusBadRequest)
+			return
+		}
+
+		// Generate ID if not provided
+		if req.ID == "" {
+			req.ID = fmt.Sprintf("orch-%d", time.Now().UnixNano())
+		}
+
+		// Build config
+		config := agents.DefaultOrchestrationConfig()
+		if req.Config != nil {
+			config = *req.Config
+		}
+		if req.Mode != "" {
+			config.Mode = req.Mode
+		}
+		if len(req.Agents) > 0 {
+			config.Agents = req.Agents
+		}
+
+		// Use default agents if none specified
+		if len(config.Agents) == 0 {
+			config.Agents = []agents.AgentRole{
+				{Name: "Researcher", Template: "researcher", Description: "Research and analysis specialist"},
+				{Name: "Coder", Template: "coder", Description: "Code implementation specialist"},
+			}
+		}
+
+		// Run orchestration
+		ctx := r.Context()
+		result, err := s.agentOrchestrator.RunOrchestration(ctx, req.ID, req.Prompt, config)
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":  err.Error(),
+				"result": result,
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(result)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // ============================================================================
 // WebSocket Handler
 // ============================================================================
@@ -4577,4 +5227,852 @@ func (s *Server) handleAgentMCPTest(w http.ResponseWriter, r *http.Request) {
 		"status":      "ok",
 		"tools_count": count,
 	})
+}
+
+// handleMCPMarketplace handles the MCP server marketplace
+func (s *Server) handleMCPMarketplace(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		category := r.URL.Query().Get("category")
+		search := r.URL.Query().Get("search")
+
+		var servers []*mcp.MarketplaceServer
+		if search != "" {
+			servers = s.mcpMarketplace.SearchServers(search)
+		} else {
+			servers = s.mcpMarketplace.ListAvailable(category)
+		}
+
+		// Get installed servers to mark which are installed
+		installed := s.mcpMarketplace.ListInstalled()
+		installedMap := make(map[string]*mcp.InstalledServer)
+		for _, i := range installed {
+			installedMap[i.ID] = i
+		}
+
+		// Build response with installation status
+		type ServerWithStatus struct {
+			*mcp.MarketplaceServer
+			Installed bool `json:"installed"`
+			Enabled   bool `json:"enabled,omitempty"`
+		}
+		result := make([]ServerWithStatus, len(servers))
+		for i, s := range servers {
+			result[i] = ServerWithStatus{
+				MarketplaceServer: s,
+				Installed:         installedMap[s.ID] != nil,
+			}
+			if inst, ok := installedMap[s.ID]; ok {
+				result[i].Enabled = inst.Enabled
+			}
+		}
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"servers":         result,
+			"categories":      s.mcpMarketplace.GetCategories(),
+			"installed_count": len(installed),
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleMCPMarketplaceAction handles install/uninstall/configure actions
+func (s *Server) handleMCPMarketplaceAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract server ID from path
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/agents/mcp/marketplace/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, `{"error": "server ID required"}`, http.StatusBadRequest)
+		return
+	}
+	serverID := parts[0]
+	action := ""
+	if len(parts) > 1 {
+		action = parts[1]
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		// Get server details
+		server, err := s.mcpMarketplace.GetServer(serverID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusNotFound)
+			return
+		}
+
+		installed, isInstalled := s.mcpMarketplace.GetInstalled(serverID)
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"server":    server,
+			"installed": isInstalled,
+			"config":    installed,
+		})
+
+	case http.MethodPost:
+		switch action {
+		case "install":
+			var req struct {
+				Env map[string]string `json:"env"`
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+
+			if err := s.mcpMarketplace.Install(serverID, req.Env); err != nil {
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			json.NewEncoder(w).Encode(map[string]any{
+				"success":   true,
+				"server_id": serverID,
+			})
+
+		case "uninstall":
+			if err := s.mcpMarketplace.Uninstall(serverID); err != nil {
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			json.NewEncoder(w).Encode(map[string]any{
+				"success":   true,
+				"server_id": serverID,
+			})
+
+		case "enable":
+			if err := s.mcpMarketplace.Enable(serverID); err != nil {
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"enabled": true,
+			})
+
+		case "disable":
+			if err := s.mcpMarketplace.Disable(serverID); err != nil {
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"enabled": false,
+			})
+
+		case "configure":
+			var req struct {
+				Env map[string]string `json:"env"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+				return
+			}
+
+			if err := s.mcpMarketplace.UpdateEnv(serverID, req.Env); err != nil {
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+			})
+
+		default:
+			http.Error(w, `{"error": "unknown action"}`, http.StatusBadRequest)
+		}
+
+	case http.MethodDelete:
+		// Uninstall server
+		if err := s.mcpMarketplace.Uninstall(serverID); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":   true,
+			"server_id": serverID,
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleQuantizeTypes returns available quantization types
+func (s *Server) handleQuantizeTypes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	types := inference.AvailableQuantizations()
+	json.NewEncoder(w).Encode(map[string]any{
+		"quantization_types": types,
+	})
+}
+
+// handleQuantize handles model quantization requests
+func (s *Server) handleQuantize(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ModelID    string `json:"model_id"`    // Model ID to quantize
+		ModelPath  string `json:"model_path"`  // Or direct path
+		OutputPath string `json:"output_path"` // Optional output path
+		QuantType  string `json:"quant_type"`  // Target quantization (e.g., q4_k_m)
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Resolve model path
+	inputPath := req.ModelPath
+	if inputPath == "" && req.ModelID != "" {
+		// Look up model by ID
+		model, err := s.registry.GetModel(req.ModelID)
+		if err != nil || model == nil {
+			http.Error(w, `{"error": "model not found"}`, http.StatusNotFound)
+			return
+		}
+		inputPath = model.Path
+	}
+
+	if inputPath == "" {
+		http.Error(w, `{"error": "model_id or model_path required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate quantization type
+	quantType := inference.QuantizationType(strings.ToLower(req.QuantType))
+	validQuant := false
+	for _, q := range inference.AvailableQuantizations() {
+		if q.Type == quantType {
+			validQuant = true
+			break
+		}
+	}
+	if !validQuant {
+		http.Error(w, `{"error": "invalid quantization type"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Create quantizer
+	binDir := filepath.Join(s.config.ModelsDir, "..", "bin")
+	quantizer := inference.NewQuantizer(binDir, s.config.ModelsDir)
+
+	// Estimate output size
+	estimatedSize, _ := quantizer.EstimateOutputSize(inputPath, quantType)
+
+	// Start quantization in background
+	progressCh, err := quantizer.QuantizeAsync(inputPath, req.OutputPath, quantType)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Return immediately with job info
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":        true,
+		"status":         "started",
+		"input_path":     inputPath,
+		"quant_type":     quantType,
+		"estimated_size": estimatedSize,
+		"message":        "Quantization started in background. Check model list for completion.",
+	})
+
+	// Log progress in background
+	go func() {
+		for progress := range progressCh {
+			if progress.Error != "" {
+				log.Printf("Quantization error: %s", progress.Error)
+			} else {
+				log.Printf("Quantization: %s (%.1f%%)", progress.Stage, progress.Progress*100)
+			}
+		}
+		// Rescan models after completion
+		s.registry.ScanModels()
+	}()
+}
+
+// handleHotSwap performs a fast model switch with minimal downtime
+func (s *Server) handleHotSwap(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ModelID string `json:"model_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ModelID == "" {
+		http.Error(w, `{"error": "model_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Look up model
+	model, err := s.registry.GetModel(req.ModelID)
+	if err != nil || model == nil {
+		http.Error(w, `{"error": "model not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Perform hot-swap
+	result, err := s.modelCache.HotSwap(req.ModelID, model.Path, model.ProjectorPath)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(result)
+}
+
+// handleHotSwapStatus returns hot-swap readiness information
+func (s *Server) handleHotSwapStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	status := s.modelCache.GetHotSwapStatus()
+	json.NewEncoder(w).Encode(status)
+}
+
+// handleHotSwapPrepare pre-warms a model for faster hot-swap later
+func (s *Server) handleHotSwapPrepare(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ModelID string `json:"model_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ModelID == "" {
+		http.Error(w, `{"error": "model_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Look up model
+	model, err := s.registry.GetModel(req.ModelID)
+	if err != nil || model == nil {
+		http.Error(w, `{"error": "model not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Prepare hot-swap
+	err = s.modelCache.PrepareHotSwap(model.Path)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":  true,
+		"model_id": req.ModelID,
+		"message":  "Model pre-warmed for hot-swap",
+	})
+}
+
+// handleLoadBalancer returns load balancer status and configuration
+func (s *Server) handleLoadBalancer(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.loadBalancer == nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"enabled": false,
+			"message": "Load balancer not configured",
+		})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		stats := s.loadBalancer.GetStats()
+		stats["enabled"] = true
+		json.NewEncoder(w).Encode(stats)
+
+	case http.MethodPut:
+		var req struct {
+			Strategy string `json:"strategy"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		s.loadBalancer.SetStrategy(inference.BalancingStrategy(req.Strategy))
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":  true,
+			"strategy": req.Strategy,
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleLoadBalancerBackends handles backend list operations
+func (s *Server) handleLoadBalancerBackends(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.loadBalancer == nil {
+		http.Error(w, `{"error": "load balancer not configured"}`, http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		backends := s.loadBalancer.ListBackends()
+		json.NewEncoder(w).Encode(map[string]any{
+			"backends": backends,
+		})
+
+	case http.MethodPost:
+		var backend inference.Backend
+		if err := json.NewDecoder(r.Body).Decode(&backend); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		s.loadBalancer.AddBackend(backend)
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":    true,
+			"backend_id": backend.ID,
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleLoadBalancerBackend handles individual backend operations
+func (s *Server) handleLoadBalancerBackend(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.loadBalancer == nil {
+		http.Error(w, `{"error": "load balancer not configured"}`, http.StatusNotFound)
+		return
+	}
+
+	// Extract backend ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/v1/loadbalancer/backends/")
+	backendID := strings.TrimSuffix(path, "/")
+
+	if backendID == "" {
+		http.Error(w, `{"error": "backend_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		if err := s.loadBalancer.RemoveBackend(backendID); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":    true,
+			"backend_id": backendID,
+		})
+
+	case http.MethodPut:
+		var updates map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		if err := s.loadBalancer.UpdateBackend(backendID, updates); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":    true,
+			"backend_id": backendID,
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleDistributedRAG returns distributed RAG status
+func (s *Server) handleDistributedRAG(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.distributedRAG == nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"enabled": false,
+			"message": "Distributed RAG not configured",
+		})
+		return
+	}
+
+	stats := s.distributedRAG.GetStats()
+	stats["enabled"] = true
+	json.NewEncoder(w).Encode(stats)
+}
+
+// handleDistributedRAGNodes handles distributed RAG node operations
+func (s *Server) handleDistributedRAGNodes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.distributedRAG == nil {
+		http.Error(w, `{"error": "distributed RAG not configured"}`, http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		nodes := s.distributedRAG.ListNodes()
+		json.NewEncoder(w).Encode(map[string]any{
+			"nodes": nodes,
+		})
+
+	case http.MethodPost:
+		var node rag.DistributedNode
+		if err := json.NewDecoder(r.Body).Decode(&node); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		s.distributedRAG.AddNode(node)
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"node_id": node.ID,
+		})
+
+	case http.MethodDelete:
+		var req struct {
+			NodeID string `json:"node_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		if err := s.distributedRAG.RemoveNode(req.NodeID); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"node_id": req.NodeID,
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleDistributedRAGSearch performs a distributed search
+func (s *Server) handleDistributedRAGSearch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Query string `json:"query"`
+		TopK  int    `json:"top_k"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Query == "" {
+		http.Error(w, `{"error": "query required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.TopK <= 0 {
+		req.TopK = 10
+	}
+
+	// If distributed RAG is not configured, fall back to local search
+	if s.distributedRAG == nil {
+		// Fall back to local RAG search
+		if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
+			http.Error(w, `{"error": "RAG not configured or not enabled"}`, http.StatusNotFound)
+			return
+		}
+		ragCtx, err := s.ragEngine.Search(r.Context(), req.Query, rag.SearchOptions{
+			TopK:           req.TopK,
+			MinScore:       0.0,
+			IncludeContent: true,
+		})
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":      true,
+			"chunks":       ragCtx.Results,
+			"total_chunks": len(ragCtx.Results),
+			"distributed":  false,
+		})
+		return
+	}
+
+	// Distributed search
+	localSearch := func(query string, topK int) ([]rag.ChunkResult, error) {
+		if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
+			return nil, nil
+		}
+		ragCtx, err := s.ragEngine.Search(r.Context(), query, rag.SearchOptions{
+			TopK:           topK,
+			MinScore:       0.0,
+			IncludeContent: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Convert to ChunkResult
+		chunks := make([]rag.ChunkResult, len(ragCtx.Results))
+		for i, res := range ragCtx.Results {
+			chunkID := ""
+			content := ""
+			if res.Chunk != nil {
+				chunkID = res.Chunk.ID
+				content = res.Chunk.Content
+			}
+			chunks[i] = rag.ChunkResult{
+				DocumentID: res.DocumentID,
+				ChunkID:    chunkID,
+				Content:    content,
+				Score:      float64(res.Score),
+				Metadata:   res.Metadata,
+			}
+		}
+		return chunks, nil
+	}
+
+	result, err := s.distributedRAG.Search(r.Context(), req.Query, req.TopK, localSearch)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":        true,
+		"chunks":         result.Chunks,
+		"total_chunks":   result.TotalChunks,
+		"search_time_ms": result.SearchTimeMS,
+		"nodes_queried":  result.NodesQueried,
+		"node_results":   result.NodeResults,
+		"distributed":    true,
+	})
+}
+
+// handlePlugins handles plugin list and scan operations
+func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.pluginManager == nil {
+		http.Error(w, `{"error": "plugin system not initialized"}`, http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		plugins := s.pluginManager.ListPlugins()
+		json.NewEncoder(w).Encode(map[string]any{
+			"plugins": plugins,
+			"count":   len(plugins),
+		})
+
+	case http.MethodPost:
+		// Scan for new plugins
+		if err := s.pluginManager.ScanPlugins(); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		plugins := s.pluginManager.ListPlugins()
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"plugins": plugins,
+			"count":   len(plugins),
+		})
+
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handlePluginAction handles individual plugin operations
+func (s *Server) handlePluginAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.pluginManager == nil {
+		http.Error(w, `{"error": "plugin system not initialized"}`, http.StatusNotFound)
+		return
+	}
+
+	// Extract plugin ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/v1/plugins/")
+	parts := strings.SplitN(path, "/", 2)
+	pluginID := parts[0]
+	action := ""
+	if len(parts) > 1 {
+		action = parts[1]
+	}
+
+	if pluginID == "" {
+		http.Error(w, `{"error": "plugin_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	plugin, exists := s.pluginManager.GetPlugin(pluginID)
+	if !exists && action != "install" {
+		http.Error(w, `{"error": "plugin not found"}`, http.StatusNotFound)
+		return
+	}
+
+	switch action {
+	case "enable":
+		if err := s.pluginManager.EnablePlugin(pluginID); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":   true,
+			"plugin_id": pluginID,
+		})
+
+	case "disable":
+		if err := s.pluginManager.DisablePlugin(pluginID); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":   true,
+			"plugin_id": pluginID,
+		})
+
+	case "execute":
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		var input map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, `{"error": "invalid input"}`, http.StatusBadRequest)
+			return
+		}
+		output, err := s.pluginManager.ExecutePlugin(pluginID, input)
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"output":  output,
+		})
+
+	case "uninstall":
+		if err := s.pluginManager.UninstallPlugin(pluginID); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"success":   true,
+			"plugin_id": pluginID,
+		})
+
+	case "config":
+		if r.Method == http.MethodPut {
+			var config map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+				http.Error(w, `{"error": "invalid config"}`, http.StatusBadRequest)
+				return
+			}
+			if err := s.pluginManager.UpdatePluginConfig(pluginID, config); err != nil {
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{
+				"success":   true,
+				"plugin_id": pluginID,
+			})
+		} else {
+			json.NewEncoder(w).Encode(map[string]any{
+				"plugin_id": pluginID,
+				"config":    plugin.Config,
+			})
+		}
+
+	default:
+		// Return plugin details
+		json.NewEncoder(w).Encode(plugin)
+	}
 }

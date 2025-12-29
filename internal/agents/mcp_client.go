@@ -114,7 +114,7 @@ func (c *MCPHTTPClient) Connect(ctx context.Context) error {
 		"capabilities":    map[string]interface{}{},
 		"clientInfo": map[string]interface{}{
 			"name":    "offgrid-llm",
-			"version": "0.2.10",
+			"version": "0.2.11",
 		},
 	})
 	if err != nil {
@@ -366,7 +366,7 @@ func (c *MCPStdioClient) Connect(ctx context.Context) error {
 		"capabilities":    map[string]interface{}{},
 		"clientInfo": map[string]interface{}{
 			"name":    "offgrid-llm",
-			"version": "0.2.10",
+			"version": "0.2.11",
 		},
 	})
 	if err != nil {

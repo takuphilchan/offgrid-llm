@@ -22,10 +22,12 @@ var httpClient = &http.Client{
 
 // ModelInstance represents a running llama-server instance with a loaded model
 type ModelInstance struct {
-	ModelID    string
-	Port       int
-	Cmd        *exec.Cmd
-	LastAccess time.Time
+	ModelID       string
+	Port          int
+	Cmd           *exec.Cmd
+	LastAccess    time.Time
+	ModelPath     string // For restart purposes
+	ProjectorPath string // For VLM restart
 }
 
 // ModelCache manages multiple llama-server instances for fast model switching
@@ -42,14 +44,22 @@ type ModelCache struct {
 	kvCacheType    string // KV cache quantization: f16, q8_0, q4_0 (reduces VRAM usage)
 	flashAttention bool   // Enable flash attention (faster, less VRAM on GPU)
 	cacheReuse     int    // KV cache reuse for chat sessions (0 = disabled)
+	contBatching   bool   // Enable continuous batching for multi-request throughput
+	// Speculative decoding settings
+	draftModel     string // Path to draft model for speculative decoding
+	draftTokens    int    // Number of draft tokens to generate (default: 8)
+	draftMin       int    // Minimum draft tokens for acceptance (default: 5)
 	mu             sync.RWMutex
 	basePort       int
 	binManager     *BinaryManager
-	mmapWarmer     *MmapWarmer // Pre-warms models into page cache
-	defaultModelID string      // Protected from eviction
-	useMlock       bool        // Lock small models in RAM
-	modelsDir      string      // Models directory for mmap warming
-	totalRAMMB     int64       // System RAM in MB for smart mlock
+	mmapWarmer     *MmapWarmer     // Pre-warms models into page cache
+	loadingTracker *LoadingTracker // Tracks loading progress for UI feedback
+	defaultModelID string          // Protected from eviction
+	useMlock       bool            // Lock small models in RAM
+	modelsDir      string          // Models directory for mmap warming
+	totalRAMMB     int64           // System RAM in MB for smart mlock
+	autoRestart    bool            // Auto-restart crashed processes
+	stopMonitor    chan struct{}
 }
 
 // NewModelCache creates a new model cache with specified capacity
@@ -61,7 +71,7 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		maxInstances = 10 // Safety limit
 	}
 
-	return &ModelCache{
+	mc := &ModelCache{
 		instances:      make(map[string]*ModelInstance),
 		portToModel:    make(map[int]string),
 		usedPorts:      make(map[int]bool),
@@ -74,11 +84,19 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		kvCacheType:    "",    // Empty = use llama.cpp defaults (f16), set to q8_0 if your build supports it
 		flashAttention: false, // Disabled by default - can cause crashes on some systems
 		cacheReuse:     0,     // Disabled by default - can cause EOF issues
+		contBatching:   true,  // Enabled by default for multi-request throughput
 		basePort:       42382,
 		binManager:     NewBinaryManager(binDir),
 		useMlock:       false, // Disabled by default, enabled for small models
 		totalRAMMB:     0,     // Will be set by SetSystemRAM
+		autoRestart:    true,  // Enable auto-restart by default
+		stopMonitor:    make(chan struct{}),
 	}
+
+	// Start process monitor
+	go mc.monitorProcesses()
+
+	return mc
 }
 
 // NewModelCacheWithWarmer creates a model cache with mmap pre-warming support
@@ -86,6 +104,7 @@ func NewModelCacheWithWarmer(maxInstances int, gpuLayers int, binDir string, mod
 	mc := NewModelCache(maxInstances, gpuLayers, binDir)
 	mc.modelsDir = modelsDir
 	mc.mmapWarmer = NewMmapWarmer(modelsDir)
+	mc.loadingTracker = NewLoadingTracker()
 	return mc
 }
 
@@ -104,6 +123,41 @@ func (mc *ModelCache) SetSystemRAM(ramMB int64) {
 	mc.totalRAMMB = ramMB
 }
 
+// GetLoadingProgress returns the current model loading progress
+func (mc *ModelCache) GetLoadingProgress() *LoadingProgress {
+	if mc.loadingTracker == nil {
+		return &LoadingProgress{Phase: PhaseIdle}
+	}
+	return mc.loadingTracker.GetProgress()
+}
+
+// GetRecentModels returns recently used models for UI display
+func (mc *ModelCache) GetRecentModels(limit int) []ModelHistory {
+	if mc.loadingTracker == nil {
+		return nil
+	}
+	return mc.loadingTracker.GetRecentModels(limit)
+}
+
+// PrewarmPredicted pre-warms models likely to be used based on history
+func (mc *ModelCache) PrewarmPredicted(currentModel string) {
+	if mc.loadingTracker == nil || mc.mmapWarmer == nil {
+		return
+	}
+
+	candidates := mc.loadingTracker.ShouldPrewarm(currentModel)
+	if len(candidates) == 0 {
+		return
+	}
+
+	go func() {
+		for _, modelID := range candidates {
+			// Find model path (would need registry access)
+			log.Printf("Predictive pre-warm candidate: %s", modelID)
+		}
+	}()
+}
+
 // PrewarmModel pre-warms a model into the OS page cache for faster loading
 func (mc *ModelCache) PrewarmModel(modelPath string) error {
 	if mc.mmapWarmer == nil {
@@ -111,6 +165,16 @@ func (mc *ModelCache) PrewarmModel(modelPath string) error {
 	}
 	_, err := mc.mmapWarmer.WarmModel(modelPath)
 	return err
+}
+
+// FastPrewarmModel uses aggressive read-ahead for immediate pre-warming.
+// Call this when user hovers over a model or when a switch is imminent.
+func (mc *ModelCache) FastPrewarmModel(modelPath string) error {
+	if mc.mmapWarmer == nil {
+		return fmt.Errorf("mmap warmer not initialized")
+	}
+	mc.mmapWarmer.WarmOnDemand(modelPath)
+	return nil
 }
 
 // PrewarmAllModels pre-warms all models in the background
@@ -216,6 +280,26 @@ func (mc *ModelCache) SetCacheReuse(tokens int) {
 		tokens = 0
 	}
 	mc.cacheReuse = tokens
+}
+
+// SetContinuousBatching enables or disables continuous batching
+// Continuous batching allows efficient handling of multiple concurrent requests
+func (mc *ModelCache) SetContinuousBatching(enable bool) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.contBatching = enable
+}
+
+// SetSpeculativeDecoding configures speculative decoding with a draft model
+// draftModelPath: path to a smaller model for generating draft tokens
+// draftTokens: number of draft tokens to generate (recommended: 4-16)
+// draftMin: minimum acceptable draft tokens (recommended: 3-8)
+func (mc *ModelCache) SetSpeculativeDecoding(draftModelPath string, draftTokens, draftMin int) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.draftModel = draftModelPath
+	mc.draftTokens = draftTokens
+	mc.draftMin = draftMin
 }
 
 // IsModelAlive checks if a specific model's llama-server process is still running
@@ -364,6 +448,11 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 				// Process is alive - return it
 				instance.LastAccess = time.Now()
 				log.Printf("Model %s already loaded on port %d", modelID, instance.Port)
+				// Mark as ready immediately if already loaded
+				if mc.loadingTracker != nil {
+					mc.loadingTracker.StartLoading(modelID, modelSizeMB, true)
+					mc.loadingTracker.Complete(modelID, true, "")
+				}
 				return instance, nil
 			}
 		}
@@ -372,15 +461,32 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		mc.cleanupInstance(modelID)
 	}
 
+	// Check if model is warm (in page cache)
+	isWarm := false
+	if mc.mmapWarmer != nil {
+		stats := mc.mmapWarmer.Stats()
+		if warmedCount, ok := stats["warmed_models"].(int); ok {
+			isWarm = warmedCount > 0
+		}
+	}
+
+	// Start loading progress tracking
+	if mc.loadingTracker != nil {
+		mc.loadingTracker.StartLoading(modelID, modelSizeMB, isWarm)
+	}
+
 	// For single-instance mode (maxInstances=1), unload everything first
 	// This prevents port conflicts and memory issues on low-end machines
 	if mc.maxInstances == 1 && len(mc.instances) > 0 {
+		if mc.loadingTracker != nil {
+			mc.loadingTracker.UpdatePhase(PhaseUnloading, 5, "Unloading previous model...")
+		}
 		log.Printf("Single-instance mode: unloading all models before loading %s", modelID)
 		for id := range mc.instances {
 			mc.cleanupInstance(id)
 		}
-		// Small delay to ensure ports are released
-		time.Sleep(500 * time.Millisecond)
+		// Reduced delay - active port checking is faster
+		time.Sleep(200 * time.Millisecond)
 	} else if len(mc.instances) >= mc.maxInstances {
 		// Multi-instance mode: evict LRU
 		if err := mc.evictLRU(); err != nil {
@@ -407,20 +513,40 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	// Determine context size - use configured value or auto-detect based on RAM
 	contextSize := mc.contextSize
 	if contextSize <= 0 {
-		// Auto-detect based on available system RAM
-		// Smaller context = more stable, less memory usage
-		if mc.totalRAMMB > 0 && mc.totalRAMMB < 8192 {
-			contextSize = 2048 // 2K for systems with <8GB RAM
-			log.Printf("Auto-detected context size: %d (system has %dMB RAM)", contextSize, mc.totalRAMMB)
+		// Auto-detect based on available system RAM and model size
+		// Smaller context = faster loading, less memory usage
+		if mc.totalRAMMB > 0 {
+			if mc.totalRAMMB < 8192 {
+				contextSize = 2048 // 2K for systems with <8GB RAM
+			} else if mc.totalRAMMB < 16384 {
+				// 8-16GB RAM: balance context with model size
+				if modelSizeMB > 4096 {
+					contextSize = 2048 // Large models: 2K context
+				} else {
+					contextSize = 4096 // Small/medium models: 4K context
+				}
+			} else {
+				contextSize = 8192 // 16GB+ RAM: 8K context
+			}
+			log.Printf("Auto-detected context size: %d (RAM: %dMB, model: %dMB)", contextSize, mc.totalRAMMB, modelSizeMB)
 		} else {
-			contextSize = 4096 // 4K for systems with 8GB+ RAM
+			contextSize = 4096 // Default fallback
 		}
 	}
 
-	// Use configured batch size - smaller = less memory spikes during generation
+	// Use configured batch size - smaller = faster first token, less memory spikes
 	batchSize := mc.batchSize
 	if batchSize <= 0 {
-		batchSize = 128 // Reduced from 256 for stability
+		// Auto-scale batch size based on RAM and model size
+		if mc.totalRAMMB > 0 && mc.totalRAMMB < 16384 {
+			if modelSizeMB > 4096 {
+				batchSize = 64 // Very aggressive for large models on 12GB
+			} else {
+				batchSize = 128 // Standard for medium models
+			}
+		} else {
+			batchSize = 256 // Default for 16GB+ systems
+		}
 	}
 
 	// Use configured parallel slots
@@ -454,12 +580,35 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	}
 	args = append(args, "-t", fmt.Sprintf("%d", numThreads))
 
-	// KV cache quantization - DISABLED by default for stability
-	// Some llama.cpp builds don't support these flags and crash
-	// Enable via OFFGRID_KV_CACHE_TYPE=q8_0 if your build supports it
-	if mc.kvCacheType != "" && mc.kvCacheType != "f16" {
-		args = append(args, "--cache-type-k", mc.kvCacheType)
-		args = append(args, "--cache-type-v", mc.kvCacheType)
+	// KV cache quantization - enabled by default for 8-16GB RAM systems
+	// Reduces KV cache memory by ~50% with minimal quality impact
+	kvCacheType := mc.kvCacheType
+	if kvCacheType == "" && mc.totalRAMMB > 0 && mc.totalRAMMB < 16384 {
+		kvCacheType = "q8_0" // Auto-enable for memory-constrained systems
+	}
+	if kvCacheType != "" && kvCacheType != "f16" {
+		args = append(args, "--cache-type-k", kvCacheType)
+		args = append(args, "--cache-type-v", kvCacheType)
+		log.Printf("Using KV cache quantization: %s (RAM: %dMB)", kvCacheType, mc.totalRAMMB)
+	}
+
+	// Continuous batching for multi-request throughput
+	// Enabled by default - allows handling multiple concurrent requests efficiently
+	if mc.contBatching {
+		args = append(args, "-cb")
+	}
+
+	// Speculative decoding for faster inference
+	// Uses a smaller draft model to propose tokens, verified in parallel by main model
+	if mc.draftModel != "" {
+		args = append(args, "--model-draft", mc.draftModel)
+		if mc.draftTokens > 0 {
+			args = append(args, "--draft", fmt.Sprintf("%d", mc.draftTokens))
+		}
+		if mc.draftMin > 0 {
+			args = append(args, "--draft-min", fmt.Sprintf("%d", mc.draftMin))
+		}
+		log.Printf("Speculative decoding enabled with draft model: %s", mc.draftModel)
 	}
 
 	// Cache reuse - DISABLED by default for stability
@@ -509,21 +658,31 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	// Update loading tracker - starting server
+	if mc.loadingTracker != nil {
+		mc.loadingTracker.UpdatePhase(PhaseStarting, 15, "Starting inference server...")
+	}
+
 	if err := cmd.Start(); err != nil {
+		if mc.loadingTracker != nil {
+			mc.loadingTracker.Complete(modelID, false, err.Error())
+		}
 		return nil, fmt.Errorf("failed to start llama-server: %w", err)
 	}
 
 	instance := &ModelInstance{
-		ModelID:    modelID,
-		Port:       port,
-		Cmd:        cmd,
-		LastAccess: time.Now(),
+		ModelID:       modelID,
+		Port:          port,
+		Cmd:           cmd,
+		LastAccess:    time.Now(),
+		ModelPath:     modelPath,
+		ProjectorPath: projectorPath,
 	}
 
 	mc.instances[modelID] = instance
 
 	// Wait for model to be ready
-	if err := mc.waitForReady(port); err != nil {
+	if err := mc.waitForReady(port, modelID); err != nil {
 		// Cleanup on failure
 		if cmd.Process != nil {
 			cmd.Process.Kill()
@@ -532,7 +691,15 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		delete(mc.instances, modelID)
 		delete(mc.portToModel, port)
 		delete(mc.usedPorts, port)
+		if mc.loadingTracker != nil {
+			mc.loadingTracker.Complete(modelID, false, err.Error())
+		}
 		return nil, err
+	}
+
+	// Complete loading successfully
+	if mc.loadingTracker != nil {
+		mc.loadingTracker.Complete(modelID, true, "")
 	}
 
 	log.Printf("Model %s loaded successfully on port %d", modelID, port)
@@ -710,7 +877,7 @@ func (mc *ModelCache) getNextAvailablePort() int {
 // waitForReady waits for llama-server to start AND for the model to fully load
 // With mmap pre-warming, models load much faster (5-15s vs 60-120s)
 // This prevents blank responses when switching models too quickly
-func (mc *ModelCache) waitForReady(port int) error {
+func (mc *ModelCache) waitForReady(port int, modelID string) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
 	// Pause background warming during active model loading to avoid I/O contention
@@ -719,11 +886,17 @@ func (mc *ModelCache) waitForReady(port int) error {
 		defer mc.mmapWarmer.Resume()
 	}
 
-	// Phase 1: Wait for server process to start (up to 30 seconds)
-	// Increased from 10s because larger models or cold starts need more time
+	// Phase 1: Wait for server process to start (up to 15 seconds)
+	// Aggressive polling for faster detection on 12GB+ RAM systems
 	serverStarted := false
-	for i := 0; i < 60; i++ {
-		time.Sleep(500 * time.Millisecond)
+	for i := 0; i < 75; i++ {
+		// Update progress: 15-40% during server startup
+		if mc.loadingTracker != nil {
+			progress := 15 + (i * 25 / 75)
+			mc.loadingTracker.UpdatePhase(PhaseStarting, progress, "Starting inference server...")
+		}
+
+		time.Sleep(200 * time.Millisecond)
 		resp, err := httpClient.Get(healthURL)
 		if err == nil {
 			resp.Body.Close()
@@ -737,15 +910,26 @@ func (mc *ModelCache) waitForReady(port int) error {
 		return fmt.Errorf("llama-server on port %d did not start within 30 seconds", port)
 	}
 
+	// Update tracker - server started, now loading model
+	if mc.loadingTracker != nil {
+		mc.loadingTracker.UpdatePhase(PhaseLoading, 40, "Loading model weights...")
+	}
+
 	// Phase 2: Wait for model to actually load
 	// With mmap pre-warming, this should be fast (5-15s)
 	// Check /v1/models endpoint which returns 200 only when model is loaded
 	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", port)
 
-	// Wait up to 60 seconds for model to load
-	maxAttempts := 60
+	// Wait up to 60 seconds for model to load (aggressive 500ms polling)
+	maxAttempts := 120
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		time.Sleep(1 * time.Second)
+		// Update progress: 40-90% during model loading
+		if mc.loadingTracker != nil {
+			progress := 40 + (attempt * 50 / maxAttempts)
+			mc.loadingTracker.UpdatePhase(PhaseLoading, progress, "Loading model weights...")
+		}
+
+		time.Sleep(500 * time.Millisecond)
 
 		// Check if process is still running
 		instance, exists := mc.instances[mc.portToModel[port]]
@@ -757,14 +941,20 @@ func (mc *ModelCache) waitForReady(port int) error {
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				log.Printf("Model on port %d is fully loaded and ready (took %ds)", port, attempt+1)
-				// Minimal delay for slot initialization
-				time.Sleep(500 * time.Millisecond)
+				loadTime := float64(attempt) * 0.5
+				log.Printf("Model on port %d is fully loaded and ready (took %.1fs)", port, loadTime)
 
-				// Warmup in background - don't block the request
+				// Skip warmup phase - model is ready to serve immediately
+				// Background warmup happens asynchronously without blocking
+				if mc.loadingTracker != nil {
+					mc.loadingTracker.UpdatePhase(PhaseReady, 100, "Model ready")
+				}
+
+				// No delay - start serving immediately
+				// Warmup in background - first user request may be slightly slower
 				go func(p int) {
 					if err := mc.warmupServer(p); err != nil {
-						log.Printf("Background warmup failed (non-fatal): %v", err)
+						log.Printf("Background warmup (non-fatal): %v", err)
 					}
 				}(port)
 				return nil
@@ -857,4 +1047,218 @@ func (mc *ModelCache) GetStats() map[string]interface{} {
 	}
 
 	return stats
+}
+
+// monitorProcesses periodically checks if llama-server processes are alive
+// and restarts them if they crash
+func (mc *ModelCache) monitorProcesses() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-mc.stopMonitor:
+			return
+		case <-ticker.C:
+			mc.checkAndRestartCrashed()
+		}
+	}
+}
+
+// checkAndRestartCrashed checks all instances and restarts any that have crashed
+func (mc *ModelCache) checkAndRestartCrashed() {
+	mc.mu.Lock()
+
+	if !mc.autoRestart {
+		mc.mu.Unlock()
+		return
+	}
+
+	// Collect crashed models
+	var crashed []struct {
+		modelID       string
+		modelPath     string
+		projectorPath string
+	}
+
+	for modelID, instance := range mc.instances {
+		if instance.Cmd == nil || instance.Cmd.Process == nil {
+			continue
+		}
+
+		// Check if process is still running by sending signal 0
+		err := instance.Cmd.Process.Signal(syscall.Signal(0))
+		if err != nil {
+			// Process has crashed
+			log.Printf("Detected crashed llama-server for model %s, will restart...", modelID)
+			crashed = append(crashed, struct {
+				modelID       string
+				modelPath     string
+				projectorPath string
+			}{modelID, instance.ModelPath, instance.ProjectorPath})
+
+			// Clean up the crashed instance
+			mc.cleanupInstance(modelID)
+		}
+	}
+	mc.mu.Unlock()
+
+	// Restart crashed models outside of lock
+	for _, c := range crashed {
+		log.Printf("Restarting model %s...", c.modelID)
+		_, err := mc.GetOrLoad(c.modelID, c.modelPath, c.projectorPath)
+		if err != nil {
+			log.Printf("Failed to restart model %s: %v", c.modelID, err)
+		} else {
+			log.Printf("Successfully restarted model %s", c.modelID)
+		}
+	}
+}
+
+// SetAutoRestart enables or disables automatic restart of crashed processes
+func (mc *ModelCache) SetAutoRestart(enable bool) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.autoRestart = enable
+}
+
+// StopMonitor stops the process monitor goroutine
+func (mc *ModelCache) StopMonitor() {
+	close(mc.stopMonitor)
+}
+
+// HotSwapResult contains the result of a hot-swap operation
+type HotSwapResult struct {
+	Success      bool   `json:"success"`
+	FromModel    string `json:"from_model,omitempty"`
+	ToModel      string `json:"to_model"`
+	SwapTimeMS   int64  `json:"swap_time_ms"`
+	Method       string `json:"method"` // "preloaded", "warm", "cold"
+	Port         int    `json:"port"`
+	ErrorMessage string `json:"error,omitempty"`
+}
+
+// HotSwap performs a fast model switch with minimal downtime
+// It uses multiple strategies to minimize load time:
+// 1. If model is already loaded (preloaded), returns immediately
+// 2. If model is in mmap cache (warm), loads faster
+// 3. Otherwise performs cold load with optimizations
+func (mc *ModelCache) HotSwap(toModelID, toModelPath, toProjectorPath string) (*HotSwapResult, error) {
+	startTime := time.Now()
+	result := &HotSwapResult{
+		ToModel: toModelID,
+	}
+
+	mc.mu.Lock()
+
+	// Check what's currently loaded
+	var currentModelID string
+	for id := range mc.instances {
+		currentModelID = id
+		break
+	}
+	result.FromModel = currentModelID
+
+	// Strategy 1: Already loaded - instant return
+	if instance, exists := mc.instances[toModelID]; exists {
+		if instance.Cmd != nil && instance.Cmd.Process != nil {
+			if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err == nil {
+				instance.LastAccess = time.Now()
+				result.Success = true
+				result.Method = "preloaded"
+				result.SwapTimeMS = time.Since(startTime).Milliseconds()
+				result.Port = instance.Port
+				mc.mu.Unlock()
+				log.Printf("Hot-swap: %s already loaded (instant)", toModelID)
+				return result, nil
+			}
+		}
+		// Process dead, clean up
+		mc.cleanupInstance(toModelID)
+	}
+	mc.mu.Unlock()
+
+	// Strategy 2: Check if model is in mmap cache (warm)
+	isWarm := false
+	if mc.mmapWarmer != nil {
+		stats := mc.mmapWarmer.Stats()
+		if warmedModels, ok := stats["models"].([]string); ok {
+			for _, path := range warmedModels {
+				if path == toModelPath {
+					isWarm = true
+					break
+				}
+			}
+		}
+	}
+
+	if isWarm {
+		result.Method = "warm"
+		log.Printf("Hot-swap: %s in mmap cache (warm load)", toModelID)
+	} else {
+		result.Method = "cold"
+		// Pre-warm in background for faster subsequent loads
+		if mc.mmapWarmer != nil {
+			go mc.mmapWarmer.WarmModel(toModelPath)
+		}
+		log.Printf("Hot-swap: %s cold load (no cache)", toModelID)
+	}
+
+	// Perform the actual load
+	instance, err := mc.GetOrLoad(toModelID, toModelPath, toProjectorPath)
+	if err != nil {
+		result.Success = false
+		result.ErrorMessage = err.Error()
+		return result, err
+	}
+
+	result.Success = true
+	result.SwapTimeMS = time.Since(startTime).Milliseconds()
+	result.Port = instance.Port
+
+	log.Printf("Hot-swap complete: %s -> %s in %dms (%s)",
+		result.FromModel, toModelID, result.SwapTimeMS, result.Method)
+
+	return result, nil
+}
+
+// PrepareHotSwap pre-warms a model for faster hot-swap later
+// Call this ahead of time when you know you'll need a model soon
+func (mc *ModelCache) PrepareHotSwap(modelPath string) error {
+	if mc.mmapWarmer == nil {
+		return fmt.Errorf("mmap warmer not initialized")
+	}
+
+	log.Printf("Preparing model for hot-swap: %s", modelPath)
+	_, err := mc.mmapWarmer.WarmModel(modelPath)
+	return err
+}
+
+// GetHotSwapStatus returns information about hot-swap readiness for models
+func (mc *ModelCache) GetHotSwapStatus() map[string]interface{} {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	// Currently loaded models
+	loaded := make([]string, 0, len(mc.instances))
+	for id := range mc.instances {
+		loaded = append(loaded, id)
+	}
+
+	// Warm models (in mmap cache)
+	var warm []string
+	if mc.mmapWarmer != nil {
+		stats := mc.mmapWarmer.Stats()
+		if warmedModels, ok := stats["models"].([]string); ok {
+			warm = warmedModels
+		}
+	}
+
+	return map[string]interface{}{
+		"loaded_models":  loaded,
+		"warm_models":    warm,
+		"max_instances":  mc.maxInstances,
+		"current_count":  len(mc.instances),
+		"hot_swap_ready": len(warm) > 0 || mc.mmapWarmer != nil,
+	}
 }

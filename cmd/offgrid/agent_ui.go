@@ -310,12 +310,16 @@ func printAgentHelp() {
 	fmt.Println()
 	fmt.Printf("  %soffgrid agent [chat]%s           Start interactive agent session (default)\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent run <prompt>%s     Run a single agent task\n", brandPrimary, colorReset)
+	fmt.Printf("  %soffgrid agent templates%s        List pre-built agent personas\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent tools%s            List available tools\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent mcp%s              Manage MCP servers (add/list/remove)\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent list%s             List active agents\n", brandPrimary, colorReset)
 	fmt.Println()
 	fmt.Printf("%sOptions:%s\n", colorBold, colorReset)
 	fmt.Printf("  %s--model <name>%s                 Specify model to use\n", colorCyan, colorReset)
+	fmt.Printf("  %s--template <id>%s                Use a pre-built agent template\n", colorCyan, colorReset)
+	fmt.Println()
+	fmt.Printf("%sTemplates:%s researcher, coder, analyst, writer, sysadmin, planner\n", colorBold, colorReset)
 	fmt.Println()
 }
 

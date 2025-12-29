@@ -1,96 +1,125 @@
-# AI Agent Guide
+# AI Agents
 
-OffGrid LLM includes an AI Agent system that can autonomously perform tasks using tools. The agent uses a ReAct (Reasoning + Acting) approach to break down problems and execute solutions step by step.
+OffGrid LLM includes autonomous AI agents that can reason, use tools, and complete complex tasks.
+
+---
 
 ## Quick Start
 
-### Using the UI
+### CLI
 
-1. Navigate to the **Agent** tab in the UI
-2. Select a model (any GGUF model works, but larger models perform better)
-3. Enter a task description
-4. Click **Run Agent**
+```bash
+offgrid agent chat                     # Interactive agent session
+offgrid agent run "What is 25 * 47?"   # Run single task
+offgrid agent templates                # List available templates
+```
 
-### Using the API
+### Web UI
 
+1. Open http://localhost:11611
+2. Go to **Agent** tab
+3. Select a model
+4. Enter a task and click **Run**
+
+---
+
+## Templates
+
+Pre-configured agent personas for common tasks:
+
+| Template | Best For |
+|----------|----------|
+| `researcher` | Information gathering, summarization, fact-checking |
+| `coder` | Writing code, debugging, code review |
+| `analyst` | Data analysis, pattern recognition, reporting |
+| `writer` | Content creation, editing, documentation |
+| `sysadmin` | System administration, DevOps, troubleshooting |
+| `planner` | Task breakdown, project planning, scheduling |
+
+### Using Templates
+
+**CLI:**
+```bash
+offgrid agent chat --template coder
+offgrid agent chat --template researcher
+offgrid agent run "Write a Python web server" --template coder
+```
+
+**API:**
 ```bash
 curl -X POST http://localhost:11611/v1/agents/run \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen2.5-7b-instruct",
-    "prompt": "Calculate the factorial of 10",
-    "style": "react",
-    "max_steps": 10,
-    "stream": true
+    "model": "llama3",
+    "prompt": "Debug this code: [code here]",
+    "template": "coder"
   }'
 ```
 
+---
+
 ## Agent Styles
 
-| Style | Description |
-|-------|-------------|
-| `react` | ReAct (Reasoning + Acting) - Best for multi-step tasks |
-| `cot` | Chain of Thought - Good for analytical tasks |
+| Style | Description | Best For |
+|-------|-------------|----------|
+| `react` | Reasoning + Acting, step-by-step | Multi-step tasks, tool use |
+| `cot` | Chain of Thought | Analysis, explanations |
+
+```bash
+offgrid agent chat --style react
+offgrid agent chat --style cot
+```
+
+---
 
 ## Built-in Tools
 
-OffGrid comes with several built-in tools:
+Agents can use these tools automatically:
 
 | Tool | Description |
 |------|-------------|
-| `calculate` | Perform mathematical calculations |
-| `search_models` | Search for models on HuggingFace |
-| `list_models` | List locally available models |
-| `search_documents` | Search RAG documents |
+| `calculate` | Math calculations |
+| `search_models` | Search HuggingFace |
+| `list_models` | List local models |
+| `search_documents` | Search RAG knowledge base |
 | `read_file` | Read file contents |
-| `write_file` | Write content to files |
+| `write_file` | Write to files |
 | `list_directory` | List directory contents |
-| `http_get` | Make HTTP GET requests |
+| `http_get` | HTTP GET requests |
+| `shell` | Execute shell commands |
 
-### Enable/Disable Tools
+### Manage Tools
 
-You can enable or disable tools in the UI or via API:
+```bash
+offgrid agent tools                    # List all tools
+```
 
+**API:**
 ```bash
 # Disable a tool
 curl -X PATCH http://localhost:11611/v1/agents/tools \
   -H "Content-Type: application/json" \
   -d '{"name": "write_file", "enabled": false}'
-
-# List all tools with status
-curl "http://localhost:11611/v1/agents/tools?all=true"
 ```
 
-## MCP Server Integration
+---
 
-OffGrid supports [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers, allowing you to extend agent capabilities with external tools.
+## MCP Integration
 
-### Adding MCP Servers via UI
+Extend agents with [Model Context Protocol](https://modelcontextprotocol.io/) servers.
 
-1. Go to **Agent** tab
-2. Click **Add** in the MCP Servers panel
-3. Enter server name and command/URL
-4. Click **Test Connection** to verify
-5. Click **Add Server**
+### Add MCP Servers
 
-### Popular MCP Servers
-
-| Server | Command | Description |
-|--------|---------|-------------|
-| Filesystem | `npx -y @modelcontextprotocol/server-filesystem /tmp` | Read/write files |
-| Memory | `npx -y @modelcontextprotocol/server-memory` | Key-value store |
-| SQLite | `npx -y @modelcontextprotocol/server-sqlite /tmp/test.db` | Database operations |
-| GitHub | `npx -y @modelcontextprotocol/server-github` | GitHub API |
-
-### Adding MCP Servers via API
-
+**CLI:**
 ```bash
-# Test connection first
-curl -X POST http://localhost:11611/v1/agents/mcp/test \
-  -H "Content-Type: application/json" \
-  -d '{"url": "npx -y @modelcontextprotocol/server-filesystem /tmp"}'
+offgrid agent mcp list
+offgrid agent mcp add filesystem "npx -y @modelcontextprotocol/server-filesystem /tmp"
+offgrid agent mcp test "npx -y @modelcontextprotocol/server-memory"
+offgrid agent mcp remove filesystem
+```
 
-# Add the server
+**API:**
+```bash
 curl -X POST http://localhost:11611/v1/agents/mcp \
   -H "Content-Type: application/json" \
   -d '{
@@ -99,16 +128,51 @@ curl -X POST http://localhost:11611/v1/agents/mcp \
   }'
 ```
 
-## Streaming Output
+### Popular MCP Servers
 
-The agent supports streaming for real-time step updates:
+| Server | Command | Purpose |
+|--------|---------|---------|
+| Filesystem | `npx -y @modelcontextprotocol/server-filesystem /tmp` | File operations |
+| Memory | `npx -y @modelcontextprotocol/server-memory` | Key-value store |
+| SQLite | `npx -y @modelcontextprotocol/server-sqlite /tmp/db.sqlite` | Database |
+| GitHub | `npx -y @modelcontextprotocol/server-github` | GitHub API |
+| Brave Search | `npx -y @modelcontextprotocol/server-brave-search` | Web search |
+
+---
+
+## API Reference
+
+### Run Agent
+
+```bash
+curl -X POST http://localhost:11611/v1/agents/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama3",
+    "prompt": "Calculate factorial of 10",
+    "style": "react",
+    "max_steps": 10,
+    "stream": true
+  }'
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | string | Model to use |
+| `prompt` | string | Task description |
+| `style` | string | `react` or `cot` |
+| `template` | string | Template name (optional) |
+| `max_steps` | int | Max reasoning steps (default: 10) |
+| `stream` | bool | Stream step-by-step output |
+
+### Streaming Response
 
 ```javascript
 const response = await fetch('/v1/agents/run', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    model: 'qwen2.5-7b-instruct',
+    model: 'llama3',
     prompt: 'Search for Python models',
     stream: true
   })
@@ -120,81 +184,81 @@ while (true) {
   if (done) break;
   
   const text = new TextDecoder().decode(value);
-  const lines = text.split('\n');
-  
-  for (const line of lines) {
+  for (const line of text.split('\n')) {
     if (line.startsWith('data: ')) {
-      const data = JSON.parse(line.substring(6));
-      console.log('Step:', data.step_type, data.content);
+      const data = JSON.parse(line.slice(6));
+      console.log(data.step_type, data.content);
     }
   }
 }
 ```
 
-## Step Types
+### Step Types
 
 | Type | Description |
 |------|-------------|
-| `thought` | Agent reasoning about the problem |
-| `action` | Agent calling a tool |
-| `observation` | Result from tool execution |
-| `answer` | Final answer to the task |
-| `error` | Error occurred during execution |
+| `thought` | Agent reasoning |
+| `action` | Tool call |
+| `observation` | Tool result |
+| `answer` | Final answer |
+| `error` | Error message |
 
-## Configuration
-
-### Max Steps
-
-Limit the number of steps an agent can take:
-
-```json
-{
-  "max_steps": 10
-}
-```
-
-### Context Size
-
-The agent uses an 8192 token context window by default, suitable for complex tasks with many tools.
+---
 
 ## Example Tasks
 
-### Research Task
-```
-"Search for the top 3 Python machine learning models and compare their sizes"
-```
-
-### File Operations
-```
-"Create a file called notes.txt with today's date and a reminder to check emails"
+**Research:**
+```bash
+offgrid agent run "Find the top 3 Python ML libraries and compare them" --template researcher
 ```
 
-### Calculations
+**Coding:**
+```bash
+offgrid agent run "Write a REST API in Go with CRUD operations" --template coder
 ```
-"Calculate the monthly payment for a $300,000 mortgage at 6.5% APR over 30 years"
+
+**Analysis:**
+```bash
+offgrid agent run "Analyze this CSV data and identify trends" --template analyst
 ```
+
+**System Admin:**
+```bash
+offgrid agent run "Check disk usage and find large files" --template sysadmin
+```
+
+**Planning:**
+```bash
+offgrid agent run "Create a project plan for building a mobile app" --template planner
+```
+
+---
 
 ## Best Practices
 
-1. **Use specific prompts**: Clear, detailed prompts produce better results
-2. **Choose appropriate models**: Larger models (7B+) handle complex reasoning better
-3. **Limit tools**: Disable unused tools to reduce confusion
-4. **Monitor steps**: Watch the streaming output to understand agent behavior
-5. **Set reasonable max_steps**: Start with 10, increase for complex tasks
+1. **Be specific** - Clear prompts get better results
+2. **Choose the right model** - 7B+ models reason better
+3. **Use templates** - They provide optimized system prompts
+4. **Limit tools** - Disable unused tools to reduce confusion
+5. **Set max_steps** - Start with 10, increase for complex tasks
+6. **Watch streaming** - Monitor step-by-step to understand behavior
+
+---
 
 ## Troubleshooting
 
-### Agent loops or repeats actions
-- Try a larger model
-- Add more specific instructions to the prompt
-- Reduce the number of available tools
+| Problem | Solution |
+|---------|----------|
+| Agent loops | Use larger model, be more specific, reduce tools |
+| MCP won't connect | Check command, ensure npx installed, use `mcp test` |
+| Tool fails | Check permissions, network access, review observation |
+| Slow responses | Use smaller model, reduce max_steps |
+| Wrong answers | Use template, add context, try different model |
 
-### MCP server won't connect
-- Ensure the command or URL is correct
-- Check that required dependencies are installed (e.g., `npx`)
-- Use the Test Connection button to diagnose issues
+---
 
-### Tool execution fails
-- Check file permissions for filesystem operations
-- Verify network access for HTTP tools
-- Review the observation output for error messages
+## See Also
+
+- [CLI Reference](../reference/cli.md)
+- [API Reference](../reference/api.md)
+- [RAG Guide](embeddings.md)

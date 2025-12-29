@@ -8,22 +8,42 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
 
 // USBExporter handles exporting models to USB drives or SD cards
 type USBExporter struct {
-	modelsDir string
-	registry  *Registry
+	modelsDir        string
+	registry         *Registry
+	includeInstaller bool
+	binaryPath       string // Path to offgrid binary
 }
 
 // NewUSBExporter creates a new USB exporter
 func NewUSBExporter(modelsDir string, registry *Registry) *USBExporter {
 	return &USBExporter{
-		modelsDir: modelsDir,
-		registry:  registry,
+		modelsDir:        modelsDir,
+		registry:         registry,
+		includeInstaller: false,
 	}
+}
+
+// NewUSBExporterWithInstaller creates a USB exporter that includes the installer
+func NewUSBExporterWithInstaller(modelsDir string, registry *Registry, binaryPath string) *USBExporter {
+	return &USBExporter{
+		modelsDir:        modelsDir,
+		registry:         registry,
+		includeInstaller: true,
+		binaryPath:       binaryPath,
+	}
+}
+
+// SetIncludeInstaller enables or disables including the installer
+func (e *USBExporter) SetIncludeInstaller(include bool, binaryPath string) {
+	e.includeInstaller = include
+	e.binaryPath = binaryPath
 }
 
 // ExportProgress represents export progress
@@ -125,6 +145,13 @@ func (e *USBExporter) ExportAll(usbPath string, onProgress func(ExportProgress))
 	// Create README
 	if err := e.createReadme(usbPath); err != nil {
 		fmt.Printf("Warning: failed to create README: %v\n", err)
+	}
+
+	// Include installer if requested
+	if e.includeInstaller {
+		if err := e.includeInstallerFiles(usbPath); err != nil {
+			fmt.Printf("Warning: failed to include installer: %v\n", err)
+		}
 	}
 
 	return exported, nil
@@ -396,4 +423,267 @@ func calculateFileHash(filePath string) (string, error) {
 	}
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// includeInstallerFiles copies the offgrid binary and install scripts to the USB
+func (e *USBExporter) includeInstallerFiles(usbPath string) error {
+	// Create installer directory
+	installerDir := filepath.Join(usbPath, "installer")
+	if err := os.MkdirAll(installerDir, 0755); err != nil {
+		return fmt.Errorf("cannot create installer directory: %w", err)
+	}
+
+	// Copy the offgrid binary if available
+	if e.binaryPath != "" {
+		if _, err := os.Stat(e.binaryPath); err == nil {
+			destBinary := filepath.Join(installerDir, filepath.Base(e.binaryPath))
+			if err := copyFile(e.binaryPath, destBinary); err != nil {
+				return fmt.Errorf("failed to copy binary: %w", err)
+			}
+			// Make executable
+			os.Chmod(destBinary, 0755)
+		}
+	} else {
+		// Try to find the binary in common locations
+		binaryPath := findOffgridBinary()
+		if binaryPath != "" {
+			destBinary := filepath.Join(installerDir, "offgrid")
+			if runtime.GOOS == "windows" {
+				destBinary += ".exe"
+			}
+			if err := copyFile(binaryPath, destBinary); err != nil {
+				return fmt.Errorf("failed to copy binary: %w", err)
+			}
+			os.Chmod(destBinary, 0755)
+		}
+	}
+
+	// Create platform-specific install scripts
+	if err := createInstallScript(installerDir, "linux"); err != nil {
+		fmt.Printf("Warning: failed to create Linux install script: %v\n", err)
+	}
+	if err := createInstallScript(installerDir, "darwin"); err != nil {
+		fmt.Printf("Warning: failed to create macOS install script: %v\n", err)
+	}
+	if err := createInstallScript(installerDir, "windows"); err != nil {
+		fmt.Printf("Warning: failed to create Windows install script: %v\n", err)
+	}
+
+	// Create an INSTALL.txt with instructions
+	installInstructions := `# OffGrid LLM - USB Installation
+
+This USB package includes the OffGrid LLM installer for offline installation.
+
+## Quick Install
+
+### Linux / macOS
+1. Open a terminal
+2. Run: ./installer/install.sh
+
+### Windows
+1. Open PowerShell as Administrator
+2. Run: .\installer\install.ps1
+
+## Manual Install
+
+1. Copy the 'offgrid' binary from installer/ to your system:
+   - Linux/macOS: /usr/local/bin/offgrid
+   - Windows: C:\Program Files\OffGrid\offgrid.exe
+
+2. Copy models from offgrid-models/ to:
+   - Linux/macOS: ~/.offgrid-llm/models/
+   - Windows: %USERPROFILE%\.offgrid-llm\models\
+
+3. Run: offgrid serve
+
+## Verify Installation
+
+Run: offgrid version
+Run: offgrid doctor
+
+For more help: offgrid help
+`
+	instructionsPath := filepath.Join(usbPath, "INSTALL.txt")
+	if err := os.WriteFile(instructionsPath, []byte(installInstructions), 0644); err != nil {
+		return fmt.Errorf("failed to write INSTALL.txt: %w", err)
+	}
+
+	return nil
+}
+
+// findOffgridBinary tries to find the offgrid binary
+func findOffgridBinary() string {
+	// Try common locations
+	candidates := []string{
+		"./bin/offgrid",
+		"./offgrid",
+		"/usr/local/bin/offgrid",
+		"/usr/bin/offgrid",
+	}
+
+	if runtime.GOOS == "windows" {
+		candidates = []string{
+			".\\bin\\offgrid.exe",
+			".\\offgrid.exe",
+		}
+	}
+
+	// Also try current executable path
+	exe, err := os.Executable()
+	if err == nil {
+		candidates = append([]string{exe}, candidates...)
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	return ""
+}
+
+// createInstallScript creates a platform-specific install script
+func createInstallScript(installerDir, platform string) error {
+	var content string
+	var filename string
+
+	switch platform {
+	case "linux", "darwin":
+		filename = "install.sh"
+		content = `#!/bin/bash
+# OffGrid LLM Installer
+set -e
+
+echo "OffGrid LLM USB Installer"
+echo "========================="
+echo
+
+# Detect USB mount point (parent of this script)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+USB_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Check for binary
+BINARY="$SCRIPT_DIR/offgrid"
+if [ ! -f "$BINARY" ]; then
+    echo "Error: offgrid binary not found in installer/"
+    echo "Please download offgrid from https://github.com/takuphilchan/offgrid-llm"
+    exit 1
+fi
+
+# Install binary
+echo "Installing offgrid binary..."
+if [ -w /usr/local/bin ]; then
+    cp "$BINARY" /usr/local/bin/offgrid
+    chmod +x /usr/local/bin/offgrid
+    echo "  Installed to /usr/local/bin/offgrid"
+else
+    echo "  Need sudo to install to /usr/local/bin"
+    sudo cp "$BINARY" /usr/local/bin/offgrid
+    sudo chmod +x /usr/local/bin/offgrid
+    echo "  Installed to /usr/local/bin/offgrid"
+fi
+
+# Create models directory
+MODELS_DIR="$HOME/.offgrid-llm/models"
+mkdir -p "$MODELS_DIR"
+
+# Import models
+if [ -d "$USB_ROOT/offgrid-models" ]; then
+    echo "Importing models..."
+    offgrid import "$USB_ROOT/offgrid-models"
+else
+    echo "No models found on USB."
+fi
+
+echo
+echo "Installation complete!"
+echo "Run 'offgrid serve' to start the server."
+`
+	case "windows":
+		filename = "install.ps1"
+		content = `# OffGrid LLM Windows Installer
+$ErrorActionPreference = "Stop"
+
+Write-Host "OffGrid LLM USB Installer" -ForegroundColor Cyan
+Write-Host "=========================" -ForegroundColor Cyan
+Write-Host
+
+# Detect USB root
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$USBRoot = Split-Path -Parent $ScriptDir
+
+# Check for binary
+$Binary = Join-Path $ScriptDir "offgrid.exe"
+if (-not (Test-Path $Binary)) {
+    Write-Host "Error: offgrid.exe not found in installer/" -ForegroundColor Red
+    Write-Host "Please download offgrid from https://github.com/takuphilchan/offgrid-llm"
+    exit 1
+}
+
+# Install to Program Files
+$InstallDir = "$env:ProgramFiles\OffGrid"
+Write-Host "Installing to $InstallDir..."
+
+if (-not (Test-Path $InstallDir)) {
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+}
+
+Copy-Item $Binary "$InstallDir\offgrid.exe" -Force
+Write-Host "  Installed offgrid.exe"
+
+# Add to PATH if not already there
+$CurrentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+if ($CurrentPath -notlike "*$InstallDir*") {
+    [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$InstallDir", "Machine")
+    Write-Host "  Added to system PATH"
+}
+
+# Create models directory
+$ModelsDir = "$env:USERPROFILE\.offgrid-llm\models"
+if (-not (Test-Path $ModelsDir)) {
+    New-Item -ItemType Directory -Path $ModelsDir -Force | Out-Null
+}
+
+# Import models
+$USBModels = Join-Path $USBRoot "offgrid-models"
+if (Test-Path $USBModels) {
+    Write-Host "Importing models..."
+    & "$InstallDir\offgrid.exe" import $USBModels
+} else {
+    Write-Host "No models found on USB."
+}
+
+Write-Host
+Write-Host "Installation complete!" -ForegroundColor Green
+Write-Host "Run 'offgrid serve' to start the server."
+`
+	default:
+		return fmt.Errorf("unsupported platform: %s", platform)
+	}
+
+	scriptPath := filepath.Join(installerDir, filename)
+	if err := os.WriteFile(scriptPath, []byte(content), 0755); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
 }

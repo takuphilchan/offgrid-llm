@@ -39,6 +39,11 @@ type Config struct {
 	LowMemoryMode   bool   `yaml:"low_memory_mode" json:"low_memory_mode"`   // Enable optimizations for <8GB RAM systems
 	AdaptiveContext bool   `yaml:"adaptive_context" json:"adaptive_context"` // Auto-adjust context size based on RAM
 
+	// Speculative decoding (faster inference with draft model)
+	SpecDraftModel  string `yaml:"spec_draft_model" json:"spec_draft_model"`   // Path to draft model for speculative decoding
+	SpecDraftTokens int    `yaml:"spec_draft_tokens" json:"spec_draft_tokens"` // Number of draft tokens (default: 8)
+	SpecDraftMin    int    `yaml:"spec_draft_min" json:"spec_draft_min"`       // Minimum acceptable draft tokens (default: 5)
+
 	// Fast model switching (critical for <5s switch times)
 	PrewarmModels    bool `yaml:"prewarm_models" json:"prewarm_models"`         // Pre-warm models into OS page cache on startup
 	SmartMlock       bool `yaml:"smart_mlock" json:"smart_mlock"`               // Auto-enable mlock for small models (RAM > 4x model size)
@@ -65,6 +70,47 @@ type Config struct {
 	EnableAuditLog  bool   `yaml:"enable_audit_log" json:"enable_audit_log"`   // Enable tamper-evident audit logging
 	AuditLogDir     string `yaml:"audit_log_dir" json:"audit_log_dir"`         // Directory for audit logs
 	EnableRequestID bool   `yaml:"enable_request_id" json:"enable_request_id"` // Add X-Request-ID header to all responses
+
+	// LDAP/Active Directory Authentication
+	LDAPEnabled       bool     `yaml:"ldap_enabled" json:"ldap_enabled"`                 // Enable LDAP authentication
+	LDAPServer        string   `yaml:"ldap_server" json:"ldap_server"`                   // LDAP server hostname or IP
+	LDAPPort          int      `yaml:"ldap_port" json:"ldap_port"`                       // LDAP port (389 or 636 for TLS)
+	LDAPUseTLS        bool     `yaml:"ldap_use_tls" json:"ldap_use_tls"`                 // Use TLS connection
+	LDAPStartTLS      bool     `yaml:"ldap_start_tls" json:"ldap_start_tls"`             // Use StartTLS after connecting
+	LDAPBindDN        string   `yaml:"ldap_bind_dn" json:"ldap_bind_dn"`                 // DN for binding (search user)
+	LDAPBindPassword  string   `yaml:"ldap_bind_password" json:"ldap_bind_password"`     // Password for bind DN
+	LDAPBaseDN        string   `yaml:"ldap_base_dn" json:"ldap_base_dn"`                 // Base DN for user search
+	LDAPUserFilter    string   `yaml:"ldap_user_filter" json:"ldap_user_filter"`         // User search filter (default: (sAMAccountName=%s) for AD)
+	LDAPAdminGroups   []string `yaml:"ldap_admin_groups" json:"ldap_admin_groups"`       // Groups that get admin role
+	LDAPUserGroups    []string `yaml:"ldap_user_groups" json:"ldap_user_groups"`         // Groups that get user role
+	LDAPAutoCreate    bool     `yaml:"ldap_auto_create" json:"ldap_auto_create"`         // Auto-create local users on LDAP login
+	LDAPSkipTLSVerify bool     `yaml:"ldap_skip_tls_verify" json:"ldap_skip_tls_verify"` // Skip TLS certificate verification
+
+	// Load balancer settings
+	LoadBalancerBackends []BackendConfig `yaml:"loadbalancer_backends" json:"loadbalancer_backends"` // Inference backends for load balancing
+	LoadBalancerStrategy string          `yaml:"loadbalancer_strategy" json:"loadbalancer_strategy"` // round_robin, weighted_round_robin, least_connections, latency
+
+	// Distributed RAG settings
+	NodeID              string       `yaml:"node_id" json:"node_id"`                             // Unique node ID for clustering
+	DistributedRAGNodes []NodeConfig `yaml:"distributed_rag_nodes" json:"distributed_rag_nodes"` // Remote RAG nodes
+}
+
+// BackendConfig represents a load balancer backend configuration
+type BackendConfig struct {
+	ID     string   `yaml:"id" json:"id"`
+	Name   string   `yaml:"name" json:"name"`
+	URL    string   `yaml:"url" json:"url"`
+	Type   string   `yaml:"type" json:"type"` // llama-server, ollama, localai, vllm, openai, custom
+	APIKey string   `yaml:"api_key" json:"api_key"`
+	Models []string `yaml:"models" json:"models"` // Models available on this backend
+	Weight int      `yaml:"weight" json:"weight"` // Weight for weighted round-robin
+}
+
+// NodeConfig represents a distributed RAG node configuration
+type NodeConfig struct {
+	ID   string `yaml:"id" json:"id"`
+	URL  string `yaml:"url" json:"url"`
+	Name string `yaml:"name" json:"name"`
 }
 
 // LoadConfig loads configuration from environment variables

@@ -1,61 +1,49 @@
-# OffGrid LLM Documentation
+# Documentation
 
-> Complete guide to running AI language models completely offline.
-
----
-
-## Documentation Structure
-
-```
-docs/
-├── setup/          # Installation & configuration
-├── guides/         # Feature tutorials & how-tos  
-├── reference/      # API & CLI specifications
-└── advanced/       # Architecture & optimization
-```
+Complete guide to OffGrid LLM.
 
 ---
 
-## Getting Started
+## Start Here
 
-| Document | Time | Description |
-|----------|------|-------------|
-| [**Getting Started**](guides/getting-started.md) | 5 min | Complete beginner's guide |
-| [**Quick Start**](setup/quickstart.md) | 3 min | Fastest path to first chat |
-| [**Installation**](setup/installation.md) | 10 min | Full installation options |
-
----
-
-## Setup & Installation
-
-| Document | Description |
-|----------|-------------|
-| [quickstart.md](setup/quickstart.md) | Get running in 3 minutes |
-| [installation.md](setup/installation.md) | All installation methods |
-| [docker.md](setup/docker.md) | Docker deployment |
-| [autostart.md](setup/autostart.md) | Systemd service setup |
+| Guide | Time | Description |
+|-------|------|-------------|
+| [Quick Start](setup/quickstart.md) | 3 min | Install and run your first model |
+| [CLI Reference](reference/cli.md) | - | All commands |
+| [API Reference](reference/api.md) | - | REST endpoints |
 
 ---
 
-## User Guides
-
-### Core Features
+## Setup
 
 | Guide | Description |
 |-------|-------------|
-| [getting-started.md](guides/getting-started.md) | First-time user walkthrough |
-| [models.md](guides/models.md) | Download & configure models |
-| [features.md](guides/features.md) | Feature overview |
-| [huggingface.md](guides/huggingface.md) | HuggingFace integration |
+| [Quick Start](setup/quickstart.md) | Fastest path to running |
+| [Installation](setup/installation.md) | All installation methods |
+| [Docker](setup/docker.md) | Container deployment |
+| [Autostart](setup/autostart.md) | Run as system service |
 
-### AI Capabilities
+---
+
+## Guides
+
+### Core
 
 | Guide | Description |
 |-------|-------------|
-| [agents.md](guides/agents.md) | Autonomous AI agents |
-| [embeddings.md](guides/embeddings.md) | RAG & document search |
-| [multi-user.md](guides/multi-user.md) | User management |
-| [metrics.md](guides/metrics.md) | Monitoring & statistics |
+| [Getting Started](guides/getting-started.md) | First-time walkthrough |
+| [Models](guides/models.md) | Choosing and managing models |
+| [Features](guides/features.md) | Feature overview |
+
+### Features
+
+| Guide | Description |
+|-------|-------------|
+| [AI Agents](guides/agents.md) | Autonomous task execution |
+| [RAG](guides/embeddings.md) | Chat with your documents |
+| [Audit Logs](guides/audit.md) | Security logging |
+| [Multi-User](guides/multi-user.md) | User management |
+| [Metrics](guides/metrics.md) | Monitoring |
 
 ---
 
@@ -63,88 +51,67 @@ docs/
 
 | Document | Description |
 |----------|-------------|
-| [api.md](reference/api.md) | REST API endpoints |
-| [cli.md](reference/cli.md) | Command-line usage |
-| [json-output.md](reference/json-output.md) | Structured output format |
-| [versioning.md](reference/versioning.md) | Version management |
+| [CLI Reference](reference/cli.md) | Command-line usage |
+| [API Reference](reference/api.md) | REST API endpoints |
+| [Python SDK](../python/README.md) | Python library |
 
 ---
 
 ## Advanced
 
-### Architecture & Development
-
-| Document | Description |
-|----------|-------------|
-| [architecture.md](advanced/architecture.md) | System design overview |
-| [building.md](advanced/building.md) | Build from source |
-| [deployment.md](advanced/deployment.md) | Production deployment |
-| [distribution.md](advanced/distribution.md) | Offline distribution |
-| [llama-cpp.md](advanced/llama-cpp.md) | llama.cpp backend setup |
-| [inference-roadmap.md](advanced/inference-roadmap.md) | Development roadmap |
-
-### Performance & Optimization
-
-| Document | Description |
-|----------|-------------|
-| [performance.md](advanced/performance.md) | General optimization |
-| [cpu-tuning.md](advanced/cpu-tuning.md) | CPU performance tuning |
-| [cpu-support.md](advanced/cpu-support.md) | CPU compatibility info |
-| [low-memory.md](advanced/low-memory.md) | Running on 4GB RAM |
-| [benchmarking.md](advanced/benchmarking.md) | Model comparison |
+| Guide | Description |
+|-------|-------------|
+| [Architecture](advanced/architecture.md) | System design |
+| [Performance](advanced/performance.md) | Optimization |
+| [Low Memory](advanced/low-memory.md) | Running on 4GB RAM |
+| [Building](advanced/building.md) | Build from source |
+| [Deployment](advanced/deployment.md) | Production setup |
 
 ---
 
 ## Quick Reference
 
-### Installation Methods
+### Install
 
-| Method | Command | Time |
-|--------|---------|------|
-| One-liner | `curl -fsSL .../install.sh \| bash` | 5 min |
-| Docker | `docker compose up -d` | 2 min |
-| Python | `pip install offgrid` | 1 min |
-| Source | `go build ./cmd/offgrid` | 15 min |
+```bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+```
+
+### Run
+
+```bash
+offgrid run llama3
+```
+
+### Server
+
+```bash
+offgrid serve
+# Open http://localhost:11611
+```
 
 ### Common Commands
 
 ```bash
-# Start server
-offgrid serve
-
-# List models
-offgrid models list
-
-# Interactive chat
-offgrid chat
-
-# Download model
-offgrid models pull <model-name>
+offgrid list                 # Show installed models
+offgrid search llama         # Search HuggingFace
+offgrid doctor               # Check system
+offgrid agent chat           # AI agent
+offgrid kb add ./docs/       # Add documents to RAG
 ```
 
-### API Quick Start
+### API
 
 ```bash
-curl http://localhost:11611/api/v1/chat/completions \
+curl http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "default", "messages": [{"role": "user", "content": "Hello"}]}'
+  -d '{"model":"auto","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 ---
 
-## Contributing
+## Links
 
-| Document | Description |
-|----------|-------------|
-| [Contributing Guide](../dev/CONTRIBUTING.md) | How to contribute |
-| [Web UI Development](../web/ui/README.md) | Frontend contribution |
-
----
-
-## File Naming Convention
-
-All documentation follows these conventions:
-
-- **Lowercase with hyphens**: `getting-started.md`, `cpu-tuning.md`
-- **Descriptive names**: `embeddings.md` not `EMBEDDINGS_GUIDE.md`
-- **Organized by purpose**: setup/, guides/, reference/, advanced/
+- [Roadmap](ROADMAP.md) - Future development
+- [Contributing](../dev/CONTRIBUTING.md) - How to contribute
+- [GitHub](https://github.com/takuphilchan/offgrid-llm) - Source code

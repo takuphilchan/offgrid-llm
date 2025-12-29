@@ -96,6 +96,10 @@
                     <svg class="nav-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
                     <span class="nav-text">Terminal</span>
                 </button>
+                <button onclick="switchTab('peers')" id="tab-peers" class="nav-item text-sm" aria-label="P2P Network">
+                    <svg class="nav-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    <span class="nav-text">P2P Network</span>
+                </button>
             </div>
             
             <!-- Multi-user features (hidden by default in single-user mode) -->
@@ -146,7 +150,7 @@
                         <div id="statusDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                         <span id="statusText" class="text-xs font-medium text-emerald-400">Ready</span>
                     </div>
-                    <span class="text-xs text-secondary opacity-60">v0.2.10</span>
+                    <span class="text-xs text-secondary opacity-60">v0.2.11</span>
                 </div>
                 
                 <!-- Model Badge - Full Width -->
@@ -171,7 +175,7 @@
             </div>
             
             <!-- Theme Toggle -->
-            <button id="theme-toggle" class="mt-2 p-2 rounded-lg hover:bg-tertiary transition-colors text-secondary hover:text-primary" title="Toggle Theme">
+            <button id="theme-toggle" onclick="showThemePicker()" class="mt-2 p-2 rounded-lg hover:bg-tertiary transition-colors text-secondary hover:text-primary" title="Choose Theme">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5"></circle>
                     <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -655,6 +659,28 @@
                                     </div>
                                 </div>
                             </details>
+
+                            <!-- Import from URL option -->
+                            <details class="collapsible-section mt-2">
+                                <summary>
+                                    <span class="flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                                        Import from web page
+                                    </span>
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="collapsible-content space-y-3">
+                                    <div class="form-group">
+                                        <label class="form-label">Web Page URL</label>
+                                        <input type="url" id="ragUrlInput" class="w-full input-theme rounded-lg px-3 py-2 text-sm" placeholder="https://example.com/article">
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="ragUrlName" class="flex-1 input-theme rounded px-3 py-2 text-sm" placeholder="Document name (optional - uses page title)">
+                                        <button onclick="ingestRAGUrl()" class="btn btn-primary">Import</button>
+                                    </div>
+                                    <p class="text-xs text-secondary">Extracts readable text content from web pages. Works best with articles and documentation.</p>
+                                </div>
+                            </details>
                         </div>
 
                         <!-- Documents List -->
@@ -1049,7 +1075,11 @@
                                 </div>
                             </div>
                             
-                            <div class="pt-2">
+                            <div class="pt-2 space-y-2">
+                                <label class="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                                    <input type="checkbox" id="includeInstaller" class="rounded">
+                                    <span>Include installer for offline setup</span>
+                                </label>
                                 <button onclick="exportToUSB()" class="btn btn-primary w-full">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -1084,7 +1114,7 @@
                     <h2>Terminal</h2>
                     <p>Run OffGrid CLI commands directly</p>
                 </div>
-                <span class="badge badge-info">v0.2.10</span>
+                <span class="badge badge-info">v0.2.11</span>
             </div>
             
             <!-- Terminal Container -->
@@ -1172,6 +1202,10 @@
                         <p>Let AI complete multi-step tasks automatically</p>
                     </div>
                     <div class="flex gap-2">
+                        <button onclick="showCreateToolModal()" class="btn btn-secondary btn-sm">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                            Create Tool
+                        </button>
                         <button onclick="showAddMCPModal()" class="btn btn-secondary btn-sm">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             Add Plugin
@@ -1270,9 +1304,71 @@
                         <div class="card-static">
                             <div class="section-header">
                                 <h3>Plugins</h3>
+                                <button onclick="showMCPMarketplace()" class="text-xs text-accent hover:underline">
+                                    Browse
+                                </button>
                             </div>
                             <div id="mcpServersList" class="space-y-1 max-h-32 overflow-auto text-sm">
                                 <div class="text-secondary text-xs">No plugins connected</div>
+                            </div>
+                        </div>
+                        
+                        <!-- MCP Marketplace Preview -->
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>MCP Marketplace</h3>
+                            </div>
+                            <div class="space-y-2">
+                                <div id="mcpMarketplacePreview" class="text-xs space-y-1">
+                                    <div class="flex items-center justify-between p-2 bg-secondary rounded hover:bg-tertiary cursor-pointer" onclick="installMCPServer('filesystem')">
+                                        <span>Filesystem</span>
+                                        <span class="text-secondary">Files</span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-2 bg-secondary rounded hover:bg-tertiary cursor-pointer" onclick="installMCPServer('memory')">
+                                        <span>Memory</span>
+                                        <span class="text-secondary">Store</span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-2 bg-secondary rounded hover:bg-tertiary cursor-pointer" onclick="installMCPServer('fetch')">
+                                        <span>Fetch</span>
+                                        <span class="text-secondary">Web</span>
+                                    </div>
+                                </div>
+                                <button onclick="showMCPMarketplace()" class="btn btn-secondary btn-sm w-full">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="9" cy="21" r="1"></circle>
+                                        <circle cx="20" cy="21" r="1"></circle>
+                                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                    </svg>
+                                    Browse All Servers
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Multi-Agent Orchestration -->
+                        <div class="card-static">
+                            <div class="section-header">
+                                <h3>Multi-Agent</h3>
+                            </div>
+                            <div class="space-y-2">
+                                <select id="orchestrationMode" class="w-full input-theme rounded px-2 py-1.5 text-xs">
+                                    <option value="sequential">Sequential</option>
+                                    <option value="parallel">Parallel</option>
+                                    <option value="debate">Debate</option>
+                                    <option value="voting">Voting</option>
+                                    <option value="hierarchy">Hierarchy</option>
+                                </select>
+                                <div class="text-xs text-secondary">
+                                    <span id="orchestrationModeDesc">Agents run one after another</span>
+                                </div>
+                                <button onclick="runOrchestration()" class="btn btn-secondary btn-sm w-full">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="9" cy="7" r="4"></circle>
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                    </svg>
+                                    Run Multi-Agent
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2000,6 +2096,122 @@
             </div>
         </div>
 
+        <!-- P2P Network Tab -->
+        <div id="content-peers" class="hidden h-full overflow-auto px-6 py-4">
+            <div class="max-w-5xl mx-auto">
+                <!-- Page Header -->
+                <div class="page-header">
+                    <div>
+                        <h2>P2P Network</h2>
+                        <p class="flex items-center gap-3">
+                            <span>Share models with peers on your local network</span>
+                            <span id="p2pStatusBadge" class="badge badge-secondary text-xs">Disabled</span>
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="refreshPeers()" class="btn btn-secondary btn-sm" id="refreshPeersBtn">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- P2P Status Card -->
+                <div class="card-static mb-4">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            Network Status
+                        </h3>
+                    </div>
+                    <div id="p2pNetworkStatus" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="p-3 bg-tertiary rounded-lg text-center">
+                            <div class="text-2xl font-bold text-primary" id="p2pPeerCount">0</div>
+                            <div class="text-xs text-secondary">Peers Found</div>
+                        </div>
+                        <div class="p-3 bg-tertiary rounded-lg text-center">
+                            <div class="text-2xl font-bold text-primary" id="p2pModelCount">0</div>
+                            <div class="text-xs text-secondary">Remote Models</div>
+                        </div>
+                        <div class="p-3 bg-tertiary rounded-lg text-center">
+                            <div class="text-2xl font-bold text-primary" id="p2pLocalCount">0</div>
+                            <div class="text-xs text-secondary">Shared Models</div>
+                        </div>
+                        <div class="p-3 bg-tertiary rounded-lg text-center">
+                            <div class="text-sm font-medium text-accent" id="p2pNodeID">-</div>
+                            <div class="text-xs text-secondary">Your Node ID</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discovered Peers -->
+                <div class="card-static mb-4">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="18" cy="5" r="3"></circle>
+                                <circle cx="6" cy="12" r="3"></circle>
+                                <circle cx="18" cy="19" r="3"></circle>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                            </svg>
+                            Discovered Peers
+                        </h3>
+                    </div>
+                    <div id="peersList" class="space-y-3">
+                        <div class="empty-state py-8">
+                            <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="18" cy="5" r="3"></circle>
+                                <circle cx="6" cy="12" r="3"></circle>
+                                <circle cx="18" cy="19" r="3"></circle>
+                            </svg>
+                            <p>No peers discovered yet</p>
+                            <span class="text-xs text-secondary">Ensure P2P is enabled in server settings</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Your Shared Models -->
+                <div class="card-static mb-4">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                <polyline points="16 6 12 2 8 6"></polyline>
+                                <line x1="12" y1="2" x2="12" y2="15"></line>
+                            </svg>
+                            Your Shared Models
+                        </h3>
+                        <span class="text-xs text-secondary">These models are available to peers on your network</span>
+                    </div>
+                    <div id="sharedModelsList" class="space-y-2 max-h-48 overflow-y-auto">
+                        <div class="text-sm text-secondary text-center py-4">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Active Transfers -->
+                <div class="card-static">
+                    <div class="section-header">
+                        <h3>
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Active Transfers
+                        </h3>
+                    </div>
+                    <div id="p2pTransfersList" class="space-y-2">
+                        <div class="text-sm text-secondary text-center py-4">No active transfers</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <!-- Modals -->
@@ -2151,6 +2363,147 @@
                 <button onclick="hideAddMCPModal()" class="btn btn-secondary">Cancel</button>
                 <button onclick="testMCPConnection()" class="btn btn-secondary">Test</button>
                 <button onclick="addMCPServer()" class="btn btn-primary">Add Server</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Custom Tool Modal -->
+    <div id="createToolModal" class="modal-backdrop">
+        <div class="modal-box modal-lg">
+            <div class="modal-box-header">
+                <h3>
+                    <span class="modal-icon emerald"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg></span>
+                    Create Custom Tool
+                </h3>
+                <button onclick="hideCreateToolModal()" class="modal-close-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="modal-box-body">
+                <div class="modal-form-group">
+                    <label>Tool Name</label>
+                    <input type="text" id="customToolName" placeholder="get_weather" 
+                           autocomplete="off" pattern="[a-z_]+"
+                           class="w-full input-theme rounded-lg px-3 py-2.5 font-mono">
+                    <p class="helper-text">Use lowercase with underscores (e.g., get_weather, search_docs)</p>
+                </div>
+                <div class="modal-form-group">
+                    <label>Description</label>
+                    <textarea id="customToolDesc" rows="2" 
+                              placeholder="Describe what this tool does..."
+                              class="w-full input-theme rounded-lg px-3 py-2.5 resize-none"></textarea>
+                </div>
+                <div class="modal-form-group">
+                    <label>Tool Type</label>
+                    <select id="customToolType" class="w-full input-theme rounded-lg px-3 py-2.5" onchange="toggleToolTypeFields()">
+                        <option value="shell">Shell Command</option>
+                        <option value="http">HTTP Request</option>
+                    </select>
+                </div>
+                <div id="shellToolFields">
+                    <div class="modal-form-group">
+                        <label>Command</label>
+                        <input type="text" id="customToolCommand" placeholder="curl -s https://api.example.com/data" 
+                               autocomplete="off"
+                               class="w-full input-theme rounded-lg px-3 py-2.5 font-mono text-sm">
+                        <p class="helper-text">Shell command to execute when tool is called</p>
+                    </div>
+                </div>
+                <div id="httpToolFields" class="hidden">
+                    <div class="modal-form-group">
+                        <label>URL</label>
+                        <input type="text" id="customToolUrl" placeholder="https://api.example.com/endpoint" 
+                               autocomplete="off"
+                               class="w-full input-theme rounded-lg px-3 py-2.5 font-mono text-sm">
+                        <p class="helper-text">HTTP endpoint to call when tool is invoked</p>
+                    </div>
+                </div>
+                
+                <!-- Tool Templates -->
+                <div class="bg-tertiary rounded-xl p-4 mt-4">
+                    <div class="text-xs font-semibold text-secondary mb-3 uppercase tracking-wide">Quick Templates</div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="flex items-center justify-between p-3 bg-primary/5 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors border border-transparent hover:border-accent/30" 
+                             onclick="fillToolTemplate('list_files', 'List files in current directory', 'shell', 'ls -la')">
+                            <div>
+                                <div class="font-medium">List Files</div>
+                                <div class="text-secondary text-xs mt-0.5">ls -la command</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-primary/5 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors border border-transparent hover:border-accent/30" 
+                             onclick="fillToolTemplate('system_info', 'Get system information', 'shell', 'uname -a')">
+                            <div>
+                                <div class="font-medium">System Info</div>
+                                <div class="text-secondary text-xs mt-0.5">uname command</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-primary/5 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors border border-transparent hover:border-accent/30" 
+                             onclick="fillToolTemplate('check_disk', 'Check disk usage', 'shell', 'df -h')">
+                            <div>
+                                <div class="font-medium">Disk Usage</div>
+                                <div class="text-secondary text-xs mt-0.5">df -h command</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-primary/5 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors border border-transparent hover:border-accent/30" 
+                             onclick="fillToolTemplate('get_date', 'Get current date and time', 'shell', 'date')">
+                            <div>
+                                <div class="font-medium">Current Date</div>
+                                <div class="text-secondary text-xs mt-0.5">date command</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-box-footer">
+                <button onclick="hideCreateToolModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="createCustomTool()" class="btn btn-primary">Create Tool</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MCP Marketplace Modal -->
+    <div id="mcpMarketplaceModal" class="modal-backdrop">
+        <div class="modal-box modal-lg">
+            <div class="modal-box-header">
+                <h3>
+                    <span class="modal-icon blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg></span>
+                    MCP Server Marketplace
+                </h3>
+                <button onclick="hideMCPMarketplace()" class="modal-close-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="modal-box-body">
+                <!-- Search and Filter -->
+                <div class="flex gap-3 mb-4">
+                    <input type="text" id="mcpMarketplaceSearch" placeholder="Search servers..." 
+                           onkeyup="searchMCPMarketplace(this.value)"
+                           class="flex-1 input-theme rounded-lg px-3 py-2">
+                    <select id="mcpMarketplaceCategory" onchange="filterMCPMarketplace(this.value)" 
+                            class="input-theme rounded-lg px-3 py-2">
+                        <option value="">All Categories</option>
+                        <option value="utility">Utility</option>
+                        <option value="search">Search</option>
+                        <option value="development">Development</option>
+                        <option value="automation">Automation</option>
+                        <option value="memory">Memory</option>
+                        <option value="database">Database</option>
+                        <option value="communication">Communication</option>
+                        <option value="storage">Storage</option>
+                        <option value="ai">AI</option>
+                    </select>
+                </div>
+                
+                <!-- Server List -->
+                <div id="mcpMarketplaceList" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto">
+                    <div class="text-center py-8 text-secondary">Loading servers...</div>
+                </div>
+            </div>
+            <div class="modal-box-footer">
+                <div class="text-xs text-secondary">
+                    <span id="mcpMarketplaceInstalledCount">0</span> servers installed
+                </div>
+                <button onclick="hideMCPMarketplace()" class="btn btn-secondary">Close</button>
             </div>
         </div>
     </div>
@@ -2575,25 +2928,27 @@
     </div>
 
     <!-- Modular JavaScript Files -->
-    <script src="/ui/js/utils.js?v=0.2.10"></script>
-    <script src="/ui/js/model-manager.js?v=0.2.10"></script>
-    <script src="/ui/js/onboarding.js?v=0.2.10"></script>
-    <script src="/ui/js/status.js?v=0.2.10"></script>
-    <script src="/ui/js/modals.js?v=0.2.10"></script>
-    <script src="/ui/js/models.js?v=0.2.10"></script>
-    <script src="/ui/js/chat.js?v=0.2.10"></script>
-    <script src="/ui/js/chat-ui.js?v=0.2.10"></script>
-    <script src="/ui/js/models-ui.js?v=0.2.10"></script>
-    <script src="/ui/js/terminal.js?v=0.2.10"></script>
-    <script src="/ui/js/rag.js?v=0.2.10"></script>
-    <script src="/ui/js/benchmark.js?v=0.2.10"></script>
-    <script src="/ui/js/auth.js?v=0.2.10"></script>
-    <script src="/ui/js/agent.js?v=0.2.10"></script>
-    <script src="/ui/js/users.js?v=0.2.10"></script>
-    <script src="/ui/js/metrics.js?v=0.2.10"></script>
-    <script src="/ui/js/lora.js?v=0.2.10"></script>
-    <script src="/ui/js/audio.js?v=0.2.10"></script>
-    <script src="/ui/js/file-browser.js?v=0.2.10"></script>
+    <script src="/ui/js/themes.js?v=0.2.11"></script>
+    <script src="/ui/js/utils.js?v=0.2.11"></script>
+    <script src="/ui/js/model-manager.js?v=0.2.11"></script>
+    <script src="/ui/js/onboarding.js?v=0.2.11"></script>
+    <script src="/ui/js/status.js?v=0.2.11"></script>
+    <script src="/ui/js/modals.js?v=0.2.11"></script>
+    <script src="/ui/js/models.js?v=0.2.11"></script>
+    <script src="/ui/js/chat.js?v=0.2.11"></script>
+    <script src="/ui/js/chat-ui.js?v=0.2.11"></script>
+    <script src="/ui/js/models-ui.js?v=0.2.11"></script>
+    <script src="/ui/js/terminal.js?v=0.2.11"></script>
+    <script src="/ui/js/rag.js?v=0.2.11"></script>
+    <script src="/ui/js/benchmark.js?v=0.2.11"></script>
+    <script src="/ui/js/auth.js?v=0.2.11"></script>
+    <script src="/ui/js/agent.js?v=0.2.11"></script>
+    <script src="/ui/js/users.js?v=0.2.11"></script>
+    <script src="/ui/js/metrics.js?v=0.2.11"></script>
+    <script src="/ui/js/lora.js?v=0.2.11"></script>
+    <script src="/ui/js/audio.js?v=0.2.11"></script>
+    <script src="/ui/js/file-browser.js?v=0.2.11"></script>
+    <script src="/ui/js/p2p.js?v=0.2.11"></script>
 
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-nav" id="mobileNav">

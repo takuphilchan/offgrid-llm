@@ -1,10 +1,13 @@
 // Package integrity provides offline model verification using bundled SHA256 hashes.
 // This allows air-gapped deployments to verify model integrity without internet access.
+// Also supports Ed25519 signature verification for signed manifests.
 package integrity
 
 import (
 	"bufio"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -360,4 +363,242 @@ func (v *Verifier) QuickVerify(modelPath string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// ============================================================================
+// SIGNATURE VERIFICATION
+// ============================================================================
+
+// SignedManifest represents a cryptographically signed manifest of model hashes
+type SignedManifest struct {
+	Version     string      `json:"version"`
+	CreatedAt   string      `json:"created_at"`
+	Publisher   string      `json:"publisher"`
+	Description string      `json:"description,omitempty"`
+	Models      []ModelHash `json:"models"`
+	Signature   string      `json:"signature"`  // Base64-encoded Ed25519 signature
+	PublicKey   string      `json:"public_key"` // Base64-encoded public key for verification
+}
+
+// SignatureVerificationResult contains the result of manifest signature verification
+type SignatureVerificationResult struct {
+	Valid      bool   `json:"valid"`
+	Publisher  string `json:"publisher,omitempty"`
+	Error      string `json:"error,omitempty"`
+	ModelCount int    `json:"model_count"`
+	SignedAt   string `json:"signed_at,omitempty"`
+}
+
+// TrustedPublicKeys contains known trusted publisher public keys (base64 encoded)
+// In production, these would be loaded from a secure source
+var TrustedPublicKeys = map[string]string{
+	"offgrid-official": "BASE64_PUBLIC_KEY_HERE", // Placeholder
+}
+
+// VerifySignedManifest verifies a signed manifest and returns the verification result
+func (v *Verifier) VerifySignedManifest(manifestPath string) (*SignatureVerificationResult, *SignedManifest, error) {
+	file, err := os.Open(manifestPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open manifest: %w", err)
+	}
+	defer file.Close()
+
+	var manifest SignedManifest
+	if err := json.NewDecoder(file).Decode(&manifest); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse manifest: %w", err)
+	}
+
+	result := &SignatureVerificationResult{
+		Publisher:  manifest.Publisher,
+		ModelCount: len(manifest.Models),
+		SignedAt:   manifest.CreatedAt,
+	}
+
+	// Check if we have a signature
+	if manifest.Signature == "" {
+		result.Error = "manifest is not signed"
+		return result, &manifest, nil
+	}
+
+	// Get the public key (from manifest or trusted keys)
+	var pubKeyBytes []byte
+	if manifest.PublicKey != "" {
+		pubKeyBytes, err = base64.StdEncoding.DecodeString(manifest.PublicKey)
+		if err != nil {
+			result.Error = "invalid public key encoding"
+			return result, &manifest, nil
+		}
+	} else if trustedKey, ok := TrustedPublicKeys[manifest.Publisher]; ok {
+		pubKeyBytes, err = base64.StdEncoding.DecodeString(trustedKey)
+		if err != nil {
+			result.Error = "invalid trusted public key"
+			return result, &manifest, nil
+		}
+	} else {
+		result.Error = "no public key available for verification"
+		return result, &manifest, nil
+	}
+
+	if len(pubKeyBytes) != ed25519.PublicKeySize {
+		result.Error = fmt.Sprintf("invalid public key size: got %d, want %d", len(pubKeyBytes), ed25519.PublicKeySize)
+		return result, &manifest, nil
+	}
+
+	// Decode signature
+	sigBytes, err := base64.StdEncoding.DecodeString(manifest.Signature)
+	if err != nil {
+		result.Error = "invalid signature encoding"
+		return result, &manifest, nil
+	}
+
+	// Create the message to verify (canonical JSON of models array)
+	message, err := createSignableMessage(&manifest)
+	if err != nil {
+		result.Error = fmt.Sprintf("failed to create signable message: %v", err)
+		return result, &manifest, nil
+	}
+
+	// Verify signature
+	pubKey := ed25519.PublicKey(pubKeyBytes)
+	if ed25519.Verify(pubKey, message, sigBytes) {
+		result.Valid = true
+	} else {
+		result.Error = "signature verification failed"
+	}
+
+	return result, &manifest, nil
+}
+
+// ImportSignedManifest imports a verified signed manifest
+func (v *Verifier) ImportSignedManifest(manifestPath string, requireSignature bool) (int, *SignatureVerificationResult, error) {
+	result, manifest, err := v.VerifySignedManifest(manifestPath)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if requireSignature && !result.Valid {
+		return 0, result, fmt.Errorf("signature verification required: %s", result.Error)
+	}
+
+	// Import the model hashes
+	count := 0
+	for _, m := range manifest.Models {
+		source := "unsigned-manifest"
+		if result.Valid {
+			source = fmt.Sprintf("signed:%s", manifest.Publisher)
+		}
+		v.db.AddHash(ModelHash{
+			Filename:   m.Filename,
+			SHA256:     m.SHA256,
+			Size:       m.Size,
+			Source:     source,
+			VerifiedAt: time.Now().Format(time.RFC3339),
+		})
+		count++
+	}
+
+	if count > 0 {
+		v.db.Save()
+	}
+
+	return count, result, nil
+}
+
+// createSignableMessage creates the canonical message for signing
+func createSignableMessage(manifest *SignedManifest) ([]byte, error) {
+	// Create a version without signature for hashing
+	toSign := struct {
+		Version   string      `json:"version"`
+		CreatedAt string      `json:"created_at"`
+		Publisher string      `json:"publisher"`
+		Models    []ModelHash `json:"models"`
+	}{
+		Version:   manifest.Version,
+		CreatedAt: manifest.CreatedAt,
+		Publisher: manifest.Publisher,
+		Models:    manifest.Models,
+	}
+
+	return json.Marshal(toSign)
+}
+
+// GenerateKeyPair generates a new Ed25519 key pair for signing manifests
+func GenerateKeyPair() (publicKey, privateKey string, err error) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		return "", "", err
+	}
+	return base64.StdEncoding.EncodeToString(pub),
+		base64.StdEncoding.EncodeToString(priv),
+		nil
+}
+
+// SignManifest creates a signed manifest from a list of model hashes
+func SignManifest(models []ModelHash, publisher string, privateKeyBase64 string) (*SignedManifest, error) {
+	privKeyBytes, err := base64.StdEncoding.DecodeString(privateKeyBase64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key encoding: %w", err)
+	}
+
+	if len(privKeyBytes) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("invalid private key size: got %d, want %d", len(privKeyBytes), ed25519.PrivateKeySize)
+	}
+
+	privKey := ed25519.PrivateKey(privKeyBytes)
+	pubKey := privKey.Public().(ed25519.PublicKey)
+
+	manifest := &SignedManifest{
+		Version:   "1.0",
+		CreatedAt: time.Now().Format(time.RFC3339),
+		Publisher: publisher,
+		Models:    models,
+		PublicKey: base64.StdEncoding.EncodeToString(pubKey),
+	}
+
+	// Create message and sign
+	message, err := createSignableMessage(manifest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create signable message: %w", err)
+	}
+
+	signature := ed25519.Sign(privKey, message)
+	manifest.Signature = base64.StdEncoding.EncodeToString(signature)
+
+	return manifest, nil
+}
+
+// CreateManifestFromDir creates a signed manifest from all models in a directory
+func (v *Verifier) CreateManifestFromDir(dir string, publisher string, privateKeyBase64 string) (*SignedManifest, error) {
+	var models []ModelHash
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".gguf") {
+			return nil
+		}
+
+		hash, err := calculateSHA256(path)
+		if err != nil {
+			return fmt.Errorf("failed to hash %s: %w", path, err)
+		}
+
+		models = append(models, ModelHash{
+			Filename: info.Name(),
+			SHA256:   hash,
+			Size:     info.Size(),
+		})
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no .gguf models found in %s", dir)
+	}
+
+	return SignManifest(models, publisher, privateKeyBase64)
 }

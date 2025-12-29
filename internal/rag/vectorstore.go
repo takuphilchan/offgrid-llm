@@ -161,8 +161,17 @@ func (vs *VectorStore) Search(queryEmbedding []float32, limit int, minScore floa
 	return results, nil
 }
 
-// HybridSearch combines semantic search with keyword matching
-func (vs *VectorStore) HybridSearch(queryEmbedding []float32, query string, opts SearchOptions, alpha float32) []SearchResult {
+// HybridSearch implements the Store interface for hybrid search
+func (vs *VectorStore) HybridSearch(queryEmbedding []float32, query string, limit int, minScore float32, alpha float32) ([]SearchResult, error) {
+	opts := SearchOptions{
+		TopK:     limit,
+		MinScore: minScore,
+	}
+	return vs.hybridSearchInternal(queryEmbedding, query, opts, alpha), nil
+}
+
+// hybridSearchInternal combines semantic search with keyword matching
+func (vs *VectorStore) hybridSearchInternal(queryEmbedding []float32, query string, opts SearchOptions, alpha float32) []SearchResult {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 
