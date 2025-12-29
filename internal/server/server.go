@@ -1127,7 +1127,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		accept := r.Header.Get("Accept")
 		if strings.Contains(accept, "application/json") || r.URL.Query().Get("format") == "json" {
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.11","status":"running"}`, s.version)
+			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
 			return
 		}
 
@@ -1142,7 +1142,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.11","status":"running"}`, s.version)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -2826,17 +2826,16 @@ func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find model in registry
-	var modelPath string
-	for _, m := range s.registry.ListModels() {
-		if m.ID == modelID {
-			modelPath = filepath.Join(s.config.ModelsDir, m.ID)
-			break
-		}
+	// Find model in registry - use GetModel to get the full metadata with path
+	modelMeta, err := s.registry.GetModel(modelID)
+	if err != nil || modelMeta == nil {
+		writeError(w, "Model not found", http.StatusNotFound)
+		return
 	}
 
+	modelPath := modelMeta.Path
 	if modelPath == "" {
-		writeError(w, "Model not found", http.StatusNotFound)
+		writeError(w, "Model path not available", http.StatusNotFound)
 		return
 	}
 
