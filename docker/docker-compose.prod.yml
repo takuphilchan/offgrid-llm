@@ -1,13 +1,11 @@
 # Docker Compose - Production Configuration
 # With SSL, monitoring, and high availability
 
-version: '3.8'
-
 services:
   offgrid:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: offgrid-llm:latest
     container_name: offgrid-llm
     restart: unless-stopped
@@ -20,6 +18,8 @@ services:
       - OFFGRID_PORT=11611
       - OFFGRID_HOST=0.0.0.0
       - OFFGRID_MODELS_DIR=/var/lib/offgrid/models
+      - OFFGRID_DATA_DIR=/var/lib/offgrid/data
+      - OFFGRID_BIN_DIR=/var/lib/offgrid/bin
       - OFFGRID_GPU_LAYERS=0
     deploy:
       resources:
@@ -34,7 +34,7 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     networks:
       - backend
 

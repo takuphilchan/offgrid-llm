@@ -2,15 +2,16 @@
 
 Run OffGrid LLM in Docker in 2 minutes.
 
-## Quick Start
+## Quick Start (CPU)
 
 ```bash
-# 1. Clone and navigate to docker directory
+# 1. Clone the repository
 git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm/docker
+cd offgrid-llm
 
-# 2. Start the container
-docker-compose up -d
+# 2. Build and start
+cd docker
+docker-compose up -d --build
 
 # 3. Open your browser
 open http://localhost:11611/ui/
@@ -20,6 +21,25 @@ docker exec offgrid-llm offgrid download qwen2.5:0.5b-instruct-q4_k_m
 ```
 
 That's it! OffGrid LLM is running.
+
+## Quick Start (GPU - NVIDIA)
+
+```bash
+# 1. Install NVIDIA Container Toolkit (one-time setup)
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | sudo apt-key add -
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo systemctl restart docker
+
+# 2. Build and start with GPU
+cd docker
+docker-compose -f docker-compose.gpu.yml up -d --build
+
+# 3. Verify GPU is detected
+docker exec offgrid-llm-gpu nvidia-smi
+```
 
 ## Common Commands
 
@@ -34,43 +54,27 @@ docker-compose down
 docker-compose restart
 
 # Update to latest version
-docker-compose pull
-docker-compose up -d
+git pull
+docker-compose up -d --build
 
 # Access shell inside container
 docker exec -it offgrid-llm sh
 
 # Check status
 docker-compose ps
-```
 
-## GPU Support
-
-### NVIDIA GPU
-
-**Prerequisites:** Install NVIDIA Container Toolkit first (see [docs/DOCKER.md](../docs/DOCKER.md) for details).
-
-**Start with GPU support:**
-```bash
-cd docker
-docker-compose -f docker-compose.gpu.yml up -d
-curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
-  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-sudo systemctl restart docker
-```
-
-**2. Start with GPU:**
-```bash
-docker-compose -f docker-compose.gpu.yml up -d
+# Download a model
+docker exec offgrid-llm offgrid download llama3.2
 ```
 
 ## Volumes
 
 OffGrid uses Docker volumes to persist data:
+
+| Volume | Purpose |
+|--------|---------|
+| `offgrid-models` | Downloaded GGUF models |
+| `offgrid-data` | Sessions, cache, settings |
 
 ```bash
 # Backup models
@@ -88,19 +92,17 @@ docker run --rm \
 # List volumes
 docker volume ls | grep offgrid
 
-# Remove volumes (DELETES ALL DATA)
+# Remove volumes (⚠️ DELETES ALL DATA)
 docker-compose down -v
 ```
 
 ## Environment Variables
 
-Configure via `.env` file or `docker-compose.yml`:
-
-```bash
-OFFGRID_PORT=11611           # Server port
-OFFGRID_GPU_LAYERS=35        # GPU layers (0 = CPU only)
-OFFGRID_MODELS_DIR=/models   # Models directory
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OFFGRID_PORT` | 11611 | Server port |
+| `OFFGRID_GPU_LAYERS` | 0 | GPU layers (0=CPU, 99=all GPU) |
+| `OFFGRID_MODELS_DIR` | /var/lib/offgrid/models | Models directory |
 
 ## Troubleshooting
 
@@ -117,24 +119,29 @@ sudo lsof -i :11611
 
 **Out of memory:**
 ```bash
-# Increase Docker memory limit in Docker Desktop settings
-# Or add to docker-compose.yml:
+# Add memory limit to docker-compose.yml:
 services:
   offgrid:
-    mem_limit: 8g
+    deploy:
+      resources:
+        limits:
+          memory: 8G
 ```
 
 **GPU not detected:**
 ```bash
 # Test GPU access
-docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
 ```
 
-## Complete Documentation
+## Production Deployment
 
-For advanced configuration, production deployment, SSL setup, monitoring, and more:
+For production with SSL and monitoring:
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
+```
 
- **[docs/DOCKER.md](docs/DOCKER.md)** - Complete Docker guide
+See [docs/setup/docker.md](../docs/setup/docker.md) for complete production guide.
 
 ---
 

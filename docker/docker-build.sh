@@ -10,29 +10,51 @@ DEFAULT_VERSION=$(cat "$ROOT_DIR/VERSION" 2>/dev/null | tr -d '\n\r ' || echo "l
 
 VERSION=${1:-$DEFAULT_VERSION}
 REGISTRY=${REGISTRY:-docker.io/offgrid}
+BUILD_GPU=${BUILD_GPU:-false}
 
-echo "Building OffGrid LLM Docker image..."
-echo "Version: $VERSION"
-echo "Registry: $REGISTRY"
+echo "🐳 Building OffGrid LLM Docker image..."
+echo "   Version: $VERSION"
+echo "   Registry: $REGISTRY"
+echo ""
 
-# Build for multiple platforms
-docker buildx create --use --name offgrid-builder 2>/dev/null || docker buildx use offgrid-builder
+cd "$ROOT_DIR"
 
-# Build and push multi-arch image
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -t ${REGISTRY}/offgrid-llm:${VERSION} \
-  -t ${REGISTRY}/offgrid-llm:latest \
-  --push \
+# Build CPU image
+echo "📦 Building CPU image..."
+docker build \
+  -f docker/Dockerfile \
+  -t offgrid-llm:${VERSION} \
+  -t offgrid-llm:latest \
   .
 
-echo "✓ Successfully built and pushed:"
-echo "  ${REGISTRY}/offgrid-llm:${VERSION}"
-echo "  ${REGISTRY}/offgrid-llm:latest"
+echo "✓ CPU image built: offgrid-llm:${VERSION}"
 
-# Cleanup
-docker buildx rm offgrid-builder
+# Build GPU image if requested
+if [ "$BUILD_GPU" = "true" ]; then
+  echo ""
+  echo "🎮 Building GPU image (CUDA)..."
+  docker build \
+    -f docker/Dockerfile.gpu \
+    -t offgrid-llm:${VERSION}-gpu \
+    -t offgrid-llm:gpu \
+    .
+  echo "✓ GPU image built: offgrid-llm:${VERSION}-gpu"
+fi
 
 echo ""
-echo "To run the image:"
-echo "  docker run -d -p 11611:11611 ${REGISTRY}/offgrid-llm:${VERSION}"
+echo "===================="
+echo "Build Complete!"
+echo "===================="
+echo ""
+echo "To run the CPU image:"
+echo "  docker run -d -p 11611:11611 -v offgrid-models:/var/lib/offgrid/models offgrid-llm:${VERSION}"
+echo ""
+if [ "$BUILD_GPU" = "true" ]; then
+  echo "To run the GPU image:"
+  echo "  docker run -d --gpus all -p 11611:11611 -v offgrid-models:/var/lib/offgrid/models offgrid-llm:gpu"
+  echo ""
+fi
+echo "Or use docker-compose:"
+echo "  cd docker && docker-compose up -d"
+echo ""
+echo "Access the UI at: http://localhost:11611/ui/"
