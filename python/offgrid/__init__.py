@@ -46,7 +46,7 @@ Usage:
 
 from typing import Dict, List, Union
 
-__version__ = "0.1.8"
+__version__ = "0.2.11"
 __author__ = "OffGrid LLM Team"
 
 from .client import Client, OffGridError, Sessions
@@ -55,6 +55,8 @@ from .kb import KnowledgeBase
 from .agent import Agent, MCP
 from .lora import LoRA
 from .audio import Audio
+from .loading import LoadingProgress
+from .p2p import P2P
 
 __all__ = [
     "Client",
@@ -66,5 +68,7 @@ __all__ = [
     "MCP",
     "LoRA",
     "Audio",
+    "LoadingProgress",
+    "P2P",
     "__version__",
 ]

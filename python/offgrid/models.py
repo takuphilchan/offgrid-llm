@@ -294,3 +294,48 @@ class ModelManager:
         }
         
         return self._client._request("POST", "/v1/benchmark", payload)
+    
+    def prewarm(self, model_id: str) -> dict:
+        """
+        Pre-warm a model into the OS page cache.
+        
+        Uses aggressive concurrent I/O to load model weights into
+        memory before they're needed, making model switches nearly
+        instant (can achieve 10GB/s+ read speeds).
+        
+        Args:
+            model_id: The model ID to pre-warm
+        
+        Returns:
+            Dict with warming status
+        
+        Example:
+            >>> client.models.prewarm("llama3.2:3b")
+            {'status': 'warming', 'model_id': 'llama3.2:3b', 'size_mb': 2048}
+            
+            >>> # Later, switch happens instantly
+            >>> client.use("llama3.2:3b")  # Already in cache!
+        """
+        return self._client._request("POST", "/v1/models/prewarm", {
+            "model_id": model_id
+        })
+    
+    def get_loading_progress(self) -> dict:
+        """
+        Get current model loading progress.
+        
+        Returns:
+            Dict with loading progress info:
+                - model_id: Model being loaded
+                - phase: idle, unloading, starting, loading, warmup, ready, failed
+                - progress: 0-100 percentage
+                - message: Human-readable status
+                - elapsed_ms: Time elapsed
+                - estimated_ms: Estimated total time
+        
+        Example:
+            >>> progress = client.models.get_loading_progress()
+            >>> if progress['phase'] == 'loading':
+            ...     print(f"Loading {progress['model_id']}: {progress['progress']}%")
+        """
+        return self._client._request("GET", "/v1/loading/progress")

@@ -138,7 +138,8 @@ class KnowledgeBase:
         self,
         query: str,
         top_k: int = 5,
-        threshold: float = None
+        threshold: float = None,
+        distributed: bool = False
     ) -> List[Dict]:
         """
         Search the Knowledge Base.
@@ -147,6 +148,7 @@ class KnowledgeBase:
             query: Search query
             top_k: Number of results to return
             threshold: Minimum similarity score (0.0 to 1.0)
+            distributed: Search across P2P network peers (default: False)
         
         Returns:
             List of search results with content and scores
@@ -155,6 +157,11 @@ class KnowledgeBase:
             >>> results = client.kb.search("project deadline")
             >>> for r in results:
             ...     print(f"[{r['score']:.2f}] {r['content'][:100]}...")
+            
+            >>> # Search across all connected peers
+            >>> results = client.kb.search("API documentation", distributed=True)
+            >>> for r in results:
+            ...     print(f"[{r['peer']}] {r['content'][:100]}...")
         """
         payload = {
             "query": query,
@@ -164,6 +171,9 @@ class KnowledgeBase:
         if threshold is not None:
             payload["threshold"] = threshold
         
+        if distributed:
+            payload["distributed"] = True
+        
         response = self._client._request("POST", "/v1/documents/search", payload)
         results = response.get("results", [])
         
@@ -171,13 +181,20 @@ class KnowledgeBase:
         flattened = []
         for r in results:
             chunk = r.get("chunk", {})
-            flattened.append({
+            result = {
                 "content": chunk.get("content", ""),
                 "document_id": r.get("document_id", ""),
                 "document_name": r.get("document_name", ""),
                 "score": r.get("score", 0),
                 "chunk_index": chunk.get("index", 0)
-            })
+            }
+            
+            # Include peer info for distributed search
+            if "peer_id" in r:
+                result["peer_id"] = r["peer_id"]
+                result["peer_hostname"] = r.get("peer_hostname", "")
+            
+            flattened.append(result)
         
         return flattened
     

@@ -16,6 +16,8 @@ from .kb import KnowledgeBase
 from .agent import Agent
 from .lora import LoRA
 from .audio import Audio
+from .loading import LoadingProgress
+from .p2p import P2P
 
 
 class OffGridError(Exception):
@@ -239,6 +241,8 @@ class Client:
         self.agent = Agent(self)
         self.lora = LoRA(self)
         self.audio = Audio(self)
+        self.loading = LoadingProgress(self)
+        self.p2p = P2P(self)
         
         # Cache for default model
         self._default_model = None

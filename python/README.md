@@ -357,6 +357,90 @@ print(f"CPU: {stats['cpu_percent']}%")
 print(f"Memory: {stats['memory_percent']}%")
 ```
 
+### Model Loading Progress (New in v0.2.11)
+
+Track model loading progress in real-time:
+
+```python
+# Get current loading status
+progress = client.loading.progress()
+print(f"Phase: {progress['phase']}")  # idle, loading, warmup, ready, failed
+print(f"Progress: {progress['progress']}%")
+
+# Wait for model to be ready with progress updates
+def show_progress(p):
+    print(f"\r{p['message']} ({p['progress']}%)", end="")
+
+success = client.loading.wait_for_ready(
+    timeout=120,
+    progress_callback=show_progress
+)
+
+# Stream loading progress via SSE
+for update in client.loading.stream():
+    print(f"{update['phase']}: {update['progress']}%")
+    if update['phase'] in ('ready', 'failed'):
+        break
+
+# Pre-warm a model into OS page cache for instant switching
+client.loading.prewarm("/var/lib/offgrid/models/llama3.gguf")
+
+# Or use the models helper
+client.models.prewarm("llama3.2:3b")
+```
+
+### P2P Network (New in v0.2.11)
+
+Discover and share models with other OffGrid nodes on your local network:
+
+```python
+# Check P2P status
+status = client.p2p.status()
+print(f"P2P enabled: {status['enabled']}")
+print(f"Connected peers: {status['peer_count']}")
+
+# List discovered peers
+for peer in client.p2p.peers():
+    print(f"{peer['hostname']} @ {peer['address']}")
+    for model in peer['models']:
+        print(f"  - {model}")
+
+# List models available across the network
+models = client.p2p.models()
+for m in models:
+    print(f"{m['model_id']} on {m['hostname']}")
+
+# Download a model from a peer
+client.p2p.download("llama3", peer_id="node-abc123")
+
+# Verify model integrity with peer consensus
+result = client.p2p.verify("llama3")
+if result['valid']:
+    print("Model verified against peer hashes")
+
+# Broadcast a new model to peers
+client.p2p.broadcast("my-custom-model")
+
+# Enable/disable P2P
+client.p2p.enable()
+client.p2p.disable()
+```
+
+### Distributed RAG (New in v0.2.11)
+
+Search knowledge bases across all connected P2P peers:
+
+```python
+# Search local knowledge base only
+results = client.kb.search("project deadline")
+
+# Search across all P2P peers
+results = client.kb.search("API documentation", distributed=True)
+for r in results:
+    peer = r.get('peer_hostname', 'local')
+    print(f"[{peer}] {r['content'][:100]}...")
+```
+
 ### Embeddings
 
 ```python
@@ -421,47 +505,6 @@ The client automatically retries failed requests with exponential backoff:
 ```python
 # Retries are automatic
 response = client.chat("Hello!")  # Will retry on transient failures
-```
-
-## Error Handling
-
-```python
-from offgrid import Client, OffGridError
-
-client = Client()
-
-try:
-    response = client.chat("Hello")
-except OffGridError as e:
-    print(f"Error: {e.message}")
-    if e.code:
-        print(f"Code: {e.code}")
-```
-
-## Requirements
-
-- Python 3.8+
-- OffGrid LLM server running (`offgrid serve`)
-- No external dependencies (uses only stdlib)
-
-## Links
-
-- [OffGrid LLM](https://github.com/takuphilchan/offgrid-llm) - Main project
-- [API Reference](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/API.md)
-- [Issue Tracker](https://github.com/takuphilchan/offgrid-llm/issues)
-
-## License
-
-MIT License
-
-# Custom server URL
-client = Client(host="http://192.168.1.100:11611")
-
-# Just hostname (auto-adds http://)
-client = Client(host="192.168.1.100:11611")
-
-# Custom timeout (for slow models)
-client = Client(timeout=600)  # 10 minutes
 ```
 
 ## Error Handling
