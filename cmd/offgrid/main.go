@@ -1203,6 +1203,9 @@ func main() {
 		case "audio":
 			handleAudio(os.Args[2:])
 			return
+		case "logs", "log":
+			handleLogs(os.Args[2:])
+			return
 		case "serve", "server":
 			// Fall through to start server
 		case "version", "-v", "--version":
@@ -2459,8 +2462,13 @@ func handleBenchmark(args []string) {
 	// Check if server is running
 	serverURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort)
 	if !isServerHealthy(serverURL) {
-		fmt.Printf("%sError: Server not running%s\n", colorRed, colorReset)
-		fmt.Printf("Start server first: %soffgrid serve%s\n\n", brandSecondary, colorReset)
+		fmt.Println()
+		printError("Server not running")
+		fmt.Println()
+		fmt.Printf("  %sStart the server first:%s\n", colorBold, colorReset)
+		fmt.Printf("    %s$%s offgrid serve\n", brandMuted, colorReset)
+		fmt.Printf("    %s$%s sudo systemctl start offgrid-llm\n", brandMuted, colorReset)
+		fmt.Println()
 		os.Exit(1)
 	}
 
@@ -3141,6 +3149,7 @@ func printHelp() {
 				{"init", "First-time setup wizard"},
 				{"doctor", "Run system diagnostics"},
 				{"info", "System information"},
+				{"logs", "View server logs (-f to follow)"},
 				{"config <action>", "Manage configuration"},
 				{"peers", "P2P network status & model sharing"},
 				{"benchmark <id>", "Performance testing"},
@@ -6308,8 +6317,13 @@ func handleBenchmarkCompare(args []string) {
 	// Check if server is running
 	serverURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort)
 	if !isServerHealthy(serverURL) {
-		fmt.Printf("%sError: Server not running%s\n", colorRed, colorReset)
-		fmt.Printf("Start server first: %soffgrid serve%s\n\n", brandSecondary, colorReset)
+		fmt.Println()
+		printError("Server not running")
+		fmt.Println()
+		fmt.Printf("  %sStart the server first:%s\n", colorBold, colorReset)
+		fmt.Printf("    %s$%s offgrid serve\n", brandMuted, colorReset)
+		fmt.Printf("    %s$%s sudo systemctl start offgrid-llm\n", brandMuted, colorReset)
+		fmt.Println()
 		os.Exit(1)
 	}
 
@@ -8358,4 +8372,121 @@ func (m *MultipartWriter) WriteField(fieldname, value string) error {
 func (m *MultipartWriter) Close() error {
 	_, err := m.w.Write([]byte(fmt.Sprintf("\r\n--%s--\r\n", m.boundary)))
 	return err
+}
+
+// handleLogs displays server and llama-server logs
+func handleLogs(args []string) {
+	// Check for help flag
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		args = []string{} // Trigger help display
+	}
+
+	follow := false
+	lines := 50
+
+	// Parse args
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-f", "--follow":
+			follow = true
+		case "-n", "--lines":
+			if i+1 < len(args) {
+				fmt.Sscanf(args[i+1], "%d", &lines)
+				i++
+			}
+		}
+	}
+
+	// Show help if no meaningful args
+	if len(args) == 0 || (len(args) == 1 && args[0] == "") {
+		fmt.Println()
+		fmt.Printf("  %s%s Logs%s\n", brandPrimary+colorBold, iconCircle, colorReset)
+		fmt.Printf("  %sView server logs%s\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sUsage%s  offgrid logs [options]\n", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sOptions%s\n", brandPrimary, colorReset)
+		fmt.Printf("    %-20s %sFollow log output (like tail -f)%s\n", "-f, --follow", colorDim, colorReset)
+		fmt.Printf("    %-20s %sNumber of lines to show (default: 50)%s\n", "-n, --lines <num>", colorDim, colorReset)
+		fmt.Println()
+		fmt.Printf("  %sExamples%s\n", brandPrimary, colorReset)
+		fmt.Printf("    %s$%s offgrid logs                   %s# Show recent logs%s\n", colorDim, colorReset, brandMuted, colorReset)
+		fmt.Printf("    %s$%s offgrid logs -f                %s# Follow logs in real-time%s\n", colorDim, colorReset, brandMuted, colorReset)
+		fmt.Printf("    %s$%s offgrid logs -n 100            %s# Show last 100 lines%s\n", colorDim, colorReset, brandMuted, colorReset)
+		fmt.Println()
+		return
+	}
+
+	// Get log file locations
+	homeDir, _ := os.UserHomeDir()
+	offgridLogDir := filepath.Join(homeDir, ".offgrid", "logs")
+
+	// Check if systemd service is running and use journalctl
+	if isSystemdService() {
+		if follow {
+			fmt.Printf("%sFollowing logs (Ctrl+C to stop)...%s\n\n", brandMuted, colorReset)
+			cmd := exec.Command("journalctl", "-u", "offgrid-llm", "-f", "-n", fmt.Sprintf("%d", lines))
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		} else {
+			cmd := exec.Command("journalctl", "-u", "offgrid-llm", "-n", fmt.Sprintf("%d", lines), "--no-pager")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		}
+		return
+	}
+
+	// Check for log files in standard locations
+	logFiles := []string{
+		filepath.Join(offgridLogDir, "server.log"),
+		"/var/log/offgrid/server.log",
+		"/tmp/offgrid-server.log",
+	}
+
+	var foundLogFile string
+	for _, lf := range logFiles {
+		if _, err := os.Stat(lf); err == nil {
+			foundLogFile = lf
+			break
+		}
+	}
+
+	if foundLogFile == "" {
+		fmt.Println()
+		printInfo("No log files found. The server may be running in foreground mode.")
+		fmt.Println()
+		fmt.Printf("  %sTry these alternatives:%s\n", brandMuted, colorReset)
+		fmt.Printf("    %s1.%s Run offgrid serve in a terminal to see live output\n", brandMuted, colorReset)
+		fmt.Printf("    %s2.%s Use systemd: sudo journalctl -u offgrid-llm -f\n", brandMuted, colorReset)
+		fmt.Printf("    %s3.%s Check: %s\n", brandMuted, colorReset, offgridLogDir)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("%sLog file: %s%s\n\n", brandMuted, foundLogFile, colorReset)
+
+	if follow {
+		fmt.Printf("%sFollowing logs (Ctrl+C to stop)...%s\n\n", brandMuted, colorReset)
+		cmd := exec.Command("tail", "-f", "-n", fmt.Sprintf("%d", lines), foundLogFile)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	} else {
+		cmd := exec.Command("tail", "-n", fmt.Sprintf("%d", lines), foundLogFile)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	}
+}
+
+// isSystemdService checks if offgrid-llm is running as a systemd service
+func isSystemdService() bool {
+	cmd := exec.Command("systemctl", "is-active", "offgrid-llm")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(output)) == "active"
 }

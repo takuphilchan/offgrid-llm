@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -50,6 +51,7 @@ type ModelCache struct {
 	draftTokens    int    // Number of draft tokens to generate (default: 8)
 	draftMin       int    // Minimum draft tokens for acceptance (default: 5)
 	mu             sync.RWMutex
+	pendingLoads   map[string]chan error // Deduplicate concurrent load requests
 	basePort       int
 	binManager     *BinaryManager
 	mmapWarmer     *MmapWarmer     // Pre-warms models into page cache
@@ -75,6 +77,7 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		instances:      make(map[string]*ModelInstance),
 		portToModel:    make(map[int]string),
 		usedPorts:      make(map[int]bool),
+		pendingLoads:   make(map[string]chan error),
 		maxInstances:   maxInstances,
 		gpuLayers:      gpuLayers,
 		contextSize:    0,     // 0 = auto-detect based on available RAM
@@ -419,14 +422,34 @@ func (mc *ModelCache) autoDetectGPULayers(modelPath string) int {
 // GetOrLoad returns an existing model instance or loads a new one
 // For low-end machines, this uses a simple single-instance approach:
 // 1. If requested model is already loaded and alive -> return it
-// 2. Otherwise, unload everything and load the new model
+// 2. If another request is already loading this model -> wait for it
+// 3. Otherwise, unload everything and load the new model
 func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*ModelInstance, error) {
 	mc.mu.Lock()
-	defer mc.mu.Unlock()
+
+	// Check if another request is already loading this model
+	if pendingCh, exists := mc.pendingLoads[modelID]; exists {
+		mc.mu.Unlock()
+		log.Printf("Model %s already loading, waiting for existing request", modelID)
+		// Wait for the other request to complete
+		err := <-pendingCh
+		if err != nil {
+			return nil, err
+		}
+		// Model should now be loaded, get it
+		mc.mu.Lock()
+		instance, exists := mc.instances[modelID]
+		mc.mu.Unlock()
+		if exists {
+			return instance, nil
+		}
+		return nil, fmt.Errorf("model %s load completed but instance not found", modelID)
+	}
 
 	// Check if model file exists and get its size
 	modelInfo, err := os.Stat(modelPath)
 	if err != nil {
+		mc.mu.Unlock()
 		return nil, fmt.Errorf("model file not found: %w", err)
 	}
 	modelSizeMB := modelInfo.Size() / (1024 * 1024)
@@ -435,6 +458,7 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	if mc.totalRAMMB > 0 {
 		requiredRAM := modelSizeMB + 1024 // Model + 1GB headroom for KV cache & OS
 		if requiredRAM > mc.totalRAMMB {
+			mc.mu.Unlock()
 			return nil, fmt.Errorf("model too large: requires ~%dMB but only %dMB RAM available (try a smaller model or Q3_K quantization)",
 				requiredRAM, mc.totalRAMMB)
 		}
@@ -453,6 +477,7 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 					mc.loadingTracker.StartLoading(modelID, modelSizeMB, true)
 					mc.loadingTracker.Complete(modelID, true, "")
 				}
+				mc.mu.Unlock()
 				return instance, nil
 			}
 		}
@@ -460,6 +485,45 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		log.Printf("Model %s process died, cleaning up", modelID)
 		mc.cleanupInstance(modelID)
 	}
+
+	// Mark this model as loading (for deduplication)
+	pendingCh := make(chan error, 10) // Buffered to allow multiple waiters
+	mc.pendingLoads[modelID] = pendingCh
+	mc.mu.Unlock()
+
+	// Ensure we clean up pending state when done
+	defer func() {
+		mc.mu.Lock()
+		delete(mc.pendingLoads, modelID)
+		mc.mu.Unlock()
+		close(pendingCh)
+	}()
+
+	// Do the actual loading (not holding the lock during I/O)
+	instance, err := mc.doLoad(modelID, modelPath, projectorPath, modelSizeMB)
+
+	// Broadcast result to waiting requests
+	if err != nil {
+		// Non-blocking send to all waiters
+		select {
+		case pendingCh <- err:
+		default:
+		}
+		return nil, err
+	}
+
+	// Success - send nil to waiters
+	select {
+	case pendingCh <- nil:
+	default:
+	}
+
+	return instance, nil
+}
+
+// doLoad performs the actual model loading (called without holding the lock initially)
+func (mc *ModelCache) doLoad(modelID, modelPath, projectorPath string, modelSizeMB int64) (*ModelInstance, error) {
+	mc.mu.Lock()
 
 	// Check if model is warm (in page cache)
 	isWarm := false
@@ -490,6 +554,7 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	} else if len(mc.instances) >= mc.maxInstances {
 		// Multi-instance mode: evict LRU
 		if err := mc.evictLRU(); err != nil {
+			mc.mu.Unlock()
 			return nil, fmt.Errorf("failed to evict model: %w", err)
 		}
 	}
@@ -647,6 +712,7 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	// Get llama-server binary path
 	binaryPath, err := mc.binManager.GetLlamaServer()
 	if err != nil {
+		mc.mu.Unlock()
 		return nil, fmt.Errorf("failed to get llama-server binary: %w", err)
 	}
 
@@ -664,6 +730,7 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	}
 
 	if err := cmd.Start(); err != nil {
+		mc.mu.Unlock()
 		if mc.loadingTracker != nil {
 			mc.loadingTracker.Complete(modelID, false, err.Error())
 		}
@@ -681,9 +748,13 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 
 	mc.instances[modelID] = instance
 
+	// Unlock before waiting (waitForReady does network I/O)
+	mc.mu.Unlock()
+
 	// Wait for model to be ready
 	if err := mc.waitForReady(port, modelID); err != nil {
-		// Cleanup on failure
+		// Cleanup on failure - re-acquire lock
+		mc.mu.Lock()
 		if cmd.Process != nil {
 			cmd.Process.Kill()
 			cmd.Wait()
@@ -691,6 +762,8 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 		delete(mc.instances, modelID)
 		delete(mc.portToModel, port)
 		delete(mc.usedPorts, port)
+		mc.mu.Unlock()
+
 		if mc.loadingTracker != nil {
 			mc.loadingTracker.Complete(modelID, false, err.Error())
 		}
@@ -875,6 +948,7 @@ func (mc *ModelCache) getNextAvailablePort() int {
 }
 
 // waitForReady waits for llama-server to start AND for the model to fully load
+// Uses adaptive polling: fast at start, slower as time passes
 // With mmap pre-warming, models load much faster (5-15s vs 60-120s)
 // This prevents blank responses when switching models too quickly
 func (mc *ModelCache) waitForReady(port int, modelID string) error {
@@ -887,12 +961,19 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 	}
 
 	// Phase 1: Wait for server process to start (up to 15 seconds)
-	// Aggressive polling for faster detection on 12GB+ RAM systems
+	// Fast 200ms polling for quick detection
 	serverStarted := false
-	for i := 0; i < 75; i++ {
+	startupDeadline := time.Now().Add(15 * time.Second)
+	attempt := 0
+
+	for time.Now().Before(startupDeadline) {
 		// Update progress: 15-40% during server startup
 		if mc.loadingTracker != nil {
-			progress := 15 + (i * 25 / 75)
+			elapsed := time.Since(startupDeadline.Add(-15 * time.Second))
+			progress := 15 + int(elapsed.Seconds()*25/15)
+			if progress > 40 {
+				progress = 40
+			}
 			mc.loadingTracker.UpdatePhase(PhaseStarting, progress, "Starting inference server...")
 		}
 
@@ -901,13 +982,14 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 		if err == nil {
 			resp.Body.Close()
 			serverStarted = true
-			log.Printf("llama-server on port %d started, waiting for model to load...", port)
+			log.Printf("llama-server on port %d started after %d attempts", port, attempt+1)
 			break
 		}
+		attempt++
 	}
 
 	if !serverStarted {
-		return fmt.Errorf("llama-server on port %d did not start within 30 seconds", port)
+		return fmt.Errorf("llama-server on port %d did not start within 15 seconds", port)
 	}
 
 	// Update tracker - server started, now loading model
@@ -916,19 +998,27 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 	}
 
 	// Phase 2: Wait for model to actually load
+	// Fast fixed polling for responsive loading detection
 	// With mmap pre-warming, this should be fast (5-15s)
-	// Check /v1/models endpoint which returns 200 only when model is loaded
 	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", port)
 
-	// Wait up to 60 seconds for model to load (aggressive 500ms polling)
-	maxAttempts := 120
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		// Update progress: 40-90% during model loading
+	loadDeadline := time.Now().Add(300 * time.Second) // 5 minute max for large models
+	loadStart := time.Now()
+
+	for time.Now().Before(loadDeadline) {
+		// Update progress: 40-95% during model loading (scaled to elapsed time)
 		if mc.loadingTracker != nil {
-			progress := 40 + (attempt * 50 / maxAttempts)
+			elapsed := time.Since(loadStart)
+			// Use asymptotic progress: approaches 95% but never reaches it during loading
+			// This gives more realistic feedback for slow loads
+			progress := 40 + int(55*(1-math.Exp(-elapsed.Seconds()/60)))
+			if progress > 95 {
+				progress = 95
+			}
 			mc.loadingTracker.UpdatePhase(PhaseLoading, progress, "Loading model weights...")
 		}
 
+		// Fast 500ms polling - balance between responsiveness and CPU
 		time.Sleep(500 * time.Millisecond)
 
 		// Check if process is still running
@@ -941,16 +1031,14 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				loadTime := float64(attempt) * 0.5
+				loadTime := time.Since(loadStart).Seconds()
 				log.Printf("Model on port %d is fully loaded and ready (took %.1fs)", port, loadTime)
 
 				// Skip warmup phase - model is ready to serve immediately
-				// Background warmup happens asynchronously without blocking
 				if mc.loadingTracker != nil {
 					mc.loadingTracker.UpdatePhase(PhaseReady, 100, "Model ready")
 				}
 
-				// No delay - start serving immediately
 				// Warmup in background - first user request may be slightly slower
 				go func(p int) {
 					if err := mc.warmupServer(p); err != nil {
@@ -963,7 +1051,7 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 	}
 
 	// If we get here, model didn't load in time
-	return fmt.Errorf("model on port %d did not load within %d seconds", port, maxAttempts)
+	return fmt.Errorf("model on port %d did not load within 5 minutes", port)
 }
 
 // checkHealth performs a quick health check on the llama-server instance

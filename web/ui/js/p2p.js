@@ -512,21 +512,23 @@ function onP2PTabInactive() {
     }
 }
 
-// Hook into tab switching
-const originalSwitchTab = window.switchTab;
-if (typeof originalSwitchTab === 'function') {
-    window.switchTab = function(tabId) {
-        // Call original
-        originalSwitchTab(tabId);
-        
-        // Handle P2P tab activation
-        if (tabId === 'peers') {
-            onP2PTabActive();
-        } else if (p2pState.refreshInterval) {
-            onP2PTabInactive();
-        }
-    };
-}
+// Hook into tab switching (use IIFE to avoid global variable conflicts)
+(function() {
+    const _origSwitchTabP2P = window.switchTab;
+    if (typeof _origSwitchTabP2P === 'function') {
+        window.switchTab = function(tabId) {
+            // Call original
+            _origSwitchTabP2P(tabId);
+            
+            // Handle P2P tab activation
+            if (tabId === 'peers') {
+                onP2PTabActive();
+            } else if (p2pState.refreshInterval) {
+                onP2PTabInactive();
+            }
+        };
+    }
+})();
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', function() {

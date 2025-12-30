@@ -2,11 +2,11 @@
 
 **Release Date:** December 30, 2025
 
-Version 0.2.11 is a significant performance and UX update focused on **model loading speed**, **12GB RAM optimization**, **CLI experience**, and **enterprise-grade features**. This release dramatically improves model switching times, adds real-time loading progress, enhances the interactive chat CLI, and introduces new enterprise capabilities.
+Version 0.2.11 is a significant performance and UX update focused on **model loading speed**, **low RAM optimization**, **CLI experience**, and **enterprise-grade features**. This release dramatically improves model switching times, adds real-time loading progress, enhances the interactive chat CLI, and introduces new enterprise capabilities.
 
 ## Highlights
 
-- **5x Faster Model Loading** - Optimized for 12GB RAM systems with aggressive polling and reduced delays
+- **5x Faster Model Loading** - Optimized for low RAM systems with aggressive polling and reduced delays
 - **Real-Time Loading Progress** - SSE-based progress streaming with phase tracking (0-100%)
 - **Enhanced CLI Chat Experience** - New commands, visual screen clear, status display, and slash command support
 - **Hover Pre-warming** - Models warm into page cache when you hover over the dropdown
@@ -19,7 +19,7 @@ Version 0.2.11 is a significant performance and UX update focused on **model loa
 
 ## Performance Optimizations
 
-### Model Loading Speed (Critical for 12GB RAM)
+### Model Loading Speed (Critical for low RAM)
 
 **Before:** Model switching took 60-120s on cold start, 15-30s even when warm
 **After:** 5-15s when warm, significantly faster cold starts
@@ -41,7 +41,7 @@ For 8-16GB RAM systems, the following are now auto-tuned:
 - **KV cache quantization**: Auto-enabled (`q8_0`) to reduce memory by ~50%
 
 ```go
-// Example: 12GB RAM with 5GB model
+// Example: low RAM with 5GB model
 // Context: 2048 (vs 4096 default)
 // Batch: 64 (vs 256 default)  
 // KV Cache: q8_0 (reduces VRAM ~50%)
@@ -324,7 +324,7 @@ OFFGRID_LDAP_BASE_DN=
 
 No configuration changes required. RAM-aware optimizations are automatic.
 
-### For 12GB RAM Systems
+### For low RAM Systems
 
 The new defaults should work well, but you can fine-tune:
 

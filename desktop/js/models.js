@@ -1,3 +1,101 @@
+// =====================================================
+// MODEL LOADING MODAL HELPERS
+// Shows a progress modal during model loading
+// =====================================================
+
+const modelLoadingTips = [
+    "Tip: First load takes longer - subsequent loads are faster",
+    "Tip: Keep the model loaded for faster responses",
+    "Tip: Smaller models load faster on low-RAM systems",
+    "Tip: Model weights are cached for faster reloading",
+    "Tip: Pre-warm models by hovering over them in the list",
+    "Tip: Use quantized models (Q4/Q5) for faster loading",
+    "Tip: SSDs dramatically improve model load times",
+    "Tip: Close unused applications to free up memory"
+];
+
+let modelLoadingTipInterval = null;
+let modelLoadingStartTime = 0;
+let modelLoadingTimeInterval = null;
+
+function showModelLoadingModal(modelName) {
+    const modal = document.getElementById('modelLoadingModal');
+    if (!modal) return;
+    
+    // Set initial state
+    const nameEl = document.getElementById('modelLoadingName');
+    const statusEl = document.getElementById('modelLoadingStatus');
+    const progressBar = document.getElementById('modelLoadingProgressBar');
+    const phaseEl = document.getElementById('modelLoadingPhase');
+    const percentEl = document.getElementById('modelLoadingPercent');
+    const timeEl = document.getElementById('modelLoadingTime');
+    const tipEl = document.getElementById('modelLoadingTip');
+    
+    if (nameEl) nameEl.textContent = modelName || 'Loading Model';
+    if (statusEl) statusEl.textContent = 'Initializing...';
+    if (progressBar) progressBar.style.width = '0%';
+    if (phaseEl) phaseEl.textContent = 'Starting';
+    if (percentEl) percentEl.textContent = '0%';
+    if (timeEl) timeEl.textContent = '0s elapsed';
+    
+    // Show random tip
+    if (tipEl) {
+        const randomTip = modelLoadingTips[Math.floor(Math.random() * modelLoadingTips.length)];
+        tipEl.innerHTML = `<p class="text-xs text-secondary italic">${randomTip}</p>`;
+    }
+    
+    // Start tip rotation
+    modelLoadingStartTime = Date.now();
+    let tipIndex = 0;
+    modelLoadingTipInterval = setInterval(() => {
+        if (tipEl) {
+            tipIndex = (tipIndex + 1) % modelLoadingTips.length;
+            tipEl.innerHTML = `<p class="text-xs text-secondary italic">${modelLoadingTips[tipIndex]}</p>`;
+        }
+    }, 5000);
+    
+    // Start elapsed time counter
+    modelLoadingTimeInterval = setInterval(() => {
+        if (timeEl) {
+            const elapsed = ((Date.now() - modelLoadingStartTime) / 1000).toFixed(0);
+            timeEl.textContent = `${elapsed}s elapsed`;
+        }
+    }, 1000);
+    
+    modal.classList.remove('hidden');
+}
+
+function updateModelLoadingModal(progress, phase, status) {
+    const progressBar = document.getElementById('modelLoadingProgressBar');
+    const phaseEl = document.getElementById('modelLoadingPhase');
+    const percentEl = document.getElementById('modelLoadingPercent');
+    const statusEl = document.getElementById('modelLoadingStatus');
+    
+    if (progressBar) progressBar.style.width = `${progress}%`;
+    if (phaseEl) phaseEl.textContent = phase || 'Loading';
+    if (percentEl) percentEl.textContent = `${progress}%`;
+    if (statusEl && status) statusEl.textContent = status;
+}
+
+function hideModelLoadingModal() {
+    const modal = document.getElementById('modelLoadingModal');
+    if (modal) modal.classList.add('hidden');
+    
+    // Clean up intervals
+    if (modelLoadingTipInterval) {
+        clearInterval(modelLoadingTipInterval);
+        modelLoadingTipInterval = null;
+    }
+    if (modelLoadingTimeInterval) {
+        clearInterval(modelLoadingTimeInterval);
+        modelLoadingTimeInterval = null;
+    }
+}
+
+// =====================================================
+// CHAT STATS AND STATUS
+// =====================================================
+
 function updateChatStats() {
     document.getElementById('messageCount').textContent = `${messages.length} messages`;
     const totalTokens = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
@@ -6,12 +104,14 @@ function updateChatStats() {
 
 // Update sidebar status display
 function updateSidebarStatus(state, modelName = '', extra = '') {
+    console.log('[updateSidebarStatus] Called with:', state, modelName, extra);
+    
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
     const modelBadge = document.getElementById('activeModelBadge');
     const modelNameEl = document.getElementById('activeModelName');
     
-    // Also update system status bar model name
+    // Also update system status bar model name (footer)
     const statusModelName = document.getElementById('statusModelName');
     if (statusModelName && modelName) {
         // Extract short model name (last part after /)
@@ -26,6 +126,7 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
             statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
             statusText.className = 'text-xs font-medium text-emerald-400';
             statusText.textContent = 'Ready';
+            // Show model badge only when ready
             if (modelName && modelBadge && modelNameEl) {
                 modelBadge.classList.remove('hidden');
                 modelNameEl.textContent = modelName;
@@ -33,39 +134,20 @@ function updateSidebarStatus(state, modelName = '', extra = '') {
             }
             break;
         case 'loading':
-            statusDot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-pulse';
-            statusText.className = 'text-xs font-medium text-orange-500';
-            statusText.textContent = extra ? `Loading... ${extra}` : 'Loading...';
-            if (modelName && modelBadge && modelNameEl) {
-                modelBadge.classList.remove('hidden');
-                modelNameEl.textContent = modelName;
-                modelNameEl.title = modelName;
-            }
-            break;
         case 'switching':
-            statusDot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-pulse';
-            statusText.className = 'text-xs font-medium text-orange-500';
-            statusText.textContent = extra ? `Switching... ${extra}` : 'Switching...';
-            if (modelName && modelBadge && modelNameEl) {
-                modelBadge.classList.remove('hidden');
-                modelNameEl.textContent = modelName;
-                modelNameEl.title = modelName;
-            }
-            break;
         case 'warming':
             statusDot.className = 'w-2 h-2 rounded-full bg-orange-500 animate-pulse';
             statusText.className = 'text-xs font-medium text-orange-500';
-            statusText.textContent = 'Warming...';
-            if (modelName && modelBadge && modelNameEl) {
-                modelBadge.classList.remove('hidden');
-                modelNameEl.textContent = modelName;
-                modelNameEl.title = modelName;
-            }
+            statusText.textContent = state === 'loading' ? 'Loading...' : 
+                                     state === 'switching' ? 'Switching...' : 'Warming...';
+            // Hide model badge during loading (modal shows the model name)
+            if (modelBadge) modelBadge.classList.add('hidden');
             break;
         case 'error':
             statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
             statusText.className = 'text-xs font-medium text-red-400';
             statusText.textContent = 'Error';
+            if (modelBadge) modelBadge.classList.add('hidden');
             break;
         case 'offline':
             statusDot.className = 'w-2 h-2 rounded-full bg-gray-500';
@@ -104,7 +186,9 @@ async function handleAgentModelChange() {
     const select = document.getElementById('agentModel');
     console.log('[MODEL] Agent model change triggered:', select?.value);
     if (select && select.value) {
-        await switchToModel(select.value, 'agentModel');
+        console.log('[MODEL] Calling switchToModel for Agent:', select.value);
+        const result = await switchToModel(select.value, 'agentModel');
+        console.log('[MODEL] switchToModel result:', result);
     }
 }
 
@@ -198,15 +282,27 @@ async function loadChatModels() {
             return;
         }
         
-        models.sort((a, b) => a.id.localeCompare(b.id));
+        // Sort: LLM before embeddings, larger first, then alphabetically
+        models.sort((a, b) => {
+            const aIsEmbed = (a.type === 'embedding' || a.id.toLowerCase().includes('embed'));
+            const bIsEmbed = (b.type === 'embedding' || b.id.toLowerCase().includes('embed'));
+            if (aIsEmbed !== bIsEmbed) return aIsEmbed ? 1 : -1;
+            if (a.size && b.size && a.size !== b.size) return b.size - a.size;
+            return a.id.localeCompare(b.id);
+        });
         
         models.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m.id;
-            const displayName = m.id.replace(/_/g, ' ').replace(/-/g, ' ');
-            const sizeInfo = m.size ? ` (${formatFileSize(m.size)})` : '';
-            opt.textContent = displayName + sizeInfo;
-            opt.title = m.id;
+            // Format with size
+            let sizeInfo = '';
+            if (m.size_gb) {
+                sizeInfo = ` (${m.size_gb})`;
+            } else if (m.size) {
+                sizeInfo = ` (${formatFileSize(m.size)})`;
+            }
+            opt.textContent = m.id + sizeInfo;
+            opt.title = m.id + sizeInfo;
             select.appendChild(opt);
         });
         
@@ -326,14 +422,24 @@ async function loadEmbeddingModels() {
             return;
         }
         
-        models.sort((a, b) => a.id.localeCompare(b.id));
+        // Sort by size (smaller first for embeddings), then alphabetically
+        models.sort((a, b) => {
+            if (a.size && b.size && a.size !== b.size) return a.size - b.size;
+            return a.id.localeCompare(b.id);
+        });
         
         models.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m.id;
-            const displayName = m.id.replace(/_/g, ' ').replace(/-/g, ' ');
-            opt.textContent = displayName;
-            opt.title = m.id;
+            // Format with size
+            let sizeInfo = '';
+            if (m.size_gb) {
+                sizeInfo = ` (${m.size_gb})`;
+            } else if (m.size) {
+                sizeInfo = ` (${formatFileSize(m.size)})`;
+            }
+            opt.textContent = m.id + sizeInfo;
+            opt.title = m.id + sizeInfo;
             select.appendChild(opt);
         });
         
@@ -612,23 +718,24 @@ async function handleModelChange() {
         return;
     }
     
-    // Don't switch if already on this model
-    if (currentModel === newModel) {
-        return;
-    }
-    
-    // If there are existing messages, clear them
-    if (typeof messages !== 'undefined' && messages.length > 0) {
-        if (typeof showToast === 'function') {
-            showToast('Chat history cleared for new model', 'info');
-        }
-        if (typeof clearChatSilent === 'function') {
-            clearChatSilent();
-        }
-    }
-    
     // Use ModelManager for efficient loading (deduplicates, cancels previous, tracks state)
     if (typeof ModelManager !== 'undefined') {
+        // Don't switch if already on this model (use ModelManager's state)
+        if (ModelManager.getCurrentModel() === newModel && ModelManager.isModelLoaded(newModel)) {
+            console.log('[handleModelChange] Already on this model:', newModel);
+            return;
+        }
+        
+        // If there are existing messages, clear them
+        if (typeof messages !== 'undefined' && messages.length > 0) {
+            if (typeof showToast === 'function') {
+                showToast('Chat history cleared for new model', 'info');
+            }
+            if (typeof clearChatSilent === 'function') {
+                clearChatSilent();
+            }
+        }
+        
         // Disable UI while loading
         const chatInput = document.getElementById('chatInput');
         const sendBtn = document.getElementById('sendBtn');
@@ -650,6 +757,9 @@ async function handleModelChange() {
             }
         }
         
+        // Update global currentModel to stay in sync
+        currentModel = newModel;
+        
         // Let ModelManager handle loading with proper state tracking
         await ModelManager.selectModel(newModel, { source: 'chatModel' });
         ModelManager.syncAllSelects('chatModel');
@@ -665,7 +775,11 @@ async function handleModelChange() {
         return;
     }
     
-    // Legacy fallback
+    // Legacy fallback - Don't switch if already on this model
+    if (currentModel === newModel) {
+        return;
+    }
+    
     currentModel = newModel;
     syncModelSelects(newModel, 'chatModel');
     

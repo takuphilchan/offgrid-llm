@@ -107,6 +107,10 @@ async function sendChat() {
         ];
     }
 
+    // Store for retry functionality
+    lastUserMessage = msg;
+    lastUserImages = inlineImages.length > 0 ? [...inlineImages] : null;
+
     messages.push({ role: 'user', content: messageContent });
     addChatMessage('user', msg, inlineImages);
     
@@ -402,14 +406,14 @@ async function sendChat() {
             if (error.code === 'missing_mmproj') {
                 userMessage = `**Vision adapter missing**\n\nThis vision model needs an mmproj file to process images.\n\n**To fix:** Re-download the model using the CLI:\n\`offgrid download <model-name>\`\n\nThe vision adapter will be downloaded automatically.`;
             } else if (errorMsg.includes('EOF') || errorMsg.includes('interrupted')) {
-                userMessage = `Generation was interrupted.\n\nThis often happens due to memory pressure. Try:\n• Using a smaller model (Q4 instead of Q8)\n• Reducing context length in settings\n• Closing other applications`;
+                userMessage = `Generation was interrupted.\n\nThis often happens due to memory pressure. Try:\n- Using a smaller model (Q4 instead of Q8)\n- Reducing context length in settings\n- Closing other applications`;
             } else if (errorMsg.includes('503') || errorMsg.includes('Failed to load model')) {
                 userMessage = `Model is taking longer than expected to load.\n\nThis can happen on slower systems. Please try again in a few moments.`;
             } else if (errorMsg.includes('500')) {
                 userMessage = `Server error occurred.\n\nThe model may still be loading. Please wait a moment and try again.`;
             }
             
-            addChatMessage('assistant', userMessage, null, startTime);
+            addChatMessage('assistant', userMessage, null, startTime, true); // true = isError
             if (typeof updateSidebarStatus === 'function') {
                 updateSidebarStatus('error');
             }
@@ -498,18 +502,21 @@ function addThinkingIndicator() {
 function scrollToBottom() {
     const container = document.getElementById('chatMessages');
     if (container) {
-        container.scrollTop = container.scrollHeight;
+        container.scrollTo({
+            top: container.scrollHeight,
+            behavior: 'smooth'
+        });
     }
 }
 
-function addChatMessage(role, content, images = null, startTime = null) {
+function addChatMessage(role, content, images = null, startTime = null, isError = false) {
     const container = document.getElementById('chatMessages');
     if (container.querySelector('.text-center')) {
         container.innerHTML = '';
     }
 
     const div = document.createElement('div');
-    div.className = 'message message-' + role;
+    div.className = 'message message-' + role + (isError ? ' message-error' : '');
     
     // Configure marked.js with syntax highlighting and copy button
     const renderer = new marked.Renderer();
@@ -584,7 +591,8 @@ function addChatMessage(role, content, images = null, startTime = null) {
                 ${role === 'assistant' ? `
                 <div class="message-actions mt-3">
                     <button onclick="copyMessage(this)" class="btn btn-secondary btn-sm">Copy</button>
-                    <button onclick="regenerateMessage()" class="btn btn-info btn-sm">Regenerate</button>
+                    ${isError ? `<button onclick="retryLastMessage()" class="btn btn-accent btn-sm">Retry</button>` : 
+                    `<button onclick="regenerateMessage()" class="btn btn-info btn-sm">Regenerate</button>`}
                 </div>` : ''}
             </div>
         </div>
@@ -645,6 +653,53 @@ function loadPerformanceMode() {
             applyPerformanceMode();
         }
     }
+}
+
+// Retry the last failed message
+function retryLastMessage() {
+    if (!lastUserMessage && !lastUserImages) {
+        showToast('No message to retry', 'warning');
+        return;
+    }
+    
+    // Remove the last error message and the user message before it
+    const container = document.getElementById('chatMessages');
+    const messageElements = container.querySelectorAll('.message');
+    
+    // Remove last 2 messages (error response and user message)
+    if (messageElements.length >= 2) {
+        messageElements[messageElements.length - 1].remove(); // Error response
+        messageElements[messageElements.length - 2].remove(); // User message
+    } else if (messageElements.length >= 1) {
+        messageElements[messageElements.length - 1].remove();
+    }
+    
+    // Also remove from messages array
+    if (messages.length >= 2) {
+        messages.pop(); // Remove assistant error
+        messages.pop(); // Remove user message
+    } else if (messages.length >= 1) {
+        messages.pop();
+    }
+    
+    // Put the message back in the input and clear images
+    const input = document.getElementById('chatInput');
+    input.value = lastUserMessage || '';
+    
+    // Re-attach images if any
+    if (lastUserImages && lastUserImages.length > 0) {
+        lastUserImages.forEach(url => {
+            if (typeof addImageAttachment === 'function') {
+                addImageAttachment(url);
+            }
+        });
+    }
+    
+    // Focus the input
+    input.focus();
+    
+    // Send the message again
+    sendChat();
 }
 
 // Search models

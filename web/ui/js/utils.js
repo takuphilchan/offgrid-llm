@@ -10,6 +10,8 @@ let terminalChatMode = false;
 let terminalChatModel = '';
 let terminalChatHistory = [];
 let userScrolledUp = false;
+let lastUserMessage = null; // Store last message for retry functionality
+let lastUserImages = null;  // Store last images for retry
 
 // ============================================
 // SECURITY UTILITIES (Enterprise-grade)
@@ -404,6 +406,11 @@ function switchTab(tab) {
         updateChatStats();
         renderSessions();
         loadChatVoiceSettings();
+        // Auto-focus chat input for better UX
+        setTimeout(() => {
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) chatInput.focus();
+        }, 100);
     }
     if (tab === 'knowledge') {
         loadRAGStatus();

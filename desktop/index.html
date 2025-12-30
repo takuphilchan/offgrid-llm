@@ -239,8 +239,8 @@
                 <div class="flex items-center gap-3">
                     <!-- Model Selector - Primary -->
                     <div class="flex items-center gap-2 flex-1 min-w-0">
-                        <select id="chatModel" class="flex-1 max-w-xs input-theme rounded-lg px-3 py-2 text-sm font-medium" onchange="handleModelChange();">
-                            <option value="">Select Model...</option>
+                        <select id="chatModel" class="flex-1 max-w-xs input-theme rounded-lg px-3 py-2 text-sm font-medium">
+                            <option value="">Loading models...</option>
                         </select>
                         
                         <!-- Quick Preset Buttons -->
@@ -758,7 +758,7 @@
                     <div class="flex flex-wrap items-end gap-3">
                         <div class="form-group flex-1 min-w-48" style="margin-bottom: 0;">
                             <label class="form-label">Model</label>
-                            <select id="benchmarkModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm" onchange="handleBenchmarkModelChange()">
+                            <select id="benchmarkModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
                                 <option value="">Select model...</option>
                             </select>
                         </div>
@@ -1221,7 +1221,7 @@
                     <div class="flex flex-wrap items-end gap-3 mb-3">
                         <div class="form-group flex-1 min-w-40" style="margin-bottom: 0;">
                             <label class="form-label">Model</label>
-                            <select id="agentModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm" onchange="handleAgentModelChange()">
+                            <select id="agentModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
                                 <option value="">Select model...</option>
                             </select>
                         </div>
@@ -1621,7 +1621,7 @@
                     <div class="flex flex-wrap items-end gap-3">
                         <div class="form-group flex-1 min-w-40" style="margin-bottom: 0;">
                             <label class="form-label">Model</label>
-                            <select id="loraBaseModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm" onchange="handleLoraModelChange()">
+                            <select id="loraBaseModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
                                 <option value="">Choose model...</option>
                             </select>
                         </div>
@@ -1739,7 +1739,7 @@
                         <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label">Model</label>
-                                <select id="voiceAssistantModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm" onchange="onVoiceModelChange()">
+                                <select id="voiceAssistantModel" class="w-full input-theme rounded-lg px-3 py-2 text-sm">
                                     <option value="">Loading...</option>
                                 </select>
                             </div>
@@ -2927,6 +2927,50 @@
         </div>
     </div>
 
+    <!-- Model Loading Modal - Shows during model switch/load -->
+    <div id="modelLoadingModal" class="modal-backdrop hidden">
+        <div class="modal-box modal-sm">
+            <div class="modal-box-body py-8">
+                <!-- Spinner -->
+                <div class="flex justify-center mb-4">
+                    <div class="relative w-16 h-16">
+                        <svg class="w-16 h-16 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-opacity="0.15"/>
+                            <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                </div>
+                
+                <!-- Model name and status -->
+                <div class="text-center mb-4">
+                    <div id="modelLoadingName" class="text-lg font-semibold text-primary mb-1">Loading Model</div>
+                    <div id="modelLoadingStatus" class="text-sm text-secondary">Initializing...</div>
+                </div>
+                
+                <!-- Progress bar -->
+                <div class="mb-4 px-4">
+                    <div class="w-full h-2 bg-tertiary rounded-full overflow-hidden">
+                        <div id="modelLoadingProgressBar" class="h-full bg-accent rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs mt-2 text-secondary">
+                        <span id="modelLoadingPhase">Starting</span>
+                        <span id="modelLoadingPercent">0%</span>
+                    </div>
+                </div>
+                
+                <!-- Time elapsed -->
+                <div class="text-center">
+                    <span id="modelLoadingTime" class="text-xs text-secondary">0s elapsed</span>
+                </div>
+                
+                <!-- Tips (rotates during loading) -->
+                <div id="modelLoadingTip" class="mt-4 px-4 py-2 bg-tertiary/50 rounded-lg text-center">
+                    <p class="text-xs text-secondary italic">Tip: First load takes longer - subsequent loads are faster</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modular JavaScript Files -->
     <script src="/ui/js/themes.js?v=0.2.11"></script>
     <script src="/ui/js/utils.js?v=0.2.11"></script>
@@ -3007,9 +3051,9 @@
         }
         
         // Update mobile nav active state on tab switch
-        const originalSwitchTab = switchTab;
+        const _originalSwitchTabMobile = switchTab;
         switchTab = function(tab) {
-            originalSwitchTab(tab);
+            _originalSwitchTabMobile(tab);
             
             // Update mobile nav
             document.querySelectorAll('.mobile-nav-item').forEach(el => el.classList.remove('active'));

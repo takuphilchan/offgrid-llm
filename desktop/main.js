@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -69,8 +69,65 @@ const paths = {
   
   getDataDir() {
     return path.join(this.getConfigDir(), 'data');
+  },
+  
+  getWindowStatePath() {
+    return path.join(this.getConfigDir(), 'window-state.json');
   }
 };
+
+// Window state management - save and restore window position/size
+const defaultWindowState = {
+  width: 1400,
+  height: 900,
+  x: undefined,
+  y: undefined,
+  isMaximized: false
+};
+
+function loadWindowState() {
+  try {
+    const statePath = paths.getWindowStatePath();
+    if (fs.existsSync(statePath)) {
+      const data = fs.readFileSync(statePath, 'utf8');
+      const state = JSON.parse(data);
+      // Validate state has required fields
+      if (typeof state.width === 'number' && typeof state.height === 'number') {
+        return { ...defaultWindowState, ...state };
+      }
+    }
+  } catch (err) {
+    console.warn('Could not load window state:', err.message);
+  }
+  return { ...defaultWindowState };
+}
+
+function saveWindowState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  
+  try {
+    const isMaximized = mainWindow.isMaximized();
+    const bounds = mainWindow.getBounds();
+    
+    const state = {
+      width: bounds.width,
+      height: bounds.height,
+      x: bounds.x,
+      y: bounds.y,
+      isMaximized: isMaximized
+    };
+    
+    // Ensure config directory exists
+    const configDir = paths.getConfigDir();
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(paths.getWindowStatePath(), JSON.stringify(state, null, 2));
+  } catch (err) {
+    console.warn('Could not save window state:', err.message);
+  }
+}
 
 // Wait for server to be ready with exponential backoff
 function waitForServer(callback, maxAttempts = 60) {
@@ -273,9 +330,14 @@ function stopOffgridServer() {
 
 // Create main window with optimized settings
 function createWindow() {
+  // Load saved window state
+  const windowState = loadWindowState();
+  
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: windowState.width,
+    height: windowState.height,
+    x: windowState.x,
+    y: windowState.y,
     minWidth: 1000,
     minHeight: 700,
     title: APP_NAME,
@@ -293,6 +355,23 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true
   });
+
+  // Restore maximized state if applicable
+  if (windowState.isMaximized) {
+    mainWindow.maximize();
+  }
+
+  // Save window state on resize/move (debounced)
+  let saveStateTimeout = null;
+  const debouncedSaveState = () => {
+    if (saveStateTimeout) clearTimeout(saveStateTimeout);
+    saveStateTimeout = setTimeout(saveWindowState, 500);
+  };
+  
+  mainWindow.on('resize', debouncedSaveState);
+  mainWindow.on('move', debouncedSaveState);
+  mainWindow.on('maximize', saveWindowState);
+  mainWindow.on('unmaximize', saveWindowState);
 
   // Load the lightweight loading page first
   mainWindow.loadFile('loading.html');
@@ -477,6 +556,19 @@ ipcMain.handle('get-paths', () => {
     models: paths.getModelsDir(),
     data: paths.getDataDir()
   };
+});
+
+// System theme support
+ipcMain.handle('get-system-theme', () => {
+  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+});
+
+// Notify renderer when system theme changes
+nativeTheme.on('updated', () => {
+  const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('system-theme-changed', theme);
+  }
 });
 
 // App lifecycle
