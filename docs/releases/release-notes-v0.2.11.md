@@ -1,13 +1,14 @@
 # Release Notes v0.2.11
 
-**Release Date:** December 29, 2025
+**Release Date:** December 30, 2025
 
-Version 0.2.11 is a significant performance and UX update focused on **model loading speed**, **12GB RAM optimization**, and **enterprise-grade features**. This release dramatically improves model switching times, adds real-time loading progress, and introduces new enterprise capabilities.
+Version 0.2.11 is a significant performance and UX update focused on **model loading speed**, **12GB RAM optimization**, **CLI experience**, and **enterprise-grade features**. This release dramatically improves model switching times, adds real-time loading progress, enhances the interactive chat CLI, and introduces new enterprise capabilities.
 
 ## Highlights
 
 - **5x Faster Model Loading** - Optimized for 12GB RAM systems with aggressive polling and reduced delays
 - **Real-Time Loading Progress** - SSE-based progress streaming with phase tracking (0-100%)
+- **Enhanced CLI Chat Experience** - New commands, visual screen clear, status display, and slash command support
 - **Hover Pre-warming** - Models warm into page cache when you hover over the dropdown
 - **Fast Concurrent Warming** - 16MB chunks with 4 parallel readers for 3-5x faster warming
 - **RAM-Aware Auto-Configuration** - Context size, batch size, and KV cache auto-tuned for available RAM
@@ -198,6 +199,60 @@ Supports 14 quantization types from Q8_0 to IQ2_XXS.
 Pre-configured agent personas:
 - Researcher, Coder, Analyst, Writer
 - System Administrator, Project Planner
+
+---
+
+## CLI Improvements
+
+### Enhanced Interactive Chat
+
+The `offgrid run <model>` interactive chat has been significantly improved:
+
+#### New Commands
+
+| Command | Description |
+|---------|-------------|
+| `help` or `?` | Show all available chat commands |
+| `status` | Display current session info (model, messages, RAG, GPU) |
+| `clear` | Clear screen AND conversation history (fresh start) |
+| `rag` | Toggle knowledge base on/off |
+| `exit`, `quit`, or `q` | Exit the chat |
+
+#### Slash Command Support
+All commands now work with or without `/` prefix:
+```
+› help       ← works
+› /help      ← also works
+› ?          ← shortcut for help
+› q          ← quick exit
+```
+
+#### Visual Screen Clear
+The `clear` command now properly clears the terminal screen and reprints the header, giving you a fresh chat experience:
+
+```
+◉ OffGrid Chat
+
+Model:   Llama-3.2-1B-Instruct-Q4_K_M.gguf
+Status:  ✓ Ready
+GPU:     NVIDIA GeForce GTX 1050 Ti
+
+Commands:  exit · clear · rag · status · help
+
+✓ Conversation cleared
+```
+
+#### Session Status Display
+The new `status` command shows detailed session information:
+```
+◉ Session Status
+
+  Model:       Llama-3.2-1B-Instruct-Q4_K_M
+  Messages:    6 (3 user, 3 assistant)
+  Session:     my-session
+  RAG:         enabled
+  GPU:         NVIDIA GeForce GTX 1050 Ti
+```
 
 ---
 

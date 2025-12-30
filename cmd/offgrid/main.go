@@ -4278,7 +4278,7 @@ func handleRun(args []string) {
 		fmt.Println()
 	}
 
-	fmt.Printf("  %sCommands:%s  exit · clear · rag · help\n", brandMuted, colorReset)
+	fmt.Printf("  %sCommands:%s  exit · clear · rag · status · help\n", brandMuted, colorReset)
 	if currentSession != nil {
 		fmt.Printf("  %sSession:%s   %s\n", brandMuted, colorReset, currentSession.Name)
 	}
@@ -4428,10 +4428,55 @@ func handleRun(args []string) {
 			continue
 		}
 
-		if input == "exit" || input == "quit" {
+		// Normalize slash commands
+		if strings.HasPrefix(input, "/") {
+			input = strings.TrimPrefix(input, "/")
+		}
+
+		if input == "exit" || input == "quit" || input == "q" {
 			fmt.Println()
 			fmt.Printf("  %sSession ended%s\n\n", brandMuted, colorReset)
 			break
+		}
+
+		if input == "help" || input == "?" {
+			fmt.Println()
+			fmt.Printf("  %s%s Chat Commands%s\n", brandPrimary+colorBold, iconBolt, colorReset)
+			fmt.Println()
+			fmt.Printf("    %sexit, quit, q%s     Exit the chat\n", colorBold, colorReset)
+			fmt.Printf("    %sclear%s             Clear screen and conversation history\n", colorBold, colorReset)
+			fmt.Printf("    %srag%s               Toggle knowledge base (RAG)\n", colorBold, colorReset)
+			fmt.Printf("    %sstatus%s            Show current session info\n", colorBold, colorReset)
+			fmt.Printf("    %shelp, ?%s           Show this help\n", colorBold, colorReset)
+			fmt.Println()
+			fmt.Printf("  %sTip: Commands work with or without / prefix%s\n", brandMuted, colorReset)
+			continue
+		}
+
+		if input == "status" {
+			fmt.Println()
+			fmt.Printf("  %s%s Session Status%s\n", brandPrimary+colorBold, iconCircle, colorReset)
+			fmt.Println()
+			fmt.Printf("    %sModel:%s       %s\n", brandMuted, colorReset, resolvedModelName)
+			fmt.Printf("    %sMessages:%s    %d (%d user, %d assistant)\n", brandMuted, colorReset, len(messages), (len(messages)+1)/2, len(messages)/2)
+			if currentSession != nil {
+				fmt.Printf("    %sSession:%s     %s\n", brandMuted, colorReset, currentSession.Name)
+			}
+			fmt.Printf("    %sRAG:%s         %s\n", brandMuted, colorReset, func() string {
+				if useKnowledgeBase {
+					return brandSuccess + "enabled" + colorReset
+				}
+				return "disabled"
+			}())
+			if sysInfo, err := resource.DetectResources(); err == nil {
+				if sysInfo.GPUAvailable {
+					fmt.Printf("    %sGPU:%s         %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
+				} else {
+					fmt.Printf("    %sDevice:%s      CPU (%d cores)\n", brandMuted, colorReset, sysInfo.CPUCores)
+				}
+			}
+			fmt.Println()
+			continue
 		}
 
 		if input == "clear" {
@@ -4445,11 +4490,26 @@ func handleRun(args []string) {
 			}
 			// Clear image path so it doesn't get re-attached
 			imagePath = ""
+			// Clear the terminal screen
+			fmt.Print("\033[2J\033[H")
+			// Reprint the header
+			fmt.Println()
+			fmt.Printf("  %s%s◉ OffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
+			fmt.Println()
+			fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, resolvedModelName)
+			fmt.Printf("  %sStatus:%s  %s✓ Ready%s\n", brandMuted, colorReset, brandSuccess, colorReset)
+			if sysInfo, err := resource.DetectResources(); err == nil {
+				if sysInfo.GPUAvailable {
+					fmt.Printf("  %sGPU:%s     %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
+				}
+			}
+			fmt.Println()
+			fmt.Printf("  %sCommands:%s  exit · clear · rag · status · help\n", brandMuted, colorReset)
 			fmt.Printf("\n  %s%s Conversation cleared%s\n", brandMuted, iconCheck, colorReset)
 			continue
 		}
 
-		if input == "rag" || input == "/rag" {
+		if input == "rag" {
 			useKnowledgeBase = !useKnowledgeBase
 			if useKnowledgeBase {
 				fmt.Printf("\n  %s%s Knowledge Base enabled%s\n", brandSuccess, iconCheck, colorReset)
