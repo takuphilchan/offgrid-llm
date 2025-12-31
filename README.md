@@ -55,6 +55,12 @@ offgrid serve
 
 Open http://localhost:11611
 
+![Chat Interface](docs/images/chat-page.png)
+*Chat with AI models locally - full privacy, no cloud*
+
+![Models Management](docs/images/models-page.png)
+*Download, manage, and switch between models with size info*
+
 ### CLI Chat
 
 ```bash
