@@ -256,7 +256,7 @@ func (d *Discovery) broadcast() {
 		NodeID:  d.nodeID,
 		Port:    d.localPort,
 		Models:  d.localModels,
-		Version: "0.2.11",
+		Version: "0.2.12",
 	}
 	d.mu.RUnlock()
 
@@ -292,7 +292,7 @@ func (d *Discovery) broadcastFallback() {
 		NodeID:  d.nodeID,
 		Port:    d.localPort,
 		Models:  d.localModels,
-		Version: "0.2.11",
+		Version: "0.2.12",
 	}
 	d.mu.RUnlock()
 

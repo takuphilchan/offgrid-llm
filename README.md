@@ -2,7 +2,7 @@
 
 Run AI models locally. No cloud. No API keys. Complete privacy.
 
-[![Version](https://img.shields.io/badge/Version-0.2.11-blue.svg)](https://github.com/takuphilchan/offgrid-llm/releases)
+[![Version](https://img.shields.io/badge/Version-0.2.12-blue.svg)](https://github.com/takuphilchan/offgrid-llm/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/offgrid)](https://pypi.org/project/offgrid/)
 

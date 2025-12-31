@@ -3,7 +3,7 @@
 > From "local LLM tool" to **the #1 private AI platform**.
 
 **Last Updated:** December 2025  
-**Current Version:** 0.2.11
+**Current Version:** 0.2.12
 
 ---
 
@@ -73,8 +73,8 @@ offgrid run ./my.gguf    # Local files work
 ```
 
 - [x] `offgrid run <model>` command ✅ Already exists
-- [x] Model name aliases (llama3.2 → Llama-3.2-3B-Instruct-Q4_K_M.gguf) ✅ Implemented v0.2.11
-- [x] Auto-download from HuggingFace by alias ✅ Implemented v0.2.11
+- [x] Model name aliases (llama3.2 → Llama-3.2-3B-Instruct-Q4_K_M.gguf) ✅ Implemented v0.2.12
+- [x] Auto-download from HuggingFace by alias ✅ Implemented v0.2.12
 - [x] Interactive CLI chat mode - Already exists
 
 ### 2.2 Better Progress Feedback
@@ -84,7 +84,7 @@ offgrid run ./my.gguf    # Local files work
 - [x] Cancel in-progress downloads - Cancel button in download modal, server-side cancellation
 
 ### 2.3 First-Run Experience
-- [x] Welcome wizard (already in v0.2.11, polish it) - Enhanced with RAM-based model recommendations
+- [x] Welcome wizard (already in v0.2.12, polish it) - Enhanced with RAM-based model recommendations
 - [x] Recommended starter model download - Shown in `offgrid list` when empty
 - [x] Hardware capability check - `offgrid init` and `offgrid doctor`
 - [x] Quick tutorial - Onboarding wizard with 3-step guide
@@ -211,7 +211,7 @@ offgrid run ./my.gguf    # Local files work
 
 ## Version Milestones
 
-### v0.2.11 - "Core Complete" (Current)
+### v0.2.12 - "Core Complete" (Current)
 - Model aliases (llama3.2, qwen2.5, etc.)
 - GPU auto-detection and layer auto-enable
 - P2P CLI command (`offgrid peers`)
