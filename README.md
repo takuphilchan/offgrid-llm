@@ -26,15 +26,15 @@ That's it. The model downloads automatically and you start chatting.
 
 ## Why OffGrid?
 
-| Feature | OffGrid | Ollama | LM Studio |
-|---------|:-------:|:------:|:---------:|
-| Air-gapped USB deployment | Yes | - | - |
-| P2P model sharing | Yes | - | - |
-| Built-in RAG | Yes | - | - |
-| Multi-user + audit logs | Yes | - | - |
-| AI Agents with MCP | Yes | - | Partial |
-| Voice assistant | Yes | - | - |
-| OpenAI-compatible API | Yes | Yes | Yes |
+| Feature | OffGrid |
+|---------|:-------:|
+| Air-gapped USB deployment | Yes |
+| P2P model sharing | Yes |
+| Built-in RAG | Yes |
+| Multi-user + audit logs | Yes |
+| AI Agents with MCP | Yes |
+| Voice assistant | Yes |
+| OpenAI-compatible API | Yes |
 
 **Built for:**
 - Healthcare (HIPAA) - patient data never leaves
