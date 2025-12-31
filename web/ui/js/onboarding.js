@@ -327,7 +327,7 @@ async function quickInstallModel(downloadCmd, buttonEl) {
             showModal({
                 type: 'info',
                 title: 'Model Already Installed',
-                message: `<strong>${startData.file_name || modelName}</strong> is already installed.<br><br>You can use it right away from the Chat tab.`,
+                message: `"${startData.file_name || modelName}" is already installed.\n\nYou can use it right away from the Chat tab.`,
                 confirmText: 'OK'
             });
             return;
@@ -646,7 +646,7 @@ async function quickInstallFromModelsPage(downloadCmd, cardEl) {
             showModal({
                 type: 'info',
                 title: 'Model Already Installed',
-                message: `<strong>${startData.file_name || modelName}</strong> is already installed.<br><br>You can use it right away from the Chat tab.`,
+                message: `"${startData.file_name || modelName}" is already installed.\n\nYou can use it right away from the Chat tab.`,
                 confirmText: 'OK'
             });
             if (cardEl) {

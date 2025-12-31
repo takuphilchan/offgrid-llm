@@ -17,7 +17,7 @@ function showModal({ type = 'info', title, message, confirmText = 'OK', cancelTe
     
     // Escape text content for security
     const safeTitle = typeof escapeHtml === 'function' ? escapeHtml(title) : title;
-    const safeMessage = typeof escapeHtml === 'function' ? escapeHtml(message) : message;
+    const safeMessage = typeof escapeHtml === 'function' ? escapeHtml(message).replace(/\n/g, '<br>') : message.replace(/\n/g, '<br>');
     const safeConfirmText = typeof escapeHtml === 'function' ? escapeHtml(confirmText) : confirmText;
     const safeCancelText = cancelText ? (typeof escapeHtml === 'function' ? escapeHtml(cancelText) : cancelText) : '';
     
