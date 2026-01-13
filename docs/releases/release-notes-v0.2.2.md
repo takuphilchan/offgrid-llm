@@ -1,6 +1,6 @@
 # OffGrid LLM v0.2.2 Release Notes
 
-**Release Date:** December 2025
+**Release Date:** January 2026
 
 ## Highlights
 

@@ -66,6 +66,7 @@ Complete guide to OffGrid LLM.
 | [Low Memory](advanced/low-memory.md) | Running on 4GB RAM |
 | [Building](advanced/building.md) | Build from source |
 | [Deployment](advanced/deployment.md) | Production setup |
+| [Inference TODO](INFERENCE_TODO.md) | Short checklist to enable real inference |
 
 ---
 

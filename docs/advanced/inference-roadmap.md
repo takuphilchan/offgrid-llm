@@ -1,4 +1,6 @@
-# Inference Status / TODO (December 2025)
+# Inference Status / TODO (January 2026)
+
+See the concise checklist in [docs/INFERENCE_TODO.md](../INFERENCE_TODO.md) for an actionable developer roadmap.
 
 > **Note:** This document covers technical inference details. For the full project roadmap, see [ROADMAP.md](../ROADMAP.md).
 

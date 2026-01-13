@@ -2,7 +2,7 @@
 
 > From "local LLM tool" to **the #1 private AI platform**.
 
-**Last Updated:** December 2025  
+**Last Updated:** January 2026  
 **Current Version:** 0.2.12
 
 ---
@@ -261,4 +261,4 @@ Priority areas:
 
 ---
 
-*This roadmap is a living document. Last updated: December 2025*
+*This roadmap is a living document. Last updated: January 2026*

@@ -35,6 +35,8 @@ cp templates/feature-template.md guides/my-feature.md
 | All docs | lowercase-kebab | `installation.md`, `api.md` |
 | docs/guides/ | SCREAMING_SNAKE_GUIDE | `AGENT_GUIDE.md` |
 | docs/advanced/ | SCREAMING_SNAKE | `ARCHITECTURE.md` |
+| docs/guides/ | lowercase-kebab | `agents.md`, `getting-started.md` |
+| docs/advanced/ | lowercase-kebab | `architecture.md`, `performance.md` |
 
 ### Markdown Standards
 
