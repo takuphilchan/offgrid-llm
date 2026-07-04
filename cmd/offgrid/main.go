@@ -93,6 +93,9 @@ func init() {
 	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
 		disableColors()
 	}
+	if os.Getenv("OFFGRID_UNICODE") == "1" || strings.EqualFold(os.Getenv("OFFGRID_UNICODE"), "true") {
+		enableUnicodeSymbols()
+	}
 }
 
 // Visual identity constants
@@ -117,39 +120,71 @@ var (
 	brandMuted     = "\033[90m"   // Gray (Bright Black)
 )
 
-const (
-	// Box drawing characters
-	boxTL     = "╭"
-	boxTR     = "╮"
-	boxBL     = "╰"
-	boxBR     = "╯"
-	boxH      = "─"
-	boxV      = ""
-	boxVR     = "├"
-	boxVL     = "┤"
-	boxHD     = "┬"
-	boxHU     = "┴"
-	boxCross  = "┼"
+var (
+	// ASCII-first terminal symbols. Keep the default output readable on
+	// Windows consoles, SSH sessions, serial terminals, and log files.
+	boxTL     = "+"
+	boxTR     = "+"
+	boxBL     = "+"
+	boxBR     = "+"
+	boxH      = "-"
+	boxV      = "|"
+	boxVR     = "+"
+	boxVL     = "+"
+	boxHD     = "+"
+	boxHU     = "+"
+	boxCross  = "+"
+	separator = "-"
+
+	iconBolt     = "*"
+	iconCheck    = "OK"
+	iconCross    = "ERR"
+	iconArrow    = "->"
+	iconDot      = "-"
+	iconStar     = "*"
+	iconBox      = "-"
+	iconCircle   = "o"
+	iconDiamond  = "*"
+	iconChevron  = ">"
+	iconDownload = "down"
+	iconUpload   = "up"
+	iconSearch   = "search"
+	iconModel    = "model"
+	iconCpu      = "CPU"
+	iconGpu      = "GPU"
+)
+
+func enableUnicodeSymbols() {
+	boxTL = "╭"
+	boxTR = "╮"
+	boxBL = "╰"
+	boxBR = "╯"
+	boxH = "─"
+	boxV = "│"
+	boxVR = "├"
+	boxVL = "┤"
+	boxHD = "┬"
+	boxHU = "┴"
+	boxCross = "┼"
 	separator = "━"
 
-	// Custom icons
-	iconBolt     = "◈"
-	iconCheck    = "✓"
-	iconCross    = "✗"
-	iconArrow    = "→"
-	iconDot      = "•"
-	iconStar     = "★"
-	iconBox      = "▪"
-	iconCircle   = "◉"
-	iconDiamond  = "◆"
-	iconChevron  = "›"
+	iconBolt = "◈"
+	iconCheck = "✓"
+	iconCross = "✗"
+	iconArrow = "→"
+	iconDot = "•"
+	iconStar = "★"
+	iconBox = "▪"
+	iconCircle = "◉"
+	iconDiamond = "◆"
+	iconChevron = "›"
 	iconDownload = "⇣"
-	iconUpload   = "⇡"
-	iconSearch   = "⌕"
-	iconModel    = "◭"
-	iconCpu      = "⟨⟩"
-	iconGpu      = "⟪⟫"
-)
+	iconUpload = "⇡"
+	iconSearch = "⌕"
+	iconModel = "◭"
+	iconCpu = "⟨⟩"
+	iconGpu = "⟪⟫"
+}
 
 func disableColors() {
 	colorReset = ""
@@ -174,8 +209,8 @@ func printBanner() {
 		return
 	}
 	fmt.Println()
-	fmt.Printf("  %s%s OffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, getVersion(), colorReset)
-	fmt.Printf("  %sLocal LLM inference at the edge%s\n", brandMuted, colorReset)
+	fmt.Printf("  %sOffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, colorReset, brandMuted, getVersion(), colorReset)
+	fmt.Printf("  %sLocal AI that works offline%s\n", brandMuted, colorReset)
 	fmt.Println()
 }
 
@@ -195,7 +230,7 @@ func printError(message string) {
 }
 
 func printInfo(message string) {
-	fmt.Printf("%sℹ%s %s\n", brandPrimary, colorReset, message)
+	fmt.Printf("%si%s %s\n", brandPrimary, colorReset, message)
 }
 
 func printWarning(message string) {
@@ -362,6 +397,9 @@ func printBox(title, content string) {
 	// Content
 	for _, line := range strings.Split(content, "\n") {
 		contentPadding := width - len(stripAnsi(line))
+		if contentPadding < 2 {
+			contentPadding = 2
+		}
 		fmt.Printf("%s%s%s %s%s %s%s%s\n",
 			brandPrimary, boxV, colorReset,
 			line,
@@ -378,7 +416,7 @@ func printModernSection(title string, items [][]string) {
 	fmt.Printf("  %s%s%s\n", brandPrimary, title, colorReset)
 	for _, item := range items {
 		if len(item) >= 2 {
-			fmt.Printf("    %s›%s %-22s %s%s%s\n", brandPrimary, colorReset, item[0], colorDim, item[1], colorReset)
+			fmt.Printf("    %s%s%s %-22s %s%s%s\n", brandPrimary, iconChevron, colorReset, item[0], colorDim, item[1], colorReset)
 		}
 	}
 	fmt.Println()
@@ -3096,9 +3134,8 @@ func handleQuantize(args []string) {
 
 func printHelp() {
 	fmt.Println()
-	// Modern branded header
-	fmt.Printf("  %s%s OffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, getVersion(), colorReset)
-	fmt.Printf("  %sEdge inference orchestrator for local LLMs%s\n", brandMuted, colorReset)
+	fmt.Printf("  %sOffGrid LLM%s %s%s%s\n", brandPrimary+colorBold, colorReset, brandMuted, getVersion(), colorReset)
+	fmt.Printf("  %sLocal AI that works offline%s\n", brandMuted, colorReset)
 	fmt.Println()
 	fmt.Printf("  %sUsage%s  offgrid %s<command>%s %s[options]%s\n", colorBold, colorReset, brandPrimary, colorReset, brandMuted, colorReset)
 	fmt.Println()
@@ -3111,14 +3148,12 @@ func printHelp() {
 
 	type section struct {
 		title string
-		icon  string
 		cmds  []cmdEntry
 	}
 
 	sections := []section{
 		{
 			title: "Model Management",
-			icon:  iconDownload,
 			cmds: []cmdEntry{
 				{"recommend", "Get model recommendations for your system"},
 				{"list", "List installed models"},
@@ -3132,7 +3167,6 @@ func printHelp() {
 		},
 		{
 			title: "Inference & Chat",
-			icon:  iconCircle,
 			cmds: []cmdEntry{
 				{"serve", "Start API server (default)"},
 				{"run <model>", "Interactive chat (--image for VLMs)"},
@@ -3144,7 +3178,6 @@ func printHelp() {
 		},
 		{
 			title: "System",
-			icon:  iconCpu,
 			cmds: []cmdEntry{
 				{"init", "First-time setup wizard"},
 				{"doctor", "Run system diagnostics"},
@@ -3157,7 +3190,6 @@ func printHelp() {
 		},
 		{
 			title: "Advanced",
-			icon:  iconStar,
 			cmds: []cmdEntry{
 				{"lora <cmd>", "LoRA adapter management"},
 				{"agent <cmd>", "AI agent workflows (6 templates)"},
@@ -3172,7 +3204,7 @@ func printHelp() {
 	const columnWidth = 22
 
 	for _, s := range sections {
-		fmt.Printf("  %s%s %s%s\n", brandPrimary, s.icon, s.title, colorReset)
+		fmt.Printf("  %s%s%s\n", brandPrimary, s.title, colorReset)
 		for _, c := range s.cmds {
 			// Calculate padding needed to reach fixed column width
 			paddingNeeded := columnWidth - len(c.name)
@@ -3190,7 +3222,7 @@ func printHelp() {
 	}
 
 	// Quick start examples in a more compact format
-	fmt.Printf("  %s%s Quick Start%s\n", brandPrimary, iconArrow, colorReset)
+	fmt.Printf("  %sQuick Start%s\n", brandPrimary, colorReset)
 	fmt.Printf("    %s$%s offgrid run llama3               %s# Llama 3.2 3B (auto-downloads)%s\n", brandMuted, colorReset, brandMuted, colorReset)
 	fmt.Printf("    %s$%s offgrid run qwen                 %s# Qwen 2.5 3B%s\n", brandMuted, colorReset, brandMuted, colorReset)
 	fmt.Printf("    %s$%s offgrid run mistral              %s# Mistral 7B%s\n", brandMuted, colorReset, brandMuted, colorReset)
@@ -3904,13 +3936,15 @@ func extractQuantFromFilename(filename string) string {
 
 func handleRun(args []string) {
 	// Check for help flag first
+	helpRequested := false
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		helpRequested = true
 		args = []string{} // Trigger help display
 	}
 
 	if len(args) < 1 {
 		fmt.Println()
-		fmt.Printf("  %s%s Interactive Chat%s\n", brandPrimary+colorBold, iconCircle, colorReset)
+		fmt.Printf("  %sInteractive Chat%s\n", brandPrimary+colorBold, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sUsage%s  offgrid run %s<model>%s %s[options]%s\n", colorBold, colorReset, brandPrimary, colorReset, brandMuted, colorReset)
 		fmt.Println()
@@ -3931,6 +3965,9 @@ func handleRun(args []string) {
 		fmt.Println()
 		fmt.Printf("  %sTip:%s Run %soffgrid alias list%s to see all shortcuts\n", brandMuted, colorReset, colorBold, colorReset)
 		fmt.Println()
+		if helpRequested {
+			os.Exit(0)
+		}
 		os.Exit(1)
 	}
 
@@ -4185,16 +4222,13 @@ func handleRun(args []string) {
 
 	// Check if llama-server is running and start it if needed
 	if err := ensureLlamaServerRunning(); err != nil {
-		fmt.Println()
-		fmt.Printf("  %s%s◉ OffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, filepath.Base(model.Path))
+		printRunHeader(filepath.Base(model.Path), useKnowledgeBase, "")
 		fmt.Printf("  %sStatus:%s  Loading...", brandMuted, colorReset) // No newline - will be overwritten
 		if err := startLlamaServerInBackground(model.Path); err != nil {
 			fmt.Println() // Add newline before error
 			printError("Failed to start llama-server")
 			fmt.Println()
-			fmt.Printf("%sℹ Start manually:%s\n", colorDim, colorReset)
+			fmt.Printf("%sStart manually:%s\n", colorDim, colorReset)
 			fmt.Printf("  %sllama-server -m %s --port 42382 &%s\n", brandSecondary, model.Path, colorReset)
 			fmt.Println()
 			os.Exit(1)
@@ -4209,11 +4243,11 @@ func handleRun(args []string) {
 
 		// Use the new robust readiness check (10 minutes for low-end machines and larger models)
 		if err := waitForModelReady(llamaPort, 600); err != nil {
-			fmt.Printf("\r  %sStatus:%s  %s✗ Failed%s\n", brandMuted, colorReset, brandError, colorReset)
+			fmt.Printf("\r  %sStatus:%s  %sFailed%s\n", brandMuted, colorReset, brandError, colorReset)
 			printError(fmt.Sprintf("Model failed to load: %v", err))
 			os.Exit(1)
 		}
-		fmt.Printf("\r  %sStatus:%s  %s✓ Ready%s  \n", brandMuted, colorReset, brandSuccess, colorReset)
+		fmt.Printf("\r  %sStatus:%s  %sReady%s  \n", brandMuted, colorReset, brandSuccess, colorReset)
 
 		// Show hardware info after loading
 		if sysInfo, err := resource.DetectResources(); err == nil {
@@ -4226,11 +4260,8 @@ func handleRun(args []string) {
 		fmt.Println()
 	} else {
 		// llama-server already running, show header
-		fmt.Println()
-		fmt.Printf("  %s%s◉ OffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, resolvedModelName)
-		fmt.Printf("  %sStatus:%s  %s✓ Ready%s\n", brandMuted, colorReset, brandSuccess, colorReset)
+		printRunHeader(resolvedModelName, useKnowledgeBase, "")
+		fmt.Printf("  %sStatus:%s  %sReady%s\n", brandMuted, colorReset, brandSuccess, colorReset)
 
 		// Show hardware info
 		if sysInfo, err := resource.DetectResources(); err == nil {
@@ -4259,7 +4290,7 @@ func handleRun(args []string) {
 			printInfo("Available sessions:")
 			sessionList, _ := sessionMgr.List()
 			for _, s := range sessionList {
-				fmt.Printf("  • %s\n", s.Name)
+				fmt.Printf("  - %s\n", s.Name)
 			}
 			fmt.Println()
 			os.Exit(1)
@@ -4287,7 +4318,7 @@ func handleRun(args []string) {
 		fmt.Println()
 	}
 
-	fmt.Printf("  %sCommands:%s  exit · clear · rag · status · help\n", brandMuted, colorReset)
+	printRunCommands()
 	if currentSession != nil {
 		fmt.Printf("  %sSession:%s   %s\n", brandMuted, colorReset, currentSession.Name)
 	}
@@ -4347,7 +4378,7 @@ func handleRun(args []string) {
 
 			if !foundActive && len(modelsResp.Data) > 0 {
 				fmt.Println()
-				printInfo(fmt.Sprintf("Switching model: %s → %s", activeModel, modelName))
+				printInfo(fmt.Sprintf("Switching model: %s -> %s", activeModel, modelName))
 				fmt.Printf("%sLoading model...%s ", colorDim, colorReset)
 
 				// Let the OffGrid server handle model switching by making a test request
@@ -4374,19 +4405,19 @@ func handleRun(args []string) {
 				)
 
 				if err != nil {
-					fmt.Printf("%s✗%s\n", brandError, colorReset)
+					fmt.Printf("%sFailed%s\n", brandError, colorReset)
 					printError(fmt.Sprintf("Failed to switch model: %v", err))
 					os.Exit(1)
 				}
 				switchResp.Body.Close()
 
 				if switchResp.StatusCode != http.StatusOK {
-					fmt.Printf("%s✗%s\n", brandError, colorReset)
+					fmt.Printf("%sFailed%s\n", brandError, colorReset)
 					printError(fmt.Sprintf("Failed to switch model (status %d)", switchResp.StatusCode))
 					os.Exit(1)
 				}
 
-				fmt.Printf("%s✓%s\n", brandSuccess, colorReset)
+				fmt.Printf("%sReady%s\n", brandSuccess, colorReset)
 				fmt.Println()
 			}
 		}
@@ -4425,7 +4456,7 @@ func handleRun(args []string) {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Printf("\n  %s%s%s ", brandPrimary+colorBold, iconChevron, colorReset)
+		fmt.Printf("\n%sYou%s\n> ", brandPrimary+colorBold, colorReset)
 		input, err := reader.ReadString('\n')
 		if err != nil {
 			break
@@ -4450,21 +4481,21 @@ func handleRun(args []string) {
 
 		if input == "help" || input == "?" {
 			fmt.Println()
-			fmt.Printf("  %s%s Chat Commands%s\n", brandPrimary+colorBold, iconBolt, colorReset)
+			fmt.Printf("  %sChat Commands%s\n", brandPrimary+colorBold, colorReset)
 			fmt.Println()
-			fmt.Printf("    %sexit, quit, q%s     Exit the chat\n", colorBold, colorReset)
-			fmt.Printf("    %sclear%s             Clear screen and conversation history\n", colorBold, colorReset)
-			fmt.Printf("    %srag%s               Toggle knowledge base (RAG)\n", colorBold, colorReset)
-			fmt.Printf("    %sstatus%s            Show current session info\n", colorBold, colorReset)
-			fmt.Printf("    %shelp, ?%s           Show this help\n", colorBold, colorReset)
+			fmt.Printf("    %s/help%s     Show this help\n", colorBold, colorReset)
+			fmt.Printf("    %s/status%s   Show model, session, and device info\n", colorBold, colorReset)
+			fmt.Printf("    %s/clear%s    Clear screen and conversation history\n", colorBold, colorReset)
+			fmt.Printf("    %s/rag%s      Toggle knowledge base retrieval\n", colorBold, colorReset)
+			fmt.Printf("    %s/exit%s     Exit the chat\n", colorBold, colorReset)
 			fmt.Println()
-			fmt.Printf("  %sTip: Commands work with or without / prefix%s\n", brandMuted, colorReset)
+			fmt.Printf("  %sAliases:%s exit, quit, q, help, status, clear, rag\n", brandMuted, colorReset)
 			continue
 		}
 
 		if input == "status" {
 			fmt.Println()
-			fmt.Printf("  %s%s Session Status%s\n", brandPrimary+colorBold, iconCircle, colorReset)
+			fmt.Printf("  %sSession Status%s\n", brandPrimary+colorBold, colorReset)
 			fmt.Println()
 			fmt.Printf("    %sModel:%s       %s\n", brandMuted, colorReset, resolvedModelName)
 			fmt.Printf("    %sMessages:%s    %d (%d user, %d assistant)\n", brandMuted, colorReset, len(messages), (len(messages)+1)/2, len(messages)/2)
@@ -4502,33 +4533,30 @@ func handleRun(args []string) {
 			// Clear the terminal screen
 			fmt.Print("\033[2J\033[H")
 			// Reprint the header
-			fmt.Println()
-			fmt.Printf("  %s%s◉ OffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
-			fmt.Println()
-			fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, resolvedModelName)
-			fmt.Printf("  %sStatus:%s  %s✓ Ready%s\n", brandMuted, colorReset, brandSuccess, colorReset)
+			printRunHeader(resolvedModelName, useKnowledgeBase, "")
+			fmt.Printf("  %sStatus:%s  %sReady%s\n", brandMuted, colorReset, brandSuccess, colorReset)
 			if sysInfo, err := resource.DetectResources(); err == nil {
 				if sysInfo.GPUAvailable {
 					fmt.Printf("  %sGPU:%s     %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
 				}
 			}
 			fmt.Println()
-			fmt.Printf("  %sCommands:%s  exit · clear · rag · status · help\n", brandMuted, colorReset)
-			fmt.Printf("\n  %s%s Conversation cleared%s\n", brandMuted, iconCheck, colorReset)
+			printRunCommands()
+			fmt.Printf("\n  %sConversation cleared%s\n", brandMuted, colorReset)
 			continue
 		}
 
 		if input == "rag" {
 			useKnowledgeBase = !useKnowledgeBase
 			if useKnowledgeBase {
-				fmt.Printf("\n  %s%s Knowledge Base enabled%s\n", brandSuccess, iconCheck, colorReset)
+				fmt.Printf("\n  %sKnowledge Base enabled%s\n", brandSuccess, colorReset)
 			} else {
-				fmt.Printf("\n  %s○ Knowledge Base disabled%s\n", brandMuted, colorReset)
+				fmt.Printf("\n  %sKnowledge Base disabled%s\n", brandMuted, colorReset)
 			}
 			continue
 		}
 
-		// Add user message
+		// Build the next user message. Only commit it to history after a successful response.
 		var userContent interface{} = input
 
 		// If we have an image pending, attach it to this message
@@ -4569,20 +4597,16 @@ func handleRun(args []string) {
 			}
 		}
 
-		messages = append(messages, ChatMessage{
+		userMessage := ChatMessage{
 			Role:    "user",
 			Content: userContent,
-		})
-
-		// Save user message to session (store as text for simplicity in session file for now)
-		if currentSession != nil {
-			currentSession.AddMessage("user", input)
 		}
+		requestMessages := append(append([]ChatMessage{}, messages...), userMessage)
 
 		// Make API request
 		reqBody := ChatCompletionRequest{
 			Model:            modelName,
-			Messages:         messages,
+			Messages:         requestMessages,
 			Stream:           true,
 			UseKnowledgeBase: useKnowledgeBase,
 		}
@@ -4593,7 +4617,7 @@ func handleRun(args []string) {
 		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 		if err != nil {
 			fmt.Println()
-			fmt.Fprintf(os.Stderr, "✗ Error creating request: %v\n", err)
+			printError(fmt.Sprintf("Error creating request: %v", err))
 			fmt.Println()
 			continue
 		}
@@ -4603,13 +4627,23 @@ func handleRun(args []string) {
 		resp, err := client.Do(req)
 		if err != nil {
 			fmt.Println()
-			fmt.Fprintf(os.Stderr, "✗ Error: %v\n", err)
+			printError(fmt.Sprintf("Request failed: %v", err))
 			fmt.Println()
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			fmt.Println()
+			printError(fmt.Sprintf("Request failed with status %d", resp.StatusCode))
+			if len(strings.TrimSpace(string(body))) > 0 {
+				fmt.Printf("  %s%s%s\n", brandMuted, strings.TrimSpace(string(body)), colorReset)
+			}
 			continue
 		}
 
 		// Handle streaming response
-		fmt.Print("\n")
+		fmt.Printf("\n%sOffGrid%s\n", brandSuccess+colorBold, colorReset)
 		scanner := bufio.NewScanner(resp.Body)
 		var assistantMsg strings.Builder
 		lineLength := 0
@@ -4651,21 +4685,35 @@ func handleRun(args []string) {
 		fmt.Println()
 		fmt.Println()
 
+		if err := scanner.Err(); err != nil {
+			resp.Body.Close()
+			printError(fmt.Sprintf("Stream interrupted: %v", err))
+			fmt.Println()
+			continue
+		}
 		resp.Body.Close()
 
-		// Add assistant response to history
+		assistantText := strings.TrimSpace(assistantMsg.String())
+		if assistantText == "" {
+			printWarning("No response text received")
+			continue
+		}
+
+		// Add the completed exchange to history.
+		messages = append(messages, userMessage)
 		messages = append(messages, ChatMessage{
 			Role:    "assistant",
-			Content: assistantMsg.String(),
+			Content: assistantText,
 		})
 
-		// Save assistant message to session
+		// Save messages to session after the exchange succeeds.
 		if currentSession != nil {
-			currentSession.AddMessage("assistant", assistantMsg.String())
+			currentSession.AddMessage("user", input)
+			currentSession.AddMessage("assistant", assistantText)
 			// Auto-save after each exchange
 			if err := sessionMgr.Save(currentSession); err != nil {
 				// Don't interrupt the conversation, just log the error
-				fmt.Printf("%s⚠ Failed to save session: %v%s\n", brandMuted, err, colorReset)
+				fmt.Printf("%sFailed to save session: %v%s\n", brandMuted, err, colorReset)
 			}
 		}
 	}
@@ -4708,6 +4756,23 @@ func (m ChatMessage) StringContent() string {
 		return text
 	}
 	return ""
+}
+
+func printRunHeader(modelName string, ragEnabled bool, sessionName string) {
+	fmt.Println()
+	fmt.Printf("  %s%sOffGrid Chat%s\n", brandPrimary, colorBold, colorReset)
+	fmt.Println()
+	fmt.Printf("  %sModel:%s   %s\n", brandMuted, colorReset, modelName)
+	if sessionName != "" {
+		fmt.Printf("  %sSession:%s %s\n", brandMuted, colorReset, sessionName)
+	}
+	if ragEnabled {
+		fmt.Printf("  %sRAG:%s     Enabled\n", brandMuted, colorReset)
+	}
+}
+
+func printRunCommands() {
+	fmt.Printf("  %sCommands:%s /help /status /clear /rag /exit\n", brandMuted, colorReset)
 }
 
 type ChatCompletionRequest struct {
