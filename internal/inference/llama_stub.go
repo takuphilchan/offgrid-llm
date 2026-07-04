@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
+	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -22,14 +22,8 @@ type LlamaEngine struct {
 func NewLlamaEngine() *LlamaEngine {
 	llamaServerURL := os.Getenv("LLAMA_SERVER_URL")
 	if llamaServerURL == "" {
-		// Try to read from config file (set by install.sh)
-		if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
-			port := strings.TrimSpace(string(portBytes))
-			llamaServerURL = fmt.Sprintf("http://127.0.0.1:%s", port)
-		} else {
-			// Final fallback
-			llamaServerURL = "http://127.0.0.1:42382"
-		}
+		port := config.ReadLlamaPort("42382")
+		llamaServerURL = fmt.Sprintf("http://127.0.0.1:%s", port)
 	}
 
 	return &LlamaEngine{

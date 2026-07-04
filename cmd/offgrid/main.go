@@ -624,11 +624,8 @@ func startLlamaServerInBackground(modelPath string) error {
 		batchSize = 256
 	}
 
-	// Read port from config file, default to 42382
-	port := "42382"
-	if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
-		port = strings.TrimSpace(string(portBytes))
-	}
+	// Read port from platform-specific config file, default to 42382
+	port := config.ReadLlamaPort("42382")
 
 	// Determine GPU layers based on detection
 	gpuLayers := 0
@@ -881,7 +878,7 @@ func reloadLlamaServerWithModel(modelPath string) error {
 		// If modelPath is provided, update the active model configuration
 		if modelPath != "" {
 			// Store the active model path for the service to use
-			activeModelFile := "/etc/offgrid/active-model"
+			activeModelFile := config.GetDefaultPaths().ActiveModel
 			cmd := exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' > %s", modelPath, activeModelFile))
 			if err := cmd.Run(); err != nil {
 				printWarning(fmt.Sprintf("Could not update active model config: %v", err))
@@ -932,18 +929,7 @@ func reloadLlamaServerWithModel(modelPath string) error {
 
 	// Start llama-server as background process
 	// Read internal port (fallback to default if not found)
-	llamaPort := "8081"
-	portFile := "/etc/offgrid/llama-port"
-	if data, err := os.ReadFile(portFile); err == nil {
-		llamaPort = strings.TrimSpace(string(data))
-	} else {
-		// Try user config directory
-		homeDir, _ := os.UserHomeDir()
-		userPortFile := filepath.Join(homeDir, ".config", "offgrid", "llama-port")
-		if data, err := os.ReadFile(userPortFile); err == nil {
-			llamaPort = strings.TrimSpace(string(data))
-		}
-	}
+	llamaPort := config.ReadLlamaPort("8081")
 
 	// Start llama-server with the model in background using shell with optimized flags
 	// Detect optimal thread count using physical core detection
@@ -1031,18 +1017,7 @@ func isLlamaServerRunning() bool {
 // waitForLlamaServerReady polls llama-server until it's ready or timeout
 func waitForLlamaServerReady(timeoutSec int) error {
 	// Read llama-server port (fallback to default if not found)
-	port := "8081"
-	portBytes, err := os.ReadFile("/etc/offgrid/llama-port")
-	if err == nil {
-		port = strings.TrimSpace(string(portBytes))
-	} else {
-		// Try user config directory
-		homeDir, _ := os.UserHomeDir()
-		userPortFile := filepath.Join(homeDir, ".config", "offgrid", "llama-port")
-		if portBytes, err := os.ReadFile(userPortFile); err == nil {
-			port = strings.TrimSpace(string(portBytes))
-		}
-	}
+	port := config.ReadLlamaPort("8081")
 
 	// Create client that bypasses proxy for localhost
 	client := &http.Client{
@@ -4235,11 +4210,8 @@ func handleRun(args []string) {
 		}
 		// Wait for llama-server to load the model
 
-		// Read llama-server port from config
-		llamaPort := "42382"
-		if portBytes, err := os.ReadFile("/etc/offgrid/llama-port"); err == nil {
-			llamaPort = strings.TrimSpace(string(portBytes))
-		}
+		// Read llama-server port from platform-specific config
+		llamaPort := config.ReadLlamaPort("42382")
 
 		// Use the new robust readiness check (10 minutes for low-end machines and larger models)
 		if err := waitForModelReady(llamaPort, 600); err != nil {
