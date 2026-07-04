@@ -1,5 +1,6 @@
 # Binaries
 /offgrid
+/bin/
 offgrid-*
 *.exe
 *.dll
@@ -27,6 +28,7 @@ coverage.html
 # Go workspace files
 go.work
 go.work.sum
+.gomodcache/
 
 # IDE
 .vscode/

@@ -1127,7 +1127,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		accept := r.Header.Get("Accept")
 		if strings.Contains(accept, "application/json") || r.URL.Query().Get("format") == "json" {
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
+			fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"%s","status":"running"}`, s.version)
 			return
 		}
 
@@ -1142,7 +1142,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// API info for other paths
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"0.2.10","status":"running"}`, s.version)
+	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"%s","status":"running"}`, s.version)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

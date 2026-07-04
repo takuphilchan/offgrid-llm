@@ -3,6 +3,7 @@ package inference
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -40,8 +41,13 @@ type EmbeddingOptions struct {
 
 // DefaultEmbeddingOptions returns sensible defaults optimized for low-end hardware
 func DefaultEmbeddingOptions() EmbeddingOptions {
+	threads := runtime.NumCPU() / 2
+	if threads < 1 {
+		threads = 1
+	}
+
 	return EmbeddingOptions{
-		NumThreads:    0,      // 0 = auto-detect based on CPU cores
+		NumThreads:    threads,
 		NumGPULayers:  0,      // CPU by default
 		UseMmap:       true,   // Memory-map for lower RAM usage
 		UseMlock:      false,  // Don't lock RAM (safer for low-end systems)

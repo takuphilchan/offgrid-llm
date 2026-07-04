@@ -194,7 +194,12 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	fileClosed := false
+	defer func() {
+		if !fileClosed {
+			file.Close()
+		}
+	}()
 
 	// Download with progress tracking
 	progress := TransferProgress{
@@ -222,6 +227,7 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 			n, err := reader.Read(buffer)
 			if n > 0 {
 				if _, writeErr := multiWriter.Write(buffer[:n]); writeErr != nil {
+					os.Remove(tmpPath)
 					return fmt.Errorf("write error: %w", writeErr)
 				}
 				bytesRead += int64(n)
@@ -244,10 +250,21 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 				if err == io.EOF {
 					break
 				}
+				os.Remove(tmpPath)
 				return fmt.Errorf("read error: %w", err)
 			}
 		}
 	}
+
+	if err := file.Sync(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close file: %w", err)
+	}
+	fileClosed = true
 
 	// Verify checksum if provided
 	if expectedHash != "" {
@@ -263,6 +280,7 @@ func (tm *TransferManager) DownloadFromPeer(ctx context.Context, peer *Peer, mod
 
 	// Move temp file to final location
 	if err := os.Rename(tmpPath, destPath); err != nil {
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to finalize file: %w", err)
 	}
 

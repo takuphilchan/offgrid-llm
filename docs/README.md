@@ -62,6 +62,7 @@ Complete guide to OffGrid LLM.
 | Guide | Description |
 |-------|-------------|
 | [Architecture](advanced/architecture.md) | System design |
+| [Repository Structure](repository-structure.md) | Source tree map and ownership |
 | [Performance](advanced/performance.md) | Optimization |
 | [Low Memory](advanced/low-memory.md) | Running on 4GB RAM |
 | [Building](advanced/building.md) | Build from source |

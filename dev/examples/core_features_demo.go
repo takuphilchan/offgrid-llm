@@ -149,6 +149,7 @@ func main() {
 	fmt.Println("[OK] Request queue with concurrency limits")
 	fmt.Println("[OK] Memory-aware request handling")
 	fmt.Println("[OK] Priority-based scheduling")
-	fmt.Println("\nThese features provide essential reliability and")
+	fmt.Println()
+	fmt.Println("These features provide essential reliability and")
 	fmt.Println("resource management for edge/offline deployments.")
 }
