@@ -451,9 +451,45 @@ func ensureOffgridServerRunning() error {
 
 // startOffgridServerInBackground starts the OffGrid server in background
 func startOffgridServerInBackground() error {
-	// Start offgrid serve in background using shell
-	cmd := exec.Command("sh", "-c", "offgrid serve > /dev/null 2>&1 &")
-	return cmd.Run()
+	exePath, err := os.Executable()
+	if err != nil || exePath == "" {
+		exePath = "offgrid"
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	logDir := filepath.Join(homeDir, ".offgrid", "logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	logPath := filepath.Join(logDir, "server.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open server log: %w", err)
+	}
+
+	cmd := exec.Command(exePath, "serve")
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	if err := cmd.Start(); err != nil {
+		logFile.Close()
+		return fmt.Errorf("failed to start %s serve: %w", exePath, err)
+	}
+
+	go func() {
+		_ = cmd.Wait()
+		_ = logFile.Close()
+	}()
+
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := ensureOffgridServerRunning(); err == nil {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("server did not become ready; check %s", logPath)
 }
 
 // ensureLlamaServerRunning checks if llama-server is responding
