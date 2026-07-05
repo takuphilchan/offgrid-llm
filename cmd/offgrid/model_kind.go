@@ -46,5 +46,5 @@ func embeddingModelChatError(model string) string {
 	if display == "" {
 		display = "this model"
 	}
-	return fmt.Sprintf("%s looks like an embedding model, not a chat model. Use it for RAG/search, or run a chat model such as `offgrid run llama3`, `offgrid run qwen`, or `offgrid run mistral`.", display)
+	return fmt.Sprintf("%s is an embedding model for search and RAG, not a conversational chat model. Start a chat with `offgrid run llama3`, `offgrid run qwen`, or `offgrid run mistral`.", display)
 }
