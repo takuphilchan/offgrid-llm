@@ -494,7 +494,8 @@ func startOffgridServerInBackground() error {
 
 // ensureLlamaServerRunning checks if llama-server is responding
 func ensureLlamaServerRunning() error {
-	healthURL := "http://localhost:8081/health"
+	port := config.ReadLlamaPort("42382")
+	healthURL := fmt.Sprintf("http://localhost:%s/health", port)
 
 	client := &http.Client{
 		Timeout: 2 * time.Second,
@@ -518,11 +519,10 @@ func ensureLlamaServerRunning() error {
 	return nil
 }
 
-// waitForModelReady waits for the model to be fully loaded and ready to generate responses
-// It performs a test completion to verify the model can actually respond
+// waitForModelReady waits for llama-server to report a healthy loaded model.
 func waitForModelReady(port string, maxWaitSeconds int) error {
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
 			Proxy: func(req *http.Request) (*url.URL, error) {
 				return nil, nil
@@ -549,7 +549,18 @@ func waitForModelReady(port string, maxWaitSeconds int) error {
 			continue
 		}
 
-		// Parse health response to check model loading status
+		if healthResp.StatusCode == http.StatusServiceUnavailable {
+			healthResp.Body.Close()
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if healthResp.StatusCode != http.StatusOK {
+			healthResp.Body.Close()
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// Parse health response to check model loading status.
 		var healthData struct {
 			Status          string `json:"status"`
 			SlotsIdle       int    `json:"slots_idle"`
@@ -573,42 +584,7 @@ func waitForModelReady(port string, maxWaitSeconds int) error {
 			}
 		}
 		healthResp.Body.Close()
-
-		// Health is OK, now do a quick test completion to verify model can respond
-		testPayload := map[string]interface{}{
-			"model": "default",
-			"messages": []map[string]string{
-				{"role": "user", "content": "Hi"},
-			},
-			"max_tokens": 1,
-			"stream":     false,
-		}
-
-		payloadBytes, _ := json.Marshal(testPayload)
-		testResp, err := client.Post(
-			fmt.Sprintf("http://localhost:%s/v1/chat/completions", port),
-			"application/json",
-			bytes.NewReader(payloadBytes),
-		)
-		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		// Check if we got a valid response (not an error)
-		if testResp.StatusCode == http.StatusOK {
-			var result map[string]interface{}
-			if err := json.NewDecoder(testResp.Body).Decode(&result); err == nil {
-				// Check if we got actual choices back
-				if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
-					testResp.Body.Close()
-					return nil // Model is ready!
-				}
-			}
-		}
-		testResp.Body.Close()
-
-		time.Sleep(500 * time.Millisecond)
+		return nil
 	}
 }
 
@@ -4031,7 +4007,7 @@ func handleRun(args []string) {
 			localPath, err := models.FindLocalModelByAlias(cfg.ModelsDir, modelName)
 			if err == nil {
 				resolvedModelPath = localPath
-				resolvedModelName = filepath.Base(localPath)
+				resolvedModelName = strings.TrimSuffix(filepath.Base(localPath), filepath.Ext(localPath))
 			} else {
 				// Model not found locally - offer to download
 				fmt.Println()
@@ -4061,7 +4037,7 @@ func handleRun(args []string) {
 						os.Exit(1)
 					}
 					resolvedModelPath = localPath
-					resolvedModelName = filepath.Base(localPath)
+					resolvedModelName = strings.TrimSuffix(filepath.Base(localPath), filepath.Ext(localPath))
 				} else {
 					fmt.Println()
 					printInfo("Aborted. To download manually:")
@@ -4377,7 +4353,7 @@ func handleRun(args []string) {
 			foundActive := false
 			var activeModel string
 			for _, m := range modelsResp.Data {
-				if m.ID == modelName {
+				if m.ID == resolvedModelName {
 					foundActive = true
 					break
 				}
@@ -4386,13 +4362,13 @@ func handleRun(args []string) {
 
 			if !foundActive && len(modelsResp.Data) > 0 {
 				fmt.Println()
-				printInfo(fmt.Sprintf("Switching model: %s -> %s", activeModel, modelName))
+				printInfo(fmt.Sprintf("Switching model: %s -> %s", activeModel, resolvedModelName))
 				fmt.Printf("%sLoading model...%s ", colorDim, colorReset)
 
 				// Let the OffGrid server handle model switching by making a test request
 				// The server's model cache will automatically load the new model
 				testPayload := map[string]interface{}{
-					"model": modelName,
+					"model": resolvedModelName,
 					"messages": []map[string]string{
 						{"role": "user", "content": "Hi"},
 					},
@@ -4462,7 +4438,7 @@ func handleRun(args []string) {
 	}
 
 	chatRuntime := &ChatRuntime{
-		ModelName:        modelName,
+		ModelName:        resolvedModelName,
 		ResolvedModel:    resolvedModelName,
 		ServerPort:       cfg.ServerPort,
 		Client:           client,
@@ -4639,7 +4615,7 @@ func handleRun(args []string) {
 
 			// Make API request
 			reqBody := ChatCompletionRequest{
-				Model:            modelName,
+				Model:            resolvedModelName,
 				Messages:         requestMessages,
 				Stream:           true,
 				UseKnowledgeBase: useKnowledgeBase,
