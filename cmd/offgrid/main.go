@@ -4425,267 +4425,294 @@ func handleRun(args []string) {
 		// We'll attach this to the first user message
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	chatRuntime := &ChatRuntime{
+		ModelName:        modelName,
+		ResolvedModel:    resolvedModelName,
+		ServerPort:       cfg.ServerPort,
+		Client:           client,
+		UseKnowledgeBase: useKnowledgeBase,
+		ImagePath:        imagePath,
+		Messages:         messages,
+		SessionMgr:       sessionMgr,
+		CurrentSession:   currentSession,
+	}
 
-	for {
-		fmt.Printf("\n%sYou%s\n> ", brandPrimary+colorBold, colorReset)
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-
-		input = strings.TrimSpace(input)
-
-		if input == "" {
-			continue
-		}
-
-		// Normalize slash commands
-		if strings.HasPrefix(input, "/") {
-			input = strings.TrimPrefix(input, "/")
-		}
-
-		if input == "exit" || input == "quit" || input == "q" {
+	usedTUI := false
+	if shouldUseChatTUI() {
+		if err := runChatTUI(chatRuntime); err != nil {
 			fmt.Println()
-			fmt.Printf("  %sSession ended%s\n\n", brandMuted, colorReset)
-			break
+			printWarning(fmt.Sprintf("TUI unavailable, falling back to plain chat: %v", err))
+		} else {
+			usedTUI = true
+			messages = chatRuntime.Messages
+			imagePath = chatRuntime.ImagePath
+			useKnowledgeBase = chatRuntime.UseKnowledgeBase
 		}
+	}
 
-		if input == "help" || input == "?" {
-			fmt.Println()
-			fmt.Printf("  %sChat Commands%s\n", brandPrimary+colorBold, colorReset)
-			fmt.Println()
-			fmt.Printf("    %s/help%s     Show this help\n", colorBold, colorReset)
-			fmt.Printf("    %s/status%s   Show model, session, and device info\n", colorBold, colorReset)
-			fmt.Printf("    %s/clear%s    Clear screen and conversation history\n", colorBold, colorReset)
-			fmt.Printf("    %s/rag%s      Toggle knowledge base retrieval\n", colorBold, colorReset)
-			fmt.Printf("    %s/exit%s     Exit the chat\n", colorBold, colorReset)
-			fmt.Println()
-			fmt.Printf("  %sAliases:%s exit, quit, q, help, status, clear, rag\n", brandMuted, colorReset)
-			continue
-		}
+	if !usedTUI {
+		reader := bufio.NewReader(os.Stdin)
 
-		if input == "status" {
-			fmt.Println()
-			fmt.Printf("  %sSession Status%s\n", brandPrimary+colorBold, colorReset)
-			fmt.Println()
-			fmt.Printf("    %sModel:%s       %s\n", brandMuted, colorReset, resolvedModelName)
-			fmt.Printf("    %sMessages:%s    %d (%d user, %d assistant)\n", brandMuted, colorReset, len(messages), (len(messages)+1)/2, len(messages)/2)
-			if currentSession != nil {
-				fmt.Printf("    %sSession:%s     %s\n", brandMuted, colorReset, currentSession.Name)
-			}
-			fmt.Printf("    %sRAG:%s         %s\n", brandMuted, colorReset, func() string {
-				if useKnowledgeBase {
-					return brandSuccess + "enabled" + colorReset
-				}
-				return "disabled"
-			}())
-			if sysInfo, err := resource.DetectResources(); err == nil {
-				if sysInfo.GPUAvailable {
-					fmt.Printf("    %sGPU:%s         %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
-				} else {
-					fmt.Printf("    %sDevice:%s      CPU (%d cores)\n", brandMuted, colorReset, sysInfo.CPUCores)
-				}
-			}
-			fmt.Println()
-			continue
-		}
-
-		if input == "clear" {
-			messages = []ChatMessage{}
-			// Clear session too if active
-			if currentSession != nil {
-				currentSession.Messages = []sessions.Message{}
-				if err := sessionMgr.Save(currentSession); err != nil {
-					fmt.Printf("  %sWarning: Failed to save cleared session: %v%s\n", colorYellow, err, colorReset)
-				}
-			}
-			// Clear image path so it doesn't get re-attached
-			imagePath = ""
-			// Clear the terminal screen
-			fmt.Print("\033[2J\033[H")
-			// Reprint the header
-			printRunHeader(resolvedModelName, useKnowledgeBase, "")
-			fmt.Printf("  %sStatus:%s  %sReady%s\n", brandMuted, colorReset, brandSuccess, colorReset)
-			if sysInfo, err := resource.DetectResources(); err == nil {
-				if sysInfo.GPUAvailable {
-					fmt.Printf("  %sGPU:%s     %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
-				}
-			}
-			fmt.Println()
-			printRunCommands()
-			fmt.Printf("\n  %sConversation cleared%s\n", brandMuted, colorReset)
-			continue
-		}
-
-		if input == "rag" {
-			useKnowledgeBase = !useKnowledgeBase
-			if useKnowledgeBase {
-				fmt.Printf("\n  %sKnowledge Base enabled%s\n", brandSuccess, colorReset)
-			} else {
-				fmt.Printf("\n  %sKnowledge Base disabled%s\n", brandMuted, colorReset)
-			}
-			continue
-		}
-
-		// Build the next user message. Only commit it to history after a successful response.
-		var userContent interface{} = input
-
-		// If we have an image pending, attach it to this message
-		if imagePath != "" {
-			// Read image file again (or we could have cached the dataURI)
-			imageData, err := os.ReadFile(imagePath)
-			if err == nil {
-				base64Image := base64.StdEncoding.EncodeToString(imageData)
-				mimeType := "image/jpeg"
-				if strings.HasSuffix(strings.ToLower(imagePath), ".png") {
-					mimeType = "image/png"
-				} else if strings.HasSuffix(strings.ToLower(imagePath), ".webp") {
-					mimeType = "image/webp"
-				} else if strings.HasSuffix(strings.ToLower(imagePath), ".gif") {
-					mimeType = "image/gif"
-				}
-
-				dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image)
-
-				// Create multimodal content
-				userContent = []map[string]interface{}{
-					{
-						"type": "text",
-						"text": input,
-					},
-					{
-						"type": "image_url",
-						"image_url": map[string]string{
-							"url": dataURI,
-						},
-					},
-				}
-
-				// Clear image path so it's only sent once
-				imagePath = ""
-			} else {
-				printError(fmt.Sprintf("Failed to read image file: %v", err))
-			}
-		}
-
-		userMessage := ChatMessage{
-			Role:    "user",
-			Content: userContent,
-		}
-		requestMessages := append(append([]ChatMessage{}, messages...), userMessage)
-
-		// Make API request
-		reqBody := ChatCompletionRequest{
-			Model:            modelName,
-			Messages:         requestMessages,
-			Stream:           true,
-			UseKnowledgeBase: useKnowledgeBase,
-		}
-
-		jsonData, _ := json.Marshal(reqBody)
-		apiURL := fmt.Sprintf("http://localhost:%d/v1/chat/completions", cfg.ServerPort)
-
-		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
-		if err != nil {
-			fmt.Println()
-			printError(fmt.Sprintf("Error creating request: %v", err))
-			fmt.Println()
-			continue
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			fmt.Println()
-			printError(fmt.Sprintf("Request failed: %v", err))
-			fmt.Println()
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-			resp.Body.Close()
-			fmt.Println()
-			printError(fmt.Sprintf("Request failed with status %d", resp.StatusCode))
-			if len(strings.TrimSpace(string(body))) > 0 {
-				fmt.Printf("  %s%s%s\n", brandMuted, strings.TrimSpace(string(body)), colorReset)
-			}
-			continue
-		}
-
-		// Handle streaming response
-		fmt.Printf("\n%sOffGrid%s\n", brandSuccess+colorBold, colorReset)
-		scanner := bufio.NewScanner(resp.Body)
-		var assistantMsg strings.Builder
-		lineLength := 0
-
-		for scanner.Scan() {
-			line := scanner.Text()
-			if !strings.HasPrefix(line, "data: ") {
-				continue
-			}
-
-			data := strings.TrimPrefix(line, "data: ")
-			if data == "[DONE]" {
+		for {
+			fmt.Printf("\n%sYou%s\n> ", brandPrimary+colorBold, colorReset)
+			input, err := reader.ReadString('\n')
+			if err != nil {
 				break
 			}
 
-			var chunk ChatCompletionChunk
-			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			input = strings.TrimSpace(input)
+
+			if input == "" {
 				continue
 			}
 
-			if len(chunk.Choices) > 0 {
-				tokenInterface := chunk.Choices[0].Delta.Content
-				var token string
-				if str, ok := tokenInterface.(string); ok {
-					token = str
-				}
-				fmt.Print(token)
-				os.Stdout.Sync() // Flush output immediately for streaming
-				assistantMsg.WriteString(token)
-				lineLength += len(token)
+			// Normalize slash commands
+			if strings.HasPrefix(input, "/") {
+				input = strings.TrimPrefix(input, "/")
+			}
 
-				// Wrap long lines
-				if lineLength > 80 && strings.Contains(token, " ") {
-					lineLength = 0
+			if input == "exit" || input == "quit" || input == "q" {
+				fmt.Println()
+				fmt.Printf("  %sSession ended%s\n\n", brandMuted, colorReset)
+				break
+			}
+
+			if input == "help" || input == "?" {
+				fmt.Println()
+				fmt.Printf("  %sChat Commands%s\n", brandPrimary+colorBold, colorReset)
+				fmt.Println()
+				fmt.Printf("    %s/help%s     Show this help\n", colorBold, colorReset)
+				fmt.Printf("    %s/status%s   Show model, session, and device info\n", colorBold, colorReset)
+				fmt.Printf("    %s/clear%s    Clear screen and conversation history\n", colorBold, colorReset)
+				fmt.Printf("    %s/rag%s      Toggle knowledge base retrieval\n", colorBold, colorReset)
+				fmt.Printf("    %s/exit%s     Exit the chat\n", colorBold, colorReset)
+				fmt.Println()
+				fmt.Printf("  %sAliases:%s exit, quit, q, help, status, clear, rag\n", brandMuted, colorReset)
+				continue
+			}
+
+			if input == "status" {
+				fmt.Println()
+				fmt.Printf("  %sSession Status%s\n", brandPrimary+colorBold, colorReset)
+				fmt.Println()
+				fmt.Printf("    %sModel:%s       %s\n", brandMuted, colorReset, resolvedModelName)
+				fmt.Printf("    %sMessages:%s    %d (%d user, %d assistant)\n", brandMuted, colorReset, len(messages), (len(messages)+1)/2, len(messages)/2)
+				if currentSession != nil {
+					fmt.Printf("    %sSession:%s     %s\n", brandMuted, colorReset, currentSession.Name)
+				}
+				fmt.Printf("    %sRAG:%s         %s\n", brandMuted, colorReset, func() string {
+					if useKnowledgeBase {
+						return brandSuccess + "enabled" + colorReset
+					}
+					return "disabled"
+				}())
+				if sysInfo, err := resource.DetectResources(); err == nil {
+					if sysInfo.GPUAvailable {
+						fmt.Printf("    %sGPU:%s         %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
+					} else {
+						fmt.Printf("    %sDevice:%s      CPU (%d cores)\n", brandMuted, colorReset, sysInfo.CPUCores)
+					}
+				}
+				fmt.Println()
+				continue
+			}
+
+			if input == "clear" {
+				messages = []ChatMessage{}
+				// Clear session too if active
+				if currentSession != nil {
+					currentSession.Messages = []sessions.Message{}
+					if err := sessionMgr.Save(currentSession); err != nil {
+						fmt.Printf("  %sWarning: Failed to save cleared session: %v%s\n", colorYellow, err, colorReset)
+					}
+				}
+				// Clear image path so it doesn't get re-attached
+				imagePath = ""
+				// Clear the terminal screen
+				fmt.Print("\033[2J\033[H")
+				// Reprint the header
+				printRunHeader(resolvedModelName, useKnowledgeBase, "")
+				fmt.Printf("  %sStatus:%s  %sReady%s\n", brandMuted, colorReset, brandSuccess, colorReset)
+				if sysInfo, err := resource.DetectResources(); err == nil {
+					if sysInfo.GPUAvailable {
+						fmt.Printf("  %sGPU:%s     %s%s%s\n", brandMuted, colorReset, brandSuccess, sysInfo.GPUName, colorReset)
+					}
+				}
+				fmt.Println()
+				printRunCommands()
+				fmt.Printf("\n  %sConversation cleared%s\n", brandMuted, colorReset)
+				continue
+			}
+
+			if input == "rag" {
+				useKnowledgeBase = !useKnowledgeBase
+				if useKnowledgeBase {
+					fmt.Printf("\n  %sKnowledge Base enabled%s\n", brandSuccess, colorReset)
+				} else {
+					fmt.Printf("\n  %sKnowledge Base disabled%s\n", brandMuted, colorReset)
+				}
+				continue
+			}
+
+			// Build the next user message. Only commit it to history after a successful response.
+			var userContent interface{} = input
+
+			// If we have an image pending, attach it to this message
+			if imagePath != "" {
+				// Read image file again (or we could have cached the dataURI)
+				imageData, err := os.ReadFile(imagePath)
+				if err == nil {
+					base64Image := base64.StdEncoding.EncodeToString(imageData)
+					mimeType := "image/jpeg"
+					if strings.HasSuffix(strings.ToLower(imagePath), ".png") {
+						mimeType = "image/png"
+					} else if strings.HasSuffix(strings.ToLower(imagePath), ".webp") {
+						mimeType = "image/webp"
+					} else if strings.HasSuffix(strings.ToLower(imagePath), ".gif") {
+						mimeType = "image/gif"
+					}
+
+					dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image)
+
+					// Create multimodal content
+					userContent = []map[string]interface{}{
+						{
+							"type": "text",
+							"text": input,
+						},
+						{
+							"type": "image_url",
+							"image_url": map[string]string{
+								"url": dataURI,
+							},
+						},
+					}
+
+					// Clear image path so it's only sent once
+					imagePath = ""
+				} else {
+					printError(fmt.Sprintf("Failed to read image file: %v", err))
 				}
 			}
-		}
 
-		fmt.Println()
-		fmt.Println()
+			userMessage := ChatMessage{
+				Role:    "user",
+				Content: userContent,
+			}
+			requestMessages := append(append([]ChatMessage{}, messages...), userMessage)
 
-		if err := scanner.Err(); err != nil {
-			resp.Body.Close()
-			printError(fmt.Sprintf("Stream interrupted: %v", err))
+			// Make API request
+			reqBody := ChatCompletionRequest{
+				Model:            modelName,
+				Messages:         requestMessages,
+				Stream:           true,
+				UseKnowledgeBase: useKnowledgeBase,
+			}
+
+			jsonData, _ := json.Marshal(reqBody)
+			apiURL := fmt.Sprintf("http://localhost:%d/v1/chat/completions", cfg.ServerPort)
+
+			req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+			if err != nil {
+				fmt.Println()
+				printError(fmt.Sprintf("Error creating request: %v", err))
+				fmt.Println()
+				continue
+			}
+
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				fmt.Println()
+				printError(fmt.Sprintf("Request failed: %v", err))
+				fmt.Println()
+				continue
+			}
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+				resp.Body.Close()
+				fmt.Println()
+				printError(fmt.Sprintf("Request failed with status %d", resp.StatusCode))
+				if len(strings.TrimSpace(string(body))) > 0 {
+					fmt.Printf("  %s%s%s\n", brandMuted, strings.TrimSpace(string(body)), colorReset)
+				}
+				continue
+			}
+
+			// Handle streaming response
+			fmt.Printf("\n%sOffGrid%s\n", brandSuccess+colorBold, colorReset)
+			scanner := bufio.NewScanner(resp.Body)
+			var assistantMsg strings.Builder
+			lineLength := 0
+
+			for scanner.Scan() {
+				line := scanner.Text()
+				if !strings.HasPrefix(line, "data: ") {
+					continue
+				}
+
+				data := strings.TrimPrefix(line, "data: ")
+				if data == "[DONE]" {
+					break
+				}
+
+				var chunk ChatCompletionChunk
+				if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+					continue
+				}
+
+				if len(chunk.Choices) > 0 {
+					tokenInterface := chunk.Choices[0].Delta.Content
+					var token string
+					if str, ok := tokenInterface.(string); ok {
+						token = str
+					}
+					fmt.Print(token)
+					os.Stdout.Sync() // Flush output immediately for streaming
+					assistantMsg.WriteString(token)
+					lineLength += len(token)
+
+					// Wrap long lines
+					if lineLength > 80 && strings.Contains(token, " ") {
+						lineLength = 0
+					}
+				}
+			}
+
 			fmt.Println()
-			continue
-		}
-		resp.Body.Close()
+			fmt.Println()
 
-		assistantText := strings.TrimSpace(assistantMsg.String())
-		if assistantText == "" {
-			printWarning("No response text received")
-			continue
-		}
+			if err := scanner.Err(); err != nil {
+				resp.Body.Close()
+				printError(fmt.Sprintf("Stream interrupted: %v", err))
+				fmt.Println()
+				continue
+			}
+			resp.Body.Close()
 
-		// Add the completed exchange to history.
-		messages = append(messages, userMessage)
-		messages = append(messages, ChatMessage{
-			Role:    "assistant",
-			Content: assistantText,
-		})
+			assistantText := strings.TrimSpace(assistantMsg.String())
+			if assistantText == "" {
+				printWarning("No response text received")
+				continue
+			}
 
-		// Save messages to session after the exchange succeeds.
-		if currentSession != nil {
-			currentSession.AddMessage("user", input)
-			currentSession.AddMessage("assistant", assistantText)
-			// Auto-save after each exchange
-			if err := sessionMgr.Save(currentSession); err != nil {
-				// Don't interrupt the conversation, just log the error
-				fmt.Printf("%sFailed to save session: %v%s\n", brandMuted, err, colorReset)
+			// Add the completed exchange to history.
+			messages = append(messages, userMessage)
+			messages = append(messages, ChatMessage{
+				Role:    "assistant",
+				Content: assistantText,
+			})
+
+			// Save messages to session after the exchange succeeds.
+			if currentSession != nil {
+				currentSession.AddMessage("user", input)
+				currentSession.AddMessage("assistant", assistantText)
+				// Auto-save after each exchange
+				if err := sessionMgr.Save(currentSession); err != nil {
+					// Don't interrupt the conversation, just log the error
+					fmt.Printf("%sFailed to save session: %v%s\n", brandMuted, err, colorReset)
+				}
 			}
 		}
 	}
