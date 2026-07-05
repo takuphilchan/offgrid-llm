@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -3271,7 +3272,9 @@ func handlePeers(args []string) {
 	cfg := config.LoadConfig()
 
 	fmt.Println()
-	fmt.Printf("  %s%s P2P Network%s\n", brandPrimary+colorBold, "📡", colorReset)
+	fmt.Printf("  %sP2P Network%s\n", brandPrimary+colorBold, colorReset)
+	fmt.Println()
+	fmt.Printf("    %sMaturity%s    Beta - use USB import/export for critical deployments\n", brandMuted, colorReset)
 	fmt.Println()
 
 	if !cfg.EnableP2P {
@@ -3283,9 +3286,9 @@ func handlePeers(args []string) {
 		fmt.Printf("      %s$%s offgrid serve  %s# Restart server%s\n", brandMuted, colorReset, brandMuted, colorReset)
 		fmt.Println()
 		fmt.Printf("    %sP2P allows you to:%s\n", colorBold, colorReset)
-		fmt.Printf("      %s•%s Discover other OffGrid nodes on your network\n", brandPrimary, colorReset)
-		fmt.Printf("      %s•%s Transfer models directly between machines\n", brandPrimary, colorReset)
-		fmt.Printf("      %s•%s Share models in air-gapped environments\n", brandPrimary, colorReset)
+		fmt.Printf("      %s-%s Discover other OffGrid nodes on your network\n", brandPrimary, colorReset)
+		fmt.Printf("      %s-%s Transfer models directly between machines\n", brandPrimary, colorReset)
+		fmt.Printf("      %s-%s Share models in air-gapped environments\n", brandPrimary, colorReset)
 		fmt.Println()
 		return
 	}
@@ -3302,34 +3305,32 @@ func handlePeers(args []string) {
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Peers []struct {
-			ID       string   `json:"id"`
-			Address  string   `json:"address"`
-			Port     int      `json:"port"`
-			Models   []string `json:"models"`
-			LastSeen string   `json:"last_seen"`
-		} `json:"peers"`
+	var peers []struct {
+		ID       string   `json:"id"`
+		Address  string   `json:"address"`
+		Port     int      `json:"port"`
+		Models   []string `json:"models"`
+		LastSeen string   `json:"last_seen"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&peers); err != nil {
 		printError(fmt.Sprintf("Failed to parse response: %v", err))
 		return
 	}
 
 	fmt.Printf("    %sStatus%s       P2P enabled (port %d, discovery %d)\n", brandMuted, colorReset, cfg.P2PPort, cfg.DiscoveryPort)
 
-	if len(result.Peers) == 0 {
+	if len(peers) == 0 {
 		fmt.Printf("    %sPeers%s        No peers discovered yet\n", brandMuted, colorReset)
 		fmt.Println()
 		fmt.Printf("    %sWaiting for other OffGrid instances on your network...%s\n", colorDim, colorReset)
 		fmt.Printf("    %sEnsure they have P2P enabled and are on the same subnet.%s\n", colorDim, colorReset)
 	} else {
-		fmt.Printf("    %sPeers%s        %d node(s) discovered\n", brandMuted, colorReset, len(result.Peers))
+		fmt.Printf("    %sPeers%s        %d node(s) discovered\n", brandMuted, colorReset, len(peers))
 		fmt.Println()
 
-		for _, peer := range result.Peers {
-			fmt.Printf("    %s◆%s %s%s%s\n", brandPrimary, colorReset, colorBold, peer.ID, colorReset)
+		for _, peer := range peers {
+			fmt.Printf("    %s-%s %s%s%s\n", brandPrimary, colorReset, colorBold, peer.ID, colorReset)
 			fmt.Printf("      %sAddress%s  %s:%d\n", brandMuted, colorReset, peer.Address, peer.Port)
 			if len(peer.Models) > 0 {
 				fmt.Printf("      %sModels%s   %s\n", brandMuted, colorReset, strings.Join(peer.Models, ", "))
@@ -5538,23 +5539,27 @@ func handleKnowledgeBase(args []string) {
 
 	if len(args) == 0 {
 		fmt.Println()
-		fmt.Printf("  %s◈ Knowledge Base%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %sKnowledge Base%s\n", brandPrimary+colorBold, colorReset)
 		fmt.Printf("  %sRAG document management%s\n", colorDim, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sUsage%s  offgrid kb <command>\n", colorDim, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sCommands%s\n", brandPrimary, colorReset)
 		fmt.Printf("    %-20s %sShow KB status%s\n", "status", colorDim, colorReset)
+		fmt.Printf("    %-20s %sEnable with embedding model%s\n", "enable <model>", colorDim, colorReset)
+		fmt.Printf("    %-20s %sDisable retrieval%s\n", "disable", colorDim, colorReset)
 		fmt.Printf("    %-20s %sList all documents%s\n", "list", colorDim, colorReset)
-		fmt.Printf("    %-20s %sAdd a document%s\n", "add <file>", colorDim, colorReset)
+		fmt.Printf("    %-20s %sAdd file or directory%s\n", "add <path>", colorDim, colorReset)
 		fmt.Printf("    %-20s %sRemove by ID%s\n", "remove <id>", colorDim, colorReset)
 		fmt.Printf("    %-20s %sSearch documents%s\n", "search <query>", colorDim, colorReset)
 		fmt.Printf("    %-20s %sClear all documents%s\n", "clear", colorDim, colorReset)
 		fmt.Println()
-		fmt.Printf("  %sSupported%s  .txt .md .json .csv .html\n", colorDim, colorReset)
+		fmt.Printf("  %sSupported%s  .txt .md .pdf .docx .csv .json .html and common code files\n", colorDim, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sExamples%s\n", brandPrimary, colorReset)
+		fmt.Printf("    %s$%s offgrid kb enable bge-small\n", colorDim, colorReset)
 		fmt.Printf("    %s$%s offgrid kb add ./docs/manual.md\n", colorDim, colorReset)
+		fmt.Printf("    %s$%s offgrid kb add ./learning-packs/\n", colorDim, colorReset)
 		fmt.Printf("    %s$%s offgrid kb search \"how to configure\"\n", colorDim, colorReset)
 		fmt.Println()
 		return
@@ -5565,11 +5570,20 @@ func handleKnowledgeBase(args []string) {
 	switch subcommand {
 	case "status":
 		handleKBStatus()
+	case "enable":
+		if len(args) < 2 {
+			printError("Usage: offgrid kb enable <embedding-model>")
+			fmt.Println("Tip: install an embedding model first, for example bge, nomic, embed, or minilm.")
+			return
+		}
+		handleKBEnable(args[1])
+	case "disable":
+		handleKBDisable()
 	case "list", "ls":
 		handleKBList()
 	case "add":
 		if len(args) < 2 {
-			printError("Usage: offgrid kb add <file>")
+			printError("Usage: offgrid kb add <file-or-directory>")
 			return
 		}
 		handleKBAdd(args[1])
@@ -5590,7 +5604,7 @@ func handleKnowledgeBase(args []string) {
 		handleKBClear()
 	default:
 		printError(fmt.Sprintf("Unknown subcommand: %s", subcommand))
-		fmt.Println("Available subcommands: status, list, add, remove, search, clear")
+		fmt.Println("Available subcommands: status, enable, disable, list, add, remove, search, clear")
 	}
 }
 
@@ -5630,25 +5644,46 @@ func handleKBStatus() {
 	if model, ok := status["model"].(string); ok && model != "" {
 		fmt.Printf("   %sModel:%s       %s\n", colorDim, colorReset, model)
 	}
+	if model, ok := status["embedding_model"].(string); ok && model != "" {
+		fmt.Printf("   %sModel:%s       %s\n", colorDim, colorReset, model)
+	}
 
-	if docCount, ok := status["document_count"].(float64); ok {
+	stats, _ := status["stats"].(map[string]interface{})
+	if docCount, ok := stats["document_count"].(float64); ok {
 		fmt.Printf("   %sDocuments:%s   %.0f\n", colorDim, colorReset, docCount)
 	}
 
-	if chunkCount, ok := status["chunk_count"].(float64); ok {
+	if chunkCount, ok := stats["chunk_count"].(float64); ok {
 		fmt.Printf("   %sChunks:%s      %.0f\n", colorDim, colorReset, chunkCount)
+	}
+	if embeddingCount, ok := stats["embedding_count"].(float64); ok {
+		fmt.Printf("   %sEmbeddings:%s  %.0f\n", colorDim, colorReset, embeddingCount)
+	}
+	if backend, ok := stats["backend"].(string); ok && backend != "" {
+		fmt.Printf("   %sBackend:%s     %s\n", colorDim, colorReset, backend)
 	}
 
 	if persistPath, ok := status["persist_path"].(string); ok && persistPath != "" {
 		fmt.Printf("   %sData Path:%s   %s\n", colorDim, colorReset, persistPath)
 	}
+	if !enabled {
+		fmt.Println()
+		fmt.Printf("   %sEnable with:%s offgrid kb enable <embedding-model>\n", colorDim, colorReset)
+	}
 
 	fmt.Println()
 }
 
-func handleKBList() {
+func handleKBEnable(model string) {
 	port := getServerPort()
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v1/rag/status", port))
+	reqBody := map[string]string{"embedding_model": model}
+	jsonData, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://localhost:%d/v1/rag/enable", port),
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
 	if err != nil {
 		printError(fmt.Sprintf("Failed to connect to server: %v", err))
 		fmt.Println("Make sure the server is running with: offgrid serve")
@@ -5656,19 +5691,49 @@ func handleKBList() {
 	}
 	defer resp.Body.Close()
 
-	var status map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		printError(fmt.Sprintf("Failed to enable knowledge base: %s", strings.TrimSpace(string(body))))
+		return
+	}
+	printSuccess(fmt.Sprintf("Knowledge Base enabled with %s", model))
+}
+
+func handleKBDisable() {
+	port := getServerPort()
+	resp, err := http.Post(fmt.Sprintf("http://localhost:%d/v1/rag/disable", port), "application/json", nil)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		fmt.Println("Make sure the server is running with: offgrid serve")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		printError(fmt.Sprintf("Failed to disable knowledge base: %s", strings.TrimSpace(string(body))))
+		return
+	}
+	printSuccess("Knowledge Base disabled")
+}
+
+func handleKBList() {
+	port := getServerPort()
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v1/documents", port))
+	if err != nil {
+		printError(fmt.Sprintf("Failed to connect to server: %v", err))
+		fmt.Println("Make sure the server is running with: offgrid serve")
+		return
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		printError(fmt.Sprintf("Failed to parse response: %v", err))
 		return
 	}
 
-	enabled, _ := status["enabled"].(bool)
-	if !enabled {
-		printError("RAG is not enabled. Enable it first via the web UI or API.")
-		return
-	}
-
-	docs, ok := status["documents"].([]interface{})
+	docs, ok := result["documents"].([]interface{})
 	if !ok || len(docs) == 0 {
 		fmt.Println()
 		fmt.Printf("%sKnowledge Base Documents%s\n", brandPrimary+colorBold, colorReset)
@@ -5710,7 +5775,6 @@ func handleKBList() {
 }
 
 func handleKBAdd(filePath string) {
-	port := getServerPort()
 	// Check if file exists
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -5719,41 +5783,90 @@ func handleKBAdd(filePath string) {
 	}
 
 	if info.IsDir() {
-		printError("Cannot add directory. Please specify a file.")
+		handleKBAddDirectory(filePath)
 		return
 	}
 
-	// Read file content
-	content, err := os.ReadFile(filePath)
+	handleKBAddFile(filePath)
+}
+
+func handleKBAddDirectory(dirPath string) {
+	var added, skipped, failed int
+
+	err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			failed++
+			printWarning(fmt.Sprintf("Skipping %s: %v", path, err))
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !isKBSupportedFile(path) {
+			skipped++
+			return nil
+		}
+		if handleKBAddFile(path) {
+			added++
+		} else {
+			failed++
+		}
+		return nil
+	})
+	if err != nil {
+		printError(fmt.Sprintf("Failed to scan directory: %v", err))
+		return
+	}
+
+	fmt.Println()
+	printSuccess(fmt.Sprintf("Directory ingestion finished: %d added, %d skipped, %d failed", added, skipped, failed))
+}
+
+func handleKBAddFile(filePath string) bool {
+	port := getServerPort()
+
+	file, err := os.Open(filePath)
 	if err != nil {
 		printError(fmt.Sprintf("Failed to read file: %v", err))
-		return
+		return false
+	}
+	defer file.Close()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		printError(fmt.Sprintf("Failed to prepare upload: %v", err))
+		return false
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		printError(fmt.Sprintf("Failed to read file: %v", err))
+		return false
+	}
+	if err := writer.Close(); err != nil {
+		printError(fmt.Sprintf("Failed to prepare upload: %v", err))
+		return false
 	}
 
-	// Prepare request
-	reqBody := map[string]interface{}{
-		"name":    filepath.Base(filePath),
-		"content": string(content),
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/v1/documents/ingest", port), &body)
+	if err != nil {
+		printError(fmt.Sprintf("Failed to create request: %v", err))
+		return false
 	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	jsonData, _ := json.Marshal(reqBody)
-
-	resp, err := http.Post(
-		fmt.Sprintf("http://localhost:%d/v1/documents/ingest", port),
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		printError(fmt.Sprintf("Failed to connect to server: %v", err))
 		fmt.Println("Make sure the server is running with: offgrid serve")
-		return
+		return false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		printError(fmt.Sprintf("Failed to add document: %s", string(body)))
-		return
+		return false
 	}
 
 	var result map[string]interface{}
@@ -5766,12 +5879,23 @@ func handleKBAdd(filePath string) {
 	} else {
 		printSuccess(fmt.Sprintf("Added '%s'", filepath.Base(filePath)))
 	}
+	return true
+}
+
+func isKBSupportedFile(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".txt", ".md", ".markdown", ".json", ".csv", ".xml", ".html", ".htm", ".pdf", ".docx", ".xlsx", ".pptx", ".rtf",
+		".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".hpp", ".rs", ".sh", ".yaml", ".yml", ".toml":
+		return true
+	default:
+		return false
+	}
 }
 
 func handleKBRemove(id string) {
 	port := getServerPort()
 	req, _ := http.NewRequest(http.MethodDelete,
-		fmt.Sprintf("http://localhost:%d/v1/documents/delete?id=%s", port, id), nil)
+		fmt.Sprintf("http://localhost:%d/v1/documents/delete?id=%s", port, url.QueryEscape(id)), nil)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -5892,17 +6016,17 @@ func handleKBClear() {
 	}
 
 	// Get list of documents first
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v1/rag/status", port))
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/v1/documents", port))
 	if err != nil {
 		printError(fmt.Sprintf("Failed to connect to server: %v", err))
 		return
 	}
 	defer resp.Body.Close()
 
-	var status map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&status)
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
 
-	docs, ok := status["documents"].([]interface{})
+	docs, ok := result["documents"].([]interface{})
 	if !ok || len(docs) == 0 {
 		fmt.Println("Knowledge base is already empty.")
 		return
@@ -5921,7 +6045,7 @@ func handleKBClear() {
 		}
 
 		req, _ := http.NewRequest(http.MethodDelete,
-			fmt.Sprintf("http://localhost:%d/v1/documents/delete?id=%s", port, id), nil)
+			fmt.Sprintf("http://localhost:%d/v1/documents/delete?id=%s", port, url.QueryEscape(id)), nil)
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
@@ -7186,8 +7310,8 @@ func handleLoRA(args []string) {
 
 	if len(args) < 1 {
 		fmt.Println()
-		fmt.Printf("  %s◈ LoRA Adapters%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("  %sFine-tuning adapter management%s\n", colorDim, colorReset)
+		fmt.Printf("  %sLoRA Adapters%s\n", brandPrimary+colorBold, colorReset)
+		fmt.Printf("  %sExperimental adapter registry%s\n", colorDim, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sUsage%s  offgrid lora <command>\n", colorDim, colorReset)
 		fmt.Println()
@@ -7198,7 +7322,7 @@ func handleLoRA(args []string) {
 		fmt.Printf("    %-24s %sShow adapter info%s\n", "info <id>", colorDim, colorReset)
 		fmt.Printf("    %-24s %sSet scale (0.0-1.0)%s\n", "scale <id> <value>", colorDim, colorReset)
 		fmt.Println()
-		fmt.Printf("  %sNote%s  Use /v1/lora/* API for runtime loading\n", colorDim, colorReset)
+		fmt.Printf("  %sMaturity%s  Experimental. Registration works; runtime hot-loading is not available yet.\n", colorDim, colorReset)
 		fmt.Println()
 		return
 	}
@@ -7219,6 +7343,7 @@ func handleLoRA(args []string) {
 			fmt.Println()
 			fmt.Printf("  %sRegister an adapter:%s offgrid lora register <name> <path>\n", colorDim, colorReset)
 		} else {
+			fmt.Printf("  %sMaturity:%s Experimental registry; runtime loading is not available yet.\n\n", colorDim, colorReset)
 			fmt.Printf("  %s%-16s  %-20s  %-8s  %s%s\n", colorDim, "ID", "Name", "Scale", "Path", colorReset)
 			for _, a := range adapterList {
 				fmt.Printf("  %-16s  %-20s  %-8.2f  %s\n", a.ID[:16], a.Name, a.Scale, a.Path)

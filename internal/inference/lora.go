@@ -2,6 +2,7 @@ package inference
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -333,10 +334,13 @@ func (m *LoRAManager) GetStatus() map[string]any {
 	}
 
 	return map[string]any{
-		"adapters":       registered,
-		"active_stack":   m.activeStack,
-		"total_adapters": len(m.adapters),
-		"loaded_count":   len(m.activeStack),
+		"adapters":                  registered,
+		"active_stack":              m.activeStack,
+		"total_adapters":            len(m.adapters),
+		"loaded_count":              len(m.activeStack),
+		"maturity":                  "experimental",
+		"runtime_loading_supported": false,
+		"message":                   "LoRA registration is available, but runtime hot-loading is not implemented for the current backend.",
 	}
 }
 
@@ -387,10 +391,8 @@ func isValidLoRAFile(path string) bool {
 // generateAdapterID generates a unique adapter ID
 func generateAdapterID() string {
 	b := make([]byte, 8)
-	if _, err := os.ReadFile("/dev/urandom"); err == nil {
-		f, _ := os.Open("/dev/urandom")
-		f.Read(b)
-		f.Close()
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("lora-%d", time.Now().UnixNano())
 	}
 	return fmt.Sprintf("lora-%x", b)
 }

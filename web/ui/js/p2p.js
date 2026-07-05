@@ -11,7 +11,10 @@ let p2pState = {
     refreshInterval: null,
     nodeID: null,
     sharedModels: [],
-    remoteModels: 0
+    remoteModels: 0,
+    maturity: 'beta',
+    transferAvailable: false,
+    message: ''
 };
 
 // Initialize P2P module
@@ -37,6 +40,9 @@ async function refreshP2PStatus() {
             p2pState.nodeID = status.node_id;
             p2pState.sharedModels = status.shared_models || [];
             p2pState.remoteModels = status.remote_models || 0;
+            p2pState.maturity = status.maturity || 'beta';
+            p2pState.transferAvailable = !!status.transfer_available;
+            p2pState.message = status.message || '';
         }
         
         // Fetch peers list
@@ -80,8 +86,8 @@ function updateP2PStatus() {
     
     if (statusBadge) {
         if (p2pState.enabled) {
-            statusBadge.textContent = 'Enabled';
-            statusBadge.className = 'badge badge-success text-xs';
+            statusBadge.textContent = 'Enabled · Beta';
+            statusBadge.className = 'badge badge-warning text-xs';
         } else {
             statusBadge.textContent = 'Disabled';
             statusBadge.className = 'badge badge-secondary text-xs';
@@ -156,7 +162,7 @@ function renderPeers(peers) {
                     <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
                 </svg>
                 <p>P2P is disabled</p>
-                <span class="text-xs text-secondary">Start the server with --enable-p2p flag</span>
+                <span class="text-xs text-secondary">Enable it only for trusted local-network beta testing</span>
             </div>
         `;
         return;
@@ -171,7 +177,7 @@ function renderPeers(peers) {
                     <circle cx="18" cy="19" r="3"></circle>
                 </svg>
                 <p>No peers discovered yet</p>
-                <span class="text-xs text-secondary">Other OffGrid nodes on your network will appear here</span>
+                <span class="text-xs text-secondary">P2P is beta. USB import/export is recommended for critical offline sharing.</span>
             </div>
         `;
         return;
@@ -184,6 +190,10 @@ function renderPeers(peers) {
 function renderPeerCard(peer) {
     const lastSeen = peer.LastSeen ? formatTimeAgo(new Date(peer.LastSeen)) : 'Unknown';
     const models = peer.Models || [];
+    const downloadDisabled = models.length === 0 || !p2pState.transferAvailable;
+    const downloadTitle = !p2pState.transferAvailable
+        ? 'P2P transfer is beta and unavailable on this server'
+        : 'Download model from this peer';
     
     return `
         <div class="p-4 bg-tertiary rounded-lg border border-theme hover:border-accent/30 transition-colors">
@@ -231,7 +241,7 @@ function renderPeerCard(peer) {
                     </svg>
                     View Models
                 </button>
-                <button onclick="downloadFromPeer('${escapeHtml(peer.ID)}')" class="btn btn-primary btn-sm flex-1" ${models.length === 0 ? 'disabled' : ''}>
+                <button onclick="downloadFromPeer('${escapeHtml(peer.ID)}')" class="btn btn-primary btn-sm flex-1" title="${downloadTitle}" ${downloadDisabled ? 'disabled' : ''}>
                     <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
@@ -273,6 +283,10 @@ function showPeerModels(peerID) {
 // Show download dialog for peer
 function downloadFromPeer(peerID) {
     const peer = p2pState.peers.find(p => p.ID === peerID);
+    if (!p2pState.transferAvailable) {
+        showToast('P2P transfer is beta and unavailable on this server. Use USB export/import for now.', 'warning');
+        return;
+    }
     if (!peer || !peer.Models || peer.Models.length === 0) {
         showToast('No models available from this peer', 'warning');
         return;
@@ -283,6 +297,10 @@ function downloadFromPeer(peerID) {
 
 // Request model download from peer
 async function requestModelDownload(peerID, modelPath) {
+    if (!p2pState.transferAvailable) {
+        showToast('P2P transfer is beta and unavailable on this server. Use USB export/import for now.', 'warning');
+        return;
+    }
     try {
         showToast(`Starting download of ${modelPath} from ${peerID}...`, 'info');
         

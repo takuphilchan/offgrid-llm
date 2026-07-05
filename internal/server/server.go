@@ -4493,11 +4493,8 @@ func (s *Server) handleLoRA(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(adapter)
 		case "load":
 			adapterID := parts[0]
-			if err := s.loraManager.LoadAdapter(r.Context(), adapterID); err != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
-				return
-			}
-			json.NewEncoder(w).Encode(map[string]string{"status": "loaded", "id": adapterID})
+			writeError(w, fmt.Sprintf("LoRA runtime loading is experimental and not implemented for this backend (adapter: %s)", adapterID), http.StatusNotImplemented)
+			return
 		case "unload":
 			adapterID := parts[0]
 			if err := s.loraManager.UnloadAdapter(r.Context(), adapterID); err != nil {

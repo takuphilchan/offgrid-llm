@@ -302,14 +302,17 @@ Chat with your documents:
 
 ```bash
 offgrid kb status              # Show status
+offgrid kb enable <model>      # Enable with an embedding model
+offgrid kb disable             # Disable retrieval
 offgrid kb list                # List documents
-offgrid kb add <file>          # Add document
+offgrid kb add <path>          # Add file or directory
 offgrid kb search "<query>"    # Search
 offgrid kb remove <id>         # Remove document
 offgrid kb clear               # Clear all
 ```
 
 ```bash
+offgrid kb enable bge-small
 offgrid kb add ./docs/manual.pdf
 offgrid kb add ./notes/
 offgrid kb search "how to configure"
@@ -319,11 +322,30 @@ offgrid kb search "how to configure"
 
 ## P2P Network
 
-View and manage peer connections:
+View beta peer discovery and local-network model transfer status.
+
+P2P is useful for trusted local labs, but USB import/export is still recommended
+for critical offline deployments.
 
 ```bash
 offgrid peers                  # List connected peers
-offgrid peers [--discover]     # Discover new peers
+```
+
+---
+
+## LoRA Adapters
+
+Register LoRA adapter metadata.
+
+Runtime hot-loading is experimental and is not available for the current
+backend yet.
+
+```bash
+offgrid lora list
+offgrid lora register <name> <path> [scale]
+offgrid lora info <id>
+offgrid lora scale <id> <value>
+offgrid lora remove <id>
 ```
 
 ---

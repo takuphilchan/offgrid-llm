@@ -25,16 +25,22 @@ func (s *Server) handleP2PPeers(w http.ResponseWriter, r *http.Request) {
 // handleP2PStatus returns the P2P network status including shared models
 func (s *Server) handleP2PStatus(w http.ResponseWriter, r *http.Request) {
 	type P2PStatus struct {
-		Enabled      bool     `json:"enabled"`
-		NodeID       string   `json:"node_id"`
-		PeerCount    int      `json:"peer_count"`
-		SharedModels []string `json:"shared_models"`
-		RemoteModels int      `json:"remote_models"`
+		Enabled           bool     `json:"enabled"`
+		NodeID            string   `json:"node_id"`
+		PeerCount         int      `json:"peer_count"`
+		SharedModels      []string `json:"shared_models"`
+		RemoteModels      int      `json:"remote_models"`
+		Maturity          string   `json:"maturity"`
+		TransferAvailable bool     `json:"transfer_available"`
+		Message           string   `json:"message,omitempty"`
 	}
 
 	status := P2PStatus{
-		Enabled:      s.config.EnableP2P,
-		SharedModels: []string{},
+		Enabled:           s.config.EnableP2P,
+		SharedModels:      []string{},
+		Maturity:          "beta",
+		TransferAvailable: s.config.EnableP2P && s.p2pTransfer != nil,
+		Message:           "P2P is beta. USB import/export is still recommended for critical offline deployments.",
 	}
 
 	if s.config.EnableP2P && s.p2pDiscovery != nil {
@@ -140,7 +146,16 @@ func (s *Server) handleP2PDownload(w http.ResponseWriter, r *http.Request) {
 		err := s.p2pTransfer.DownloadFromPeer(context.Background(), targetPeer, req.ModelPath, req.Hash)
 		if err != nil {
 			log.Printf("P2P download failed: %v", err)
-			// Error is handled in callback
+			s.downloadMutex.Lock()
+			s.downloadProgress[progressID] = &DownloadProgress{
+				FileName:   filepath.Base(req.ModelPath),
+				BytesTotal: 0,
+				BytesDone:  0,
+				Percent:    0,
+				Status:     "failed",
+				Error:      err.Error(),
+			}
+			s.downloadMutex.Unlock()
 		} else {
 			log.Printf("P2P download complete: %s", req.ModelPath)
 			// Refresh local models
