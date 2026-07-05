@@ -144,7 +144,7 @@ func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 
 	assistantText := strings.TrimSpace(assistantMsg.String())
 	if assistantText == "" {
-		return fmt.Errorf("no response text received")
+		return fmt.Errorf("%s", embeddingModelChatError(rt.ResolvedModel))
 	}
 
 	rt.Messages = append(rt.Messages, userMessage, ChatMessage{
@@ -327,6 +327,7 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.busy = false
 			m.statusText = "Ready"
+			m.removeEmptyAssistantStream()
 			m.appendError(msg.err.Error())
 			return m, nil
 		}
@@ -413,6 +414,19 @@ func (m *chatTUIModel) updateAssistantStream(text string) {
 		return
 	}
 	m.lines[m.streamLineIndex] = chatAIStyle.Render("OffGrid") + "\n" + text
+	m.refreshViewport()
+}
+
+func (m *chatTUIModel) removeEmptyAssistantStream() {
+	if strings.TrimSpace(m.streamText) != "" {
+		return
+	}
+	if m.streamLineIndex < 0 || m.streamLineIndex >= len(m.lines) {
+		return
+	}
+	m.lines = append(m.lines[:m.streamLineIndex], m.lines[m.streamLineIndex+1:]...)
+	m.streamLineIndex = -1
+	m.streamText = ""
 	m.refreshViewport()
 }
 

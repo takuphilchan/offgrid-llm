@@ -3952,6 +3952,7 @@ func handleRun(args []string) {
 		fmt.Printf("    %s--load%s <name>      Load and continue existing session\n", brandPrimary, colorReset)
 		fmt.Printf("    %s--image%s <path>     Attach an image (for VLM models)\n", brandPrimary, colorReset)
 		fmt.Printf("    %s--rag%s              Enable knowledge base (RAG)\n", brandPrimary, colorReset)
+		fmt.Printf("    %s--allow-embedding-chat%s  Force chat with an embedding-like model\n", brandPrimary, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sMore Aliases%s\n", colorBold, colorReset)
 		fmt.Printf("    %sphi%s, %sgemma%s, %sqwen2.5-coder%s, %scodellama%s, %sllava%s (vision)\n", brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset)
@@ -3970,6 +3971,7 @@ func handleRun(args []string) {
 	var saveSession bool
 	var imagePath string
 	var useKnowledgeBase bool
+	var allowEmbeddingChat bool
 
 	// Parse flags
 	for i := 1; i < len(args); i++ {
@@ -3985,6 +3987,8 @@ func handleRun(args []string) {
 			i++
 		} else if args[i] == "--rag" {
 			useKnowledgeBase = true
+		} else if args[i] == "--allow-embedding-chat" {
+			allowEmbeddingChat = true
 		}
 	}
 
@@ -4161,39 +4165,18 @@ func handleRun(args []string) {
 		}
 	}
 
-	// Check if this is an embedding model (not designed for chat)
-	isEmbeddingModel := strings.Contains(strings.ToLower(modelName), "minilm") ||
-		strings.Contains(strings.ToLower(modelName), "e5-") ||
-		strings.Contains(strings.ToLower(modelName), "bge-") ||
-		strings.Contains(strings.ToLower(modelName), "gte-") ||
-		strings.Contains(strings.ToLower(modelName), "embedding")
-
-	if isEmbeddingModel {
+	if isLikelyEmbeddingModel(modelName, resolvedModelName, resolvedModelPath, model.Path) && !allowEmbeddingChat {
 		fmt.Println()
-		printWarning("This appears to be an embedding model, not a chat model")
+		printWarning(embeddingModelChatError(resolvedModelName))
 		fmt.Println()
-		printInfo("Embedding models are designed for:")
-		fmt.Println("  • Converting text to vectors")
-		fmt.Println("  • Semantic search")
-		fmt.Println("  • Text similarity")
+		printInfo("Embedding models are useful for the knowledge base:")
+		printItem("Add documents", "offgrid kb add ./documents/")
+		printItem("Search docs", "offgrid kb search \"your question\"")
+		printItem("Chat with RAG", "offgrid run llama3 --rag")
 		fmt.Println()
-		printInfo("For chat/text generation, use a language model instead:")
-		fmt.Println("  • tinyllama-1.1b-chat")
-		fmt.Println("  • phi-2")
-		fmt.Println("  • llama-2-7b-chat")
-		fmt.Println("  • mistral-7b-instruct")
+		printInfo("To override this guard: offgrid run <model> --allow-embedding-chat")
 		fmt.Println()
-		fmt.Printf("%sContinue anyway?%s (y/N): ", brandMuted, colorReset)
-
-		var response string
-		fmt.Scanln(&response)
-		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-			fmt.Println()
-			printInfo("Aborted. Use 'offgrid list' to see available models")
-			fmt.Println()
-			os.Exit(0)
-		}
-		fmt.Println()
+		os.Exit(1)
 	}
 
 	// Check if OffGrid API server is running and start it if needed
