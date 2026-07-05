@@ -33,13 +33,27 @@ type ChatRuntime struct {
 	CurrentSession   *sessions.Session
 }
 
-func (rt *ChatRuntime) Submit(input string) (string, error) {
+func (rt *ChatRuntime) Stream(input string) <-chan chatStreamMsg {
+	ch := make(chan chatStreamMsg)
+	go func() {
+		defer close(ch)
+
+		if err := rt.stream(input, ch); err != nil {
+			ch <- chatStreamMsg{err: err}
+			return
+		}
+		ch <- chatStreamMsg{done: true}
+	}()
+	return ch
+}
+
+func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 	var userContent interface{} = input
 
 	if rt.ImagePath != "" {
 		imageData, err := os.ReadFile(rt.ImagePath)
 		if err != nil {
-			return "", fmt.Errorf("failed to read image file: %w", err)
+			return fmt.Errorf("failed to read image file: %w", err)
 		}
 
 		base64Image := base64.StdEncoding.EncodeToString(imageData)
@@ -74,19 +88,19 @@ func (rt *ChatRuntime) Submit(input string) (string, error) {
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	apiURL := fmt.Sprintf("http://localhost:%d/v1/chat/completions", rt.ServerPort)
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", err
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := rt.Client.Do(req)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -96,7 +110,7 @@ func (rt *ChatRuntime) Submit(input string) (string, error) {
 		if msg == "" {
 			msg = http.StatusText(resp.StatusCode)
 		}
-		return "", fmt.Errorf("request failed with status %d: %s", resp.StatusCode, msg)
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, msg)
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -121,15 +135,16 @@ func (rt *ChatRuntime) Submit(input string) (string, error) {
 		}
 		if token, ok := chunk.Choices[0].Delta.Content.(string); ok {
 			assistantMsg.WriteString(token)
+			ch <- chatStreamMsg{token: token}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("stream interrupted: %w", err)
+		return fmt.Errorf("stream interrupted: %w", err)
 	}
 
 	assistantText := strings.TrimSpace(assistantMsg.String())
 	if assistantText == "" {
-		return "", fmt.Errorf("no response text received")
+		return fmt.Errorf("no response text received")
 	}
 
 	rt.Messages = append(rt.Messages, userMessage, ChatMessage{
@@ -141,11 +156,11 @@ func (rt *ChatRuntime) Submit(input string) (string, error) {
 		rt.CurrentSession.AddMessage("user", input)
 		rt.CurrentSession.AddMessage("assistant", assistantText)
 		if err := rt.SessionMgr.Save(rt.CurrentSession); err != nil {
-			return assistantText, fmt.Errorf("response received, but failed to save session: %w", err)
+			return fmt.Errorf("response received, but failed to save session: %w", err)
 		}
 	}
 
-	return assistantText, nil
+	return nil
 }
 
 func (rt *ChatRuntime) Clear() error {
@@ -180,22 +195,27 @@ func (rt *ChatRuntime) StatusText() string {
 	return strings.TrimSpace(b.String())
 }
 
-type chatResponseMsg struct {
-	input    string
-	response string
-	err      error
+type chatStreamMsg struct {
+	token string
+	err   error
+	done  bool
 }
 
 type chatTUIModel struct {
-	rt         *ChatRuntime
-	input      textinput.Model
-	viewport   viewport.Model
-	spinner    spinner.Model
-	lines      []string
-	busy       bool
-	width      int
-	height     int
-	statusText string
+	rt              *ChatRuntime
+	input           textinput.Model
+	viewport        viewport.Model
+	spinner         spinner.Model
+	lines           []string
+	busy            bool
+	width           int
+	height          int
+	statusText      string
+	streamCh        <-chan chatStreamMsg
+	streamLineIndex int
+	streamText      string
+	history         []string
+	historyIndex    int
 }
 
 var (
@@ -217,18 +237,21 @@ func newChatTUIModel(rt *ChatRuntime) chatTUIModel {
 	sp.Spinner = spinner.Dot
 
 	m := chatTUIModel{
-		rt:         rt,
-		input:      ti,
-		viewport:   viewport.New(80, 20),
-		spinner:    sp,
-		statusText: "Ready",
+		rt:           rt,
+		input:        ti,
+		viewport:     viewport.New(80, 20),
+		spinner:      sp,
+		statusText:   "Ready",
+		historyIndex: -1,
 	}
 
 	if len(rt.Messages) > 0 {
 		m.appendSystem("Loaded previous conversation")
 		for _, msg := range rt.Messages {
 			if msg.Role == "user" {
-				m.appendUser(msg.StringContent())
+				userText := msg.StringContent()
+				m.appendUser(userText)
+				m.addHistory(userText)
 			} else {
 				m.appendAssistant(msg.StringContent())
 			}
@@ -271,14 +294,26 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if input == "" {
 				return m, nil
 			}
+			m.addHistory(input)
 			if strings.HasPrefix(input, "/") {
 				cmd := strings.TrimPrefix(input, "/")
 				return m.handleCommand(cmd)
 			}
 			m.appendUser(input)
+			m.streamText = ""
+			m.streamLineIndex = m.appendAssistantStream()
+			m.streamCh = m.rt.Stream(input)
 			m.busy = true
-			m.statusText = "Thinking..."
-			return m, tea.Batch(m.spinner.Tick, submitChatCmd(m.rt, input))
+			m.statusText = "Streaming..."
+			return m, tea.Batch(m.spinner.Tick, waitForStream(m.streamCh))
+		case "up":
+			if !m.busy {
+				m.previousHistory()
+			}
+		case "down":
+			if !m.busy {
+				m.nextHistory()
+			}
 		}
 
 	case spinner.TickMsg:
@@ -288,14 +323,26 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case chatResponseMsg:
-		m.busy = false
-		m.statusText = "Ready"
+	case chatStreamMsg:
 		if msg.err != nil {
+			m.busy = false
+			m.statusText = "Ready"
 			m.appendError(msg.err.Error())
-		} else {
-			m.appendAssistant(msg.response)
+			return m, nil
 		}
+		if msg.token != "" {
+			m.streamText += msg.token
+			m.updateAssistantStream(m.streamText)
+		}
+		if msg.done {
+			m.busy = false
+			m.statusText = "Ready"
+			m.streamCh = nil
+			m.streamLineIndex = -1
+			m.streamText = ""
+			return m, nil
+		}
+		return m, waitForStream(m.streamCh)
 	}
 
 	var cmd tea.Cmd
@@ -315,7 +362,7 @@ func (m chatTUIModel) View() string {
 		status = m.spinner.View() + " " + status
 	}
 
-	footer := chatMuteStyle.Render(status + "  /help /status /clear /rag /exit")
+	footer := chatMuteStyle.Render(status + "  /help /status /clear /rag /exit  Up/Down history")
 	return header + "\n\n" + m.viewport.View() + "\n\n" + m.input.View() + "\n" + footer
 }
 
@@ -355,6 +402,20 @@ func (m *chatTUIModel) appendAssistant(text string) {
 	m.appendLine(chatAIStyle.Render("OffGrid") + "\n" + text)
 }
 
+func (m *chatTUIModel) appendAssistantStream() int {
+	m.lines = append(m.lines, chatAIStyle.Render("OffGrid")+"\n")
+	m.refreshViewport()
+	return len(m.lines) - 1
+}
+
+func (m *chatTUIModel) updateAssistantStream(text string) {
+	if m.streamLineIndex < 0 || m.streamLineIndex >= len(m.lines) {
+		return
+	}
+	m.lines[m.streamLineIndex] = chatAIStyle.Render("OffGrid") + "\n" + text
+	m.refreshViewport()
+}
+
 func (m *chatTUIModel) appendSystem(text string) {
 	m.appendLine(chatMuteStyle.Render(text))
 }
@@ -373,10 +434,48 @@ func (m *chatTUIModel) refreshViewport() {
 	m.viewport.GotoBottom()
 }
 
-func submitChatCmd(rt *ChatRuntime, input string) tea.Cmd {
+func (m *chatTUIModel) addHistory(input string) {
+	if len(m.history) == 0 || m.history[len(m.history)-1] != input {
+		m.history = append(m.history, input)
+	}
+	m.historyIndex = len(m.history)
+}
+
+func (m *chatTUIModel) previousHistory() {
+	if len(m.history) == 0 {
+		return
+	}
+	if m.historyIndex < 0 || m.historyIndex > len(m.history) {
+		m.historyIndex = len(m.history)
+	}
+	if m.historyIndex > 0 {
+		m.historyIndex--
+	}
+	m.input.SetValue(m.history[m.historyIndex])
+	m.input.CursorEnd()
+}
+
+func (m *chatTUIModel) nextHistory() {
+	if len(m.history) == 0 || m.historyIndex < 0 {
+		return
+	}
+	if m.historyIndex < len(m.history)-1 {
+		m.historyIndex++
+		m.input.SetValue(m.history[m.historyIndex])
+		m.input.CursorEnd()
+		return
+	}
+	m.historyIndex = len(m.history)
+	m.input.SetValue("")
+}
+
+func waitForStream(ch <-chan chatStreamMsg) tea.Cmd {
 	return func() tea.Msg {
-		response, err := rt.Submit(input)
-		return chatResponseMsg{input: input, response: response, err: err}
+		msg, ok := <-ch
+		if !ok {
+			return chatStreamMsg{done: true}
+		}
+		return msg
 	}
 }
 
