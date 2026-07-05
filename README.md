@@ -22,6 +22,13 @@ offgrid run llama3
 
 That's it. The model downloads automatically and you start chatting.
 
+For offline classroom or community deployments:
+
+```bash
+offgrid appliance status
+offgrid appliance plan hub
+```
+
 ---
 
 ## Why OffGrid?
@@ -30,6 +37,7 @@ That's it. The model downloads automatically and you start chatting.
 |---------|:-------:|
 | Air-gapped USB deployment | Yes |
 | P2P model sharing | Yes |
+| Appliance profiles for edge devices | Yes |
 | Built-in RAG | Yes |
 | Multi-user + audit logs | Yes |
 | AI Agents with MCP | Yes |
@@ -40,6 +48,7 @@ That's it. The model downloads automatically and you start chatting.
 - Healthcare (HIPAA) - patient data never leaves
 - Government - air-gapped deployment
 - Enterprise - audit logging and multi-user
+- Schools and community centers - local AI access on shared devices
 - Remote sites - ships, rigs, expeditions
 - Research - unlimited use, zero API costs
 
@@ -163,6 +172,7 @@ offgrid audit verify
 | Guide | Description |
 |-------|-------------|
 | [Quick Start](docs/setup/quickstart.md) | Get running in 3 minutes |
+| [Appliance Deployment](docs/setup/appliance.md) | Offline AI boxes for schools and communities |
 | [CLI Reference](docs/reference/cli.md) | All commands |
 | [API Reference](docs/reference/api.md) | REST endpoints |
 | [Python SDK](python/README.md) | Python library |

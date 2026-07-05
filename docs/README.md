@@ -20,6 +20,7 @@ Complete guide to OffGrid LLM.
 |-------|-------------|
 | [Quick Start](setup/quickstart.md) | Fastest path to running |
 | [Installation](setup/installation.md) | All installation methods |
+| [Appliance Deployment](setup/appliance.md) | Offline AI boxes for schools and communities |
 | [Docker](setup/docker.md) | Container deployment |
 | [Autostart](setup/autostart.md) | Run as system service |
 
@@ -98,6 +99,7 @@ offgrid serve
 offgrid list                 # Show installed models
 offgrid search llama         # Search HuggingFace
 offgrid doctor               # Check system
+offgrid appliance status     # Check appliance hardware fit
 offgrid agent chat           # AI agent
 offgrid kb add ./docs/       # Add documents to RAG
 ```

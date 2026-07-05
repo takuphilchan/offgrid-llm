@@ -11,6 +11,7 @@ offgrid run llama3           # Chat with a model
 offgrid serve                # Start web UI server
 offgrid list                 # Show installed models
 offgrid doctor               # Check system health
+offgrid appliance status     # Check hardware fit for an offline box
 ```
 
 ---
@@ -168,6 +169,42 @@ Web UI: http://localhost:11611
 ```bash
 curl http://localhost:11611/health
 ```
+
+---
+
+## Appliance
+
+Plan and prepare offline AI boxes for schools, libraries, clinics, and community
+networks.
+
+```bash
+offgrid appliance <command>
+```
+
+| Command | Description |
+|---------|-------------|
+| `status` | Show this machine's appliance fit |
+| `plan [profile]` | Show hardware and deployment plan |
+| `profile [name]` | Show profile tuning settings |
+| `init [profile]` | Create local appliance metadata |
+
+Profiles:
+
+| Profile | Best Use |
+|---------|----------|
+| `lite` | Raspberry Pi class learning node |
+| `hub` | Refurbished mini PC for schools and community centers |
+| `gpu` | NVIDIA GPU lab machine |
+| `jetson` | Jetson robotics, camera, and edge AI kit |
+
+```bash
+offgrid appliance status
+offgrid appliance plan hub
+offgrid appliance profile lite
+offgrid appliance init hub
+```
+
+See [Appliance Deployment](../setup/appliance.md).
 
 ---
 

@@ -1126,6 +1126,9 @@ func main() {
 		case "doctor", "check", "diagnose":
 			handleDoctor(os.Args[2:])
 			return
+		case "appliance", "box":
+			handleAppliance(os.Args[2:])
+			return
 		case "init", "setup":
 			handleInit(os.Args[2:])
 			return
@@ -3172,6 +3175,7 @@ func printHelp() {
 				{"logs", "View server logs (-f to follow)"},
 				{"config <action>", "Manage configuration"},
 				{"peers", "P2P network status & model sharing"},
+				{"appliance <cmd>", "Plan offline community devices"},
 				{"benchmark <id>", "Performance testing"},
 			},
 		},
@@ -3214,6 +3218,7 @@ func printHelp() {
 	fmt.Printf("    %s$%s offgrid run qwen                 %s# Qwen 2.5 3B%s\n", brandMuted, colorReset, brandMuted, colorReset)
 	fmt.Printf("    %s$%s offgrid run mistral              %s# Mistral 7B%s\n", brandMuted, colorReset, brandMuted, colorReset)
 	fmt.Printf("    %s$%s offgrid alias list               %s# See all model shortcuts%s\n", brandMuted, colorReset, brandMuted, colorReset)
+	fmt.Printf("    %s$%s offgrid appliance status         %s# Check hardware fit%s\n", brandMuted, colorReset, brandMuted, colorReset)
 	fmt.Println()
 
 	// Footer with helpful info
