@@ -173,11 +173,11 @@ The UI communicates with the OffGrid LLM server:
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/v1/models` | List available models |
-| `POST /api/v1/chat/completions` | Send chat messages |
-| `POST /api/v1/embeddings` | Generate embeddings |
-| `GET /api/v1/health` | Server health check |
-| `WS /api/v1/ws` | WebSocket for streaming |
+| `GET /v1/models` | List available models |
+| `POST /v1/chat/completions` | Send chat messages |
+| `POST /v1/embeddings` | Generate embeddings |
+| `GET /health` | Server health check |
+| `WS /v1/ws` | WebSocket for streaming |
 
 See **[API Documentation](../../docs/API.md)** for full reference.
 

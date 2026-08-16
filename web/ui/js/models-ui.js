@@ -99,9 +99,11 @@ async function searchModels() {
             const div = document.createElement('div');
             div.className = 'model-item';
             const downloadCmd = model.download_command || `offgrid download ${model.id}`;
+            model.size_gb = Number(model.size_gb) || 0;
+            model.best_quant = escapeHtml(model.best_quant || '');
+            model.downloads = Number(model.downloads) || 0;
             const sizeInfo = model.size_gb ? `${model.size_gb} GB` : 'Size unknown';
             const quantInfo = model.best_quant ? ` · ${model.best_quant}` : '';
-            const escapedCmd = downloadCmd.replace(/'/g, "\\'");
             
             // Check if this model is already installed (by checking if best_file matches any installed model)
             const bestFile = (model.best_file || '').replace('.gguf', '').toLowerCase();
@@ -114,17 +116,21 @@ async function searchModels() {
             
             const buttonHtml = isInstalled 
                 ? `<span class="text-xs text-green-400 px-2 py-1">Installed</span>`
-                : `<button onclick="downloadModelWithCommand('${escapedCmd}', this)" class="btn btn-primary btn-sm">Download</button>`;
+                : `<button data-download-command="${escapeAttribute(downloadCmd)}" class="btn btn-primary btn-sm">Download</button>`;
             
             div.innerHTML = `
                 <div class="flex justify-between items-center">
                     <div class="flex-1">
-                        <div class="font-semibold text-sm text-accent">${model.name || model.id}</div>
+                        <div class="font-semibold text-sm text-accent">${escapeHtml(model.name || model.id)}</div>
                         <div class="text-xs text-secondary mt-1">${sizeInfo}${quantInfo} · ${model.downloads || 0} downloads</div>
                     </div>
                     ${buttonHtml}
                 </div>
             `;
+            const downloadButton = div.querySelector('[data-download-command]');
+            if (downloadButton) {
+                downloadButton.addEventListener('click', () => downloadModelWithCommand(downloadButton.dataset.downloadCommand, downloadButton));
+            }
             results.appendChild(div);
         });
     } catch (error) {
@@ -147,9 +153,9 @@ async function searchModels() {
         } else {
             errorHtml = `
                 <div class="text-sm">
-                    <p class="text-red-400 mb-2">Search error: ${error.message}</p>
+                    <p class="text-red-400 mb-2">Search error: ${escapeHtml(error.message)}</p>
                     <p class="text-secondary mb-2">Use the Terminal tab to search instead:</p>
-                    <p class="text-xs font-mono bg-secondary px-2 py-1 rounded inline-block">offgrid search ${query}</p>
+                    <p class="text-xs font-mono bg-secondary px-2 py-1 rounded inline-block">offgrid search ${escapeHtml(query)}</p>
                 </div>
             `;
         }

@@ -450,7 +450,7 @@ function renderSessions() {
         <div class="p-2 rounded bg-tertiary hover:bg-white/5 cursor-pointer transition-colors group" data-session-id="${session.id}">
             <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0" onclick="loadSession(${session.id})">
-                    <h4 class="font-medium text-sm text-accent">${session.title}</h4>
+                    <h4 class="font-medium text-sm text-accent">${escapeHtml(session.title)}</h4>
                     <p class="text-xs text-secondary mt-0.5">
                         ${session.messageCount} messages • ${new Date(session.timestamp).toLocaleDateString()}
                     </p>

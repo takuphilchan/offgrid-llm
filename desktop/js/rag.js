@@ -506,7 +506,7 @@ async function searchRAGDocuments() {
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-mono px-1.5 py-0.5 rounded bg-accent/20 text-accent">#${i + 1}</span>
-                            <span class="text-sm font-medium truncate">${r.document_name}</span>
+                            <span class="text-sm font-medium truncate">${escapeHtml(r.document_name)}</span>
                         </div>
                         <div class="flex items-center gap-1">
                             <div class="w-12 h-1.5 bg-tertiary rounded-full overflow-hidden">
@@ -526,7 +526,7 @@ async function searchRAGDocuments() {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
                 <p class="text-red-400 text-sm">Search failed</p>
-                <p class="text-xs text-secondary mt-1">${e.message}</p>
+                <p class="text-xs text-secondary mt-1">${escapeHtml(e.message)}</p>
             </div>
         `;
     }
@@ -652,4 +652,3 @@ async function uploadRAGFiles(files) {
     
     refreshRAGDocuments();
 }
-

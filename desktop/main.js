@@ -180,7 +180,7 @@ function ensureDirectories() {
 // Check if server is running (with timeout and proper cleanup)
 function checkServer() {
   return new Promise((resolve) => {
-    const req = http.get(`${SERVER_URL}/v1/health`, (res) => {
+    const req = http.get(`${SERVER_URL}/health`, (res) => {
       // Consume response data to free up memory
       res.resume();
       resolve(res.statusCode === 200);

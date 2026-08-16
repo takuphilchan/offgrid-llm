@@ -13,23 +13,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/ui/manifest.json">
     <title>OffGrid LLM</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/ui/vendor/css/tailwind.min.css">
     <!-- Code syntax highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+    <link rel="stylesheet" href="/ui/vendor/css/atom-one-dark.min.css">
+    <script src="/ui/vendor/js/highlight.min.js"></script>
+    <script src="/ui/vendor/js/highlight-python.min.js"></script>
+    <script src="/ui/vendor/js/highlight-javascript.min.js"></script>
+    <script src="/ui/vendor/js/highlight-java.min.js"></script>
+    <script src="/ui/vendor/js/highlight-cpp.min.js"></script>
+    <script src="/ui/vendor/js/highlight-bash.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/ui/vendor/js/marked.min.js"></script>
     <!-- DOMPurify for XSS prevention -->
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
-    <!-- Terminal Font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="/ui/vendor/js/purify.min.js"></script>
     <link rel="stylesheet" href="/ui/css/styles.css">
 </head>
 <body class="antialiased">
@@ -3038,37 +3034,6 @@
         </div>
     </div>
 
-    <script>
-        // Mobile navigation helpers
-        function toggleMobileMore() {
-            const menu = document.getElementById('mobileMoreMenu');
-            menu.classList.toggle('hidden');
-        }
-        
-        function hideMobileMore() {
-            const menu = document.getElementById('mobileMoreMenu');
-            menu.classList.add('hidden');
-        }
-        
-        // Update mobile nav active state on tab switch
-        const _originalSwitchTabMobile = switchTab;
-        switchTab = function(tab) {
-            _originalSwitchTabMobile(tab);
-            
-            // Update mobile nav
-            document.querySelectorAll('.mobile-nav-item').forEach(el => el.classList.remove('active'));
-            const mobileTab = document.getElementById('mobile-tab-' + tab);
-            if (mobileTab) mobileTab.classList.add('active');
-            
-            hideMobileMore();
-        };
-        
-        // Register service worker for offline support
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/ui/sw.js')
-                .then(reg => console.log('SW registered:', reg.scope))
-                .catch(err => console.log('SW registration failed:', err));
-        }
-    </script>
+    <script src="/ui/js/mobile-nav.js?v=0.2.12"></script>
 </body>
 </html>

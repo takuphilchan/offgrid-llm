@@ -23,16 +23,16 @@ async function loadUsers() {
                 <td class="py-3">
                     <div class="flex items-center gap-3">
                         <div class="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-sm">
-                            ${u.username.charAt(0).toUpperCase()}
+                            ${escapeHtml(u.username.charAt(0).toUpperCase())}
                         </div>
                         <div>
-                            <div class="font-medium">${u.username}</div>
-                            <div class="text-xs text-secondary">${u.id.substring(0, 8)}...</div>
+                            <div class="font-medium">${escapeHtml(u.username)}</div>
+                            <div class="text-xs text-secondary">${escapeHtml(u.id.substring(0, 8))}...</div>
                         </div>
                     </div>
                 </td>
                 <td class="py-3">
-                    <span class="px-2 py-1 rounded text-xs font-medium ${getRoleBadgeClass(u.role)}">${u.role}</span>
+                    <span class="px-2 py-1 rounded text-xs font-medium ${getRoleBadgeClass(u.role)}">${escapeHtml(u.role)}</span>
                 </td>
                 <td class="py-3 text-sm text-secondary">${formatDate(u.created_at)}</td>
                 <td class="py-3 text-sm text-secondary">${u.last_login_at ? formatDate(u.last_login_at) : 'Never'}</td>
@@ -124,8 +124,8 @@ async function createUser() {
         
         // Offer to login as new user
         showConfirm(
-            `User "${username}" created!<br><br>` +
-            `<strong>API Key:</strong><br><code class="bg-tertiary px-2 py-1 rounded text-xs break-all">${data.api_key}</code><br><br>` +
+            `User "${escapeHtml(username)}" created!<br><br>` +
+            `<strong>API Key:</strong><br><code class="bg-tertiary px-2 py-1 rounded text-xs break-all">${escapeHtml(data.api_key)}</code><br><br>` +
             `<small class="text-secondary">Save this key - it won't be shown again.</small><br><br>` +
             `Would you like to login as this user now?`,
             async () => {
@@ -222,18 +222,18 @@ async function showUserDetails(userId) {
         content.innerHTML = `
             <div class="flex items-center gap-4 pb-4 border-b border-theme">
                 <div class="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center text-accent text-2xl font-bold">
-                    ${user.username.charAt(0).toUpperCase()}
+                    ${escapeHtml(user.username.charAt(0).toUpperCase())}
                 </div>
                 <div>
-                    <h4 class="text-xl font-semibold">${user.username}</h4>
-                    <span class="px-2 py-1 rounded text-xs font-medium ${getRoleBadgeClass(user.role)}">${user.role}</span>
+                    <h4 class="text-xl font-semibold">${escapeHtml(user.username)}</h4>
+                    <span class="px-2 py-1 rounded text-xs font-medium ${getRoleBadgeClass(user.role)}">${escapeHtml(user.role)}</span>
                 </div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="text-xs text-secondary block mb-1">User ID</label>
-                    <code class="text-sm bg-tertiary px-2 py-1 rounded block break-all">${user.id}</code>
+                    <code class="text-sm bg-tertiary px-2 py-1 rounded block break-all">${escapeHtml(user.id)}</code>
                 </div>
                 <div>
                     <label class="text-xs text-secondary block mb-1">Created</label>
@@ -284,7 +284,7 @@ async function regenerateApiKey() {
             });
             if (!resp.ok) throw new Error('Failed to regenerate key');
             const data = await resp.json();
-            showAlert(`New API Key:<br><br><code class="bg-tertiary px-2 py-1 rounded text-sm break-all">${data.api_key}</code><br><br><small>Copy this - it won't be shown again.</small>`, { title: 'API Key Regenerated', type: 'success' });
+            showAlert(`New API Key:<br><br><code class="bg-tertiary px-2 py-1 rounded text-sm break-all">${escapeHtml(data.api_key)}</code><br><br><small>Copy this - it won't be shown again.</small>`, { title: 'API Key Regenerated', type: 'success' });
             hideUserDetailsModal();
             loadUsers();
         } catch (e) {

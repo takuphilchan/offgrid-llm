@@ -170,7 +170,7 @@ function load() { }
 function handle(x) { }
 
 // ✅ Good: Use const/let, not var
-const API_BASE = '/api/v1';
+const API_BASE = '/v1';
 let currentModel = '';
 
 // ❌ Bad: Using var
@@ -186,7 +186,7 @@ function processMessage(msg) {
 // ✅ Good: Async/await for promises
 async function fetchModels() {
     try {
-        const response = await fetch('/api/v1/models');
+        const response = await fetch('/v1/models');
         const data = await response.json();
         return data.models;
     } catch (error) {
@@ -344,7 +344,7 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     };
     if (body) options.body = JSON.stringify(body);
     
-    const response = await fetch(`/api/v1${endpoint}`, options);
+    const response = await fetch(`/v1${endpoint}`, options);
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     return response.json();
 }

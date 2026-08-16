@@ -295,7 +295,7 @@ async function sendChat() {
                                 const contentDiv = msgDiv.querySelector('.message-content');
                                 // Append invisible char to preserve trailing whitespace/newlines during stream
                                 const streamContent = assistantMsg + (assistantMsg.endsWith(' ') ? ' ' : ''); 
-                                contentDiv.innerHTML = marked.parse(streamContent || '');
+                                contentDiv.innerHTML = safeMarkdown(streamContent);
                                 contentDiv.querySelectorAll('pre code').forEach((block) => {
                                     hljs.highlightElement(block);
                                 });
@@ -315,7 +315,7 @@ async function sendChat() {
             // Final render to ensure complete message is shown
             if (msgDiv && assistantMsg) {
                 const contentDiv = msgDiv.querySelector('.message-content');
-                contentDiv.innerHTML = marked.parse(assistantMsg || '');
+                contentDiv.innerHTML = safeMarkdown(assistantMsg);
                 contentDiv.querySelectorAll('pre code').forEach((block) => {
                     hljs.highlightElement(block);
                 });
@@ -562,7 +562,7 @@ function addChatMessage(role, content, images = null, startTime = null, isError 
     });
 
     // Parse markdown content
-    const formattedContent = marked.parse(String(content || ''));
+    const formattedContent = safeMarkdown(String(content || ''));
     const avatar = role === 'user' ? 'U' : 'AI';
     const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     const elapsed = startTime ? `${Date.now() - startTime}ms` : '';

@@ -34,12 +34,15 @@ async function loadCommonPaths() {
             container.innerHTML = data.paths
                 .filter(p => p.exists)
                 .map(p => `
-                    <button onclick="browseTo('${p.path.replace(/'/g, "\\'")}')" 
+                    <button data-browse-path="${escapeAttribute(p.path)}"
                             class="px-3 py-1 text-xs bg-secondary hover:bg-accent hover:text-white rounded border border-theme transition-colors"
-                            title="${p.description}">
-                        ${p.label}
+                            title="${escapeAttribute(p.description)}">
+                        ${escapeHtml(p.label)}
                     </button>
                 `).join('');
+            container.querySelectorAll('[data-browse-path]').forEach(button => {
+                button.addEventListener('click', () => browseTo(button.dataset.browsePath));
+            });
         } else {
             container.innerHTML = '<span class="text-xs text-red-400">Failed to load paths</span>';
         }
@@ -74,9 +77,9 @@ async function browseTo(path) {
                 const visibleDirs = data.directories.filter(d => !d.is_hidden);
                 visibleDirs.forEach(dir => {
                     html += `
-                        <div class="file-entry directory" onclick="browseTo('${dir.path.replace(/'/g, "\\'")}')">
+                        <div class="file-entry directory" data-browse-path="${escapeAttribute(dir.path)}">
                             <span class="file-icon">▸</span>
-                            <span class="file-name">${dir.name}</span>
+                            <span class="file-name">${escapeHtml(dir.name)}</span>
                         </div>
                     `;
                 });
@@ -88,11 +91,14 @@ async function browseTo(path) {
             }
             
             listContainer.innerHTML = html;
+            listContainer.querySelectorAll('[data-browse-path]').forEach(entry => {
+                entry.addEventListener('click', () => browseTo(entry.dataset.browsePath));
+            });
         } else {
-            listContainer.innerHTML = `<div class="p-4 text-center text-red-400 text-sm">${data.error || 'Failed to browse'}</div>`;
+            listContainer.innerHTML = `<div class="p-4 text-center text-red-400 text-sm">${escapeHtml(data.error || 'Failed to browse')}</div>`;
         }
     } catch (error) {
-        listContainer.innerHTML = `<div class="p-4 text-center text-red-400 text-sm">Error: ${error.message}</div>`;
+        listContainer.innerHTML = `<div class="p-4 text-center text-red-400 text-sm">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
