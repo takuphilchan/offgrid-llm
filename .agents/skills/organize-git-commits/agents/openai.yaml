@@ -1,0 +1,4 @@
+interface:
+  display_name: "Organize Git Commits"
+  short_description: "Plan and create clean, reviewable Git commits"
+  default_prompt: "Use $organize-git-commits to group my working tree changes into coherent, validated commits."
