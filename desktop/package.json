@@ -1,6 +1,6 @@
 {
   "name": "offgrid-llm-desktop",
-  "version": "0.2.12",
+  "version": "0.3.0",
   "description": "OffGrid LLM Desktop - Local AI Platform",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
@@ -13,9 +13,9 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
-    "build:linux": "electron-builder --linux",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux --x64",
+    "build:mac": "electron-builder --mac --x64 --arm64",
+    "build:win": "electron-builder --win --x64",
     "build:all": "electron-builder -mwl",
     "dist": "electron-builder",
     "package": "npm run build:all"
@@ -23,7 +23,7 @@
   "build": {
     "appId": "com.offgrid.llm.desktop",
     "productName": "OffGrid LLM Desktop",
-    "copyright": "Copyright © 2024-2025 OffGrid LLM Team",
+    "copyright": "Copyright © 2024-2026 OffGrid LLM Team",
     "directories": {
       "buildResources": "assets",
       "output": "dist"
@@ -33,6 +33,13 @@
       "preload.js",
       "loading.html",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "ui",
+        "filter": ["**/*"]
+      }
     ],
     "linux": {
       "extraResources": [
@@ -45,11 +52,11 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64", "arm64"]
+          "arch": ["x64"]
         },
         {
           "target": "deb",
-          "arch": ["x64", "arm64"]
+          "arch": ["x64"]
         }
       ],
       "category": "Development",
@@ -150,7 +157,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^27.0.0",
-    "electron-builder": "^24.6.4"
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
   }
 }

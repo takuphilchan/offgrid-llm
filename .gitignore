@@ -12,6 +12,9 @@ dist/
 desktop/dist/
 desktop/node_modules/
 node_modules/
+*.tsbuildinfo
+web/app/vite.config.js
+web/app/vite.config.d.ts
 
 # Temporary notes
 DEMO_COMMANDS.md

@@ -228,10 +228,14 @@ async function startOffgridServer() {
 
     offgridProcess = spawn(offgridBinary, ['server', 'start'], {
       stdio: 'pipe',
+      cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'),
       env: {
         ...process.env,
         OFFGRID_PORT: SERVER_PORT.toString(),
-        OFFGRID_HOME: paths.getConfigDir()
+        OFFGRID_MODELS_DIR: paths.getModelsDir(),
+        OFFGRID_UI_DIR: app.isPackaged
+          ? path.join(process.resourcesPath, 'ui')
+          : path.join(__dirname, '../web/dist')
       },
       detached: false
     });
