@@ -4,25 +4,28 @@
 
 services:
   offgrid-gpu:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.gpu
-    image: offgrid-llm:gpu
-    container_name: offgrid-llm-gpu
+    image: ${OFFGRID_IMAGE:-takuphilchan/offgrid-llm}:${OFFGRID_VERSION:-latest}-gpu
+    pull_policy: missing
+    init: true
     restart: unless-stopped
     ports:
-      - "11611:11611"
+      - "127.0.0.1:${OFFGRID_PORT:-11611}:11611"
     volumes:
       - offgrid-models:/var/lib/offgrid/models
       - offgrid-data:/var/lib/offgrid/data
     environment:
-      - OFFGRID_PORT=11611
-      - OFFGRID_HOST=0.0.0.0
-      - OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE=true
-      - OFFGRID_MODELS_DIR=/var/lib/offgrid/models
-      - OFFGRID_DATA_DIR=/var/lib/offgrid/data
-      - OFFGRID_BIN_DIR=/var/lib/offgrid/bin
-      - OFFGRID_GPU_LAYERS=99  # Use all GPU layers
+      OFFGRID_PORT: 11611
+      OFFGRID_HOST: 0.0.0.0
+      OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE: "true"
+      OFFGRID_MODELS_DIR: /var/lib/offgrid/models
+      OFFGRID_DATA_DIR: /var/lib/offgrid/data
+      OFFGRID_BIN_DIR: /var/lib/offgrid/bin
+      OFFGRID_GPU_LAYERS: 99
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
     deploy:
       resources:
         reservations:
@@ -33,7 +36,7 @@ services:
         limits:
           memory: 16G
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11611/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:11611/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -44,7 +47,3 @@ volumes:
     driver: local
   offgrid-data:
     driver: local
-
-networks:
-  default:
-    name: offgrid-network

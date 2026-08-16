@@ -2,6 +2,9 @@
 .git
 .gitignore
 .gitattributes
+.github
+.agents
+.gomodcache
 
 # Build artifacts
 offgrid
@@ -12,6 +15,15 @@ offgrid-*
 *.dylib
 dist/
 build/
+bin/
+**/node_modules/
+web/dist/
+web/ui/
+desktop/
+dev/
+examples/
+installers/
+python/
 
 # Models (too large for Docker image)
 models/

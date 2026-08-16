@@ -3,9 +3,22 @@
 # Build from project root: docker build -f docker/Dockerfile -t offgrid-llm .
 
 # =============================================================================
-# Stage 1: Build the Go binary
+# Stage 1: Build the web application
+# =============================================================================
+FROM node:22-alpine AS ui-builder
+
+WORKDIR /build/web/app
+COPY web/app/package.json web/app/package-lock.json ./
+RUN npm ci
+COPY web/app/ ./
+RUN npm run build
+
+# =============================================================================
+# Stage 2: Build the Go binary
 # =============================================================================
 FROM golang:1.26.6-alpine3.24 AS go-builder
+
+ARG VERSION=dev
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -26,15 +39,14 @@ RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
-COPY web/ ./web/
 
 # Build the application with static linking
 RUN CGO_ENABLED=1 GOOS=linux go build \
-    -a -ldflags '-extldflags "-static"' \
-    -o offgrid ./cmd/offgrid/
+	-trimpath -ldflags="-s -w -X main.Version=${VERSION} -extldflags=-static" \
+	-o offgrid ./cmd/offgrid/
 
 # =============================================================================
-# Stage 2: Build llama.cpp server
+# Stage 3: Build llama.cpp server
 # =============================================================================
 FROM alpine:3.24 AS llama-builder
 
@@ -55,14 +67,34 @@ RUN mkdir llama.cpp && cd llama.cpp && \
     git remote add origin https://github.com/ggml-org/llama.cpp.git && \
     git fetch --depth 1 origin ${LLAMA_CPP_COMMIT} && \
     git checkout --detach FETCH_HEAD && \
-    cmake -B build -DGGML_STATIC=ON -DLLAMA_BUILD_SERVER=ON && \
+    cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DGGML_OPENMP=OFF \
+        -DGGML_NATIVE=OFF \
+        -DLLAMA_BUILD_SERVER=ON \
+        -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_BUILD_EXAMPLES=OFF && \
     cmake --build build --config Release -j$(nproc) --target llama-server && \
     strip build/bin/llama-server
 
 # =============================================================================
-# Stage 3: Final runtime image
+# Stage 4: Final runtime image
 # =============================================================================
 FROM alpine:3.24
+
+ARG VERSION=dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="OffGrid LLM" \
+      org.opencontainers.image.description="Private, local-first LLM inference, agents, and knowledge retrieval" \
+      org.opencontainers.image.url="https://github.com/takuphilchan/offgrid-llm" \
+      org.opencontainers.image.source="https://github.com/takuphilchan/offgrid-llm" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -89,8 +121,8 @@ COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgr
 
 RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
 
-# Copy web UI
-COPY --from=go-builder /build/web/ui /var/lib/offgrid/web/ui
+# Copy the exact UI built from this source revision.
+COPY --from=ui-builder --chown=offgrid:offgrid /build/web/dist /var/lib/offgrid/web/ui
 
 # Switch to non-root user
 USER offgrid
@@ -101,14 +133,17 @@ EXPOSE 11611
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:11611/health || exit 1
+    CMD curl -f http://127.0.0.1:11611/health || exit 1
 
 # Environment variables
 ENV OFFGRID_MODELS_DIR=/var/lib/offgrid/models \
     OFFGRID_DATA_DIR=/var/lib/offgrid/data \
     OFFGRID_BIN_DIR=/var/lib/offgrid/bin \
     OFFGRID_PORT=11611 \
-    OFFGRID_HOST=localhost
+    OFFGRID_HOST=0.0.0.0 \
+    OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE=true
 
-# Run the server
-CMD ["/usr/local/bin/offgrid"]
+# Keep the image useful as both a server and a CLI. For example,
+# `docker run --rm IMAGE version` executes `offgrid version`.
+ENTRYPOINT ["/usr/local/bin/offgrid"]
+CMD ["serve"]

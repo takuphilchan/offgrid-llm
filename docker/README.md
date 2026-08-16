@@ -1,239 +1,40 @@
-# Docker Deployment
+# Container layout
 
-This directory contains all Docker-related files for containerized deployment of OffGrid LLM.
+OffGrid's container files are separated by responsibility:
 
-## Quick Start
+| File | Purpose |
+| --- | --- |
+| `Dockerfile` | Portable Linux AMD64/ARM64 CPU release image |
+| `Dockerfile.gpu` | Linux AMD64 NVIDIA CUDA release image |
+| `docker-compose.yml` | Pull-first, localhost-only CPU deployment |
+| `docker-compose.dev.yml` | Overlay that builds the current checkout |
+| `docker-compose.gpu.yml` | Pull-first NVIDIA deployment |
+| `docker-compose.prod.yml` | Authenticated TLS stack with optional monitoring |
+| `docker-build.sh` | Maintainer local/multi-platform build helper |
+| `validate-docker.sh` | Configuration and optional image smoke tests |
+| `.env.example` | Supported Compose image, version, port, and secret inputs |
 
-```bash
-cd docker
-docker-compose up -d
-```
+The release image runs as UID/GID 1000, drops Linux capabilities in Compose,
+uses an init process, includes a health check, and stores mutable state only in
+`/var/lib/offgrid/models` and `/var/lib/offgrid/data`.
 
-Access the UI at http://localhost:11611/ui/
+Start with [DOCKER_README.md](DOCKER_README.md) for commands or see the
+[complete deployment guide](../docs/setup/docker.md).
 
-## Files Overview
+## Maintainer builds
 
-### Core Files
-
-- **`Dockerfile`** - Production-ready multi-stage Docker image
-  - Alpine-based (~100MB final image)
-  - Non-root user (uid 1000)
-  - Health checks included
-  - Optimized for production
-
-- **`DOCKER_README.md`** - Quick start guide (2 minutes)
-  - Basic commands
-  - GPU setup
-  - Common troubleshooting
-
-### Deployment Configurations
-
-- **`docker-compose.yml`** - Basic deployment
-  - Single container setup
-  - Volume persistence for models and data
-  - Health monitoring
-  - Auto-restart enabled
-
-- **`docker-compose.gpu.yml`** - GPU-optimized deployment
-  - NVIDIA GPU support
-  - CUDA device passthrough
-  - GPU resource limits
-  - Performance-tuned settings
-
-- **`docker-compose.prod.yml`** - Production stack
-  - Nginx reverse proxy with SSL/TLS ready
-  - Prometheus monitoring
-  - Grafana dashboards
-  - Network isolation
-  - Production security hardening
-
-### Configuration & Build
-
-- **`nginx.conf.example`** - Nginx reverse proxy configuration
-  - SSL/TLS termination template
-  - WebSocket support
-  - Rate limiting
-  - Security headers
-
-- **`docker-build.sh`** - Multi-architecture build automation
-  - Builds for AMD64 and ARM64
-  - Pushes to registry
-  - Tags versions automatically
-
-- **`validate-docker.sh`** - Automated validation
-  - Checks Docker/Compose installation
-  - Validates configuration files
-  - Tests container startup
-  - Verifies health endpoints
-
-## Usage
-
-### Basic Deployment
+From the repository root:
 
 ```bash
-cd docker
-docker-compose up -d
+# Local CPU image
+bash ./docker/docker-build.sh
+
+# CPU AMD64/ARM64 manifest
+PUSH=true bash ./docker/docker-build.sh 0.3.0
+
+# CPU manifest plus Linux AMD64 CUDA image
+PUSH=true BUILD_GPU=true bash ./docker/docker-build.sh 0.3.0
 ```
 
-### GPU Deployment (NVIDIA)
-
-**Prerequisites:** Install NVIDIA Container Toolkit first.
-
-```bash
-cd docker
-docker-compose -f docker-compose.gpu.yml up -d
-```
-
-### Production Deployment
-
-Production requires a TLS certificate and an explicit Grafana password. Create
-the first OffGrid administrator before starting the authenticated server:
-
-```bash
-cd docker
-cp /path/to/fullchain.pem certs/cert.pem
-cp /path/to/private-key.pem certs/key.pem
-chmod 600 certs/key.pem
-export GRAFANA_ADMIN_PASSWORD='replace-with-a-strong-password'
-docker compose -f docker-compose.prod.yml build offgrid
-docker compose -f docker-compose.prod.yml run --rm offgrid users create admin admin
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-Save the one-time password and API key printed by `users create`. The basic CPU
-and GPU compose files deliberately opt into unauthenticated LAN access and are
-for trusted development networks only.
-
-Access:
-- OffGrid UI: https://localhost (via Nginx)
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000
-
-### Validation
-
-```bash
-cd docker
-./validate-docker.sh
-```
-
-## Common Commands
-
-```bash
-# View logs
-docker-compose logs -f offgrid
-
-# Stop containers
-docker-compose down
-
-# Update to latest
-docker-compose pull
-docker-compose up -d
-
-# Shell access
-docker exec -it offgrid-llm sh
-
-# Check status
-docker-compose ps
-```
-
-## Configuration
-
-Create a `.env` file in this directory for custom configuration:
-
-```env
-# Server settings
-OFFGRID_PORT=11611
-OFFGRID_HOST=0.0.0.0
-
-# GPU settings (for GPU deployments)
-GPU_LAYERS=35
-CUDA_VISIBLE_DEVICES=0
-
-# Resource limits
-MEMORY_LIMIT=4g
-CPU_COUNT=4
-```
-
-## Volume Persistence
-
-Data is persisted in Docker volumes:
-
-- `offgrid_models` - Downloaded AI models
-- `offgrid_data` - User data and configuration
-- `prometheus_data` - Metrics (production stack)
-- `grafana_data` - Dashboards (production stack)
-
-**Backup volumes:**
-```bash
-docker run --rm -v offgrid_models:/models -v $(pwd):/backup alpine tar czf /backup/models-backup.tar.gz -C / models
-```
-
-**Restore volumes:**
-```bash
-docker run --rm -v offgrid_models:/models -v $(pwd):/backup alpine tar xzf /backup/models-backup.tar.gz -C /
-```
-
-## Architecture Differences
-
-This production Docker setup differs from `../dev/Dockerfile`:
-
-**Production (`docker/Dockerfile`):**
-- Alpine-based (~100MB)
-- Go binary only
-- Optimized for deployment
-- Minimal attack surface
-
-**Development (`dev/Dockerfile`):**
-- Ubuntu-based (~1GB)
-- Builds llama.cpp from source
-- Full build toolchain
-- Development and testing focus
-
-## Documentation
-
-- **Quick Start:** [DOCKER_README.md](DOCKER_README.md)
-- **Complete Guide:** [../docs/DOCKER.md](../docs/DOCKER.md)
-- **General Docs:** [../docs/README.md](../docs/README.md)
-
-## Troubleshooting
-
-**Container won't start:**
-```bash
-./validate-docker.sh
-docker-compose logs offgrid
-```
-
-**GPU not detected:**
-```bash
-docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
-```
-
-**Port already in use:**
-```bash
-# Change port in .env or docker-compose.yml
-OFFGRID_PORT=11612
-```
-
-**Permission issues:**
-```bash
-# Fix volume permissions
-docker-compose down
-docker volume rm offgrid_models offgrid_data
-docker-compose up -d
-```
-
-## Security Notes
-
-For production deployments:
-
-1. **Install SSL/TLS certificates** - Add `certs/cert.pem` and `certs/key.pem`
-2. **Set strong passwords** - Set `GRAFANA_ADMIN_PASSWORD` and bootstrap an OffGrid admin
-3. **Network isolation** - Use production compose file's network setup
-4. **Regular updates** - Keep base images updated
-5. **Volume backups** - Implement regular backup strategy
-
-## Support
-
-- Issues: https://github.com/takuphilchan/offgrid-llm/issues
-- Documentation: [../docs/](../docs/)
-- Development: [../dev/README.md](../dev/README.md)
+Override `IMAGE` and `PLATFORMS` when publishing to another registry. Normal
+users should pull the prebuilt images and do not need a compiler or Node.js.

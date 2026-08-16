@@ -1,0 +1,15 @@
+# Developer overlay: build the OffGrid image from the current checkout.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+services:
+  offgrid:
+    image: offgrid-llm:dev
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        VERSION: ${OFFGRID_VERSION:-dev}
+        VCS_REF: ${OFFGRID_VCS_REF:-local}
+        BUILD_DATE: ${OFFGRID_BUILD_DATE:-local}

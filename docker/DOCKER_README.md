@@ -1,158 +1,112 @@
-# Docker Quick Start
+# OffGrid container quick start
 
-Run OffGrid LLM in Docker in 2 minutes.
+The published CPU image contains the OffGrid server, CLI, React UI, and a
+pinned llama.cpp runtime. Models and application data remain outside the image
+in named Docker volumes.
 
-## Quick Start (CPU)
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm
-
-# 2. Build and start
-cd docker
-docker-compose up -d --build
-
-# 3. Open your browser
-open http://localhost:11611/ui/
-
-# 4. Download a model (from terminal or UI)
-docker exec offgrid-llm offgrid download qwen2.5:0.5b-instruct-q4_k_m
-```
-
-That's it! OffGrid LLM is running.
-
-## Quick Start (GPU - NVIDIA)
+## Pull and run
 
 ```bash
-# 1. Install NVIDIA Container Toolkit (one-time setup)
-distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | sudo apt-key add -
-curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
-  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-sudo systemctl restart docker
-
-# 2. Build and start with GPU
-cd docker
-docker-compose -f docker-compose.gpu.yml up -d --build
-
-# 3. Verify GPU is detected
-docker exec offgrid-llm-gpu nvidia-smi
+docker pull takuphilchan/offgrid-llm:latest
+docker run -d \
+  --name offgrid \
+  --init \
+  --restart unless-stopped \
+  --security-opt no-new-privileges=true \
+  --cap-drop ALL \
+  -p 127.0.0.1:11611:11611 \
+  -v offgrid-models:/var/lib/offgrid/models \
+  -v offgrid-data:/var/lib/offgrid/data \
+  takuphilchan/offgrid-llm:latest
 ```
 
-## Common Commands
+Open <http://localhost:11611/ui/>. The loopback port binding is intentional:
+the default container is unauthenticated and must not be exposed publicly.
 
 ```bash
-# View logs
-docker-compose logs -f offgrid
+# Inspect server health
+curl http://127.0.0.1:11611/health
 
-# Stop the container
-docker-compose down
+# Use the CLI inside the running container
+docker exec -it offgrid offgrid version
+docker exec -it offgrid offgrid download tinyllama-1.1b-chat --yes
 
-# Restart the container
-docker-compose restart
-
-# Update to latest version
-git pull
-docker-compose up -d --build
-
-# Access shell inside container
-docker exec -it offgrid-llm sh
-
-# Check status
-docker-compose ps
-
-# Download a model
-docker exec offgrid-llm offgrid download llama3.2
+# Follow logs and stop without deleting data
+docker logs -f offgrid
+docker stop offgrid
+docker rm offgrid
 ```
 
-## Volumes
+## Compose
 
-OffGrid uses Docker volumes to persist data:
-
-| Volume | Purpose |
-|--------|---------|
-| `offgrid-models` | Downloaded GGUF models |
-| `offgrid-data` | Sessions, cache, settings |
+From this directory:
 
 ```bash
-# Backup models
-docker run --rm \
-  -v offgrid-llm_offgrid-models:/source \
-  -v $(pwd)/backup:/backup \
-  alpine tar czf /backup/models.tar.gz -C /source .
-
-# Restore models
-docker run --rm \
-  -v offgrid-llm_offgrid-models:/target \
-  -v $(pwd)/backup:/backup \
-  alpine tar xzf /backup/models.tar.gz -C /target
-
-# List volumes
-docker volume ls | grep offgrid
-
-# Remove volumes (⚠️ DELETES ALL DATA)
-docker-compose down -v
+cp .env.example .env
+docker compose pull
+docker compose up -d
+docker compose ps
+docker compose logs -f offgrid
 ```
 
-## Environment Variables
+Update without deleting the `offgrid-models` or `offgrid-data` volumes:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OFFGRID_PORT` | 11611 | Server port |
-| `OFFGRID_GPU_LAYERS` | 0 | GPU layers (0=CPU, 99=all GPU) |
-| `OFFGRID_MODELS_DIR` | /var/lib/offgrid/models | Models directory |
-
-## Troubleshooting
-
-**Container won't start:**
 ```bash
-docker-compose logs offgrid
+docker compose pull
+docker compose up -d
 ```
 
-**Port already in use:**
+Build the current checkout for development:
+
 ```bash
-sudo lsof -i :11611
-# Or change port in docker-compose.yml
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dev.yml \
+  up -d --build
 ```
 
-**Out of memory:**
+## NVIDIA image
+
+The GPU image is Linux AMD64 only and requires NVIDIA Container Toolkit:
+
 ```bash
-# Add memory limit to docker-compose.yml:
-services:
-  offgrid:
-    deploy:
-      resources:
-        limits:
-          memory: 8G
+docker compose -f docker-compose.gpu.yml pull
+docker compose -f docker-compose.gpu.yml up -d
 ```
 
-**GPU not detected:**
-```bash
-# Test GPU access
-docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
-```
+Release tags use `<version>-gpu`, and the stable GPU tag is `latest-gpu`.
 
-## Production Deployment
+## Production
 
-For production with authentication, TLS, and monitoring:
+The production definition enables OffGrid authentication, terminates TLS at
+Nginx, and keeps the application port on an internal network. Supply TLS files
+and bootstrap an administrator before starting it:
+
 ```bash
 cp /path/to/fullchain.pem certs/cert.pem
 cp /path/to/private-key.pem certs/key.pem
-chmod 600 certs/key.pem
-export GRAFANA_ADMIN_PASSWORD='replace-with-a-strong-password'
-docker compose -f docker-compose.prod.yml build offgrid
+cp .env.example .env
+
+docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml run --rm offgrid users create admin admin
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-Save the one-time password and API key printed by `users create`. The basic
-compose profiles are unauthenticated and should only be used on trusted
-development networks.
+Enable the optional Prometheus and Grafana services with:
 
-See [docs/setup/docker.md](../docs/setup/docker.md) for complete production guide.
+```bash
+docker compose -f docker-compose.prod.yml --profile monitoring up -d
+```
 
----
+## Validation
 
-**Need help?** [Open an issue](https://github.com/takuphilchan/offgrid-llm/issues)
+```bash
+bash ./validate-docker.sh
+BUILD_IMAGE=true bash ./validate-docker.sh
+```
+
+The second command performs a complete CPU image build, checks the embedded CLI,
+starts the server on `127.0.0.1:11612`, and probes its health endpoint.
+
+Removing a Compose project with `docker compose down` preserves named volumes.
+Using `docker compose down --volumes` permanently deletes models and user data.

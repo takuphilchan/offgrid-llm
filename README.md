@@ -2,13 +2,44 @@
 
 Run AI models locally. No cloud. No API keys. Complete privacy.
 
-[![Version](https://img.shields.io/badge/Version-0.2.12-blue.svg)](https://github.com/takuphilchan/offgrid-llm/releases)
+[![Version](https://img.shields.io/badge/Version-0.3.0-blue.svg)](https://github.com/takuphilchan/offgrid-llm/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/offgrid)](https://pypi.org/project/offgrid/)
 
 ---
 
 ## Install
+
+### Docker
+
+```bash
+docker pull takuphilchan/offgrid-llm:latest
+
+docker run -d \
+  --name offgrid \
+  --init \
+  --restart unless-stopped \
+  --security-opt no-new-privileges=true \
+  --cap-drop ALL \
+  -p 127.0.0.1:11611:11611 \
+  -v offgrid-models:/var/lib/offgrid/models \
+  -v offgrid-data:/var/lib/offgrid/data \
+  takuphilchan/offgrid-llm:latest
+```
+
+Open http://localhost:11611/ui/. The two named volumes preserve models,
+knowledge, configuration, and run history across image upgrades.
+
+```bash
+docker exec -it offgrid offgrid download tinyllama-1.1b-chat --yes
+docker exec -it offgrid offgrid version
+```
+
+The published image supports both `linux/amd64` and `linux/arm64`. It is
+unauthenticated for local use, so keep the host binding on `127.0.0.1`. Use the
+authenticated production Compose profile before exposing OffGrid to a network.
+
+### Native CLI
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash

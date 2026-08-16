@@ -1,60 +1,66 @@
-#!/bin/bash
-# Build and push OffGrid LLM Docker images
+#!/usr/bin/env bash
+# Build (and optionally publish) OffGrid container images.
 
-set -e
+set -euo pipefail
 
-# Read version from VERSION file if not provided
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-DEFAULT_VERSION=$(cat "$ROOT_DIR/VERSION" 2>/dev/null | tr -d '\n\r ' || echo "latest")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "${SCRIPT_DIR}")"
+DEFAULT_VERSION="$(tr -d '\n\r ' < "${ROOT_DIR}/VERSION")"
 
-VERSION=${1:-$DEFAULT_VERSION}
-REGISTRY=${REGISTRY:-docker.io/offgrid}
-BUILD_GPU=${BUILD_GPU:-false}
+VERSION="${1:-${DEFAULT_VERSION}}"
+IMAGE="${IMAGE:-takuphilchan/offgrid-llm}"
+PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
+PUSH="${PUSH:-false}"
+BUILD_GPU="${BUILD_GPU:-false}"
+VCS_REF="$(git -C "${ROOT_DIR}" rev-parse HEAD 2>/dev/null || printf 'unknown')"
+BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-echo "🐳 Building OffGrid LLM Docker image..."
-echo "   Version: $VERSION"
-echo "   Registry: $REGISTRY"
-echo ""
+cd "${ROOT_DIR}"
 
-cd "$ROOT_DIR"
-
-# Build CPU image
-echo "📦 Building CPU image..."
-docker build \
-  -f docker/Dockerfile \
-  -t offgrid-llm:${VERSION} \
-  -t offgrid-llm:latest \
-  .
-
-echo "✓ CPU image built: offgrid-llm:${VERSION}"
-
-# Build GPU image if requested
-if [ "$BUILD_GPU" = "true" ]; then
-  echo ""
-  echo "🎮 Building GPU image (CUDA)..."
-  docker build \
-    -f docker/Dockerfile.gpu \
-    -t offgrid-llm:${VERSION}-gpu \
-    -t offgrid-llm:gpu \
-    .
-  echo "✓ GPU image built: offgrid-llm:${VERSION}-gpu"
+echo "Building ${IMAGE}:${VERSION}"
+if [[ "${PUSH}" == "true" ]]; then
+  docker buildx build \
+    --file docker/Dockerfile \
+    --platform "${PLATFORMS}" \
+    --build-arg "VERSION=${VERSION}" \
+    --build-arg "VCS_REF=${VCS_REF}" \
+    --build-arg "BUILD_DATE=${BUILD_DATE}" \
+    --tag "${IMAGE}:${VERSION}" \
+    --push .
+  echo "Published ${IMAGE}:${VERSION} for ${PLATFORMS}"
+else
+  docker buildx build \
+    --file docker/Dockerfile \
+    --load \
+    --build-arg "VERSION=${VERSION}" \
+    --build-arg "VCS_REF=${VCS_REF}" \
+    --build-arg "BUILD_DATE=${BUILD_DATE}" \
+    --tag "${IMAGE}:${VERSION}" .
+  echo "Built ${IMAGE}:${VERSION} for the local architecture"
 fi
 
-echo ""
-echo "===================="
-echo "Build Complete!"
-echo "===================="
-echo ""
-echo "To run the CPU image:"
-echo "  docker run -d -p 11611:11611 -v offgrid-models:/var/lib/offgrid/models offgrid-llm:${VERSION}"
-echo ""
-if [ "$BUILD_GPU" = "true" ]; then
-  echo "To run the GPU image:"
-  echo "  docker run -d --gpus all -p 11611:11611 -v offgrid-models:/var/lib/offgrid/models offgrid-llm:gpu"
-  echo ""
+if [[ "${BUILD_GPU}" == "true" ]]; then
+  if [[ "${PUSH}" == "true" ]]; then
+    docker buildx build \
+      --file docker/Dockerfile.gpu \
+      --platform linux/amd64 \
+      --build-arg "VERSION=${VERSION}" \
+      --build-arg "VCS_REF=${VCS_REF}" \
+      --build-arg "BUILD_DATE=${BUILD_DATE}" \
+      --tag "${IMAGE}:${VERSION}-gpu" \
+      --push .
+    echo "Published ${IMAGE}:${VERSION}-gpu"
+  else
+    docker buildx build \
+      --file docker/Dockerfile.gpu \
+      --load \
+      --build-arg "VERSION=${VERSION}" \
+      --build-arg "VCS_REF=${VCS_REF}" \
+      --build-arg "BUILD_DATE=${BUILD_DATE}" \
+      --tag "${IMAGE}:${VERSION}-gpu" .
+    echo "Built ${IMAGE}:${VERSION}-gpu"
+  fi
 fi
-echo "Or use docker-compose:"
-echo "  cd docker && docker-compose up -d"
-echo ""
-echo "Access the UI at: http://localhost:11611/ui/"
+
+echo "Run locally:"
+echo "  docker run -d --name offgrid -p 127.0.0.1:11611:11611 -v offgrid-models:/var/lib/offgrid/models -v offgrid-data:/var/lib/offgrid/data ${IMAGE}:${VERSION}"
