@@ -63,6 +63,14 @@ type EnableRAGRequest struct {
 	EmbeddingModel string `json:"embedding_model"`
 }
 
+type ReindexDocumentRequest struct {
+	DocumentID string `json:"document_id"`
+}
+
+type EvaluateRAGRequest struct {
+	Cases []rag.EvaluationCase `json:"cases"`
+}
+
 // handleRAGStatus returns the status of the RAG engine
 func (s *Server) handleRAGStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -378,6 +386,71 @@ func (s *Server) handleDocumentSearch(w http.ResponseWriter, r *http.Request) {
 		Results: ragContext.Results,
 		Context: ragContext.Context,
 	})
+}
+
+// handleDocumentReindex rebuilds one document from its locally retained source.
+func (s *Server) handleDocumentReindex(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
+		http.Error(w, "RAG is not enabled", http.StatusBadRequest)
+		return
+	}
+	var req ReindexDocumentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.DocumentID) == "" {
+		http.Error(w, "document_id is required", http.StatusBadRequest)
+		return
+	}
+	doc, err := s.ragEngine.ReindexDocument(r.Context(), req.DocumentID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		} else if strings.Contains(err.Error(), "source content is unavailable") {
+			status = http.StatusConflict
+		}
+		writeRAGJSONError(w, status, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(IngestResponse{Success: true, Document: doc, Message: "Document reindexed successfully"})
+}
+
+// handleRAGEvaluate runs a user-supplied retrieval regression suite.
+func (s *Server) handleRAGEvaluate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
+		http.Error(w, "RAG is not enabled", http.StatusBadRequest)
+		return
+	}
+	var req EvaluateRAGRequest
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if len(req.Cases) > 100 {
+		http.Error(w, "a maximum of 100 evaluation cases is allowed", http.StatusBadRequest)
+		return
+	}
+	report, err := s.ragEngine.Evaluate(r.Context(), req.Cases)
+	if err != nil {
+		writeRAGJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
+func writeRAGJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": message})
 }
 
 // handleDocumentIngestURL ingests a web page URL into the knowledge base

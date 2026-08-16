@@ -21,6 +21,14 @@ func TestSQLiteStore(t *testing.T) {
 	}
 	defer store.Close()
 
+	emptyDocs, err := store.ListDocuments()
+	if err != nil {
+		t.Fatalf("ListDocuments on empty store failed: %v", err)
+	}
+	if emptyDocs == nil || len(emptyDocs) != 0 {
+		t.Fatalf("empty document list = %#v, want non-nil empty slice", emptyDocs)
+	}
+
 	// Create test document
 	doc := &Document{
 		ID:          "doc1",

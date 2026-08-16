@@ -1,6 +1,7 @@
 package inference
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -31,6 +32,11 @@ type ModelInstance struct {
 	ProjectorPath string // For VLM restart
 }
 
+type pendingLoad struct {
+	done chan struct{}
+	err  error
+}
+
 // ModelCache manages multiple llama-server instances for fast model switching
 type ModelCache struct {
 	instances      map[string]*ModelInstance // modelID -> instance
@@ -51,7 +57,7 @@ type ModelCache struct {
 	draftTokens    int    // Number of draft tokens to generate (default: 8)
 	draftMin       int    // Minimum draft tokens for acceptance (default: 5)
 	mu             sync.RWMutex
-	pendingLoads   map[string]chan error // Deduplicate concurrent load requests
+	pendingLoads   map[string]*pendingLoad // Deduplicate concurrent load requests
 	basePort       int
 	binManager     *BinaryManager
 	mmapWarmer     *MmapWarmer     // Pre-warms models into page cache
@@ -77,7 +83,7 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		instances:      make(map[string]*ModelInstance),
 		portToModel:    make(map[int]string),
 		usedPorts:      make(map[int]bool),
-		pendingLoads:   make(map[string]chan error),
+		pendingLoads:   make(map[string]*pendingLoad),
 		maxInstances:   maxInstances,
 		gpuLayers:      gpuLayers,
 		contextSize:    0,     // 0 = auto-detect based on available RAM
@@ -328,6 +334,17 @@ func (mc *ModelCache) IsModelAlive(modelID string) bool {
 	return true
 }
 
+// LoadedModelIDs returns a snapshot of instances currently owned by the cache.
+func (mc *ModelCache) LoadedModelIDs() []string {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+	ids := make([]string, 0, len(mc.instances))
+	for id := range mc.instances {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // shouldUseMlock determines if mlock should be used for a model
 // Smart mlock: enable if system RAM is at least 4x the model size
 // AND the system has sufficient RLIMIT_MEMLOCK
@@ -425,16 +442,27 @@ func (mc *ModelCache) autoDetectGPULayers(modelPath string) int {
 // 2. If another request is already loading this model -> wait for it
 // 3. Otherwise, unload everything and load the new model
 func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*ModelInstance, error) {
+	return mc.GetOrLoadContext(context.Background(), modelID, modelPath, projectorPath)
+}
+
+// GetOrLoadContext is the cancellation-aware model admission path.
+func (mc *ModelCache) GetOrLoadContext(ctx context.Context, modelID, modelPath, projectorPath string) (*ModelInstance, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	mc.mu.Lock()
 
 	// Check if another request is already loading this model
-	if pendingCh, exists := mc.pendingLoads[modelID]; exists {
+	if pending, exists := mc.pendingLoads[modelID]; exists {
 		mc.mu.Unlock()
 		log.Printf("Model %s already loading, waiting for existing request", modelID)
-		// Wait for the other request to complete
-		err := <-pendingCh
-		if err != nil {
-			return nil, err
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-pending.done:
+		}
+		if pending.err != nil {
+			return nil, pending.err
 		}
 		// Model should now be loaded, get it
 		mc.mu.Lock()
@@ -487,42 +515,29 @@ func (mc *ModelCache) GetOrLoad(modelID, modelPath, projectorPath string) (*Mode
 	}
 
 	// Mark this model as loading (for deduplication)
-	pendingCh := make(chan error, 10) // Buffered to allow multiple waiters
-	mc.pendingLoads[modelID] = pendingCh
+	pending := &pendingLoad{done: make(chan struct{})}
+	mc.pendingLoads[modelID] = pending
 	mc.mu.Unlock()
 
-	// Ensure we clean up pending state when done
-	defer func() {
-		mc.mu.Lock()
-		delete(mc.pendingLoads, modelID)
-		mc.mu.Unlock()
-		close(pendingCh)
-	}()
-
 	// Do the actual loading (not holding the lock during I/O)
-	instance, err := mc.doLoad(modelID, modelPath, projectorPath, modelSizeMB)
-
-	// Broadcast result to waiting requests
-	if err != nil {
-		// Non-blocking send to all waiters
-		select {
-		case pendingCh <- err:
-		default:
-		}
-		return nil, err
-	}
-
-	// Success - send nil to waiters
-	select {
-	case pendingCh <- nil:
-	default:
-	}
-
-	return instance, nil
+	instance, loadErr := mc.doLoadContext(ctx, modelID, modelPath, projectorPath, modelSizeMB)
+	mc.mu.Lock()
+	pending.err = loadErr
+	delete(mc.pendingLoads, modelID)
+	close(pending.done)
+	mc.mu.Unlock()
+	return instance, loadErr
 }
 
 // doLoad performs the actual model loading (called without holding the lock initially)
 func (mc *ModelCache) doLoad(modelID, modelPath, projectorPath string, modelSizeMB int64) (*ModelInstance, error) {
+	return mc.doLoadContext(context.Background(), modelID, modelPath, projectorPath, modelSizeMB)
+}
+
+func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, projectorPath string, modelSizeMB int64) (*ModelInstance, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	mc.mu.Lock()
 
 	// Check if model is warm (in page cache)
@@ -716,7 +731,7 @@ func (mc *ModelCache) doLoad(modelID, modelPath, projectorPath string, modelSize
 		return nil, fmt.Errorf("failed to get llama-server binary: %w", err)
 	}
 
-	cmd := exec.Command(binaryPath, args...)
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
 
 	cmd.Env = append(cmd.Env, "NO_PROXY=*")
 
@@ -752,7 +767,7 @@ func (mc *ModelCache) doLoad(modelID, modelPath, projectorPath string, modelSize
 	mc.mu.Unlock()
 
 	// Wait for model to be ready
-	if err := mc.waitForReady(port, modelID); err != nil {
+	if err := mc.waitForReadyContext(ctx, port, modelID); err != nil {
 		// Cleanup on failure - re-acquire lock
 		mc.mu.Lock()
 		if cmd.Process != nil {
@@ -952,6 +967,10 @@ func (mc *ModelCache) getNextAvailablePort() int {
 // With mmap pre-warming, models load much faster (5-15s vs 60-120s)
 // This prevents blank responses when switching models too quickly
 func (mc *ModelCache) waitForReady(port int, modelID string) error {
+	return mc.waitForReadyContext(context.Background(), port, modelID)
+}
+
+func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID string) error {
 	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
 
 	// Pause background warming during active model loading to avoid I/O contention
@@ -967,6 +986,9 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 	attempt := 0
 
 	for time.Now().Before(startupDeadline) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// Update progress: 15-40% during server startup
 		if mc.loadingTracker != nil {
 			elapsed := time.Since(startupDeadline.Add(-15 * time.Second))
@@ -977,8 +999,11 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 			mc.loadingTracker.UpdatePhase(PhaseStarting, progress, "Starting inference server...")
 		}
 
-		time.Sleep(200 * time.Millisecond)
-		resp, err := httpClient.Get(healthURL)
+		if err := waitContext(ctx, 200*time.Millisecond); err != nil {
+			return err
+		}
+		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+		resp, err := httpClient.Do(request)
 		if err == nil {
 			resp.Body.Close()
 			serverStarted = true
@@ -1006,6 +1031,9 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 	loadStart := time.Now()
 
 	for time.Now().Before(loadDeadline) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// Update progress: 40-95% during model loading (scaled to elapsed time)
 		if mc.loadingTracker != nil {
 			elapsed := time.Since(loadStart)
@@ -1019,7 +1047,9 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 		}
 
 		// Fast 500ms polling - balance between responsiveness and CPU
-		time.Sleep(500 * time.Millisecond)
+		if err := waitContext(ctx, 500*time.Millisecond); err != nil {
+			return err
+		}
 
 		// Check if process is still running
 		instance, exists := mc.instances[mc.portToModel[port]]
@@ -1027,7 +1057,8 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 			return fmt.Errorf("llama-server on port %d exited unexpectedly", port)
 		}
 
-		resp, err := httpClient.Get(modelsURL)
+		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
+		resp, err := httpClient.Do(request)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -1052,6 +1083,17 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 
 	// If we get here, model didn't load in time
 	return fmt.Errorf("model on port %d did not load within 5 minutes", port)
+}
+
+func waitContext(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // checkHealth performs a quick health check on the llama-server instance

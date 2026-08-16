@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -66,19 +68,33 @@ type ToolExecutor func(ctx context.Context, name string, args json.RawMessage) (
 // LLMCaller calls the LLM with messages
 type LLMCaller func(ctx context.Context, messages []api.ChatMessage, options map[string]interface{}) (string, error)
 
+// StructuredLLMCaller preserves native assistant tool calls instead of forcing
+// models to serialize actions into a text ReAct template.
+type StructuredLLMCaller func(ctx context.Context, messages []api.ChatMessage, tools []api.Tool, options map[string]interface{}) (*api.ChatCompletionResponse, error)
+
 // Agent is an autonomous agent that can use tools to accomplish tasks
 type Agent struct {
-	mu          sync.RWMutex
-	config      AgentConfig
-	tools       []api.Tool
-	executor    ToolExecutor
-	llmCaller   LLMCaller
-	state       AgentState
-	steps       []Step
-	memory      []api.ChatMessage
-	currentTask string
-	logger      *log.Logger
-	onStep      func(Step) // Callback for each step
+	mu                  sync.RWMutex
+	config              AgentConfig
+	tools               []api.Tool
+	executor            ToolExecutor
+	llmCaller           LLMCaller
+	structuredLLMCaller StructuredLLMCaller
+	state               AgentState
+	steps               []Step
+	memory              []api.ChatMessage
+	currentTask         string
+	logger              *log.Logger
+	onStep              func(Step) // Callback for each step
+}
+
+// NewStructuredAgent creates an agent that prefers OpenAI-compatible native
+// tool calls. The text parser remains available through NewAgent for older
+// local models that do not support tool calling.
+func NewStructuredAgent(config AgentConfig, tools []api.Tool, executor ToolExecutor, caller StructuredLLMCaller) *Agent {
+	agent := NewAgent(config, tools, executor, nil)
+	agent.structuredLLMCaller = caller
+	return agent
 }
 
 // NewAgent creates a new agent
@@ -107,7 +123,7 @@ func (a *Agent) SetStepCallback(callback func(Step)) {
 // Run executes the agent with the given task
 func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 	// Check if LLM caller is configured
-	if a.llmCaller == nil {
+	if a.llmCaller == nil && a.structuredLLMCaller == nil {
 		return "", fmt.Errorf("no LLM configured - start the server first with 'offgrid serve' or use the API")
 	}
 
@@ -195,10 +211,31 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 		a.state = StateThinking
 		a.mu.Unlock()
 
-		response, err := a.llmCaller(stepCtx, messages, map[string]interface{}{
+		options := map[string]interface{}{
 			"temperature": a.config.Temperature,
 			"max_tokens":  a.config.MaxTokens,
-		})
+		}
+		var response string
+		var structuredToolCall *api.ToolCall
+		var err error
+		if a.structuredLLMCaller != nil {
+			var structuredResponse *api.ChatCompletionResponse
+			structuredResponse, err = a.structuredLLMCaller(stepCtx, messages, a.tools, options)
+			if err == nil {
+				if structuredResponse == nil || len(structuredResponse.Choices) == 0 {
+					err = fmt.Errorf("model returned no choices")
+				} else {
+					message := structuredResponse.Choices[0].Message
+					response = message.StringContent()
+					if len(message.ToolCalls) > 0 {
+						toolCall := message.ToolCalls[0]
+						structuredToolCall = &toolCall
+					}
+				}
+			}
+		} else {
+			response, err = a.llmCaller(stepCtx, messages, options)
+		}
 		cancel()
 
 		if err != nil {
@@ -210,6 +247,13 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 
 		// Parse the response
 		thought, action, actionInput, answer := a.parseResponse(response)
+		if structuredToolCall != nil {
+			action = structuredToolCall.Function.Name
+			actionInput = structuredToolCall.Function.Arguments
+			answer = ""
+		} else if a.structuredLLMCaller != nil && response != "" {
+			answer = response
+		}
 
 		// Record thought step
 		if thought != "" {
@@ -245,6 +289,16 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 			execStart := time.Now()
 			result, err := a.executor(ctx, action, json.RawMessage(actionInput))
 			actionStep.Duration = time.Since(execStart)
+			if errors.Is(err, capabilities.ErrApprovalRequired) {
+				actionStep.Type = "approval_required"
+				actionStep.Content = fmt.Sprintf("Approval required for tool: %s", action)
+				actionStep.ToolResult = err.Error()
+				a.addStep(actionStep)
+				a.mu.Lock()
+				a.state = StateWaiting
+				a.mu.Unlock()
+				return "", err
+			}
 
 			isError := false
 			isUnknownTool := false
@@ -383,10 +437,15 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 			a.addStep(obsStep)
 
 			// Add to messages for next iteration
-			messages = append(messages, api.ChatMessage{
-				Role:    "assistant",
-				Content: response,
-			})
+			if structuredToolCall != nil {
+				messages = append(messages, api.ChatMessage{
+					Role:      "assistant",
+					Content:   response,
+					ToolCalls: []api.ToolCall{*structuredToolCall},
+				})
+			} else {
+				messages = append(messages, api.ChatMessage{Role: "assistant", Content: response})
+			}
 
 			// If unknown tool error, add stronger guidance
 			observationMessage := fmt.Sprintf("Observation: %s", observationText)
@@ -394,10 +453,16 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 				observationMessage = fmt.Sprintf("Observation: %s\n\nIMPORTANT: That tool does not exist. Your ONLY available tools are: calculator, read_file, write_file, list_files, shell, http_get, current_time. Do NOT try other tools. If you already have the answer, use Final Answer now.", observationText)
 			}
 
-			messages = append(messages, api.ChatMessage{
-				Role:    "user",
-				Content: observationMessage,
-			})
+			if structuredToolCall != nil {
+				messages = append(messages, api.ChatMessage{
+					Role:       "tool",
+					Name:       action,
+					ToolCallID: structuredToolCall.ID,
+					Content:    observationText,
+				})
+			} else {
+				messages = append(messages, api.ChatMessage{Role: "user", Content: observationMessage})
+			}
 			// Continue to next iteration to process tool result
 			continue
 		}

@@ -219,16 +219,23 @@ type chatTUIModel struct {
 }
 
 var (
-	chatTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
-	chatMuteStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	chatUserStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
-	chatAIStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
-	chatErrStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	chatTitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#9AAFFF"))
+	chatMuteStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#929DB5"))
+	chatFaintStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#68738C"))
+	chatUserStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F4F6FB"))
+	chatAIStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#9AAFFF"))
+	chatReadyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#60D5A6"))
+	chatErrStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF7F8D"))
+	chatHeaderStyle = lipgloss.NewStyle().Padding(0, 1).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true).BorderForeground(lipgloss.Color("#252D42"))
 )
 
 func newChatTUIModel(rt *ChatRuntime) chatTUIModel {
 	ti := textinput.New()
-	ti.Placeholder = "Ask locally... (/help for commands)"
+	ti.Placeholder = "Ask, draft, analyze, or plan..."
+	ti.Prompt = "› "
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#9AAFFF")).Bold(true)
+	ti.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#F4F6FB"))
+	ti.PlaceholderStyle = chatFaintStyle
 	ti.Focus()
 	ti.CharLimit = 8000
 	ti.Width = 80
@@ -353,9 +360,9 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m chatTUIModel) View() string {
-	header := chatTitleStyle.Render("OffGrid Chat") + " " + chatMuteStyle.Render(m.rt.ResolvedModel)
+	header := chatTitleStyle.Render("◈ OffGrid") + "  " + chatMuteStyle.Render("Private AI workspace") + "  " + chatFaintStyle.Render(m.rt.ResolvedModel)
 	if m.rt.UseKnowledgeBase {
-		header += " " + chatMuteStyle.Render("RAG:on")
+		header += "  " + chatReadyStyle.Render("● Knowledge on")
 	}
 
 	status := m.statusText
@@ -363,8 +370,12 @@ func (m chatTUIModel) View() string {
 		status = m.spinner.View() + " " + status
 	}
 
-	footer := chatMuteStyle.Render(status + "  /help /status /clear /rag /exit  Up/Down history")
-	return header + "\n\n" + m.viewport.View() + "\n\n" + m.input.View() + "\n" + footer
+	statusStyle := chatReadyStyle
+	if m.busy {
+		statusStyle = chatTitleStyle
+	}
+	footer := statusStyle.Render("● "+status) + chatFaintStyle.Render("   /help  /status  /clear  /rag  /exit   ↑↓ history")
+	return chatHeaderStyle.Width(maxInt(20, m.width-2)).Render(header) + "\n\n" + m.viewport.View() + "\n\n" + m.input.View() + "\n" + footer
 }
 
 func (m chatTUIModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {

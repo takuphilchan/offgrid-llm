@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -24,8 +25,11 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/artifacts"
 	"github.com/takuphilchan/offgrid-llm/internal/audit"
 	"github.com/takuphilchan/offgrid-llm/internal/cache"
+	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/degradation"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
@@ -37,6 +41,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/power"
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
+	"github.com/takuphilchan/offgrid-llm/internal/runs"
 	"github.com/takuphilchan/offgrid-llm/internal/stats"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
 	"github.com/takuphilchan/offgrid-llm/internal/tools"
@@ -66,31 +71,38 @@ type Server struct {
 	currentModelID       string
 	currentPort          int
 	modelMutex           sync.Mutex
-	inferenceMutex       sync.Mutex // Ensures only one inference runs at a time
+	inferenceLifecycle   *inference.LifecycleGate
 	rateLimiter          *RateLimiter
 	inferenceRateLimiter *InferenceRateLimiter
 	sessionHandlers      *SessionHandlers
 	authMiddleware       *users.Middleware
 	// New feature managers
-	userStore         *users.UserStore
-	quotaManager      *users.QuotaManager
-	kbManager         *users.KnowledgeBaseManager
-	loraManager       *inference.LoRAManager
-	agentManager      *agents.Manager
-	agentOrchestrator *agents.Orchestrator
-	toolRegistry      *agents.ToolRegistry
-	p2pDiscovery      *p2p.Discovery
-	p2pTransfer       *p2p.TransferManager
-	offgridMetrics    *metrics.OffGridMetrics
-	wsHub             *websocket.Hub
-	powerManager      *power.PowerManager
-	degradationMgr    *degradation.Manager     // Graceful degradation under resource pressure
-	auditLogger       *audit.AuditLogger       // Enterprise audit logging (optional)
-	ldapAuth          *users.LDAPAuthenticator // LDAP/Active Directory authentication
-	mcpMarketplace    *mcp.Marketplace         // MCP server marketplace
-	loadBalancer      *inference.LoadBalancer  // Multi-backend load balancer
-	distributedRAG    *rag.DistributedRAG      // Distributed RAG index
-	pluginManager     *tools.PluginManager     // Plugin system for custom tools
+	userStore          *users.UserStore
+	quotaManager       *users.QuotaManager
+	kbManager          *users.KnowledgeBaseManager
+	loraManager        *inference.LoRAManager
+	agentManager       *agents.Manager
+	agentOrchestrator  *agents.Orchestrator
+	toolRegistry       *agents.ToolRegistry
+	mcpHandler         http.Handler
+	p2pDiscovery       *p2p.Discovery
+	p2pTransfer        *p2p.TransferManager
+	p2pIdentity        *p2p.Identity
+	p2pTrust           *p2p.TrustStore
+	offgridMetrics     *metrics.OffGridMetrics
+	wsHub              *websocket.Hub
+	powerManager       *power.PowerManager
+	degradationMgr     *degradation.Manager     // Graceful degradation under resource pressure
+	auditLogger        *audit.AuditLogger       // Enterprise audit logging (optional)
+	ldapAuth           *users.LDAPAuthenticator // LDAP/Active Directory authentication
+	mcpMarketplace     *mcp.Marketplace         // MCP server marketplace
+	loadBalancer       *inference.LoadBalancer  // Multi-backend load balancer
+	distributedRAG     *rag.DistributedRAG      // Distributed RAG index
+	pluginManager      *tools.PluginManager     // Plugin system for custom tools
+	capabilityBroker   *capabilities.Broker     // Shared authorization boundary for tools and agents
+	runLog             *runs.Log                // Durable event stream for agent runs
+	artifactStore      *artifacts.Store         // Content-addressed agent outputs and captures
+	computerController *computer.Controller     // Governed computer-use control plane
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -215,6 +227,36 @@ func NewWithConfig(cfg *config.Config) *Server {
 	if err := toolRegistry.LoadUserTools(toolsConfigPath); err != nil {
 		log.Printf("Warning: Failed to load user tools: %v", err)
 	}
+	capabilityBroker := capabilities.NewBroker(capabilities.DefaultPolicy{})
+	toolRegistry.SetCapabilityBroker(capabilityBroker)
+	runLog, runLogErr := runs.NewLog(filepath.Join(dataDir, "runs", "events.jsonl"))
+	if runLogErr != nil {
+		log.Printf("Warning: Failed to initialize durable run log: %v", runLogErr)
+	}
+	artifactStore, artifactErr := artifacts.NewStore(filepath.Join(dataDir, "artifacts"))
+	if artifactErr != nil {
+		log.Printf("Warning: Failed to initialize artifact store: %v", artifactErr)
+	}
+	computerController := computer.NewController(computer.UnsupportedDriver{}, capabilityBroker, artifactStore)
+	computerController.SetAudit(func(auditEvent computer.AuditEvent) {
+		if runLog == nil {
+			return
+		}
+		runID := auditEvent.SessionID
+		if runID == "" {
+			runID = "computer-system"
+		}
+		eventType := runs.ComputerAction
+		if strings.Contains(auditEvent.Type, "session") {
+			eventType = runs.ComputerSession
+		} else if strings.Contains(auditEvent.Type, "emergency") {
+			eventType = runs.ComputerEmergency
+		}
+		event, eventErr := runs.NewEvent(runID, eventType, auditEvent)
+		if eventErr == nil {
+			_ = runLog.Publish(context.Background(), event)
+		}
+	})
 	offgridMetrics := metrics.NewOffGridMetrics() // Uses DefaultRegistry
 	wsHub := websocket.NewHub()
 	ctx := context.Background()
@@ -373,11 +415,23 @@ func NewWithConfig(cfg *config.Config) *Server {
 	// Initialize P2P components if enabled
 	var p2pDiscovery *p2p.Discovery
 	var p2pTransfer *p2p.TransferManager
+	var p2pIdentity *p2p.Identity
+	var p2pTrust *p2p.TrustStore
 	if cfg.EnableP2P {
-		p2pDiscovery = p2p.NewDiscovery(cfg.ServerPort, cfg.DiscoveryPort)
-		p2pTransfer = p2p.NewTransferManager(cfg.P2PPort, cfg.ModelsDir)
+		identity, identityErr := p2p.LoadOrCreateIdentity(filepath.Join(dataDir, "p2p", "identity.key"))
+		trustStore, trustErr := p2p.NewTrustStore(filepath.Join(dataDir, "p2p", "trusted-peers.json"))
+		if identityErr != nil || trustErr != nil {
+			log.Printf("Warning: secure P2P initialization failed (identity=%v trust=%v)", identityErr, trustErr)
+		} else {
+			p2pDiscovery = p2p.NewDiscovery(cfg.P2PPort, cfg.DiscoveryPort)
+			p2pDiscovery.SetIdentity(identity, trustStore)
+			p2pTransfer = p2p.NewTrustedTransferManager(cfg.P2PPort, cfg.ModelsDir, identity, trustStore)
+			p2pIdentity = identity
+			p2pTrust = trustStore
+		}
 	}
 
+	serverVersion := readVersionOnce()
 	return &Server{
 		config:               cfg,
 		registry:             registry,
@@ -394,6 +448,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		modelCache:           createModelCache(cfg), // Use factory function for performance tuning
 		rateLimiter:          rateLimiter,
 		inferenceRateLimiter: inferenceRateLimiter,
+		inferenceLifecycle:   inference.NewLifecycleGate(cfg.InferenceSlots),
 		sessionHandlers:      sessionHandlers,
 		authMiddleware:       authMiddleware,
 		userStore:            userStore,
@@ -403,8 +458,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 		agentManager:         agentManager,
 		agentOrchestrator:    agentOrchestrator,
 		toolRegistry:         toolRegistry,
+		mcpHandler:           toolRegistry.MCPHTTPHandler(serverVersion),
 		p2pDiscovery:         p2pDiscovery,
 		p2pTransfer:          p2pTransfer,
+		p2pIdentity:          p2pIdentity,
+		p2pTrust:             p2pTrust,
 		offgridMetrics:       offgridMetrics,
 		wsHub:                wsHub,
 		powerManager:         powerManager,
@@ -415,7 +473,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 		loadBalancer:         loadBalancer,
 		distributedRAG:       distributedRAG,
 		pluginManager:        pluginManager,
-		version:              readVersionOnce(), // Cache VERSION file at startup
+		capabilityBroker:     capabilityBroker,
+		runLog:               runLog,
+		artifactStore:        artifactStore,
+		computerController:   computerController,
+		version:              serverVersion,
 	}
 }
 
@@ -475,6 +537,7 @@ func createModelCache(cfg *config.Config) *inference.ModelCache {
 	cache.SetKVCacheType(cfg.KVCacheType)
 	cache.SetFlashAttention(cfg.FlashAttention)
 	cache.SetContinuousBatching(cfg.ContBatching)
+	cache.SetParallelSlots(cfg.InferenceSlots)
 
 	// Configure speculative decoding if draft model specified
 	if cfg.SpecDraftModel != "" {
@@ -589,14 +652,22 @@ func (s *Server) startLlamaServer() error {
 // switchModel uses the model cache to load or switch to a model
 // Returns the port of the llama-server instance running this model
 func (s *Server) switchModel(modelID string) error {
+	return s.switchModelContext(context.Background(), modelID)
+}
+
+func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
 	s.modelMutex.Lock()
 	defer s.modelMutex.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	// Fast path: if model is already loaded and active, skip reload
 	if s.currentModelID == modelID && s.currentPort > 0 {
 		// Verify the cached instance is still alive
 		if s.modelCache.IsModelAlive(modelID) {
 			log.Printf("Model %s already loaded on port %d, skipping reload", modelID, s.currentPort)
+			_ = s.registry.LoadModel(modelID)
 			return nil
 		}
 		log.Printf("Model %s was loaded but process died, reloading...", modelID)
@@ -611,7 +682,7 @@ func (s *Server) switchModel(modelID string) error {
 	}
 
 	// Load or get cached model instance
-	instance, err := s.modelCache.GetOrLoad(modelID, metadata.Path, metadata.ProjectorPath)
+	instance, err := s.modelCache.GetOrLoadContext(ctx, modelID, metadata.Path, metadata.ProjectorPath)
 	if err != nil {
 		return fmt.Errorf("failed to load model: %w", err)
 	}
@@ -633,9 +704,59 @@ func (s *Server) switchModel(modelID string) error {
 			llamaEngine.SetPort(instance.Port)
 		}
 	}
+	loadOptions := inference.DefaultLoadOptions()
+	loadOptions.NumThreads = s.config.NumThreads
+	loadOptions.ContextSize = s.config.MaxContextSize
+	if s.powerManager != nil {
+		if limit := s.powerManager.GetMaxContext(); limit > 0 && limit < loadOptions.ContextSize {
+			loadOptions.ContextSize = limit
+		}
+	}
+	if s.degradationMgr != nil {
+		if limit := s.degradationMgr.MaxContextSize(); limit > 0 && limit < loadOptions.ContextSize {
+			loadOptions.ContextSize = limit
+		}
+	}
+	if err := s.engine.Load(ctx, metadata.Path, loadOptions); err != nil {
+		return fmt.Errorf("connect inference engine: %w", err)
+	}
+	// Registry state is committed only after the runtime is reachable.
+	if err := s.registry.LoadModel(modelID); err != nil {
+		return err
+	}
+	s.syncRegistryLoadState()
 
 	log.Printf("Now using model %s on port %d", modelID, instance.Port)
 	return nil
+}
+
+func (s *Server) syncRegistryLoadState() {
+	if s.modelCache == nil || s.registry == nil {
+		return
+	}
+	loaded := make(map[string]bool)
+	for _, id := range s.modelCache.LoadedModelIDs() {
+		loaded[id] = true
+	}
+	for _, model := range s.registry.ListModels() {
+		_ = s.registry.SetLoaded(model.ID, loaded[model.ID])
+	}
+}
+
+func (s *Server) acquireInference(ctx context.Context, modelID string) (func(), error) {
+	if s.inferenceLifecycle == nil {
+		if err := s.switchModelContext(ctx, modelID); err != nil {
+			return nil, err
+		}
+		return func() {}, nil
+	}
+	loadCtx := ctx
+	cancel := func() {}
+	if s.config != nil && s.config.ModelLoadTimeout > 0 {
+		loadCtx, cancel = context.WithTimeout(ctx, time.Duration(s.config.ModelLoadTimeout)*time.Second)
+	}
+	defer cancel()
+	return s.inferenceLifecycle.Acquire(loadCtx, modelID, s.switchModelContext)
 }
 
 func serverListenAddress(host string, port int) string {
@@ -732,6 +853,16 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/chat/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleChatCompletions)))
 	mux.HandleFunc("/v1/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleCompletions)))
 	mux.HandleFunc("/v1/embeddings", chatOnly(s.inferenceRateLimiter.Middleware(s.handleEmbeddings)))
+	mux.HandleFunc("/v1/responses", chatOnly(s.inferenceRateLimiter.Middleware(s.handleResponses)))
+
+	// Ollama-compatible API for Hermes, OpenClaw, and existing Ollama clients.
+	mux.HandleFunc("/api/version", s.handleOllamaVersion)
+	mux.HandleFunc("/api/tags", modelsOnly(s.handleOllamaTags))
+	mux.HandleFunc("/api/show", modelsOnly(s.handleOllamaShow))
+	mux.HandleFunc("/api/ps", modelsOnly(s.handleOllamaPS))
+	mux.HandleFunc("/api/chat", chatOnly(s.inferenceRateLimiter.Middleware(s.handleOllamaChat)))
+	mux.HandleFunc("/api/generate", chatOnly(s.inferenceRateLimiter.Middleware(s.handleOllamaGenerate)))
+	mux.HandleFunc("/api/embed", chatOnly(s.inferenceRateLimiter.Middleware(s.handleOllamaEmbed)))
 
 	// Model search and discovery (OffGrid-specific)
 	mux.HandleFunc("/v1/search", modelsOnly(s.handleModelSearch))
@@ -776,11 +907,14 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/documents/ingest-url", ragManagerOnly(s.handleDocumentIngestURL))
 	mux.HandleFunc("/v1/documents/delete", ragManagerOnly(s.handleDocumentDelete))
 	mux.HandleFunc("/v1/documents/search", ragOnly(s.handleDocumentSearch))
+	mux.HandleFunc("/v1/documents/reindex", ragManagerOnly(s.handleDocumentReindex))
+	mux.HandleFunc("/v1/rag/evaluate", ragManagerOnly(s.handleRAGEvaluate))
 
 	// P2P endpoints
 	mux.HandleFunc("/v1/p2p/peers", modelsOnly(s.handleP2PPeers))
 	mux.HandleFunc("/v1/p2p/download", modelManagerOnly(s.handleP2PDownload))
 	mux.HandleFunc("/v1/p2p/status", modelsOnly(s.handleP2PStatus))
+	mux.HandleFunc("/v1/p2p/trust", adminOnly(s.handleP2PTrust))
 
 	// Statistics endpoint
 	mux.HandleFunc("/stats", statsOnly(s.handleStats))
@@ -826,10 +960,19 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/lora/", modelManagerOnly(s.handleLoRA))
 
 	// Agent endpoints
+	mux.HandleFunc("/mcp", adminOnly(s.mcpHandler.ServeHTTP))
 	mux.HandleFunc("/v1/agents/run", adminOnly(s.handleAgentRun))
 	mux.HandleFunc("/v1/agents/tasks", adminOnly(s.handleAgentTasks))
 	mux.HandleFunc("/v1/agents/workflows", adminOnly(s.handleAgentWorkflows))
 	mux.HandleFunc("/v1/agents/orchestrate", adminOnly(s.handleAgentOrchestrate))
+	mux.HandleFunc("/v1/runs", adminOnly(s.handleRuns))
+	mux.HandleFunc("/v1/runs/", adminOnly(s.handleRuns))
+	mux.HandleFunc("/v1/artifacts/", adminOnly(s.handleArtifacts))
+	mux.HandleFunc("/v1/computer/status", adminOnly(s.handleComputerStatus))
+	mux.HandleFunc("/v1/computer/session", adminOnly(s.handleComputerSession))
+	mux.HandleFunc("/v1/computer/action", adminOnly(s.handleComputerAction))
+	mux.HandleFunc("/v1/computer/stop", adminOnly(s.handleComputerStop))
+	mux.HandleFunc("/v1/computer/reset", adminOnly(s.handleComputerReset))
 	mux.HandleFunc("/v1/agents/tools", adminOnly(s.handleAgentTools))
 	mux.HandleFunc("/v1/agents/mcp", adminOnly(s.handleAgentMCP))
 	mux.HandleFunc("/v1/agents/mcp/test", adminOnly(s.handleAgentMCPTest))
@@ -856,19 +999,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/catalog", modelsOnly(s.handleModelCatalog))
 
 	// Web UI - serve HTML/CSS/JS
-	uiPath := "/var/lib/offgrid/web/ui"
-	// Fallback to local development path if installed path doesn't exist
-	if _, err := os.Stat(uiPath); os.IsNotExist(err) {
-		uiPath = "web/ui"
-	}
-
-	// Force local path if running from source (check for go.mod)
-	if _, err := os.Stat("go.mod"); err == nil {
-		if _, err := os.Stat("web/ui"); err == nil {
-			uiPath = "web/ui"
-			log.Println("Running from source, using local web/ui directory")
-		}
-	}
+	uiPath := resolveUIRoot()
 
 	// Serve static files
 	fs := http.FileServer(http.Dir(uiPath))
@@ -928,7 +1059,7 @@ func (s *Server) Start() error {
 	}()
 
 	// Start P2P services if enabled
-	if s.config.EnableP2P {
+	if s.config.EnableP2P && s.p2pDiscovery != nil && s.p2pTransfer != nil {
 		// Update local models for discovery
 		modelIDs := make([]string, 0)
 		for _, m := range s.registry.ListModels() {
@@ -1227,12 +1358,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		uiPath := "/var/lib/offgrid/web/ui/index.html"
-		// Fallback to local development path if installed path doesn't exist
-		if _, err := os.Stat(uiPath); os.IsNotExist(err) {
-			uiPath = "web/ui/index.html"
-		}
-		http.ServeFile(w, r, uiPath)
+		http.ServeFile(w, r, filepath.Join(resolveUIRoot(), "index.html"))
 		return
 	}
 
@@ -1246,10 +1372,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	stats := s.monitor.GetStats()
 
 	// Get model count
+	s.syncRegistryLoadState()
 	models := s.registry.ListModels()
 
 	// Calculate uptime
 	uptime := time.Since(s.startTime)
+	lifecycleStatus := inference.LifecycleStatus{Capacity: s.config.InferenceSlots}
+	if s.inferenceLifecycle != nil {
+		lifecycleStatus = s.inferenceLifecycle.Status()
+	}
 	uptimeStr := formatDuration(uptime)
 
 	// Build detailed health response
@@ -1278,6 +1409,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			"available": len(models),
 			"loaded":    s.registry.CountLoadedModels(),
 		},
+		"inference": lifecycleStatus,
 		"config": map[string]interface{}{
 			"port":        s.config.ServerPort,
 			"max_context": s.config.MaxContextSize,
@@ -1448,6 +1580,10 @@ func (s *Server) handleStatsV1(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate uptime
 	uptime := time.Since(s.startTime)
+	lifecycleStatus := inference.LifecycleStatus{Capacity: s.config.InferenceSlots}
+	if s.inferenceLifecycle != nil {
+		lifecycleStatus = s.inferenceLifecycle.Status()
+	}
 
 	response := map[string]interface{}{
 		"server": map[string]interface{}{
@@ -1460,6 +1596,7 @@ func (s *Server) handleStatsV1(w http.ResponseWriter, r *http.Request) {
 		"inference": map[string]interface{}{
 			"models":    allStats,
 			"aggregate": s.getAggregateStats(),
+			"lifecycle": lifecycleStatus,
 		},
 		"system": map[string]interface{}{
 			"os":              sysInfo.OS,
@@ -1653,6 +1790,7 @@ func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	s.syncRegistryLoadState()
 	models := s.registry.ListModels()
 	response := api.ModelListResponse{
 		Object: "list",
@@ -1728,58 +1866,20 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Acquire inference lock to ensure only one inference runs at a time
-	// Use Lock to queue requests instead of rejecting them
-	s.inferenceMutex.Lock()
-	defer s.inferenceMutex.Unlock()
-
 	// Get model metadata
-	modelMeta, err := s.registry.GetModel(req.Model)
+	_, err := s.registry.GetModel(req.Model)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
 		return
 	}
 
-	// Switch to requested model if different from current
-	if err := s.switchModel(req.Model); err != nil {
+	// Admit bounded same-model concurrency; model changes remain exclusive.
+	releaseInference, err := s.acquireInference(r.Context(), req.Model)
+	if err != nil {
 		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
 		return
 	}
-
-	// Load model if not loaded
-	if !modelMeta.IsLoaded {
-		if err := s.registry.LoadModel(req.Model); err != nil {
-			writeError(w, fmt.Sprintf("Failed to load model: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Load into engine
-		ctx := context.Background()
-		opts := inference.DefaultLoadOptions()
-		opts.NumThreads = s.config.NumThreads
-		opts.ContextSize = s.config.MaxContextSize
-
-		// Apply power-aware context limit
-		powerMaxContext := s.powerManager.GetMaxContext()
-		if powerMaxContext > 0 && powerMaxContext < opts.ContextSize {
-			log.Printf("Power saver: reducing context %d -> %d", opts.ContextSize, powerMaxContext)
-			opts.ContextSize = powerMaxContext
-		}
-
-		// Apply degradation-aware context limit
-		if s.degradationMgr != nil {
-			degradationMaxContext := s.degradationMgr.MaxContextSize()
-			if degradationMaxContext > 0 && degradationMaxContext < opts.ContextSize {
-				log.Printf("Resource pressure: reducing context %d -> %d", opts.ContextSize, degradationMaxContext)
-				opts.ContextSize = degradationMaxContext
-			}
-		}
-
-		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
-			writeError(w, fmt.Sprintf("Failed to load model into engine: %v", err), http.StatusInternalServerError)
-			return
-		}
-	}
+	defer releaseInference()
 
 	// Apply RAG enhancement if enabled
 	log.Printf("[RAG] Check: UseKnowledgeBase=%v, RAGEnabled=%v", req.UseKnowledgeBase, s.ragEngine.IsEnabled())
@@ -1792,12 +1892,17 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				if req.Messages[i].Role == "user" {
 					userContent := req.Messages[i].StringContent()
 					log.Printf("[RAG] Searching for: %s", userContent)
-					enhancedContent, ragCtx, err := s.ragEngine.EnhancePrompt(r.Context(), userContent)
+					_, ragCtx, err := s.ragEngine.EnhancePrompt(r.Context(), userContent)
 					if err != nil {
 						log.Printf("RAG enhancement failed: %v", err)
 					} else if ragCtx != nil && len(ragCtx.Results) > 0 {
-						// Replace the user message with enhanced version
-						req.Messages[i].Content = enhancedContent
+						// Keep the user's message intact. Retrieved text is a separate,
+						// explicitly untrusted system context so its provenance and
+						// instruction boundary survive downstream processing.
+						ragMessage := api.ChatMessage{Role: "system", Content: ragCtx.Context}
+						req.Messages = append(req.Messages, api.ChatMessage{})
+						copy(req.Messages[i+1:], req.Messages[i:])
+						req.Messages[i] = ragMessage
 						log.Printf("[RAG] Injected %d chunks from %d documents (context length: %d chars)",
 							len(ragCtx.Results), ragCtx.UniqueDocumentCount(), len(ragCtx.Context))
 					} else {
@@ -2010,42 +2115,18 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Prompt is required", http.StatusBadRequest)
 		return
 	}
-
-	// Acquire inference lock to ensure only one inference runs at a time
-	s.inferenceMutex.Lock()
-	defer s.inferenceMutex.Unlock()
-
-	// Switch to requested model if different from current
-	if err := s.switchModel(req.Model); err != nil {
-		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Get model metadata
-	modelMeta, err := s.registry.GetModel(req.Model)
-	if err != nil {
+	if _, err := s.registry.GetModel(req.Model); err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
 		return
 	}
 
-	// Load model if not loaded
-	if !modelMeta.IsLoaded {
-		if err := s.registry.LoadModel(req.Model); err != nil {
-			writeError(w, fmt.Sprintf("Failed to load model: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Load into engine
-		ctx := context.Background()
-		opts := inference.DefaultLoadOptions()
-		opts.NumThreads = s.config.NumThreads
-		opts.ContextSize = s.config.MaxContextSize
-
-		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
-			writeError(w, fmt.Sprintf("Failed to load model into engine: %v", err), http.StatusInternalServerError)
-			return
-		}
+	// Admit bounded same-model concurrency; model changes remain exclusive.
+	releaseInference, err := s.acquireInference(r.Context(), req.Model)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
+		return
 	}
+	defer releaseInference()
 
 	// Perform inference
 	ctx := r.Context()
@@ -3101,29 +3182,17 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get model
-	modelMeta, err := s.registry.GetModel(req.Model)
+	_, err := s.registry.GetModel(req.Model)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
 		return
 	}
-
-	// Load model if needed
-	if !modelMeta.IsLoaded {
-		if err := s.registry.LoadModel(req.Model); err != nil {
-			writeError(w, fmt.Sprintf("Failed to load model: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		ctx := context.Background()
-		opts := inference.DefaultLoadOptions()
-		opts.NumThreads = s.config.NumThreads
-		opts.ContextSize = s.config.MaxContextSize
-
-		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
-			writeError(w, fmt.Sprintf("Failed to load model into engine: %v", err), http.StatusInternalServerError)
-			return
-		}
+	releaseInference, err := s.acquireInference(r.Context(), req.Model)
+	if err != nil {
+		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
+		return
 	}
+	defer releaseInference()
 
 	// Run benchmark
 	log.Printf("Running benchmark: %s (prompt=%d, output=%d, iterations=%d)",
@@ -3228,16 +3297,21 @@ func generateTestPrompt(targetTokens int) string {
 
 // handleWebUI serves the HTML UI
 func (s *Server) handleWebUI(w http.ResponseWriter, r *http.Request) {
-	// Determine UI path
-	uiPath := "/var/lib/offgrid/web/ui/index.html"
+	http.ServeFile(w, r, filepath.Join(resolveUIRoot(), "index.html"))
+}
 
-	// Fallback to local development path
-	if _, err := os.Stat(uiPath); os.IsNotExist(err) {
-		uiPath = "web/ui/index.html"
+func resolveUIRoot() string {
+	candidates := []string{}
+	if configured := strings.TrimSpace(os.Getenv("OFFGRID_UI_DIR")); configured != "" {
+		candidates = append(candidates, configured)
 	}
-
-	// Serve index.html for SPA routing
-	http.ServeFile(w, r, uiPath)
+	candidates = append(candidates, "web/dist", "/var/lib/offgrid/web/ui", "web/ui")
+	for _, candidate := range candidates {
+		if _, err := os.Stat(filepath.Join(candidate, "index.html")); err == nil {
+			return candidate
+		}
+	}
+	return "web/ui"
 }
 
 // writeError writes an error response
@@ -4042,7 +4116,8 @@ func (s *Server) handleSystemConfig(w http.ResponseWriter, r *http.Request) {
 		"multi_user_mode": s.config.MultiUserMode,
 		"require_auth":    s.config.RequireAuth,
 		"guest_access":    s.config.GuestAccess,
-		"version":         "0.2.9",
+		"version":         s.version,
+		"inference_slots": s.config.InferenceSlots,
 		"features": map[string]bool{
 			"users":   s.config.MultiUserMode,
 			"metrics": true, // Always available but can be hidden
@@ -4637,19 +4712,30 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Prompt        string `json:"prompt"`
-		Task          string `json:"task"` // Alias for prompt
-		Model         string `json:"model"`
-		Style         string `json:"style"`
-		Stream        bool   `json:"stream"`
-		MaxIterations int    `json:"max_iterations"`
-		MaxSteps      int    `json:"max_steps"`
-		SystemPrompt  string `json:"system_prompt"`
+		Prompt            string   `json:"prompt"`
+		Task              string   `json:"task"` // Alias for prompt
+		Model             string   `json:"model"`
+		Style             string   `json:"style"`
+		Stream            bool     `json:"stream"`
+		MaxIterations     int      `json:"max_iterations"`
+		MaxSteps          int      `json:"max_steps"`
+		SystemPrompt      string   `json:"system_prompt"`
+		ApprovedTools     []string `json:"approved_tools,omitempty"` // Rejected: name-only grants are unsafe.
+		ApprovedToolCalls []struct {
+			Tool      string          `json:"tool"`
+			Arguments json.RawMessage `json:"arguments"`
+		} `json:"approved_tool_calls,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+		return
+	}
+	if len(req.ApprovedTools) > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "approved_tools is unsafe and no longer supported; use approved_tool_calls with the exact arguments"})
 		return
 	}
 
@@ -4675,7 +4761,7 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get model metadata
-	modelMeta, err := s.registry.GetModel(req.Model)
+	_, err := s.registry.GetModel(req.Model)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -4683,36 +4769,16 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Switch to requested model if different
-	if err := s.switchModel(req.Model); err != nil {
+	// Hold a lifecycle lease for the complete agent run so no concurrent
+	// request can switch the shared engine out from under its reasoning loop.
+	releaseInference, err := s.acquireInference(r.Context(), req.Model)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to switch model: %v", err)})
 		return
 	}
-
-	// Load model if not loaded
-	if !modelMeta.IsLoaded {
-		log.Printf("[Agent] Loading model: %s", req.Model)
-		if err := s.registry.LoadModel(req.Model); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to load model: %v", err)})
-			return
-		}
-
-		ctx := context.Background()
-		opts := inference.DefaultLoadOptions()
-		opts.NumThreads = s.config.NumThreads
-		opts.ContextSize = s.config.MaxContextSize
-
-		if err := s.engine.Load(ctx, modelMeta.Path, opts); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to load model into engine: %v", err)})
-			return
-		}
-	}
+	defer releaseInference()
 
 	style := "react"
 	switch req.Style {
@@ -4730,10 +4796,51 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		maxIter = 10
 	}
 
+	// A run ID is created before any tool boundary is crossed so policy and
+	// audit events can always be correlated with the task returned to clients.
+	taskID := fmt.Sprintf("run-%d", time.Now().UnixNano())
+	actor := users.GetUserID(r)
+	if actor == "" {
+		actor = "local-admin"
+	}
+	approvedToolCalls := make(map[string]bool, len(req.ApprovedToolCalls))
+	for _, approval := range req.ApprovedToolCalls {
+		key, keyErr := toolApprovalKey(approval.Tool, approval.Arguments)
+		if keyErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": keyErr.Error()})
+			return
+		}
+		approvedToolCalls[key] = true
+	}
+
 	// Get tools from registry (includes built-in + user-defined + MCP tools)
 	tools := s.toolRegistry.GetTools()
 	executor := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
-		return s.toolRegistry.Execute(ctx, name, args)
+		descriptor, _ := s.toolRegistry.Capability(name)
+		approvalKey, approvalKeyErr := toolApprovalKey(name, args)
+		if approvalKeyErr != nil {
+			return "", approvalKeyErr
+		}
+		s.publishRunEvent(ctx, taskID, runs.ToolRequested, map[string]any{
+			"tool": name, "arguments": args, "capability": descriptor, "approval_key": approvalKey,
+		})
+		result, execErr := s.toolRegistry.ExecuteWithPolicy(ctx, name, args, agents.ToolExecution{
+			RunID: taskID, Actor: actor, Approved: approvedToolCalls[approvalKey],
+		})
+		if errors.Is(execErr, capabilities.ErrApprovalRequired) {
+			s.publishRunEvent(ctx, taskID, runs.ApprovalRequired, map[string]any{
+				"tool": name, "arguments": args, "capability": descriptor, "approval_key": approvalKey,
+			})
+			return "", execErr
+		}
+		eventData := map[string]any{"tool": name, "success": execErr == nil}
+		if execErr != nil {
+			eventData["error"] = execErr.Error()
+		}
+		s.publishRunEvent(ctx, taskID, runs.ToolCompleted, eventData)
+		return result, execErr
 	}
 
 	// Use ReAct system prompt if not provided
@@ -4754,9 +4861,11 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 	// Check if streaming is requested
 	stream := req.Stream
 
-	// Create task for tracking
-	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
+	// Create task for tracking and publish the durable source-of-truth event.
 	s.agentManager.CreateTask(taskID, req.Prompt, &agentCfg)
+	s.publishRunEvent(r.Context(), taskID, runs.RunStarted, map[string]any{
+		"prompt": req.Prompt, "model": req.Model, "style": style, "actor": actor,
+	})
 
 	if stream {
 		s.agentManager.StartTask(taskID)
@@ -4850,17 +4959,30 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 
 		// Send final result
 		if err != nil {
-			s.agentManager.CompleteTask(taskID, "", err)
+			if errors.Is(err, capabilities.ErrApprovalRequired) {
+				s.agentManager.WaitForApproval(taskID, err)
+			} else {
+				s.agentManager.CompleteTask(taskID, "", err)
+				s.publishRunEvent(r.Context(), taskID, runs.RunFailed, map[string]any{"error": err.Error()})
+			}
 			errData, _ := json.Marshal(map[string]interface{}{
-				"type":  "error",
-				"error": err.Error(),
+				"type":   map[bool]string{true: "approval_required", false: "error"}[errors.Is(err, capabilities.ErrApprovalRequired)],
+				"error":  err.Error(),
+				"run_id": taskID,
 			})
 			fmt.Fprintf(w, "data: %s\n\n", errData)
 		} else {
 			s.agentManager.CompleteTask(taskID, result, nil)
+			artifact, _ := s.persistRunOutput(r.Context(), taskID, result)
+			completion := map[string]any{"model": req.Model}
+			if artifact != nil {
+				completion["artifact_digest"] = artifact.Digest
+			}
+			s.publishRunEvent(r.Context(), taskID, runs.RunCompleted, completion)
 			doneData, _ := json.Marshal(map[string]interface{}{
 				"type":   "done",
 				"output": result,
+				"run_id": taskID,
 			})
 			fmt.Fprintf(w, "data: %s\n\n", doneData)
 		}
@@ -4868,17 +4990,20 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Non-streaming: regular LLM caller
-	llmCaller := func(ctx context.Context, messages []api.ChatMessage, opts map[string]interface{}) (string, error) {
+	// Non-streaming: preserve native tool calls end-to-end. Text-only models
+	// still work because a response without tool_calls is treated as the answer.
+	structuredLLMCaller := func(ctx context.Context, messages []api.ChatMessage, tools []api.Tool, opts map[string]interface{}) (*api.ChatCompletionResponse, error) {
 		// Check if a model is loaded
 		if s.engine == nil {
-			return "", fmt.Errorf("no LLM configured - load a model first")
+			return nil, fmt.Errorf("no LLM configured - load a model first")
 		}
 
 		// Build chat request
 		chatReq := api.ChatCompletionRequest{
-			Model:    req.Model,
-			Messages: messages,
+			Model:      req.Model,
+			Messages:   messages,
+			Tools:      tools,
+			ToolChoice: "auto",
 		}
 		if temp, ok := opts["temperature"].(float64); ok {
 			t := float32(temp)
@@ -4889,43 +5014,69 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Use server's chat completion
-		resp, err := s.engine.ChatCompletion(ctx, &chatReq)
-		if err != nil {
-			return "", err
-		}
-
-		if len(resp.Choices) > 0 {
-			return resp.Choices[0].Message.StringContent(), nil
-		}
-		return "", fmt.Errorf("no response from model")
+		return s.engine.ChatCompletion(ctx, &chatReq)
 	}
 
 	s.agentManager.StartTask(taskID)
 
 	// Non-streaming agent
-	agent := agents.NewAgent(agentCfg, tools, executor, llmCaller)
+	agent := agents.NewStructuredAgent(agentCfg, tools, executor, structuredLLMCaller)
 	agent.SetStepCallback(func(step agents.Step) {
 		s.agentManager.AddTaskStep(taskID, step)
 	})
 
 	result, err := agent.Run(r.Context(), req.Prompt)
 	if err != nil {
-		s.agentManager.CompleteTask(taskID, "", err)
 		log.Printf("[Agent] Error: %v", err)
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		status := http.StatusInternalServerError
+		if errors.Is(err, capabilities.ErrApprovalRequired) {
+			s.agentManager.WaitForApproval(taskID, err)
+			status = http.StatusConflict
+		} else {
+			s.agentManager.CompleteTask(taskID, "", err)
+			s.publishRunEvent(r.Context(), taskID, runs.RunFailed, map[string]any{"error": err.Error()})
+		}
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error(), "run_id": taskID})
 		return
 	}
 
 	s.agentManager.CompleteTask(taskID, result, nil)
+	artifact, _ := s.persistRunOutput(r.Context(), taskID, result)
+	completion := map[string]any{"model": req.Model}
+	if artifact != nil {
+		completion["artifact_digest"] = artifact.Digest
+	}
+	s.publishRunEvent(r.Context(), taskID, runs.RunCompleted, completion)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"output":  result,
-		"steps":   agent.GetSteps(),
-		"task_id": taskID,
+		"output":   result,
+		"steps":    agent.GetSteps(),
+		"task_id":  taskID,
+		"run_id":   taskID,
+		"artifact": artifact,
 	})
+}
+
+func toolApprovalKey(tool string, arguments json.RawMessage) (string, error) {
+	tool = strings.TrimSpace(tool)
+	if tool == "" {
+		return "", fmt.Errorf("approved tool call requires a tool name")
+	}
+	var decoded any
+	if len(arguments) == 0 {
+		decoded = map[string]any{}
+	} else if err := json.Unmarshal(arguments, &decoded); err != nil {
+		return "", fmt.Errorf("approved tool call %q has invalid arguments: %w", tool, err)
+	}
+	canonical, err := json.Marshal(decoded)
+	if err != nil {
+		return "", fmt.Errorf("canonicalize approved tool call %q: %w", tool, err)
+	}
+	digest := sha256.Sum256(append(append([]byte(tool), '\n'), canonical...))
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {

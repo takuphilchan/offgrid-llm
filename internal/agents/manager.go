@@ -19,6 +19,7 @@ type TaskStatus string
 const (
 	TaskPending   TaskStatus = "pending"
 	TaskRunning   TaskStatus = "running"
+	TaskWaiting   TaskStatus = "waiting_for_approval"
 	TaskCompleted TaskStatus = "completed"
 	TaskFailed    TaskStatus = "failed"
 	TaskCancelled TaskStatus = "cancelled"
@@ -171,6 +172,24 @@ func (m *Manager) AddTaskStep(id string, step Step) error {
 	}
 
 	task.Steps = append(task.Steps, step)
+	return nil
+}
+
+// WaitForApproval keeps a task resumable instead of recording a policy pause
+// as an execution failure.
+func (m *Manager) WaitForApproval(id string, err error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task, exists := m.tasks[id]
+	if !exists {
+		return fmt.Errorf("task not found: %s", id)
+	}
+	task.Status = TaskWaiting
+	task.CompletedAt = nil
+	if err != nil {
+		task.Error = err.Error()
+	}
+	m.saveTask(task)
 	return nil
 }
 

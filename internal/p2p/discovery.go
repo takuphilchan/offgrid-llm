@@ -2,7 +2,9 @@ package p2p
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,19 +16,24 @@ import (
 
 // Peer represents a peer in the network
 type Peer struct {
-	ID       string
-	Address  string
-	Port     int
-	LastSeen time.Time
-	Models   []string
+	ID        string    `json:"id"`
+	Address   string    `json:"address"`
+	Port      int       `json:"port"`
+	LastSeen  time.Time `json:"last_seen"`
+	Models    []string  `json:"models"`
+	PublicKey string    `json:"public_key,omitempty"`
+	Trusted   bool      `json:"trusted"`
 }
 
 // Announcement represents a peer announcement message
 type Announcement struct {
-	NodeID  string   `json:"node_id"`
-	Port    int      `json:"port"`
-	Models  []string `json:"models"`
-	Version string   `json:"version"`
+	NodeID    string   `json:"node_id"`
+	Port      int      `json:"port"`
+	Models    []string `json:"models"`
+	Version   string   `json:"version"`
+	Timestamp int64    `json:"timestamp,omitempty"`
+	PublicKey string   `json:"public_key,omitempty"`
+	Signature string   `json:"signature,omitempty"`
 }
 
 // multicastGroup is the IPv4 multicast group for OffGrid discovery
@@ -43,6 +50,21 @@ type Discovery struct {
 	stopChan      chan struct{}
 	localModels   []string // Models available on this node
 	nodeID        string   // Unique identifier for this node
+	identity      *Identity
+	trustStore    *TrustStore
+}
+
+func (d *Discovery) SetIdentity(identity *Identity, trustStore *TrustStore) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.identity = identity
+	d.trustStore = trustStore
+	if identity != nil {
+		d.nodeID = identity.NodeID()
+	}
+	for _, peer := range d.peers {
+		peer.Trusted = trustStore != nil && trustStore.IsTrusted(peer.ID, peer.PublicKey)
+	}
 }
 
 // NewDiscovery creates a new P2P discovery instance
@@ -101,13 +123,17 @@ func (d *Discovery) GetPeers() []*Peer {
 
 	peers := make([]*Peer, 0, len(d.peers))
 	for _, peer := range d.peers {
-		peers = append(peers, peer)
+		copy := *peer
+		copy.Models = append([]string(nil), peer.Models...)
+		peers = append(peers, &copy)
 	}
 	return peers
 }
 
 // GetNodeID returns the unique identifier for this node
 func (d *Discovery) GetNodeID() string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return d.nodeID
 }
 
@@ -253,11 +279,13 @@ func (d *Discovery) broadcast() {
 	// Create JSON announcement
 	d.mu.RLock()
 	announcement := Announcement{
-		NodeID:  d.nodeID,
-		Port:    d.localPort,
-		Models:  d.localModels,
-		Version: "0.2.12",
+		NodeID:    d.nodeID,
+		Port:      d.localPort,
+		Models:    d.localModels,
+		Version:   "0.3.0",
+		Timestamp: time.Now().UTC().Unix(),
 	}
+	d.signAnnouncementLocked(&announcement)
 	d.mu.RUnlock()
 
 	data, err := json.Marshal(announcement)
@@ -289,11 +317,13 @@ func (d *Discovery) broadcastFallback() {
 	// Create JSON announcement
 	d.mu.RLock()
 	announcement := Announcement{
-		NodeID:  d.nodeID,
-		Port:    d.localPort,
-		Models:  d.localModels,
-		Version: "0.2.12",
+		NodeID:    d.nodeID,
+		Port:      d.localPort,
+		Models:    d.localModels,
+		Version:   "0.3.0",
+		Timestamp: time.Now().UTC().Unix(),
 	}
+	d.signAnnouncementLocked(&announcement)
 	d.mu.RUnlock()
 
 	data, err := json.Marshal(announcement)
@@ -316,6 +346,14 @@ func (d *Discovery) handleAnnouncement(message, fromIP string) {
 		// Ignore malformed announcements
 		return
 	}
+	d.mu.RLock()
+	requireSignature := d.identity != nil
+	d.mu.RUnlock()
+	if requireSignature {
+		if err := verifyAnnouncement(announcement, time.Now().UTC()); err != nil {
+			return
+		}
+	}
 
 	// Don't add ourselves
 	if announcement.NodeID == d.nodeID {
@@ -331,18 +369,55 @@ func (d *Discovery) handleAnnouncement(message, fromIP string) {
 		peer.LastSeen = time.Now()
 		peer.Port = announcement.Port
 		peer.Models = announcement.Models
+		peer.PublicKey = announcement.PublicKey
+		peer.Trusted = d.trustStore != nil && d.trustStore.IsTrusted(peerID, announcement.PublicKey)
 	} else {
 		// Add new peer
 		d.peers[peerID] = &Peer{
-			ID:       peerID,
-			Address:  fromIP,
-			Port:     announcement.Port,
-			LastSeen: time.Now(),
-			Models:   announcement.Models,
+			ID:        peerID,
+			Address:   fromIP,
+			Port:      announcement.Port,
+			LastSeen:  time.Now(),
+			Models:    announcement.Models,
+			PublicKey: announcement.PublicKey,
+			Trusted:   d.trustStore != nil && d.trustStore.IsTrusted(peerID, announcement.PublicKey),
 		}
 		log.Printf("🌐 Discovered new peer: %s (%s:%d) with %d models",
 			peerID, fromIP, announcement.Port, len(announcement.Models))
 	}
+}
+
+func (d *Discovery) signAnnouncementLocked(announcement *Announcement) {
+	if d.identity == nil {
+		return
+	}
+	announcement.PublicKey = d.identity.PublicKey()
+	payload, _ := announcementPayload(*announcement)
+	announcement.Signature = d.identity.sign(payload)
+}
+
+func verifyAnnouncement(announcement Announcement, now time.Time) error {
+	if announcement.Timestamp == 0 || now.Sub(time.Unix(announcement.Timestamp, 0)).Abs() > 2*time.Minute {
+		return fmt.Errorf("stale announcement")
+	}
+	public, err := base64.StdEncoding.DecodeString(announcement.PublicKey)
+	if err != nil || len(public) != ed25519.PublicKeySize || nodeIDForPublicKey(public) != announcement.NodeID {
+		return fmt.Errorf("announcement identity mismatch")
+	}
+	signature, err := base64.StdEncoding.DecodeString(announcement.Signature)
+	if err != nil {
+		return err
+	}
+	payload, _ := announcementPayload(announcement)
+	if !ed25519.Verify(ed25519.PublicKey(public), payload, signature) {
+		return fmt.Errorf("announcement signature verification failed")
+	}
+	return nil
+}
+
+func announcementPayload(announcement Announcement) ([]byte, error) {
+	announcement.Signature = ""
+	return json.Marshal(announcement)
 }
 
 // cleanupStale removes peers that haven't been seen recently

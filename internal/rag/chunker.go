@@ -40,6 +40,11 @@ func (c *Chunker) ChunkText(documentID, text string) []*Chunk {
 
 	// Then merge/split paragraphs to target chunk size
 	chunks := c.mergeToChunks(documentID, paragraphs, text)
+	for _, chunk := range chunks {
+		if chunk != nil && chunk.ContentHash == "" {
+			chunk.ContentHash = GenerateContentHash(chunk.Content)
+		}
+	}
 
 	return chunks
 }

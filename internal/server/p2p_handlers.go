@@ -17,6 +17,10 @@ func (s *Server) handleP2PPeers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "P2P is disabled", http.StatusForbidden)
 		return
 	}
+	if s.p2pDiscovery == nil {
+		writeError(w, "Secure P2P is unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
 	peers := s.p2pDiscovery.GetPeers()
 	json.NewEncoder(w).Encode(peers)
@@ -33,14 +37,15 @@ func (s *Server) handleP2PStatus(w http.ResponseWriter, r *http.Request) {
 		Maturity          string   `json:"maturity"`
 		TransferAvailable bool     `json:"transfer_available"`
 		Message           string   `json:"message,omitempty"`
+		TrustedPeers      int      `json:"trusted_peers"`
 	}
 
 	status := P2PStatus{
 		Enabled:           s.config.EnableP2P,
 		SharedModels:      []string{},
-		Maturity:          "beta",
+		Maturity:          "signed-beta",
 		TransferAvailable: s.config.EnableP2P && s.p2pTransfer != nil,
-		Message:           "P2P is beta. USB import/export is still recommended for critical offline deployments.",
+		Message:           "P2P requires an explicitly trusted Ed25519 peer identity and verifies signed SHA-256 manifests.",
 	}
 
 	if s.config.EnableP2P && s.p2pDiscovery != nil {
@@ -56,6 +61,9 @@ func (s *Server) handleP2PStatus(w http.ResponseWriter, r *http.Request) {
 		// Count unique remote models
 		remoteModels := make(map[string]bool)
 		for _, peer := range peers {
+			if peer.Trusted {
+				status.TrustedPeers++
+			}
 			for _, model := range peer.Models {
 				remoteModels[model] = true
 			}
@@ -67,10 +75,53 @@ func (s *Server) handleP2PStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
+// handleP2PTrust explicitly pins a discovered peer's public key. Discovery
+// alone never grants permission to install content.
+func (s *Server) handleP2PTrust(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.config.EnableP2P || s.p2pDiscovery == nil || s.p2pTrust == nil {
+		writeError(w, "Secure P2P is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var request struct {
+		PeerID string `json:"peer_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request.PeerID == "" {
+		writeError(w, "peer_id is required", http.StatusBadRequest)
+		return
+	}
+	var selected *p2p.Peer
+	for _, peer := range s.p2pDiscovery.GetPeers() {
+		if peer.ID == request.PeerID {
+			selected = peer
+			break
+		}
+	}
+	if selected == nil || selected.PublicKey == "" {
+		writeError(w, "Signed peer not found", http.StatusNotFound)
+		return
+	}
+	if err := s.p2pTrust.Trust(selected.ID, selected.PublicKey); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Refresh the peer's trusted projection using its latest signed announcement.
+	s.p2pDiscovery.SetIdentity(s.p2pIdentity, s.p2pTrust)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": "trusted", "peer_id": selected.ID, "public_key": selected.PublicKey})
+}
+
 // handleP2PDownload initiates a download from a peer
 func (s *Server) handleP2PDownload(w http.ResponseWriter, r *http.Request) {
 	if !s.config.EnableP2P {
 		writeError(w, "P2P is disabled", http.StatusForbidden)
+		return
+	}
+	if s.p2pDiscovery == nil || s.p2pTransfer == nil || s.p2pTrust == nil {
+		writeError(w, "Secure P2P is unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -116,6 +167,10 @@ func (s *Server) handleP2PDownload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Peer not found", http.StatusNotFound)
 		return
 	}
+	if !s.p2pTrust.IsTrusted(targetPeer.ID, targetPeer.PublicKey) {
+		writeError(w, "Peer is not trusted; trust its pinned identity before downloading", http.StatusForbidden)
+		return
+	}
 
 	// Start download in background
 	go func() {
@@ -142,8 +197,10 @@ func (s *Server) handleP2PDownload(w http.ResponseWriter, r *http.Request) {
 			s.downloadMutex.Unlock()
 		})
 
-		// Start download
-		err := s.p2pTransfer.DownloadFromPeer(context.Background(), targetPeer, req.ModelPath, req.Hash)
+		manifest, err := s.p2pTransfer.FetchManifest(context.Background(), targetPeer, req.ModelPath)
+		if err == nil {
+			_, err = s.p2pTransfer.DownloadVerified(context.Background(), targetPeer, manifest)
+		}
 		if err != nil {
 			log.Printf("P2P download failed: %v", err)
 			s.downloadMutex.Lock()
@@ -172,7 +229,7 @@ func (s *Server) handleP2PDownload(w http.ResponseWriter, r *http.Request) {
 	// Return success immediately
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "download_started",
-		"message": fmt.Sprintf("Downloading %s from %s", req.ModelPath, req.PeerID),
+		"status":  "verified_download_started",
+		"message": fmt.Sprintf("Downloading and verifying %s from trusted peer %s", req.ModelPath, req.PeerID),
 	})
 }

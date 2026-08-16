@@ -18,6 +18,7 @@ import (
 // Engine is the main RAG engine that coordinates document ingestion and search
 type Engine struct {
 	mu              sync.RWMutex
+	ingestMu        sync.Mutex
 	store           Store // Interface for vector store
 	chunker         *Chunker
 	embeddingEngine *inference.EmbeddingEngine
@@ -42,6 +43,28 @@ type Store interface {
 	Stats() map[string]interface{}
 	Close() error
 }
+
+type batchStore interface {
+	AddDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error
+}
+
+type replaceBatchStore interface {
+	ReplaceDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error
+}
+
+type filteredHybridStore interface {
+	HybridSearchWithOptions(queryEmbedding []float32, query string, opts SearchOptions, alpha float32) ([]SearchResult, error)
+}
+
+type indexMetadataStore interface {
+	GetIndexMetadata() (IndexMetadata, bool, error)
+	SetIndexMetadata(IndexMetadata) error
+}
+
+const (
+	chunkerVersion = "adaptive-v2"
+	parserVersion  = "document-parser-v1"
+)
 
 // NewEngine creates a new RAG engine
 func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engine {
@@ -73,8 +96,18 @@ func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engi
 // GetPersistedModel returns the embedding model from persisted data (if any)
 // This is used to auto-restore RAG on server startup
 func (e *Engine) GetPersistedModel() string {
-	// TODO: Store model version in SQLite metadata table
-	// For now, we'll return a default or check a separate config file
+	metadataStore, ok := e.store.(indexMetadataStore)
+	if !ok {
+		return ""
+	}
+	metadata, found, err := metadataStore.GetIndexMetadata()
+	if err != nil {
+		log.Printf("[RAG] Failed to read index metadata: %v", err)
+		return ""
+	}
+	if found {
+		return metadata.EmbeddingModel
+	}
 	return ""
 }
 
@@ -132,6 +165,20 @@ func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
 
 	if e.enabled && e.embeddingModel == embeddingModel {
 		return nil // Already enabled with this model
+	}
+	if metadataStore, ok := e.store.(indexMetadataStore); ok {
+		metadata, found, err := metadataStore.GetIndexMetadata()
+		if err != nil {
+			return fmt.Errorf("read RAG index metadata: %w", err)
+		}
+		if found {
+			if metadata.SchemaVersion != IndexSchemaVersion {
+				return fmt.Errorf("RAG index schema %d is incompatible with schema %d; rebuild the index", metadata.SchemaVersion, IndexSchemaVersion)
+			}
+			if metadata.EmbeddingModel != embeddingModel {
+				return fmt.Errorf("RAG index was built with embedding model %q, not %q; rebuild the index before switching models", metadata.EmbeddingModel, embeddingModel)
+			}
+		}
 	}
 
 	// Load embedding model if not already loaded
@@ -193,8 +240,10 @@ func (e *Engine) AnalyzeDocument(content string) DocumentAnalysis {
 
 // IngestText ingests plain text content
 func (e *Engine) IngestText(ctx context.Context, name, content string, metadata map[string]string) (*Document, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 
 	if !e.enabled {
 		return nil, fmt.Errorf("RAG is not enabled")
@@ -219,13 +268,17 @@ func (e *Engine) IngestText(ctx context.Context, name, content string, metadata 
 	}
 
 	doc := &Document{
-		ID:          docID,
-		Name:        name,
-		ContentType: "text/plain",
-		Size:        int64(len(content)),
-		Metadata:    metadata,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:             docID,
+		Name:           name,
+		ContentType:    "text/plain",
+		Size:           int64(len(content)),
+		ContentHash:    GenerateContentHash(content),
+		IndexStatus:    "indexing",
+		SourceRetained: true,
+		RawContent:     content,
+		Metadata:       metadata,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	// Use auto-tuned chunking if enabled
@@ -274,15 +327,62 @@ func (e *Engine) IngestText(ctx context.Context, name, content string, metadata 
 		}
 		allEmbeddings = append(allEmbeddings, embeddings...)
 	}
-
-	// Store document and chunks
-	if err := e.store.AddDocument(doc); err != nil {
-		return nil, fmt.Errorf("failed to store document: %w", err)
+	if len(allEmbeddings) != len(chunks) || len(allEmbeddings) == 0 {
+		return nil, fmt.Errorf("embedding response count mismatch: got %d for %d chunks", len(allEmbeddings), len(chunks))
 	}
-	for i, chunk := range chunks {
-		chunk.CreatedAt = time.Now()
-		if err := e.store.AddChunk(chunk, allEmbeddings[i]); err != nil {
-			return nil, fmt.Errorf("failed to store chunk %d: %w", i, err)
+	embeddingDim := len(allEmbeddings[0])
+	if embeddingDim == 0 {
+		return nil, fmt.Errorf("embedding model returned an empty vector")
+	}
+	for i, embedding := range allEmbeddings {
+		if len(embedding) != embeddingDim {
+			return nil, fmt.Errorf("embedding %d has dimension %d, expected %d", i, len(embedding), embeddingDim)
+		}
+		chunks[i].Embedding = append([]float32(nil), embedding...)
+		chunks[i].CreatedAt = time.Now().UTC()
+	}
+	doc.IndexStatus = "ready"
+	doc.IndexedAt = time.Now().UTC()
+
+	indexMetadata := IndexMetadata{
+		SchemaVersion:  IndexSchemaVersion,
+		EmbeddingModel: e.embeddingModel,
+		EmbeddingDim:   embeddingDim,
+		ChunkerVersion: chunkerVersion,
+		ParserVersion:  parserVersion,
+		UpdatedAt:      time.Now().UTC(),
+	}
+	if metadataStore, ok := e.store.(indexMetadataStore); ok {
+		existing, found, err := metadataStore.GetIndexMetadata()
+		if err != nil {
+			return nil, fmt.Errorf("read index metadata: %w", err)
+		}
+		if found && (existing.EmbeddingModel != indexMetadata.EmbeddingModel || existing.EmbeddingDim != embeddingDim) {
+			return nil, fmt.Errorf("embedding identity mismatch: index uses %s/%d, model returned %s/%d",
+				existing.EmbeddingModel, existing.EmbeddingDim, indexMetadata.EmbeddingModel, embeddingDim)
+		}
+	}
+
+	// Store the document and all chunks as one logical operation.
+	if store, ok := e.store.(batchStore); ok {
+		if err := store.AddDocumentWithChunks(doc, chunks, allEmbeddings); err != nil {
+			return nil, fmt.Errorf("failed to atomically store document: %w", err)
+		}
+	} else {
+		if err := e.store.AddDocument(doc); err != nil {
+			return nil, fmt.Errorf("failed to store document: %w", err)
+		}
+		for i, chunk := range chunks {
+			if err := e.store.AddChunk(chunk, allEmbeddings[i]); err != nil {
+				_ = e.store.DeleteDocument(doc.ID)
+				return nil, fmt.Errorf("failed to store chunk %d: %w", i, err)
+			}
+		}
+	}
+	if metadataStore, ok := e.store.(indexMetadataStore); ok {
+		if err := metadataStore.SetIndexMetadata(indexMetadata); err != nil {
+			_ = e.store.DeleteDocument(doc.ID)
+			return nil, fmt.Errorf("persist index metadata: %w", err)
 		}
 	}
 
@@ -338,6 +438,106 @@ func (e *Engine) IngestReader(ctx context.Context, name string, reader io.Reader
 	return e.IngestText(ctx, name, string(content), metadata)
 }
 
+// ReindexDocument rebuilds all derived chunks and embeddings from the retained
+// source text, then swaps the index atomically. Documents created by older
+// versions must be ingested once more because their source was not retained.
+func (e *Engine) ReindexDocument(ctx context.Context, documentID string) (*Document, error) {
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if !e.enabled {
+		return nil, fmt.Errorf("RAG is not enabled")
+	}
+	doc, err := e.store.GetDocument(strings.TrimSpace(documentID))
+	if err != nil {
+		return nil, fmt.Errorf("load document: %w", err)
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("document %q not found", documentID)
+	}
+	if strings.TrimSpace(doc.RawContent) == "" {
+		return nil, fmt.Errorf("source content is unavailable for document %q; re-ingest it once to enable future reindexing", documentID)
+	}
+	store, ok := e.store.(replaceBatchStore)
+	if !ok {
+		return nil, fmt.Errorf("RAG store does not support atomic reindexing")
+	}
+	chunks, embeddings, embeddingDim, err := e.buildDocumentIndex(ctx, doc, doc.RawContent)
+	if err != nil {
+		return nil, err
+	}
+	doc.ChunkCount = len(chunks)
+	doc.ContentHash = GenerateContentHash(doc.RawContent)
+	doc.Size = int64(len(doc.RawContent))
+	doc.IndexStatus = "ready"
+	doc.LastError = ""
+	doc.IndexedAt = time.Now().UTC()
+	doc.UpdatedAt = doc.IndexedAt
+	if err := store.ReplaceDocumentWithChunks(doc, chunks, embeddings); err != nil {
+		return nil, fmt.Errorf("replace document index: %w", err)
+	}
+	if metadataStore, ok := e.store.(indexMetadataStore); ok {
+		if err := metadataStore.SetIndexMetadata(IndexMetadata{
+			SchemaVersion: IndexSchemaVersion, EmbeddingModel: e.embeddingModel, EmbeddingDim: embeddingDim,
+			ChunkerVersion: chunkerVersion, ParserVersion: parserVersion, UpdatedAt: doc.IndexedAt,
+		}); err != nil {
+			return nil, fmt.Errorf("persist index metadata: %w", err)
+		}
+	}
+	return doc, nil
+}
+
+func (e *Engine) buildDocumentIndex(ctx context.Context, doc *Document, content string) ([]*Chunk, [][]float32, int, error) {
+	chunker := e.chunker
+	if e.autoTuneChunks {
+		opts, analysis := AutoTuneChunkingOptions(content)
+		chunker = NewChunker(opts)
+		if doc.Metadata == nil {
+			doc.Metadata = make(map[string]string)
+		}
+		doc.Metadata["doc_type"] = analysis.DocumentType
+		doc.Metadata["chunk_size"] = fmt.Sprintf("%d", opts.ChunkSize)
+		doc.Metadata["auto_tuned"] = "true"
+	}
+	chunks := chunker.ChunkText(doc.ID, content)
+	if len(chunks) == 0 {
+		return nil, nil, 0, fmt.Errorf("no chunks generated from source content")
+	}
+	const batchSize = 32
+	embeddings := make([][]float32, 0, len(chunks))
+	for i := 0; i < len(chunks); i += batchSize {
+		end := i + batchSize
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+		texts := make([]string, end-i)
+		for j, chunk := range chunks[i:end] {
+			texts[j] = chunk.Content
+		}
+		batch, err := e.generateEmbeddings(ctx, texts)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("generate embeddings for batch %d: %w", i/batchSize, err)
+		}
+		embeddings = append(embeddings, batch...)
+	}
+	if len(embeddings) != len(chunks) || len(embeddings) == 0 {
+		return nil, nil, 0, fmt.Errorf("embedding response count mismatch: got %d for %d chunks", len(embeddings), len(chunks))
+	}
+	dimension := len(embeddings[0])
+	if dimension == 0 {
+		return nil, nil, 0, fmt.Errorf("embedding model returned an empty vector")
+	}
+	for i := range chunks {
+		if len(embeddings[i]) != dimension {
+			return nil, nil, 0, fmt.Errorf("embedding %d has dimension %d, expected %d", i, len(embeddings[i]), dimension)
+		}
+		chunks[i].Embedding = append([]float32(nil), embeddings[i]...)
+		chunks[i].CreatedAt = time.Now().UTC()
+	}
+	return chunks, embeddings, dimension, nil
+}
+
 // Search searches for relevant chunks using hybrid search (semantic + keyword)
 func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (*RAGContext, error) {
 	e.mu.RLock()
@@ -370,7 +570,12 @@ func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (
 	}
 
 	// Use hybrid search combining semantic similarity with keyword matching
-	results, err := e.store.HybridSearch(embeddings[0], query, searchOpts.TopK, searchOpts.MinScore, e.hybridAlpha)
+	var results []SearchResult
+	if store, ok := e.store.(filteredHybridStore); ok {
+		results, err = store.HybridSearchWithOptions(embeddings[0], query, searchOpts, e.hybridAlpha)
+	} else {
+		results, err = e.store.HybridSearch(embeddings[0], query, searchOpts.TopK, searchOpts.MinScore, e.hybridAlpha)
+	}
 	if err != nil {
 		// Fall back to pure semantic search if hybrid fails
 		results, err = e.store.Search(embeddings[0], searchOpts.TopK, searchOpts.MinScore)
@@ -395,6 +600,7 @@ func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (
 
 // mmrRerank applies Maximal Marginal Relevance to select diverse results
 func (e *Engine) mmrRerank(results []SearchResult, queryEmb []float32, k int, lambda float32) []SearchResult {
+	_ = queryEmb
 	if len(results) <= k {
 		return results
 	}
@@ -416,11 +622,11 @@ func (e *Engine) mmrRerank(results []SearchResult, queryEmb []float32, k int, la
 			// Calculate relevance to query
 			relevance := candidate.Score
 
-			// Calculate max similarity to already selected documents
+			// Calculate max similarity to already selected chunks. Search stores
+			// return embeddings specifically for this reranking step.
 			maxSim := float32(0.0)
 			for _, sel := range selected {
-				// Approximate similarity using score difference (since we don't store embeddings)
-				sim := 1.0 - absFloat32(candidate.Score-sel.Score)
+				sim := chunkDiversitySimilarity(candidate.Chunk, sel.Chunk)
 				if sim > maxSim {
 					maxSim = sim
 				}
@@ -444,11 +650,21 @@ func (e *Engine) mmrRerank(results []SearchResult, queryEmb []float32, k int, la
 	return selected
 }
 
-func absFloat32(x float32) float32 {
-	if x < 0 {
-		return -x
+func chunkDiversitySimilarity(a, b *Chunk) float32 {
+	if a == nil || b == nil {
+		return 0
 	}
-	return x
+	if len(a.Embedding) > 0 && len(a.Embedding) == len(b.Embedding) {
+		return cosineSimilarity(a.Embedding, b.Embedding)
+	}
+	if a.DocumentID == b.DocumentID {
+		distance := a.Index - b.Index
+		if distance < 0 {
+			distance = -distance
+		}
+		return 1 / float32(distance+1)
+	}
+	return 0
 }
 
 // EnhancePrompt enhances a user prompt with relevant context from documents

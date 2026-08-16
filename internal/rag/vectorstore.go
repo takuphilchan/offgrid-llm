@@ -15,6 +15,7 @@ type VectorStore struct {
 	chunks     map[string]*Chunk    // chunkID -> chunk
 	documents  map[string]*Document // documentID -> document
 	docChunks  map[string][]string  // documentID -> []chunkID
+	metadata   *IndexMetadata
 }
 
 // NewVectorStore creates a new in-memory vector store
@@ -40,11 +41,83 @@ func (vs *VectorStore) AddChunk(chunk *Chunk, embedding []float32) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
-	vs.chunks[chunk.ID] = chunk
-	vs.embeddings[chunk.ID] = embedding
+	chunkCopy := *chunk
+	chunkCopy.Embedding = append([]float32(nil), embedding...)
+	if chunkCopy.ContentHash == "" {
+		chunkCopy.ContentHash = GenerateContentHash(chunkCopy.Content)
+	}
+	vs.chunks[chunk.ID] = &chunkCopy
+	vs.embeddings[chunk.ID] = append([]float32(nil), embedding...)
 
 	// Track which chunks belong to which document
 	vs.docChunks[chunk.DocumentID] = append(vs.docChunks[chunk.DocumentID], chunk.ID)
+	return nil
+}
+
+// AddDocumentWithChunks stores a complete document under one lock.
+func (vs *VectorStore) AddDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error {
+	if len(chunks) != len(embeddings) {
+		return fmt.Errorf("chunk and embedding counts differ: %d != %d", len(chunks), len(embeddings))
+	}
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	if _, exists := vs.documents[doc.ID]; exists {
+		return fmt.Errorf("document already exists")
+	}
+	vs.documents[doc.ID] = doc
+	for i, chunk := range chunks {
+		chunkCopy := *chunk
+		chunkCopy.Embedding = append([]float32(nil), embeddings[i]...)
+		if chunkCopy.ContentHash == "" {
+			chunkCopy.ContentHash = GenerateContentHash(chunkCopy.Content)
+		}
+		vs.chunks[chunk.ID] = &chunkCopy
+		vs.embeddings[chunk.ID] = append([]float32(nil), embeddings[i]...)
+		vs.docChunks[chunk.DocumentID] = append(vs.docChunks[chunk.DocumentID], chunk.ID)
+	}
+	return nil
+}
+
+// ReplaceDocumentWithChunks atomically swaps a document's generated index.
+func (vs *VectorStore) ReplaceDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error {
+	if len(chunks) != len(embeddings) {
+		return fmt.Errorf("chunk and embedding counts differ: %d != %d", len(chunks), len(embeddings))
+	}
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	for _, chunkID := range vs.docChunks[doc.ID] {
+		delete(vs.chunks, chunkID)
+		delete(vs.embeddings, chunkID)
+	}
+	vs.docChunks[doc.ID] = nil
+	vs.documents[doc.ID] = doc
+	for i, chunk := range chunks {
+		chunkCopy := *chunk
+		chunkCopy.Embedding = append([]float32(nil), embeddings[i]...)
+		if chunkCopy.ContentHash == "" {
+			chunkCopy.ContentHash = GenerateContentHash(chunkCopy.Content)
+		}
+		vs.chunks[chunk.ID] = &chunkCopy
+		vs.embeddings[chunk.ID] = append([]float32(nil), embeddings[i]...)
+		vs.docChunks[doc.ID] = append(vs.docChunks[doc.ID], chunk.ID)
+	}
+	return nil
+}
+
+func (vs *VectorStore) GetIndexMetadata() (IndexMetadata, bool, error) {
+	vs.mu.RLock()
+	defer vs.mu.RUnlock()
+	if vs.metadata == nil {
+		return IndexMetadata{}, false, nil
+	}
+	return *vs.metadata, true, nil
+}
+
+func (vs *VectorStore) SetIndexMetadata(metadata IndexMetadata) error {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	metadataCopy := metadata
+	vs.metadata = &metadataCopy
 	return nil
 }
 
@@ -54,7 +127,7 @@ func (vs *VectorStore) GetDocument(id string) (*Document, error) {
 	defer vs.mu.RUnlock()
 	doc, ok := vs.documents[id]
 	if !ok {
-		return nil, fmt.Errorf("document not found")
+		return nil, nil
 	}
 	return doc, nil
 }
@@ -132,8 +205,10 @@ func (vs *VectorStore) Search(queryEmbedding []float32, limit int, minScore floa
 
 		// Get document name
 		docName := ""
+		var metadata map[string]string
 		if doc := vs.documents[chunk.DocumentID]; doc != nil {
 			docName = doc.Name
+			metadata = doc.Metadata
 		}
 
 		result := SearchResult{
@@ -141,7 +216,9 @@ func (vs *VectorStore) Search(queryEmbedding []float32, limit int, minScore floa
 			Score:      score,
 			DocumentID: chunk.DocumentID,
 			DocName:    docName,
+			Metadata:   metadata,
 		}
+		result.Locator = locatorForResult(result)
 
 		// Maintain top-k using min-heap
 		if h.Len() < limit {
@@ -164,9 +241,15 @@ func (vs *VectorStore) Search(queryEmbedding []float32, limit int, minScore floa
 // HybridSearch implements the Store interface for hybrid search
 func (vs *VectorStore) HybridSearch(queryEmbedding []float32, query string, limit int, minScore float32, alpha float32) ([]SearchResult, error) {
 	opts := SearchOptions{
-		TopK:     limit,
-		MinScore: minScore,
+		TopK:           limit,
+		MinScore:       minScore,
+		IncludeContent: true,
 	}
+	return vs.hybridSearchInternal(queryEmbedding, query, opts, alpha), nil
+}
+
+// HybridSearchWithOptions preserves document filters through the store boundary.
+func (vs *VectorStore) HybridSearchWithOptions(queryEmbedding []float32, query string, opts SearchOptions, alpha float32) ([]SearchResult, error) {
 	return vs.hybridSearchInternal(queryEmbedding, query, opts, alpha), nil
 }
 
@@ -222,8 +305,10 @@ func (vs *VectorStore) hybridSearchInternal(queryEmbedding []float32, query stri
 
 		// Get document name
 		docName := ""
+		var metadata map[string]string
 		if doc := vs.documents[chunk.DocumentID]; doc != nil {
 			docName = doc.Name
+			metadata = doc.Metadata
 		}
 
 		result := SearchResult{
@@ -231,7 +316,9 @@ func (vs *VectorStore) hybridSearchInternal(queryEmbedding []float32, query stri
 			Score:      combinedScore,
 			DocumentID: chunk.DocumentID,
 			DocName:    docName,
+			Metadata:   metadata,
 		}
+		result.Locator = locatorForResult(result)
 
 		// Maintain top-k using min-heap
 		if h.Len() < opts.TopK {
@@ -294,11 +381,18 @@ func (vs *VectorStore) Stats() map[string]interface{} {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 
+	retainedCount := 0
+	for _, doc := range vs.documents {
+		if doc.RawContent != "" {
+			retainedCount++
+		}
+	}
 	return map[string]interface{}{
-		"document_count":  len(vs.documents),
-		"chunk_count":     len(vs.chunks),
-		"embedding_count": len(vs.embeddings),
-		"backend":         "memory",
+		"document_count":             len(vs.documents),
+		"chunk_count":                len(vs.chunks),
+		"embedding_count":            len(vs.embeddings),
+		"reindexable_document_count": retainedCount,
+		"backend":                    "memory",
 	}
 }
 

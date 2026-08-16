@@ -8,7 +8,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -64,6 +67,11 @@ func (s *SQLiteStore) initSchema() error {
 			content_type TEXT,
 			size INTEGER,
 			chunk_count INTEGER,
+			content_hash TEXT DEFAULT '',
+			index_status TEXT DEFAULT 'ready',
+			last_error TEXT DEFAULT '',
+			indexed_at DATETIME,
+			raw_content TEXT DEFAULT '',
 			metadata TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -75,11 +83,23 @@ func (s *SQLiteStore) initSchema() error {
 			chunk_index INTEGER,
 			start_char INTEGER,
 			end_char INTEGER,
+			page INTEGER DEFAULT 0,
+			section TEXT DEFAULT '',
+			content_hash TEXT DEFAULT '',
 			embedding BLOB, -- Stored as JSON array of floats for now (simple)
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_chunks_doc_id ON chunks(document_id);`,
+		`CREATE TABLE IF NOT EXISTS index_metadata (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			schema_version INTEGER NOT NULL,
+			embedding_model TEXT NOT NULL,
+			embedding_dimension INTEGER NOT NULL,
+			chunker_version TEXT NOT NULL,
+			parser_version TEXT NOT NULL,
+			updated_at DATETIME NOT NULL
+		);`,
 		// FTS5 virtual table for full-text search (hybrid search support)
 		`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
 			chunk_id,
@@ -106,6 +126,24 @@ func (s *SQLiteStore) initSchema() error {
 			if !isFTS5Error(err) {
 				return fmt.Errorf("failed to execute init query: %w", err)
 			}
+		}
+	}
+
+	// Add locator columns for indexes created before schema version 2. SQLite
+	// does not support ADD COLUMN IF NOT EXISTS on all supported versions, so
+	// duplicate-column errors are intentionally ignored.
+	for _, migration := range []string{
+		`ALTER TABLE documents ADD COLUMN content_hash TEXT DEFAULT ''`,
+		`ALTER TABLE documents ADD COLUMN index_status TEXT DEFAULT 'ready'`,
+		`ALTER TABLE documents ADD COLUMN last_error TEXT DEFAULT ''`,
+		`ALTER TABLE documents ADD COLUMN indexed_at DATETIME`,
+		`ALTER TABLE documents ADD COLUMN raw_content TEXT DEFAULT ''`,
+		`ALTER TABLE chunks ADD COLUMN page INTEGER DEFAULT 0`,
+		`ALTER TABLE chunks ADD COLUMN section TEXT DEFAULT ''`,
+		`ALTER TABLE chunks ADD COLUMN content_hash TEXT DEFAULT ''`,
+	} {
+		if _, err := s.db.Exec(migration); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+			return fmt.Errorf("failed to migrate RAG schema: %w", err)
 		}
 	}
 
@@ -136,9 +174,11 @@ func (s *SQLiteStore) AddDocument(doc *Document) error {
 	metadataJSON, _ := json.Marshal(doc.Metadata)
 
 	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO documents (id, name, content_type, size, chunk_count, metadata, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, doc.ID, doc.Name, doc.ContentType, doc.Size, doc.ChunkCount, string(metadataJSON), doc.CreatedAt, doc.UpdatedAt)
+		INSERT OR REPLACE INTO documents
+			(id, name, content_type, size, chunk_count, content_hash, index_status, last_error, indexed_at, raw_content, metadata, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, doc.ID, doc.Name, doc.ContentType, doc.Size, doc.ChunkCount, doc.ContentHash, doc.IndexStatus,
+		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.CreatedAt, doc.UpdatedAt)
 
 	return err
 }
@@ -151,10 +191,151 @@ func (s *SQLiteStore) AddChunk(chunk *Chunk, embedding []float32) error {
 	embeddingJSON, _ := json.Marshal(embedding)
 
 	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO chunks (id, document_id, content, chunk_index, start_char, end_char, embedding, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, chunk.ID, chunk.DocumentID, chunk.Content, chunk.Index, chunk.StartChar, chunk.EndChar, embeddingJSON, chunk.CreatedAt)
+		INSERT OR REPLACE INTO chunks (id, document_id, content, chunk_index, start_char, end_char, page, section, content_hash, embedding, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, chunk.ID, chunk.DocumentID, chunk.Content, chunk.Index, chunk.StartChar, chunk.EndChar,
+		chunk.Page, chunk.Section, chunk.ContentHash, embeddingJSON, chunk.CreatedAt)
 
+	return err
+}
+
+// AddDocumentWithChunks stores a document and all of its embeddings atomically.
+func (s *SQLiteStore) AddDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error {
+	if len(chunks) != len(embeddings) {
+		return fmt.Errorf("chunk and embedding counts differ: %d != %d", len(chunks), len(embeddings))
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	metadataJSON, err := json.Marshal(doc.Metadata)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO documents
+			(id, name, content_type, size, chunk_count, content_hash, index_status, last_error, indexed_at, raw_content, metadata, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, doc.ID, doc.Name, doc.ContentType, doc.Size, doc.ChunkCount, doc.ContentHash, doc.IndexStatus,
+		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.CreatedAt, doc.UpdatedAt); err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO chunks (id, document_id, content, chunk_index, start_char, end_char, page, section, content_hash, embedding, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for i, chunk := range chunks {
+		embeddingJSON, err := json.Marshal(embeddings[i])
+		if err != nil {
+			return err
+		}
+		if _, err := stmt.Exec(chunk.ID, chunk.DocumentID, chunk.Content, chunk.Index, chunk.StartChar, chunk.EndChar,
+			chunk.Page, chunk.Section, chunk.ContentHash, embeddingJSON, chunk.CreatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ReplaceDocumentWithChunks swaps all derived chunks in one transaction while
+// retaining the stable document ID and creation time.
+func (s *SQLiteStore) ReplaceDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error {
+	if len(chunks) != len(embeddings) {
+		return fmt.Errorf("chunk and embedding counts differ: %d != %d", len(chunks), len(embeddings))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	metadataJSON, err := json.Marshal(doc.Metadata)
+	if err != nil {
+		return err
+	}
+	result, err := tx.Exec(`UPDATE documents SET
+		name=?, content_type=?, size=?, chunk_count=?, content_hash=?, index_status=?,
+		last_error=?, indexed_at=?, raw_content=?, metadata=?, updated_at=? WHERE id=?`,
+		doc.Name, doc.ContentType, doc.Size, doc.ChunkCount, doc.ContentHash, doc.IndexStatus,
+		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.UpdatedAt, doc.ID)
+	if err != nil {
+		return err
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+		return fmt.Errorf("document %q not found", doc.ID)
+	}
+	if _, err := tx.Exec(`DELETE FROM chunks WHERE document_id = ?`, doc.ID); err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT INTO chunks
+		(id, document_id, content, chunk_index, start_char, end_char, page, section, content_hash, embedding, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for i, chunk := range chunks {
+		embeddingJSON, err := json.Marshal(embeddings[i])
+		if err != nil {
+			return err
+		}
+		if _, err := stmt.Exec(chunk.ID, chunk.DocumentID, chunk.Content, chunk.Index, chunk.StartChar, chunk.EndChar,
+			chunk.Page, chunk.Section, chunk.ContentHash, embeddingJSON, chunk.CreatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// GetIndexMetadata returns the persisted index build identity.
+func (s *SQLiteStore) GetIndexMetadata() (IndexMetadata, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var metadata IndexMetadata
+	err := s.db.QueryRow(`
+		SELECT schema_version, embedding_model, embedding_dimension, chunker_version, parser_version, updated_at
+		FROM index_metadata WHERE id = 1
+	`).Scan(&metadata.SchemaVersion, &metadata.EmbeddingModel, &metadata.EmbeddingDim,
+		&metadata.ChunkerVersion, &metadata.ParserVersion, &metadata.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return IndexMetadata{}, false, nil
+	}
+	if err != nil {
+		return IndexMetadata{}, false, err
+	}
+	return metadata, true, nil
+}
+
+// SetIndexMetadata persists the index build identity.
+func (s *SQLiteStore) SetIndexMetadata(metadata IndexMetadata) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if metadata.UpdatedAt.IsZero() {
+		metadata.UpdatedAt = time.Now().UTC()
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO index_metadata (id, schema_version, embedding_model, embedding_dimension, chunker_version, parser_version, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			schema_version=excluded.schema_version,
+			embedding_model=excluded.embedding_model,
+			embedding_dimension=excluded.embedding_dimension,
+			chunker_version=excluded.chunker_version,
+			parser_version=excluded.parser_version,
+			updated_at=excluded.updated_at
+	`, metadata.SchemaVersion, metadata.EmbeddingModel, metadata.EmbeddingDim,
+		metadata.ChunkerVersion, metadata.ParserVersion, metadata.UpdatedAt)
 	return err
 }
 
@@ -165,11 +346,14 @@ func (s *SQLiteStore) GetDocument(id string) (*Document, error) {
 
 	var doc Document
 	var metadataJSON string
+	var indexedAt sql.NullTime
 
 	err := s.db.QueryRow(`
-		SELECT id, name, content_type, size, chunk_count, metadata, created_at, updated_at
+		SELECT id, name, content_type, size, chunk_count, content_hash, index_status,
+		       last_error, indexed_at, raw_content, metadata, created_at, updated_at
 		FROM documents WHERE id = ?
-	`, id).Scan(&doc.ID, &doc.Name, &doc.ContentType, &doc.Size, &doc.ChunkCount, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt)
+	`, id).Scan(&doc.ID, &doc.Name, &doc.ContentType, &doc.Size, &doc.ChunkCount, &doc.ContentHash,
+		&doc.IndexStatus, &doc.LastError, &indexedAt, &doc.RawContent, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -181,6 +365,12 @@ func (s *SQLiteStore) GetDocument(id string) (*Document, error) {
 	if metadataJSON != "" {
 		json.Unmarshal([]byte(metadataJSON), &doc.Metadata)
 	}
+	if indexedAt.Valid {
+		doc.IndexedAt = indexedAt.Time
+	} else {
+		doc.IndexedAt = doc.UpdatedAt
+	}
+	doc.SourceRetained = doc.RawContent != ""
 
 	return &doc, nil
 }
@@ -190,18 +380,27 @@ func (s *SQLiteStore) ListDocuments() ([]*Document, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, content_type, size, chunk_count, metadata, created_at, updated_at FROM documents ORDER BY created_at DESC`)
+	rows, err := s.db.Query(`SELECT id, name, content_type, size, chunk_count, content_hash, index_status,
+		last_error, indexed_at, LENGTH(raw_content) > 0, metadata, created_at, updated_at
+		FROM documents ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var docs []*Document
+	docs := make([]*Document, 0)
 	for rows.Next() {
 		var doc Document
 		var metadataJSON string
-		if err := rows.Scan(&doc.ID, &doc.Name, &doc.ContentType, &doc.Size, &doc.ChunkCount, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt); err != nil {
+		var indexedAt sql.NullTime
+		if err := rows.Scan(&doc.ID, &doc.Name, &doc.ContentType, &doc.Size, &doc.ChunkCount, &doc.ContentHash,
+			&doc.IndexStatus, &doc.LastError, &indexedAt, &doc.SourceRetained, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt); err != nil {
 			return nil, err
+		}
+		if indexedAt.Valid {
+			doc.IndexedAt = indexedAt.Time
+		} else {
+			doc.IndexedAt = doc.UpdatedAt
 		}
 		if metadataJSON != "" {
 			json.Unmarshal([]byte(metadataJSON), &doc.Metadata)
@@ -230,7 +429,8 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 	// Fetch all chunks and their embeddings with document metadata
 	// In a real vector DB, this would be an index scan
 	rows, err := s.db.Query(`
-		SELECT c.id, c.document_id, c.content, c.chunk_index, c.start_char, c.end_char, c.embedding, d.name, d.metadata
+		SELECT c.id, c.document_id, c.content, c.chunk_index, c.start_char, c.end_char,
+		       c.page, c.section, c.content_hash, c.embedding, d.name, d.metadata
 		FROM chunks c
 		JOIN documents d ON c.document_id = d.id
 	`)
@@ -249,13 +449,18 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 		var docName string
 		var metadataJSON sql.NullString
 
-		if err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunk.Content, &chunk.Index, &chunk.StartChar, &chunk.EndChar, &embeddingJSON, &docName, &metadataJSON); err != nil {
+		if err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunk.Content, &chunk.Index, &chunk.StartChar, &chunk.EndChar,
+			&chunk.Page, &chunk.Section, &chunk.ContentHash, &embeddingJSON, &docName, &metadataJSON); err != nil {
 			continue
 		}
 
 		var embedding []float32
 		if err := json.Unmarshal(embeddingJSON, &embedding); err != nil {
 			continue
+		}
+		chunk.Embedding = embedding
+		if chunk.ContentHash == "" {
+			chunk.ContentHash = GenerateContentHash(chunk.Content)
 		}
 
 		// Parse document metadata
@@ -267,12 +472,13 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 		score := cosineSimilarity(queryEmbedding, embedding)
 		if score >= minScore {
 			result := SearchResult{
-				Chunk:      &Chunk{ID: chunk.ID, DocumentID: chunk.DocumentID, Content: chunk.Content, Index: chunk.Index, StartChar: chunk.StartChar, EndChar: chunk.EndChar},
+				Chunk:      &chunk,
 				Score:      score,
 				DocumentID: chunk.DocumentID,
 				DocName:    docName,
 				Metadata:   metadata,
 			}
+			result.Locator = locatorForResult(result)
 
 			// Maintain a heap of size limit (min-heap by score)
 			if h.Len() < limit {
@@ -296,42 +502,55 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 
 // HybridSearch performs a hybrid search combining semantic similarity with FTS5 keyword matching
 func (s *SQLiteStore) HybridSearch(queryEmbedding []float32, query string, limit int, minScore float32, alpha float32) ([]SearchResult, error) {
+	return s.HybridSearchWithOptions(queryEmbedding, query, SearchOptions{
+		TopK: limit, MinScore: minScore, IncludeContent: true,
+	}, alpha)
+}
+
+// HybridSearchWithOptions performs hybrid retrieval while honoring document
+// scope. Filtering before ranking prevents unrelated documents from consuming
+// the requested top-k slots.
+func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query string, opts SearchOptions, alpha float32) ([]SearchResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	limit := opts.TopK
+	minScore := opts.MinScore
+	if limit <= 0 {
+		return []SearchResult{}, nil
+	}
+	if alpha < 0 {
+		alpha = 0
+	} else if alpha > 1 {
+		alpha = 1
+	}
 
-	// Get FTS5 matches first (keyword search)
-	ftsMatches := make(map[string]float32)
+	// Rank keyword matches. We fuse ranks instead of mixing raw BM25 and cosine
+	// values, whose scales are unrelated and vary by corpus.
+	keywordRanks := make(map[string]int)
 	ftsRows, err := s.db.Query(`
-		SELECT chunk_id, bm25(chunks_fts) as score
+		SELECT chunk_id
 		FROM chunks_fts
 		WHERE chunks_fts MATCH ?
-		ORDER BY score
+		ORDER BY bm25(chunks_fts)
 		LIMIT ?
-	`, query, limit*3)
+	`, query, limit*10)
 
 	if err == nil {
 		defer ftsRows.Close()
+		rank := 1
 		for ftsRows.Next() {
 			var chunkID string
-			var bm25Score float64
-			if err := ftsRows.Scan(&chunkID, &bm25Score); err == nil {
-				// BM25 scores are negative (lower is better), normalize to 0-1
-				// Typical BM25 scores range from -10 to 0
-				normalizedScore := float32(1.0 + bm25Score/10.0)
-				if normalizedScore < 0 {
-					normalizedScore = 0
-				}
-				if normalizedScore > 1 {
-					normalizedScore = 1
-				}
-				ftsMatches[chunkID] = normalizedScore
+			if err := ftsRows.Scan(&chunkID); err == nil {
+				keywordRanks[chunkID] = rank
+				rank++
 			}
 		}
 	}
 
 	// Fetch all chunks for semantic search with document metadata
 	rows, err := s.db.Query(`
-		SELECT c.id, c.document_id, c.content, c.chunk_index, c.start_char, c.end_char, c.embedding, d.name, d.metadata
+		SELECT c.id, c.document_id, c.content, c.chunk_index, c.start_char, c.end_char,
+		       c.page, c.section, c.content_hash, c.embedding, d.name, d.metadata
 		FROM chunks c
 		JOIN documents d ON c.document_id = d.id
 	`)
@@ -340,9 +559,15 @@ func (s *SQLiteStore) HybridSearch(queryEmbedding []float32, query string, limit
 	}
 	defer rows.Close()
 
-	// Use a min-heap for top-k selection
-	h := &searchResultHeap{}
-	heap.Init(h)
+	type candidate struct {
+		result   SearchResult
+		semantic float32
+	}
+	candidates := make([]candidate, 0)
+	documentFilter := make(map[string]struct{}, len(opts.DocumentFilter))
+	for _, documentID := range opts.DocumentFilter {
+		documentFilter[documentID] = struct{}{}
+	}
 
 	for rows.Next() {
 		var chunk Chunk
@@ -350,13 +575,23 @@ func (s *SQLiteStore) HybridSearch(queryEmbedding []float32, query string, limit
 		var docName string
 		var metadataJSON sql.NullString
 
-		if err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunk.Content, &chunk.Index, &chunk.StartChar, &chunk.EndChar, &embeddingJSON, &docName, &metadataJSON); err != nil {
+		if err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunk.Content, &chunk.Index, &chunk.StartChar, &chunk.EndChar,
+			&chunk.Page, &chunk.Section, &chunk.ContentHash, &embeddingJSON, &docName, &metadataJSON); err != nil {
 			continue
+		}
+		if len(documentFilter) > 0 {
+			if _, allowed := documentFilter[chunk.DocumentID]; !allowed {
+				continue
+			}
 		}
 
 		var embedding []float32
 		if err := json.Unmarshal(embeddingJSON, &embedding); err != nil {
 			continue
+		}
+		chunk.Embedding = embedding
+		if chunk.ContentHash == "" {
+			chunk.ContentHash = GenerateContentHash(chunk.Content)
 		}
 
 		// Parse document metadata
@@ -365,46 +600,49 @@ func (s *SQLiteStore) HybridSearch(queryEmbedding []float32, query string, limit
 			json.Unmarshal([]byte(metadataJSON.String), &metadata)
 		}
 
-		// Calculate semantic similarity
 		semanticScore := cosineSimilarity(queryEmbedding, embedding)
+		result := SearchResult{Chunk: &chunk, DocumentID: chunk.DocumentID, DocName: docName, Metadata: metadata}
+		result.Locator = locatorForResult(result)
+		candidates = append(candidates, candidate{result: result, semantic: semanticScore})
+	}
 
-		// Get keyword score (FTS5 BM25)
-		keywordScore := ftsMatches[chunk.ID]
-
-		// Combine scores: alpha controls the balance
-		// alpha=1.0 means pure semantic, alpha=0.0 means pure keyword
-		var combinedScore float32
-		if len(ftsMatches) > 0 {
-			combinedScore = alpha*semanticScore + (1-alpha)*keywordScore
-		} else {
-			// Fall back to pure semantic if FTS5 not available
-			combinedScore = semanticScore
-		}
-
-		if combinedScore >= minScore {
-			result := SearchResult{
-				Chunk:      &Chunk{ID: chunk.ID, DocumentID: chunk.DocumentID, Content: chunk.Content, Index: chunk.Index, StartChar: chunk.StartChar, EndChar: chunk.EndChar},
-				Score:      combinedScore,
-				DocumentID: chunk.DocumentID,
-				DocName:    docName,
-				Metadata:   metadata,
+	if len(keywordRanks) == 0 {
+		sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].semantic > candidates[j].semantic })
+	} else {
+		sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].semantic > candidates[j].semantic })
+		const rrfK = float32(60)
+		for i := range candidates {
+			semanticRRF := (rrfK + 1) / (rrfK + float32(i+1))
+			keywordRRF := float32(0)
+			if rank, ok := keywordRanks[candidates[i].result.Chunk.ID]; ok {
+				keywordRRF = (rrfK + 1) / (rrfK + float32(rank))
 			}
-
-			if h.Len() < limit {
-				heap.Push(h, result)
-			} else if combinedScore > (*h)[0].Score {
-				heap.Pop(h)
-				heap.Push(h, result)
+			candidates[i].result.Score = alpha*semanticRRF + (1-alpha)*keywordRRF
+		}
+		sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].result.Score > candidates[j].result.Score })
+	}
+	results := make([]SearchResult, 0, limit)
+	for _, candidate := range candidates {
+		score := candidate.result.Score
+		if len(keywordRanks) == 0 {
+			score = candidate.semantic
+			candidate.result.Score = score
+		}
+		if score >= minScore {
+			results = append(results, candidate.result)
+			if len(results) == limit {
+				break
 			}
 		}
 	}
-
-	// Extract results in descending order
-	results := make([]SearchResult, h.Len())
-	for i := len(results) - 1; i >= 0; i-- {
-		results[i] = heap.Pop(h).(SearchResult)
+	if !opts.IncludeContent {
+		for i := range results {
+			chunk := results[i].Chunk
+			results[i].Chunk = &Chunk{ID: chunk.ID, DocumentID: chunk.DocumentID, Index: chunk.Index,
+				StartChar: chunk.StartChar, EndChar: chunk.EndChar, Page: chunk.Page, Section: chunk.Section,
+				ContentHash: chunk.ContentHash}
+		}
 	}
-
 	return results, nil
 }
 
@@ -432,14 +670,16 @@ func (s *SQLiteStore) Stats() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var docCount, chunkCount int
+	var docCount, chunkCount, retainedCount int
 	s.db.QueryRow("SELECT COUNT(*) FROM documents").Scan(&docCount)
 	s.db.QueryRow("SELECT COUNT(*) FROM chunks").Scan(&chunkCount)
+	s.db.QueryRow("SELECT COUNT(*) FROM documents WHERE LENGTH(raw_content) > 0").Scan(&retainedCount)
 
 	return map[string]interface{}{
-		"document_count": docCount,
-		"chunk_count":    chunkCount,
-		"backend":        "sqlite",
+		"document_count":             docCount,
+		"chunk_count":                chunkCount,
+		"reindexable_document_count": retainedCount,
+		"backend":                    "sqlite",
 	}
 }
 

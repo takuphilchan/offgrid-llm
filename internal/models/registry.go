@@ -34,6 +34,10 @@ func (r *Registry) ScanModels() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	previouslyLoaded := make(map[string]bool, len(r.models))
+	for id, metadata := range r.models {
+		previouslyLoaded[id] = metadata != nil && metadata.IsLoaded
+	}
 	// Clear existing models to get fresh state
 	r.models = make(map[string]*api.ModelMetadata)
 
@@ -72,7 +76,7 @@ func (r *Registry) ScanModels() error {
 				ContextSize:  4096, // Default, will be updated when loaded
 				Parameters:   r.detectParameters(path),
 				Type:         modelType,
-				IsLoaded:     false,
+				IsLoaded:     previouslyLoaded[modelID],
 			}
 
 			// Check for projector
@@ -179,11 +183,18 @@ func (r *Registry) GetModel(id string) (*api.ModelMetadata, error) {
 		return nil, fmt.Errorf("model not found: %s", id)
 	}
 
-	return model, nil
+	copy := *model
+	return &copy, nil
 }
 
-// LoadModel loads a model into memory
+// LoadModel records that the runtime successfully loaded a model. Runtime
+// ownership belongs to inference.ModelCache; the registry is only a catalog.
 func (r *Registry) LoadModel(id string) error {
+	return r.SetLoaded(id, true)
+}
+
+// SetLoaded synchronizes catalog metadata with the inference runtime.
+func (r *Registry) SetLoaded(id string, loaded bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -192,37 +203,19 @@ func (r *Registry) LoadModel(id string) error {
 		return fmt.Errorf("model not found: %s", id)
 	}
 
-	if model.IsLoaded {
-		return nil // Already loaded
+	model.IsLoaded = loaded
+	if loaded {
+		model.LoadedAt = time.Now()
+	} else {
+		model.LoadedAt = time.Time{}
 	}
-
-	// TODO: Actual model loading with llama.cpp
-	// For now, just mark as loaded
-	model.IsLoaded = true
-	model.LoadedAt = time.Now()
 
 	return nil
 }
 
 // UnloadModel unloads a model from memory
 func (r *Registry) UnloadModel(id string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	model, exists := r.models[id]
-	if !exists {
-		return fmt.Errorf("model not found: %s", id)
-	}
-
-	if !model.IsLoaded {
-		return nil // Not loaded
-	}
-
-	// TODO: Actual model unloading
-	delete(r.loadedModels, id)
-	model.IsLoaded = false
-
-	return nil
+	return r.SetLoaded(id, false)
 }
 
 // ImportFromUSB imports a model from a USB drive or external storage

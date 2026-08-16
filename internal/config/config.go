@@ -36,6 +36,7 @@ type Config struct {
 	UseMmap         bool   `yaml:"use_mmap" json:"use_mmap"`                 // Memory-map model file (good for low RAM)
 	UseMlock        bool   `yaml:"use_mlock" json:"use_mlock"`               // Lock model in RAM (good for high RAM)
 	ContBatching    bool   `yaml:"cont_batching" json:"cont_batching"`       // Continuous batching for multi-request throughput
+	InferenceSlots  int    `yaml:"inference_slots" json:"inference_slots"`   // Concurrent requests for the active model
 	LowMemoryMode   bool   `yaml:"low_memory_mode" json:"low_memory_mode"`   // Enable optimizations for <8GB RAM systems
 	AdaptiveContext bool   `yaml:"adaptive_context" json:"adaptive_context"` // Auto-adjust context size based on RAM
 
@@ -149,6 +150,7 @@ func LoadConfig() *Config {
 		UseMmap:         getEnvBool("OFFGRID_USE_MMAP", true),
 		UseMlock:        getEnvBool("OFFGRID_USE_MLOCK", false),
 		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", true), // Better throughput
+		InferenceSlots:  getEnvInt("OFFGRID_INFERENCE_SLOTS", 1),
 		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),
 		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true),
 		// Fast model switching
@@ -203,6 +205,12 @@ func getEnvBool(key string, defaultValue bool) bool {
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
+	if c.InferenceSlots == 0 {
+		c.InferenceSlots = 1
+	}
+	if c.InferenceSlots < 1 || c.InferenceSlots > 16 {
+		return fmt.Errorf("inference_slots must be between 1 and 16")
+	}
 	// Ensure models directory exists
 	if err := os.MkdirAll(c.ModelsDir, 0755); err != nil {
 		return err
@@ -397,6 +405,9 @@ func (c *Config) applyDefaults() {
 	if c.KVCacheType == "" {
 		c.KVCacheType = "q8_0"
 	}
+	if c.InferenceSlots == 0 {
+		c.InferenceSlots = 1
+	}
 
 	if c.ModelLoadTimeout == 0 {
 		c.ModelLoadTimeout = 300 // 5 minutes for low-end machines
@@ -428,6 +439,9 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if maxModels := getEnvInt("OFFGRID_MAX_MODELS", 0); maxModels != 0 {
 		c.MaxModels = maxModels
+	}
+	if slots := getEnvInt("OFFGRID_INFERENCE_SLOTS", 0); slots != 0 {
+		c.InferenceSlots = slots
 	}
 	if gpu := os.Getenv("OFFGRID_ENABLE_GPU"); gpu != "" {
 		c.EnableGPU = getEnvBool("OFFGRID_ENABLE_GPU", false)

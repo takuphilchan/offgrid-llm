@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -377,19 +382,114 @@ func executeCalculator(expr string) (string, error) {
 		return "", fmt.Errorf("expression is required")
 	}
 
-	// Use bc or python for calculation
-	cmd := exec.Command("python3", "-c", fmt.Sprintf("print(eval('%s'))", expr))
-	output, err := cmd.Output()
+	parsed, err := parser.ParseExpr(expr)
 	if err != nil {
-		// Fallback to bc
-		cmd = exec.Command("bc", "-l")
-		cmd.Stdin = strings.NewReader(expr + "\n")
-		output, err = cmd.Output()
-		if err != nil {
-			return "", fmt.Errorf("calculation failed: %w", err)
-		}
+		return "", fmt.Errorf("invalid expression: %w", err)
 	}
-	return strings.TrimSpace(string(output)), nil
+	value, err := evaluateMathExpression(parsed)
+	if err != nil {
+		return "", err
+	}
+	if math.IsInf(value, 0) || math.IsNaN(value) {
+		return "", fmt.Errorf("calculation produced a non-finite value")
+	}
+	return strconv.FormatFloat(value, 'g', -1, 64), nil
+}
+
+func evaluateMathExpression(expression ast.Expr) (float64, error) {
+	switch node := expression.(type) {
+	case *ast.BasicLit:
+		if node.Kind != token.INT && node.Kind != token.FLOAT {
+			return 0, fmt.Errorf("unsupported literal")
+		}
+		value, err := strconv.ParseFloat(node.Value, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid number: %w", err)
+		}
+		return value, nil
+	case *ast.ParenExpr:
+		return evaluateMathExpression(node.X)
+	case *ast.UnaryExpr:
+		value, err := evaluateMathExpression(node.X)
+		if err != nil {
+			return 0, err
+		}
+		switch node.Op {
+		case token.ADD:
+			return value, nil
+		case token.SUB:
+			return -value, nil
+		default:
+			return 0, fmt.Errorf("unsupported unary operator %s", node.Op)
+		}
+	case *ast.BinaryExpr:
+		left, err := evaluateMathExpression(node.X)
+		if err != nil {
+			return 0, err
+		}
+		right, err := evaluateMathExpression(node.Y)
+		if err != nil {
+			return 0, err
+		}
+		switch node.Op {
+		case token.ADD:
+			return left + right, nil
+		case token.SUB:
+			return left - right, nil
+		case token.MUL:
+			return left * right, nil
+		case token.QUO:
+			if right == 0 {
+				return 0, fmt.Errorf("division by zero")
+			}
+			return left / right, nil
+		default:
+			return 0, fmt.Errorf("unsupported operator %s", node.Op)
+		}
+	case *ast.Ident:
+		switch strings.ToLower(node.Name) {
+		case "pi":
+			return math.Pi, nil
+		case "e":
+			return math.E, nil
+		default:
+			return 0, fmt.Errorf("unknown constant %q", node.Name)
+		}
+	case *ast.CallExpr:
+		function, ok := node.Fun.(*ast.Ident)
+		if !ok {
+			return 0, fmt.Errorf("unsupported function")
+		}
+		arguments := make([]float64, len(node.Args))
+		for i, argument := range node.Args {
+			value, err := evaluateMathExpression(argument)
+			if err != nil {
+				return 0, err
+			}
+			arguments[i] = value
+		}
+		switch strings.ToLower(function.Name) {
+		case "sqrt":
+			if len(arguments) != 1 || arguments[0] < 0 {
+				return 0, fmt.Errorf("sqrt requires one non-negative argument")
+			}
+			return math.Sqrt(arguments[0]), nil
+		case "abs":
+			if len(arguments) != 1 {
+				return 0, fmt.Errorf("abs requires one argument")
+			}
+			return math.Abs(arguments[0]), nil
+		case "pow":
+			if len(arguments) != 2 {
+				return 0, fmt.Errorf("pow requires two arguments")
+			}
+			return math.Pow(arguments[0], arguments[1]), nil
+		default:
+			return 0, fmt.Errorf("unsupported function %q", function.Name)
+		}
+	default:
+		return 0, fmt.Errorf("unsupported expression")
+	}
 }
 
 func executeReadFile(path string) (string, error) {

@@ -47,8 +47,8 @@ func startInteractiveAgent(modelName string) {
 	fmt.Print("\033[H\033[2J")
 
 	// Print Header
-	fmt.Printf("%s%s OffGrid Agent CLI %s%s\n", brandPrimary+colorBold, iconBolt, Version, colorReset)
-	fmt.Printf("%sInteractive Session • Model: %s%s\n", colorDim, modelName, colorReset)
+	fmt.Printf("%s%s OffGrid Agent%s  %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, getVersion(), colorReset)
+	fmt.Printf("%sPrivate AI workspace  |  Model: %s%s\n", colorDim, modelName, colorReset)
 	fmt.Println()
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -231,7 +231,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 				toolName, _ := event["tool"].(string)
 				toolArgs, _ := event["args"].(string)
 				fmt.Printf("\r\033[K") // Clear any spinner line
-				fmt.Printf("%s🛠  Using %s%s\n", colorYellow, toolName, colorReset)
+				fmt.Printf("%s%s  Using %s%s\n", brandAccent, iconChevron, toolName, colorReset)
 				if len(toolArgs) > 0 {
 					// Truncate args if too long
 					if len(toolArgs) > 60 {
@@ -251,7 +251,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 					result = result[:100] + "..."
 				}
 				fmt.Printf("\r\033[K") // Clear any spinner line
-				fmt.Printf("%s✓  Result: %s%s\n", colorGreen, result, colorReset)
+				fmt.Printf("%s%s  Result: %s%s\n", brandSuccess, iconCheck, result, colorReset)
 
 				// Back to thinking
 				stopSpinner = make(chan bool)

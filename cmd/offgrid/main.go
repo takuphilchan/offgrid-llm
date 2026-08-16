@@ -92,7 +92,7 @@ var (
 
 // Check if colors should be disabled
 func init() {
-	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+	if !terminalSupportsColor() {
 		disableColors()
 	}
 	if os.Getenv("OFFGRID_UNICODE") == "1" || strings.EqualFold(os.Getenv("OFFGRID_UNICODE"), "true") {
@@ -114,12 +114,12 @@ var (
 	colorMagenta = "\033[35m"
 
 	// Brand colors
-	brandPrimary   = "\033[36m"   // Cyan
-	brandSecondary = "\033[37m"   // White
-	brandAccent    = "\033[36m"   // Cyan
-	brandSuccess   = "\033[36m"   // Cyan
-	brandError     = "\033[1;37m" // White Bold
-	brandMuted     = "\033[90m"   // Gray (Bright Black)
+	brandPrimary   = "\033[38;2;154;175;255m" // Indigo accent (#9aafff)
+	brandSecondary = "\033[38;2;244;246;251m" // Primary text (#f4f6fb)
+	brandAccent    = "\033[38;2;229;187;104m" // Amber (#e5bb68)
+	brandSuccess   = "\033[38;2;96;213;166m"  // Green (#60d5a6)
+	brandError     = "\033[38;2;255;127;141m" // Red (#ff7f8d)
+	brandMuted     = "\033[38;2;146;157;181m" // Muted text (#929db5)
 )
 
 var (
@@ -188,6 +188,17 @@ func enableUnicodeSymbols() {
 	iconGpu = "⟪⟫"
 }
 
+func terminalSupportsColor() bool {
+	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+		return false
+	}
+	if os.Getenv("FORCE_COLOR") != "" {
+		return true
+	}
+	info, err := os.Stdout.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
 func disableColors() {
 	colorReset = ""
 	colorBold = ""
@@ -228,7 +239,7 @@ func printSuccess(message string) {
 }
 
 func printError(message string) {
-	fmt.Printf("%s%s%s %s\n", brandError, iconCross, colorReset, message)
+	fmt.Fprintf(os.Stderr, "%s%s%s %s\n", brandError, iconCross, colorReset, message)
 }
 
 func printInfo(message string) {
@@ -236,7 +247,7 @@ func printInfo(message string) {
 }
 
 func printWarning(message string) {
-	fmt.Printf("%s!%s %s\n", brandAccent, colorReset, message)
+	fmt.Fprintf(os.Stderr, "%s!%s %s\n", brandAccent, colorReset, message)
 }
 
 // printProgressBar renders a clean progress bar for downloads
@@ -1096,24 +1107,26 @@ func waitForLlamaServerReady(timeoutSec int) error {
 func main() {
 	// Check for global --json flag
 	jsonFlag := false
+	noColorFlag := false
 	filteredArgs := make([]string, 0, len(os.Args))
-	for i, arg := range os.Args {
+	for _, arg := range os.Args {
 		if arg == "--json" {
 			jsonFlag = true
+		} else if arg == "--no-color" {
+			noColorFlag = true
 		} else {
 			filteredArgs = append(filteredArgs, arg)
-		}
-		// Also check if it's at position 2 (after command)
-		if i == 2 && arg == "--json" {
-			jsonFlag = true
 		}
 	}
 
 	// Set global JSON mode
 	output.JSONMode = jsonFlag
+	if jsonFlag || noColorFlag {
+		disableColors()
+	}
 
 	// Use filtered args if --json was found
-	if jsonFlag {
+	if jsonFlag || noColorFlag {
 		os.Args = filteredArgs
 	}
 
@@ -3130,6 +3143,7 @@ func printHelp() {
 	fmt.Printf("  %sLocal AI that works offline%s\n", brandMuted, colorReset)
 	fmt.Println()
 	fmt.Printf("  %sUsage%s  offgrid %s<command>%s %s[options]%s\n", colorBold, colorReset, brandPrimary, colorReset, brandMuted, colorReset)
+	fmt.Printf("  %sGlobal%s --json for automation, --no-color for plain output\n", brandMuted, colorReset)
 	fmt.Println()
 
 	// Define structure for commands to ensure global alignment

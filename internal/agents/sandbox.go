@@ -47,8 +47,9 @@ func (s *LocalSandbox) Execute(ctx context.Context, cmd string, args []string, e
 	c := exec.CommandContext(ctx, cmd, args...)
 	c.Dir = s.workDir
 
-	// Set environment
-	c.Env = os.Environ() // Inherit base env
+	// Keep credentials and unrelated host configuration out of agent-created
+	// processes. Callers can add explicit variables below.
+	c.Env = minimalEnvironment()
 	for k, v := range env {
 		c.Env = append(c.Env, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -63,10 +64,9 @@ func (s *LocalSandbox) Execute(ctx context.Context, cmd string, args []string, e
 }
 
 func (s *LocalSandbox) WriteFile(path string, content []byte) error {
-	// Ensure path is within workDir
-	fullPath := filepath.Join(s.workDir, path)
-	if !strings.HasPrefix(fullPath, s.workDir) {
-		return fmt.Errorf("access denied: path escapes sandbox")
+	fullPath, err := s.resolvePath(path)
+	if err != nil {
+		return err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
@@ -76,9 +76,9 @@ func (s *LocalSandbox) WriteFile(path string, content []byte) error {
 }
 
 func (s *LocalSandbox) ReadFile(path string) ([]byte, error) {
-	fullPath := filepath.Join(s.workDir, path)
-	if !strings.HasPrefix(fullPath, s.workDir) {
-		return nil, fmt.Errorf("access denied: path escapes sandbox")
+	fullPath, err := s.resolvePath(path)
+	if err != nil {
+		return nil, err
 	}
 	return os.ReadFile(fullPath)
 }
@@ -87,9 +87,9 @@ func (s *LocalSandbox) ListFiles(path string) (string, error) {
 	if path == "" {
 		path = "."
 	}
-	fullPath := filepath.Join(s.workDir, path)
-	if !strings.HasPrefix(fullPath, s.workDir) {
-		return "", fmt.Errorf("access denied: path escapes sandbox")
+	fullPath, err := s.resolvePath(path)
+	if err != nil {
+		return "", err
 	}
 
 	entries, err := os.ReadDir(fullPath)
@@ -111,6 +111,34 @@ func (s *LocalSandbox) ListFiles(path string) (string, error) {
 		}
 	}
 	return result.String(), nil
+}
+
+func (s *LocalSandbox) resolvePath(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return "", fmt.Errorf("access denied: absolute paths are not allowed in sandbox")
+	}
+	clean := filepath.Clean(path)
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("access denied: path escapes sandbox")
+	}
+	current := s.workDir
+	if clean == "." {
+		return current, nil
+	}
+	for _, component := range strings.Split(clean, string(filepath.Separator)) {
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("access denied: symlinks are not allowed in sandbox paths")
+		}
+	}
+	return current, nil
 }
 
 func (s *LocalSandbox) Cleanup() error {
