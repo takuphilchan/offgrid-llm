@@ -103,6 +103,9 @@ type Server struct {
 	runLog             *runs.Log                // Durable event stream for agent runs
 	artifactStore      *artifacts.Store         // Content-addressed agent outputs and captures
 	computerController *computer.Controller     // Governed computer-use control plane
+	sandbox            agents.Sandbox           // Long-lived agent sandbox owned by this server
+	closeOnce          sync.Once
+	closeErr           error
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -477,6 +480,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		runLog:               runLog,
 		artifactStore:        artifactStore,
 		computerController:   computerController,
+		sandbox:              sandbox,
 		version:              serverVersion,
 	}
 }
@@ -804,6 +808,8 @@ func (s *Server) requirePermissionWhenAuthEnabled(permission users.Permission, n
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
+	defer s.Close()
+
 	if err := validateServerExposure(s.config); err != nil {
 		return err
 	}
@@ -1127,6 +1133,34 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Close releases long-lived runtime resources owned by the server. It is safe
+// to call more than once and is also used by tests that construct a server
+// without starting its HTTP listener.
+func (s *Server) Close() error {
+	s.closeOnce.Do(func() {
+		if s.modelCache != nil {
+			s.modelCache.UnloadAll()
+			s.modelCache.StopMonitor()
+		}
+		if s.p2pDiscovery != nil {
+			s.p2pDiscovery.Stop()
+		}
+		if s.loadBalancer != nil {
+			s.loadBalancer.Stop()
+		}
+		if s.monitor != nil {
+			s.monitor.Stop()
+		}
+		if s.cache != nil {
+			s.cache.StopCleanupRoutine()
+		}
+		if s.sandbox != nil {
+			s.closeErr = s.sandbox.Cleanup()
+		}
+	})
+	return s.closeErr
+}
+
 const maxRequestBodyBytes int64 = 64 << 20
 
 func requestBodyLimitMiddleware(next http.Handler) http.Handler {
@@ -1162,6 +1196,9 @@ func (s *Server) handleShutdown() {
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		log.Printf("Shutdown error: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		log.Printf("Runtime cleanup error: %v", err)
 	}
 
 	log.Println("Server stopped")

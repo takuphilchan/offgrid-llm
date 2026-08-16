@@ -12,8 +12,19 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-func TestHandleHealth(t *testing.T) {
+func newTestServer(t *testing.T) *Server {
+	t.Helper()
 	server := New()
+	t.Cleanup(func() {
+		if err := server.Close(); err != nil {
+			t.Errorf("close test server: %v", err)
+		}
+	})
+	return server
+}
+
+func TestHandleHealth(t *testing.T) {
+	server := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
@@ -30,7 +41,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleRoot(t *testing.T) {
-	server := New()
+	server := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Accept", "application/json")
@@ -53,7 +64,7 @@ func TestHandleRoot(t *testing.T) {
 }
 
 func TestHandleListModels(t *testing.T) {
-	server := New()
+	server := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/v1/models", nil)
 	w := httptest.NewRecorder()
@@ -75,7 +86,7 @@ func TestHandleListModels(t *testing.T) {
 }
 
 func TestHandleChatCompletions_InvalidMethod(t *testing.T) {
-	server := New()
+	server := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/v1/chat/completions", nil)
 	w := httptest.NewRecorder()
@@ -88,7 +99,7 @@ func TestHandleChatCompletions_InvalidMethod(t *testing.T) {
 }
 
 func TestHandleChatCompletions_InvalidRequest(t *testing.T) {
-	server := New()
+	server := newTestServer(t)
 
 	req := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewBufferString("invalid json"))
 	w := httptest.NewRecorder()
@@ -101,7 +112,7 @@ func TestHandleChatCompletions_InvalidRequest(t *testing.T) {
 }
 
 func TestHandleChatCompletions_MissingModel(t *testing.T) {
-	server := New()
+	server := newTestServer(t)
 
 	reqBody := api.ChatCompletionRequest{
 		Messages: []api.ChatMessage{
@@ -122,7 +133,7 @@ func TestHandleChatCompletions_MissingModel(t *testing.T) {
 }
 
 func TestHandleChatCompletions_MissingMessages(t *testing.T) {
-	server := New()
+	server := newTestServer(t)
 
 	reqBody := api.ChatCompletionRequest{
 		Model:    "test-model",
@@ -142,7 +153,7 @@ func TestHandleChatCompletions_MissingMessages(t *testing.T) {
 }
 
 func TestHandleCompletions_InvalidMethod(t *testing.T) {
-	server := New()
+	server := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/v1/completions", nil)
 	w := httptest.NewRecorder()

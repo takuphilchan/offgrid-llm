@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // Sandbox defines the interface for executing code safely
@@ -147,6 +148,7 @@ func (s *LocalSandbox) Cleanup() error {
 
 // DockerSandbox implements a containerized sandbox
 type DockerSandbox struct {
+	mu          sync.Mutex
 	containerID string
 	image       string
 }
@@ -164,7 +166,17 @@ func NewDockerSandbox(image string) (*DockerSandbox, error) {
 	}
 
 	// Start container in detached mode, keeping it alive
-	cmd := exec.Command("docker", "run", "-d", "--rm", "--network=none", "--memory=512m", "--cpus=1.0", image, "tail", "-f", "/dev/null")
+	cmd := exec.Command(
+		"docker", "run", "-d", "--rm",
+		"--label", "com.offgrid.component=agent-sandbox",
+		"--network=none",
+		"--memory=512m",
+		"--cpus=1.0",
+		"--pids-limit=128",
+		"--security-opt", "no-new-privileges=true",
+		"--cap-drop", "ALL",
+		image, "tail", "-f", "/dev/null",
+	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start container: %w\n%s", err, string(output))
@@ -232,9 +244,18 @@ func (s *DockerSandbox) ListFiles(path string) (string, error) {
 }
 
 func (s *DockerSandbox) Cleanup() error {
-	if s.containerID != "" {
-		return exec.Command("docker", "kill", s.containerID).Run()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.containerID == "" {
+		return nil
 	}
+	containerID := s.containerID
+	output, err := exec.Command("docker", "rm", "-f", containerID).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove sandbox container %s: %w: %s", containerID, err, strings.TrimSpace(string(output)))
+	}
+	s.containerID = ""
 	return nil
 }
 
