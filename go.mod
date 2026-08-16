@@ -2,7 +2,7 @@ module github.com/takuphilchan/offgrid-llm
 
 go 1.24.2
 
-toolchain go1.24.11
+toolchain go1.26.6
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -11,6 +11,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.12
 	github.com/go-skynet/go-llama.cpp v0.0.0-20240314183750-6a8041ef6b46
 	github.com/shirou/gopsutil/v3 v3.21.11
+	golang.org/x/crypto v0.36.0
 	golang.org/x/sys v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.40.1
@@ -48,7 +49,6 @@ require (
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/text v0.23.0 // indirect
 	modernc.org/libc v1.66.10 // indirect

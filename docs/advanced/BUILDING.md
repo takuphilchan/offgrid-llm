@@ -360,7 +360,7 @@ brew install create-dmg
 
 ```bash
 # Ensure Go version is correct
-go version  # Should be 1.21 or later
+go version  # Should be 1.26.6 or later
 
 # Clean and rebuild
 make clean

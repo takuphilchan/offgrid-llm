@@ -413,14 +413,28 @@ install_build_deps() {
     print_success "Build dependencies installed"
 }
 
-# Install Go 1.21+
+# Install a supported, security-patched Go toolchain
 install_go() {
     print_progress "Installing Go Programming Language" "~1-2 minutes"
     
-    local REQUIRED_GO_VERSION="1.21"
-    local GO_VERSION="1.21.13"
+    local REQUIRED_GO_VERSION="1.26.6"
+    local GO_VERSION="1.26.6"
     local GO_TARBALL="go${GO_VERSION}.linux-${ARCH}.tar.gz"
     local GO_URL="https://go.dev/dl/${GO_TARBALL}"
+    local GO_SHA256
+
+    case "$ARCH" in
+        amd64)
+            GO_SHA256="708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
+            ;;
+        arm64)
+            GO_SHA256="d0507e9e9d7fe012aae570108cbd76c15de879e17130ab8cb90d4d7445cb1f2e"
+            ;;
+        *)
+            print_error "No trusted Go checksum configured for architecture: $ARCH"
+            return 1
+            ;;
+    esac
     
     # Check if Go is installed and version is sufficient
     if command -v go &> /dev/null; then
@@ -443,6 +457,16 @@ install_go() {
         print_error "Failed to download Go"
         return 1
     fi
+
+    print_step "Verifying Go archive checksum..."
+    if ! printf '%s  %s\n' "$GO_SHA256" "$GO_TARBALL" | sha256sum -c -; then
+        print_error "Go archive checksum verification failed"
+        rm -f "$GO_TARBALL"
+        return 1
+    fi
+
+    # Avoid overlaying a new toolchain onto files from an older release.
+    sudo rm -rf /usr/local/go
     
     print_step "Installing Go to /usr/local/go..."
     sudo tar -C /usr/local -xzf "$GO_TARBALL"
@@ -794,21 +818,18 @@ build_offgrid() {
     local BUILD_DIR=$(pwd)
     local GO_CMD="go"
     
-    # Use Go 1.21+ if available - check multiple possible locations
+    # Use the supported Go toolchain if available - check known locations
     if [ -f "/usr/local/go/bin/go" ]; then
         GO_CMD="/usr/local/go/bin/go"
         print_info "Using installed Go at /usr/local/go/bin/go"
-    elif [ -f "$HOME/go1.21.5/bin/go" ]; then
-        GO_CMD="$HOME/go1.21.5/bin/go"
-        print_info "Using installed Go at $HOME/go1.21.5/bin/go"
-    elif [ -f "$HOME/go1.21.13/bin/go" ]; then
-        GO_CMD="$HOME/go1.21.13/bin/go"
-        print_info "Using installed Go at $HOME/go1.21.13/bin/go"
+    elif [ -f "$HOME/go1.26.6/bin/go" ]; then
+        GO_CMD="$HOME/go1.26.6/bin/go"
+        print_info "Using installed Go at $HOME/go1.26.6/bin/go"
     else
-        # Try to find Go 1.21+ in PATH
+        # Try to find a supported Go version in PATH
         if command -v go &> /dev/null; then
-            GO_VERSION_CHECK=$(go version | awk '{print $3}' | sed 's/go//' | cut -d. -f1-2)
-            if [ "$(printf '%s\n' "1.21" "$GO_VERSION_CHECK" | sort -V | head -n1)" = "1.21" ]; then
+            GO_VERSION_CHECK=$(go version | awk '{print $3}' | sed 's/go//')
+            if [ "$(printf '%s\n' "1.26.6" "$GO_VERSION_CHECK" | sort -V | head -n1)" = "1.26.6" ]; then
                 GO_CMD="go"
                 print_info "Using system Go (version check passed)"
             fi
@@ -825,8 +846,8 @@ build_offgrid() {
     print_info "Using Go: $GO_VERSION"
     
     # Check Go version meets minimum requirement
-    GO_VERSION_NUM=$(echo $GO_VERSION | sed 's/go//' | cut -d. -f1-2)
-    MIN_GO_VERSION="1.21"
+    GO_VERSION_NUM=$(echo $GO_VERSION | sed 's/go//')
+    MIN_GO_VERSION="1.26.6"
     if [ "$(printf '%s\n' "$MIN_GO_VERSION" "$GO_VERSION_NUM" | sort -V | head -n1)" != "$MIN_GO_VERSION" ]; then
         print_warning "Go version $GO_VERSION_NUM is older than required $MIN_GO_VERSION"
         print_warning "Attempting to use system Go anyway..."
