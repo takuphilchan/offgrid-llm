@@ -86,14 +86,26 @@ docker-compose -f docker-compose.gpu.yml up -d
 
 ### Production Deployment
 
-**With monitoring stack:**
+Production requires a TLS certificate and an explicit Grafana password. Create
+the first OffGrid administrator before starting the authenticated server:
+
 ```bash
 cd docker
+cp /path/to/fullchain.pem certs/cert.pem
+cp /path/to/private-key.pem certs/key.pem
+chmod 600 certs/key.pem
+export GRAFANA_ADMIN_PASSWORD='replace-with-a-strong-password'
+docker compose -f docker-compose.prod.yml build offgrid
+docker compose -f docker-compose.prod.yml run --rm offgrid users create admin admin
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
+Save the one-time password and API key printed by `users create`. The basic CPU
+and GPU compose files deliberately opt into unauthenticated LAN access and are
+for trusted development networks only.
+
 Access:
-- OffGrid UI: http://localhost (via Nginx)
+- OffGrid UI: https://localhost (via Nginx)
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000
 
@@ -214,8 +226,8 @@ docker-compose up -d
 
 For production deployments:
 
-1. **Enable SSL/TLS** - Use `nginx.conf.example` as template
-2. **Set strong passwords** - Configure Grafana admin password
+1. **Install SSL/TLS certificates** - Add `certs/cert.pem` and `certs/key.pem`
+2. **Set strong passwords** - Set `GRAFANA_ADMIN_PASSWORD` and bootstrap an OffGrid admin
 3. **Network isolation** - Use production compose file's network setup
 4. **Regular updates** - Keep base images updated
 5. **Volume backups** - Implement regular backup strategy

@@ -22,6 +22,9 @@ services:
     environment:
       - OFFGRID_PORT=11611
       - OFFGRID_HOST=0.0.0.0
+      # Explicit opt-in: this quick-start profile is unauthenticated.
+      # Do not expose port 11611 beyond a trusted local network.
+      - OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE=true
       - OFFGRID_MODELS_DIR=/var/lib/offgrid/models
       - OFFGRID_DATA_DIR=/var/lib/offgrid/data
       - OFFGRID_BIN_DIR=/var/lib/offgrid/bin

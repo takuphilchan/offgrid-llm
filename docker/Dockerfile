@@ -5,7 +5,7 @@
 # =============================================================================
 # Stage 1: Build the Go binary
 # =============================================================================
-FROM golang:1.21-alpine AS go-builder
+FROM golang:1.26.6-alpine3.24 AS go-builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -36,7 +36,9 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
 # =============================================================================
 # Stage 2: Build llama.cpp server
 # =============================================================================
-FROM alpine:latest AS llama-builder
+FROM alpine:3.24 AS llama-builder
+
+ARG LLAMA_CPP_COMMIT=e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
 
 RUN apk add --no-cache \
     git \
@@ -47,9 +49,12 @@ RUN apk add --no-cache \
 
 WORKDIR /build
 
-# Clone and build llama.cpp
-RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git && \
-    cd llama.cpp && \
+# Fetch an immutable llama.cpp revision and build it
+RUN mkdir llama.cpp && cd llama.cpp && \
+    git init && \
+    git remote add origin https://github.com/ggml-org/llama.cpp.git && \
+    git fetch --depth 1 origin ${LLAMA_CPP_COMMIT} && \
+    git checkout --detach FETCH_HEAD && \
     cmake -B build -DGGML_STATIC=ON -DLLAMA_BUILD_SERVER=ON && \
     cmake --build build --config Release -j$(nproc) --target llama-server && \
     strip build/bin/llama-server
@@ -57,7 +62,7 @@ RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git && \
 # =============================================================================
 # Stage 3: Final runtime image
 # =============================================================================
-FROM alpine:latest
+FROM alpine:3.24
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -103,7 +108,7 @@ ENV OFFGRID_MODELS_DIR=/var/lib/offgrid/models \
     OFFGRID_DATA_DIR=/var/lib/offgrid/data \
     OFFGRID_BIN_DIR=/var/lib/offgrid/bin \
     OFFGRID_PORT=11611 \
-    OFFGRID_HOST=0.0.0.0
+    OFFGRID_HOST=localhost
 
 # Run the server
 CMD ["/usr/local/bin/offgrid"]

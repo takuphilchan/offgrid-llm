@@ -136,10 +136,20 @@ docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
 
 ## Production Deployment
 
-For production with SSL and monitoring:
+For production with authentication, TLS, and monitoring:
 ```bash
+cp /path/to/fullchain.pem certs/cert.pem
+cp /path/to/private-key.pem certs/key.pem
+chmod 600 certs/key.pem
+export GRAFANA_ADMIN_PASSWORD='replace-with-a-strong-password'
+docker compose -f docker-compose.prod.yml build offgrid
+docker compose -f docker-compose.prod.yml run --rm offgrid users create admin admin
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
+
+Save the one-time password and API key printed by `users create`. The basic
+compose profiles are unauthenticated and should only be used on trusted
+development networks.
 
 See [docs/setup/docker.md](../docs/setup/docker.md) for complete production guide.
 

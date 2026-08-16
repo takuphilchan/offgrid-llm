@@ -17,6 +17,8 @@ services:
     environment:
       - OFFGRID_PORT=11611
       - OFFGRID_HOST=0.0.0.0
+      - OFFGRID_REQUIRE_AUTH=true
+      - OFFGRID_MULTI_USER=true
       - OFFGRID_MODELS_DIR=/var/lib/offgrid/models
       - OFFGRID_DATA_DIR=/var/lib/offgrid/data
       - OFFGRID_BIN_DIR=/var/lib/offgrid/bin
@@ -37,9 +39,10 @@ services:
       start_period: 30s
     networks:
       - backend
+      - monitoring
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     container_name: offgrid-nginx
     restart: unless-stopped
     ports:
@@ -56,11 +59,11 @@ services:
 
   # Optional: Prometheus monitoring
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     container_name: offgrid-prometheus
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -68,20 +71,22 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
     networks:
+      - backend
       - monitoring
 
   # Optional: Grafana dashboards
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.4.0
     container_name: offgrid-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=changeme
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - prometheus

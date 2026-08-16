@@ -1,0 +1,22 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [{ "expr": "sum(rate(offgrid_requests_total[5m]))", "refId": "A" }],
+      "title": "HTTP requests per second",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["offgrid"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "OffGrid LLM Overview",
+  "uid": "offgrid-overview",
+  "version": 1
+}
