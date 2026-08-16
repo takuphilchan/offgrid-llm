@@ -48,15 +48,24 @@ func TestNewGPUMonitor(t *testing.T) {
 				t.Logf("  Temperature: %d°C", gpu.Temperature)
 			}
 
-			// Validate data consistency (allow small rounding errors from nvidia-smi)
-			calculatedTotal := gpu.MemoryUsed + gpu.MemoryFree
-			diff := gpu.MemoryTotal - calculatedTotal
-			if diff < 0 {
-				diff = -diff
+			// Drivers may reserve VRAM that is reported as neither used nor free.
+			// Validate bounds rather than requiring used + free to equal total.
+			if gpu.MemoryUsed < 0 || gpu.MemoryFree < 0 {
+				t.Errorf("Memory values must be nonnegative: used=%d MB, free=%d MB",
+					gpu.MemoryUsed, gpu.MemoryFree)
 			}
-			if diff > 100 { // Allow up to 100MB difference for rounding
-				t.Errorf("Memory accounting inconsistent: %d != %d + %d (diff: %d MB)",
-					gpu.MemoryTotal, gpu.MemoryUsed, gpu.MemoryFree, diff)
+			if gpu.MemoryUsed > gpu.MemoryTotal || gpu.MemoryFree > gpu.MemoryTotal {
+				t.Errorf("Memory value exceeds total: total=%d MB, used=%d MB, free=%d MB",
+					gpu.MemoryTotal, gpu.MemoryUsed, gpu.MemoryFree)
+			}
+
+			const roundingToleranceMB int64 = 1
+			accounted := gpu.MemoryUsed + gpu.MemoryFree
+			if accounted > gpu.MemoryTotal+roundingToleranceMB {
+				t.Errorf("Accounted memory exceeds total: total=%d MB, used=%d MB, free=%d MB",
+					gpu.MemoryTotal, gpu.MemoryUsed, gpu.MemoryFree)
+			} else if reserved := gpu.MemoryTotal - accounted; reserved > 0 {
+				t.Logf("  Memory Reserved: %d MB", reserved)
 			}
 		}
 	} else {
