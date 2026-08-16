@@ -15,6 +15,8 @@ node_modules/
 *.tsbuildinfo
 web/app/vite.config.js
 web/app/vite.config.d.ts
+playwright-report/
+test-results/
 
 # Temporary notes
 DEMO_COMMANDS.md

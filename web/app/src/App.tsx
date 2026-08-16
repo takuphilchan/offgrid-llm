@@ -131,7 +131,9 @@ function ChatPage({ models, model, setModel }: { models: Model[]; model: string;
   const [error, setError] = useState('');
   const controller = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement | null>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [conversation, busy]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversation, busy]);
 
   const send = async () => {
     const prompt = draft.trim();
