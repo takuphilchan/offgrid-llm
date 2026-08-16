@@ -29,7 +29,7 @@
 ### Software Requirements
 
 - **Operating System:** Linux, macOS, or Windows
-- **Go:** 1.21+ (for building from source)
+- **Go:** 1.26.6+ (matching the security-patched toolchain in `go.mod`)
 - **Git:** For cloning repository
 
 ---
@@ -215,7 +215,7 @@ offgrid serve --gpu-layers 35
 ### Use the REST API
 
 ```bash
-curl http://localhost:11611/api/v1/chat/completions \
+curl http://localhost:11611/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "tinyllama-1.1b",

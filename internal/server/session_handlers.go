@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -63,6 +64,10 @@ func (h *SessionHandlers) HandleSessionCreate(w http.ResponseWriter, r *http.Req
 
 	session := sessions.NewSession(req.Name, req.ModelID)
 	if err := h.manager.Save(session); err != nil {
+		if errors.Is(err, sessions.ErrInvalidSessionName) {
+			writeError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		writeError(w, "Failed to create session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -97,6 +102,10 @@ func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := h.manager.Delete(name); err != nil {
+		if errors.Is(err, sessions.ErrInvalidSessionName) {
+			writeError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		writeError(w, "Failed to delete session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

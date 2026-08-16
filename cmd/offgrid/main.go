@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -7100,8 +7101,14 @@ func handleUsers(args []string) {
 			return
 		}
 
-		// Generate a random password
-		password := fmt.Sprintf("temp-%d", time.Now().UnixNano())
+		// Generate a strong one-time password for first login. Only its bcrypt
+		// hash is persisted.
+		passwordBytes := make([]byte, 18)
+		if _, err := rand.Read(passwordBytes); err != nil {
+			printError(fmt.Sprintf("Failed to generate password: %v", err))
+			return
+		}
+		password := base64.RawURLEncoding.EncodeToString(passwordBytes)
 
 		user, apiKey, err := store.CreateUser(username, password, role)
 		if err != nil {
@@ -7125,6 +7132,7 @@ func handleUsers(args []string) {
 		fmt.Printf("  %sUser ID:%s     %s\n", colorDim, colorReset, user.ID)
 		fmt.Printf("  %sUsername:%s    %s\n", colorDim, colorReset, user.Username)
 		fmt.Printf("  %sRole:%s        %s\n", colorDim, colorReset, user.Role)
+		fmt.Printf("  %sPassword:%s    %s\n", colorDim, colorReset, password)
 		fmt.Printf("  %sAPI Key:%s     %s\n", colorDim, colorReset, apiKey)
 		fmt.Println()
 		fmt.Printf("  %s⚠ Save the API key - it cannot be retrieved later%s\n", colorYellow, colorReset)

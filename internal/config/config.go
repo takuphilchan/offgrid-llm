@@ -64,6 +64,9 @@ type Config struct {
 	RequireAuth   bool `yaml:"require_auth" json:"require_auth"`       // Require authentication for API access
 	GuestAccess   bool `yaml:"guest_access" json:"guest_access"`       // Allow guest access when auth not required
 	MultiUserMode bool `yaml:"multi_user_mode" json:"multi_user_mode"` // Enable multi-user features (Users tab, quotas)
+	// Explicit escape hatch for trusted development networks. Remote unauthenticated
+	// listeners are rejected unless this is enabled.
+	AllowUnauthenticatedRemote bool `yaml:"allow_unauthenticated_remote" json:"allow_unauthenticated_remote"`
 
 	// Enterprise Security (opt-in)
 	CORSOrigins     string `yaml:"cors_origins" json:"cors_origins"`           // Comma-separated allowed origins (empty = allow all)
@@ -149,19 +152,20 @@ func LoadConfig() *Config {
 		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),
 		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true),
 		// Fast model switching
-		PrewarmModels:    getEnvBool("OFFGRID_PREWARM_MODELS", true),
-		SmartMlock:       getEnvBool("OFFGRID_SMART_MLOCK", true),
-		ProtectDefault:   getEnvBool("OFFGRID_PROTECT_DEFAULT", true), // Keep default model in cache
-		FastSwitchMode:   getEnvBool("OFFGRID_FAST_SWITCH", true),
-		ModelLoadTimeout: getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 300), // 5 minute timeout for low-end machines
-		EnableP2P:        getEnvBool("OFFGRID_ENABLE_P2P", false),
-		P2PPort:          getEnvInt("OFFGRID_P2P_PORT", 9090),
-		DiscoveryPort:    getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
-		LogLevel:         getEnv("OFFGRID_LOG_LEVEL", "info"),
-		LogFile:          getEnv("OFFGRID_LOG_FILE", ""),
-		RequireAuth:      getEnvBool("OFFGRID_REQUIRE_AUTH", false),
-		GuestAccess:      getEnvBool("OFFGRID_GUEST_ACCESS", true),
-		MultiUserMode:    getEnvBool("OFFGRID_MULTI_USER", false),
+		PrewarmModels:              getEnvBool("OFFGRID_PREWARM_MODELS", true),
+		SmartMlock:                 getEnvBool("OFFGRID_SMART_MLOCK", true),
+		ProtectDefault:             getEnvBool("OFFGRID_PROTECT_DEFAULT", true), // Keep default model in cache
+		FastSwitchMode:             getEnvBool("OFFGRID_FAST_SWITCH", true),
+		ModelLoadTimeout:           getEnvInt("OFFGRID_MODEL_LOAD_TIMEOUT", 300), // 5 minute timeout for low-end machines
+		EnableP2P:                  getEnvBool("OFFGRID_ENABLE_P2P", false),
+		P2PPort:                    getEnvInt("OFFGRID_P2P_PORT", 9090),
+		DiscoveryPort:              getEnvInt("OFFGRID_DISCOVERY_PORT", 9091),
+		LogLevel:                   getEnv("OFFGRID_LOG_LEVEL", "info"),
+		LogFile:                    getEnv("OFFGRID_LOG_FILE", ""),
+		RequireAuth:                getEnvBool("OFFGRID_REQUIRE_AUTH", false),
+		GuestAccess:                getEnvBool("OFFGRID_GUEST_ACCESS", true),
+		MultiUserMode:              getEnvBool("OFFGRID_MULTI_USER", false),
+		AllowUnauthenticatedRemote: getEnvBool("OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE", false),
 		// Enterprise Security (opt-in, disabled by default for simple use)
 		CORSOrigins:     getEnv("OFFGRID_CORS_ORIGINS", ""),      // Empty = allow all (simple mode)
 		EnableAuditLog:  getEnvBool("OFFGRID_AUDIT_LOG", false),  // Disabled by default
@@ -214,7 +218,9 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	cfg := &Config{}
+	// Seed the decoder with defaults so omitted booleans keep their defaults and
+	// an explicitly configured false value is not overwritten later.
+	cfg := LoadConfig()
 
 	// Try YAML first
 	ext := filepath.Ext(path)
@@ -256,11 +262,43 @@ func (c *Config) SaveToFile(path string) error {
 		return fmt.Errorf("unsupported config file format: %s (use .yaml, .yml, or .json)", ext)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := writeConfigFileAtomic(path, data); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	return nil
+}
+
+func writeConfigFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".config-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if n, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	} else if n != len(data) {
+		tmp.Close()
+		return fmt.Errorf("short config write: wrote %d of %d bytes", n, len(data))
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // LoadWithPriority loads config with priority: file > env > defaults
@@ -360,23 +398,6 @@ func (c *Config) applyDefaults() {
 		c.KVCacheType = "q8_0"
 	}
 
-	// Boolean defaults that should be TRUE for optimal experience
-	// These need special handling since Go defaults bools to false
-	// We use a sentinel approach: check if they were explicitly set in the config file
-	// For now, we ALWAYS enable these for best out-of-box experience
-	// Users can explicitly disable with env vars if needed
-	c.UseMmap = true         // Always use mmap for low RAM safety
-	c.FlashAttention = true  // Always enable for speed
-	c.ContBatching = true    // Always enable for throughput
-	c.AdaptiveContext = true // Always enable for auto-adjustment
-
-	// Fast model switching - CRITICAL for good UX, always enable
-	c.PrewarmModels = true  // Pre-warm models into page cache
-	c.SmartMlock = true     // Auto mlock for small models
-	c.ProtectDefault = true // Don't evict default model
-	c.FastSwitchMode = true // Enable all fast-switch optimizations
-
-	// Fast model switching defaults - enable by default for best UX
 	if c.ModelLoadTimeout == 0 {
 		c.ModelLoadTimeout = 300 // 5 minutes for low-end machines
 	}
@@ -437,6 +458,9 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if multiUser := os.Getenv("OFFGRID_MULTI_USER"); multiUser != "" {
 		c.MultiUserMode = getEnvBool("OFFGRID_MULTI_USER", false)
+	}
+	if allowRemote := os.Getenv("OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE"); allowRemote != "" {
+		c.AllowUnauthenticatedRemote = getEnvBool("OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE", false)
 	}
 
 	// Fast model switching overrides (allow disabling if explicitly set to false)

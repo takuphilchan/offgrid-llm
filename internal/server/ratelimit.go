@@ -2,7 +2,9 @@ package server
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -82,11 +84,11 @@ func (rl *RateLimiter) Allow(key string) bool {
 		rl.mu.Unlock()
 	}
 
-	return bucket.take(rl.rate, rl.interval)
+	return bucket.take(rl.rate, rl.interval, rl.burst)
 }
 
 // take attempts to take a token from the bucket
-func (tb *TokenBucket) take(rate int, interval time.Duration) bool {
+func (tb *TokenBucket) take(rate int, interval time.Duration, burst int) bool {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -97,8 +99,8 @@ func (tb *TokenBucket) take(rate int, interval time.Duration) bool {
 	tokensToAdd := int(elapsed.Seconds() / interval.Seconds() * float64(rate))
 	if tokensToAdd > 0 {
 		tb.tokens += tokensToAdd
-		if tb.tokens > rate {
-			tb.tokens = rate
+		if tb.tokens > burst {
+			tb.tokens = burst
 		}
 		tb.lastRefill = now
 	}
@@ -135,7 +137,7 @@ func (rl *RateLimiter) cleanup() {
 func (rl *RateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Create key from IP + endpoint
-		key := r.RemoteAddr + ":" + r.URL.Path
+		key := clientIP(r.RemoteAddr) + ":" + r.URL.Path
 
 		if !rl.Allow(key) {
 			w.Header().Set("Content-Type", "application/json")
@@ -216,7 +218,7 @@ func (irl *InferenceRateLimiter) Release(ip string) {
 // Middleware returns an HTTP middleware for inference endpoints
 func (irl *InferenceRateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
+		ip := clientIP(r.RemoteAddr)
 
 		if !irl.Acquire(ip) {
 			w.Header().Set("Content-Type", "application/json")
@@ -233,4 +235,12 @@ func (irl *InferenceRateLimiter) Middleware(next http.HandlerFunc) http.HandlerF
 		defer irl.Release(ip)
 		next(w, r)
 	}
+}
+
+func clientIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddr))
+	if err == nil {
+		return strings.Trim(host, "[]")
+	}
+	return strings.Trim(strings.TrimSpace(remoteAddr), "[]")
 }

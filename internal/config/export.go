@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -310,6 +311,10 @@ type ImportResult struct {
 // Import imports a configuration bundle
 func (i *Importer) Import(bundlePath string) (*ImportResult, error) {
 	result := &ImportResult{}
+	const maxBundleEntries = 10000
+	const maxExpandedBytes int64 = 2 << 30
+	var expandedBytes int64
+	entryCount := 0
 
 	// Open the bundle
 	file, err := os.Open(bundlePath)
@@ -337,8 +342,16 @@ func (i *Importer) Import(bundlePath string) (*ImportResult, error) {
 		if err != nil {
 			return nil, err
 		}
+		entryCount++
+		if entryCount > maxBundleEntries || header.Size < 0 || header.Size > maxExpandedBytes-expandedBytes {
+			return nil, fmt.Errorf("configuration bundle exceeds safety limits")
+		}
+		expandedBytes += header.Size
 
 		if header.Name == "manifest.json" {
+			if header.Size > 10<<20 {
+				return nil, fmt.Errorf("manifest is too large")
+			}
 			var manifest ExportManifest
 			if err := json.NewDecoder(tr).Decode(&manifest); err != nil {
 				return nil, fmt.Errorf("failed to read manifest: %w", err)
@@ -363,9 +376,17 @@ func (i *Importer) Import(bundlePath string) (*ImportResult, error) {
 	}
 
 	// Reset file for second pass
-	file.Seek(0, 0)
-	gr, _ = gzip.NewReader(file)
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil, err
+	}
+	gr.Close()
+	gr, err = gzip.NewReader(file)
+	if err != nil {
+		return nil, err
+	}
 	tr = tar.NewReader(gr)
+	expandedBytes = 0
+	entryCount = 0
 
 	// Second pass: extract files
 	for {
@@ -376,12 +397,23 @@ func (i *Importer) Import(bundlePath string) (*ImportResult, error) {
 		if err != nil {
 			return nil, err
 		}
+		entryCount++
+		if entryCount > maxBundleEntries || header.Size < 0 || header.Size > maxExpandedBytes-expandedBytes {
+			return nil, fmt.Errorf("configuration bundle exceeds safety limits")
+		}
+		expandedBytes += header.Size
 
 		if header.Name == "manifest.json" {
 			continue
 		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return nil, fmt.Errorf("unsupported bundle entry type for %q", header.Name)
+		}
 
-		targetPath := i.resolveTargetPath(header.Name)
+		targetPath, err := i.resolveTargetPath(header.Name)
+		if err != nil {
+			return nil, err
+		}
 		if targetPath == "" {
 			continue
 		}
@@ -407,7 +439,7 @@ func (i *Importer) Import(bundlePath string) (*ImportResult, error) {
 		outFile.Close()
 
 		// Set permissions
-		os.Chmod(targetPath, os.FileMode(header.Mode))
+		os.Chmod(targetPath, 0600)
 
 		result.FilesImported++
 	}
@@ -419,10 +451,10 @@ func (i *Importer) Import(bundlePath string) (*ImportResult, error) {
 }
 
 // resolveTargetPath resolves the archive path to a local filesystem path
-func (i *Importer) resolveTargetPath(archivePath string) string {
+func (i *Importer) resolveTargetPath(archivePath string) (string, error) {
 	parts := strings.SplitN(archivePath, "/", 2)
 	if len(parts) < 2 {
-		return ""
+		return "", nil
 	}
 
 	prefix := parts[0]
@@ -431,16 +463,39 @@ func (i *Importer) resolveTargetPath(archivePath string) string {
 	switch prefix {
 	case "config":
 		if rest == "config.yaml" && i.configPath != "" {
-			return i.configPath
+			return i.configPath, nil
 		}
-		return filepath.Join(i.dataDir, rest)
+		return safeImportTarget(i.dataDir, rest)
 	case "templates":
-		return filepath.Join(i.dataDir, "templates", rest)
+		return safeImportTarget(filepath.Join(i.dataDir, "templates"), rest)
 	case "prompts":
-		return filepath.Join(i.dataDir, "prompts", rest)
+		return safeImportTarget(filepath.Join(i.dataDir, "prompts"), rest)
 	default:
-		return ""
+		return "", nil
 	}
+}
+
+func safeImportTarget(root, name string) (string, error) {
+	// Archive paths are slash-separated regardless of the host OS. Normalize
+	// Windows separators before validation so a bundle cannot become safe or
+	// unsafe depending on where it is inspected.
+	archiveName := strings.ReplaceAll(name, "\\", "/")
+	cleanArchive := path.Clean(archiveName)
+	if cleanArchive == "." || cleanArchive == ".." ||
+		strings.HasPrefix(cleanArchive, "/") || strings.HasPrefix(cleanArchive, "../") ||
+		strings.Contains(cleanArchive, ":") {
+		return "", fmt.Errorf("unsafe bundle path %q", name)
+	}
+	clean := filepath.FromSlash(cleanArchive)
+	if filepath.IsAbs(clean) || filepath.VolumeName(clean) != "" {
+		return "", fmt.Errorf("unsafe bundle path %q", name)
+	}
+	target := filepath.Join(root, clean)
+	rel, err := filepath.Rel(root, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("unsafe bundle path %q", name)
+	}
+	return target, nil
 }
 
 // createBackup creates a backup of current configuration

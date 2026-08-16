@@ -62,7 +62,7 @@ OffGrid LLM is a **locally-running AI inference server** that provides:
 │                                                                          │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
 │  │   REST Router   │  │ WebSocket Hub   │  │  Static Files   │         │
-│  │ /api/v1/*       │  │ /api/v1/ws      │  │ /ui/*           │         │
+│  │ /v1/*           │  │ /v1/ws          │  │ /ui/*           │         │
 │  └────────┬────────┘  └────────┬────────┘  └─────────────────┘         │
 └───────────┼────────────────────┼────────────────────────────────────────┘
             │                    │
@@ -417,7 +417,7 @@ func (s *Server) handleMyEndpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 // internal/server/server.go (in route setup)
-mux.HandleFunc("/api/v1/myendpoint", s.handleMyEndpoint)
+mux.HandleFunc("/v1/myendpoint", s.handleMyEndpoint)
 ```
 
 ### Adding New Middleware

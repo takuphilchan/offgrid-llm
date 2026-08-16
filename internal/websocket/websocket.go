@@ -20,22 +20,28 @@ import (
 type MessageType int
 
 const (
-	TextMessage   MessageType = 1
-	BinaryMessage MessageType = 2
-	CloseMessage  MessageType = 8
-	PingMessage   MessageType = 9
-	PongMessage   MessageType = 10
+	TextMessage          MessageType = 1
+	BinaryMessage        MessageType = 2
+	CloseMessage         MessageType = 8
+	PingMessage          MessageType = 9
+	PongMessage          MessageType = 10
+	maxPayloadSize                   = 8 << 20
+	readTimeout                      = 90 * time.Second
+	messageRateWindow                = 10 * time.Second
+	maxMessagesPerWindow             = 60
 )
 
 // Connection represents a WebSocket connection
 type Connection struct {
-	conn       net.Conn
-	mu         sync.Mutex
-	closed     bool
-	onMessage  func(MessageType, []byte)
-	onClose    func()
-	onError    func(error)
-	pingTicker *time.Ticker
+	conn        net.Conn
+	mu          sync.Mutex
+	closed      bool
+	onMessage   func(MessageType, []byte)
+	onClose     func()
+	onError     func(error)
+	pingTicker  *time.Ticker
+	windowStart time.Time
+	windowCount int
 }
 
 // Message represents a WebSocket message
@@ -82,7 +88,8 @@ func Upgrade(w http.ResponseWriter, r *http.Request) (*Connection, error) {
 	}
 
 	wsConn := &Connection{
-		conn: conn,
+		conn:        conn,
+		windowStart: time.Now(),
 	}
 
 	return wsConn, nil
@@ -118,6 +125,9 @@ func (c *Connection) ReadLoop() {
 	reader := bufio.NewReader(c.conn)
 
 	for {
+		if err := c.conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+			return
+		}
 		msgType, data, err := c.readFrame(reader)
 		if err != nil {
 			if err != io.EOF && !c.closed {
@@ -136,11 +146,26 @@ func (c *Connection) ReadLoop() {
 		case CloseMessage:
 			return
 		default:
+			if !c.allowMessage(time.Now()) {
+				if c.onError != nil {
+					c.onError(fmt.Errorf("websocket message rate limit exceeded"))
+				}
+				return
+			}
 			if c.onMessage != nil {
 				c.onMessage(msgType, data)
 			}
 		}
 	}
+}
+
+func (c *Connection) allowMessage(now time.Time) bool {
+	if c.windowStart.IsZero() || now.Sub(c.windowStart) >= messageRateWindow {
+		c.windowStart = now
+		c.windowCount = 0
+	}
+	c.windowCount++
+	return c.windowCount <= maxMessagesPerWindow
 }
 
 // readFrame reads a WebSocket frame
@@ -152,7 +177,13 @@ func (c *Connection) readFrame(reader *bufio.Reader) (MessageType, []byte, error
 	}
 
 	opcode := MessageType(header[0] & 0x0F)
+	if header[0]&0x80 == 0 {
+		return 0, nil, fmt.Errorf("fragmented websocket frames are not supported")
+	}
 	masked := header[1]&0x80 != 0
+	if !masked {
+		return 0, nil, fmt.Errorf("client websocket frames must be masked")
+	}
 	payloadLen := int64(header[1] & 0x7F)
 
 	// Extended payload length
@@ -169,6 +200,9 @@ func (c *Connection) readFrame(reader *bufio.Reader) (MessageType, []byte, error
 		}
 		payloadLen = int64(ext[0])<<56 | int64(ext[1])<<48 | int64(ext[2])<<40 | int64(ext[3])<<32 |
 			int64(ext[4])<<24 | int64(ext[5])<<16 | int64(ext[6])<<8 | int64(ext[7])
+	}
+	if payloadLen < 0 || payloadLen > maxPayloadSize {
+		return 0, nil, fmt.Errorf("websocket payload exceeds %d bytes", maxPayloadSize)
 	}
 
 	// Read mask key if present

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 )
@@ -412,18 +413,15 @@ func (s *Server) handleDocumentIngestURL(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Validate URL
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		http.Error(w, "URL must start with http:// or https://", http.StatusBadRequest)
+	parsedURL, err := validateOutboundURL(req.URL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Fetch the web page
-	client := &http.Client{
-		Timeout: 30 * 1000000000, // 30 seconds
-	}
+	client := safeOutboundHTTPClient(30 * time.Second)
 
-	httpReq, err := http.NewRequestWithContext(r.Context(), "GET", req.URL, nil)
+	httpReq, err := http.NewRequestWithContext(r.Context(), "GET", parsedURL.String(), nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid URL: %s", err.Error()), http.StatusBadRequest)
 		return

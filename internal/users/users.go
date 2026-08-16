@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Role represents a user role
@@ -175,7 +177,10 @@ func (s *UserStore) CreateUser(username, password string, role Role) (*User, str
 	id := generateID()
 
 	// Hash password
-	passwordHash := hashPassword(password)
+	passwordHash, err := hashPassword(password)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to hash password: %w", err)
+	}
 
 	// Generate API key
 	apiKey := generateAPIKey()
@@ -275,7 +280,11 @@ func (s *UserStore) UpdatePassword(id, newPassword string) error {
 		return fmt.Errorf("user not found")
 	}
 
-	user.PasswordHash = hashPassword(newPassword)
+	passwordHash, err := hashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+	user.PasswordHash = passwordHash
 	user.UpdatedAt = time.Now()
 	s.save()
 
@@ -345,8 +354,8 @@ func (s *UserStore) ListUsers() []*User {
 
 // ValidatePassword validates a username and password
 func (s *UserStore) ValidatePassword(username, password string) (*User, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	id, ok := s.byUsername[strings.ToLower(username)]
 	if !ok {
@@ -360,6 +369,16 @@ func (s *UserStore) ValidatePassword(username, password string) (*User, bool) {
 
 	if !verifyPassword(password, user.PasswordHash) {
 		return nil, false
+	}
+
+	// Transparently migrate legacy unsalted SHA-256 hashes after a successful
+	// login. API keys continue to use SHA-256 because they are high-entropy.
+	if isLegacyPasswordHash(user.PasswordHash) {
+		if upgradedHash, err := hashPassword(password); err == nil {
+			user.PasswordHash = upgradedHash
+			user.UpdatedAt = time.Now()
+			s.save()
+		}
 	}
 
 	return user, true
@@ -473,7 +492,35 @@ func (s *UserStore) save() {
 
 	path := filepath.Join(s.dataDir, "users.json")
 	os.MkdirAll(filepath.Dir(path), 0755)
-	os.WriteFile(path, jsonData, 0600)
+	_ = writeUserStoreAtomic(path, jsonData)
+}
+
+func writeUserStoreAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".users-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if n, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	} else if n != len(data) {
+		tmp.Close()
+		return fmt.Errorf("short user store write: wrote %d of %d bytes", n, len(data))
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // load loads the store from disk
@@ -676,14 +723,29 @@ func generateToken() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-func hashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(hash[:])
+func hashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }
 
 func verifyPassword(password, hash string) bool {
-	computed := hashPassword(password)
-	return subtle.ConstantTimeCompare([]byte(computed), []byte(hash)) == 1
+	if isLegacyPasswordHash(hash) {
+		computed := sha256.Sum256([]byte(password))
+		legacyHash := hex.EncodeToString(computed[:])
+		return subtle.ConstantTimeCompare([]byte(legacyHash), []byte(hash)) == 1
+	}
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+func isLegacyPasswordHash(hash string) bool {
+	if len(hash) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(hash)
+	return err == nil
 }
 
 func hashString(s string) string {

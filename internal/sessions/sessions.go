@@ -2,13 +2,18 @@ package sessions
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
+
+var ErrInvalidSessionName = errors.New("invalid session name")
 
 // Message represents a single chat message
 type Message struct {
@@ -55,19 +60,25 @@ func NewSessionManager(sessionsDir string) *SessionManager {
 
 // Save saves a session to disk
 func (sm *SessionManager) Save(session *Session) error {
+	if session == nil {
+		return fmt.Errorf("%w: session is nil", ErrInvalidSessionName)
+	}
+	filePath, err := sm.sessionFilePath(session.Name)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(sm.sessionsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create sessions directory: %w", err)
 	}
 
 	session.UpdatedAt = time.Now()
 
-	filePath := filepath.Join(sm.sessionsDir, session.Name+".json")
 	data, err := json.MarshalIndent(session, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}
 
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	if err := writeSessionFileAtomic(filePath, data); err != nil {
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
 
@@ -86,9 +97,40 @@ func (sm *SessionManager) Save(session *Session) error {
 	return nil
 }
 
+func writeSessionFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".session-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if n, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	} else if n != len(data) {
+		tmp.Close()
+		return fmt.Errorf("short session write: wrote %d of %d bytes", n, len(data))
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
 // Load loads a session from disk
 func (sm *SessionManager) Load(name string) (*Session, error) {
-	filePath := filepath.Join(sm.sessionsDir, name+".json")
+	filePath, err := sm.sessionFilePath(name)
+	if err != nil {
+		return nil, err
+	}
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -220,7 +262,10 @@ func (sm *SessionManager) ListMeta() ([]SessionMeta, error) {
 
 // Delete deletes a session
 func (sm *SessionManager) Delete(name string) error {
-	filePath := filepath.Join(sm.sessionsDir, name+".json")
+	filePath, err := sm.sessionFilePath(name)
+	if err != nil {
+		return err
+	}
 
 	if err := os.Remove(filePath); err != nil {
 		if os.IsNotExist(err) {
@@ -239,9 +284,27 @@ func (sm *SessionManager) Delete(name string) error {
 
 // Exists checks if a session exists
 func (sm *SessionManager) Exists(name string) bool {
-	filePath := filepath.Join(sm.sessionsDir, name+".json")
-	_, err := os.Stat(filePath)
+	filePath, err := sm.sessionFilePath(name)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filePath)
 	return err == nil
+}
+
+func (sm *SessionManager) sessionFilePath(name string) (string, error) {
+	if name == "" || len(name) > 128 || name == "." || name == ".." ||
+		filepath.Base(name) != name || strings.ContainsAny(name, `/\`) ||
+		strings.IndexFunc(name, unicode.IsControl) >= 0 {
+		return "", fmt.Errorf("%w: %q", ErrInvalidSessionName, name)
+	}
+
+	path := filepath.Join(sm.sessionsDir, name+".json")
+	rel, err := filepath.Rel(sm.sessionsDir, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidSessionName, name)
+	}
+	return path, nil
 }
 
 // NewSession creates a new session

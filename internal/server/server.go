@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -637,9 +638,80 @@ func (s *Server) switchModel(modelID string) error {
 	return nil
 }
 
+func serverListenAddress(host string, port int) string {
+	if strings.TrimSpace(host) == "" {
+		host = "localhost"
+	}
+	return net.JoinHostPort(host, fmt.Sprintf("%d", port))
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+func validateServerExposure(cfg *config.Config) error {
+	if cfg == nil {
+		return fmt.Errorf("server configuration is required")
+	}
+	if !cfg.RequireAuth && !cfg.AllowUnauthenticatedRemote && !isLoopbackHost(cfg.ServerHost) {
+		return fmt.Errorf("refusing unauthenticated non-loopback listener %q; enable authentication or explicitly set OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE=true", cfg.ServerHost)
+	}
+	return nil
+}
+
+// requirePermissionWhenAuthEnabled preserves local single-user mode while
+// enforcing role permissions whenever authentication is enabled.
+func (s *Server) requirePermissionWhenAuthEnabled(permission users.Permission, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.config != nil && s.config.RequireAuth {
+			user := users.GetUser(r)
+			if user == nil || !user.HasPermission(permission) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+		}
+		next(w, r)
+	}
+}
+
 // Start starts the HTTP server
 func (s *Server) Start() error {
+	if err := validateServerExposure(s.config); err != nil {
+		return err
+	}
+
 	mux := http.NewServeMux()
+	adminOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, handler)
+	}
+	modelManagerOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionModelsManage, handler)
+	}
+	ragManagerOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionRAGManage, handler)
+	}
+	chatOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionChat, handler)
+	}
+	modelsOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionModels, handler)
+	}
+	ragOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionRAG, handler)
+	}
+	statsOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionStats, handler)
+	}
+	sessionsOnly := func(handler http.HandlerFunc) http.HandlerFunc {
+		return s.requirePermissionWhenAuthEnabled(users.PermissionSessions, handler)
+	}
 
 	// Health check endpoints
 	mux.HandleFunc("/health", s.handleHealth)
@@ -649,139 +721,139 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/power", s.handlePower)      // Power/battery status
 
 	// API v1 routes (OpenAI-compatible)
-	mux.HandleFunc("/v1/models", s.rateLimiter.Middleware(s.handleListModels))
-	mux.HandleFunc("/v1/models/delete", s.rateLimiter.Middleware(s.handleDeleteModel))
-	mux.HandleFunc("/v1/models/download", s.rateLimiter.Middleware(s.handleDownloadModel))
-	mux.HandleFunc("/v1/models/download/progress", s.handleDownloadProgress)
-	mux.HandleFunc("/v1/models/download/cancel", s.handleCancelDownload)
-	mux.HandleFunc("/v1/models/verify", s.handleVerifyModel)
+	mux.HandleFunc("/v1/models", modelsOnly(s.rateLimiter.Middleware(s.handleListModels)))
+	mux.HandleFunc("/v1/models/delete", modelManagerOnly(s.rateLimiter.Middleware(s.handleDeleteModel)))
+	mux.HandleFunc("/v1/models/download", modelManagerOnly(s.rateLimiter.Middleware(s.handleDownloadModel)))
+	mux.HandleFunc("/v1/models/download/progress", modelsOnly(s.handleDownloadProgress))
+	mux.HandleFunc("/v1/models/download/cancel", modelManagerOnly(s.handleCancelDownload))
+	mux.HandleFunc("/v1/models/verify", modelManagerOnly(s.handleVerifyModel))
 
 	// Inference endpoints with strict rate limiting
-	mux.HandleFunc("/v1/chat/completions", s.inferenceRateLimiter.Middleware(s.handleChatCompletions))
-	mux.HandleFunc("/v1/completions", s.inferenceRateLimiter.Middleware(s.handleCompletions))
-	mux.HandleFunc("/v1/embeddings", s.inferenceRateLimiter.Middleware(s.handleEmbeddings))
+	mux.HandleFunc("/v1/chat/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleChatCompletions)))
+	mux.HandleFunc("/v1/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleCompletions)))
+	mux.HandleFunc("/v1/embeddings", chatOnly(s.inferenceRateLimiter.Middleware(s.handleEmbeddings)))
 
 	// Model search and discovery (OffGrid-specific)
-	mux.HandleFunc("/v1/search", s.handleModelSearch)
-	mux.HandleFunc("/v1/catalog", s.handleModelCatalog)
-	mux.HandleFunc("/v1/benchmark", s.handleBenchmark)
-	mux.HandleFunc("/v1/quantize", s.handleQuantize)
-	mux.HandleFunc("/v1/quantize/types", s.handleQuantizeTypes)
-	mux.HandleFunc("/v1/models/hotswap", s.handleHotSwap)
-	mux.HandleFunc("/v1/models/hotswap/status", s.handleHotSwapStatus)
-	mux.HandleFunc("/v1/models/hotswap/prepare", s.handleHotSwapPrepare)
-	mux.HandleFunc("/v1/terminal/exec", s.handleTerminalExec)
-	mux.HandleFunc("/v1/terminal/exec/stream", s.handleTerminalExecStream)
+	mux.HandleFunc("/v1/search", modelsOnly(s.handleModelSearch))
+	mux.HandleFunc("/v1/catalog", modelsOnly(s.handleModelCatalog))
+	mux.HandleFunc("/v1/benchmark", chatOnly(s.handleBenchmark))
+	mux.HandleFunc("/v1/quantize", modelManagerOnly(s.handleQuantize))
+	mux.HandleFunc("/v1/quantize/types", modelsOnly(s.handleQuantizeTypes))
+	mux.HandleFunc("/v1/models/hotswap", modelManagerOnly(s.handleHotSwap))
+	mux.HandleFunc("/v1/models/hotswap/status", modelsOnly(s.handleHotSwapStatus))
+	mux.HandleFunc("/v1/models/hotswap/prepare", modelManagerOnly(s.handleHotSwapPrepare))
+	mux.HandleFunc("/v1/terminal/exec", adminOnly(s.handleTerminalExec))
+	mux.HandleFunc("/v1/terminal/exec/stream", adminOnly(s.handleTerminalExecStream))
 
 	// Load balancer endpoints
-	mux.HandleFunc("/v1/loadbalancer", s.handleLoadBalancer)
-	mux.HandleFunc("/v1/loadbalancer/backends", s.handleLoadBalancerBackends)
-	mux.HandleFunc("/v1/loadbalancer/backends/", s.handleLoadBalancerBackend)
+	mux.HandleFunc("/v1/loadbalancer", adminOnly(s.handleLoadBalancer))
+	mux.HandleFunc("/v1/loadbalancer/backends", adminOnly(s.handleLoadBalancerBackends))
+	mux.HandleFunc("/v1/loadbalancer/backends/", adminOnly(s.handleLoadBalancerBackend))
 
 	// Distributed RAG endpoints
-	mux.HandleFunc("/v1/rag/distributed", s.handleDistributedRAG)
-	mux.HandleFunc("/v1/rag/distributed/nodes", s.handleDistributedRAGNodes)
-	mux.HandleFunc("/v1/rag/distributed/search", s.handleDistributedRAGSearch)
+	mux.HandleFunc("/v1/rag/distributed", ragOnly(s.handleDistributedRAG))
+	mux.HandleFunc("/v1/rag/distributed/nodes", ragManagerOnly(s.handleDistributedRAGNodes))
+	mux.HandleFunc("/v1/rag/distributed/search", ragOnly(s.handleDistributedRAGSearch))
 
 	// Templates endpoints
-	mux.HandleFunc("/v1/templates", s.handleTemplates)
-	mux.HandleFunc("/v1/templates/", s.handleTemplateDetails)
+	mux.HandleFunc("/v1/templates", adminOnly(s.handleTemplates))
+	mux.HandleFunc("/v1/templates/", adminOnly(s.handleTemplateDetails))
 
 	// USB import/export
-	mux.HandleFunc("/v1/usb/scan", s.handleUSBScan)
-	mux.HandleFunc("/v1/usb/import", s.handleUSBImport)
-	mux.HandleFunc("/v1/usb/export", s.handleUSBExport)
+	mux.HandleFunc("/v1/usb/scan", adminOnly(s.handleUSBScan))
+	mux.HandleFunc("/v1/usb/import", adminOnly(s.handleUSBImport))
+	mux.HandleFunc("/v1/usb/export", adminOnly(s.handleUSBExport))
 	mux.HandleFunc("/v1/usb/export/progress", s.handleExportProgress)
-	mux.HandleFunc("/v1/filesystem/browse", s.handleFilesystemBrowse)
-	mux.HandleFunc("/v1/filesystem/common-paths", s.handleCommonPaths)
+	mux.HandleFunc("/v1/filesystem/browse", adminOnly(s.handleFilesystemBrowse))
+	mux.HandleFunc("/v1/filesystem/common-paths", adminOnly(s.handleCommonPaths))
 
 	// RAG (Retrieval Augmented Generation) endpoints
-	mux.HandleFunc("/v1/rag/status", s.handleRAGStatus)
-	mux.HandleFunc("/v1/rag/enable", s.handleRAGEnable)
-	mux.HandleFunc("/v1/rag/disable", s.handleRAGDisable)
-	mux.HandleFunc("/v1/documents", s.handleDocumentsList)
-	mux.HandleFunc("/v1/documents/ingest", s.handleDocumentIngest)
-	mux.HandleFunc("/v1/documents/ingest-url", s.handleDocumentIngestURL)
-	mux.HandleFunc("/v1/documents/delete", s.handleDocumentDelete)
-	mux.HandleFunc("/v1/documents/search", s.handleDocumentSearch)
+	mux.HandleFunc("/v1/rag/status", ragOnly(s.handleRAGStatus))
+	mux.HandleFunc("/v1/rag/enable", ragManagerOnly(s.handleRAGEnable))
+	mux.HandleFunc("/v1/rag/disable", ragManagerOnly(s.handleRAGDisable))
+	mux.HandleFunc("/v1/documents", ragOnly(s.handleDocumentsList))
+	mux.HandleFunc("/v1/documents/ingest", ragManagerOnly(s.handleDocumentIngest))
+	mux.HandleFunc("/v1/documents/ingest-url", ragManagerOnly(s.handleDocumentIngestURL))
+	mux.HandleFunc("/v1/documents/delete", ragManagerOnly(s.handleDocumentDelete))
+	mux.HandleFunc("/v1/documents/search", ragOnly(s.handleDocumentSearch))
 
 	// P2P endpoints
-	mux.HandleFunc("/v1/p2p/peers", s.handleP2PPeers)
-	mux.HandleFunc("/v1/p2p/download", s.handleP2PDownload)
-	mux.HandleFunc("/v1/p2p/status", s.handleP2PStatus)
+	mux.HandleFunc("/v1/p2p/peers", modelsOnly(s.handleP2PPeers))
+	mux.HandleFunc("/v1/p2p/download", modelManagerOnly(s.handleP2PDownload))
+	mux.HandleFunc("/v1/p2p/status", modelsOnly(s.handleP2PStatus))
 
 	// Statistics endpoint
-	mux.HandleFunc("/stats", s.handleStats)
-	mux.HandleFunc("/v1/stats", s.handleStatsV1)
-	mux.HandleFunc("/v1/system/info", s.handleSystemInfo)
+	mux.HandleFunc("/stats", statsOnly(s.handleStats))
+	mux.HandleFunc("/v1/stats", statsOnly(s.handleStatsV1))
+	mux.HandleFunc("/v1/system/info", statsOnly(s.handleSystemInfo))
 
 	// Plugin endpoints
-	mux.HandleFunc("/v1/plugins", s.handlePlugins)
-	mux.HandleFunc("/v1/plugins/", s.handlePluginAction)
+	mux.HandleFunc("/v1/plugins", adminOnly(s.handlePlugins))
+	mux.HandleFunc("/v1/plugins/", adminOnly(s.handlePluginAction))
 
 	// Sessions endpoints
-	mux.HandleFunc("/v1/sessions", s.sessionHandlers.HandleSessions)
-	mux.HandleFunc("/v1/sessions/", s.sessionHandlers.HandleSessions)
+	mux.HandleFunc("/v1/sessions", sessionsOnly(s.sessionHandlers.HandleSessions))
+	mux.HandleFunc("/v1/sessions/", sessionsOnly(s.sessionHandlers.HandleSessions))
 
 	// Model cache and loading progress
-	mux.HandleFunc("/v1/cache/stats", s.handleCacheStats)
-	mux.HandleFunc("/v1/loading/progress", s.handleLoadingProgress)
-	mux.HandleFunc("/v1/loading/progress/stream", s.handleLoadingProgressStream)
-	mux.HandleFunc("/v1/loading/prewarm", s.handleFastPrewarm)
+	mux.HandleFunc("/v1/cache/stats", modelsOnly(s.handleCacheStats))
+	mux.HandleFunc("/v1/loading/progress", modelsOnly(s.handleLoadingProgress))
+	mux.HandleFunc("/v1/loading/progress/stream", modelsOnly(s.handleLoadingProgressStream))
+	mux.HandleFunc("/v1/loading/prewarm", modelManagerOnly(s.handleFastPrewarm))
 
 	// Cache management endpoints
-	mux.HandleFunc("/cache/stats", s.handleCacheStats)
-	mux.HandleFunc("/cache/clear", s.handleCacheClear)
+	mux.HandleFunc("/cache/stats", modelsOnly(s.handleCacheStats))
+	mux.HandleFunc("/cache/clear", modelManagerOnly(s.handleCacheClear))
 
 	// Prometheus metrics endpoint
 	mux.HandleFunc("/metrics", s.handleMetrics)
-	mux.HandleFunc("/v1/system/stats", s.handleSystemStats)
+	mux.HandleFunc("/v1/system/stats", statsOnly(s.handleSystemStats))
 	mux.HandleFunc("/v1/system/config", s.handleSystemConfig) // UI feature flags
 
 	// User management endpoints
 	mux.HandleFunc("/v1/users/me", s.handleCurrentUser)
-	mux.HandleFunc("/v1/users", s.handleUsers)
-	mux.HandleFunc("/v1/users/", s.handleUsers)
+	mux.HandleFunc("/v1/users", s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, s.handleUsers))
+	mux.HandleFunc("/v1/users/", s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, s.handleUsers))
 	mux.HandleFunc("/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("/v1/auth/logout", s.handleLogout)
-	mux.HandleFunc("/v1/auth/ldap/test", s.handleLDAPTest)
-	mux.HandleFunc("/v1/auth/ldap/sync", s.handleLDAPSync)
+	mux.HandleFunc("/v1/auth/ldap/test", s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, s.handleLDAPTest))
+	mux.HandleFunc("/v1/auth/ldap/sync", s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, s.handleLDAPSync))
 	mux.HandleFunc("/v1/quota", s.handleQuota)
-	mux.HandleFunc("/v1/quota/", s.handleQuotaManage)
+	mux.HandleFunc("/v1/quota/", s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, s.handleQuotaManage))
 
 	// LoRA adapter endpoints
-	mux.HandleFunc("/v1/lora", s.handleLoRAList)
-	mux.HandleFunc("/v1/lora/", s.handleLoRA)
+	mux.HandleFunc("/v1/lora", modelsOnly(s.handleLoRAList))
+	mux.HandleFunc("/v1/lora/", modelManagerOnly(s.handleLoRA))
 
 	// Agent endpoints
-	mux.HandleFunc("/v1/agents/run", s.handleAgentRun)
-	mux.HandleFunc("/v1/agents/tasks", s.handleAgentTasks)
-	mux.HandleFunc("/v1/agents/workflows", s.handleAgentWorkflows)
-	mux.HandleFunc("/v1/agents/orchestrate", s.handleAgentOrchestrate)
-	mux.HandleFunc("/v1/agents/tools", s.handleAgentTools)
-	mux.HandleFunc("/v1/agents/mcp", s.handleAgentMCP)
-	mux.HandleFunc("/v1/agents/mcp/test", s.handleAgentMCPTest)
-	mux.HandleFunc("/v1/agents/mcp/marketplace", s.handleMCPMarketplace)
-	mux.HandleFunc("/v1/agents/mcp/marketplace/", s.handleMCPMarketplaceAction)
+	mux.HandleFunc("/v1/agents/run", adminOnly(s.handleAgentRun))
+	mux.HandleFunc("/v1/agents/tasks", adminOnly(s.handleAgentTasks))
+	mux.HandleFunc("/v1/agents/workflows", adminOnly(s.handleAgentWorkflows))
+	mux.HandleFunc("/v1/agents/orchestrate", adminOnly(s.handleAgentOrchestrate))
+	mux.HandleFunc("/v1/agents/tools", adminOnly(s.handleAgentTools))
+	mux.HandleFunc("/v1/agents/mcp", adminOnly(s.handleAgentMCP))
+	mux.HandleFunc("/v1/agents/mcp/test", adminOnly(s.handleAgentMCPTest))
+	mux.HandleFunc("/v1/agents/mcp/marketplace", adminOnly(s.handleMCPMarketplace))
+	mux.HandleFunc("/v1/agents/mcp/marketplace/", adminOnly(s.handleMCPMarketplaceAction))
 
 	// Audio endpoints (OpenAI-compatible TTS/ASR)
-	mux.HandleFunc("/v1/audio/transcriptions", s.handleAudioTranscriptions)
-	mux.HandleFunc("/v1/audio/speech", s.handleAudioSpeech)
-	mux.HandleFunc("/v1/audio/voices", s.handleAudioVoices)
-	mux.HandleFunc("/v1/audio/whisper-models", s.handleAudioWhisperModels)
-	mux.HandleFunc("/v1/audio/models", s.handleAudioModels)
-	mux.HandleFunc("/v1/audio/status", s.handleAudioStatus)
-	mux.HandleFunc("/v1/audio/download", s.handleAudioDownload)
-	mux.HandleFunc("/v1/audio/setup/whisper", s.handleAudioSetupWhisper)
-	mux.HandleFunc("/v1/audio/setup/piper", s.handleAudioSetupPiper)
+	mux.HandleFunc("/v1/audio/transcriptions", chatOnly(s.handleAudioTranscriptions))
+	mux.HandleFunc("/v1/audio/speech", chatOnly(s.handleAudioSpeech))
+	mux.HandleFunc("/v1/audio/voices", chatOnly(s.handleAudioVoices))
+	mux.HandleFunc("/v1/audio/whisper-models", chatOnly(s.handleAudioWhisperModels))
+	mux.HandleFunc("/v1/audio/models", chatOnly(s.handleAudioModels))
+	mux.HandleFunc("/v1/audio/status", chatOnly(s.handleAudioStatus))
+	mux.HandleFunc("/v1/audio/download", adminOnly(s.handleAudioDownload))
+	mux.HandleFunc("/v1/audio/setup/whisper", adminOnly(s.handleAudioSetupWhisper))
+	mux.HandleFunc("/v1/audio/setup/piper", adminOnly(s.handleAudioSetupPiper))
 
 	// WebSocket endpoint
-	mux.HandleFunc("/v1/ws", s.handleWebSocket)
+	mux.HandleFunc("/v1/ws", chatOnly(s.rateLimiter.Middleware(s.handleWebSocket)))
 
 	// Simplified UI endpoints (no /v1 prefix for easier frontend access)
-	mux.HandleFunc("/models", s.handleListModels)
-	mux.HandleFunc("/models/refresh", s.handleRefreshModels)
-	mux.HandleFunc("/catalog", s.handleModelCatalog)
+	mux.HandleFunc("/models", modelsOnly(s.handleListModels))
+	mux.HandleFunc("/models/refresh", modelManagerOnly(s.handleRefreshModels))
+	mux.HandleFunc("/catalog", modelsOnly(s.handleModelCatalog))
 
 	// Web UI - serve HTML/CSS/JS
 	uiPath := "/var/lib/offgrid/web/ui"
@@ -808,10 +880,16 @@ func (s *Server) Start() error {
 	// Build handler chain: logging -> auth -> routes
 	var handler http.Handler = mux
 	handler = s.authMiddleware.Wrap(handler) // Auth middleware
-	handler = s.loggingMiddleware(handler)   // Logging middleware (outermost)
+	handler = requestBodyLimitMiddleware(handler)
+	handler = s.loggingMiddleware(handler) // Logging middleware (outermost)
+
+	listenAddr := serverListenAddress(s.config.ServerHost, s.config.ServerPort)
+	if !s.config.RequireAuth && s.config.AllowUnauthenticatedRemote && !isLoopbackHost(s.config.ServerHost) {
+		log.Printf("SECURITY WARNING: authentication is disabled while listening on non-loopback host %q", s.config.ServerHost)
+	}
 
 	s.httpServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.config.ServerPort),
+		Addr:         listenAddr,
 		Handler:      handler,
 		ReadTimeout:  5 * time.Minute,  // Increased for low-end machines
 		WriteTimeout: 15 * time.Minute, // Long timeout for LLM inference on low-end machines
@@ -873,7 +951,7 @@ func (s *Server) Start() error {
 	go s.collectSystemMetrics()
 
 	// Create listener first to ensure port is available
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.ServerPort))
+	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		return fmt.Errorf("failed to bind to port %d: %w", s.config.ServerPort, err)
 	}
@@ -900,8 +978,8 @@ func (s *Server) Start() error {
 		}
 	}
 
-	fmt.Printf("Server:  http://localhost:%d\n", s.config.ServerPort)
-	fmt.Printf("Web UI:  http://localhost:%d/ui/\n", s.config.ServerPort)
+	fmt.Printf("Server:  http://%s\n", listenAddr)
+	fmt.Printf("Web UI:  http://%s/ui/\n", listenAddr)
 	fmt.Println()
 	fmt.Printf("%sOpenAI-Compatible API:%s\n", colorDim, colorReset)
 	fmt.Printf("  POST /v1/chat/completions\n")
@@ -916,6 +994,17 @@ func (s *Server) Start() error {
 	}
 
 	return nil
+}
+
+const maxRequestBodyBytes int64 = 64 << 20
+
+func requestBodyLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // handleShutdown handles graceful shutdown
@@ -1004,6 +1093,13 @@ func (s *Server) collectSystemMetrics() {
 // loggingMiddleware logs all HTTP requests
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Browser hardening. Inline event handlers remain temporarily allowed while
+		// the legacy UI is migrated; executable script files must be local.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "camera=(), geolocation=(), payment=(), usb=()")
+
 		// Generate request ID for tracing (if enabled)
 		requestID := ""
 		if s.config.EnableRequestID {
@@ -1140,9 +1236,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// API info for other paths
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"name":"OffGrid LLM","version":"%s","status":"running"}`, s.version)
+	http.NotFound(w, r)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -4327,12 +4421,22 @@ func (s *Server) handleLDAPSync(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Get user from context or query
+	currentUser := users.GetUser(r)
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		// Try to get from auth
-		if user := users.GetUser(r); user != nil {
-			userID = user.ID
+		if currentUser != nil {
+			userID = currentUser.ID
+		}
+	}
+
+	if s.config != nil && s.config.RequireAuth {
+		if currentUser == nil {
+			http.Error(w, `{"error": "unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		if userID != currentUser.ID && !currentUser.HasPermission(users.PermissionAdmin) {
+			http.Error(w, `{"error": "forbidden"}`, http.StatusForbidden)
+			return
 		}
 	}
 
@@ -4946,6 +5050,10 @@ func (s *Server) handleAgentOrchestrate(w http.ResponseWriter, r *http.Request) 
 // ============================================================================
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	if !s.isAllowedWebSocketOrigin(r) {
+		http.Error(w, "Forbidden WebSocket origin", http.StatusForbidden)
+		return
+	}
 	conn, err := websocket.Upgrade(w, r)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
@@ -4984,6 +5092,26 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Start the read loop (blocking)
 	conn.ReadLoop()
+}
+
+func (s *Server) isAllowedWebSocketOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // Non-browser clients do not send Origin.
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	if strings.EqualFold(parsed.Host, r.Host) {
+		return true
+	}
+	for _, allowed := range strings.Split(s.config.CORSOrigins, ",") {
+		if strings.EqualFold(strings.TrimSpace(allowed), origin) {
+			return true
+		}
+	}
+	return false
 }
 
 // handleAgentTools lists and manages agent tools

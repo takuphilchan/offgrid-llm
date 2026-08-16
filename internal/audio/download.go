@@ -764,6 +764,11 @@ func createLibSymlinks(dir string) {
 	}
 }
 
+const (
+	maxArchiveFiles         = 10000
+	maxExpandedArchiveBytes = int64(2 << 30)
+)
+
 // extractZip extracts a zip file, looking for the specified binary
 func extractZip(zipPath, destDir, binaryName string) error {
 	r, err := zip.OpenReader(zipPath)
@@ -772,7 +777,15 @@ func extractZip(zipPath, destDir, binaryName string) error {
 	}
 	defer r.Close()
 
-	for _, f := range r.File {
+	var expandedBytes int64
+	for index, f := range r.File {
+		if index >= maxArchiveFiles || f.UncompressedSize64 > uint64(maxExpandedArchiveBytes-expandedBytes) {
+			return fmt.Errorf("archive exceeds safety limits")
+		}
+		expandedBytes += int64(f.UncompressedSize64)
+		if !f.FileInfo().IsDir() && (!f.FileInfo().Mode().IsRegular() || f.FileInfo().Mode()&os.ModeSymlink != 0) {
+			return fmt.Errorf("unsupported archive entry type for %q", f.Name)
+		}
 		// Extract all files
 		fpath := filepath.Join(destDir, filepath.Base(f.Name))
 
@@ -828,6 +841,8 @@ func extractTarGz(tarPath, destDir string) error {
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
+	fileCount := 0
+	var expandedBytes int64
 
 	for {
 		header, err := tr.Next()
@@ -838,7 +853,19 @@ func extractTarGz(tarPath, destDir string) error {
 			return err
 		}
 
-		target := filepath.Join(destDir, header.Name)
+		fileCount++
+		if fileCount > maxArchiveFiles {
+			return fmt.Errorf("archive contains too many entries")
+		}
+		if header.Size < 0 || header.Size > maxExpandedArchiveBytes-expandedBytes {
+			return fmt.Errorf("archive exceeds maximum expanded size")
+		}
+		expandedBytes += header.Size
+
+		target, err := safeArchiveTarget(destDir, header.Name)
+		if err != nil {
+			return err
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -863,10 +890,25 @@ func extractTarGz(tarPath, destDir string) error {
 			if header.Mode&0111 != 0 {
 				os.Chmod(target, 0755)
 			}
+		default:
+			return fmt.Errorf("unsupported archive entry type for %q", header.Name)
 		}
 	}
 
 	return nil
+}
+
+func safeArchiveTarget(destDir, entryName string) (string, error) {
+	cleanName := filepath.Clean(filepath.FromSlash(entryName))
+	if cleanName == "." || filepath.IsAbs(cleanName) || filepath.VolumeName(cleanName) != "" {
+		return "", fmt.Errorf("unsafe archive path %q", entryName)
+	}
+	target := filepath.Join(destDir, cleanName)
+	rel, err := filepath.Rel(destDir, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("unsafe archive path %q", entryName)
+	}
+	return target, nil
 }
 
 // extractZipAll extracts all files from a zip to the destination directory (flat)
@@ -879,10 +921,18 @@ func extractZipAll(zipPath, destDir string) error {
 
 	os.MkdirAll(destDir, 0755)
 
-	for _, f := range r.File {
+	var expandedBytes int64
+	for index, f := range r.File {
+		if index >= maxArchiveFiles || f.UncompressedSize64 > uint64(maxExpandedArchiveBytes-expandedBytes) {
+			return fmt.Errorf("archive exceeds safety limits")
+		}
 		if f.FileInfo().IsDir() {
 			continue
 		}
+		if !f.FileInfo().Mode().IsRegular() || f.FileInfo().Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("unsupported archive entry type for %q", f.Name)
+		}
+		expandedBytes += int64(f.UncompressedSize64)
 
 		// Extract to flat directory using just the filename
 		fpath := filepath.Join(destDir, filepath.Base(f.Name))
@@ -926,6 +976,8 @@ func extractTarGzAll(tarPath, destDir string) error {
 
 	tr := tar.NewReader(gzr)
 	os.MkdirAll(destDir, 0755)
+	fileCount := 0
+	var expandedBytes int64
 
 	for {
 		header, err := tr.Next()
@@ -935,10 +987,18 @@ func extractTarGzAll(tarPath, destDir string) error {
 		if err != nil {
 			return err
 		}
+		fileCount++
+		if fileCount > maxArchiveFiles || header.Size < 0 || header.Size > maxExpandedArchiveBytes-expandedBytes {
+			return fmt.Errorf("archive exceeds safety limits")
+		}
+		expandedBytes += header.Size
 
 		// Skip directories
 		if header.Typeflag == tar.TypeDir {
 			continue
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return fmt.Errorf("unsupported archive entry type for %q", header.Name)
 		}
 
 		// Extract to flat directory using just the filename
