@@ -326,26 +326,14 @@ install_binaries() {
     local WEB_DIR="/var/lib/offgrid/web/ui"
     $use_sudo mkdir -p "$WEB_DIR"
     
-    # Try bundle directory first
+    # Release bundles always contain the generated React application here.
     if [ -d "$bundle_dir/web/ui" ]; then
         log_info "Installing web UI from bundle..."
         $use_sudo cp -r "$bundle_dir/web/ui/"* "$WEB_DIR/"
         log_success "Web UI installed"
-    # Fallback: download directly from GitHub
     else
-        log_info "Downloading web UI from GitHub..."
-        local ui_tmp="/tmp/offgrid-ui-$$"
-        mkdir -p "$ui_tmp"
-        
-        if curl -fsSL "${GITHUB_URL}/archive/refs/heads/main.tar.gz" | tar -xz -C "$ui_tmp" --strip-components=2 "offgrid-llm-main/web/ui" 2>/dev/null; then
-            $use_sudo cp -r "$ui_tmp/ui/"* "$WEB_DIR/"
-            rm -rf "$ui_tmp"
-            log_success "Web UI installed"
-        else
-            rm -rf "$ui_tmp"
-            log_warn "Web UI download failed - UI will not be available"
-            log_info "You can manually copy web/ui/* to /var/lib/offgrid/web/ui/ later"
-        fi
+        log_warn "Generated web UI is missing from this bundle"
+        log_info "Use an official release bundle or copy web/dist after running scripts/sync-ui.sh"
     fi
     
     log_success "OffGrid LLM installed successfully"

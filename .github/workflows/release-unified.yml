@@ -76,6 +76,7 @@ jobs:
         working-directory: web/app
         run: |
           npm ci
+          npm run api:check
           npm run check
           npm run build
       - name: Upload UI bundle
@@ -667,28 +668,25 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-          
-          # Build for all platforms that desktop app will need
+
           mkdir -p build/linux build/macos build/windows
-          
-          # Linux binary
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
-            -o build/linux/offgrid ./cmd/offgrid
-          
-          # macOS binaries (both architectures)
-          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
-            -o build/macos/offgrid-amd64 ./cmd/offgrid
-          
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
-            -o build/macos/offgrid-arm64 ./cmd/offgrid
-          
-          # Windows binary
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
-            -o build/windows/offgrid.exe ./cmd/offgrid
+
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
+              -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+              -o build/linux/offgrid ./cmd/offgrid
+          elif [ "${{ matrix.os }}" = "macos" ]; then
+            GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build \
+              -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+              -o build/macos/offgrid-amd64 ./cmd/offgrid
+            GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build \
+              -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+              -o build/macos/offgrid-arm64 ./cmd/offgrid
+          else
+            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
+              -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+              -o build/windows/offgrid.exe ./cmd/offgrid
+          fi
 
       - name: Install desktop dependencies
         working-directory: desktop
@@ -734,7 +732,6 @@ jobs:
           fi
           
       - name: Verify build artifacts exist
-        continue-on-error: true
         working-directory: desktop/dist
         shell: bash
         run: |
@@ -743,19 +740,22 @@ jobs:
           
           if [ "${{ matrix.os }}" = "linux" ]; then
             if ! ls *.AppImage *.deb 2>/dev/null | grep -q .; then
-              echo "WARNING: No Linux desktop artifacts found!"
+              echo "ERROR: No Linux desktop artifacts found!"
+              exit 1
             else
               echo "SUCCESS: Found Linux desktop artifacts"
             fi
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            if ! ls *.dmg 2>/dev/null | grep -q .; then
-              echo "WARNING: No macOS desktop artifacts found!"
+            if ! ls *.zip 2>/dev/null | grep -q .; then
+              echo "ERROR: No macOS desktop artifacts found!"
+              exit 1
             else
               echo "SUCCESS: Found macOS desktop artifacts"
             fi
           elif [ "${{ matrix.os }}" = "windows" ]; then
             if ! ls *.exe 2>/dev/null | grep -q .; then
-              echo "WARNING: No Windows desktop artifacts found!"
+              echo "ERROR: No Windows desktop artifacts found!"
+              exit 1
             else
               echo "SUCCESS: Found Windows desktop artifacts"
             fi
@@ -775,8 +775,8 @@ jobs:
               fi
             done
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            # Upload all macOS artifacts (.dmg files)
-            for file in *.dmg; do
+            # Upload all macOS artifacts.
+            for file in *.zip; do
               if [ -f "$file" ]; then
                 echo "Found: $file"
                 echo "$file" >> ../../artifacts-list.txt

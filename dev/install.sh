@@ -1287,12 +1287,15 @@ setup_config() {
     sudo mkdir -p "$MODELS_DIR"
     sudo mkdir -p "$WEB_DIR"
     
-    print_step "Copying web UI..."
-    if [ -f "web/ui/index.html" ]; then
-        sudo cp -r web/ui/* "$WEB_DIR/"
+    print_step "Building and copying web UI..."
+    if [ -f "web/app/package-lock.json" ] && command -v npm >/dev/null 2>&1; then
+        (cd web/app && npm ci && npm run api:check && npm run build)
+    fi
+    if [ -f "web/dist/index.html" ]; then
+        sudo cp -r web/dist/. "$WEB_DIR/"
         print_success "Web UI files copied"
     else
-        print_warning "No UI files found"
+        print_warning "No generated UI found; run scripts/sync-ui.sh first"
     fi
     
     sudo chown -R offgrid:offgrid "$CONFIG_DIR"

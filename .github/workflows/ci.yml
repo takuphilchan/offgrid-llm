@@ -1,0 +1,84 @@
+name: Continuous integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Go, contract, UI, and desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            web/app/package-lock.json
+            desktop/package-lock.json
+
+      - name: Test Go packages
+        run: go test ./...
+
+      - name: Generate and build web UI
+        working-directory: web/app
+        run: |
+          npm ci
+          npm run api:check
+          npm run check
+          npm run build
+
+      - name: Build runtime for integration and desktop packaging
+        run: |
+          mkdir -p build/linux
+          go build -trimpath -o build/linux/offgrid ./cmd/offgrid
+
+      - name: Run browser integration tests
+        shell: bash
+        run: |
+          mkdir -p /tmp/offgrid-ci/models /tmp/offgrid-ci/data
+          OFFGRID_HOST=127.0.0.1 \
+          OFFGRID_PORT=11611 \
+          OFFGRID_MODELS_DIR=/tmp/offgrid-ci/models \
+          OFFGRID_DATA_DIR=/tmp/offgrid-ci/data \
+          OFFGRID_UI_DIR="$PWD/web/dist" \
+          ./build/linux/offgrid serve >/tmp/offgrid-ci/server.log 2>&1 &
+          server_pid=$!
+          trap 'kill -TERM "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:11611/health >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 60 ]]; then
+              cat /tmp/offgrid-ci/server.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cd web/app
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Validate Electron package
+        working-directory: desktop
+        run: |
+          npm ci
+          node --check main.js
+          node --check preload.js
+          npx electron-builder --dir --linux

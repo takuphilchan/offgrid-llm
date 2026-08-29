@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version label for a manual build (for example 0.3.0-rc.1)
+        description: Image label for a manual pre-release build
         required: true
-        default: dev
+        default: edge
       publish_gpu:
         description: Also publish the Linux AMD64 NVIDIA CUDA image
         required: true

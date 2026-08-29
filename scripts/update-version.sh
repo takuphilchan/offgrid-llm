@@ -17,22 +17,16 @@ fi
 VERSION=$(cat "$VERSION_FILE" | tr -d '\n\r ')
 echo "Updating version to: $VERSION"
 
-# Update package.json
+# npm updates package.json and its lockfile together. --allow-same-version keeps
+# this command idempotent for release retries.
 if [ -f "$ROOT_DIR/desktop/package.json" ]; then
-    echo "Updating desktop/package.json..."
-    sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/desktop/package.json"
+    echo "Updating desktop package metadata..."
+    npm version "$VERSION" --prefix "$ROOT_DIR/desktop" --no-git-tag-version --allow-same-version
 fi
 
-# Update desktop/index.html (version displays)
-if [ -f "$ROOT_DIR/desktop/index.html" ]; then
-    echo "Updating desktop/index.html..."
-    sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v$VERSION/g" "$ROOT_DIR/desktop/index.html"
-fi
-
-# Update web/ui/index.html (version displays)
-if [ -f "$ROOT_DIR/web/ui/index.html" ]; then
-    echo "Updating web/ui/index.html..."
-    sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v$VERSION/g" "$ROOT_DIR/web/ui/index.html"
+if [ -f "$ROOT_DIR/web/app/package.json" ]; then
+    echo "Updating web package metadata..."
+    npm version "$VERSION" --prefix "$ROOT_DIR/web/app" --no-git-tag-version --allow-same-version
 fi
 
 # Update scripts/build-all.sh
@@ -54,20 +48,14 @@ fi
 #     sed -i "s/version = \"[^\"]*\"/version = \"$VERSION\"/" "$ROOT_DIR/python/pyproject.toml"
 # fi
 
-# Update internal/server/server.go
-if [ -f "$ROOT_DIR/internal/server/server.go" ]; then
-    echo "Updating internal/server/server.go..."
-    sed -i "s/\"version\":\"[^\"]*\"/\"version\":\"$VERSION\"/" "$ROOT_DIR/internal/server/server.go"
-    sed -i "s/\"version\":        \"[^\"]*\"/\"version\":        \"$VERSION\"/" "$ROOT_DIR/internal/server/server.go"
-fi
-
 # Update internal/agents/mcp_client.go
 if [ -f "$ROOT_DIR/internal/agents/mcp_client.go" ]; then
     echo "Updating internal/agents/mcp_client.go..."
     sed -i "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/internal/agents/mcp_client.go"
 fi
 
-# Note: cmd/offgrid/main.go now uses getVersion() which reads from VERSION file
+# Server and desktop runtime versions are injected by the build. Do not rewrite
+# Go source or generated UI files to publish a release.
 echo ""
 echo "Version updated to $VERSION in all files."
 echo ""
