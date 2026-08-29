@@ -1,5 +1,10 @@
-import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { APIError, api, type ChatMessage, type Document, type Model, type RunEvent, type RunSummary, type ToolApproval } from './api/client';
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type FormEvent, type ReactNode } from 'react';
+import { APIError, api, type Document, type Model, type PublicUser, type RunEvent, type RunSummary, type ToolApproval } from './api/client';
+import { Icon } from './components/Icon';
+import { ModelSelect } from './components/ModelSelect';
+import { ChatPage } from './features/chat/ChatPage';
+import { LoginPage } from './features/auth/LoginPage';
+import { ModelsPage } from './features/models/ModelsPage';
 import { useI18n, type LocaleCode } from './i18n';
 
 type Page = 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings';
@@ -22,45 +27,39 @@ class PageBoundary extends Component<{ children: ReactNode; message: string; ret
   }
 }
 
-const iconPaths: Record<Page | 'send' | 'upload' | 'refresh', string[]> = {
-  chat: ['M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'],
-  knowledge: ['M4 19.5A2.5 2.5 0 0 1 6.5 17H20', 'M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z'],
-  agents: ['M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M19 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M5 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M12 9v4m-4 3h8'],
-  models: ['M21 7 12 2 3 7l9 5 9-5z', 'm3 12 9 5 9-5', 'm3 17 9 5 9-5'],
-  activity: ['M4 19V9m5 10V5m5 14v-7m5 7V3'],
-  send: ['m4 4 16 8-16 8 3-8-3-8z', 'M7 12h13'],
-  upload: ['M12 16V4m-5 5 5-5 5 5', 'M5 20h14'],
-  refresh: ['M20 6v5h-5', 'M4 18v-5h5', 'M18.5 9A7 7 0 0 0 6 6.5L4 11', 'M5.5 15A7 7 0 0 0 18 17.5l2-4.5']
-  ,settings: ['M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', 'M12 2v3m0 14v3M4.93 4.93l2.12 2.12m9.9 9.9 2.12 2.12M2 12h3m14 0h3M4.93 19.07l2.12-2.12m9.9-9.9 2.12-2.12']
-};
-
-function Icon({ name, size = 20 }: { name: keyof typeof iconPaths; size?: number }) {
-  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    {iconPaths[name].map((path, index) => <path d={path} key={index} />)}
-  </svg>;
-}
-
 export function App() {
   const { messages: text, locale, setLocale, available } = useI18n();
   const [page, setPage] = useState<Page>(pageFromLocation);
   const [health, setHealth] = useState<Health>('checking');
   const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState(localStorage.getItem('offgrid.model') ?? '');
+  const [access, setAccess] = useState<'checking' | 'ready' | 'login'>('checking');
+  const [authUser, setAuthUser] = useState<PublicUser | null>(null);
   const [loadError, setLoadError] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true');
 
-  const refreshBase = async () => {
+  const refreshBase = useCallback(async () => {
     setLoadError('');
     const [healthResult, modelResult] = await Promise.allSettled([api.health(), api.models()]);
     setHealth(healthResult.status === 'fulfilled' ? 'ready' : 'offline');
     if (modelResult.status === 'fulfilled') {
+      setAccess('ready');
       setModels(modelResult.value);
       setModel(current => {
         if (current && modelResult.value.some(item => item.id === current)) return current;
         return modelResult.value.find(item => item.type !== 'embedding')?.id ?? modelResult.value[0]?.id ?? '';
       });
-    } else setLoadError(modelResult.reason instanceof Error ? modelResult.reason.message : text.common.error);
-  };
+      void api.currentUser().then(result => setAuthUser(result.user)).catch(reason => {
+        if (reason instanceof APIError && reason.status === 401) setAccess('login');
+      });
+    } else if (modelResult.reason instanceof APIError && modelResult.reason.status === 401) {
+      setAccess('login');
+      setAuthUser(null);
+    } else {
+      setAccess('ready');
+      setLoadError(modelResult.reason instanceof Error ? modelResult.reason.message : text.common.error);
+    }
+  }, [text.common.error]);
 
   useEffect(() => {
     if (!window.location.hash) window.history.replaceState(null, '', '#/chat');
@@ -69,13 +68,20 @@ export function App() {
     window.addEventListener('popstate', syncPage);
     return () => { window.removeEventListener('hashchange', syncPage); window.removeEventListener('popstate', syncPage); };
   }, []);
-  useEffect(() => { void refreshBase(); const timer = window.setInterval(() => void api.health().then(() => setHealth('ready')).catch(() => setHealth('offline')), 15_000); return () => clearInterval(timer); }, []);
+  useEffect(() => { void refreshBase(); const timer = window.setInterval(() => void api.health().then(() => setHealth('ready')).catch(() => setHealth('offline')), 15_000); return () => clearInterval(timer); }, [refreshBase]);
   useEffect(() => { if (model) localStorage.setItem('offgrid.model', model); }, [model]);
 
   const titles = {
     chat: [text.chat.title, text.chat.subtitle], knowledge: [text.knowledge.title, text.knowledge.subtitle],
     agents: [text.agents.title, text.agents.subtitle], models: [text.models.title, text.models.subtitle],
     activity: [text.activity.title, text.activity.subtitle], settings: [text.settings.title, text.settings.subtitle]
+  };
+
+  if (access === 'checking') return <div className="boot-screen"><div className="orb"><div /></div><span>{text.status.checking}</span></div>;
+  if (access === 'login') return <LoginPage onAuthenticated={user => { setAuthUser(user); setAccess('ready'); void refreshBase(); }} />;
+
+  const logout = async () => {
+    try { await api.logout(); } finally { setAuthUser(null); await refreshBase(); }
   };
 
   return <div className="app-shell">
@@ -98,6 +104,7 @@ export function App() {
         <div className="topbar-actions">
           <label className="locale-picker"><span>{text.common.language}</span><select value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
           <button className="icon-button" onClick={() => void refreshBase()} aria-label={text.common.refresh}><Icon name="refresh" size={18} /></button>
+          {authUser && <button className="text-button" onClick={() => void logout()}>{text.auth.signOut}</button>}
         </div>
       </header>
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
@@ -106,7 +113,7 @@ export function App() {
           {page === 'chat' && <ChatPage models={models} model={model} setModel={setModel} />}
           {page === 'knowledge' && <KnowledgePage />}
           {page === 'agents' && <AgentPage models={models} model={model} setModel={setModel} />}
-          {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} />}
+          {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} />}
           {page === 'activity' && <ActivityPage health={health} />}
           {page === 'settings' && <SettingsPage health={health} onShowOnboarding={() => setShowOnboarding(true)} />}
         </PageBoundary>
@@ -114,51 +121,6 @@ export function App() {
     </main>
     <nav className="mobile-nav" aria-label="Primary">{pages.map(item => <a key={item} href={`#/${item}`} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined}><Icon name={item} size={19} /><span>{text.nav[item]}</span></a>)}</nav>
     {showOnboarding && <Onboarding health={health} models={models} onDone={() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); setShowOnboarding(false); }} />}
-  </div>;
-}
-
-function ModelSelect({ models, value, onChange }: { models: Model[]; value: string; onChange: (value: string) => void }) {
-  const { messages: text } = useI18n();
-  return <label className="model-select"><span>{text.chat.model}</span><select value={value} onChange={event => onChange(event.target.value)}><option value="">{text.chat.selectModel}</option>{models.filter(item => item.type !== 'embedding').map(item => <option value={item.id} key={item.id}>{item.id}</option>)}</select></label>;
-}
-
-function ChatPage({ models, model, setModel }: { models: Model[]; model: string; setModel: (model: string) => void }) {
-  const { messages: text } = useI18n();
-  const [conversation, setConversation] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState('');
-  const [knowledge, setKnowledge] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const controller = useRef<AbortController | null>(null);
-  const end = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    end.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversation, busy]);
-
-  const send = async () => {
-    const prompt = draft.trim();
-    if (!prompt || !model || busy) return;
-    const next = [...conversation, { role: 'user', content: prompt } as ChatMessage];
-    setConversation(next); setDraft(''); setBusy(true); setError('');
-    controller.current = new AbortController();
-    try {
-      const answer = await api.chat(model, next, knowledge, controller.current.signal);
-      setConversation([...next, { role: 'assistant', content: answer }]);
-    } catch (reason) {
-      if ((reason as Error).name !== 'AbortError') setError(reason instanceof Error ? reason.message : text.common.error);
-    } finally { setBusy(false); controller.current = null; }
-  };
-  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } };
-
-  return <div className="chat-layout">
-    <div className="chat-toolbar"><ModelSelect models={models} value={model} onChange={setModel} /><label className="switch"><input type="checkbox" checked={knowledge} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label></div>
-    <div className="conversation" aria-live="polite">
-      {conversation.length === 0 && <div className="empty-chat"><div className="orb"><div /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
-      {conversation.map((message, index) => <article className={`message ${message.role}`} key={index}><div className="message-label">{message.role === 'user' ? text.chat.you : text.chat.assistant}</div><div className="message-body">{message.content}</div></article>)}
-      {busy && <article className="message assistant"><div className="message-label">{text.chat.assistant}</div><div className="thinking"><i /><i /><i /></div></article>}
-      {error && <div className="inline-error" role="alert">{error}</div>}<div ref={end} />
-    </div>
-    <div className="composer"><textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} rows={1} /><button disabled={busy ? false : !draft.trim() || !model} onClick={busy ? () => controller.current?.abort() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
   </div>;
 }
 
@@ -201,11 +163,6 @@ function AgentPage({ models, model, setModel }: { models: Model[]; model: string
   const approve = () => { if (!approval) return; const next = [...grants, approval]; setGrants(next); void execute(next); };
   const deny = () => { setApproval(null); setError(text.agents.denied); };
   return <div className="agent-workspace"><form className="task-card" onSubmit={run}><div className="form-row"><ModelSelect models={models} value={model} onChange={setModel} /></div><label><span>{text.agents.task}</span><textarea rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label><button className="primary-button" disabled={busy || !task.trim() || !model}>{busy ? text.agents.running : text.agents.run}</button></form><section className="result-card"><span className="eyebrow">{text.agents.result}</span>{approval ? <div className="approval-card" role="alertdialog" aria-labelledby="approval-title"><span className="status-pill danger">{text.agents.approvalTitle}</span><h2 id="approval-title">{approval.tool}</h2><p>{text.agents.approvalBody}</p><pre>{JSON.stringify(approval.arguments, null, 2)}</pre><div><button className="danger-button" onClick={deny}>{text.agents.deny}</button><button className="primary-button" onClick={approve}>{text.agents.approve}</button></div></div> : error ? <div className="inline-error">{error}</div> : result ? <pre>{result}</pre> : <div className="quiet-state"><Icon name="agents" size={30} /><p>{text.agents.subtitle}</p></div>}</section></div>;
-}
-
-function ModelsPage({ models, selected, setSelected }: { models: Model[]; selected: string; setSelected: (model: string) => void }) {
-  const { messages: text } = useI18n();
-  return <div className="stack"><div className="summary-line"><strong>{models.length}</strong> {text.models.available}</div>{models.length === 0 ? <EmptyPanel text={text.models.empty} /> : <div className="model-list">{models.map(model => <button key={model.id} className={selected === model.id ? 'model-row selected' : 'model-row'} onClick={() => model.type !== 'embedding' && setSelected(model.id)}><div className="model-glyph"><Icon name="models" /></div><div><strong>{model.id}</strong><span>{model.type === 'embedding' ? text.models.embedding : text.models.local}</span></div><small>{model.size_gb || formatBytes(model.size ?? 0)}</small><i /></button>)}</div>}</div>;
 }
 
 function ActivityPage({ health }: { health: Health }) {
