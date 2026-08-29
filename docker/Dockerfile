@@ -139,6 +139,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 ENV OFFGRID_MODELS_DIR=/var/lib/offgrid/models \
     OFFGRID_DATA_DIR=/var/lib/offgrid/data \
     OFFGRID_BIN_DIR=/var/lib/offgrid/bin \
+    OFFGRID_VERSION=${VERSION} \
     OFFGRID_PORT=11611 \
     OFFGRID_HOST=0.0.0.0 \
     OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE=true

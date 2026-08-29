@@ -40,3 +40,24 @@ func TestSessionManagerSafeNameRoundTrip(t *testing.T) {
 		t.Fatalf("loaded name = %q, want %q", loaded.Name, session.Name)
 	}
 }
+
+func TestAppendExchangePersistsCompleteTurn(t *testing.T) {
+	manager := NewSessionManager(t.TempDir())
+	if err := manager.Save(NewSession("chat", "model-a")); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := manager.AppendExchange("chat", "model-b", "hello", "hi there")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ModelID != "model-b" || len(updated.Messages) != 2 {
+		t.Fatalf("unexpected updated session: %#v", updated)
+	}
+	loaded, err := manager.Load("chat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Messages) != 2 || loaded.Messages[0].Content != "hello" || loaded.Messages[1].Content != "hi there" {
+		t.Fatalf("exchange was not persisted: %#v", loaded.Messages)
+	}
+}

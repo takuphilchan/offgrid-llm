@@ -31,7 +31,7 @@ type LlamaHTTPEngine struct {
 // NewLlamaHTTPEngine creates an engine that proxies to llama.cpp server
 func NewLlamaHTTPEngine(llamaServerURL string) *LlamaHTTPEngine {
 	if llamaServerURL == "" {
-		llamaServerURL = "http://localhost:42382"
+		llamaServerURL = "http://127.0.0.1:42382"
 	}
 
 	return &LlamaHTTPEngine{
@@ -61,7 +61,7 @@ func (e *LlamaHTTPEngine) Load(ctx context.Context, modelPath string, opts LoadO
 
 // SetPort updates the llama-server port for this engine
 func (e *LlamaHTTPEngine) SetPort(port int) {
-	e.baseURL = fmt.Sprintf("http://localhost:%d", port)
+	e.baseURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 }
 
 // Unload is a no-op

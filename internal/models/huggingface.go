@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -660,6 +661,12 @@ func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
 // DownloadGGUF downloads a GGUF file from HuggingFace
 
 func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, onProgress func(int64, int64)) error {
+	return hf.DownloadGGUFContext(context.Background(), modelID, filename, destPath, onProgress)
+}
+
+// DownloadGGUFContext downloads a GGUF file, retaining a verified partial
+// .tmp file when the context is cancelled so the next attempt can resume.
+func (hf *HuggingFaceClient) DownloadGGUFContext(ctx context.Context, modelID, filename, destPath string, onProgress func(int64, int64)) error {
 	downloadURL := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelID, filename)
 
 	// Use .tmp file during download
@@ -671,7 +678,7 @@ func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, on
 
 	// Use a client with no timeout for large downloads
 	client := &http.Client{Timeout: 0}
-	resume, err := openResumableResponse(client, downloadURL, tmpPath, "OffGrid-LLM/0.3.0")
+	resume, err := openResumableResponseContext(ctx, client, downloadURL, tmpPath, "OffGrid-LLM")
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
@@ -725,7 +732,7 @@ func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, on
 	}
 
 	// Verify complete download
-	if written != totalSize {
+	if totalSize > 0 && written != totalSize {
 		return fmt.Errorf("incomplete download: got %d bytes, expected %d", written, totalSize)
 	}
 

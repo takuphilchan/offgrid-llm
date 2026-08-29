@@ -153,6 +153,86 @@ type DockerSandbox struct {
 	image       string
 }
 
+// LazySandbox defers creating a long-lived execution environment until an
+// agent actually invokes a sandboxed tool. This keeps ordinary chat/server
+// startup from creating idle Python containers.
+type LazySandbox struct {
+	mu       sync.Mutex
+	image    string
+	delegate Sandbox
+	closed   bool
+}
+
+func NewLazySandbox(image string) *LazySandbox {
+	return &LazySandbox{image: image}
+}
+
+func (s *LazySandbox) sandbox() (Sandbox, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, fmt.Errorf("sandbox is closed")
+	}
+	if s.delegate != nil {
+		return s.delegate, nil
+	}
+	dockerSandbox, err := NewDockerSandbox(s.image)
+	if err == nil {
+		s.delegate = dockerSandbox
+		return s.delegate, nil
+	}
+	localSandbox, localErr := NewLocalSandbox()
+	if localErr != nil {
+		return nil, fmt.Errorf("docker sandbox unavailable (%v) and local sandbox failed: %w", err, localErr)
+	}
+	s.delegate = localSandbox
+	return s.delegate, nil
+}
+
+func (s *LazySandbox) Execute(ctx context.Context, cmd string, args []string, env map[string]string) (string, error) {
+	delegate, err := s.sandbox()
+	if err != nil {
+		return "", err
+	}
+	return delegate.Execute(ctx, cmd, args, env)
+}
+
+func (s *LazySandbox) WriteFile(path string, content []byte) error {
+	delegate, err := s.sandbox()
+	if err != nil {
+		return err
+	}
+	return delegate.WriteFile(path, content)
+}
+
+func (s *LazySandbox) ReadFile(path string) ([]byte, error) {
+	delegate, err := s.sandbox()
+	if err != nil {
+		return nil, err
+	}
+	return delegate.ReadFile(path)
+}
+
+func (s *LazySandbox) ListFiles(path string) (string, error) {
+	delegate, err := s.sandbox()
+	if err != nil {
+		return "", err
+	}
+	return delegate.ListFiles(path)
+}
+
+func (s *LazySandbox) Cleanup() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	if s.delegate == nil {
+		return nil
+	}
+	err := s.delegate.Cleanup()
+	s.delegate = nil
+	return err
+}
+
 // NewDockerSandbox creates a new docker sandbox
 // Requires "docker" command to be available
 func NewDockerSandbox(image string) (*DockerSandbox, error) {

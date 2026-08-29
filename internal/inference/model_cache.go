@@ -975,7 +975,7 @@ func (mc *ModelCache) waitForReady(port int, modelID string) error {
 }
 
 func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID string) error {
-	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 
 	// Pause background warming during active model loading to avoid I/O contention
 	if mc.mmapWarmer != nil {
@@ -1029,7 +1029,7 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 	// Phase 2: Wait for model to actually load
 	// Fast fixed polling for responsive loading detection
 	// With mmap pre-warming, this should be fast (5-15s)
-	modelsURL := fmt.Sprintf("http://localhost:%d/v1/models", port)
+	modelsURL := fmt.Sprintf("http://127.0.0.1:%d/v1/models", port)
 
 	loadDeadline := time.Now().Add(300 * time.Second) // 5 minute max for large models
 	loadStart := time.Now()
@@ -1097,7 +1097,7 @@ func waitContext(ctx context.Context, duration time.Duration) error {
 // checkHealth performs a quick health check on the llama-server instance
 // Returns nil if the server is alive (even if busy with 503)
 func (mc *ModelCache) checkHealth(port int) error {
-	healthURL := fmt.Sprintf("http://localhost:%d/health", port)
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 
 	// Create a client with a very short timeout for health checks
 	client := &http.Client{

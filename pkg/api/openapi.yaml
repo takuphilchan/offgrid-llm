@@ -1,0 +1,523 @@
+openapi: 3.1.0
+info:
+  title: OffGrid Local API
+  version: 1.0.0
+  description: Stable contract shared by the OffGrid service, web UI, desktop app, CLI, and external agents.
+servers:
+  - url: http://127.0.0.1:11611
+security:
+  - sessionCookie: []
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Runtime health
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+  /v1/users/me:
+    get:
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Current authentication state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /v1/auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated session
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      responses:
+        '200':
+          description: Session cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties: { status: { type: string } }
+  /v1/models:
+    get:
+      operationId: listModels
+      responses:
+        '200':
+          description: Installed models
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object, data]
+                properties:
+                  object: { type: string, const: list }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Model' }
+  /v1/catalog:
+    get:
+      operationId: listCatalog
+      responses:
+        '200':
+          description: Curated model catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, models]
+                properties:
+                  total: { type: integer }
+                  models:
+                    type: array
+                    items: { $ref: '#/components/schemas/CatalogModel' }
+  /v1/models/download:
+    post:
+      operationId: downloadModel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelDownloadRequest' }
+      responses:
+        '200':
+          description: Download accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, status, file_name]
+                properties:
+                  success: { type: boolean }
+                  status: { type: string }
+                  file_name: { type: string }
+                  message: { type: string }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/models/download/progress:
+    get:
+      operationId: getDownloadProgress
+      responses:
+        '200':
+          description: Download state keyed by destination filename
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { $ref: '#/components/schemas/DownloadProgress' }
+  /v1/models/download/cancel:
+    post:
+      operationId: cancelDownload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name]
+              properties: { file_name: { type: string } }
+      responses:
+        '200':
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, cancelled]
+                properties:
+                  success: { type: boolean }
+                  cancelled: { type: boolean }
+                  message: { type: string }
+  /v1/models/delete:
+    delete:
+      operationId: deleteModel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model_id]
+              properties: { model_id: { type: string } }
+      responses:
+        '200':
+          description: Model deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties: { success: { type: boolean }, message: { type: string } }
+  /v1/models/verify:
+    get:
+      operationId: verifyModel
+      parameters:
+        - in: query
+          name: model
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Full-file SHA-256 result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Verification' }
+  /v1/sessions:
+    get:
+      operationId: listSessions
+      responses:
+        '200':
+          description: Durable conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatSession' }
+    post:
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 128 }
+                model_id: { type: string }
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatSession' }
+  /v1/sessions/{name}:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+    get:
+      operationId: getSession
+      responses:
+        '200':
+          description: Durable conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatSession' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteSession
+      responses:
+        '200':
+          description: Conversation deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties: { success: { type: boolean }, message: { type: string } }
+  /v1/sessions/{name}/generate:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+    post:
+      operationId: generateSessionTurn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1 }
+                model_id: { type: string }
+                use_knowledge_base: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Complete persisted user/assistant turn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session, message]
+                properties:
+                  session: { $ref: '#/components/schemas/ChatSession' }
+                  message: { $ref: '#/components/schemas/SessionMessage' }
+  /v1/chat/completions:
+    post:
+      operationId: createChatCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatCompletionRequest' }
+      responses:
+        '200':
+          description: OpenAI-compatible non-streaming response
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatCompletionResponse' }
+  /v1/documents:
+    get:
+      operationId: listDocuments
+      responses:
+        '200':
+          description: Indexed documents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documents, count]
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: '#/components/schemas/Document' }
+                  count: { type: integer }
+  /v1/rag/status:
+    get:
+      operationId: getRAGStatus
+      responses:
+        '200':
+          description: Retrieval readiness
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RAGStatus' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    SessionName:
+      in: path
+      name: name
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
+  responses:
+    Error:
+      description: API error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          oneOf:
+            - type: string
+            - type: object
+              required: [message]
+              properties:
+                message: { type: string }
+                type: { type: string }
+                code: { type: string }
+    Health:
+      type: object
+      required: [status, version]
+      properties:
+        status: { type: string }
+        version: { type: string }
+        uptime: { type: string }
+        uptime_seconds: { type: integer, format: int64 }
+        models: { type: object, additionalProperties: true }
+        inference: { type: object, additionalProperties: true }
+        system: { type: object, additionalProperties: true }
+    PublicUser:
+      type: object
+      required: [id, username, role]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        display_name: { type: string }
+        role: { type: string }
+    CurrentUser:
+      type: object
+      required: [authenticated, user]
+      properties:
+        authenticated: { type: boolean }
+        guest: { type: boolean }
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: 'null'
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    LoginResponse:
+      type: object
+      required: [user, expires_at, auth_method]
+      properties:
+        user: { $ref: '#/components/schemas/PublicUser' }
+        token: { type: string, writeOnly: true }
+        expires_at: { type: string, format: date-time }
+        auth_method: { type: string }
+    Model:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        object: { type: string }
+        created: { type: integer, format: int64 }
+        owned_by: { type: string }
+        type: { type: string }
+        size: { type: integer, format: int64 }
+        size_gb: { type: string }
+        loaded: { type: boolean }
+    CatalogModel:
+      type: object
+      required: [id, name, description, category, parameters, size, size_bytes, repo, file, quant, min_ram_gb, recommended, provider, type, license]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        parameters: { type: string }
+        size: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        repo: { type: string }
+        file: { type: string }
+        quant: { type: string }
+        min_ram_gb: { type: integer }
+        recommended: { type: boolean }
+        provider: { type: string }
+        type: { type: string }
+        license: { type: string }
+    ModelDownloadRequest:
+      type: object
+      required: [repository]
+      properties:
+        repository: { type: string }
+        file_name: { type: string }
+        quantization: { type: string }
+    DownloadProgress:
+      type: object
+      required: [file_name, bytes_total, bytes_done, percent, speed, started_at, status]
+      properties:
+        file_name: { type: string }
+        bytes_total: { type: integer, format: int64 }
+        bytes_done: { type: integer, format: int64 }
+        percent: { type: number, minimum: 0, maximum: 100 }
+        speed: { type: number, minimum: 0 }
+        started_at: { type: integer, format: int64 }
+        status: { type: string, enum: [downloading, complete, failed, cancelled] }
+        error: { type: string }
+    Verification:
+      type: object
+      required: [model_id, file_name, size, size_gb, sha256, verified]
+      properties:
+        model_id: { type: string }
+        file_name: { type: string }
+        size: { type: integer, format: int64 }
+        size_gb: { type: string }
+        sha256: { type: string }
+        verified: { type: boolean }
+        message: { type: string }
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role: { type: string, enum: [system, user, assistant] }
+        content: { type: string }
+    SessionMessage:
+      allOf:
+        - $ref: '#/components/schemas/ChatMessage'
+        - type: object
+          required: [timestamp]
+          properties: { timestamp: { type: string, format: date-time } }
+    ChatSession:
+      type: object
+      required: [name, model_id, messages, created_at, updated_at]
+      properties:
+        name: { type: string }
+        model_id: { type: string }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/SessionMessage' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model: { type: string }
+        messages:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        stream: { type: boolean, default: false }
+        use_knowledge_base: { type: boolean, default: false }
+    ChatCompletionResponse:
+      type: object
+      required: [id, object, created, model, choices]
+      properties:
+        id: { type: string }
+        object: { type: string }
+        created: { type: integer, format: int64 }
+        model: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [index, message]
+            properties:
+              index: { type: integer }
+              message: { $ref: '#/components/schemas/ChatMessage' }
+              finish_reason: { type: [string, 'null'] }
+    Document:
+      type: object
+      required: [id, name, content_type, size, chunk_count, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        content_type: { type: string }
+        size: { type: integer, format: int64 }
+        chunk_count: { type: integer }
+        content_hash: { type: string }
+        index_status: { type: string }
+        last_error: { type: string }
+        indexed_at: { type: string, format: date-time }
+        source_retained: { type: boolean }
+        created_at: { type: string, format: date-time }
+    RAGStatus:
+      type: object
+      required: [enabled, stats]
+      properties:
+        enabled: { type: boolean }
+        embedding_model: { type: string }
+        stats: { type: object, additionalProperties: true }

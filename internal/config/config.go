@@ -18,6 +18,7 @@ type Config struct {
 
 	// Model settings
 	ModelsDir      string `yaml:"models_dir" json:"models_dir"`
+	DataDir        string `yaml:"data_dir" json:"data_dir"`
 	DefaultModel   string `yaml:"default_model" json:"default_model"`
 	MaxContextSize int    `yaml:"max_context_size" json:"max_context_size"`
 	NumThreads     int    `yaml:"num_threads" json:"num_threads"`
@@ -132,11 +133,13 @@ func LoadConfig() *Config {
 			defaultModelsDir = systemModelsDir
 		}
 	}
+	defaultDataDir := filepath.Join(filepath.Dir(defaultModelsDir), "data")
 
 	return &Config{
 		ServerPort:      getEnvInt("OFFGRID_PORT", 11611),
 		ServerHost:      getEnv("OFFGRID_HOST", "localhost"),
 		ModelsDir:       getEnv("OFFGRID_MODELS_DIR", defaultModelsDir),
+		DataDir:         getEnv("OFFGRID_DATA_DIR", defaultDataDir),
 		DefaultModel:    getEnv("OFFGRID_DEFAULT_MODEL", ""),
 		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 4096),
 		NumThreads:      getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
@@ -213,6 +216,12 @@ func (c *Config) Validate() error {
 	}
 	// Ensure models directory exists
 	if err := os.MkdirAll(c.ModelsDir, 0755); err != nil {
+		return err
+	}
+	if c.DataDir == "" {
+		c.DataDir = filepath.Join(filepath.Dir(c.ModelsDir), "data")
+	}
+	if err := os.MkdirAll(c.DataDir, 0700); err != nil {
 		return err
 	}
 
@@ -379,6 +388,9 @@ func (c *Config) applyDefaults() {
 	if c.ModelsDir == "" {
 		c.ModelsDir = defaultModelsDir
 	}
+	if c.DataDir == "" {
+		c.DataDir = filepath.Join(filepath.Dir(c.ModelsDir), "data")
+	}
 	if c.MaxContextSize == 0 {
 		c.MaxContextSize = 4096
 	}
@@ -424,6 +436,9 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if dir := getEnv("OFFGRID_MODELS_DIR", ""); dir != "" {
 		c.ModelsDir = dir
+	}
+	if dir := getEnv("OFFGRID_DATA_DIR", ""); dir != "" {
+		c.DataDir = dir
 	}
 	if model := getEnv("OFFGRID_DEFAULT_MODEL", ""); model != "" {
 		c.DefaultModel = model

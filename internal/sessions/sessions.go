@@ -44,6 +44,7 @@ type SessionMeta struct {
 // SessionManager handles session persistence with metadata caching
 type SessionManager struct {
 	sessionsDir string
+	mutationMu  sync.Mutex
 	mu          sync.RWMutex
 	metaCache   map[string]*SessionMeta // Cache of session metadata keyed by name
 	cacheValid  bool                    // Whether the cache is valid
@@ -60,6 +61,12 @@ func NewSessionManager(sessionsDir string) *SessionManager {
 
 // Save saves a session to disk
 func (sm *SessionManager) Save(session *Session) error {
+	sm.mutationMu.Lock()
+	defer sm.mutationMu.Unlock()
+	return sm.save(session)
+}
+
+func (sm *SessionManager) save(session *Session) error {
 	if session == nil {
 		return fmt.Errorf("%w: session is nil", ErrInvalidSessionName)
 	}
@@ -95,6 +102,31 @@ func (sm *SessionManager) Save(session *Session) error {
 	sm.mu.Unlock()
 
 	return nil
+}
+
+// AppendExchange atomically appends a completed user/assistant exchange. It is
+// used after inference succeeds so a stored conversation never contains half
+// of a generated turn.
+func (sm *SessionManager) AppendExchange(name, modelID, userContent, assistantContent string) (*Session, error) {
+	if userContent == "" || assistantContent == "" {
+		return nil, fmt.Errorf("user and assistant content are required")
+	}
+	sm.mutationMu.Lock()
+	defer sm.mutationMu.Unlock()
+
+	session, err := sm.Load(name)
+	if err != nil {
+		return nil, err
+	}
+	if modelID != "" {
+		session.ModelID = modelID
+	}
+	session.AddMessage("user", userContent)
+	session.AddMessage("assistant", assistantContent)
+	if err := sm.save(session); err != nil {
+		return nil, err
+	}
+	return session, nil
 }
 
 func writeSessionFileAtomic(path string, data []byte) error {
@@ -262,6 +294,8 @@ func (sm *SessionManager) ListMeta() ([]SessionMeta, error) {
 
 // Delete deletes a session
 func (sm *SessionManager) Delete(name string) error {
+	sm.mutationMu.Lock()
+	defer sm.mutationMu.Unlock()
 	filePath, err := sm.sessionFilePath(name)
 	if err != nil {
 		return err

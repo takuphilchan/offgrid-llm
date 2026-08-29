@@ -26,7 +26,7 @@ func initAudioEngine(dataDir string) error {
 
 // getAudioDataDir returns the audio data directory
 func (s *Server) getAudioDataDir() string {
-	return filepath.Join(s.config.ModelsDir, "..", "audio")
+	return filepath.Join(s.config.DataDir, "audio")
 }
 
 // handleAudioTranscriptions handles POST /v1/audio/transcriptions (OpenAI-compatible)

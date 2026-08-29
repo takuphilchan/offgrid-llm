@@ -53,6 +53,25 @@ func TestLoadFromFileKeepsBooleanDefaultsWhenOmitted(t *testing.T) {
 	}
 }
 
+func TestLoadConfigHonorsDataDirectory(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "state")
+	t.Setenv("OFFGRID_DATA_DIR", dataDir)
+	cfg := LoadConfig()
+	if cfg.DataDir != dataDir {
+		t.Fatalf("DataDir = %q, want %q", cfg.DataDir, dataDir)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("data path is not a directory: %s", dataDir)
+	}
+}
+
 func TestImporterRejectsTraversalPaths(t *testing.T) {
 	root := t.TempDir()
 	importer := NewImporter(root, filepath.Join(root, "config.yaml"), false)

@@ -1271,6 +1271,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
+	if strings.TrimSpace(os.Getenv("OFFGRID_VERSION")) == "" {
+		_ = os.Setenv("OFFGRID_VERSION", getVersion())
+	}
 
 	// Start the HTTP server (default command)
 	srv := server.NewWithConfig(cfg)
@@ -4263,8 +4266,7 @@ func handleRun(args []string) {
 	}
 
 	// Setup session management
-	homeDir, _ := os.UserHomeDir()
-	sessionsDir := filepath.Join(homeDir, ".offgrid", "sessions")
+	sessionsDir := filepath.Join(config.LoadConfig().DataDir, "sessions")
 	sessionMgr := sessions.NewSessionManager(sessionsDir)
 
 	var currentSession *sessions.Session
@@ -5360,8 +5362,7 @@ func handleBatch(args []string) {
 
 // handleSession handles session commands
 func handleSession(args []string) {
-	homeDir, _ := os.UserHomeDir()
-	sessionsDir := filepath.Join(homeDir, ".offgrid", "sessions")
+	sessionsDir := filepath.Join(config.LoadConfig().DataDir, "sessions")
 	sessionMgr := sessions.NewSessionManager(sessionsDir)
 
 	// Check for help flag
@@ -6382,8 +6383,7 @@ func handleExportSession(args []string) {
 		}
 	}
 
-	homeDir, _ := os.UserHomeDir()
-	sessionsDir := filepath.Join(homeDir, ".offgrid", "sessions")
+	sessionsDir := filepath.Join(config.LoadConfig().DataDir, "sessions")
 	sessionMgr := sessions.NewSessionManager(sessionsDir)
 
 	session, err := sessionMgr.Load(sessionName)
@@ -6757,9 +6757,7 @@ func handleBenchmarkCompare(args []string) {
 
 // handleAudit handles audit log commands
 func handleAudit(args []string) {
-	// Data dir is parent of models dir
-	homeDir, _ := os.UserHomeDir()
-	dataDir := filepath.Join(homeDir, ".offgrid-llm")
+	dataDir := config.LoadConfig().DataDir
 	auditDir := filepath.Join(dataDir, "audit")
 
 	// Check for help flag or no args
@@ -7043,8 +7041,7 @@ func handleUsers(args []string) {
 		return
 	}
 
-	dataDir := filepath.Join(cfg.ModelsDir, "..", "data")
-	store := users.NewUserStore(dataDir)
+	store := users.NewUserStore(cfg.DataDir)
 
 	if len(args) < 1 {
 		fmt.Println()
@@ -7220,7 +7217,7 @@ func handleUsers(args []string) {
 			return
 		}
 		userID := args[1]
-		quotaManager := users.NewQuotaManager(dataDir)
+		quotaManager := users.NewQuotaManager(cfg.DataDir)
 		summary := quotaManager.GetUsageSummary(userID)
 		if output.JSONMode {
 			output.PrintJSON(summary)
@@ -7305,8 +7302,7 @@ func handleMetrics(args []string) {
 // handleLoRA handles LoRA adapter management
 func handleLoRA(args []string) {
 	cfg := config.LoadConfig()
-	dataDir := filepath.Join(cfg.ModelsDir, "..", "data")
-	manager := inference.NewLoRAManager(dataDir, nil)
+	manager := inference.NewLoRAManager(cfg.DataDir, nil)
 
 	// Check for help flag
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
@@ -7782,9 +7778,7 @@ func handleAgent(args []string) {
 
 // handleAgentMCP manages MCP server configuration
 func handleAgentMCP(args []string) {
-	// Get config path
-	homeDir, _ := os.UserHomeDir()
-	configPath := filepath.Join(homeDir, ".offgrid-llm", "data", "tools.json")
+	configPath := filepath.Join(config.LoadConfig().DataDir, "tools.json")
 
 	if len(args) < 1 {
 		fmt.Println()

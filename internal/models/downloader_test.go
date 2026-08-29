@@ -2,13 +2,30 @@ package models
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestOpenResumableResponseHonorsCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	_, err := openResumableResponseContext(ctx, http.DefaultClient, server.URL, filepath.Join(t.TempDir(), "partial.tmp"), "test")
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want context deadline exceeded", err)
+	}
+}
 
 func TestCatalog(t *testing.T) {
 	catalog := DefaultCatalog()

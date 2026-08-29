@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,6 +20,10 @@ type resumableResponse struct {
 // The remote response is authoritative: stale catalog sizes and servers that
 // ignore Range must never cause data to be appended twice.
 func openResumableResponse(client *http.Client, sourceURL, tmpPath, userAgent string) (*resumableResponse, error) {
+	return openResumableResponseContext(context.Background(), client, sourceURL, tmpPath, userAgent)
+}
+
+func openResumableResponseContext(ctx context.Context, client *http.Client, sourceURL, tmpPath, userAgent string) (*resumableResponse, error) {
 	var offset int64
 	if stat, err := os.Stat(tmpPath); err == nil {
 		offset = stat.Size()
@@ -27,7 +32,7 @@ func openResumableResponse(client *http.Client, sourceURL, tmpPath, userAgent st
 	}
 
 	for attempt := 0; attempt < 2; attempt++ {
-		req, err := http.NewRequest(http.MethodGet, sourceURL, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 		if err != nil {
 			return nil, fmt.Errorf("create download request: %w", err)
 		}

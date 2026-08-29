@@ -1,17 +1,28 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+type SessionCompleter func(context.Context, string, []api.ChatMessage, bool) (string, error)
 
 // SessionHandlers provides HTTP handlers for session management
 type SessionHandlers struct {
-	manager *sessions.SessionManager
+	manager      *sessions.SessionManager
+	completer    SessionCompleter
+	sessionLocks sync.Map
+}
+
+func (h *SessionHandlers) SetCompleter(completer SessionCompleter) {
+	h.completer = completer
 }
 
 // NewSessionHandlers creates a new SessionHandlers instance
@@ -159,6 +170,73 @@ func (h *SessionHandlers) HandleSessionAddMessage(w http.ResponseWriter, r *http
 	})
 }
 
+// HandleSessionGenerate performs a model turn and persists the complete
+// exchange under the same session. Calls for one session are serialized so
+// concurrent browser tabs cannot lose messages.
+func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodPost {
+		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.completer == nil {
+		writeError(w, "Session chat is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		Content          string `json:"content"`
+		ModelID          string `json:"model_id,omitempty"`
+		UseKnowledgeBase bool   `json:"use_knowledge_base,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.Content = strings.TrimSpace(req.Content)
+	if req.Content == "" {
+		writeError(w, "Content is required", http.StatusBadRequest)
+		return
+	}
+
+	lockValue, _ := h.sessionLocks.LoadOrStore(name, &sync.Mutex{})
+	lock := lockValue.(*sync.Mutex)
+	lock.Lock()
+	defer lock.Unlock()
+
+	session, err := h.manager.Load(name)
+	if err != nil {
+		writeError(w, "Session not found: "+err.Error(), http.StatusNotFound)
+		return
+	}
+	modelID := req.ModelID
+	if modelID == "" {
+		modelID = session.ModelID
+	}
+	if modelID == "" {
+		writeError(w, "Model is required", http.StatusBadRequest)
+		return
+	}
+	messages := make([]api.ChatMessage, 0, len(session.Messages)+1)
+	for _, message := range session.Messages {
+		messages = append(messages, api.ChatMessage{Role: message.Role, Content: message.Content})
+	}
+	messages = append(messages, api.ChatMessage{Role: "user", Content: req.Content})
+	answer, err := h.completer(r.Context(), modelID, messages, req.UseKnowledgeBase)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	updated, err := h.manager.AppendExchange(name, modelID, req.Content, answer)
+	if err != nil {
+		writeError(w, "Failed to save session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"session": updated,
+		"message": sessions.Message{Role: "assistant", Content: answer, Timestamp: updated.UpdatedAt},
+	})
+}
+
 // HandleSessions is the main router for session endpoints
 func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/v1/sessions")
@@ -195,6 +273,10 @@ func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request)
 	// POST /v1/sessions/{name}/messages
 	if parts[1] == "messages" && r.Method == http.MethodPost {
 		h.HandleSessionAddMessage(w, r, sessionName)
+		return
+	}
+	if parts[1] == "generate" && r.Method == http.MethodPost {
+		h.HandleSessionGenerate(w, r, sessionName)
 		return
 	}
 

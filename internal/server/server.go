@@ -106,6 +106,8 @@ type Server struct {
 	sandbox            agents.Sandbox           // Long-lived agent sandbox owned by this server
 	closeOnce          sync.Once
 	closeErr           error
+	runtimeCtx         context.Context
+	runtimeCancel      context.CancelFunc
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -146,6 +148,9 @@ func New() *Server {
 func NewWithConfig(cfg *config.Config) *Server {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
+	}
+	if err := prepareDataLayout(cfg.ModelsDir, cfg.DataDir); err != nil {
+		log.Printf("Warning: failed to prepare application data directory: %v", err)
 	}
 
 	// Initialize components
@@ -188,31 +193,21 @@ func NewWithConfig(cfg *config.Config) *Server {
 	inferenceRateLimiter := NewInferenceRateLimiter(10, 20)
 
 	// Initialize RAG engine
-	ragEngine := rag.NewEngine(embeddingEngine, cfg.ModelsDir)
+	ragEngine := rag.NewEngine(embeddingEngine, cfg.DataDir)
 
 	// Initialize session handlers
-	sessionsDir := filepath.Join(cfg.ModelsDir, "..", "sessions")
+	sessionsDir := filepath.Join(cfg.DataDir, "sessions")
 	sessionHandlers := NewSessionHandlers(sessionsDir)
 
 	// Initialize new feature components
-	dataDir := filepath.Join(cfg.ModelsDir, "..", "data")
+	dataDir := cfg.DataDir
 	userStore := users.NewUserStore(dataDir)
 	quotaManager := users.NewQuotaManager(dataDir)
 	kbManager := users.NewKnowledgeBaseManager(dataDir)
 	loraManager := inference.NewLoRAManager(dataDir, engine)
 
-	// Initialize Agent Sandbox
-	// Try Docker first, fall back to Local
-	var sandbox agents.Sandbox
-	var err error
-	sandbox, err = agents.NewDockerSandbox("python:3.10-slim")
-	if err != nil {
-		log.Printf("Docker sandbox not available (%v), falling back to local sandbox", err)
-		sandbox, err = agents.NewLocalSandbox()
-		if err != nil {
-			log.Printf("Warning: Failed to create local sandbox: %v", err)
-		}
-	}
+	// Ordinary chat/server use must not launch an idle Python container.
+	var sandbox agents.Sandbox = agents.NewLazySandbox("python:3.10-slim")
 
 	// Initialize Agent Manager with Sandboxed Executor
 	var executor agents.ToolExecutor
@@ -262,8 +257,8 @@ func NewWithConfig(cfg *config.Config) *Server {
 	})
 	offgridMetrics := metrics.NewOffGridMetrics() // Uses DefaultRegistry
 	wsHub := websocket.NewHub()
-	ctx := context.Background()
-	go wsHub.Run(ctx)
+	runtimeCtx, runtimeCancel := context.WithCancel(context.Background())
+	go wsHub.Run(runtimeCtx)
 
 	// Initialize power manager for battery/power awareness
 	powerPolicy := power.DefaultPolicy()
@@ -327,6 +322,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 	authMiddleware.AddBypassPath("/livez")
 	authMiddleware.AddBypassPath("/readyz")
 	authMiddleware.AddBypassPath("/metrics")
+	authMiddleware.AddBypassPath("/openapi.yaml")
 
 	// Initialize LDAP authenticator if enabled
 	var ldapAuth *users.LDAPAuthenticator
@@ -435,7 +431,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 	}
 
 	serverVersion := readVersionOnce()
-	return &Server{
+	server := &Server{
 		config:               cfg,
 		registry:             registry,
 		engine:               engine,
@@ -482,7 +478,26 @@ func NewWithConfig(cfg *config.Config) *Server {
 		computerController:   computerController,
 		sandbox:              sandbox,
 		version:              serverVersion,
+		runtimeCtx:           runtimeCtx,
+		runtimeCancel:        runtimeCancel,
 	}
+	sessionHandlers.SetCompleter(func(ctx context.Context, modelID string, messages []api.ChatMessage, useKnowledgeBase bool) (string, error) {
+		response, err := server.completeChat(ctx, &api.ChatCompletionRequest{
+			Model: modelID, Messages: messages, UseKnowledgeBase: &useKnowledgeBase,
+		})
+		if err != nil {
+			return "", err
+		}
+		if len(response.Choices) == 0 {
+			return "", newServiceError(http.StatusBadGateway, "model returned no response", nil)
+		}
+		answer := response.Choices[0].Message.StringContent()
+		if answer == "" {
+			return "", newServiceError(http.StatusBadGateway, "model returned an empty response", nil)
+		}
+		return answer, nil
+	})
+	return server
 }
 
 // createModelCache creates a model cache with performance settings from config
@@ -625,22 +640,23 @@ func estimateAverageModelSize(modelsDir string) int64 {
 	return avgSize * 120 / 100
 }
 
-// readVersionOnce reads the VERSION file once at startup and caches the result
+// readVersionOnce resolves the version injected by the distribution entrypoint,
+// then falls back to the source-tree VERSION file for local development.
 func readVersionOnce() string {
-	if versionData, err := os.ReadFile("VERSION"); err == nil {
-		return strings.TrimSpace(string(versionData))
+	if version := strings.TrimSpace(os.Getenv("OFFGRID_VERSION")); version != "" {
+		return version
 	}
-	return "unknown"
+	if versionData, err := os.ReadFile("VERSION"); err == nil {
+		if version := strings.TrimSpace(string(versionData)); version != "" {
+			return version
+		}
+	}
+	return "dev"
 }
 
 // startLlamaServer is deprecated - models are now loaded on-demand via cache
 // However, we use this opportunity to pre-warm models into the OS page cache
 func (s *Server) startLlamaServer() error {
-	// Kill any pre-existing llama-server instances to avoid port conflicts
-	// The model cache will start fresh instances on demand
-	exec.Command("pkill", "-9", "llama-server").Run()
-	log.Println("Cleared any pre-existing llama-server instances - will load models on first request")
-
 	// Start background pre-warming of all models into OS page cache (if enabled)
 	// This dramatically speeds up model switching (from 60-120s to 5-15s)
 	if s.config.PrewarmModels || s.config.FastSwitchMode {
@@ -846,6 +862,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/livez", s.handleLiveness)   // Kubernetes-style
 	mux.HandleFunc("/readyz", s.handleReadiness) // Kubernetes-style
 	mux.HandleFunc("/power", s.handlePower)      // Power/battery status
+	mux.HandleFunc("/openapi.yaml", handleOpenAPISpec)
 
 	// API v1 routes (OpenAI-compatible)
 	mux.HandleFunc("/v1/models", modelsOnly(s.rateLimiter.Middleware(s.handleListModels)))
@@ -1044,7 +1061,7 @@ func (s *Server) Start() error {
 
 	// Auto-enable RAG if an embedding model is available
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(s.runtimeCtx, 60*time.Second)
 		defer cancel()
 
 		// First try to restore persisted state
@@ -1074,12 +1091,12 @@ func (s *Server) Start() error {
 		s.p2pDiscovery.SetLocalModels(modelIDs)
 
 		// Start discovery
-		if err := s.p2pDiscovery.Start(context.Background()); err != nil {
+		if err := s.p2pDiscovery.Start(s.runtimeCtx); err != nil {
 			log.Printf("Failed to start P2P discovery: %v", err)
 		}
 
 		// Start transfer server
-		if err := s.p2pTransfer.StartServer(context.Background()); err != nil {
+		if err := s.p2pTransfer.StartServer(s.runtimeCtx); err != nil {
 			log.Printf("Failed to start P2P transfer server: %v", err)
 		}
 	}
@@ -1138,6 +1155,9 @@ func (s *Server) Start() error {
 // without starting its HTTP listener.
 func (s *Server) Close() error {
 	s.closeOnce.Do(func() {
+		if s.runtimeCancel != nil {
+			s.runtimeCancel()
+		}
 		if s.modelCache != nil {
 			s.modelCache.UnloadAll()
 			s.modelCache.StopMonitor()
@@ -1153,6 +1173,12 @@ func (s *Server) Close() error {
 		}
 		if s.cache != nil {
 			s.cache.StopCleanupRoutine()
+		}
+		if s.powerManager != nil {
+			s.powerManager.Stop()
+		}
+		if s.degradationMgr != nil {
+			s.degradationMgr.Stop()
 		}
 		if s.sandbox != nil {
 			s.closeErr = s.sandbox.Cleanup()
@@ -1211,6 +1237,8 @@ func (s *Server) collectSystemMetrics() {
 
 	for {
 		select {
+		case <-s.runtimeCtx.Done():
+			return
 		case <-ticker.C:
 			var memStats runtime.MemStats
 			runtime.ReadMemStats(&memStats)
@@ -1261,10 +1289,11 @@ func (s *Server) collectSystemMetrics() {
 // loggingMiddleware logs all HTTP requests
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Browser hardening. Inline event handlers remain temporarily allowed while
-		// the legacy UI is migrated; executable script files must be local.
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'")
+		// Browser hardening for both the web and Electron-hosted React application.
+		// Framing policy must be delivered as a response header, not an HTML meta tag.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), geolocation=(), payment=(), usb=()")
 
@@ -1874,15 +1903,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check degradation level - reject if in emergency mode
-	if s.degradationMgr != nil && !s.degradationMgr.RequestStart() {
-		writeError(w, "Server under heavy load, please try again later", http.StatusServiceUnavailable)
-		return
-	}
-	if s.degradationMgr != nil {
-		defer s.degradationMgr.RequestEnd()
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 
 	// Parse request
@@ -1890,6 +1910,27 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+	if !req.Stream {
+		response, err := s.completeChat(r.Context(), &req)
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Error encoding response: %v", err)
+		}
+		return
+	}
+
+	// Streaming requests keep their inference lease for the lifetime of the
+	// response and therefore perform admission here.
+	if s.degradationMgr != nil && !s.degradationMgr.RequestStart() {
+		writeError(w, "Server under heavy load, please try again later", http.StatusServiceUnavailable)
+		return
+	}
+	if s.degradationMgr != nil {
+		defer s.degradationMgr.RequestEnd()
 	}
 
 	// Validate request
@@ -1951,39 +1992,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Handle streaming vs non-streaming
-	if req.Stream {
-		s.handleChatCompletionsStream(w, r, &req)
-		return
-	}
-
-	// Perform inference
-	ctx := r.Context()
-	startTime := time.Now()
-	response, err := s.engine.ChatCompletion(ctx, &req)
-	duration := time.Since(startTime)
-
-	if err != nil {
-		if handleEngineError(w, err) {
-			return
-		}
-		writeError(w, fmt.Sprintf("Inference failed: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Record statistics
-	totalTokens := int64(response.Usage.TotalTokens)
-	s.statsTracker.RecordInference(req.Model, totalTokens, duration.Milliseconds())
-
-	// Track tokens generated for metrics
-	atomic.AddInt64(&s.tokensGenerated, int64(response.Usage.CompletionTokens))
-	s.offgridMetrics.TokensOutputTotal.Add(float64(response.Usage.CompletionTokens))
-	s.offgridMetrics.TokensInputTotal.Add(float64(response.Usage.PromptTokens))
-
-	// Send response
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding response: %v", err)
-	}
+	s.handleChatCompletionsStream(w, r, &req)
 }
 
 // handleChatCompletionsStream handles streaming chat completions using Server-Sent Events
@@ -2728,9 +2737,15 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if model already exists
-	destFileName := filepath.Base(req.FileName)
-	if !strings.HasSuffix(destFileName, ".gguf") {
+	sourceFileName := strings.TrimSpace(req.FileName)
+	destFileName := filepath.Base(sourceFileName)
+	if destFileName == "" || destFileName == "." || destFileName == string(filepath.Separator) {
+		writeError(w, "invalid file_name", http.StatusBadRequest)
+		return
+	}
+	if !strings.HasSuffix(strings.ToLower(destFileName), ".gguf") {
 		destFileName += ".gguf"
+		sourceFileName += ".gguf"
 	}
 	destPath := filepath.Join(s.config.ModelsDir, destFileName)
 	if _, err := os.Stat(destPath); err == nil {
@@ -2747,14 +2762,30 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create cancellable context for this download
-	ctx, cancel := context.WithCancel(context.Background())
+	// Create one authoritative progress/cancellation record before launching the
+	// worker. A cancelled .tmp file is deliberately retained for a later resume.
+	baseCtx := s.runtimeCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(baseCtx)
 	s.downloadMutex.Lock()
-	s.downloadCancelFuncs[req.FileName] = cancel
+	if _, active := s.downloadCancelFuncs[destFileName]; active {
+		s.downloadMutex.Unlock()
+		cancel()
+		writeError(w, "download is already active for "+destFileName, http.StatusConflict)
+		return
+	}
+	s.downloadCancelFuncs[destFileName] = cancel
+	s.downloadProgress[destFileName] = &DownloadProgress{
+		FileName:  destFileName,
+		Status:    "downloading",
+		StartedAt: time.Now().Unix(),
+	}
 	s.downloadMutex.Unlock()
 
 	// Start download in background
-	go s.downloadModelAsync(ctx, req.Repository, req.FileName)
+	go s.downloadModelAsync(ctx, req.Repository, sourceFileName, destFileName)
 
 	// Audit model download initiation
 	user := users.GetUser(r)
@@ -2768,9 +2799,10 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	}, true)
 
 	response := map[string]interface{}{
-		"success": true,
-		"message": fmt.Sprintf("Download started for %s/%s", req.Repository, req.FileName),
-		"status":  "downloading",
+		"success":   true,
+		"message":   fmt.Sprintf("Download started for %s/%s", req.Repository, sourceFileName),
+		"status":    "downloading",
+		"file_name": destFileName,
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -2778,175 +2810,62 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) downloadModelAsync(ctx context.Context, repository, fileName string) {
-	// Ensure fileName doesn't have double .gguf extension
-	fileName = strings.TrimSuffix(fileName, ".gguf") + ".gguf"
-
+func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileName, progressKey string) {
 	// Clean up cancel func when done
 	defer func() {
 		s.downloadMutex.Lock()
-		delete(s.downloadCancelFuncs, fileName)
+		delete(s.downloadCancelFuncs, progressKey)
 		s.downloadMutex.Unlock()
 	}()
 
-	log.Printf("Starting download: %s/%s", repository, fileName)
-
-	// Initialize progress tracking
+	log.Printf("Starting resumable download: %s/%s", repository, sourceFileName)
 	startTime := time.Now()
-	s.downloadMutex.Lock()
-	s.downloadProgress[fileName] = &DownloadProgress{
-		FileName:  fileName,
-		Status:    "downloading",
-		StartedAt: startTime.Unix(),
-	}
-	s.downloadMutex.Unlock()
-
-	// Try different URL formats (some repos use different naming conventions)
-	urls := []string{
-		// Standard format: repo/resolve/main/filename.gguf
-		fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", repository, fileName),
-	}
-
-	// Get models directory from config
-	modelsDir := s.config.ModelsDir
-
-	// Use just the base filename for the destination
-	destFileName := filepath.Base(fileName)
-	destPath := filepath.Join(modelsDir, destFileName)
-
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 0, // No timeout for large downloads
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return nil // Follow redirects
-		},
-	}
-
-	var resp *http.Response
-	var err error
-	var successURL string
-
-	// Try each URL
-	for _, url := range urls {
-		log.Printf("Trying URL: %s", url)
-		resp, err = client.Get(url)
-		if err != nil {
-			log.Printf("Failed to fetch %s: %v", url, err)
-			continue
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			successURL = url
-			break
-		}
-
-		resp.Body.Close()
-		log.Printf("URL returned status %d: %s", resp.StatusCode, url)
-	}
-
-	if resp == nil || resp.StatusCode != http.StatusOK {
-		log.Printf("All download attempts failed for %s/%s", repository, fileName)
+	destPath := filepath.Join(s.config.ModelsDir, progressKey)
+	hf := models.NewHuggingFaceClient()
+	err := hf.DownloadGGUFContext(ctx, repository, sourceFileName, destPath, func(done, total int64) {
 		s.downloadMutex.Lock()
-		s.downloadProgress[fileName].Status = "failed"
-		s.downloadProgress[fileName].Error = "All download URLs failed"
-		s.downloadMutex.Unlock()
-		return
-	}
-	defer resp.Body.Close()
-
-	log.Printf("Successfully connected to: %s", successURL)
-
-	// Update progress with total size
-	total := resp.ContentLength
-	s.downloadMutex.Lock()
-	s.downloadProgress[fileName].BytesTotal = total
-	s.downloadMutex.Unlock()
-
-	// Create destination file
-	out, err := os.Create(destPath)
-	if err != nil {
-		log.Printf("Failed to create file: %v", err)
-		s.downloadMutex.Lock()
-		s.downloadProgress[fileName].Status = "failed"
-		s.downloadProgress[fileName].Error = err.Error()
-		s.downloadMutex.Unlock()
-		return
-	}
-	defer out.Close()
-
-	// Copy with progress logging
-	var downloaded int64
-	buffer := make([]byte, 32*1024) // 32KB buffer
-	lastLog := time.Now()
-
-	for {
-		// Check for cancellation
-		select {
-		case <-ctx.Done():
-			log.Printf("Download cancelled: %s", fileName)
-			out.Close()
-			os.Remove(destPath) // Clean up partial file
-			s.downloadMutex.Lock()
-			s.downloadProgress[fileName].Status = "cancelled"
-			s.downloadProgress[fileName].Error = "Download cancelled by user"
-			s.downloadMutex.Unlock()
-			return
-		default:
-		}
-
-		n, err := resp.Body.Read(buffer)
-		if n > 0 {
-			_, writeErr := out.Write(buffer[:n])
-			if writeErr != nil {
-				log.Printf("Write error: %v", writeErr)
-				s.downloadMutex.Lock()
-				s.downloadProgress[fileName].Status = "failed"
-				s.downloadProgress[fileName].Error = writeErr.Error()
-				s.downloadMutex.Unlock()
-				return
-			}
-			downloaded += int64(n)
-
-			// Update progress with speed calculation
-			s.downloadMutex.Lock()
-			s.downloadProgress[fileName].BytesDone = downloaded
+		if progress := s.downloadProgress[progressKey]; progress != nil {
+			progress.BytesDone = done
+			progress.BytesTotal = total
 			if total > 0 {
-				s.downloadProgress[fileName].Percent = float64(downloaded) / float64(total) * 100
+				progress.Percent = min(100, float64(done)/float64(total)*100)
 			}
-			// Calculate speed based on elapsed time since start
-			elapsed := time.Since(startTime).Seconds()
-			if elapsed > 0 {
-				s.downloadProgress[fileName].Speed = float64(downloaded) / elapsed
-			}
-			s.downloadMutex.Unlock()
-
-			// Log progress every 100MB or every 5 seconds
-			if downloaded%(100*1024*1024) == 0 || time.Since(lastLog) > 5*time.Second {
-				percent := float64(downloaded) / float64(total) * 100
-				log.Printf("Download progress: %.1f%% (%d/%d bytes)", percent, downloaded, total)
-				lastLog = time.Now()
+			if elapsed := time.Since(startTime).Seconds(); elapsed > 0 {
+				progress.Speed = float64(done) / elapsed
 			}
 		}
-		if err == io.EOF {
-			break
+		s.downloadMutex.Unlock()
+	})
+	if err != nil {
+		status := "failed"
+		message := err.Error()
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			status = "cancelled"
+			message = "Download cancelled; partial data was kept for resume"
 		}
-		if err != nil {
-			log.Printf("Read error: %v", err)
-			s.downloadMutex.Lock()
-			s.downloadProgress[fileName].Status = "failed"
-			s.downloadProgress[fileName].Error = err.Error()
-			s.downloadMutex.Unlock()
-			return
+		log.Printf("Model download %s: %s: %v", status, progressKey, err)
+		s.downloadMutex.Lock()
+		if progress := s.downloadProgress[progressKey]; progress != nil {
+			progress.Status = status
+			progress.Error = message
 		}
+		s.downloadMutex.Unlock()
+		return
 	}
 
-	log.Printf("Download completed: %s (%d bytes)", fileName, downloaded)
-
-	// Mark as complete
+	fileInfo, statErr := os.Stat(destPath)
 	s.downloadMutex.Lock()
-	s.downloadProgress[fileName].Status = "complete"
-	s.downloadProgress[fileName].Percent = 100
+	if progress := s.downloadProgress[progressKey]; progress != nil {
+		if statErr == nil {
+			progress.BytesDone = fileInfo.Size()
+			progress.BytesTotal = fileInfo.Size()
+		}
+		progress.Status = "complete"
+		progress.Percent = 100
+		progress.Error = ""
+	}
 	s.downloadMutex.Unlock()
+	log.Printf("Download completed: %s", progressKey)
 
 	// Rescan models to pick up the new file
 	if err := s.registry.ScanModels(); err != nil {
@@ -3000,7 +2919,6 @@ func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
 		// Match by exact name or if request is empty (cancel all)
 		if req.FileName == "" || fileName == req.FileName || strings.Contains(fileName, req.FileName) {
 			cancelFunc()
-			delete(s.downloadCancelFuncs, fileName)
 			// Update progress status
 			if progress, ok := s.downloadProgress[fileName]; ok {
 				progress.Status = "cancelled"
@@ -3030,6 +2948,10 @@ func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
 
 // handleVerifyModel computes and returns the SHA256 hash of a model file
 func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 
 	modelID := r.URL.Query().Get("model")
@@ -3057,6 +2979,10 @@ func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Model file not found", http.StatusNotFound)
 		return
 	}
+	if err != nil {
+		writeError(w, "Failed to inspect model file", http.StatusInternalServerError)
+		return
+	}
 
 	type VerifyResponse struct {
 		ModelID  string `json:"model_id"`
@@ -3068,22 +2994,6 @@ func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
 		Message  string `json:"message,omitempty"`
 	}
 
-	// For large files, compute hash in background or check cache
-	// For now, compute synchronously for files under 1GB, skip for larger
-	if fileInfo.Size() > 1024*1024*1024 {
-		resp := VerifyResponse{
-			ModelID:  modelID,
-			FileName: filepath.Base(modelPath),
-			Size:     fileInfo.Size(),
-			SizeGB:   fmt.Sprintf("%.2f GB", float64(fileInfo.Size())/(1024*1024*1024)),
-			SHA256:   "",
-			Verified: false,
-			Message:  "File too large for synchronous verification. Use CLI: offgrid verify " + modelID,
-		}
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
 	// Compute SHA256
 	file, err := os.Open(modelPath)
 	if err != nil {
@@ -3093,9 +3003,25 @@ func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	hasher := sha256.New()
-	if _, err := io.Copy(hasher, file); err != nil {
-		writeError(w, "Failed to compute hash", http.StatusInternalServerError)
-		return
+	buffer := make([]byte, 1024*1024)
+	for {
+		if err := r.Context().Err(); err != nil {
+			return
+		}
+		n, readErr := file.Read(buffer)
+		if n > 0 {
+			if _, err := hasher.Write(buffer[:n]); err != nil {
+				writeError(w, "Failed to compute hash", http.StatusInternalServerError)
+				return
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			writeError(w, "Failed to compute hash", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	hash := hex.EncodeToString(hasher.Sum(nil))
@@ -3127,32 +3053,44 @@ func (s *Server) handleModelCatalog(w http.ResponseWriter, r *http.Request) {
 
 	// Transform catalog entries to a simpler format for the UI
 	type SimpleCatalogEntry struct {
+		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Category    string `json:"category"`
-		Size        string `json:"size"`
+		Parameters  string `json:"parameters"`
+		Size        string `json:"size"` // backwards-compatible parameter label
+		SizeBytes   int64  `json:"size_bytes"`
 		Repo        string `json:"repo"`
 		File        string `json:"file"`
 		Quant       string `json:"quant"`
+		MinRAMGB    int    `json:"min_ram_gb"`
+		Recommended bool   `json:"recommended"`
+		Provider    string `json:"provider"`
+		Type        string `json:"type"`
+		License     string `json:"license"`
 	}
 
 	simpleModels := []SimpleCatalogEntry{}
 	for _, entry := range catalog.Models {
 		if len(entry.Variants) > 0 {
-			// Use the first variant (usually recommended quantization)
-			variant := entry.Variants[0]
+			// Q4_K_M is the practical quality/size default for local inference.
+			// Catalog ordering is not a recommendation signal.
+			variant := &entry.Variants[0]
+			if preferred := entry.FindVariant("Q4_K_M"); preferred != nil {
+				variant = preferred
+			}
 			var repo, file string
 
 			// Extract repo and file from sources
 			if len(variant.Sources) > 0 {
 				for _, source := range variant.Sources {
 					if source.Type == "huggingface" {
-						// Parse HuggingFace URL
-						// Format: huggingface.co/owner/repo/resolve/main/file.gguf
-						parts := strings.Split(source.URL, "/")
-						if len(parts) >= 7 {
-							repo = parts[3] + "/" + parts[4]
-							file = parts[len(parts)-1]
+						if parsed, err := url.Parse(source.URL); err == nil {
+							parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+							if len(parts) >= 5 && parts[2] == "resolve" {
+								repo = parts[0] + "/" + parts[1]
+								file = strings.Join(parts[4:], "/")
+							}
 							break
 						}
 					}
@@ -3160,13 +3098,21 @@ func (s *Server) handleModelCatalog(w http.ResponseWriter, r *http.Request) {
 			}
 
 			simpleModels = append(simpleModels, SimpleCatalogEntry{
+				ID:          entry.ID,
 				Name:        entry.Name,
 				Description: entry.Description,
 				Category:    strings.Join(entry.Tags, ", "),
+				Parameters:  entry.Parameters,
 				Size:        entry.Parameters,
+				SizeBytes:   variant.Size,
 				Repo:        repo,
 				File:        file,
 				Quant:       variant.Quantization,
+				MinRAMGB:    entry.MinRAM,
+				Recommended: entry.Recommended,
+				Provider:    entry.Provider,
+				Type:        entry.Type,
+				License:     entry.License,
 			})
 		}
 	}
@@ -3342,13 +3288,13 @@ func resolveUIRoot() string {
 	if configured := strings.TrimSpace(os.Getenv("OFFGRID_UI_DIR")); configured != "" {
 		candidates = append(candidates, configured)
 	}
-	candidates = append(candidates, "web/dist", "/var/lib/offgrid/web/ui", "web/ui")
+	candidates = append(candidates, "web/dist", "/var/lib/offgrid/web/ui")
 	for _, candidate := range candidates {
 		if _, err := os.Stat(filepath.Join(candidate, "index.html")); err == nil {
 			return candidate
 		}
 	}
-	return "web/ui"
+	return "web/dist"
 }
 
 // writeError writes an error response
