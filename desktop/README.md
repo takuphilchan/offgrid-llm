@@ -1,221 +1,83 @@
-# OffGrid LLM Web UI
+# OffGrid desktop
 
-> A modular, contributor-friendly web interface for OffGrid LLM.
+The desktop application is a secure Electron host for the same React UI and Go
+runtime used by the browser edition. It does not maintain a second frontend.
 
-## Overview
+## Development
 
-The UI provides a complete interface for interacting with OffGrid LLM:
-
-| Feature | Description |
-|---------|-------------|
-| 💬 **Chat** | Conversational AI with streaming responses |
-| 🔧 **Models** | Download, load, and configure models |
-| 🎤 **Voice** | Speech-to-text and text-to-speech |
-| 🤖 **Agent** | Autonomous task execution with tools |
-| 📚 **Knowledge** | RAG with document ingestion |
-| 📊 **Benchmarks** | Performance testing and comparison |
-| 💻 **Terminal** | Command-line interface in browser |
-| 👥 **Users** | User management and authentication |
-
----
-
-## Quick Start
+Build the UI first:
 
 ```bash
-# Start from project root
-cd web/ui
-
-# Option 1: Python server
-python3 -m http.server 8081
-
-# Option 2: Node server  
-npx serve -p 8081
-
-# Open http://localhost:8081
+cd web/app
+npm ci
+npm run api:check
+npm run build
 ```
 
----
+Then make an OffGrid server available at `127.0.0.1:11611`. It can be the local
+development binary or the Docker container. From the repository root:
 
-## File Structure
+```bash
+go build -trimpath -o build/linux/offgrid ./cmd/offgrid
 
-```
-web/ui/
-├── index.html              # Main entry point (loads external files)
-├── README.md               # This file
-├── CONTRIBUTING.md         # UI contribution guide
-│
-├── css/
-│   └── styles.css          # All CSS (~1,600 lines)
-│       ├── CSS Variables   # Theme colors, fonts
-│       ├── Base Styles     # Typography, layout
-│       ├── Components      # Buttons, cards, modals
-│       └── Utilities       # Helpers, animations
-│
-└── js/                     # JavaScript modules (~6,800 lines total)
-    │
-    │── [Core]
-    ├── utils.js            # State variables, helpers, init
-    ├── modals.js           # Alert, confirm, prompt dialogs
-    ├── auth.js             # Login, logout, session check
-    │
-    │── [Chat & Models]
-    ├── chat.js             # Chat logic, sessions, history
-    ├── chat-ui.js          # Message rendering, streaming
-    ├── models.js           # Model loading, configuration
-    ├── models-ui.js        # Model browser, downloads
-    │
-    │── [Features]
-    ├── terminal.js         # Terminal emulator
-    ├── rag.js              # Knowledge base, documents
-    ├── benchmark.js        # Performance benchmarks
-    ├── agent.js            # AI Agent with MCP
-    ├── audio.js            # Voice input/output
-    │
-    │── [Management]
-    ├── users.js            # User management
-    ├── metrics.js          # System monitoring
-    ├── lora.js             # LoRA adapter management
-    └── file-browser.js     # File selection modal
+cd desktop
+npm ci
+npm run dev
 ```
 
----
+Use `build/windows/offgrid.exe` on Windows and an architecture-specific binary
+under `build/macos` on macOS. Set `OFFGRID_PORT` before starting Electron to use
+another local port. Invalid port values fall back to `11611`.
 
-## Contributing
+In development Electron uses an existing healthy local server when available.
+Packaged applications can start the bundled runtime themselves.
 
-See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed contribution guidelines.
+## Packaging
 
-### Quick Reference: Which File to Edit
-
-| I want to change... | Edit this file |
-|---------------------|----------------|
-| Colors, themes, dark mode | `css/styles.css` (`:root` variables) |
-| Chat messages, streaming | `js/chat-ui.js` |
-| Session management | `js/chat.js` |
-| Model loading | `js/models.js` |
-| Model browser UI | `js/models-ui.js` |
-| Voice/audio features | `js/audio.js` |
-| Terminal commands | `js/terminal.js` |
-| AI Agent behavior | `js/agent.js` |
-| Knowledge base/RAG | `js/rag.js` |
-| Benchmarks | `js/benchmark.js` |
-| User management | `js/users.js` |
-| Popup dialogs | `js/modals.js` |
-| Utility functions | `js/utils.js` |
-
----
-
-## Architecture
-
-### Technology Stack
-
-| Technology | Purpose |
-|------------|---------|
-| Tailwind CSS | Utility classes (CDN) |
-| Vanilla JS | No framework, no build step |
-| marked.js | Markdown rendering |
-| highlight.js | Code syntax highlighting |
-| JetBrains Mono | Terminal font |
-
-### Design Principles
-
-1. **No Build Required** - Works directly in browser
-2. **Global Scope** - Functions accessible everywhere (no ES6 modules)
-3. **Progressive Enhancement** - Works without JS for basic viewing
-4. **Offline-First** - Minimal external dependencies
-5. **Theme Support** - CSS variables for easy theming
-
-### State Management
-
-Global state in `js/utils.js`:
-
-```javascript
-// Current state
-let currentModel = '';
-let sessions = {};
-let currentSessionId = null;
-let isStreaming = false;
-
-// Configuration
-let config = {
-    temperature: 0.7,
-    maxTokens: 2048
-};
+```bash
+cd desktop
+npm run build:win
+npm run build:mac
+npm run build:linux
 ```
 
----
+Build on the target operating system. Release automation supplies the matching
+runtime and the prebuilt `web/dist` bundle, then creates:
 
-## Theming
+- Windows x64 NSIS and portable packages;
+- macOS x64 and ARM64 zip packages;
+- Linux x64 AppImage and Debian packages.
 
-Colors are defined via CSS variables in `css/styles.css`:
+Windows uses a per-user install by default so administrator access is not
+required. Code signing and notarization credentials should be provided by the
+release environment; development packages are unsigned.
 
-```css
-:root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f9fafb;
-    --text-primary: #111827;
-    --accent: #3b82f6;
-}
+## Runtime behavior
 
-.dark {
-    --bg-primary: #111827;
-    --bg-secondary: #1f2937;
-    --text-primary: #f9fafb;
-}
+- The application keeps models in `~/.offgrid-llm/models` and all other state in
+  `~/.offgrid-llm/data`.
+- Closing the window keeps the app in the tray on Windows and Linux; **Quit**
+  stops the runtime owned by Electron.
+- If Docker or another local service already owns the configured port, Electron
+  connects to it and does not stop it on exit.
+- Window geometry is persisted in `~/.offgrid-llm/window-state.json`.
+- The loading screen uses the product visual system and reports startup failure
+  without exposing raw backend internals.
+
+## Security boundary
+
+The renderer has Node integration disabled, context isolation and Chromium
+sandboxing enabled, and only a small preload API. New windows are denied;
+trusted HTTPS links open in the operating-system browser. Do not add generic
+filesystem or command-execution functions to the preload bridge.
+
+## Validation
+
+```bash
+node --check main.js
+node --check preload.js
+npx electron-builder --dir --linux
 ```
 
-Toggle dark mode by clicking the theme toggle in the sidebar.
-
----
-
-## API Integration
-
-The UI communicates with the OffGrid LLM server:
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /v1/models` | List available models |
-| `POST /v1/chat/completions` | Send chat messages |
-| `POST /v1/embeddings` | Generate embeddings |
-| `GET /health` | Server health check |
-| `WS /v1/ws` | WebSocket for streaming |
-
-See **[API Documentation](../../docs/API.md)** for full reference.
-
----
-
-## Testing
-
-### Manual Testing
-
-1. Start local server: `python3 -m http.server 8081`
-2. Open browser DevTools (F12)
-3. Check Console for errors
-4. Test each feature tab
-
-### Checklist
-
-- [ ] Chat sends and receives messages
-- [ ] Models load and switch correctly
-- [ ] Dark/light theme toggle works
-- [ ] Voice recording (if microphone available)
-- [ ] Session save/load/export
-- [ ] Mobile responsive layout
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Styles not loading | Check for 404 errors, verify `css/styles.css` exists |
-| JavaScript errors | Scripts must load in order (`utils.js` first) |
-| API calls failing | Ensure OffGrid server is running, check CORS |
-
----
-
-## Related Documentation
-
-- [Main Documentation](../../docs/README.md)
-- [API Reference](../../docs/API.md)
-- [Contributing Guide](../../dev/CONTRIBUTING.md)
-- [Features Guide](../../docs/guides/FEATURES_GUIDE.md)
+CI also builds the React application and its generated API types before the
+Electron package, preventing stale or missing UI assets from shipping.

@@ -1,5 +1,6 @@
 {
   "name": "offgrid-llm-desktop",
+  "desktopName": "com.offgrid.llm.desktop",
   "version": "0.3.0",
   "description": "OffGrid LLM Desktop - Local AI Platform",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
@@ -32,6 +33,7 @@
       "main.js",
       "preload.js",
       "loading.html",
+      "assets/icon.png",
       "package.json"
     ],
     "extraResources": [
@@ -63,11 +65,16 @@
       "icon": "assets/icon.png",
       "maintainer": "OffGrid LLM Team <team@offgrid-llm.dev>",
       "desktop": {
-        "Name": "OffGrid LLM Desktop",
-        "GenericName": "Local AI Platform",
-        "Comment": "Run LLMs locally without internet",
-        "Categories": "Development;Science;Education;",
-        "Keywords": "ai;llm;ml;offline;"
+        "entry": {
+          "Name": "OffGrid LLM Desktop",
+          "GenericName": "Private Local AI Workspace",
+          "Comment": "Run private AI models locally",
+          "Categories": "Development;Science;Education;",
+          "Keywords": "ai;llm;local;private;offline;",
+          "Terminal": false,
+          "Type": "Application",
+          "StartupWMClass": "com.offgrid.llm.desktop"
+        }
       },
       "executableName": "offgrid-llm-desktop",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
@@ -142,7 +149,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": true,
+      "perMachine": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,

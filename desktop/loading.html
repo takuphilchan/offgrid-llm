@@ -14,8 +14,8 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #e2e8f0;
+            background: radial-gradient(circle at 50% 20%, rgba(85, 110, 190, .18), transparent 36%), #070a12;
+            color: #eef2ff;
             height: 100vh;
             display: flex;
             flex-direction: column;
@@ -64,8 +64,8 @@
         .spinner {
             width: 48px;
             height: 48px;
-            border: 3px solid #334155;
-            border-top-color: #06b6d4;
+            border: 3px solid #192235;
+            border-top-color: #9aafff;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -112,7 +112,7 @@
         }
         
         .retry-btn {
-            background: #06b6d4;
+            background: #9aafff;
             color: #0f172a;
             border: none;
             padding: 10px 24px;
@@ -124,7 +124,7 @@
         }
         
         .retry-btn:hover {
-            background: #22d3ee;
+            background: #b4c2ff;
             transform: translateY(-1px);
         }
     </style>
@@ -133,9 +133,9 @@
     <div id="loading-state">
         <div class="logo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#06b6d4"/>
-                <path d="M2 17l10 5 10-5" stroke="#06b6d4"/>
-                <path d="M2 12l10 5 10-5" stroke="#0891b2"/>
+                <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#9aafff"/>
+                <path d="M2 17l10 5 10-5" stroke="#9aafff"/>
+                <path d="M2 12l10 5 10-5" stroke="#7c9cff"/>
             </svg>
         </div>
         <h1>OffGrid LLM</h1>
@@ -155,6 +155,7 @@
         <p class="error-message" id="error-message">Server failed to start</p>
         <button class="retry-btn" onclick="retryConnection()">Retry</button>
     </div>
+    <p class="version" id="version"></p>
     
     <script>
         const statusMessages = [
@@ -202,7 +203,9 @@
         
         // Set version if available
         if (window.electron && window.electron.getVersion) {
-            document.getElementById('version').textContent = 'Electron ' + window.electron.getVersion();
+            window.electron.getVersion().then(version => {
+                document.getElementById('version').textContent = 'OffGrid ' + version;
+            });
         }
     </script>
 </body>

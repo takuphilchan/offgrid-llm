@@ -21,11 +21,13 @@ contextBridge.exposeInMainWorld('electron', {
   isDesktop: true,
   
   // App version (exposed safely)
-  getVersion: () => process.versions.electron,
+  getVersion: () => ipcRenderer.invoke('get-app-version'),
   
   // System theme support
   getSystemTheme: () => ipcRenderer.invoke('get-system-theme'),
   onThemeChange: (callback) => {
-    ipcRenderer.on('system-theme-changed', (event, theme) => callback(theme));
+    const listener = (_event, theme) => callback(theme);
+    ipcRenderer.on('system-theme-changed', listener);
+    return () => ipcRenderer.removeListener('system-theme-changed', listener);
   }
 });

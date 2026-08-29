@@ -1,42 +1,29 @@
-#!/bin/bash
-# Build script for OffGrid LLM Desktop
-# Builds desktop applications for all platforms
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-cd "$(dirname "$0")"
+desktop_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+project_root="$(cd "$desktop_dir/.." && pwd)"
+target="${1:-current}"
 
-echo "Building OffGrid LLM Desktop Applications..."
-echo ""
+cd "$project_root/web/app"
+npm ci
+npm run api:check
+npm run check
+npm run build
 
-# Check if node_modules exists
-if [ ! -d "node_modules" ]; then
-    echo "Installing dependencies..."
-    npm install
-fi
+cd "$desktop_dir"
+npm ci
 
-# Clean previous builds
-echo "Cleaning previous builds..."
-rm -rf dist/
+case "$target" in
+  linux) npm run build:linux ;;
+  mac) npm run build:mac ;;
+  win) npm run build:win ;;
+  current) npm run build ;;
+  *)
+    echo "Usage: ./build.sh [current|linux|mac|win]" >&2
+    exit 2
+    ;;
+esac
 
-# Build for current platform
-if [ "$1" = "linux" ]; then
-    echo "Building for Linux..."
-    npm run build:linux
-elif [ "$1" = "mac" ]; then
-    echo "Building for macOS..."
-    npm run build:mac
-elif [ "$1" = "win" ]; then
-    echo "Building for Windows..."
-    npm run build:win
-elif [ "$1" = "all" ]; then
-    echo "Building for all platforms..."
-    npm run build:all
-else
-    echo "Building for current platform..."
-    npm run build
-fi
-
-echo ""
-echo "Build complete! Installers are in desktop/dist/"
-ls -lh dist/
+echo "Desktop artifacts are in $desktop_dir/dist"

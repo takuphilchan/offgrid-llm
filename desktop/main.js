@@ -27,8 +27,11 @@ let isQuitting = false;
 let serverCheckInterval = null;
 
 const APP_NAME = 'OffGrid LLM Desktop';
-const SERVER_PORT = 11611;
-const SERVER_URL = `http://localhost:${SERVER_PORT}`;
+const configuredPort = Number.parseInt(process.env.OFFGRID_PORT || '11611', 10);
+const SERVER_PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
+  ? configuredPort
+  : 11611;
+const SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
 
 // Paths configuration
 const paths = {
@@ -197,7 +200,15 @@ function checkServer() {
 // Start OffGrid server
 async function startOffgridServer() {
   const offgridBinary = paths.getOffgridBinary();
-  
+
+  // A separately managed server (for example Docker) is a valid desktop
+  // backend even when a development checkout has no bundled native binary.
+  const isRunning = await checkServer();
+  if (isRunning) {
+    console.log('OffGrid server is already running');
+    return true;
+  }
+
   if (!fs.existsSync(offgridBinary)) {
     console.error('OffGrid binary not found:', offgridBinary);
     dialog.showErrorBox(
@@ -205,13 +216,6 @@ async function startOffgridServer() {
       `OffGrid binary not found at:\n${offgridBinary}\n\nPlease ensure the application is properly installed.`
     );
     return false;
-  }
-
-  // Check if server is already running
-  const isRunning = await checkServer();
-  if (isRunning) {
-    console.log('OffGrid server is already running');
-    return true;
   }
 
   console.log('Starting OffGrid server:', offgridBinary);
@@ -226,13 +230,14 @@ async function startOffgridServer() {
       }
     }
 
-    offgridProcess = spawn(offgridBinary, ['server', 'start'], {
+    offgridProcess = spawn(offgridBinary, ['serve'], {
       stdio: 'pipe',
       cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'),
       env: {
         ...process.env,
         OFFGRID_PORT: SERVER_PORT.toString(),
         OFFGRID_MODELS_DIR: paths.getModelsDir(),
+        OFFGRID_DATA_DIR: paths.getDataDir(),
         OFFGRID_UI_DIR: app.isPackaged
           ? path.join(process.resourcesPath, 'ui')
           : path.join(__dirname, '../web/dist')
@@ -342,8 +347,8 @@ function createWindow() {
     height: windowState.height,
     x: windowState.x,
     y: windowState.y,
-    minWidth: 1000,
-    minHeight: 700,
+    minWidth: 760,
+    minHeight: 560,
     title: APP_NAME,
     webPreferences: {
       nodeIntegration: false,
@@ -355,7 +360,7 @@ function createWindow() {
       spellcheck: false
     },
     icon: path.join(__dirname, 'assets/icon.png'),
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#070a12',
     show: false,
     autoHideMenuBar: true
   });
@@ -400,6 +405,18 @@ function createWindow() {
     if (errorCode !== -3) {
       mainWindow.loadFile('loading.html');
     }
+  });
+
+  // The renderer is a local application surface. Keep untrusted navigation
+  // out of the privileged desktop window and hand safe web links to the OS.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith(SERVER_URL) || url.startsWith('file:')) return;
+    event.preventDefault();
+    if (url.startsWith('https://')) void shell.openExternal(url);
   });
 
   // Prevent close, minimize to tray instead
@@ -537,6 +554,8 @@ function createTray() {
 ipcMain.handle('get-api-url', () => {
   return SERVER_URL;
 });
+
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('get-server-status', async () => {
   return await checkServer();

@@ -1,36 +1,31 @@
 @echo off
-REM Build script for OffGrid LLM Desktop on Windows
+setlocal
 
-cd /d "%~dp0"
+set "DESKTOP_DIR=%~dp0"
+for %%I in ("%DESKTOP_DIR%..") do set "PROJECT_ROOT=%%~fI"
+set "TARGET=%~1"
+if "%TARGET%"=="" set "TARGET=current"
 
-echo Building OffGrid LLM Desktop Applications...
-echo.
+pushd "%PROJECT_ROOT%\web\app" || exit /b 1
+call npm ci || exit /b 1
+call npm run api:check || exit /b 1
+call npm run check || exit /b 1
+call npm run build || exit /b 1
+popd
 
-REM Check if node_modules exists
-if not exist "node_modules\" (
-    echo Installing dependencies...
-    call npm install
-)
+pushd "%DESKTOP_DIR%" || exit /b 1
+call npm ci || exit /b 1
 
-REM Clean previous builds
-echo Cleaning previous builds...
-if exist "dist\" (
-    rmdir /s /q dist
-)
-
-REM Build
-if "%1"=="all" (
-    echo Building for all platforms...
-    call npm run build:all
-) else if "%1"=="win" (
-    echo Building for Windows...
-    call npm run build:win
+if "%TARGET%"=="win" (
+  call npm run build:win
+) else if "%TARGET%"=="current" (
+  call npm run build
 ) else (
-    echo Building for current platform...
-    call npm run build
+  echo Usage: build.bat [current^|win] 1>&2
+  exit /b 2
 )
 
-echo.
-echo Build complete! Installers are in desktop\dist\
-dir dist\
-pause
+if errorlevel 1 exit /b 1
+echo Desktop artifacts are in %DESKTOP_DIR%dist
+popd
+endlocal
