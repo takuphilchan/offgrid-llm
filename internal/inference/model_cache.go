@@ -3,7 +3,6 @@ package inference
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"net"
@@ -322,16 +321,22 @@ func (mc *ModelCache) IsModelAlive(modelID string) bool {
 		return false
 	}
 
-	if instance.Cmd == nil || instance.Cmd.Process == nil {
+	return mc.instanceHealthy(instance)
+}
+
+func (mc *ModelCache) instanceHealthy(instance *ModelInstance) bool {
+	if instance == nil || instance.Cmd == nil || instance.Cmd.Process == nil {
 		return false
 	}
-
-	// Signal 0 checks if process exists without actually sending a signal
+	if instance.Cmd.ProcessState != nil && instance.Cmd.ProcessState.Exited() {
+		return false
+	}
+	// Signal 0 alone reports zombie processes as alive on Linux. Require the
+	// model server's health endpoint as well before reusing a cached instance.
 	if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err != nil {
 		return false
 	}
-
-	return true
+	return mc.checkHealth(instance.Port) == nil
 }
 
 // LoadedModelIDs returns a snapshot of instances currently owned by the cache.
@@ -494,20 +499,16 @@ func (mc *ModelCache) GetOrLoadContext(ctx context.Context, modelID, modelPath, 
 
 	// Check if model is already loaded and process is alive
 	if instance, exists := mc.instances[modelID]; exists {
-		if instance.Cmd.Process != nil {
-			// Simple liveness check - just see if process exists
-			if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err == nil {
-				// Process is alive - return it
-				instance.LastAccess = time.Now()
-				log.Printf("Model %s already loaded on port %d", modelID, instance.Port)
-				// Mark as ready immediately if already loaded
-				if mc.loadingTracker != nil {
-					mc.loadingTracker.StartLoading(modelID, modelSizeMB, true)
-					mc.loadingTracker.Complete(modelID, true, "")
-				}
-				mc.mu.Unlock()
-				return instance, nil
+		if mc.instanceHealthy(instance) {
+			instance.LastAccess = time.Now()
+			log.Printf("Model %s already loaded on port %d", modelID, instance.Port)
+			// Mark as ready immediately if already loaded
+			if mc.loadingTracker != nil {
+				mc.loadingTracker.StartLoading(modelID, modelSizeMB, true)
+				mc.loadingTracker.Complete(modelID, true, "")
 			}
+			mc.mu.Unlock()
+			return instance, nil
 		}
 		// Process is dead, clean it up
 		log.Printf("Model %s process died, cleaning up", modelID)
@@ -731,7 +732,10 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 		return nil, fmt.Errorf("failed to get llama-server binary: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	// The model server belongs to the cache, not to the HTTP request that first
+	// requested it. waitForReadyContext still honors cancellation and performs
+	// cleanup if startup is interrupted.
+	cmd := exec.Command(binaryPath, args...)
 
 	cmd.Env = append(cmd.Env, "NO_PROXY=*")
 
@@ -1070,12 +1074,6 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 					mc.loadingTracker.UpdatePhase(PhaseReady, 100, "Model ready")
 				}
 
-				// Warmup in background - first user request may be slightly slower
-				go func(p int) {
-					if err := mc.warmupServer(p); err != nil {
-						log.Printf("Background warmup (non-fatal): %v", err)
-					}
-				}(port)
 				return nil
 			}
 		}
@@ -1120,32 +1118,6 @@ func (mc *ModelCache) checkHealth(port int) error {
 	}
 
 	return fmt.Errorf("health check failed with status: %d", resp.StatusCode)
-}
-
-// warmupServer sends a minimal request to initialize the inference pipeline
-// This prevents 503 errors on the first real request
-func (mc *ModelCache) warmupServer(port int) error {
-	url := fmt.Sprintf("http://localhost:%d/v1/chat/completions", port)
-
-	// Very minimal request - just 1 token
-	payload := `{"messages":[{"role":"user","content":"hi"}],"max_tokens":1,"temperature":0}`
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(url, "application/json", strings.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Read and discard body
-	io.Copy(io.Discard, resp.Body)
-
-	if resp.StatusCode == http.StatusOK {
-		log.Printf("Warmup request successful on port %d", port)
-		return nil
-	}
-
-	return fmt.Errorf("warmup request returned status %d", resp.StatusCode)
 }
 
 // GetStats returns cache statistics
@@ -1212,13 +1184,14 @@ func (mc *ModelCache) checkAndRestartCrashed() {
 	}
 
 	for modelID, instance := range mc.instances {
+		if _, loading := mc.pendingLoads[modelID]; loading {
+			continue
+		}
 		if instance.Cmd == nil || instance.Cmd.Process == nil {
 			continue
 		}
 
-		// Check if process is still running by sending signal 0
-		err := instance.Cmd.Process.Signal(syscall.Signal(0))
-		if err != nil {
+		if !mc.instanceHealthy(instance) {
 			// Process has crashed
 			log.Printf("Detected crashed llama-server for model %s, will restart...", modelID)
 			crashed = append(crashed, struct {
@@ -1291,17 +1264,15 @@ func (mc *ModelCache) HotSwap(toModelID, toModelPath, toProjectorPath string) (*
 
 	// Strategy 1: Already loaded - instant return
 	if instance, exists := mc.instances[toModelID]; exists {
-		if instance.Cmd != nil && instance.Cmd.Process != nil {
-			if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err == nil {
-				instance.LastAccess = time.Now()
-				result.Success = true
-				result.Method = "preloaded"
-				result.SwapTimeMS = time.Since(startTime).Milliseconds()
-				result.Port = instance.Port
-				mc.mu.Unlock()
-				log.Printf("Hot-swap: %s already loaded (instant)", toModelID)
-				return result, nil
-			}
+		if mc.instanceHealthy(instance) {
+			instance.LastAccess = time.Now()
+			result.Success = true
+			result.Method = "preloaded"
+			result.SwapTimeMS = time.Since(startTime).Milliseconds()
+			result.Port = instance.Port
+			mc.mu.Unlock()
+			log.Printf("Hot-swap: %s already loaded (instant)", toModelID)
+			return result, nil
 		}
 		// Process dead, clean up
 		mc.cleanupInstance(toModelID)
