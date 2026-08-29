@@ -1,19 +1,20 @@
 # OffGrid LLM
 
-Run AI models locally. No cloud. No API keys. Complete privacy.
+OffGrid is a local-first AI runtime with a CLI, HTTP API, responsive web UI,
+and Electron desktop host. It runs GGUF models through `llama-server` and keeps
+models, conversations, knowledge indexes, users, and run history on storage you
+control.
 
-[![Version](https://img.shields.io/badge/Version-0.3.0-blue.svg)](https://github.com/takuphilchan/offgrid-llm/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/offgrid)](https://pypi.org/project/offgrid/)
+The project is being hardened from a prototype into a dependable local tool.
+Core paths are tested; optional subsystems are exposed according to their
+actual readiness rather than being presented as universally available.
 
----
+## Run with Docker
 
-## Install
-
-### Docker
+The current development image is `edge`:
 
 ```bash
-docker pull takuphilchan/offgrid-llm:latest
+docker pull takuphilchan/offgrid-llm:edge
 
 docker run -d \
   --name offgrid \
@@ -24,227 +25,153 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:latest
+  takuphilchan/offgrid-llm:edge
 ```
 
-Open http://localhost:11611/ui/. The two named volumes preserve models,
-knowledge, configuration, and run history across image upgrades.
+Open <http://127.0.0.1:11611/ui/>. The named volumes survive container
+replacement. Keep the `127.0.0.1` binding unless authentication and a trusted
+TLS reverse proxy are configured.
+
+Useful container commands:
 
 ```bash
-docker exec -it offgrid offgrid download tinyllama-1.1b-chat --yes
 docker exec -it offgrid offgrid version
+docker exec -it offgrid offgrid list
+docker exec -it offgrid offgrid download phi-3.5-mini-instruct
+docker logs -f offgrid
 ```
 
-The published image supports both `linux/amd64` and `linux/arm64`. It is
-unauthenticated for local use, so keep the host binding on `127.0.0.1`. Use the
-authenticated production Compose profile before exposing OffGrid to a network.
+Stable release tags will publish `latest`, full semantic versions, immutable
+`sha-*` tags, provenance, SBOMs, and AMD64/ARM64 manifests. See
+[Docker deployment](docs/setup/docker.md).
 
-### Native CLI
+## Build and run from source
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
-```
-
-## Run
-
-```bash
-offgrid run llama3
-```
-
-That's it. The model downloads automatically and you start chatting.
-
-For offline classroom or community deployments:
-
-```bash
-offgrid appliance status
-offgrid appliance plan hub
-```
-
----
-
-## Why OffGrid?
-
-| Feature | OffGrid |
-|---------|:-------:|
-| Air-gapped USB deployment | Yes |
-| P2P model sharing | Yes |
-| Appliance profiles for edge devices | Yes |
-| Built-in RAG | Yes |
-| Multi-user + audit logs | Yes |
-| AI Agents with MCP | Yes |
-| Voice assistant | Yes |
-| OpenAI-compatible API | Yes |
-
-**Built for:**
-- Healthcare (HIPAA) - patient data never leaves
-- Government - air-gapped deployment
-- Enterprise - audit logging and multi-user
-- Schools and community centers - local AI access on shared devices
-- Remote sites - ships, rigs, expeditions
-- Research - unlimited use, zero API costs
-
----
-
-## Quick Start
-
-### Web UI
-
-```bash
-offgrid serve
-```
-
-Open http://localhost:11611
-
-![Chat Interface](docs/images/chat-page.png)
-*Chat with AI models locally - full privacy, no cloud*
-
-![Models Management](docs/images/models-page.png)
-*Download, manage, and switch between models with size info*
-
-### CLI Chat
-
-```bash
-offgrid run llama3           # Chat with Llama 3
-offgrid run mistral          # Chat with Mistral
-offgrid run codellama        # Chat with Code Llama
-```
-
-### Python
-
-```bash
-pip install offgrid
-```
-
-```python
-import offgrid
-
-client = offgrid.Client()
-response = client.chat("Hello!")
-print(response)
-```
-
----
-
-## Models
-
-Built-in shortcuts:
-
-| Alias | Model | RAM |
-|-------|-------|-----|
-| `tiny` | TinyLlama 1.1B | 2 GB |
-| `phi` | Phi 3 Mini | 4 GB |
-| `llama3` | Llama 3.2 3B | 4 GB |
-| `qwen` | Qwen 2.5 3B | 4 GB |
-| `mistral` | Mistral 7B | 8 GB |
-| `codellama` | Code Llama 7B | 8 GB |
-
-```bash
-offgrid alias list           # See all shortcuts
-offgrid search llama         # Search HuggingFace
-offgrid list                 # Show installed
-```
-
----
-
-## Features
-
-### AI Agents
-
-Autonomous task execution with tool use:
-
-```bash
-offgrid agent chat --template coder
-offgrid agent run "Analyze this data and create a chart"
-```
-
-Templates: `researcher`, `coder`, `analyst`, `writer`, `sysadmin`, `planner`
-
-### Knowledge Base (RAG)
-
-Chat with your documents:
-
-```bash
-offgrid kb add ./documents/
-offgrid kb search "project requirements"
-```
-
-### Voice
-
-Speech-to-text and text-to-speech:
-
-```bash
-offgrid audio transcribe recording.wav
-offgrid audio speak "Hello world" --output hello.wav
-```
-
-### Offline Transfer
-
-Export models to USB for air-gapped systems:
-
-```bash
-offgrid export llama3 /media/usb
-offgrid import /media/usb
-```
-
-### Audit Logs
-
-Tamper-evident security logging:
-
-```bash
-offgrid audit show
-offgrid audit export-csv report.csv
-offgrid audit verify
-```
-
----
-
-## Documentation
-
-| Guide | Description |
-|-------|-------------|
-| [Quick Start](docs/setup/quickstart.md) | Get running in 3 minutes |
-| [Appliance Deployment](docs/setup/appliance.md) | Offline AI boxes for schools and communities |
-| [CLI Reference](docs/reference/cli.md) | All commands |
-| [API Reference](docs/reference/api.md) | REST endpoints |
-| [Python SDK](python/README.md) | Python library |
-| [Agents](docs/guides/agents.md) | AI agent system |
-| [RAG](docs/guides/embeddings.md) | Knowledge base |
-| [Docker](docs/setup/docker.md) | Container deployment |
-
----
-
-## System Requirements
-
-| RAM | Models |
-|-----|--------|
-| 4 GB | TinyLlama, SmolLM, Phi 3 Mini |
-| 8 GB | Llama 3.2 3B, Qwen 2.5 3B, Gemma 2B |
-| 16 GB | Mistral 7B, Llama 3.1 8B, Code Llama |
-| 32 GB+ | Llama 3 70B, Mixtral, DeepSeek |
-
-GPU optional. Supports NVIDIA (CUDA), AMD (ROCm), Apple Silicon (Metal).
-
----
-
-## Contributing
+Requirements: Go 1.25+ with the toolchain declared in `go.mod`, Node.js 22,
+npm, and a supported `llama-server` binary.
 
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
-go build -o bin/offgrid ./cmd/offgrid
+
+cd web/app
+npm ci
+npm run api:check
+npm run build
+cd ../..
+
+go build -trimpath -o bin/offgrid ./cmd/offgrid
 ./bin/offgrid serve
 ```
 
-See [Contributing Guide](dev/CONTRIBUTING.md).
+Open <http://127.0.0.1:11611/ui/>. On Windows, use `bin\offgrid.exe`; in WSL,
+use the Linux command above from `/mnt/d/offgrid-llm`.
 
----
+The CLI is also the container entry point:
+
+```bash
+./bin/offgrid --help
+./bin/offgrid search phi
+./bin/offgrid download phi-3.5-mini-instruct
+./bin/offgrid list
+./bin/offgrid run phi-3.5-mini-instruct.Q4_K_M
+```
+
+## Desktop app
+
+Electron hosts the same React application and local API used by the browser,
+so navigation, persistence, translations, model management, and authentication
+do not drift between editions. Release automation builds Windows, macOS, and
+Linux packages with the matching OffGrid runtime and UI.
+
+For desktop development, start an OffGrid server first (a local binary or the
+Docker container), then run:
+
+```bash
+cd desktop
+npm ci
+npm run dev
+```
+
+If no server is already listening, the packaged desktop app starts its bundled
+runtime. Desktop data defaults to `~/.offgrid-llm`.
+
+## Interfaces
+
+- OpenAI-compatible: `POST /v1/chat/completions`, `POST /v1/embeddings`
+- Ollama-compatible: `/api/chat`, `/api/generate`, `/api/tags`, `/api/embed`
+- Durable conversations: `/v1/sessions`
+- Model catalog and lifecycle: `/v1/catalog`, `/v1/models/*`
+- MCP and governed agent endpoints for external agent integration
+- Versioned OpenAPI contract: `GET /openapi.yaml`
+
+The source contract is [openapi.yaml](pkg/api/openapi.yaml). UI types are
+generated from it; CI fails when generated types drift.
+
+## Persistent data
+
+Two roots are authoritative:
+
+| Setting | Native default | Container default | Contents |
+| --- | --- | --- | --- |
+| `OFFGRID_MODELS_DIR` | `~/.offgrid-llm/models` | `/var/lib/offgrid/models` | GGUF and projector files |
+| `OFFGRID_DATA_DIR` | `~/.offgrid-llm/data` | `/var/lib/offgrid/data` | sessions, users, RAG, runs, audio, audit, artifacts |
+
+Legacy state is copied into the data root without overwriting newer files. The
+legacy source is retained so migration is recoverable.
+
+## Capability maturity
+
+| Capability | Status | Notes |
+| --- | --- | --- |
+| Local inference and model switching | Core | `llama-server` is lifecycle-managed and loopback-only |
+| CLI, OpenAI/Ollama APIs, web UI | Core | Shared runtime and contract |
+| Durable chat sessions | Core | Complete turns are persisted atomically |
+| Model catalog/download/resume/verify | Core | Cancellation keeps resumable partial files |
+| Authentication and permissions | Core for network use | Disabled in loopback quick start |
+| Knowledge/RAG | Optional | Requires a compatible local embedding model |
+| Agents and MCP tools | Optional, governed | Tool calls are policy checked; risky calls require approval |
+| Audio, computer use, LoRA, P2P | Experimental | Platform and deployment support varies; do not assume availability |
+
+## Development checks
+
+```bash
+go test ./...
+
+cd web/app
+npm run api:check
+npm run check
+npm run build
+npm run test:e2e
+
+cd ../../desktop
+node --check main.js
+node --check preload.js
+```
+
+The CI workflow runs Go tests, contract generation checks, the UI build, live
+browser integration tests, and an unpacked Electron package build.
+
+## Documentation
+
+- [Architecture](docs/advanced/ARCHITECTURE.md)
+- [Maintainability and generation](docs/advanced/maintainability.md)
+- [API reference](docs/reference/api.md)
+- [CLI reference](docs/reference/cli.md)
+- [Docker deployment](docs/setup/docker.md)
+- [Model management](docs/guides/models.md)
+- [Knowledge and embeddings](docs/guides/embeddings.md)
+- [Agents](docs/guides/agents.md)
+- [Repository structure](docs/repository-structure.md)
+
+## Security
+
+The unauthenticated quick start is for loopback use only. Remote deployments
+must enable authentication, restrict permissions, terminate TLS at a trusted
+proxy, and review agent/computer-use policies. Do not expose model management,
+terminal, or tool execution endpoints directly to an untrusted network.
 
 ## License
 
-MIT - See [LICENSE](LICENSE)
-
-Built with [llama.cpp](https://github.com/ggerganov/llama.cpp)
-
----
-
-[Documentation](docs/README.md) | [Issues](https://github.com/takuphilchan/offgrid-llm/issues) | [Roadmap](docs/ROADMAP.md)
+MIT. See [LICENSE](LICENSE). OffGrid uses [llama.cpp](https://github.com/ggml-org/llama.cpp)
+for local inference.

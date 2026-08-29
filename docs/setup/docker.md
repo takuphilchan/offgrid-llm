@@ -7,7 +7,7 @@ application state live in persistent Docker volumes.
 ## Quick start
 
 ```bash
-docker pull takuphilchan/offgrid-llm:latest
+docker pull takuphilchan/offgrid-llm:edge
 docker run -d \
   --name offgrid \
   --init \
@@ -17,7 +17,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:latest
+  takuphilchan/offgrid-llm:edge
 ```
 
 Open <http://localhost:11611/ui/> and download a model from the Models page, or
@@ -35,14 +35,16 @@ and TLS for remote access.
 
 | Tag | Meaning |
 | --- | --- |
-| `latest` | Most recent stable CPU release |
-| `0.3.0` | Versioned CPU release |
-| `0.3` | Most recent patch in a minor CPU release |
+| `edge` | Current development image; update deliberately |
+| `latest` | Most recent stable CPU release after the first stable publication |
+| `<version>` | Immutable semantic-version release, for example `1.0.0` |
+| `<major>.<minor>` | Most recent patch in a stable minor release |
 | `sha-<commit>` | Image built from an exact source revision |
 | `latest-gpu` | Most recent stable NVIDIA release (Linux AMD64) |
-| `0.3.0-gpu` | Versioned NVIDIA release (Linux AMD64) |
+| `<version>-gpu` | Versioned NVIDIA release (Linux AMD64) |
 
-Pin a full version or digest in production rather than tracking `latest`.
+Use `edge` for the current pre-release build. Pin a full version or digest in
+production once a stable release is published.
 
 ## Compose deployments
 

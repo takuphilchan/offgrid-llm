@@ -1,117 +1,43 @@
-# Version Management
+# Version management
 
-OffGrid LLM uses a centralized version management system.
+`VERSION` is the release version source. The Go binary receives it through
+linker flags; Electron and React package metadata are updated together with
+their npm lockfiles.
 
-## Single Source of Truth
+## Preparing a version
 
-The `VERSION` file at the repository root contains the current version:
+1. Edit `VERSION` with a valid semantic version, without a leading `v`.
+2. Run:
 
-```
-0.1.7
-```
-
-## How It Works
-
-All version references are managed programmatically:
-
-1. **VERSION file** - Single source of truth (repository root)
-2. **update-version.sh** - Updates all files when version changes
-3. **Build scripts** - Read VERSION file automatically
-4. **Runtime** - Version set via ldflags during compilation
-
-## Updating the Version
-
-To bump the version:
-
-1. Edit the `VERSION` file:
-   ```bash
-   echo "0.1.8" > VERSION
-   ```
-
-2. Run the update script:
    ```bash
    ./scripts/update-version.sh
    ```
 
-3. Commit the changes:
-   ```bash
-   git add VERSION desktop/package.json desktop/index.html scripts/build-all.sh internal/p2p/discovery.go
-   git commit -m "chore: bump version to 0.1.8"
-   ```
+3. Review changes to `VERSION`, `desktop/package.json`,
+   `desktop/package-lock.json`, `web/app/package.json`, and
+   `web/app/package-lock.json`.
+4. Run the checks in the root README before creating a release.
 
-## Files Updated Automatically
+The update script is idempotent. It does not rewrite generated UI assets or Go
+source to publish a version.
 
-The `update-version.sh` script updates:
-
-- `desktop/package.json` - Electron app version
-- `desktop/index.html` - UI version displays
-- `scripts/build-all.sh` - Build script version variable
-- `internal/p2p/discovery.go` - P2P protocol version
-
-## Build-Time Version Injection
-
-The main binary version is injected at build time via ldflags:
+## Build-time injection
 
 ```bash
-go build -ldflags="-X main.Version=$(cat VERSION)" ./cmd/offgrid
+version="$(cat VERSION)"
+go build -trimpath -ldflags="-s -w -X main.Version=$version" -o offgrid ./cmd/offgrid
 ```
 
-The `scripts/build-all.sh` script does this automatically.
+Container and unified release workflows inject the same value and include
+source revision/build metadata. `offgrid version`, the root API response, and
+the desktop About information should therefore identify the packaged artifact.
 
-## Version Format
+## Tags
 
-Follow semantic versioning (semver):
+- `edge` is the manually published development container label.
+- Stable releases use a Git tag such as `v1.0.0`.
+- Stable container publishing also creates `1.0.0`, `1.0`, `latest`, and an
+  immutable `sha-*` tag.
 
-- **MAJOR.MINOR.PATCH** (e.g., 0.1.7)
-- **MAJOR** - Breaking changes
-- **MINOR** - New features (backwards compatible)
-- **PATCH** - Bug fixes
-
-## Checking Current Version
-
-```bash
-# From VERSION file
-cat VERSION
-
-# From built binary
-./offgrid version
-
-# From desktop app
-# See bottom of sidebar in UI
-```
-
-## CI/CD Integration
-
-Build scripts automatically read the VERSION file:
-
-```bash
-# Build with correct version
-./scripts/build-all.sh
-
-# Docker build with version tag
-cd docker
-./docker-build.sh  # Uses VERSION file automatically
-```
-
-## Migration from Hardcoded Versions
-
-Previously, versions were hardcoded in multiple files. Now:
-
-- **Before**: Manually update 10+ files for each release
-- **After**: Edit VERSION file, run `update-version.sh`, done
-
-## Documentation References
-
-Documentation files may reference specific versions as examples (e.g., in installation commands). These are fine to keep as-is and don't need to be updated unless creating new documentation.
-
-Example references that are OK:
-- Release notes referencing historical versions
-- Installation examples showing specific version downloads
-- Git tag examples in documentation
-
-## Scripts
-
-- `scripts/get-version.sh` - Returns current version from VERSION file
-- `scripts/update-version.sh` - Updates all files to match VERSION
-- `scripts/build-all.sh` - Builds with version from VERSION file
-- `docker/docker-build.sh` - Docker build with version from VERSION file
+Do not create a release tag merely to update `edge`. Release notes are
+historical and keep their original version references.

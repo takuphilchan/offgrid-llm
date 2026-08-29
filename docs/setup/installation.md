@@ -259,9 +259,10 @@ systemctl status offgrid@$USER
 # Check if UI files exist
 ls -la /var/lib/offgrid/web/ui/
 
-# If missing, reinstall or copy manually:
+# If missing, rebuild from a source checkout and copy the generated bundle:
 sudo mkdir -p /var/lib/offgrid/web/ui
-sudo cp -r web/ui/* /var/lib/offgrid/web/ui/
+./scripts/sync-ui.sh
+sudo cp -r web/dist/. /var/lib/offgrid/web/ui/
 ```
 
 ---
