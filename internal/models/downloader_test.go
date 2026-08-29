@@ -1,6 +1,12 @@
 package models
 
 import (
+	"bytes"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -184,4 +190,108 @@ func TestDownloader(t *testing.T) {
 			t.Error("progress callback was not set")
 		}
 	})
+}
+
+func TestDownloaderUsesRemoteSizeInsteadOfStaleCatalogSize(t *testing.T) {
+	content := bytes.Repeat([]byte("offgrid"), 2048)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	variant := &ModelVariant{Quantization: "Q4_K_M", Size: int64(len(content) - 100)}
+	downloader := NewDownloader(dir, &ModelCatalog{})
+	if err := downloader.downloadFromSource("test-model", variant.Quantization, variant, ModelSource{URL: server.URL}); err != nil {
+		t.Fatalf("download with stale catalog size failed: %v", err)
+	}
+	assertDownloadedContent(t, dir, "test-model.Q4_K_M.gguf", content)
+}
+
+func TestDownloaderReplacesPartialWhenServerIgnoresRange(t *testing.T) {
+	content := bytes.Repeat([]byte("model-data"), 1024)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	tmpPath := filepath.Join(dir, ".test-model-Q4_K_M.tmp")
+	if err := os.WriteFile(tmpPath, []byte("stale partial data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	variant := &ModelVariant{Quantization: "Q4_K_M", Size: int64(len(content))}
+	downloader := NewDownloader(dir, &ModelCatalog{})
+	if err := downloader.downloadFromSource("test-model", variant.Quantization, variant, ModelSource{URL: server.URL}); err != nil {
+		t.Fatalf("download from server that ignored Range failed: %v", err)
+	}
+	assertDownloadedContent(t, dir, "test-model.Q4_K_M.gguf", content)
+}
+
+func TestDownloaderRecoversFromOversizedPartial(t *testing.T) {
+	content := bytes.Repeat([]byte("model-data"), 1024)
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.Header.Get("Range") != "" {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", len(content)))
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	tmpPath := filepath.Join(dir, ".test-model-Q4_K_M.tmp")
+	oversized := append(append([]byte(nil), content...), []byte("corruption")...)
+	if err := os.WriteFile(tmpPath, oversized, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	variant := &ModelVariant{Quantization: "Q4_K_M", Size: int64(len(content))}
+	downloader := NewDownloader(dir, &ModelCatalog{})
+	if err := downloader.downloadFromSource("test-model", variant.Quantization, variant, ModelSource{URL: server.URL}); err != nil {
+		t.Fatalf("recovery from oversized partial failed: %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2 (rejected resume plus clean restart)", requests)
+	}
+	assertDownloadedContent(t, dir, "test-model.Q4_K_M.gguf", content)
+}
+
+func TestDownloaderFinalizesAlreadyCompletePartial(t *testing.T) {
+	content := bytes.Repeat([]byte("model-data"), 1024)
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", len(content)))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	tmpPath := filepath.Join(dir, ".test-model-Q4_K_M.tmp")
+	if err := os.WriteFile(tmpPath, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	variant := &ModelVariant{Quantization: "Q4_K_M", Size: int64(len(content))}
+	downloader := NewDownloader(dir, &ModelCatalog{})
+	if err := downloader.downloadFromSource("test-model", variant.Quantization, variant, ModelSource{URL: server.URL}); err != nil {
+		t.Fatalf("finalizing complete partial failed: %v", err)
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
+	}
+	assertDownloadedContent(t, dir, "test-model.Q4_K_M.gguf", content)
+}
+
+func assertDownloadedContent(t *testing.T, dir, name string, expected []byte) {
+	t.Helper()
+	actual, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, expected) {
+		t.Fatalf("downloaded content differs: got %d bytes, want %d", len(actual), len(expected))
+	}
 }

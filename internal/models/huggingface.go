@@ -669,46 +669,29 @@ func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, on
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	// Check if partially downloaded
-	var written int64
-	if stat, err := os.Stat(tmpPath); err == nil {
-		written = stat.Size()
-	}
-
-	req, err := http.NewRequest("GET", downloadURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", "OffGrid-LLM/0.1.0")
-
-	// Support resume with Range header
-	if written > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", written))
-	}
-
 	// Use a client with no timeout for large downloads
 	client := &http.Client{Timeout: 0}
-	resp, err := client.Do(req)
+	resume, err := openResumableResponse(client, downloadURL, tmpPath, "OffGrid-LLM/0.3.0")
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
+	written := resume.offset
+	totalSize := resume.total
+	if resume.complete {
+		if err := os.Rename(tmpPath, destPath); err != nil {
+			return fmt.Errorf("failed to finalize download: %w", err)
+		}
+		return nil
+	}
+	resp := resume.response
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		return fmt.Errorf("download failed with status %d", resp.StatusCode)
-	}
-
-	// Get total size
-	totalSize := resp.ContentLength
-	if resp.StatusCode == http.StatusPartialContent {
-		totalSize += written // Add already downloaded bytes
-	}
 
 	// Open/create .tmp file
 	flag := os.O_CREATE | os.O_WRONLY
 	if written > 0 {
 		flag |= os.O_APPEND
+	} else {
+		flag |= os.O_TRUNC
 	}
 
 	out, err := os.OpenFile(tmpPath, flag, 0644)

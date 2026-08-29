@@ -94,40 +94,27 @@ func (d *Downloader) downloadFromSource(modelID, quantization string, variant *M
 	tmpPath := filepath.Join(d.modelsDir, fmt.Sprintf(".%s-%s.tmp", modelID, quantization))
 	destPath := filepath.Join(d.modelsDir, fmt.Sprintf("%s.%s.gguf", modelID, quantization))
 
-	// Check if partially downloaded
-	var bytesWritten int64
-	if stat, err := os.Stat(tmpPath); err == nil {
-		bytesWritten = stat.Size()
-		progress.BytesDone = bytesWritten
-		d.notifyProgress(progress)
-	}
-
-	// Create HTTP request with Range support for resume
-	req, err := http.NewRequest("GET", source.URL, nil)
+	resume, err := openResumableResponse(d.client, source.URL, tmpPath, "OffGrid-LLM/0.3.0")
 	if err != nil {
 		return err
 	}
+	bytesWritten := resume.offset
+	progress.BytesDone = bytesWritten
+	progress.BytesTotal = resume.total
+	d.notifyProgress(progress)
 
-	if bytesWritten > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", bytesWritten))
+	if resume.complete {
+		return d.finishDownload(tmpPath, destPath, variant, progress, resume.total)
 	}
-
-	// Execute request
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return err
-	}
+	resp := resume.response
 	defer resp.Body.Close()
-
-	// Check response
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
-	}
 
 	// Open file for writing
 	flag := os.O_CREATE | os.O_WRONLY
 	if bytesWritten > 0 {
 		flag |= os.O_APPEND
+	} else {
+		flag |= os.O_TRUNC
 	}
 
 	file, err := os.OpenFile(tmpPath, flag, 0644)
@@ -160,11 +147,13 @@ func (d *Downloader) downloadFromSource(modelID, quantization string, variant *M
 				speed := int64(float64(bytesDownloadedThisSession) / elapsed)
 
 				progress.BytesDone = bytesWritten
-				progress.Percent = float64(bytesWritten) / float64(variant.Size) * 100
+				if resume.total > 0 {
+					progress.Percent = float64(bytesWritten) / float64(resume.total) * 100
+				}
 				progress.Speed = speed
 
-				if speed > 0 {
-					remaining := variant.Size - bytesWritten
+				if speed > 0 && resume.total > bytesWritten {
+					remaining := resume.total - bytesWritten
 					progress.TimeRemaining = time.Duration(float64(remaining)/float64(speed)) * time.Second
 				}
 
@@ -181,9 +170,16 @@ func (d *Downloader) downloadFromSource(modelID, quantization string, variant *M
 		}
 	}
 
-	// Verify file size
-	if bytesWritten != variant.Size {
-		return fmt.Errorf("incomplete download: got %d bytes, expected %d", bytesWritten, variant.Size)
+	return d.finishDownload(tmpPath, destPath, variant, progress, resume.total)
+}
+
+func (d *Downloader) finishDownload(tmpPath, destPath string, variant *ModelVariant, progress DownloadProgress, expectedSize int64) error {
+	stat, err := os.Stat(tmpPath)
+	if err != nil {
+		return err
+	}
+	if expectedSize > 0 && stat.Size() != expectedSize {
+		return fmt.Errorf("incomplete download: got %d bytes, expected %d", stat.Size(), expectedSize)
 	}
 
 	// Verify SHA256 if provided

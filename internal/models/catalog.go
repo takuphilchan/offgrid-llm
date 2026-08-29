@@ -253,8 +253,8 @@ func DefaultCatalog() *ModelCatalog {
 				Variants: []ModelVariant{
 					{
 						Quantization: "Q4_K_M",
-						Size:         2200000000, // ~2.2GB
-						SHA256:       "",
+						Size:         2393232608,
+						SHA256:       "3f68916e850b107d8641d18bcd5548f0d66beef9e0a9077fe84ef28943eb7e88",
 						Quality:      "high",
 						Sources: []ModelSource{
 							{
