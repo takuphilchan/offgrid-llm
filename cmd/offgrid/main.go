@@ -1415,6 +1415,12 @@ func handleDownload(args []string) {
 	}
 
 	modelPath := filepath.Join(cfg.ModelsDir, fmt.Sprintf("%s.%s.gguf", modelEntry.ID, quantization))
+	if modelEntry.Type == "embedding" {
+		modelPath = filepath.Join(cfg.ModelsDir, modelEntry.ID+".gguf")
+		fmt.Println()
+		printInfo(fmt.Sprintf("Enable the knowledge base with: offgrid kb enable %s", modelEntry.ID))
+		return
+	}
 
 	if err := reloadLlamaServerWithModel(modelPath); err != nil {
 		fmt.Println()
@@ -5556,7 +5562,7 @@ func handleKnowledgeBase(args []string) {
 		fmt.Printf("  %sSupported%s  .txt .md .pdf .docx .csv .json .html and common code files\n", colorDim, colorReset)
 		fmt.Println()
 		fmt.Printf("  %sExamples%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %s$%s offgrid kb enable bge-small\n", colorDim, colorReset)
+		fmt.Printf("    %s$%s offgrid kb enable bge-small-en-v1.5\n", colorDim, colorReset)
 		fmt.Printf("    %s$%s offgrid kb add ./docs/manual.md\n", colorDim, colorReset)
 		fmt.Printf("    %s$%s offgrid kb add ./learning-packs/\n", colorDim, colorReset)
 		fmt.Printf("    %s$%s offgrid kb search \"how to configure\"\n", colorDim, colorReset)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/takuphilchan/offgrid-llm/internal/config"
@@ -334,5 +335,18 @@ func TestHandleQuotaRejectsOtherUser(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestSafeModelID(t *testing.T) {
+	for _, valid := range []string{"bge-m3", "all-minilm-l6-v2", "model.Q4_K_M", "vendor_model-1"} {
+		if !isSafeModelID(valid) {
+			t.Errorf("isSafeModelID(%q) = false", valid)
+		}
+	}
+	for _, invalid := range []string{"", "../model", "model/name", "model name", strings.Repeat("a", 129)} {
+		if isSafeModelID(invalid) {
+			t.Errorf("isSafeModelID(%q) = true", invalid)
+		}
 	}
 }

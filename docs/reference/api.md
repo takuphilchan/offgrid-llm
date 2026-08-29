@@ -97,16 +97,34 @@ clients must read `/v1/rag/status` and present an unavailable state when a local
 embedding model has not been configured. Setting `use_knowledge_base` on a chat
 request has an effect only when the RAG engine is enabled and indexed.
 
+The supported setup workflow is:
+
+- `GET /v1/catalog` to choose an entry with `type: embedding`.
+- `POST /v1/models/download` with its stable `model_id`, repository, and file.
+- `GET /v1/models/download/progress` until that model is complete.
+- `POST /v1/rag/enable` with the installed embedding model ID.
+- `POST /v1/documents/ingest` to retain and index a source.
+- `POST /v1/documents/reindex` when a retained source needs rebuilding.
+
+Activation metadata is persisted even before the first document is indexed.
+
 ## Agents and MCP
 
 MCP and agent routes are governed, administrator-level surfaces. Agent
 sandboxes start lazily only when a tool call needs them. Treat terminal,
 computer-use, filesystem, and external MCP tools as privileged operations and
-require explicit policy or user approval.
+require explicit policy or user approval. The stable UI integration routes are:
 
-These capabilities continue to evolve and are not all included in the stable
-OpenAPI document yet. Their guides must be read together with the security
-configuration before network use.
+- `POST /v1/agents/run` and `GET /v1/agents/tasks`
+- `GET/PATCH /v1/agents/tools`
+- `GET/POST /v1/agents/mcp` and `POST /v1/agents/mcp/test`
+- `GET /v1/capabilities`
+- `GET /v1/computer/status`
+
+Task state, tool enablement, and successful MCP connection configuration are
+stored in the OffGrid data directory. Computer use remains unavailable until a
+supported native driver is configured; callers must honor the status endpoint.
+These routes are included in the versioned OpenAPI document.
 
 ## Errors
 

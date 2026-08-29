@@ -10,6 +10,10 @@ export type DownloadProgress = components['schemas']['DownloadProgress'];
 export type Verification = components['schemas']['Verification'];
 export type PublicUser = components['schemas']['PublicUser'];
 export type ToolApproval = { tool: string; arguments: Record<string, unknown> };
+export type AgentStep = { id?: string; type?: string; content?: string; tool_name?: string; tool_args?: Record<string, unknown>; tool_result?: string };
+export type AgentTask = { id: string; prompt: string; status: string; result?: string; error?: string; steps?: AgentStep[]; created_at: string; started_at?: string; completed_at?: string };
+export type AgentTool = { name: string; description: string; enabled: boolean; source: string; capability?: { name: string; namespace: string; source: string; kind: string; risk: string; description?: string } };
+export type MCPServer = { name: string; url?: string; transport: string; tools: number; status: string };
 export type RunSummary = { id: string; status: string; started_at: string; updated_at: string; event_count: number; data?: Record<string, unknown> };
 export type RunEvent = { id: string; run_id: string; sequence: number; type: string; time: string; data?: Record<string, any> };
 export type RAGStatus = components['schemas']['RAGStatus'];
@@ -67,8 +71,8 @@ export const api = {
     const result = await request<{ models: CatalogModel[] | null }>('/v1/catalog');
     return Array.isArray(result.models) ? result.models : [];
   },
-  downloadModel: (model: Pick<CatalogModel, 'repo' | 'file' | 'quant'>) => request<{ success: boolean; status: string; file_name: string }>('/v1/models/download', {
-    method: 'POST', body: JSON.stringify({ repository: model.repo, file_name: model.file, quantization: model.quant })
+  downloadModel: (model: Pick<CatalogModel, 'id' | 'repo' | 'file' | 'quant'>) => request<{ success: boolean; exists?: boolean; status: string; file_name: string }>('/v1/models/download', {
+    method: 'POST', body: JSON.stringify({ model_id: model.id, repository: model.repo, file_name: model.file, quantization: model.quant })
   }),
   downloadProgress: () => request<Record<string, DownloadProgress>>('/v1/models/download/progress'),
   cancelDownload: (fileName: string) => request<{ success: boolean }>('/v1/models/download/cancel', {
@@ -83,6 +87,9 @@ export const api = {
     return { ...result, documents: Array.isArray(result.documents) ? result.documents : [] };
   },
   ragStatus: () => request<RAGStatus>('/v1/rag/status'),
+  enableRAG: (embeddingModel: string) => request<{ success: boolean; message: string }>('/v1/rag/enable', {
+    method: 'POST', body: JSON.stringify({ embedding_model: embeddingModel })
+  }),
   stats: async () => (await request<Record<string, any> | null>('/v1/stats')) ?? {},
   systemConfig: () => request<SystemConfig>('/v1/system/config'),
   computerStatus: () => request<ComputerStatus>('/v1/computer/status'),
@@ -101,8 +108,29 @@ export const api = {
     });
     return result.choices[0]?.message.content ?? '';
   },
-  runAgent: (model: string, prompt: string, approvedToolCalls: ToolApproval[] = []) => request<{ output: string; task_id: string; run_id: string; steps: unknown[] }>('/v1/agents/run', {
-    method: 'POST', body: JSON.stringify({ model, prompt, max_iterations: 12, approved_tool_calls: approvedToolCalls })
+  runAgent: (model: string, prompt: string, style: string, approvedToolCalls: ToolApproval[] = []) => request<{ output: string; task_id: string; run_id: string; steps: AgentStep[] }>('/v1/agents/run', {
+    method: 'POST', body: JSON.stringify({ model, prompt, style, max_iterations: 12, approved_tool_calls: approvedToolCalls })
+  }),
+  agentTasks: async () => {
+    const result = await request<AgentTask[] | null>('/v1/agents/tasks');
+    return Array.isArray(result) ? result : [];
+  },
+  agentTools: async () => {
+    const result = await request<{ tools: AgentTool[] | null; total: number; enabled_count: number }>('/v1/agents/tools?all=true');
+    return { ...result, tools: Array.isArray(result.tools) ? result.tools : [] };
+  },
+  setAgentToolEnabled: (name: string, enabled: boolean) => request<{ status: string; tool: string; enabled_count: number }>('/v1/agents/tools', {
+    method: 'PATCH', body: JSON.stringify({ name, enabled })
+  }),
+  mcpServers: async () => {
+    const result = await request<{ servers: MCPServer[] | null }>('/v1/agents/mcp');
+    return Array.isArray(result.servers) ? result.servers : [];
+  },
+  testMCP: (url: string) => request<{ status: string; tools_count: number }>('/v1/agents/mcp/test', {
+    method: 'POST', body: JSON.stringify({ url })
+  }),
+  connectMCP: (name: string, url: string) => request<{ status: string; server: string; tools_added: number }>('/v1/agents/mcp', {
+    method: 'POST', body: JSON.stringify({ name, url })
   }),
   reindexDocument: (documentID: string) => request<{ success: boolean; document: Document }>('/v1/documents/reindex', {
     method: 'POST', body: JSON.stringify({ document_id: documentID })

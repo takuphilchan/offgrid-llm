@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -54,8 +55,9 @@ type UserDefinedTool struct {
 
 // ToolsConfig is the user's tools configuration file
 type ToolsConfig struct {
-	Tools      []UserDefinedTool `json:"tools"`
-	MCPServers []MCPServerConfig `json:"mcp_servers"`
+	Tools         []UserDefinedTool `json:"tools"`
+	MCPServers    []MCPServerConfig `json:"mcp_servers"`
+	DisabledTools []string          `json:"disabled_tools,omitempty"`
 }
 
 // MCPServerConfig configures an MCP server connection
@@ -149,6 +151,11 @@ func (r *ToolRegistry) LoadUserTools(configPath string) error {
 		r.executors[ut.Name] = r.createUserToolExecutor(ut)
 		r.toolSources[ut.Name] = "user"
 		r.registerCapabilityLocked(ut.Name)
+	}
+	for _, name := range config.DisabledTools {
+		if _, exists := r.tools[name]; exists {
+			r.disabledTools[name] = true
+		}
 	}
 
 	// Connect to MCP servers
@@ -440,6 +447,7 @@ func (r *ToolRegistry) TestMCPConnection(urlOrCommand string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer client.Close()
 
 	// Return tool count without registering
 	return len(client.GetTools()), nil
@@ -460,6 +468,7 @@ func (r *ToolRegistry) GetMCPServers() []map[string]interface{} {
 			"status":    "connected",
 		})
 	}
+	sort.Slice(servers, func(i, j int) bool { return servers[i]["name"].(string) < servers[j]["name"].(string) })
 	return servers
 }
 
@@ -474,6 +483,7 @@ func (r *ToolRegistry) GetTools() []api.Tool {
 			tools = append(tools, tool)
 		}
 	}
+	sort.Slice(tools, func(i, j int) bool { return tools[i].Function.Name < tools[j].Function.Name })
 	return tools
 }
 
@@ -496,39 +506,82 @@ func (r *ToolRegistry) GetAllToolsWithStatus() []map[string]interface{} {
 			"capability":  r.capabilityLocked(name),
 		})
 	}
+	sort.Slice(tools, func(i, j int) bool { return tools[i]["name"].(string) < tools[j]["name"].(string) })
 	return tools
 }
 
 // EnableTool enables a tool by name
 func (r *ToolRegistry) EnableTool(name string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, ok := r.tools[name]; !ok {
-		return fmt.Errorf("tool not found: %s", name)
-	}
-	delete(r.disabledTools, name)
-	return nil
+	return r.SetToolEnabled(name, true)
 }
 
 // DisableTool disables a tool by name
 func (r *ToolRegistry) DisableTool(name string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, ok := r.tools[name]; !ok {
-		return fmt.Errorf("tool not found: %s", name)
-	}
-	r.disabledTools[name] = true
-	return nil
+	return r.SetToolEnabled(name, false)
 }
 
 // SetToolEnabled sets whether a tool is enabled or disabled
 func (r *ToolRegistry) SetToolEnabled(name string, enabled bool) error {
-	if enabled {
-		return r.EnableTool(name)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.tools[name]; !ok {
+		return fmt.Errorf("tool not found: %s", name)
 	}
-	return r.DisableTool(name)
+	if enabled {
+		delete(r.disabledTools, name)
+	} else {
+		r.disabledTools[name] = true
+	}
+	return r.persistSettingsLocked(nil)
+}
+
+// PersistMCPServer records a successfully connected MCP server so the same
+// connection and its discovered tools are restored after a service restart.
+func (r *ToolRegistry) PersistMCPServer(server MCPServerConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	server.Enabled = true
+	return r.persistSettingsLocked(func(config *ToolsConfig) {
+		for index := range config.MCPServers {
+			if config.MCPServers[index].Name == server.Name {
+				config.MCPServers[index] = server
+				return
+			}
+		}
+		config.MCPServers = append(config.MCPServers, server)
+	})
+}
+
+func (r *ToolRegistry) persistSettingsLocked(update func(*ToolsConfig)) error {
+	if r.configPath == "" {
+		return nil
+	}
+	var config ToolsConfig
+	data, err := os.ReadFile(r.configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read tools config: %w", err)
+	}
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("parse tools config: %w", err)
+		}
+	}
+	if update != nil {
+		update(&config)
+	}
+	config.DisabledTools = config.DisabledTools[:0]
+	for name := range r.disabledTools {
+		config.DisabledTools = append(config.DisabledTools, name)
+	}
+	sort.Strings(config.DisabledTools)
+	encoded, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode tools config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(r.configPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(r.configPath, encoded, 0o600)
 }
 
 // GetEnabledCount returns the count of enabled tools

@@ -13,7 +13,20 @@ Embeddings are vector representations of text that capture semantic meaning. The
 
 ## Quick Start
 
-### 1. Download an Embedding Model
+### Web UI (recommended)
+
+1. Start OffGrid and open `http://127.0.0.1:11611/ui/#/knowledge`.
+2. Select an embedding model. Use **BGE M3** for multilingual knowledge or
+   **all-MiniLM-L6-v2** for a small English-only installation.
+3. Choose **Install and enable**. The UI tracks that model's download and
+   activates retrieval when the model is ready.
+4. Add a document. The retained source can be reindexed later after parser or
+   chunking upgrades.
+
+The Knowledge page reports the active embedding model. Chat only uses the
+index when **Use knowledge base** is enabled for that conversation.
+
+### CLI
 
 ```bash
 # List available embedding models
@@ -21,12 +34,18 @@ offgrid models list --filter embedding
 
 # Download a lightweight model (42MB, 384 dimensions)
 offgrid download all-minilm-l6-v2
+offgrid kb enable all-minilm-l6-v2
 
-# Or a more powerful model (262MB, 768 dimensions)
-offgrid download nomic-embed-text-v1
+# Or use the multilingual model (about 411MB, 1024 dimensions)
+offgrid download bge-m3
+offgrid kb enable bge-m3
+
+# Index retained source files
+offgrid kb add ./docs/manual.pdf
+offgrid kb status
 ```
 
-### 2. Generate Embeddings via API
+### Generate Embeddings via API
 
 ```bash
 curl -X POST http://localhost:11611/v1/embeddings \
@@ -37,7 +56,7 @@ curl -X POST http://localhost:11611/v1/embeddings \
   }'
 ```
 
-### 3. Use in Python
+### Use in Python
 
 ```python
 import requests
@@ -107,15 +126,16 @@ offgrid download bge-small-en-v1.5
 offgrid download nomic-embed-text-v1
 ```
 
-### E5 Small v2 (Multilingual)
-- **Size**: 64MB
-- **Dimensions**: 384
-- **Best for**: Non-English text, multilingual search
-- **RAM**: 1GB minimum
-- **Languages**: 100+ languages
+### BGE M3 (Multilingual)
+- **Size**: about 411MB (Q4_K_M)
+- **Dimensions**: 1024
+- **Best for**: Multilingual retrieval and longer knowledge sources
+- **RAM**: 2GB minimum
+- **Languages**: Multilingual
 
 ```bash
-offgrid download e5-small-v2
+offgrid download bge-m3
+offgrid kb enable bge-m3
 ```
 
 ---
@@ -322,7 +342,7 @@ def embed_large_batch(texts, model="all-minilm-l6-v2", batch_size=32):
 
 - **Low RAM / High throughput**: `all-minilm-l6-v2` (42MB)
 - **Best accuracy**: `nomic-embed-text-v1` (262MB)
-- **Multilingual**: `e5-small-v2` (64MB)
+- **Multilingual**: `bge-m3` (about 411MB)
 
 ### 2. Batch Your Requests
 
@@ -423,16 +443,17 @@ offgrid models list
 offgrid download all-minilm-l6-v2
 ```
 
+If a catalog download returns HTTP 404, upgrade OffGrid or refresh the
+container image before retrying. Older catalogs referenced repositories that
+did not publish the expected GGUF artifacts. A partial download is retained
+for resumable failures; a 404 is a source-catalog error, not a retryable partial
+transfer.
+
 ### Out of memory
 
 Use a smaller model:
 ```bash
 offgrid download all-minilm-l6-v2  # 42MB instead of 262MB
-```
-
-Or use quantized version:
-```bash
-offgrid download all-minilm-l6-v2 --quantization Q8_0  # 23MB
 ```
 
 ### Slow performance

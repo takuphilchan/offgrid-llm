@@ -142,6 +142,7 @@ func (m *Manager) CreateTask(id, prompt string, config *AgentConfig) *Task {
 	}
 
 	m.tasks[id] = task
+	m.saveTask(task)
 	return task
 }
 
@@ -158,6 +159,7 @@ func (m *Manager) StartTask(id string) error {
 	now := time.Now()
 	task.StartedAt = &now
 	task.Status = TaskRunning
+	m.saveTask(task)
 	return nil
 }
 
@@ -172,6 +174,7 @@ func (m *Manager) AddTaskStep(id string, step Step) error {
 	}
 
 	task.Steps = append(task.Steps, step)
+	m.saveTask(task)
 	return nil
 }
 
@@ -357,6 +360,7 @@ func (m *Manager) CancelTask(id string) error {
 	}
 
 	task.Status = TaskCancelled
+	m.saveTask(task)
 	return nil
 }
 
@@ -638,7 +642,9 @@ func (e *WorkflowEngine) evaluateCondition(condition string, vars map[string]any
 // Task Persistence
 // ============================================================================
 
-// saveTask saves a task to disk
+// saveTask saves every task state to disk. Persisting pending, running, and
+// approval-waiting states makes service restarts observable instead of losing
+// in-flight work from the task history.
 func (m *Manager) saveTask(task *Task) {
 	if m.dataDir == "" {
 		return
@@ -646,11 +652,6 @@ func (m *Manager) saveTask(task *Task) {
 
 	tasksDir := filepath.Join(m.dataDir, "agent_tasks")
 	os.MkdirAll(tasksDir, 0755)
-
-	// Only save completed or failed tasks (not running ones)
-	if task.Status != TaskCompleted && task.Status != TaskFailed {
-		return
-	}
 
 	data, err := json.MarshalIndent(task, "", "  ")
 	if err != nil {

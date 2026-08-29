@@ -304,6 +304,160 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RAGStatus' }
+  /v1/rag/enable:
+    post:
+      operationId: enableRAG
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [embedding_model]
+              properties: { embedding_model: { type: string, minLength: 1 } }
+      responses:
+        '200':
+          description: Knowledge retrieval enabled and activation persisted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties: { success: { type: boolean }, message: { type: string } }
+        '400': { $ref: '#/components/responses/Error' }
+  /v1/documents/ingest:
+    post:
+      operationId: ingestDocument
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties: { file: { type: string, format: binary } }
+      responses:
+        '200':
+          description: Document indexed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, document]
+                properties: { success: { type: boolean }, document: { $ref: '#/components/schemas/Document' } }
+  /v1/documents/reindex:
+    post:
+      operationId: reindexDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [document_id]
+              properties: { document_id: { type: string } }
+      responses:
+        '200':
+          description: Document reindexed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, document]
+                properties: { success: { type: boolean }, document: { $ref: '#/components/schemas/Document' } }
+  /v1/agents/run:
+    post:
+      operationId: runAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentRunRequest' }
+      responses:
+        '200':
+          description: Completed governed agent run
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResponse' }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/agents/tasks:
+    get:
+      operationId: listAgentTasks
+      responses:
+        '200':
+          description: Durable agent task states
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AgentTask' } }
+  /v1/agents/tools:
+    get:
+      operationId: listAgentTools
+      parameters:
+        - in: query
+          name: all
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Agent tool catalog
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    patch:
+      operationId: setAgentToolEnabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, enabled]
+              properties: { name: { type: string }, enabled: { type: boolean } }
+      responses:
+        '200': { description: Tool state persisted }
+  /v1/agents/mcp:
+    get:
+      operationId: listMCPServers
+      responses:
+        '200': { description: Connected MCP servers }
+    post:
+      operationId: connectMCPServer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties: { name: { type: string }, url: { type: string, format: uri } }
+      responses:
+        '200': { description: MCP server connected and persisted }
+  /v1/agents/mcp/test:
+    post:
+      operationId: testMCPServer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties: { url: { type: string, format: uri } }
+      responses:
+        '200': { description: MCP connection test result }
+  /v1/capabilities:
+    get:
+      operationId: listCapabilities
+      responses:
+        '200': { description: Governed capability descriptors }
+  /v1/computer/status:
+    get:
+      operationId: getComputerStatus
+      responses:
+        '200':
+          description: Computer-use driver and safety-controller status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComputerStatus' }
 components:
   securitySchemes:
     sessionCookie:
@@ -425,6 +579,11 @@ components:
         repository: { type: string }
         file_name: { type: string }
         quantization: { type: string }
+        model_id:
+          type: string
+          description: Stable catalog ID used for the collision-free local filename.
+          pattern: '^[A-Za-z0-9._-]+$'
+          maxLength: 128
     DownloadProgress:
       type: object
       required: [file_name, bytes_total, bytes_done, percent, speed, started_at, status]
@@ -521,3 +680,52 @@ components:
         enabled: { type: boolean }
         embedding_model: { type: string }
         stats: { type: object, additionalProperties: true }
+    ToolApproval:
+      type: object
+      required: [tool, arguments]
+      properties:
+        tool: { type: string }
+        arguments: { type: object, additionalProperties: true }
+    AgentRunRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model: { type: string }
+        prompt: { type: string, minLength: 1 }
+        style: { type: string, enum: [react, cot, plan, plan-execute] }
+        max_iterations: { type: integer, minimum: 1, maximum: 100 }
+        approved_tool_calls:
+          type: array
+          items: { $ref: '#/components/schemas/ToolApproval' }
+    AgentStep:
+      type: object
+      additionalProperties: true
+    AgentRunResponse:
+      type: object
+      required: [output, task_id, run_id, steps]
+      properties:
+        output: { type: string }
+        task_id: { type: string }
+        run_id: { type: string }
+        steps: { type: array, items: { $ref: '#/components/schemas/AgentStep' } }
+        artifact: { type: object, additionalProperties: true }
+    AgentTask:
+      type: object
+      required: [id, prompt, status, created_at]
+      properties:
+        id: { type: string }
+        prompt: { type: string }
+        status: { type: string }
+        result: { type: string }
+        error: { type: string }
+        steps: { type: array, items: { $ref: '#/components/schemas/AgentStep' } }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+    ComputerStatus:
+      type: object
+      required: [available, emergency_stop, active_sessions]
+      properties:
+        available: { type: boolean }
+        emergency_stop: { type: boolean }
+        active_sessions: { type: integer, minimum: 0 }

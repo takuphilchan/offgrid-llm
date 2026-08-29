@@ -16,10 +16,13 @@ offgrid agent templates                # List available templates
 
 ### Web UI
 
-1. Open http://localhost:11611
-2. Go to **Agent** tab
-3. Select a model
-4. Enter a task and click **Run**
+1. Open `http://127.0.0.1:11611/ui/#/agents`
+2. Select an installed chat model and reasoning style
+3. Enter a task and click **Run**
+
+The page also shows durable task history, enabled tools, MCP connections, and
+the real computer-use driver status. An unavailable driver is reported as
+unavailable; the UI does not imply that desktop control is active.
 
 ---
 
@@ -78,21 +81,23 @@ Agents can use these tools automatically:
 
 | Tool | Description |
 |------|-------------|
-| `calculate` | Math calculations |
-| `search_models` | Search HuggingFace |
-| `list_models` | List local models |
-| `search_documents` | Search RAG knowledge base |
+| `calculator` | Math calculations |
 | `read_file` | Read file contents |
 | `write_file` | Write to files |
-| `list_directory` | List directory contents |
+| `list_files` | List directory contents |
 | `http_get` | HTTP GET requests |
 | `shell` | Execute shell commands |
+| `current_time` | Read the current local time |
 
 ### Manage Tools
 
 ```bash
 offgrid agent tools                    # List all tools
 ```
+
+Tool enable/disable choices are persisted in the OffGrid data directory and
+restored on restart. The web UI exposes the same state through
+`GET/PATCH /v1/agents/tools`.
 
 **API:**
 ```bash
@@ -127,6 +132,10 @@ curl -X POST http://localhost:11611/v1/agents/mcp \
     "url": "npx -y @modelcontextprotocol/server-filesystem /tmp"
   }'
 ```
+
+Successful HTTP MCP connections are persisted and restored from the OffGrid
+data directory. Test a URL before connecting it; external MCP tools inherit the
+same policy and approval boundaries as built-in tools.
 
 ### Popular MCP Servers
 

@@ -12,6 +12,10 @@ function installedCatalogModel(model: CatalogModel, installed: Model[]): boolean
   return installed.some(item => item.id.toLowerCase() === stem || item.id.toLowerCase() === model.id.toLowerCase());
 }
 
+function downloadFor(model: CatalogModel, progress: Record<string, DownloadProgress>): DownloadProgress | undefined {
+  return progress[`${model.id}.gguf`];
+}
+
 export function ModelsPage({ models, selected, setSelected, onRefresh }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void> }) {
   const { messages: text } = useI18n();
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
@@ -22,6 +26,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh }: { model
   const [confirmDelete, setConfirmDelete] = useState('');
   const [verification, setVerification] = useState<Verification | null>(null);
   const completed = useRef(new Set<string>());
+  const activeOperations = useRef(new Set<string>());
 
   const load = async () => {
     setLoading(true);
@@ -50,14 +55,20 @@ export function ModelsPage({ models, selected, setSelected, onRefresh }: { model
   }, [onRefresh]);
 
   const download = async (model: CatalogModel) => {
-    setOperation(`download:${model.id}`);
+    const operationID = `download:${model.id}`;
+    if (activeOperations.current.has(operationID)) return;
+    activeOperations.current.add(operationID);
+    setOperation(operationID);
     setError('');
     try {
       await api.downloadModel(model);
       setProgress(await api.downloadProgress());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : text.common.error);
-    } finally { setOperation(''); }
+    } finally {
+      activeOperations.current.delete(operationID);
+      setOperation('');
+    }
   };
 
   const cancel = async (download: DownloadProgress) => {
@@ -110,7 +121,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh }: { model
     <section className="model-section">
       <div className="section-heading"><div><span className="eyebrow">{text.models.catalog}</span><h2>{text.models.discover}</h2></div><button className="secondary-button" onClick={() => void load()}>{text.common.refresh}</button></div>
       {loading && catalog.length === 0 ? <div className="catalog-grid"><div className="catalog-card skeleton-card" /><div className="catalog-card skeleton-card" /></div> : <div className="catalog-grid">{catalog.map(model => {
-        const current = progress[fileName(model.file)];
+        const current = downloadFor(model, progress);
         const installed = installedCatalogModel(model, models);
         return <article className="catalog-card" key={model.id}>
           <div className="catalog-card-top"><div className="model-glyph"><Icon name="models" /></div>{model.recommended && <span className="status-pill">{text.models.recommended}</span>}</div>

@@ -302,6 +302,31 @@ func TestDownloaderFinalizesAlreadyCompletePartial(t *testing.T) {
 	assertDownloadedContent(t, dir, "test-model.Q4_K_M.gguf", content)
 }
 
+func TestDownloaderUsesStableCatalogIDForEmbeddingModel(t *testing.T) {
+	content := bytes.Repeat([]byte("embedding-data"), 1024)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	variant := ModelVariant{
+		Quantization: "Q4_K_M",
+		Size:         int64(len(content)),
+		Sources:      []ModelSource{{URL: server.URL}},
+	}
+	catalog := &ModelCatalog{Models: []CatalogEntry{{
+		ID:       "bge-m3",
+		Type:     "embedding",
+		Variants: []ModelVariant{variant},
+	}}}
+	downloader := NewDownloader(dir, catalog)
+	if err := downloader.Download("bge-m3", "Q4_K_M"); err != nil {
+		t.Fatalf("download embedding model: %v", err)
+	}
+	assertDownloadedContent(t, dir, "bge-m3.gguf", content)
+}
+
 func assertDownloadedContent(t *testing.T, dir, name string, expected []byte) {
 	t.Helper()
 	actual, err := os.ReadFile(filepath.Join(dir, name))

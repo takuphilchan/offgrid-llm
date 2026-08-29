@@ -312,7 +312,8 @@ offgrid kb clear               # Clear all
 ```
 
 ```bash
-offgrid kb enable bge-small
+offgrid download bge-small-en-v1.5
+offgrid kb enable bge-small-en-v1.5
 offgrid kb add ./docs/manual.pdf
 offgrid kb add ./notes/
 offgrid kb search "how to configure"

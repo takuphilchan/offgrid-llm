@@ -479,7 +479,7 @@ func DefaultCatalog() *ModelCatalog {
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/ggml-model-f16.gguf",
+								URL:      "https://huggingface.co/stratalab-org/all-MiniLM-L6-v2-GGUF/resolve/main/all-MiniLM-L6-v2.F16.gguf",
 								Priority: 1,
 							},
 						},
@@ -506,7 +506,7 @@ func DefaultCatalog() *ModelCatalog {
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/main/ggml-model-f16.gguf",
+								URL:      "https://huggingface.co/CompendiumLabs/bge-small-en-v1.5-gguf/resolve/main/bge-small-en-v1.5-f16.gguf",
 								Priority: 1,
 							},
 						},
@@ -533,7 +533,7 @@ func DefaultCatalog() *ModelCatalog {
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/nomic-ai/nomic-embed-text-v1/resolve/main/ggml-model-f16.gguf",
+								URL:      "https://huggingface.co/nomic-ai/nomic-embed-text-v1-GGUF/resolve/main/nomic-embed-text-v1.f16.gguf",
 								Priority: 1,
 							},
 						},
@@ -560,7 +560,7 @@ func DefaultCatalog() *ModelCatalog {
 						Sources: []ModelSource{
 							{
 								Type:     "huggingface",
-								URL:      "https://huggingface.co/BAAI/bge-m3/resolve/main/ggml-model-q4_k_m.gguf",
+								URL:      "https://huggingface.co/smarttasks/bge-m3-GGUF/resolve/main/bge-m3-Q4_K_M.gguf",
 								Priority: 1,
 							},
 						},

@@ -1,9 +1,10 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type FormEvent, type ReactNode } from 'react';
-import { APIError, api, type Document, type Model, type PublicUser, type RunEvent, type RunSummary, type ToolApproval } from './api/client';
+import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
+import { APIError, api, type Model, type PublicUser, type RunEvent, type RunSummary } from './api/client';
 import { Icon } from './components/Icon';
-import { ModelSelect } from './components/ModelSelect';
+import { AgentPage } from './features/agents/AgentPage';
 import { ChatPage } from './features/chat/ChatPage';
 import { LoginPage } from './features/auth/LoginPage';
+import { KnowledgePage } from './features/knowledge/KnowledgePage';
 import { ModelsPage } from './features/models/ModelsPage';
 import { useI18n, type LocaleCode } from './i18n';
 
@@ -111,7 +112,7 @@ export function App() {
       <section className="page-content">
         <PageBoundary key={page} message={text.common.error} retry={text.common.retry}>
           {page === 'chat' && <ChatPage models={models} model={model} setModel={setModel} />}
-          {page === 'knowledge' && <KnowledgePage />}
+          {page === 'knowledge' && <KnowledgePage models={models} onModelsChanged={refreshBase} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'agents' && <AgentPage models={models} model={model} setModel={setModel} />}
           {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} />}
           {page === 'activity' && <ActivityPage health={health} />}
@@ -122,47 +123,6 @@ export function App() {
     <nav className="mobile-nav" aria-label="Primary">{pages.map(item => <a key={item} href={`#/${item}`} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined}><Icon name={item} size={19} /><span>{text.nav[item]}</span></a>)}</nav>
     {showOnboarding && <Onboarding health={health} models={models} onDone={() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); setShowOnboarding(false); }} />}
   </div>;
-}
-
-function KnowledgePage() {
-  const { messages: text } = useI18n();
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [enabled, setEnabled] = useState(true);
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState('');
-  const [reindexing, setReindexing] = useState('');
-  const input = useRef<HTMLInputElement | null>(null);
-  const refresh = async () => { setBusy(true); setError(''); try { const [list, status] = await Promise.all([api.documents(), api.ragStatus()]); setDocuments(list.documents); setEnabled(status.enabled); } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); } finally { setBusy(false); } };
-  useEffect(() => { void refresh(); }, []);
-  const upload = async (file?: File) => { if (!file) return; setBusy(true); try { await api.ingest(file); await refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); } };
-  const reindex = async (document: Document) => { setReindexing(document.id); setError(''); try { await api.reindexDocument(document.id); await refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); } finally { setReindexing(''); } };
-  return <div className="stack"><div className="section-actions"><div className={`notice ${enabled ? 'success' : 'warning'}`}><i />{enabled ? `${documents.length} ${text.knowledge.chunks}` : text.knowledge.disabled}</div><input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} /><button className="primary-button" onClick={() => input.current?.click()} disabled={!enabled || busy}><Icon name="upload" size={17} />{text.knowledge.add}</button></div>
-    {error && <div className="inline-error">{error}</div>}{busy && documents.length === 0 ? <SkeletonCards /> : documents.length === 0 ? <EmptyPanel text={text.knowledge.empty} /> : <div className="card-grid">{documents.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><small>{document.chunk_count} {text.knowledge.chunks} · {document.index_status ?? 'ready'}</small><div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button disabled={!document.source_retained || reindexing === document.id} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button></div></div></article>)}</div>}
-  </div>;
-}
-
-function AgentPage({ models, model, setModel }: { models: Model[]; model: string; setModel: (model: string) => void }) {
-  const { messages: text } = useI18n(); const [task, setTask] = useState(''); const [busy, setBusy] = useState(false); const [result, setResult] = useState(''); const [error, setError] = useState('');
-  const [approval, setApproval] = useState<ToolApproval | null>(null); const [grants, setGrants] = useState<ToolApproval[]>([]);
-  const execute = async (approved: ToolApproval[]) => {
-    if (!task.trim() || !model) return;
-    setBusy(true); setResult(''); setError(''); setApproval(null);
-    try { setResult((await api.runAgent(model, task.trim(), approved)).output); }
-    catch (reason) {
-      if (reason instanceof APIError && reason.status === 409 && reason.data?.run_id) {
-        try {
-          const events = await api.runEvents(String(reason.data.run_id));
-          const request = [...events].reverse().find(item => item.type === 'approval.required');
-          if (request?.data?.tool) { setApproval({ tool: String(request.data.tool), arguments: request.data.arguments ?? {} }); return; }
-        } catch { /* Preserve the original policy error below. */ }
-      }
-      setError(reason instanceof Error ? reason.message : text.common.error);
-    } finally { setBusy(false); }
-  };
-  const run = (event: FormEvent) => { event.preventDefault(); setGrants([]); void execute([]); };
-  const approve = () => { if (!approval) return; const next = [...grants, approval]; setGrants(next); void execute(next); };
-  const deny = () => { setApproval(null); setError(text.agents.denied); };
-  return <div className="agent-workspace"><form className="task-card" onSubmit={run}><div className="form-row"><ModelSelect models={models} value={model} onChange={setModel} /></div><label><span>{text.agents.task}</span><textarea rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label><button className="primary-button" disabled={busy || !task.trim() || !model}>{busy ? text.agents.running : text.agents.run}</button></form><section className="result-card"><span className="eyebrow">{text.agents.result}</span>{approval ? <div className="approval-card" role="alertdialog" aria-labelledby="approval-title"><span className="status-pill danger">{text.agents.approvalTitle}</span><h2 id="approval-title">{approval.tool}</h2><p>{text.agents.approvalBody}</p><pre>{JSON.stringify(approval.arguments, null, 2)}</pre><div><button className="danger-button" onClick={deny}>{text.agents.deny}</button><button className="primary-button" onClick={approve}>{text.agents.approve}</button></div></div> : error ? <div className="inline-error">{error}</div> : result ? <pre>{result}</pre> : <div className="quiet-state"><Icon name="agents" size={30} /><p>{text.agents.subtitle}</p></div>}</section></div>;
 }
 
 function ActivityPage({ health }: { health: Health }) {
@@ -201,5 +161,3 @@ function Onboarding({ health, models, onDone }: { health: Health; models: Model[
 
 function Metric({ label, value }: { label: string; value: string }) { return <article className="metric"><span>{label}</span><strong>{value}</strong></article>; }
 function EmptyPanel({ text }: { text: string }) { return <div className="empty-panel"><div className="empty-lines"><i /><i /><i /></div><p>{text}</p></div>; }
-function SkeletonCards() { return <div className="card-grid">{[1, 2, 3].map(item => <div className="skeleton-card" key={item}><i /><div><span /><span /></div></div>)}</div>; }
-function formatBytes(bytes: number) { if (!bytes) return '—'; const units = ['B', 'KB', 'MB', 'GB', 'TB']; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return `${(bytes / 1024 ** index).toFixed(index > 1 ? 1 : 0)} ${units[index]}`; }

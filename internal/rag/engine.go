@@ -23,12 +23,23 @@ type Engine struct {
 	chunker         *Chunker
 	embeddingEngine *inference.EmbeddingEngine
 	embeddingModel  string
+	resolveModel    func(string) (string, error)
 	dataDir         string
 	enabled         bool
 	hybridAlpha     float32 // Weight for semantic vs keyword search (0=keyword only, 1=semantic only)
 	maxContextLen   int     // Maximum context length in characters
 	reranking       bool    // Enable MMR-based reranking for diversity
 	autoTuneChunks  bool    // Enable automatic chunking parameter tuning
+}
+
+// SetModelResolver configures how a stable model ID is resolved to the local
+// model file used by the embedding runtime. RAG metadata intentionally stores
+// the ID rather than an absolute path so indexes remain portable across native
+// and container installations.
+func (e *Engine) SetModelResolver(resolve func(string) (string, error)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.resolveModel = resolve
 }
 
 // Store defines the interface for vector storage
@@ -162,6 +173,10 @@ func (e *Engine) AutoEnableWithModel(ctx context.Context, availableModels []stri
 func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	embeddingModel = strings.TrimSpace(embeddingModel)
+	if embeddingModel == "" {
+		return fmt.Errorf("embedding model is required")
+	}
 
 	if e.enabled && e.embeddingModel == embeddingModel {
 		return nil // Already enabled with this model
@@ -176,21 +191,48 @@ func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
 				return fmt.Errorf("RAG index schema %d is incompatible with schema %d; rebuild the index", metadata.SchemaVersion, IndexSchemaVersion)
 			}
 			if metadata.EmbeddingModel != embeddingModel {
-				return fmt.Errorf("RAG index was built with embedding model %q, not %q; rebuild the index before switching models", metadata.EmbeddingModel, embeddingModel)
+				documents, listErr := e.store.ListDocuments()
+				if listErr != nil {
+					return fmt.Errorf("inspect RAG index before switching models: %w", listErr)
+				}
+				if len(documents) > 0 {
+					return fmt.Errorf("RAG index was built with embedding model %q, not %q; rebuild the index before switching models", metadata.EmbeddingModel, embeddingModel)
+				}
 			}
 		}
 	}
 
-	// Load embedding model if not already loaded
-	if !e.embeddingEngine.IsLoaded() {
+	modelPath := embeddingModel
+	if e.resolveModel != nil {
+		resolved, err := e.resolveModel(embeddingModel)
+		if err != nil {
+			return fmt.Errorf("resolve embedding model %q: %w", embeddingModel, err)
+		}
+		modelPath = resolved
+	}
+
+	// Load the requested file when no embedding model is active or a different
+	// one is active. EmbeddingEngine.Load safely unloads the previous runtime.
+	loadedPath, _ := e.embeddingEngine.GetModelInfo()["model_path"].(string)
+	if !e.embeddingEngine.IsLoaded() || loadedPath != modelPath {
 		opts := inference.DefaultEmbeddingOptions()
-		if err := e.embeddingEngine.Load(ctx, embeddingModel, opts); err != nil {
+		if err := e.embeddingEngine.Load(ctx, modelPath, opts); err != nil {
 			return fmt.Errorf("failed to load embedding model: %w", err)
 		}
 	}
 
 	e.embeddingModel = embeddingModel
 	e.enabled = true
+	if metadataStore, ok := e.store.(indexMetadataStore); ok {
+		if err := metadataStore.SetIndexMetadata(IndexMetadata{
+			SchemaVersion: IndexSchemaVersion, EmbeddingModel: embeddingModel,
+			EmbeddingDim: e.embeddingEngine.GetDimensions(), ChunkerVersion: chunkerVersion,
+			ParserVersion: parserVersion, UpdatedAt: time.Now().UTC(),
+		}); err != nil {
+			e.enabled = false
+			return fmt.Errorf("persist RAG activation: %w", err)
+		}
+	}
 
 	// Load persisted documents
 	if err := e.loadFromDisk(); err != nil {

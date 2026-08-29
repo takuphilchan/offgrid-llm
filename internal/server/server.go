@@ -194,6 +194,16 @@ func NewWithConfig(cfg *config.Config) *Server {
 
 	// Initialize RAG engine
 	ragEngine := rag.NewEngine(embeddingEngine, cfg.DataDir)
+	ragEngine.SetModelResolver(func(modelID string) (string, error) {
+		model, err := registry.GetModel(modelID)
+		if err != nil {
+			return "", err
+		}
+		if model.Type != "embedding" {
+			return "", fmt.Errorf("model %q is %q, not an embedding model", modelID, model.Type)
+		}
+		return model.Path, nil
+	})
 
 	// Initialize session handlers
 	sessionsDir := filepath.Join(cfg.DataDir, "sessions")
@@ -997,6 +1007,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/computer/stop", adminOnly(s.handleComputerStop))
 	mux.HandleFunc("/v1/computer/reset", adminOnly(s.handleComputerReset))
 	mux.HandleFunc("/v1/agents/tools", adminOnly(s.handleAgentTools))
+	mux.HandleFunc("/v1/capabilities", adminOnly(s.handleCapabilities))
 	mux.HandleFunc("/v1/agents/mcp", adminOnly(s.handleAgentMCP))
 	mux.HandleFunc("/v1/agents/mcp/test", adminOnly(s.handleAgentMCPTest))
 	mux.HandleFunc("/v1/agents/mcp/marketplace", adminOnly(s.handleMCPMarketplace))
@@ -2689,6 +2700,7 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		Repository   string `json:"repository"`
 		FileName     string `json:"file_name"`
 		Quantization string `json:"quantization"` // Optional: just the quant like "Q4_K_M"
+		ModelID      string `json:"model_id"`     // Optional stable catalog ID used as the local filename.
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2739,6 +2751,14 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	// Check if model already exists
 	sourceFileName := strings.TrimSpace(req.FileName)
 	destFileName := filepath.Base(sourceFileName)
+	if req.ModelID != "" {
+		modelID := strings.TrimSpace(req.ModelID)
+		if !isSafeModelID(modelID) {
+			writeError(w, "model_id may contain only letters, numbers, dot, underscore, and hyphen", http.StatusBadRequest)
+			return
+		}
+		destFileName = modelID + ".gguf"
+	}
 	if destFileName == "" || destFileName == "." || destFileName == string(filepath.Separator) {
 		writeError(w, "invalid file_name", http.StatusBadRequest)
 		return
@@ -2808,6 +2828,20 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
+}
+
+func isSafeModelID(modelID string) bool {
+	if modelID == "" || len(modelID) > 128 {
+		return false
+	}
+	for _, char := range modelID {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '.' || char == '_' || char == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileName, progressKey string) {
@@ -2885,7 +2919,10 @@ func (s *Server) handleDownloadProgress(w http.ResponseWriter, r *http.Request) 
 	s.downloadMutex.RLock()
 	progress := make(map[string]*DownloadProgress)
 	for k, v := range s.downloadProgress {
-		progress[k] = v
+		if v != nil {
+			copy := *v
+			progress[k] = &copy
+		}
 	}
 	s.downloadMutex.RUnlock()
 
@@ -5249,6 +5286,19 @@ func (s *Server) isAllowedWebSocketOrigin(r *http.Request) bool {
 }
 
 // handleAgentTools lists and manages agent tools
+func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	capabilityList := []capabilities.Descriptor{}
+	if s.capabilityBroker != nil {
+		capabilityList = s.capabilityBroker.List()
+	}
+	json.NewEncoder(w).Encode(map[string]any{"capabilities": capabilityList, "count": len(capabilityList)})
+}
+
 func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -5430,6 +5480,11 @@ func (s *Server) handleAgentMCP(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{
 				"error": fmt.Sprintf("failed to connect to MCP server: %v", err),
 			})
+			return
+		}
+		if err := s.toolRegistry.PersistMCPServer(agents.MCPServerConfig{Name: req.Name, URL: req.URL, Transport: "http", Enabled: true}); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("connected but failed to persist MCP server: %v", err)})
 			return
 		}
 

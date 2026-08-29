@@ -1,4 +1,6 @@
 export type Messages = {
+	knowledgeSetup: { title: string; body: string; model: string; installEnable: string; enable: string; preparing: string; active: string; openModels: string; failed: string };
+	agentRuntime: { style: string; react: string; plan: string; reasoning: string; tools: string; enabled: string; history: string; noTasks: string; connectors: string; noConnectors: string; connectorName: string; connectorURL: string; test: string; connect: string; testing: string; connecting: string; computer: string; unavailable: string; available: string; steps: string; noTools: string; risk: string };
   product: string;
   privateWorkspace: string;
   nav: { chat: string; knowledge: string; agents: string; models: string; activity: string; settings: string };

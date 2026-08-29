@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -117,6 +118,19 @@ func (b *Broker) Resolve(name string) (Descriptor, bool) {
 	defer b.mu.RUnlock()
 	descriptor, ok := b.descriptors[name]
 	return descriptor, ok
+}
+
+// List returns a stable snapshot suitable for discovery UIs and external
+// agent clients.
+func (b *Broker) List() []Descriptor {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	result := make([]Descriptor, 0, len(b.descriptors))
+	for _, descriptor := range b.descriptors {
+		result = append(result, descriptor)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result
 }
 
 func (b *Broker) Authorize(ctx context.Context, request Request) (Result, error) {

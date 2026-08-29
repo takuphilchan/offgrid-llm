@@ -93,6 +93,13 @@ func (d *Downloader) downloadFromSource(modelID, quantization string, variant *M
 	// Create temporary file
 	tmpPath := filepath.Join(d.modelsDir, fmt.Sprintf(".%s-%s.tmp", modelID, quantization))
 	destPath := filepath.Join(d.modelsDir, fmt.Sprintf("%s.%s.gguf", modelID, quantization))
+	// Embedding models are addressed by their catalog ID throughout the RAG API.
+	// Keeping that stable ID as the filename lets `offgrid download <id>` flow
+	// directly into `offgrid kb enable <id>` without exposing quantization as a
+	// second, accidental model identity.
+	if entry := d.catalog.FindModel(modelID); entry != nil && entry.Type == "embedding" {
+		destPath = filepath.Join(d.modelsDir, modelID+".gguf")
+	}
 
 	resume, err := openResumableResponse(d.client, source.URL, tmpPath, "OffGrid-LLM/0.3.0")
 	if err != nil {
