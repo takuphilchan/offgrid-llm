@@ -1,7 +1,7 @@
 {
   "name": "offgrid-llm-desktop",
   "desktopName": "com.offgrid.llm.desktop",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OffGrid LLM Desktop - Local AI Platform",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
@@ -40,7 +40,9 @@
       {
         "from": "../web/dist",
         "to": "ui",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "linux": {
@@ -48,17 +50,23 @@
         {
           "from": "../build/linux/offgrid",
           "to": "bin/offgrid",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         }
       ],
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Development",
@@ -84,18 +92,25 @@
         {
           "from": "../build/macos/offgrid-amd64",
           "to": "bin/offgrid-amd64",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         },
         {
           "from": "../build/macos/offgrid-arm64",
           "to": "bin/offgrid-arm64",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         }
       ],
       "target": [
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.developer-tools",
@@ -131,17 +146,23 @@
         {
           "from": "../build/windows/offgrid.exe",
           "to": "bin/offgrid.exe",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         }
       ],
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
