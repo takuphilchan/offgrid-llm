@@ -15,6 +15,10 @@ permissions:
 
 env:
   GO_VERSION: '1.26.6'
+  # Keep release bundles on the same reviewed inference runtime as the
+  # container images. Building a moving upstream branch makes releases
+  # non-reproducible and can break individual platforms without a repo change.
+  LLAMA_CPP_COMMIT: e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
 
 jobs:
   # Create release first
@@ -116,7 +120,7 @@ jobs:
             cpu_flags: "-march=x86-64-v4"
             
           - name: linux-arm64-cpu
-            os: ubuntu-22.04
+            os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
             variant: cpu
@@ -145,7 +149,7 @@ jobs:
             
           # macOS variants
           - name: darwin-arm64-metal
-            os: macos-latest
+            os: macos-15
             platform: darwin
             arch: arm64
             variant: metal
@@ -154,7 +158,7 @@ jobs:
             cpu_flags: "-mcpu=apple-m1"
             
           - name: darwin-amd64-cpu
-            os: macos-15
+            os: macos-15-intel
             platform: darwin
             arch: amd64
             variant: cpu
@@ -197,6 +201,21 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Validate runner architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          host_arch="$(uname -m)"
+          case "${{ matrix.arch }}:${host_arch}" in
+            amd64:x86_64|amd64:amd64|arm64:arm64|arm64:aarch64)
+              echo "Runner architecture ${host_arch} matches ${{ matrix.arch }}"
+              ;;
+            *)
+              echo "::error::Runner architecture ${host_arch} cannot produce the ${{ matrix.arch }} runtime bundle"
+              exit 1
+              ;;
+          esac
+
       - name: Install dependencies (Linux)
         if: matrix.platform == 'linux'
         run: |
@@ -229,15 +248,19 @@ jobs:
       - name: Clone llama.cpp
         shell: bash
         run: |
-          git clone --depth 1 https://github.com/ggml-org/llama.cpp /tmp/llama.cpp
+          set -euo pipefail
+          mkdir -p /tmp/llama.cpp
           cd /tmp/llama.cpp
+          git init
+          git remote add origin https://github.com/ggml-org/llama.cpp.git
+          git fetch --depth 1 origin "${LLAMA_CPP_COMMIT}"
+          git checkout --detach FETCH_HEAD
           echo "LLAMA_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Build llama-server
         shell: bash
         run: |
-          cd /tmp/llama.cpp
-          mkdir build && cd build
+          set -euo pipefail
           
           # Detect host architecture and validate CPU flags compatibility
           HOST_ARCH="$(uname -m)"
@@ -276,21 +299,31 @@ jobs:
           
           # Build CMake command with validated flags
           # Use static linking for maximum GLIBC compatibility (works on GLIBC 2.17+)
-          CMAKE_ARGS="-DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DGGML_STATIC=ON -DLLAMA_CURL=OFF"
+          CMAKE_ARGS=(
+            -S /tmp/llama.cpp
+            -B /tmp/llama.cpp/build
+            -DBUILD_SHARED_LIBS=OFF
+            -DCMAKE_BUILD_TYPE=Release
+            -DGGML_NATIVE=OFF
+            -DGGML_STATIC=ON
+            -DLLAMA_CURL=OFF
+          )
           
           # Add static linking flags for Linux to avoid GLIBC version requirements
           if [ "${{ matrix.platform }}" = "linux" ]; then
             STATIC_FLAGS="-static-libgcc -static-libstdc++"
             if [ -n "$CPU_FLAGS" ]; then
-              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$CPU_FLAGS $STATIC_FLAGS\" -DCMAKE_CXX_FLAGS=\"$CPU_FLAGS $STATIC_FLAGS\""
-              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_EXE_LINKER_FLAGS=\"$STATIC_FLAGS\""
+              CMAKE_ARGS+=("-DCMAKE_C_FLAGS=$CPU_FLAGS $STATIC_FLAGS")
+              CMAKE_ARGS+=("-DCMAKE_CXX_FLAGS=$CPU_FLAGS $STATIC_FLAGS")
             else
-              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$STATIC_FLAGS\" -DCMAKE_CXX_FLAGS=\"$STATIC_FLAGS\""
-              CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_EXE_LINKER_FLAGS=\"$STATIC_FLAGS\""
+              CMAKE_ARGS+=("-DCMAKE_C_FLAGS=$STATIC_FLAGS")
+              CMAKE_ARGS+=("-DCMAKE_CXX_FLAGS=$STATIC_FLAGS")
             fi
+            CMAKE_ARGS+=("-DCMAKE_EXE_LINKER_FLAGS=$STATIC_FLAGS")
             echo "Using static linking for Linux (GLIBC compatibility)"
           elif [ -n "$CPU_FLAGS" ]; then
-            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_C_FLAGS=\"$CPU_FLAGS\" -DCMAKE_CXX_FLAGS=\"$CPU_FLAGS\""
+            CMAKE_ARGS+=("-DCMAKE_C_FLAGS=$CPU_FLAGS")
+            CMAKE_ARGS+=("-DCMAKE_CXX_FLAGS=$CPU_FLAGS")
             echo "CMake will use CPU optimizations: $CPU_FLAGS"
           else
             echo "CMake will use default compiler flags (no CPU-specific optimizations)"
@@ -298,14 +331,12 @@ jobs:
           
           # Add GPU flags if present
           if [ -n "${{ matrix.gpu_flags }}" ]; then
-            CMAKE_ARGS="$CMAKE_ARGS ${{ matrix.gpu_flags }}"
+            CMAKE_ARGS+=("${{ matrix.gpu_flags }}")
           fi
           
-          # Run cmake
-          echo "Running: cmake .. $CMAKE_ARGS"
-          eval cmake .. $CMAKE_ARGS
-          
-          cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) --target llama-server
+          printf 'CMake argument: %q\n' "${CMAKE_ARGS[@]}"
+          cmake "${CMAKE_ARGS[@]}"
+          cmake --build /tmp/llama.cpp/build --config Release -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)" --target llama-server
 
       - name: Build whisper.cpp
         shell: bash
@@ -908,139 +939,17 @@ jobs:
           find . -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.exe" \) -exec sha256sum {} \; > ../checksums-${{ steps.version.outputs.version }}.sha256
           cd ..
 
-      - name: Create release notes
+      - name: Load checked-in release notes
+        shell: bash
         run: |
-          cat > release-notes.md << EOF
-          # OffGrid LLM ${{ steps.version.outputs.version }}
-          
-          **Complete release with CLI bundles and Desktop applications!**
-          
-          ## Installation
-          
-          ### 🖥️ Desktop Application (Recommended for Most Users)
-          
-          **Easy installation with system tray integration:**
-          
-          **Linux:**
-          - Download `.AppImage` - Make executable and run: \`chmod +x *.AppImage && ./OffGrid*.AppImage\`
-          - Or download \`.deb\` - Install: \`sudo dpkg -i *.deb\`
-          
-          **macOS:**
-          - Download \`.dmg\` - Mount and drag to Applications folder
-          
-          **Windows:**
-          - Download \`*Setup*.exe\` - Run installer
-          
-          **One-line install:**
-          \`\`\`bash
-          # Linux/macOS
-          curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
-          
-          # Windows (PowerShell as Admin)
-          irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
-          \`\`\`
-          
-          ### 💻 CLI Installation (For Servers & Advanced Users)
-          
-          **Linux / macOS:**
-          \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
-          \`\`\`
-          
-          **Or download bundles below and extract**
-          
-          ## 📦 Desktop Applications
-          
-          ### Linux
-          - \`OffGrid-LLM-Desktop-{version}-x86_64.AppImage\` - Universal Linux (recommended)
-          - \`OffGrid-LLM-Desktop-{version}-amd64.deb\` - Debian/Ubuntu
-          - \`OffGrid-LLM-Desktop-{version}-arm64.AppImage\` - ARM64 Linux
-          - \`OffGrid-LLM-Desktop-{version}-arm64.deb\` - ARM64 Debian/Ubuntu
-          
-          ### macOS  
-          - \`OffGrid-LLM-Desktop-{version}-arm64.dmg\` - Apple Silicon (M1/M2/M3)
-          - \`OffGrid-LLM-Desktop-{version}-x64.dmg\` - Intel Mac
-          - \`OffGrid-LLM-Desktop-{version}-universal.dmg\` - Universal (both architectures)
-          
-          ### Windows
-          - \`OffGrid-LLM-Desktop-Setup-{version}.exe\` - Windows Installer (recommended)
-          - \`OffGrid-LLM-Desktop-{version}-Portable.exe\` - Portable version (no install)
-          
-          ## 🔧 CLI Bundles
-          
-          Choose your platform and GPU variant:
-          
-          ### Linux
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan-avx2.tar.gz\` - Vulkan GPU (recommended, Intel/AMD 2013+)
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-vulkan-avx512.tar.gz\` - Vulkan GPU (newer Intel)
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-amd64-cpu-avx2.tar.gz\` - CPU only
-          - \`offgrid-${{ steps.version.outputs.version }}-linux-arm64-cpu-neon.tar.gz\` - ARM64
-          
-          ### macOS
-          - \`offgrid-${{ steps.version.outputs.version }}-darwin-arm64-metal-apple-silicon.tar.gz\` - Apple Silicon with Metal GPU
-          - \`offgrid-${{ steps.version.outputs.version }}-darwin-amd64-cpu-avx2.tar.gz\` - Intel Mac (CPU only)
-          
-          ### Windows
-          - \`offgrid-${{ steps.version.outputs.version }}-windows-amd64-cpu-avx2.zip\` - CPU only
-          
-          ## 📋 What's Included
-          
-          ### Desktop App Includes:
-          - Beautiful UI with system tray
-          - Automatic server management  
-          - Built-in CLI binary
-          - Model management interface
-          - Chat interface
-          
-          ### CLI Bundle Includes:
-          - \`offgrid\` - Main CLI application
-          - \`llama-server\` - Inference engine (llama.cpp)
-          - \`install.sh\` - Installation script (Linux/macOS)
-          - \`README.md\` - Getting started guide
-          - \`checksums.sha256\` - File verification
-          
-          ## ✅ Verification
-          
-          Verify your download:
-          \`\`\`bash
-          sha256sum -c checksums-${{ steps.version.outputs.version }}.sha256
-          \`\`\`
-          
-          ## 🚀 Getting Started
-          
-          ### Desktop App
-          1. Install using one of the methods above
-          2. Launch "OffGrid LLM Desktop" from your applications
-          3. Use the Models tab to download models
-          4. Start chatting!
-          
-          ### CLI
-          After installation:
-          \`\`\`bash
-          # Verify
-          offgrid --version
-          
-          # Search for models
-          offgrid search llama --limit 5
-          
-          # Download a model
-          offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \\
-            --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
-          
-          # Start chatting
-          offgrid run Llama-3.2-3B-Instruct-Q4_K_M
-          
-          # Or use Web UI
-          open http://localhost:11611/ui
-          \`\`\`
-          
-          ## 📚 Documentation
-          
-          - [Complete Documentation](https://github.com/takuphilchan/offgrid-llm/tree/main/docs)
-          - [Desktop App Guide](https://github.com/takuphilchan/offgrid-llm/blob/main/DESKTOP_INSTALL.md)
-          - [CLI Reference](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/CLI_REFERENCE.md)
-          - [API Documentation](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/API.md)
-          EOF
+          set -euo pipefail
+          notes_path="docs/releases/release-notes-${{ steps.version.outputs.version }}.md"
+          if [[ ! -f "${notes_path}" ]]; then
+            echo "::error::Missing release notes at ${notes_path}"
+            exit 1
+          fi
+          cp "${notes_path}" release-notes.md
+
 
       - name: Upload checksums to release
         uses: softprops/action-gh-release@v1

@@ -48,10 +48,10 @@ fi
 #     sed -i "s/version = \"[^\"]*\"/version = \"$VERSION\"/" "$ROOT_DIR/python/pyproject.toml"
 # fi
 
-# Update internal/agents/mcp_client.go
-if [ -f "$ROOT_DIR/internal/agents/mcp_client.go" ]; then
-    echo "Updating internal/agents/mcp_client.go..."
-    sed -i "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/internal/agents/mcp_client.go"
+# Update the MCP SDK client implementation version.
+if [ -f "$ROOT_DIR/internal/agents/mcp_sdk.go" ]; then
+    echo "Updating internal/agents/mcp_sdk.go..."
+    sed -i "s/Name: \"offgrid-llm\", Version: \"[0-9]*\.[0-9]*\.[0-9]*\"/Name: \"offgrid-llm\", Version: \"$VERSION\"/" "$ROOT_DIR/internal/agents/mcp_sdk.go"
 fi
 
 # Server and desktop runtime versions are injected by the build. Do not rewrite
