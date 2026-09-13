@@ -34,8 +34,10 @@ attempt to pick up a workflow fix: it uses the old workflow revision.
 
 If Docker Hub did not publish, push a branch named `release-container/vX.Y.Z`
 from the reviewed workflow commit. `docker-publish.yml` checks out the existing
-tagged source and publishes only the exact `X.Y.Z` and `X.Y.Z-gpu` tags on
-this repair path. It does not move `latest` or minor-version aliases backward.
+tagged application source; a reviewed GPU Dockerfile repair can come from the
+repair branch. Already-published CPU and GPU tags are reused when their
+platforms are complete. This path publishes only the exact `X.Y.Z` and
+`X.Y.Z-gpu` tags and does not move `latest` or minor-version aliases backward.
 Confirm both the multi-platform CPU tag and AMD64 GPU tag are pullable before
 proceeding.
 

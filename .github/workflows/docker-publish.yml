@@ -52,14 +52,17 @@ jobs:
             value="${GITHUB_REF_NAME#v}"
             source_ref="${GITHUB_REF}"
           fi
-          echo "value=${value}" >> "${GITHUB_OUTPUT}"
-          echo "source_ref=${source_ref}" >> "${GITHUB_OUTPUT}"
-          echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "${GITHUB_OUTPUT}"
+          {
+            echo "value=${value}"
+            echo "source_ref=${source_ref}"
+            echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Check out tagged source
         uses: actions/checkout@v6
         with:
           ref: ${{ steps.version.outputs.source_ref }}
+          fetch-depth: 0
 
       - name: Record source revision
         id: source
@@ -67,6 +70,45 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
           echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Apply reviewed GPU packaging fix on repair branch
+        if: startsWith(github.ref, 'refs/heads/release-container/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The application remains pinned to its immutable release tag. Only
+          # the repaired Dockerfile comes from the reviewed repair branch.
+          git show "${GITHUB_SHA}:docker/Dockerfile.gpu" > docker/Dockerfile.gpu
+
+      - name: Reuse published versioned images on repair branch
+        if: startsWith(github.ref, 'refs/heads/release-container/v')
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for flavor in cpu gpu; do
+            tag="${{ steps.version.outputs.value }}"
+            if [[ "${flavor}" == gpu ]]; then tag="${tag}-gpu"; fi
+            status="$(curl --silent --show-error --max-time 20 --retry 3 \
+              --output "${RUNNER_TEMP}/offgrid-${flavor}-tag.json" \
+              --write-out '%{http_code}' \
+              "https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/${tag}/")"
+            case "${status}" in
+              200)
+                if [[ "${flavor}" == cpu ]]; then
+                  if jq -e '.images | any(.[]; .os == "linux" and .architecture == "amd64") and any(.[]; .os == "linux" and .architecture == "arm64")' \
+                    "${RUNNER_TEMP}/offgrid-${flavor}-tag.json" >/dev/null; then
+                    echo "cpu=true" >> "${GITHUB_OUTPUT}"
+                  fi
+                elif jq -e '.images | any(.[]; .os == "linux" and .architecture == "amd64")' \
+                  "${RUNNER_TEMP}/offgrid-${flavor}-tag.json" >/dev/null; then
+                  echo "gpu=true" >> "${GITHUB_OUTPUT}"
+                fi
+                ;;
+              404) ;;
+              *) echo "::error::Docker Hub lookup for ${tag} returned HTTP ${status}"; exit 1 ;;
+            esac
+          done
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -110,6 +152,7 @@ jobs:
             org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
 
       - name: Build smoke-test image
+        if: steps.existing.outputs.cpu != 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -126,6 +169,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Verify container startup and CLI
+        if: steps.existing.outputs.cpu != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -136,12 +180,14 @@ jobs:
             if curl --fail --silent http://127.0.0.1:11611/health >/dev/null; then
               exit 0
             fi
+            echo "Waiting for container health (${attempt}/30)"
             sleep 2
           done
           echo "Container did not become healthy" >&2
           exit 1
 
       - name: Build and push multi-platform image
+        if: steps.existing.outputs.cpu != 'true'
         id: push
         uses: docker/build-push-action@v7
         with:
@@ -161,6 +207,7 @@ jobs:
           sbom: true
 
       - name: Attest published image
+        if: steps.existing.outputs.cpu != 'true'
         uses: actions/attest@v4
         with:
           subject-name: index.docker.io/${{ env.IMAGE_NAME }}
@@ -168,7 +215,7 @@ jobs:
           push-to-registry: true
 
       - name: Generate NVIDIA image metadata
-        if: github.event_name == 'push' || inputs.publish_gpu
+        if: (github.event_name == 'push' || inputs.publish_gpu) && steps.existing.outputs.gpu != 'true'
         id: meta_gpu
         uses: docker/metadata-action@v6
         with:
@@ -186,9 +233,10 @@ jobs:
           labels: |
             org.opencontainers.image.title=OffGrid LLM (NVIDIA CUDA)
             org.opencontainers.image.description=Private, local-first LLM inference with NVIDIA CUDA acceleration
+            org.offgrid.packaging.revision=${{ github.sha }}
 
       - name: Build and push NVIDIA image
-        if: github.event_name == 'push' || inputs.publish_gpu
+        if: (github.event_name == 'push' || inputs.publish_gpu) && steps.existing.outputs.gpu != 'true'
         id: push_gpu
         uses: docker/build-push-action@v7
         with:
@@ -208,7 +256,7 @@ jobs:
           sbom: true
 
       - name: Attest NVIDIA image
-        if: github.event_name == 'push' || inputs.publish_gpu
+        if: (github.event_name == 'push' || inputs.publish_gpu) && steps.existing.outputs.gpu != 'true'
         uses: actions/attest@v4
         with:
           subject-name: index.docker.io/${{ env.IMAGE_NAME }}

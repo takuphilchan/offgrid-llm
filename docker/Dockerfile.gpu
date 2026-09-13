@@ -107,16 +107,15 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -g 1000 offgrid && \
-    useradd -u 1000 -g offgrid -m offgrid
+# The Ubuntu-based CUDA image already has UID/GID 1000 (the "ubuntu" account).
+# Use that numeric identity so CPU and GPU images can share persistent volumes.
 
 # Create required directories
 RUN mkdir -p /var/lib/offgrid/models \
              /var/lib/offgrid/web/ui \
              /var/lib/offgrid/data \
              /var/lib/offgrid/bin && \
-    chown -R offgrid:offgrid /var/lib/offgrid
+    chown -R 1000:1000 /var/lib/offgrid
 
 # Copy binaries from builders
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
@@ -125,10 +124,10 @@ COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgr
 RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
 
 # Copy the exact UI built from this source revision.
-COPY --from=ui-builder --chown=offgrid:offgrid /build/web/dist /var/lib/offgrid/web/ui
+COPY --from=ui-builder --chown=1000:1000 /build/web/dist /var/lib/offgrid/web/ui
 
 # Switch to non-root user
-USER offgrid
+USER 1000:1000
 WORKDIR /var/lib/offgrid
 
 # Expose default port
@@ -142,6 +141,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 ENV OFFGRID_MODELS_DIR=/var/lib/offgrid/models \
     OFFGRID_DATA_DIR=/var/lib/offgrid/data \
     OFFGRID_BIN_DIR=/var/lib/offgrid/bin \
+    HOME=/var/lib/offgrid \
     OFFGRID_VERSION=${VERSION} \
     OFFGRID_PORT=11611 \
     OFFGRID_HOST=0.0.0.0 \
