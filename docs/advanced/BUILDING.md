@@ -157,192 +157,42 @@ CLI bundles are created by the GitHub Actions workflow. See `.github/workflows/r
 
 ## Automated Releases (GitHub Actions)
 
-### Trigger a Release
+The current process is documented in [Releasing OffGrid](releasing.md). A
+`vX.Y.Z` tag starts the desktop/CLI release and Docker Hub publishing flows.
+The GitHub release is complete only after its 14 expected assets and
+`checksums-vX.Y.Z.sha256` are present; the matching Docker Hub image must also
+be pullable. Repair branches can finish an existing tag without moving it or
+rebuilding already verified native packages.
 
-#### Method 1: Git Tag (Recommended)
-
-```bash
-# Tag the release
-git tag -a v0.1.6 -m "Release v0.1.6"
-
-# Push tag to trigger workflow
-git push origin v0.1.6
-```
-
-This automatically:
-1. Builds llama.cpp for all platforms
-2. Builds OffGrid binaries for all platforms
-3. Creates platform-specific packages
-4. Generates checksums
-5. Creates GitHub Release with all artifacts
-
-#### Method 2: Manual Workflow Dispatch
-
-From GitHub:
-1. Go to Actions --> Release Build
-2. Click "Run workflow"
-3. Enter version (e.g., `v0.1.6`)
-4. Click "Run workflow"
-
-### What Gets Built
-
-The workflow creates these artifacts:
-
-#### Linux
-- `offgrid-v0.1.6-linux-amd64.tar.gz`
-- `offgrid-v0.1.6-linux-arm64.tar.gz`
-
-Each contains:
-- `bin/offgrid`
-- `bin/llama-server`
-- `install.sh`
-- `README.md`
-- `LICENSE`
-
-#### macOS
-- `offgrid-v0.1.6-darwin-amd64.dmg`
-- `offgrid-v0.1.6-darwin-arm64.dmg`
-
-Each DMG contains:
-- `OffGrid.app` (application bundle)
-- Symlink to Applications folder
-- `README.txt`
-
-#### Windows
-- `offgrid-v0.1.6-windows-amd64.zip`
-- `offgrid-v0.1.6-windows-arm64.zip`
-
-Each contains:
-- `offgrid.exe`
-- `llama-server.exe`
-- `install.ps1`
-- `README.md`
-- `LICENSE`
-
-#### Checksums
-- `checksums.txt` - SHA256 hashes for all files
+The GitHub assets cover Linux AMD64/ARM64, macOS Intel/Apple Silicon, and
+Windows AMD64 runtime bundles, plus Linux, macOS, and Windows desktop
+packages. See the release notes for the exact filenames of a version.
 
 ## Installation Instructions
 
-### End User Installation
+Use the current [installation guide](../setup/installation.md) and the exact
+asset names on the release page. The old v0.1.6 DMG and Windows ARM64
+examples are not current release artifacts. Download only the packages for
+your operating system and architecture, then verify the downloaded file
+against `checksums-vX.Y.Z.sha256` before installation.
 
-#### One-Line Install (Linux/macOS)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/install.sh | bash
-```
-
-#### Manual Install
-
-##### Linux/macOS
-```bash
-# Download and extract
-wget https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/offgrid-v0.1.6-linux-amd64.tar.gz
-tar -xzf offgrid-v0.1.6-linux-amd64.tar.gz
-cd offgrid-v0.1.6-linux-amd64
-
-# Install
-sudo ./install.sh
-```
-
-##### macOS
-```bash
-# Download DMG
-curl -LO https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/offgrid-v0.1.6-darwin-arm64.dmg
-
-# Open and drag to Applications
-open offgrid-v0.1.6-darwin-arm64.dmg
-
-# Or run the install script
-/Volumes/OffGrid\ LLM/OffGrid.app/Contents/Resources/install.sh
-```
-
-##### Windows
-```powershell
-# Download and extract
-Invoke-WebRequest -Uri "https://github.com/takuphilchan/offgrid-llm/releases/download/v0.1.6/offgrid-v0.1.6-windows-amd64.zip" -OutFile offgrid.zip
-Expand-Archive offgrid.zip -DestinationPath offgrid
-cd offgrid
-
-# Install (requires Admin)
-powershell -ExecutionPolicy Bypass -File install.ps1
-```
-
-## Code Signing (Optional)
-
-### macOS
-
-```bash
-# Sign the app
-codesign --deep --force --verify --verbose \
-  --sign "Developer ID Application: Your Name (TEAM_ID)" \
-  OffGrid.app
-
-# Notarize with Apple
-xcrun notarytool submit offgrid-v0.1.6-darwin-arm64.dmg \
-  --apple-id "your@email.com" \
-  --team-id "TEAM_ID" \
-  --password "app-specific-password"
-
-# Staple notarization ticket
-xcrun stapler staple OffGrid.app
-```
-
-Requirements:
-- Apple Developer account ($99/year)
-- Developer ID certificate
-- App-specific password
-
-### Windows
-
-```powershell
-# Sign the executable
-signtool sign /f certificate.pfx /p password `
-  /tr http://timestamp.digicert.com /td sha256 `
-  offgrid.exe
-
-# Sign the installer
-signtool sign /f certificate.pfx /p password `
-  /tr http://timestamp.digicert.com /td sha256 `
-  OffGridSetup.exe
-```
-
-Requirements:
-- Code signing certificate ($100-500/year)
-- signtool (Windows SDK)
+Desktop packages are currently unsigned. Do not claim that Windows installers
+or macOS desktop archives are signed or notarized until the signing jobs and
+their verification are part of the release workflow.
 
 ## Testing Releases
 
 ### Test Locally Before Pushing
 
 ```bash
-# 1. Build everything
-make cross-compile
-
-# 2. Test on current platform
-./dist/offgrid-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) --version
-
-# 3. Create packages
-make release VERSION=0.1.0-test
-
-# 4. Test installation
-cd dist
-tar -xzf offgrid-0.1.0-test-linux-amd64.tar.gz
-cd offgrid-0.1.0-test-linux-amd64
-sudo ./install.sh
+go test ./...
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+node dev/scripts/test-finalize-release.mjs
 ```
 
-### Test in Clean Environment
-
-Use Docker for Linux:
-
-```bash
-# Test Ubuntu installation
-docker run --rm -it ubuntu:22.04 bash
-# Inside container:
-curl -fsSL https://your-test-url/install.sh | bash
-offgrid --version
-```
+CI also builds the web UI, exercises its browser integration tests, and
+packages Electron. See [Releasing OffGrid](releasing.md) for hosted artifact
+and Docker Hub checks.
 
 ## Troubleshooting
 

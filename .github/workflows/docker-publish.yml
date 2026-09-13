@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - 'release-container/v*'
   workflow_dispatch:
     inputs:
       version:
@@ -31,20 +33,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
       - name: Resolve build version
         id: version
         shell: bash
         run: |
+          set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             value="${{ inputs.version }}"
+            source_ref="${GITHUB_REF}"
+          elif [[ "${GITHUB_REF}" == refs/heads/release-container/v* ]]; then
+            source_ref="${GITHUB_REF#refs/heads/release-container/}"
+            if [[ ! "${source_ref}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Expected a release-container/vX.Y.Z branch"
+              exit 1
+            fi
+            value="${source_ref#v}"
           else
             value="${GITHUB_REF_NAME#v}"
+            source_ref="${GITHUB_REF}"
           fi
           echo "value=${value}" >> "${GITHUB_OUTPUT}"
+          echo "source_ref=${source_ref}" >> "${GITHUB_OUTPUT}"
           echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "${GITHUB_OUTPUT}"
+
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.version.outputs.source_ref }}
+
+      - name: Record source revision
+        id: source
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "${GITHUB_OUTPUT}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -74,12 +96,15 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=sha,prefix=sha-
+            type=raw,value=sha-${{ steps.source.outputs.short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
           labels: |
             org.opencontainers.image.title=OffGrid LLM
             org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
@@ -95,7 +120,7 @@ jobs:
           tags: offgrid-llm:smoke-test
           build-args: |
             VERSION=${{ steps.version.outputs.value }}
-            VCS_REF=${{ github.sha }}
+            VCS_REF=${{ steps.source.outputs.sha }}
             BUILD_DATE=${{ steps.version.outputs.created }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -128,7 +153,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.value }}
-            VCS_REF=${{ github.sha }}
+            VCS_REF=${{ steps.source.outputs.sha }}
             BUILD_DATE=${{ steps.version.outputs.created }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -149,13 +174,15 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           flavor: |
+            latest=false
             suffix=-gpu,onlatest=true
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=sha,prefix=sha-
+            type=raw,value=sha-${{ steps.source.outputs.short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
           labels: |
             org.opencontainers.image.title=OffGrid LLM (NVIDIA CUDA)
             org.opencontainers.image.description=Private, local-first LLM inference with NVIDIA CUDA acceleration
@@ -173,7 +200,7 @@ jobs:
           labels: ${{ steps.meta_gpu.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.value }}
-            VCS_REF=${{ github.sha }}
+            VCS_REF=${{ steps.source.outputs.sha }}
             BUILD_DATE=${{ steps.version.outputs.created }}
           cache-from: type=gha,scope=gpu
           cache-to: type=gha,mode=max,scope=gpu

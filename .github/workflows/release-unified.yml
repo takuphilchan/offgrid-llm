@@ -203,7 +203,27 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Reuse verified release bundle on manual rerun
+        id: existing
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          extension=.tar.gz
+          if [ "${{ matrix.platform }}" = "windows" ]; then extension=.zip; fi
+          asset_name="offgrid-${version}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ matrix.cpu_features }}${extension}"
+          existing_assets="$(gh api "repos/${{ github.repository }}/releases/tags/${version}" \
+            --jq '.assets[] | select(.state == "uploaded" and .size > 0 and (.digest | test("^sha256:[0-9a-f]{64}$"))) | .name')"
+          if grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
+            echo "Verified release asset ${asset_name} already exists; skipping its rebuild"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Validate runner architecture
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -219,7 +239,7 @@ jobs:
           esac
 
       - name: Install dependencies (Linux)
-        if: matrix.platform == 'linux'
+        if: matrix.platform == 'linux' && steps.existing.outputs.skip != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake git
@@ -236,17 +256,18 @@ jobs:
           fi
 
       - name: Install dependencies (macOS)
-        if: matrix.platform == 'darwin'
+        if: matrix.platform == 'darwin' && steps.existing.outputs.skip != 'true'
         run: |
           brew install cmake
 
       - name: Install dependencies (Windows)
-        if: matrix.platform == 'windows'
+        if: matrix.platform == 'windows' && steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
 
       - name: Clone llama.cpp
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -264,6 +285,7 @@ jobs:
           echo "LLAMA_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Build llama-server
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -348,21 +370,28 @@ jobs:
           
           printf 'CMake argument: %q\n' "${CMAKE_ARGS[@]}"
           cmake "${CMAKE_ARGS[@]}"
-          if [ "${{ matrix.platform }}" = "windows" ]; then
-            # MSBuild can exhaust the hosted runner's memory when this large
-            # C++ target is built with unrestricted parallelism.
+          if [ "${{ matrix.platform }}" = "windows" ] || [ "${{ matrix.variant }}" = "vulkan" ]; then
+            # MSBuild and Vulkan shader compilation can exhaust hosted runner
+            # memory with unrestricted parallelism.
             build_jobs=2
           else
             build_jobs="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
           fi
+          echo "Building llama-server with ${build_jobs} parallel jobs"
           build_log="/tmp/llama-server-build.log"
           if ! cmake --build /tmp/llama.cpp/build --config Release --parallel "$build_jobs" --target llama-server 2>&1 | tee "$build_log"; then
-            echo "::error::llama-server build failed; compiler diagnostics follow"
-            grep -Ei '(^|[[:space:]])(fatal )?error|error C[0-9]+|error LNK[0-9]+' "$build_log" | tail -40 || true
+            diagnostics="$(grep -Ei '(^|[[:space:]])(fatal )?error|error C[0-9]+|error LNK[0-9]+|killed signal' "$build_log" | tail -20 || true)"
+            if [ -n "$diagnostics" ]; then
+              while IFS= read -r line; do echo "::error::${line}"; done <<< "$diagnostics"
+            else
+              tail -40 "$build_log"
+              echo "::error::llama-server build failed without a compiler diagnostic; inspect the log tail above"
+            fi
             exit 1
           fi
 
       - name: Build whisper.cpp
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           # Use stable release tag to avoid upstream bugs in main branch
@@ -385,6 +414,7 @@ jobs:
           cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
       - name: Download Piper
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           mkdir -p /tmp/piper
@@ -435,6 +465,7 @@ jobs:
           fi
 
       - name: Build offgrid binary
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         env:
           GOOS: ${{ matrix.platform }}
@@ -450,6 +481,7 @@ jobs:
             ./cmd/offgrid
 
       - name: Create bundle
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -650,6 +682,7 @@ jobs:
           echo "BUNDLE_NAME=${BUNDLE_NAME}" >> $GITHUB_ENV
 
       - name: Upload artifact
+        if: steps.existing.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BUNDLE_NAME }}
@@ -657,7 +690,7 @@ jobs:
           retention-days: 7
 
       - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -966,7 +999,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+          # Manual repair needs the current verification script even when the
+          # old release tag predates it. Tag builds use their tagged script.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
 
       - name: Get version
         id: version
@@ -977,54 +1012,10 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate checksums from published assets
+      - name: Verify assets, generate checksums, and publish
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
-          checksum_file="checksums-${version}.sha256"
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${version}" \
-            --jq '.assets[] | select(.state == "uploaded") | [.digest, .name] | @tsv' |
-            while IFS=$'\t' read -r digest name; do
-              case "${name}" in
-                *.tar.gz|*.zip|*.AppImage|*.dmg|*.exe|*.deb)
-                  if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-                    echo "::error::Missing SHA-256 digest for release asset ${name}"
-                    exit 1
-                  fi
-                  printf '%s  %s\n' "${digest#sha256:}" "${name}"
-                  ;;
-              esac
-            done | sort -k2 > "${checksum_file}"
-          if [[ ! -s "${checksum_file}" ]]; then
-            echo "::error::No release assets found for ${version}"
-            exit 1
-          fi
-
-      - name: Load checked-in release notes
-        shell: bash
-        run: |
-          set -euo pipefail
-          notes_path="docs/releases/release-notes-${{ steps.version.outputs.version }}.md"
-          if [[ ! -f "${notes_path}" ]]; then
-            echo "::error::Missing release notes at ${notes_path}"
-            exit 1
-          fi
-          cp "${notes_path}" release-notes.md
-
-
-      - name: Upload checksums and publish verified release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
-          gh release upload "${version}" "checksums-${version}.sha256" \
-            --repo "${{ github.repository }}" --clobber
-          gh release edit "${version}" \
-            --repo "${{ github.repository }}" \
-            --notes-file release-notes.md \
-            --draft=false
+          bash .github/scripts/finalize-release.sh \
+            "${{ steps.version.outputs.version }}" "${{ github.repository }}"

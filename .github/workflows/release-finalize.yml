@@ -1,0 +1,56 @@
+name: Finalize existing release
+
+# A repair branch retries publication without rebuilding artifacts that are
+# already on the release. The tag and every expected asset must exist first.
+on:
+  push:
+    branches:
+      - 'release-finalize/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    name: Verify assets, checksums, and release notes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@v6
+
+      - name: Resolve and verify existing release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF#refs/heads/release-finalize/}"
+          if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Expected a release-finalize/vX.Y.Z branch"
+            exit 1
+          fi
+          git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify published multi-platform container
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          image_version="${VERSION#v}"
+          image_json="$(curl --fail --silent --show-error --retry 3 --retry-all-errors \
+            "https://hub.docker.com/v2/repositories/takuphilchan/offgrid-llm/tags/${image_version}/")"
+          if ! jq -e '.images | any(.[]; .os == "linux" and .architecture == "amd64") and any(.[]; .os == "linux" and .architecture == "arm64")' <<< "${image_json}" >/dev/null; then
+            echo "::error::Docker Hub image ${image_version} is missing Linux AMD64 or ARM64"
+            exit 1
+          fi
+
+      - name: Verify and publish existing release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash .github/scripts/finalize-release.sh \
+            "${{ steps.release.outputs.version }}" "${{ github.repository }}"
