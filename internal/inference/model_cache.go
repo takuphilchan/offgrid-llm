@@ -43,6 +43,7 @@ type ModelCache struct {
 	usedPorts      map[int]bool              // track which ports are in use
 	maxInstances   int
 	gpuLayers      int    // Number of GPU layers to offload
+	gpuEnabled     bool   // Explicit opt-in for automatic GPU placement
 	contextSize    int    // Context window size (0 = auto-detect based on RAM)
 	batchSize      int    // Batch size for inference (lower = faster first token)
 	parallelSlots  int    // Number of parallel inference slots (-np flag)
@@ -85,6 +86,7 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		pendingLoads:   make(map[string]*pendingLoad),
 		maxInstances:   maxInstances,
 		gpuLayers:      gpuLayers,
+		gpuEnabled:     gpuLayers > 0,
 		contextSize:    0,     // 0 = auto-detect based on available RAM
 		batchSize:      256,   // Lower batch = faster time-to-first-token
 		parallelSlots:  1,     // 1 slot for stability on low-end machines
@@ -105,6 +107,14 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 	go mc.monitorProcesses()
 
 	return mc
+}
+
+// SetGPUEnabled controls automatic GPU placement when gpuLayers is zero.
+// Explicit positive GPU layer counts continue to opt in by themselves.
+func (mc *ModelCache) SetGPUEnabled(enabled bool) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.gpuEnabled = enabled || mc.gpuLayers > 0
 }
 
 // NewModelCacheWithWarmer creates a model cache with mmap pre-warming support
@@ -388,57 +398,26 @@ func (mc *ModelCache) shouldUseMlock(modelPath string) bool {
 	return false
 }
 
-// autoDetectGPULayers determines optimal GPU layers based on available VRAM
-// This enables automatic GPU acceleration on consumer hardware
-func (mc *ModelCache) autoDetectGPULayers(modelPath string) int {
-	// Try to detect NVIDIA GPU VRAM
+// hasAvailableNvidiaGPU only decides whether to request automatic offload.
+// llama.cpp's memory fitter must choose the layer count: model-file size alone
+// cannot account for a long-context KV cache or other VRAM allocations.
+func hasAvailableNvidiaGPU() bool {
 	cmd := exec.Command("nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits")
 	output, err := cmd.Output()
 	if err != nil {
-		// No NVIDIA GPU available
-		return 0
+		return false
 	}
+	return hasEnoughNvidiaVRAM(output)
+}
 
-	// Parse free VRAM in MB
-	freeVRAM, err := strconv.ParseInt(strings.TrimSpace(string(output)), 10, 64)
-	if err != nil || freeVRAM < 2000 {
-		// Less than 2GB free, don't use GPU
-		log.Printf("GPU auto-detect: Only %dMB free VRAM, need 2GB+ for stable GPU inference", freeVRAM)
-		return 0
-	}
-
-	// Get model file size to estimate layers
-	info, err := os.Stat(modelPath)
-	if err != nil {
-		return 0
-	}
-
-	modelSizeMB := info.Size() / (1024 * 1024)
-
-	// Very conservative approach: only use GPU if we have 2x the model size in VRAM
-	// This leaves plenty of room for KV cache growth during generation
-	requiredVRAM := modelSizeMB * 2
-	if freeVRAM < requiredVRAM {
-		// Not enough headroom, use partial offload
-		// Only offload a portion of layers to leave room for KV cache
-		usableForModel := freeVRAM / 2 // Use only half of VRAM for model weights
-		layerPercentage := float64(usableForModel) / float64(modelSizeMB)
-		estimatedLayers := int(layerPercentage * 24) // Conservative 24 layer estimate
-
-		if estimatedLayers < 8 {
-			log.Printf("GPU auto-detect: %dMB VRAM insufficient for stable GPU inference with %dMB model", freeVRAM, modelSizeMB)
-			return 0
+func hasEnoughNvidiaVRAM(output []byte) bool {
+	for _, line := range strings.Split(string(output), "\n") {
+		freeVRAM, parseErr := strconv.ParseInt(strings.TrimSpace(line), 10, 64)
+		if parseErr == nil && freeVRAM >= 1024 {
+			return true
 		}
-
-		log.Printf("GPU auto-detect: Partial offload - %dMB VRAM, %dMB model - using %d layers (conservative)",
-			freeVRAM, modelSizeMB, estimatedLayers)
-		return estimatedLayers
 	}
-
-	// Have 2x headroom, safe to use full GPU
-	log.Printf("GPU auto-detect: %dMB VRAM >= 2x model (%dMB) - using all layers",
-		freeVRAM, modelSizeMB)
-	return 99
+	return false
 }
 
 // GetOrLoad returns an existing model instance or loads a new one
@@ -647,7 +626,7 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 		"-np", fmt.Sprintf("%d", parallelSlots), // Parallel slots
 		"-b", fmt.Sprintf("%d", batchSize), // Batch size
 		"--no-warmup", // Skip token generation warmup
-		"-fit", "off", // Skip slow memory fitting (saves 20-30s on startup)
+		"--jinja",     // Enable native structured tool calls from supported templates
 	}
 
 	// Add CPU thread count (critical for performance)
@@ -700,26 +679,30 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 		args = append(args, "--mmproj", projectorPath)
 	}
 
-	// Add GPU layers - auto-detect if not explicitly configured
+	// Automatic GPU placement must account for the requested KV cache, not
+	// only the GGUF weight file. Keep the configured context as the fit floor so
+	// integration readiness never advertises a larger window than llama uses.
 	gpuLayersToUse := mc.gpuLayers
-	if gpuLayersToUse == 0 {
-		// Auto-detect GPU layers based on available VRAM
-		gpuLayersToUse = mc.autoDetectGPULayers(modelPath)
-	}
-	if gpuLayersToUse > 0 {
-		args = append(args, "-ngl", fmt.Sprintf("%d", gpuLayersToUse))
-		// Enable flash attention for GPU inference (faster, less VRAM)
-		if mc.flashAttention {
-			args = append(args, "-fa")
-			log.Printf("Flash attention enabled for GPU inference")
-		}
-		log.Printf("Using %d GPU layers for model %s", gpuLayersToUse, modelID)
+	autoGPU := mc.gpuEnabled && gpuLayersToUse == 0 && hasAvailableNvidiaGPU()
+	if autoGPU {
+		args = append(args, "-ngl", "auto", "-fit", "on", "-fitc", fmt.Sprintf("%d", contextSize))
+		log.Printf("Using automatic NVIDIA GPU offload with %d-token context floor", contextSize)
+	} else if gpuLayersToUse > 0 {
+		args = append(args, "-ngl", fmt.Sprintf("%d", gpuLayersToUse), "-fit", "off")
+		log.Printf("Using %d explicitly configured GPU layers for model %s", gpuLayersToUse, modelID)
 	} else {
-		args = append(args, "-ngl", "0")
+		args = append(args, "-ngl", "0", "-fit", "off")
 		// For CPU-only, use mlock to keep model in RAM if beneficial
 		if mc.useMlock || mc.shouldUseMlock(modelPath) {
 			args = append(args, "--mlock")
 			log.Printf("Using mlock for model %s (CPU-only, keeping in RAM)", modelID)
+		}
+	}
+	if gpuLayersToUse > 0 || autoGPU {
+		// Enable flash attention for GPU inference (faster, less VRAM)
+		if mc.flashAttention {
+			args = append(args, "-fa", "on")
+			log.Printf("Flash attention enabled for GPU inference")
 		}
 	}
 

@@ -86,8 +86,14 @@ docker compose \
 
 ### NVIDIA GPU
 
-Install NVIDIA Container Toolkit and confirm `docker run --rm --gpus all
-nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi` succeeds. Then run:
+Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+for the Docker host and confirm GPU passthrough first:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+```
+
+Then run:
 
 ```bash
 docker compose -f docker-compose.gpu.yml pull
@@ -95,7 +101,34 @@ docker compose -f docker-compose.gpu.yml up -d
 ```
 
 The GPU image is deliberately separate because it is Linux AMD64-only and much
-larger than the portable CPU image.
+larger than the portable CPU image. It uses CUDA 12.8 and includes Blackwell
+`sm_120` support. `OFFGRID_GPU_LAYERS=0` selects automatic VRAM-aware offload;
+`OFFGRID_ENABLE_GPU=true` is set by the image and Compose profile. The model
+must actually load before GPU use can be confirmed: check `docker logs` for
+CUDA and offloaded layers, and watch `nvidia-smi` during inference.
+
+For Hermes, set a real 65,536-token context and choose a model that can fit its
+weights **and** KV cache in available RAM/VRAM. On a machine with 8 GB VRAM,
+Phi-3.5 Mini's 64K KV cache may need partial CPU offload; a smaller-cache
+long-context model is preferable. Example Compose overrides:
+
+```bash
+OFFGRID_MAX_CONTEXT=65536 OFFGRID_ADAPTIVE_CONTEXT=false \
+  OFFGRID_KV_CACHE_TYPE=q4_0 \
+  docker compose -f docker-compose.gpu.yml up -d
+```
+
+Do not run the CPU and GPU profiles on the same host port simultaneously.
+Compose creates project-scoped volumes, while the `docker run` example above
+uses volumes named exactly `offgrid-models` and `offgrid-data`; switching
+between those deployment methods does not automatically move models or data.
+Back up and deliberately migrate volumes before changing deployment methods.
+
+On WSL 2, `.wslconfig` sets a **maximum** VM memory limit; Docker GPU access
+does not remove the need for host RAM. Consult [Microsoft's WSL resource
+settings](https://learn.microsoft.com/en-us/windows/wsl/wsl-config) and keep
+enough memory for Windows. Applying a changed limit requires `wsl --shutdown`,
+which also stops running WSL containers until Docker restarts.
 
 ## Persistent storage
 

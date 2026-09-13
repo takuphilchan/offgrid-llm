@@ -177,6 +177,12 @@ func (d *Downloader) downloadFromSource(modelID, quantization string, variant *M
 		}
 	}
 
+	// Windows does not allow an open file to be renamed. Close explicitly
+	// before finishDownload promotes the partial file into its final location;
+	// the deferred close still covers all earlier error paths.
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close downloaded model: %w", err)
+	}
 	return d.finishDownload(tmpPath, destPath, variant, progress, resume.total)
 }
 

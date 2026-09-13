@@ -70,11 +70,17 @@ docker compose \
 The GPU image is Linux AMD64 only and requires NVIDIA Container Toolkit:
 
 ```bash
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 docker compose -f docker-compose.gpu.yml pull
 docker compose -f docker-compose.gpu.yml up -d
 ```
 
 Release tags use `<version>-gpu`, and the stable GPU tag is `latest-gpu`.
+Automatic GPU offload is enabled by this profile. For a Hermes trial, set
+`OFFGRID_MAX_CONTEXT=65536 OFFGRID_ADAPTIVE_CONTEXT=false` and select a
+long-context model that fits available memory; a 64K context can consume far
+more memory than the GGUF file size suggests. Check `docker logs` for CUDA
+offload and `nvidia-smi` during an actual response.
 
 ## Production
 

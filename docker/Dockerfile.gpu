@@ -4,7 +4,7 @@
 # =============================================================================
 # Stage 1: Build the web application
 # =============================================================================
-FROM node:22-bookworm-slim AS ui-builder
+FROM node:22-alpine AS ui-builder
 
 WORKDIR /build/web/app
 COPY web/app/package.json web/app/package-lock.json ./
@@ -15,17 +15,18 @@ RUN npm run build
 # =============================================================================
 # Stage 2: Build the Go binary
 # =============================================================================
-FROM golang:1.26.6-bookworm AS go-builder
+FROM golang:1.26.6-alpine3.24 AS go-builder
 
 ARG VERSION=dev
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
     git \
     make \
     gcc \
     g++ \
-    && rm -rf /var/lib/apt/lists/*
+    musl-dev \
+    linux-headers
 
 WORKDIR /build
 
@@ -38,17 +39,19 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 
-# Build the application
+# Build the application as a static binary for the CUDA runtime image.
 RUN CGO_ENABLED=1 GOOS=linux go build \
-	-trimpath -ldflags="-s -w -X main.Version=${VERSION}" \
-	-o offgrid ./cmd/offgrid/
+    -trimpath -ldflags="-s -w -X main.Version=${VERSION} -extldflags=-static" \
+    -o offgrid ./cmd/offgrid/
 
 # =============================================================================
 # Stage 3: Build llama.cpp with CUDA support
 # =============================================================================
-FROM nvidia/cuda:12.2.0-devel-ubuntu22.04 AS llama-builder
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS llama-builder
 
 ARG LLAMA_CPP_COMMIT=e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
+ARG CUDA_ARCHITECTURES="75;80;86;89;90;120"
+ARG BUILD_JOBS=2
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -71,16 +74,18 @@ RUN mkdir llama.cpp && cd llama.cpp && \
         -DGGML_CUDA=ON \
         -DGGML_NATIVE=OFF \
         -DLLAMA_BUILD_SERVER=ON \
+        -DLLAMA_BUILD_UI=OFF \
+        -DLLAMA_USE_PREBUILT_UI=OFF \
         -DLLAMA_BUILD_TESTS=OFF \
         -DLLAMA_BUILD_EXAMPLES=OFF \
-        -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90" && \
-    cmake --build build --config Release -j$(nproc) --target llama-server && \
+        -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" && \
+    cmake --build build --config Release --parallel "${BUILD_JOBS}" --target llama-server && \
     strip build/bin/llama-server
 
 # =============================================================================
 # Stage 4: Final runtime image with CUDA
 # =============================================================================
-FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 
 ARG VERSION=dev
 ARG VCS_REF=unknown
@@ -137,10 +142,12 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 ENV OFFGRID_MODELS_DIR=/var/lib/offgrid/models \
     OFFGRID_DATA_DIR=/var/lib/offgrid/data \
     OFFGRID_BIN_DIR=/var/lib/offgrid/bin \
+    OFFGRID_VERSION=${VERSION} \
     OFFGRID_PORT=11611 \
     OFFGRID_HOST=0.0.0.0 \
     OFFGRID_ALLOW_UNAUTHENTICATED_REMOTE=true \
-    OFFGRID_GPU_LAYERS=99
+    OFFGRID_ENABLE_GPU=true \
+    OFFGRID_GPU_LAYERS=0
 
 ENTRYPOINT ["/usr/local/bin/offgrid"]
 CMD ["serve"]

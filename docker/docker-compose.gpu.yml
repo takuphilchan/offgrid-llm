@@ -20,7 +20,12 @@ services:
       OFFGRID_MODELS_DIR: /var/lib/offgrid/models
       OFFGRID_DATA_DIR: /var/lib/offgrid/data
       OFFGRID_BIN_DIR: /var/lib/offgrid/bin
-      OFFGRID_GPU_LAYERS: 99
+      OFFGRID_ENABLE_GPU: "true"
+      # 0 asks llama.cpp to fit GPU layers to the model, KV cache, and VRAM.
+      OFFGRID_GPU_LAYERS: ${OFFGRID_GPU_LAYERS:-0}
+      OFFGRID_MAX_CONTEXT: ${OFFGRID_MAX_CONTEXT:-4096}
+      OFFGRID_ADAPTIVE_CONTEXT: ${OFFGRID_ADAPTIVE_CONTEXT:-true}
+      OFFGRID_KV_CACHE_TYPE: ${OFFGRID_KV_CACHE_TYPE:-q8_0}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -33,8 +38,6 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-        limits:
-          memory: 16G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:11611/health"]
       interval: 30s

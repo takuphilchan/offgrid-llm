@@ -1,7 +1,9 @@
 package inference
 
 import (
-	"archive/zip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,9 +11,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 )
 
-// BinaryManager handles the lifecycle of the llama-server binary
+// BinaryManager resolves a compatible llama-server. The native fallback is a
+// checksum-pinned CPU/Metal release; GPU builds must be supplied explicitly or
+// obtained from the OffGrid GPU container.
 type BinaryManager struct {
 	version   string
 	binDir    string
@@ -19,38 +25,28 @@ type BinaryManager struct {
 	hasAMD    bool
 }
 
-// NewBinaryManager creates a new binary manager
 func NewBinaryManager(binDir string) *BinaryManager {
-	bm := &BinaryManager{
-		version: "b4320", // Pinned version for stability
-		binDir:  binDir,
+	if configured := strings.TrimSpace(os.Getenv("OFFGRID_BIN_DIR")); configured != "" {
+		binDir = configured
 	}
+	bm := &BinaryManager{version: "b10516", binDir: binDir}
 	bm.detectGPU()
 	return bm
 }
 
-// detectGPU checks for available GPU acceleration
 func (bm *BinaryManager) detectGPU() {
-	// Check for NVIDIA
 	if _, err := exec.LookPath("nvidia-smi"); err == nil {
-		cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader")
-		if output, err := cmd.Output(); err == nil && len(output) > 0 {
+		if output, err := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader").Output(); err == nil && len(output) > 0 {
 			bm.hasNVIDIA = true
 		}
 	}
-
-	// Check for AMD ROCm
 	if _, err := exec.LookPath("rocm-smi"); err == nil {
 		bm.hasAMD = true
 	}
 }
 
-// HasGPU returns true if GPU acceleration is available
-func (bm *BinaryManager) HasGPU() bool {
-	return bm.hasNVIDIA || bm.hasAMD
-}
+func (bm *BinaryManager) HasGPU() bool { return bm.hasNVIDIA || bm.hasAMD }
 
-// GPUType returns the detected GPU type
 func (bm *BinaryManager) GPUType() string {
 	if bm.hasNVIDIA {
 		return "nvidia"
@@ -61,247 +57,178 @@ func (bm *BinaryManager) GPUType() string {
 	return "cpu"
 }
 
-// GetLlamaServer returns the path to the llama-server binary
-// It checks (in order):
-// 1. OFFGRID_LLAMA_SERVER_PATH environment variable
-// 2. Local bin directory
-// 3. System PATH
-// 4. Downloads it if not found
-func (bm *BinaryManager) GetLlamaServer() (string, error) {
-	// 1. Check env
-	if path := os.Getenv("OFFGRID_LLAMA_SERVER_PATH"); path != "" {
-		if _, err := os.Stat(path); err == nil {
-			return path, nil
-		}
-	}
-
-	// 2. Check local bin
-	binaryName := "llama-server"
+func llamaServerBinaryName() string {
 	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
+		return "llama-server.exe"
 	}
-	localPath := filepath.Join(bm.binDir, binaryName)
-	if _, err := os.Stat(localPath); err == nil {
-		return localPath, nil
-	}
+	return "llama-server"
+}
 
-	// 3. Check PATH
-	if path, err := exec.LookPath("llama-server"); err == nil {
+func (bm *BinaryManager) versionedPath() string {
+	return filepath.Join(bm.binDir, "llama-"+bm.version, llamaServerBinaryName())
+}
+
+func (bm *BinaryManager) localPath() string {
+	return filepath.Join(bm.binDir, llamaServerBinaryName())
+}
+
+func regularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
+// GetLlamaServer prefers an explicit path, then the verified fallback, then
+// compatible user/packaged binaries. An old binary is never silently reused.
+func (bm *BinaryManager) GetLlamaServer() (string, error) {
+	if path := strings.TrimSpace(os.Getenv("OFFGRID_LLAMA_SERVER_PATH")); path != "" {
+		if !regularFile(path) {
+			return "", fmt.Errorf("OFFGRID_LLAMA_SERVER_PATH does not point to a regular file: %s", path)
+		}
 		return path, nil
 	}
-
-	// 4. Download
-	if err := bm.downloadBinary(localPath); err != nil {
-		return "", fmt.Errorf("failed to download llama-server: %w", err)
+	if path := bm.versionedPath(); regularFile(path) {
+		if llamaServerSupportsRequiredFlags(path) {
+			return path, nil
+		}
+		return "", fmt.Errorf("existing llama-server at %s lacks required flags; remove that specific runtime directory and retry", path)
 	}
+	if path := bm.localPath(); regularFile(path) && llamaServerSupportsRequiredFlags(path) {
+		return path, nil
+	}
+	if path, err := exec.LookPath("llama-server"); err == nil && llamaServerSupportsRequiredFlags(path) {
+		return path, nil
+	}
+	if (bm.hasNVIDIA || bm.hasAMD) && strings.EqualFold(os.Getenv("OFFGRID_ENABLE_GPU"), "true") && runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("no compatible GPU llama-server found; set OFFGRID_LLAMA_SERVER_PATH to a GPU build or use the OffGrid GPU container")
+	}
+	path := bm.versionedPath()
+	if err := bm.downloadBinary(path); err != nil {
+		return "", fmt.Errorf("download llama-server: %w", err)
+	}
+	return path, nil
+}
 
-	return localPath, nil
+func llamaServerSupportsRequiredFlags(binaryPath string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	output, _ := exec.CommandContext(ctx, binaryPath, "--help").CombinedOutput()
+	text := string(output)
+	return ctx.Err() == nil && strings.Contains(text, "--jinja") && strings.Contains(text, "--fit-ctx") && strings.Contains(text, "--cache-type-k")
 }
 
 func (bm *BinaryManager) downloadBinary(destPath string) error {
-	// Ensure bin dir exists
-	if err := os.MkdirAll(bm.binDir, 0755); err != nil {
+	if err := os.MkdirAll(bm.binDir, 0o755); err != nil {
 		return err
 	}
-
-	url, err := bm.getDownloadURL()
+	asset, digest, err := bm.downloadAsset()
 	if err != nil {
 		return err
 	}
-
-	fmt.Println()
-	fmt.Printf("  ⇣ Downloading llama-server (one-time setup)...\n")
-	fmt.Printf("    Source: %s\n", url)
-	if bm.hasNVIDIA {
-		fmt.Printf("    GPU:    NVIDIA (CUDA acceleration enabled)\n")
-	} else if bm.hasAMD {
-		fmt.Printf("    GPU:    AMD (ROCm acceleration enabled)\n")
-	} else {
-		fmt.Printf("    GPU:    None (CPU mode)\n")
-	}
-	fmt.Println()
-
-	// Download zip to temp file
-	tmpFile, err := os.CreateTemp("", "llama-server-*.zip")
+	assetURL := fmt.Sprintf("https://github.com/ggml-org/llama.cpp/releases/download/%s/%s", bm.version, asset)
+	fmt.Printf("Downloading verified llama.cpp %s runtime...\n", bm.version)
+	file, err := os.CreateTemp("", "offgrid-llama-archive-*")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
-
-	resp, err := http.Get(url)
+	defer os.Remove(file.Name())
+	client := &http.Client{Timeout: 5 * time.Minute}
+	response, err := client.Get(assetURL)
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed: HTTP %s", resp.Status)
-	}
-
-	// Get content length for progress
-	contentLength := resp.ContentLength
-
-	// Download with progress
-	var downloaded int64
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			if _, writeErr := tmpFile.Write(buf[:n]); writeErr != nil {
-				return writeErr
-			}
-			downloaded += int64(n)
-			if contentLength > 0 {
-				percent := float64(downloaded) / float64(contentLength) * 100
-				fmt.Printf("\r    Progress: %.1f%% (%d MB / %d MB)", percent, downloaded/(1024*1024), contentLength/(1024*1024))
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-	}
-	fmt.Println()
-	fmt.Printf("    ✓ Download complete\n")
-
-	// Extract zip
-	fmt.Printf("    Extracting binary...\n")
-	if err := bm.extractZip(tmpFile.Name(), destPath); err != nil {
+		file.Close()
 		return err
 	}
-	fmt.Printf("    ✓ Installed to %s\n", destPath)
-	fmt.Println()
-
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		file.Close()
+		return fmt.Errorf("release archive returned HTTP %d", response.StatusCode)
+	}
+	const maxArchive = 128 << 20
+	if response.ContentLength > maxArchive {
+		file.Close()
+		return fmt.Errorf("release archive exceeds %d bytes", maxArchive)
+	}
+	hash := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(response.Body, maxArchive+1))
+	closeErr := file.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if written > maxArchive {
+		return fmt.Errorf("release archive exceeds %d bytes", maxArchive)
+	}
+	if actual := hex.EncodeToString(hash.Sum(nil)); actual != digest {
+		return fmt.Errorf("release archive SHA-256 mismatch: got %s", actual)
+	}
+	stage, err := os.MkdirTemp(bm.binDir, ".llama-stage-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage)
+	if err := extractLlamaArchive(file.Name(), stage, bm.version, asset); err != nil {
+		return err
+	}
+	if !regularFile(filepath.Join(stage, llamaServerBinaryName())) {
+		return fmt.Errorf("verified release archive contains no %s", llamaServerBinaryName())
+	}
+	if err := os.Rename(stage, filepath.Dir(destPath)); err != nil {
+		if llamaServerSupportsRequiredFlags(destPath) {
+			// Another OffGrid process completed the same pinned install first.
+			return nil
+		}
+		return fmt.Errorf("install verified runtime: %w", err)
+	}
+	fmt.Printf("Installed llama-server at %s\n", destPath)
 	return nil
 }
 
+func (bm *BinaryManager) downloadAsset() (name, sha256Digest string, err error) {
+	if bm.version != "b10516" {
+		return "", "", fmt.Errorf("no verified assets for llama.cpp %s", bm.version)
+	}
+	switch runtime.GOOS + "/" + runtime.GOARCH {
+	case "linux/amd64":
+		return "llama-b10516-bin-ubuntu-x64.tar.gz", "f263a91280471b4c33c4999d7c76259c0f3a0a53a0b3e692b2c0b84380137a35", nil
+	case "linux/arm64":
+		return "llama-b10516-bin-ubuntu-arm64.tar.gz", "e7491dca79c9799fc3ae169675a79f5777d3027e31ffb08ae679e5e0a7ae3c97", nil
+	case "darwin/arm64":
+		return "llama-b10516-bin-macos-arm64.tar.gz", "ee3324327d621026ae80c24031670e65fa62a0b23a3a027dbe2f65f240affd30", nil
+	case "darwin/amd64":
+		return "llama-b10516-bin-macos-x64.tar.gz", "b7adecf7bd2cde577ddabee8357a72409165d8104f43b4acee9f1b98cc9c447a", nil
+	case "windows/amd64":
+		return "llama-b10516-bin-win-cpu-x64.zip", "fbbbc55e0eb2e1b07f9dcb9488616c98ed47d9003b90e15e7c8c7812c4307cd3", nil
+	case "windows/arm64":
+		return "llama-b10516-bin-win-cpu-arm64.zip", "4b136692ab17009722e350d5bb8e5905f9af6bcd43d2897f0655186a9cc65db6", nil
+	default:
+		return "", "", fmt.Errorf("unsupported llama.cpp platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+}
+
 func (bm *BinaryManager) getDownloadURL() (string, error) {
-	baseURL := "https://github.com/ggerganov/llama.cpp/releases/download"
-
-	// Map OS/Arch/GPU to asset name
-	// Based on llama.cpp release conventions as of late 2024
-	var assetName string
-
-	switch runtime.GOOS {
-	case "linux":
-		if runtime.GOARCH == "amd64" {
-			if bm.hasNVIDIA {
-				// CUDA build for NVIDIA GPUs
-				assetName = fmt.Sprintf("llama-%s-bin-ubuntu-x64.zip", bm.version)
-				// Note: The CUDA version is in a separate asset, but the ubuntu build
-				// typically includes CUDA support if nvidia drivers are present
-			} else {
-				assetName = fmt.Sprintf("llama-%s-bin-ubuntu-x64.zip", bm.version)
-			}
-		}
-	case "darwin":
-		if runtime.GOARCH == "arm64" {
-			// Apple Silicon with Metal support
-			assetName = fmt.Sprintf("llama-%s-bin-macos-arm64.zip", bm.version)
-		} else if runtime.GOARCH == "amd64" {
-			assetName = fmt.Sprintf("llama-%s-bin-macos-x64.zip", bm.version)
-		}
-	case "windows":
-		if runtime.GOARCH == "amd64" {
-			if bm.hasNVIDIA {
-				// CUDA build for Windows with NVIDIA
-				assetName = fmt.Sprintf("llama-%s-bin-win-cuda-cu12.2.0-x64.zip", bm.version)
-			} else {
-				// AVX2 CPU build for Windows
-				assetName = fmt.Sprintf("llama-%s-bin-win-avx2-x64.zip", bm.version)
-			}
-		}
+	asset, _, err := bm.downloadAsset()
+	if err != nil {
+		return "", err
 	}
-
-	if assetName == "" {
-		return "", fmt.Errorf("unsupported platform: %s/%s", runtime.GOOS, runtime.GOARCH)
-	}
-
-	return fmt.Sprintf("%s/%s/%s", baseURL, bm.version, assetName), nil
+	return fmt.Sprintf("https://github.com/ggml-org/llama.cpp/releases/download/%s/%s", bm.version, asset), nil
 }
 
-// GetVersion returns the pinned llama.cpp version
-func (bm *BinaryManager) GetVersion() string {
-	return bm.version
-}
+func (bm *BinaryManager) GetVersion() string { return bm.version }
 
-// IsInstalled checks if llama-server is already installed
 func (bm *BinaryManager) IsInstalled() bool {
-	binaryName := "llama-server"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
-	localPath := filepath.Join(bm.binDir, binaryName)
-	_, err := os.Stat(localPath)
-	return err == nil
+	return regularFile(bm.versionedPath()) || regularFile(bm.localPath())
 }
 
-// GetInstalledPath returns the path to the installed binary, or empty if not installed
 func (bm *BinaryManager) GetInstalledPath() string {
-	binaryName := "llama-server"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
+	if path := bm.versionedPath(); regularFile(path) {
+		return path
 	}
-	localPath := filepath.Join(bm.binDir, binaryName)
-	if _, err := os.Stat(localPath); err == nil {
-		return localPath
+	if path := bm.localPath(); regularFile(path) {
+		return path
 	}
 	if path, err := exec.LookPath("llama-server"); err == nil {
 		return path
 	}
 	return ""
-}
-
-func (bm *BinaryManager) extractZip(zipPath, destPath string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	binaryName := "llama-server"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
-
-	// Find the binary in the zip
-	// Note: The zip structure might vary (e.g. inside a folder)
-	// We search for the binary name
-	var foundFile *zip.File
-	for _, f := range r.File {
-		// Check if filename matches (ignoring directories)
-		baseName := filepath.Base(f.Name)
-		if baseName == binaryName {
-			foundFile = f
-			break
-		}
-		// Also check for "server" which was the old name
-		if baseName == "server" || baseName == "server.exe" {
-			foundFile = f
-			break
-		}
-	}
-
-	if foundFile == nil {
-		return fmt.Errorf("binary %s not found in zip", binaryName)
-	}
-
-	// Extract
-	rc, err := foundFile.Open()
-	if err != nil {
-		return err
-	}
-	defer rc.Close()
-
-	outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	defer outFile.Close()
-
-	_, err = io.Copy(outFile, rc)
-	return err
 }

@@ -27,6 +27,7 @@ func TestBinaryManager_GetLlamaServer_Local(t *testing.T) {
 	if err := os.WriteFile(binaryPath, []byte("dummy"), 0755); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("OFFGRID_LLAMA_SERVER_PATH", binaryPath)
 
 	// Test finding it
 	foundPath, err := bm.GetLlamaServer()
@@ -36,6 +37,16 @@ func TestBinaryManager_GetLlamaServer_Local(t *testing.T) {
 
 	if foundPath != binaryPath {
 		t.Errorf("Expected path %s, got %s", binaryPath, foundPath)
+	}
+}
+
+func TestBinaryManagerRejectsOldLocalBinary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "llama-server")
+	if err := os.WriteFile(path, []byte("old binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if llamaServerSupportsRequiredFlags(path) {
+		t.Fatal("non-executable or old llama-server was accepted")
 	}
 }
 
@@ -50,5 +61,18 @@ func TestBinaryManager_GetDownloadURL(t *testing.T) {
 		if url == "" {
 			t.Error("URL should not be empty")
 		}
+	}
+}
+
+func TestBinaryManagerHonorsExplicitPaths(t *testing.T) {
+	customBin := t.TempDir()
+	t.Setenv("OFFGRID_BIN_DIR", customBin)
+	manager := NewBinaryManager(t.TempDir())
+	if manager.binDir != customBin {
+		t.Fatalf("binDir = %q, want %q", manager.binDir, customBin)
+	}
+	t.Setenv("OFFGRID_LLAMA_SERVER_PATH", filepath.Join(customBin, "missing-llama-server"))
+	if _, err := manager.GetLlamaServer(); err == nil {
+		t.Fatal("missing explicit llama-server path silently fell back to another binary")
 	}
 }
