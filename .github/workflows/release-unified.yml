@@ -15,10 +15,11 @@ permissions:
 
 env:
   GO_VERSION: '1.26.6'
-  # Keep release bundles on the same reviewed inference runtime as the
-  # container images. Building a moving upstream branch makes releases
-  # non-reproducible and can break individual platforms without a repo change.
+  # Linux and macOS bundles passed at this pinned revision in v0.3.1.
   LLAMA_CPP_COMMIT: e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
+  # The v0.3.0 Windows bundle was built successfully from this exact revision.
+  # The older generic pin above failed on the Windows MSVC runner in v0.3.1.
+  LLAMA_CPP_WINDOWS_COMMIT: 718f7b4175bf8b6af6f5eac09fee10754b3ecddd
 
 jobs:
   # Create release first
@@ -30,6 +31,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
 
       - name: Get version
         id: version
@@ -40,28 +43,23 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
       
-      - name: Delete existing release if present
-        continue-on-error: true
+      - name: Create draft release if missing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete ${{ steps.version.outputs.version }} --yes --repo ${{ github.repository }} || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create new release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: OffGrid LLM ${{ steps.version.outputs.version }}
-          body: |
-            # OffGrid LLM ${{ steps.version.outputs.version }}
-            
-            Release is being built. Artifacts will appear shortly.
-            
-            Please wait for all build jobs to complete.
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          if gh release view "${version}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${version} already exists; preserving its assets for this rerun."
+          else
+            gh release create "${version}" \
+              --repo "${{ github.repository }}" \
+              --verify-tag \
+              --title "OffGrid LLM ${version}" \
+              --notes "Release is being built. Artifacts will appear after verification." \
+              --draft
+          fi
 
   build-ui:
     name: Build Web UI
@@ -70,6 +68,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -179,6 +179,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
 
       - name: Download UI bundle
         uses: actions/download-artifact@v4
@@ -243,17 +245,21 @@ jobs:
         shell: bash
         run: |
           choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
-          choco install mingw
 
       - name: Clone llama.cpp
         shell: bash
         run: |
           set -euo pipefail
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            llama_commit="${LLAMA_CPP_WINDOWS_COMMIT}"
+          else
+            llama_commit="${LLAMA_CPP_COMMIT}"
+          fi
           mkdir -p /tmp/llama.cpp
           cd /tmp/llama.cpp
           git init
           git remote add origin https://github.com/ggml-org/llama.cpp.git
-          git fetch --depth 1 origin "${LLAMA_CPP_COMMIT}"
+          git fetch --depth 1 origin "${llama_commit}"
           git checkout --detach FETCH_HEAD
           echo "LLAMA_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
@@ -321,6 +327,12 @@ jobs:
             fi
             CMAKE_ARGS+=("-DCMAKE_EXE_LINKER_FLAGS=$STATIC_FLAGS")
             echo "Using static linking for Linux (GLIBC compatibility)"
+          elif [ "${{ matrix.platform }}" = "windows" ]; then
+            # The Windows runner selects MSVC. GCC -march/-mno-* options are
+            # ignored by cl.exe, so use its supported AVX2 codegen switch.
+            CMAKE_ARGS+=("-DCMAKE_C_FLAGS=/arch:AVX2")
+            CMAKE_ARGS+=("-DCMAKE_CXX_FLAGS=/arch:AVX2 /EHsc")
+            echo "Using MSVC AVX2 flags for the Windows bundle"
           elif [ -n "$CPU_FLAGS" ]; then
             CMAKE_ARGS+=("-DCMAKE_C_FLAGS=$CPU_FLAGS")
             CMAKE_ARGS+=("-DCMAKE_CXX_FLAGS=$CPU_FLAGS")
@@ -336,7 +348,19 @@ jobs:
           
           printf 'CMake argument: %q\n' "${CMAKE_ARGS[@]}"
           cmake "${CMAKE_ARGS[@]}"
-          cmake --build /tmp/llama.cpp/build --config Release -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)" --target llama-server
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            # MSBuild can exhaust the hosted runner's memory when this large
+            # C++ target is built with unrestricted parallelism.
+            build_jobs=2
+          else
+            build_jobs="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+          fi
+          build_log="/tmp/llama-server-build.log"
+          if ! cmake --build /tmp/llama.cpp/build --config Release --parallel "$build_jobs" --target llama-server 2>&1 | tee "$build_log"; then
+            echo "::error::llama-server build failed; compiler diagnostics follow"
+            grep -Ei '(^|[[:space:]])(fatal )?error|error C[0-9]+|error LNK[0-9]+' "$build_log" | tail -40 || true
+            exit 1
+          fi
 
       - name: Build whisper.cpp
         shell: bash
@@ -634,14 +658,20 @@ jobs:
 
       - name: Upload to release
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          files: ${{ env.ASSET_PATH }}
-          draft: false
-          prerelease: false
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          asset_name="$(basename "${ASSET_PATH}")"
+          if gh release view "${version}" --repo "${{ github.repository }}" \
+            --json assets --jq '.assets[].name' | grep -Fxq "${asset_name}"; then
+            echo "Release asset ${asset_name} already exists; keeping it."
+          else
+            gh release upload "${version}" "${ASSET_PATH}" \
+              --repo "${{ github.repository }}"
+          fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Build desktop app
   build-desktop:
@@ -667,6 +697,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
 
       - name: Download UI bundle
         uses: actions/download-artifact@v4
@@ -835,6 +867,18 @@ jobs:
         shell: bash
         working-directory: desktop/dist
         run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          repo="${{ github.repository }}"
+          existing_assets="$(gh release view "${version}" --repo "${repo}" --json assets --jq '.assets[].name')"
+          upload_if_missing() {
+            local file="$1"
+            if grep -Fxq "${file}" <<< "${existing_assets}"; then
+              echo "Release asset ${file} already exists; keeping it."
+            else
+              gh release upload "${version}" "${file}" --repo "${repo}"
+            fi
+          }
           echo "Current directory contents:"
           ls -lah
           echo ""
@@ -872,7 +916,7 @@ jobs:
             find . -maxdepth 1 \( -name "*.AppImage" -o -name "*.deb" \) -type f | while IFS= read -r filepath; do
               file="${filepath#./}"
               echo "Uploading: $file ($(du -h "$file" | cut -f1))"
-              if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
+              if upload_if_missing "$file"; then
                 echo "✓ Successfully uploaded: $file"
               else
                 echo "✗ Failed to upload: $file"
@@ -883,7 +927,7 @@ jobs:
             find . -maxdepth 1 -name "*.zip" -type f | while IFS= read -r filepath; do
               file="${filepath#./}"
               echo "Uploading: $file ($(du -h "$file" | cut -f1))"
-              if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
+              if upload_if_missing "$file"; then
                 echo "✓ Successfully uploaded: $file"
               else
                 echo "✗ Failed to upload: $file"
@@ -894,7 +938,7 @@ jobs:
             find . -maxdepth 1 -name "*.exe" -type f | while IFS= read -r filepath; do
               file="${filepath#./}"
               echo "Uploading: $file ($(du -h "$file" | cut -f1))"
-              if gh release upload ${{ steps.version.outputs.version }} "$file" --repo ${{ github.repository }} --clobber; then
+              if upload_if_missing "$file"; then
                 echo "✓ Successfully uploaded: $file"
               else
                 echo "✗ Failed to upload: $file"
@@ -918,6 +962,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
 
       - name: Get version
         id: version
@@ -928,16 +974,31 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Generate checksums
+      - name: Generate checksums from published assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd artifacts
-          find . -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.exe" \) -exec sha256sum {} \; > ../checksums-${{ steps.version.outputs.version }}.sha256
-          cd ..
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          checksum_file="checksums-${version}.sha256"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${version}" \
+            --jq '.assets[] | select(.state == "uploaded") | [.digest, .name] | @tsv' |
+            while IFS=$'\t' read -r digest name; do
+              case "${name}" in
+                *.tar.gz|*.zip|*.AppImage|*.dmg|*.exe|*.deb)
+                  if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                    echo "::error::Missing SHA-256 digest for release asset ${name}"
+                    exit 1
+                  fi
+                  printf '%s  %s\n' "${digest#sha256:}" "${name}"
+                  ;;
+              esac
+            done | sort -k2 > "${checksum_file}"
+          if [[ ! -s "${checksum_file}" ]]; then
+            echo "::error::No release assets found for ${version}"
+            exit 1
+          fi
 
       - name: Load checked-in release notes
         shell: bash
@@ -951,11 +1012,16 @@ jobs:
           cp "${notes_path}" release-notes.md
 
 
-      - name: Upload checksums to release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          files: checksums-${{ steps.version.outputs.version }}.sha256
-          body_path: release-notes.md
+      - name: Upload checksums and publish verified release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          gh release upload "${version}" "checksums-${version}.sha256" \
+            --repo "${{ github.repository }}" --clobber
+          gh release edit "${version}" \
+            --repo "${{ github.repository }}" \
+            --notes-file release-notes.md \
+            --draft=false
