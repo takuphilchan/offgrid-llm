@@ -15,7 +15,8 @@ or invent a new version just to rerun packaging.
    (Docker Hub images). The latter requires the `DOCKERHUB_TOKEN` repository
    secret with push access to `takuphilchan/offgrid-llm`.
 4. Verify all 14 expected GitHub assets and `checksums-vX.Y.Z.sha256`, plus
-   the Linux AMD64 and ARM64 images under the exact Docker Hub `X.Y.Z` tag.
+   the Linux AMD64 and ARM64 images under the exact Docker Hub `X.Y.Z` tag
+   and the Linux AMD64 image under `X.Y.Z-gpu`.
    A GitHub release is not complete merely because its page is public.
 
 The release finalizer checks every expected asset's uploaded state, nonzero
@@ -35,11 +36,12 @@ If Docker Hub did not publish, push a branch named `release-container/vX.Y.Z`
 from the reviewed workflow commit. `docker-publish.yml` checks out the existing
 tagged source and publishes only the exact `X.Y.Z` and `X.Y.Z-gpu` tags on
 this repair path. It does not move `latest` or minor-version aliases backward.
-Confirm the tag is pullable for Linux AMD64 and ARM64 before proceeding.
+Confirm both the multi-platform CPU tag and AMD64 GPU tag are pullable before
+proceeding.
 
 When every asset already exists and only checksums/notes/final publication
 failed, push `release-finalize/vX.Y.Z` from the reviewed workflow commit.
-`release-finalize.yml` verifies the source tag, both container architectures,
+`release-finalize.yml` verifies the source tag, CPU and GPU container platforms,
 all GitHub assets, and then publishes checksums and notes without rebuilding
 large native bundles. The branch can be updated to retry after a workflow fix;
 the original tag remains unchanged.
