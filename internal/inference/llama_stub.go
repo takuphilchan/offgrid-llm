@@ -61,6 +61,10 @@ func (e *LlamaEngine) ChatCompletionStream(ctx context.Context, req *api.ChatCom
 	return e.httpEngine.ChatCompletionStream(ctx, req, callback)
 }
 
+func (e *LlamaEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.ChatCompletionRequest, callback ChatCompletionStreamCallback) error {
+	return e.httpEngine.ChatCompletionStreamRaw(ctx, req, callback)
+}
+
 // Completion delegates to HTTP engine
 func (e *LlamaEngine) Completion(ctx context.Context, req *api.CompletionRequest) (*api.CompletionResponse, error) {
 	return e.httpEngine.Completion(ctx, req)

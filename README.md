@@ -48,7 +48,12 @@ Stable release tags will publish `latest`, full semantic versions, immutable
 ## Build and run from source
 
 Requirements: Go 1.25+ with the toolchain declared in `go.mod`, Node.js 22,
-npm, and a supported `llama-server` binary.
+and npm. OffGrid uses a compatible `llama-server` on `PATH` when present;
+otherwise the native CPU/Metal build downloads a checksum-pinned llama.cpp
+runtime on first inference. For a custom or GPU build, set
+`OFFGRID_LLAMA_SERVER_PATH` to its executable. `OFFGRID_BIN_DIR` selects the
+native fallback install directory. The Docker image already bundles its
+inference runtime.
 
 ```bash
 git clone https://github.com/takuphilchan/offgrid-llm.git
@@ -99,14 +104,42 @@ runtime. Desktop data defaults to `~/.offgrid-llm`.
 ## Interfaces
 
 - OpenAI-compatible: `POST /v1/chat/completions`, `POST /v1/embeddings`
-- Ollama-compatible: `/api/chat`, `/api/generate`, `/api/tags`, `/api/embed`
 - Durable conversations: `/v1/sessions`
 - Model catalog and lifecycle: `/v1/catalog`, `/v1/models/*`
 - MCP and governed agent endpoints for external agent integration
+- Native `offgrid` provider plugins for Hermes Agent and OpenClaw
 - Versioned OpenAPI contract: `GET /openapi.yaml`
 
 The source contract is [openapi.yaml](pkg/api/openapi.yaml). UI types are
 generated from it; CI fails when generated types drift.
+
+External agents connect to OffGrid as a native `offgrid` provider. Hermes and
+OpenClaw have guided managed setup:
+
+```bash
+offgrid hermes install
+offgrid hermes
+offgrid openclaw install
+offgrid openclaw test
+offgrid openclaw run "Summarize this directory"
+```
+
+Run these on the machine where the agent should live. If you built from source
+and did not add the CLI to `PATH`, replace `offgrid` with `./bin/offgrid`
+(`.\bin\offgrid.exe` in PowerShell). When OffGrid runs in Docker, keep the
+service container running but run the managed agent installer from the host;
+`docker exec` cannot install an agent into your host environment.
+
+The install command checks the OffGrid service and model, installs Hermes with
+its official installer when needed, installs the provider, persists its
+configuration without pulling optional npm/browser dependencies. Verify actual
+inference with `offgrid hermes test`; full diagnostics remain available through
+`offgrid hermes doctor`. Hermes requires at least 64,000 context tokens, so
+the command stops with guidance when the running OffGrid service cannot supply
+that window. OpenClaw uses its official installer when missing and a local
+plugin that discovers chat models only. Lower-level provider commands remain
+available through `offgrid integrations`. See the
+[external agents guide](docs/guides/external-agents.md).
 
 ## Persistent data
 
@@ -125,7 +158,7 @@ legacy source is retained so migration is recoverable.
 | Capability | Status | Notes |
 | --- | --- | --- |
 | Local inference and model switching | Core | `llama-server` is lifecycle-managed and loopback-only |
-| CLI, OpenAI/Ollama APIs, web UI | Core | Shared runtime and contract |
+| CLI, OpenAI-compatible API, web UI | Core | Shared runtime and contract |
 | Durable chat sessions | Core | Complete turns are persisted atomically |
 | Model catalog/download/resume/verify | Core | Cancellation keeps resumable partial files |
 | Authentication and permissions | Core for network use | Disabled in loopback quick start |

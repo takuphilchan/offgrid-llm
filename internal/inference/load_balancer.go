@@ -19,7 +19,6 @@ type BackendType string
 
 const (
 	BackendLlamaServer BackendType = "llama-server"
-	BackendOllama      BackendType = "ollama"
 	BackendLocalAI     BackendType = "localai"
 	BackendVLLM        BackendType = "vllm"
 	BackendOpenAI      BackendType = "openai"

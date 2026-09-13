@@ -1243,6 +1243,21 @@ func main() {
 		case "agent", "agents":
 			handleAgent(os.Args[2:])
 			return
+		case "integration", "integrations":
+			handleIntegrations(os.Args[2:])
+			return
+		case "hermes":
+			if err := handleHermes(os.Args[2:]); err != nil {
+				printError(err.Error())
+				os.Exit(1)
+			}
+			return
+		case "openclaw":
+			if err := handleOpenClaw(os.Args[2:]); err != nil {
+				printError(err.Error())
+				os.Exit(1)
+			}
+			return
 		case "audio":
 			handleAudio(os.Args[2:])
 			return
@@ -3209,6 +3224,9 @@ func printHelp() {
 			cmds: []cmdEntry{
 				{"lora <cmd>", "LoRA adapter management"},
 				{"agent <cmd>", "AI agent workflows (6 templates)"},
+				{"hermes [cmd]", "Install and run Hermes on OffGrid"},
+				{"openclaw [cmd]", "Install and run OpenClaw on OffGrid"},
+				{"integrations <cmd>", "Connect Hermes, OpenClaw, and other agents"},
 				{"audio <cmd>", "Speech-to-text & TTS"},
 				{"users <cmd>", "Multi-user management"},
 				{"audit <cmd>", "Security audit logs (export CSV/JSON)"},

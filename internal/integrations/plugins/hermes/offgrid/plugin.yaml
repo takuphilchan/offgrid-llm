@@ -1,0 +1,5 @@
+name: offgrid
+kind: model-provider
+version: 1.0.0
+description: Private local inference through an OffGrid runtime
+author: OffGrid LLM

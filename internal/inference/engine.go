@@ -2,12 +2,25 @@ package inference
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 // TokenCallback is called for each token during streaming
 type TokenCallback func(token string) error
+
+// ChatCompletionStreamCallback receives one complete JSON chunk from an
+// OpenAI-compatible SSE stream. Engines that implement RawStreamingEngine
+// preserve structured deltas such as tool_calls and usage metadata.
+type ChatCompletionStreamCallback func(chunk json.RawMessage) error
+
+// RawStreamingEngine is the optional structured-streaming extension used by
+// the public API. Keeping it separate preserves compatibility with embedded
+// engines that can only emit text tokens.
+type RawStreamingEngine interface {
+	ChatCompletionStreamRaw(ctx context.Context, req *api.ChatCompletionRequest, callback ChatCompletionStreamCallback) error
+}
 
 // Engine defines the interface for LLM inference backends
 type Engine interface {

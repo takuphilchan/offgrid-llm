@@ -1,0 +1,43 @@
+{
+  "id": "offgrid",
+  "name": "OffGrid Provider",
+  "description": "Private local model inference through OffGrid",
+  "categories": ["models"],
+  "activation": { "onStartup": false },
+  "enabledByDefault": true,
+  "providers": ["offgrid"],
+  "modelCatalog": {
+    "discovery": { "offgrid": "refreshable" }
+  },
+  "providerRequest": {
+    "providers": {
+      "offgrid": {
+        "family": "offgrid",
+        "openAICompletions": { "supportsStreamingUsage": true }
+      }
+    }
+  },
+  "modelPricing": {
+    "providers": { "offgrid": { "external": false } }
+  },
+  "setup": {
+    "providers": [{ "id": "offgrid", "envVars": ["OFFGRID_API_KEY"] }]
+  },
+  "providerAuthChoices": [
+    {
+      "provider": "offgrid",
+      "method": "custom",
+      "choiceId": "offgrid",
+      "choiceLabel": "OffGrid",
+      "choiceHint": "Private local inference through an OffGrid runtime",
+      "groupId": "offgrid",
+      "groupLabel": "OffGrid",
+      "groupHint": "Local and offline-capable"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { APIError, api, type AgentStep, type AgentTask, type AgentTool, type ComputerStatus, type MCPServer, type Model, type ToolApproval } from '../../api/client';
+import { APIError, api, type AgentStep, type AgentTask, type AgentTool, type ComputerStatus, type ExternalIntegration, type IntegrationSetup, type MCPServer, type Model, type ToolApproval } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { ModelSelect } from '../../components/ModelSelect';
 import { useI18n } from '../../i18n';
@@ -25,20 +25,28 @@ export function AgentPage({ models, model, setModel }: { models: Model[]; model:
   const [connectionURL, setConnectionURL] = useState('');
   const [connectionBusy, setConnectionBusy] = useState<'test' | 'connect' | ''>('');
   const [connectionMessage, setConnectionMessage] = useState('');
+  const [integrations, setIntegrations] = useState<ExternalIntegration[]>([]);
+  const [integrationSetup, setIntegrationSetup] = useState<{ id: string; name: string; setup: IntegrationSetup } | null>(null);
+  const [integrationBusy, setIntegrationBusy] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const refreshRuntime = async () => {
     setLoadingRuntime(true);
-    const [toolResult, taskResult, serverResult, computerResult] = await Promise.allSettled([api.agentTools(), api.agentTasks(), api.mcpServers(), api.computerStatus()]);
+    const [toolResult, taskResult, serverResult, computerResult, integrationResult] = await Promise.allSettled([api.agentTools(), api.agentTasks(), api.mcpServers(), api.computerStatus(), api.integrations(model)]);
     if (toolResult.status === 'fulfilled') { setTools(toolResult.value.tools); setEnabledTools(toolResult.value.enabled_count); }
     if (taskResult.status === 'fulfilled') setTasks([...taskResult.value].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
     if (serverResult.status === 'fulfilled') setServers(serverResult.value);
     if (computerResult.status === 'fulfilled') setComputer(computerResult.value);
-    const failed = [toolResult, taskResult, serverResult, computerResult].find(item => item.status === 'rejected');
+    if (integrationResult.status === 'fulfilled') setIntegrations(integrationResult.value.integrations);
+    const failed = [toolResult, taskResult, serverResult, computerResult, integrationResult].find(item => item.status === 'rejected');
     if (failed?.status === 'rejected') setError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
     setLoadingRuntime(false);
   };
 
-  useEffect(() => { void refreshRuntime(); }, []);
+  useEffect(() => {
+    setIntegrationSetup(null);
+    void refreshRuntime();
+  }, [model]);
 
   const execute = async (approved: ToolApproval[]) => {
     if (!task.trim() || !model) return;
@@ -90,6 +98,29 @@ export function AgentPage({ models, model, setModel }: { models: Model[]; model:
     finally { setConnectionBusy(''); }
   };
 
+  const showIntegrationSetup = async (item: ExternalIntegration) => {
+    setIntegrationBusy(item.id); setError(''); setCopied(false);
+    try { const response = await api.integrationSetup(item.id, model || item.model_id); setIntegrationSetup({ id: item.id, name: item.name, setup: response.setup }); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
+    finally { setIntegrationBusy(''); }
+  };
+
+  const copyIntegrationSetup = async () => {
+    if (!integrationSetup) return;
+    try {
+      if (integrationSetup.id === 'hermes') {
+        await navigator.clipboard.writeText(integrationSetup.setup.install_command);
+        setCopied(true);
+        return;
+      }
+      const environment = Object.entries(integrationSetup.setup.environment ?? {}).map(([key, value]) => `export ${key}=${JSON.stringify(value)}`).join('\n');
+      await navigator.clipboard.writeText([integrationSetup.setup.install_command, environment, integrationSetup.setup.content, ...integrationSetup.setup.verify].filter(Boolean).join('\n\n'));
+      setCopied(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : text.common.error);
+    }
+  };
+
   const recentTasks = useMemo(() => tasks.slice(0, 8), [tasks]);
   return <div className="stack agents-page">
     {error && <div className="inline-error" role="alert">{error}</div>}
@@ -108,7 +139,34 @@ export function AgentPage({ models, model, setModel }: { models: Model[]; model:
     </div>
 
     <section className="runtime-panel connector-panel"><div><span className="eyebrow">{text.agentRuntime.connectors}</span><div className="connector-list">{servers.length === 0 ? <p>{text.agentRuntime.noConnectors}</p> : servers.map(server => <article key={server.name}><i /><div><strong>{server.name}</strong><small>{server.transport} · {server.tools} {text.agentRuntime.tools.toLowerCase()} · {server.status}</small></div></article>)}</div></div><form onSubmit={connect}><label><span>{text.agentRuntime.connectorName}</span><input value={connectionName} onChange={event => setConnectionName(event.target.value)} /></label><label><span>{text.agentRuntime.connectorURL}</span><input type="url" placeholder="http://127.0.0.1:3000/mcp" value={connectionURL} onChange={event => setConnectionURL(event.target.value)} /></label>{connectionMessage && <small className="connection-success">{connectionMessage}</small>}<div><button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button><button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button></div></form></section>
+    <ExternalProvidersPanel integrations={integrations} loading={loadingRuntime} busy={integrationBusy} setup={integrationSetup} copied={copied} onSetup={showIntegrationSetup} onCopy={copyIntegrationSetup} />
   </div>;
+}
+
+type ExternalProvidersPanelProps = {
+  integrations: ExternalIntegration[];
+  loading: boolean;
+  busy: string;
+  setup: { id: string; name: string; setup: IntegrationSetup } | null;
+  copied: boolean;
+  onSetup: (item: ExternalIntegration) => void;
+  onCopy: () => void;
+};
+
+function ExternalProvidersPanel({ integrations, loading, busy, setup, copied, onSetup, onCopy }: ExternalProvidersPanelProps) {
+  const { messages: text } = useI18n();
+  const managedHermes = setup?.id === 'hermes';
+  return <section className="runtime-panel external-providers">
+    <div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.externalProviders}</span><h2>{text.agentRuntime.providerPluginsTitle}</h2><p>{text.agentRuntime.externalProvidersBody}</p></div></div>
+    {!loading && integrations.length === 0 && <p className="compact-empty">{text.agentRuntime.noExternalProviders}</p>}
+    <div className="provider-grid">{integrations.map(item => <article key={item.id} className="provider-card">
+      <div><span className={item.ready ? 'status-pill' : 'status-pill warning'}>{item.ready ? text.agentRuntime.providerReady : text.agentRuntime.providerNeedsSetup}</span><h3>{item.name}</h3><p>{item.description}</p></div>
+      <dl><div><dt>{text.agentRuntime.provider}</dt><dd>{item.provider_id}</dd></div><div><dt>{text.agentRuntime.transport}</dt><dd>{item.transport}</dd></div><div><dt>{text.agentRuntime.model}</dt><dd>{item.model_id ?? '—'}</dd></div><div><dt>{text.agentRuntime.context}</dt><dd>{item.context_window.toLocaleString()} / {item.minimum_context.toLocaleString()}</dd></div></dl>
+      {item.warnings.length > 0 && <ul>{item.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}
+      <button className="secondary-button" disabled={busy === item.id || !item.model_id} onClick={() => onSetup(item)}>{busy === item.id ? text.common.loading : text.agentRuntime.generateSetup}</button>
+    </article>)}</div>
+    {setup && <div className="provider-setup"><div className="section-heading"><div><span className="eyebrow">{setup.name}</span><h3>{text.agentRuntime.configuration}</h3></div><button className="secondary-button" onClick={onCopy}>{copied ? text.agentRuntime.copied : text.agentRuntime.copy}</button></div><label>{text.agentRuntime.installPlugin}</label><pre>{setup.setup.install_command}</pre>{!managedHermes && <>{Object.keys(setup.setup.environment ?? {}).length > 0 && <><label>{text.agentRuntime.environment}</label><pre>{Object.entries(setup.setup.environment ?? {}).map(([key, value]) => `export ${key}=${JSON.stringify(value)}`).join('\n')}</pre></>}<label>{setup.setup.config_file}</label><pre>{setup.setup.content}</pre></>}<label>{text.agentRuntime.verification}</label><pre>{setup.setup.verify.join('\n')}</pre>{(setup.setup.notes?.length ?? 0) > 0 && <div className="provider-notes"><strong>{text.agentRuntime.notes}</strong><ul>{setup.setup.notes?.map(note => <li key={note}>{note}</li>)}</ul></div>}</div>}
+  </section>;
 }
 
 function Metric({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) { return <article className={danger ? 'metric warning' : 'metric'}><span>{label}</span><strong>{value}</strong></article>; }

@@ -21,9 +21,6 @@ Wants=network.target
 # After=network-online.target
 # Wants=network-online.target
 
-# Conflict with any other LLM servers
-Conflicts=ollama.service
-
 [Service]
 Type=simple
 User=offgrid

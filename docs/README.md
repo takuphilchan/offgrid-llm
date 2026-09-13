@@ -41,6 +41,7 @@ Complete guide to OffGrid LLM.
 | Guide | Description |
 |-------|-------------|
 | [AI Agents](guides/agents.md) | Autonomous task execution |
+| [External Agents](guides/external-agents.md) | Hermes and OpenClaw provider plugins |
 | [RAG](guides/embeddings.md) | Chat with your documents |
 | [Audit Logs](guides/audit.md) | Security logging |
 | [Multi-User](guides/multi-user.md) | User management |

@@ -72,9 +72,8 @@ curl http://127.0.0.1:11611/v1/chat/completions \
   }'
 ```
 
-Set `stream` to `true` for server-sent events. OffGrid also provides the
-Ollama-compatible `/api/chat`, `/api/generate`, `/api/tags`, and `/api/embed`
-routes for clients that use those conventions.
+Set `stream` to `true` for server-sent events. Structured streaming preserves
+tool-call deltas and optional usage information for agent runtimes.
 
 ## Durable conversations
 

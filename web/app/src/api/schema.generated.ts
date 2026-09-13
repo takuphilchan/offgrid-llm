@@ -424,6 +424,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listExternalAgentIntegrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/integrations/{id}/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getExternalAgentIntegrationSetup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/computer/status": {
         parameters: {
             query?: never;
@@ -501,6 +533,57 @@ export interface components {
             size?: number;
             size_gb?: string;
             loaded?: boolean;
+            context_window?: number;
+            /** @description OpenAI-compatible alias for context_window. */
+            context_length?: number;
+            capabilities?: string[];
+        };
+        IntegrationStatus: {
+            id: string;
+            /** @constant */
+            provider_id: "offgrid";
+            plugin_id: string;
+            name: string;
+            description: string;
+            /** @constant */
+            transport: "openai-chat-completions";
+            /** Format: uri */
+            documentation_url: string;
+            minimum_context: number;
+            recommended_context: number;
+            requires_tools: boolean;
+            capabilities: string[];
+            ready: boolean;
+            /** @enum {string} */
+            status: "ready" | "needs_configuration";
+            model_id?: string;
+            context_window: number;
+            warnings: string[];
+        };
+        IntegrationList: {
+            /** @constant */
+            provider: "offgrid";
+            /** Format: uri */
+            base_url: string;
+            integrations: components["schemas"]["IntegrationStatus"][];
+        };
+        IntegrationSetup: {
+            /** @constant */
+            provider_id: "offgrid";
+            plugin_id: string;
+            install_command: string;
+            format: string;
+            config_file: string;
+            content: string;
+            environment?: {
+                [key: string]: string;
+            };
+            verify: string[];
+            notes?: string[];
+        };
+        IntegrationSetupResponse: {
+            integration: components["schemas"]["IntegrationStatus"];
+            setup: components["schemas"]["IntegrationSetup"];
         };
         CatalogModel: {
             id: string;
@@ -553,8 +636,18 @@ export interface components {
         };
         ChatMessage: {
             /** @enum {string} */
-            role: "system" | "user" | "assistant";
+            role: "system" | "developer" | "user" | "assistant" | "tool";
             content: string;
+            tool_call_id?: string;
+            tool_calls?: {
+                id: string;
+                /** @constant */
+                type: "function";
+                function: {
+                    name: string;
+                    arguments: string;
+                };
+            }[];
         };
         SessionMessage: components["schemas"]["ChatMessage"] & {
             /** Format: date-time */
@@ -574,6 +667,22 @@ export interface components {
             messages: components["schemas"]["ChatMessage"][];
             /** @default false */
             stream: boolean;
+            stream_options?: {
+                /** @default false */
+                include_usage: boolean;
+            };
+            tools?: {
+                /** @constant */
+                type: "function";
+                function: {
+                    name: string;
+                    description?: string;
+                    parameters?: {
+                        [key: string]: unknown;
+                    };
+                };
+            }[];
+            tool_choice?: unknown;
             /** @default false */
             use_knowledge_base: boolean;
         };
@@ -1422,6 +1531,58 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listExternalAgentIntegrations: {
+        parameters: {
+            query?: {
+                /** @description Installed chat model to evaluate for integration readiness. */
+                model?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description First-party external agent provider integrations and their runtime readiness. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationList"];
+                };
+            };
+        };
+    };
+    getExternalAgentIntegrationSetup: {
+        parameters: {
+            query?: {
+                model?: string;
+                base_url?: string;
+                max_output_tokens?: number;
+            };
+            header?: never;
+            path: {
+                id: "hermes" | "openclaw";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ready-to-copy native provider setup. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationSetupResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     getComputerStatus: {

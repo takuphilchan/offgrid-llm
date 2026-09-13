@@ -296,6 +296,48 @@ offgrid agent mcp add memory "npx -y @modelcontextprotocol/server-memory"
 
 ---
 
+## External Agents
+
+Install, configure, verify, and launch Hermes Agent through OffGrid:
+
+```bash
+offgrid hermes install                    # Complete guided setup
+offgrid hermes install --with-browser     # Also install optional browser/computer-use tools
+offgrid hermes status                     # Inspect setup and model-context preflight
+offgrid hermes test                       # Run an inference smoke test
+offgrid hermes                            # Start interactive Hermes chat
+offgrid hermes -q "Summarize this repo"   # Start with a prompt
+```
+
+The install command uses Hermes' official installer when the runtime is not
+present, installs the native OffGrid provider, and persists configuration
+through Hermes' own configuration CLI. Use `--yes` for an unattended install.
+The default skips npm/browser tools and unrelated full diagnostics; use
+`--with-browser` or `--doctor` to opt in. Optional npm/browser failures are
+reported as warnings after the working core is configured. Hermes requires a
+real OffGrid context of at least 64,000 tokens; do not inflate the Hermes
+setting beyond what OffGrid actually allocates.
+
+Lower-level provider inspection and configuration remain available:
+
+```bash
+offgrid integrations list
+offgrid integrations setup hermes --model <model-id>
+offgrid openclaw install                   # Install and configure OpenClaw
+offgrid openclaw status                    # Check provider and model readiness
+offgrid openclaw test                      # Headless model-response smoke test
+offgrid openclaw run "Summarize this repo" # Run an isolated local agent turn
+```
+
+`offgrid integrations install openclaw` only copies the provider bundle; use
+`offgrid openclaw install` for complete setup. An installed OpenClaw runtime
+is left at its current version. Missing runtimes use OpenClaw's official
+installer after confirmation; pass `--yes` only when you trust that installer
+and the local provider. The managed setup updates only the `offgrid` provider
+in OpenClaw's config and does not change an existing default model.
+
+---
+
 ## Knowledge Base (RAG)
 
 Chat with your documents:

@@ -28,37 +28,6 @@ func TestToolApprovalKeyBindsExactCanonicalArguments(t *testing.T) {
 	}
 }
 
-func TestOllamaToolContractRoundTrip(t *testing.T) {
-	request := ollamaRequest{
-		Model: "model-a",
-		Messages: []ollamaMessage{{
-			Role: "assistant",
-			ToolCalls: []ollamaToolCall{{Function: ollamaFunctionCall{
-				Name: "lookup", Arguments: map[string]interface{}{"key": "answer"},
-			}}},
-		}},
-		Tools: []api.Tool{{Type: "function", Function: api.FunctionDef{Name: "lookup"}}},
-	}
-	stream := false
-	request.Stream = &stream
-	converted, err := request.toChatRequest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(converted.Tools) != 1 || len(converted.Messages[0].ToolCalls) != 1 {
-		t.Fatalf("tool contract was lost: %#v", converted)
-	}
-	call := converted.Messages[0].ToolCalls[0]
-	if call.Function.Name != "lookup" || call.Function.Arguments != `{"key":"answer"}` {
-		t.Fatalf("unexpected converted call: %#v", call)
-	}
-
-	roundTrip := fromAPIMessage(api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{call}})
-	if len(roundTrip.ToolCalls) != 1 || roundTrip.ToolCalls[0].Function.Arguments["key"] != "answer" {
-		t.Fatalf("Ollama response lost structured arguments: %#v", roundTrip)
-	}
-}
-
 func TestResponsesInputAndFunctionCallContract(t *testing.T) {
 	input := json.RawMessage(`[{"role":"user","content":[{"type":"input_text","text":"hello"}]}]`)
 	messages, err := responseInputMessages(input)

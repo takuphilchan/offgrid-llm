@@ -4,22 +4,28 @@ import "time"
 
 // ChatCompletionRequest represents an OpenAI-compatible chat completion request
 type ChatCompletionRequest struct {
-	Model            string        `json:"model"`
-	Messages         []ChatMessage `json:"messages"`
-	Temperature      *float32      `json:"temperature,omitempty"`
-	TopP             *float32      `json:"top_p,omitempty"`
-	N                *int          `json:"n,omitempty"`
-	Stream           bool          `json:"stream,omitempty"`
-	Stop             []string      `json:"stop,omitempty"`
-	MaxTokens        *int          `json:"max_tokens,omitempty"`
-	PresencePenalty  *float32      `json:"presence_penalty,omitempty"`
-	FrequencyPenalty *float32      `json:"frequency_penalty,omitempty"`
-	User             string        `json:"user,omitempty"`
+	Model            string         `json:"model"`
+	Messages         []ChatMessage  `json:"messages"`
+	Temperature      *float32       `json:"temperature,omitempty"`
+	TopP             *float32       `json:"top_p,omitempty"`
+	N                *int           `json:"n,omitempty"`
+	Stream           bool           `json:"stream,omitempty"`
+	StreamOptions    *StreamOptions `json:"stream_options,omitempty"`
+	Stop             []string       `json:"stop,omitempty"`
+	MaxTokens        *int           `json:"max_tokens,omitempty"`
+	PresencePenalty  *float32       `json:"presence_penalty,omitempty"`
+	FrequencyPenalty *float32       `json:"frequency_penalty,omitempty"`
+	User             string         `json:"user,omitempty"`
 	// Function calling
 	Tools      []Tool      `json:"tools,omitempty"`
 	ToolChoice interface{} `json:"tool_choice,omitempty"` // "none", "auto", or {"type": "function", "function": {"name": "..."}}
 	// RAG / Knowledge Base
 	UseKnowledgeBase *bool `json:"use_knowledge_base,omitempty"` // Enable RAG context injection
+}
+
+// StreamOptions controls optional OpenAI-compatible stream metadata.
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage,omitempty"`
 }
 
 // Tool represents a tool that can be called by the model
@@ -107,6 +113,7 @@ type ChatCompletionChunk struct {
 	Created int64                       `json:"created"`
 	Model   string                      `json:"model"`
 	Choices []ChatCompletionChoiceChunk `json:"choices"`
+	Usage   *Usage                      `json:"usage,omitempty"`
 }
 
 // ChatCompletionChoiceChunk represents a chunk in streaming mode
@@ -157,16 +164,19 @@ type Usage struct {
 
 // Model represents a model in the registry
 type Model struct {
-	ID         string   `json:"id"`
-	Object     string   `json:"object"` // "model"
-	Created    int64    `json:"created"`
-	OwnedBy    string   `json:"owned_by"`
-	Permission []string `json:"permission,omitempty"`
-	Root       string   `json:"root,omitempty"`
-	Parent     string   `json:"parent,omitempty"`
-	Type       string   `json:"type,omitempty"`    // "llm" or "embedding"
-	Size       int64    `json:"size,omitempty"`    // Size in bytes
-	SizeGB     string   `json:"size_gb,omitempty"` // Human-readable size
+	ID            string   `json:"id"`
+	Object        string   `json:"object"` // "model"
+	Created       int64    `json:"created"`
+	OwnedBy       string   `json:"owned_by"`
+	Permission    []string `json:"permission,omitempty"`
+	Root          string   `json:"root,omitempty"`
+	Parent        string   `json:"parent,omitempty"`
+	Type          string   `json:"type,omitempty"`           // "llm" or "embedding"
+	Size          int64    `json:"size,omitempty"`           // Size in bytes
+	SizeGB        string   `json:"size_gb,omitempty"`        // Human-readable size
+	ContextWindow int      `json:"context_window,omitempty"` // Allocated runtime context
+	ContextLength int      `json:"context_length,omitempty"` // Compatibility alias used by agent clients
+	Capabilities  []string `json:"capabilities,omitempty"`
 }
 
 // ModelListResponse represents the response for listing models

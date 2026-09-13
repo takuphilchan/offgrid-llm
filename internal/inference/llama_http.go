@@ -169,6 +169,25 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 
 // ChatCompletionStream performs a streaming chat completion
 func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.ChatCompletionRequest, callback TokenCallback) error {
+	return e.ChatCompletionStreamRaw(ctx, req, func(data json.RawMessage) error {
+		var chunk api.ChatCompletionChunk
+		if err := json.Unmarshal(data, &chunk); err != nil {
+			return nil
+		}
+		for _, choice := range chunk.Choices {
+			if content, ok := choice.Delta.Content.(string); ok && content != "" {
+				if err := callback(content); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
+// ChatCompletionStreamRaw forwards complete JSON chunks from llama-server so
+// callers retain tool-call deltas and other structured streaming fields.
+func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.ChatCompletionRequest, callback ChatCompletionStreamCallback) error {
 	if !e.loaded {
 		return fmt.Errorf("no model loaded")
 	}
@@ -257,9 +276,11 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 
 		defer resp.Body.Close()
 
-		// Read SSE stream
+		// Read SSE stream. Tool schemas and tool-call argument fragments can
+		// exceed Scanner's 64 KiB default token size.
 		scanner := bufio.NewScanner(resp.Body)
-		receivedTokens := false
+		scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+		receivedChunks := false
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -272,35 +293,16 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 				break
 			}
 
-			var chunk struct {
-				Choices []struct {
-					Delta struct {
-						Content string `json:"content"`
-					} `json:"delta"`
-					FinishReason string `json:"finish_reason"`
-				} `json:"choices"`
-			}
-
-			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			if !json.Valid([]byte(data)) {
 				continue // Skip malformed chunks
 			}
-
-			if len(chunk.Choices) > 0 {
-				// Check for normal completion
-				if chunk.Choices[0].FinishReason == "stop" || chunk.Choices[0].FinishReason == "length" {
-					break // Clean completion
+			if err := callback(json.RawMessage(append([]byte(nil), data...))); err != nil {
+				if receivedChunks {
+					return nil
 				}
-				if chunk.Choices[0].Delta.Content != "" {
-					receivedTokens = true
-					if err := callback(chunk.Choices[0].Delta.Content); err != nil {
-						// Callback error (likely client disconnected) - not an error if we sent tokens
-						if receivedTokens {
-							return nil
-						}
-						return err
-					}
-				}
+				return err
 			}
+			receivedChunks = true
 		}
 
 		// Check for scanner errors (including unexpected EOF)
@@ -309,9 +311,9 @@ func (e *LlamaHTTPEngine) ChatCompletionStream(ctx context.Context, req *api.Cha
 			if ctx.Err() != nil {
 				return nil
 			}
-			// If we already sent tokens, treat as success (partial response is better than error)
-			if receivedTokens {
-				log.Printf("Stream ended after sending tokens (possible EOF): %v", err)
+			// If we already sent chunks, treat as success (partial response is better than error)
+			if receivedChunks {
+				log.Printf("Stream ended after sending chunks (possible EOF): %v", err)
 				return nil // Not an error - user got their response
 			}
 			return fmt.Errorf("generation failed: %w (try reducing context size or using a smaller model)", err)

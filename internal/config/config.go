@@ -105,7 +105,7 @@ type BackendConfig struct {
 	ID     string   `yaml:"id" json:"id"`
 	Name   string   `yaml:"name" json:"name"`
 	URL    string   `yaml:"url" json:"url"`
-	Type   string   `yaml:"type" json:"type"` // llama-server, ollama, localai, vllm, openai, custom
+	Type   string   `yaml:"type" json:"type"` // llama-server, localai, vllm, openai, custom
 	APIKey string   `yaml:"api_key" json:"api_key"`
 	Models []string `yaml:"models" json:"models"` // Models available on this backend
 	Weight int      `yaml:"weight" json:"weight"` // Weight for weighted round-robin

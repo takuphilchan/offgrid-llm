@@ -449,6 +449,46 @@ paths:
       operationId: listCapabilities
       responses:
         '200': { description: Governed capability descriptors }
+  /v1/integrations:
+    get:
+      operationId: listExternalAgentIntegrations
+      parameters:
+        - in: query
+          name: model
+          schema: { type: string }
+          description: Installed chat model to evaluate for integration readiness.
+      responses:
+        '200':
+          description: First-party external agent provider integrations and their runtime readiness.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationList' }
+  /v1/integrations/{id}/setup:
+    get:
+      operationId: getExternalAgentIntegrationSetup
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, enum: [hermes, openclaw] }
+        - in: query
+          name: model
+          schema: { type: string }
+        - in: query
+          name: base_url
+          schema: { type: string, format: uri }
+        - in: query
+          name: max_output_tokens
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Ready-to-copy native provider setup.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationSetupResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /v1/computer/status:
     get:
       operationId: getComputerStatus
@@ -553,6 +593,59 @@ components:
         size: { type: integer, format: int64 }
         size_gb: { type: string }
         loaded: { type: boolean }
+        context_window: { type: integer, minimum: 1 }
+        context_length: { type: integer, minimum: 1, description: OpenAI-compatible alias for context_window. }
+        capabilities:
+          type: array
+          items: { type: string }
+    IntegrationStatus:
+      type: object
+      required: [id, provider_id, plugin_id, name, description, transport, documentation_url, minimum_context, recommended_context, requires_tools, capabilities, ready, status, context_window, warnings]
+      properties:
+        id: { type: string }
+        provider_id: { type: string, const: offgrid }
+        plugin_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        transport: { type: string, const: openai-chat-completions }
+        documentation_url: { type: string, format: uri }
+        minimum_context: { type: integer, minimum: 1 }
+        recommended_context: { type: integer, minimum: 1 }
+        requires_tools: { type: boolean }
+        capabilities: { type: array, items: { type: string } }
+        ready: { type: boolean }
+        status: { type: string, enum: [ready, needs_configuration] }
+        model_id: { type: string }
+        context_window: { type: integer, minimum: 1 }
+        warnings: { type: array, items: { type: string } }
+    IntegrationList:
+      type: object
+      required: [provider, base_url, integrations]
+      properties:
+        provider: { type: string, const: offgrid }
+        base_url: { type: string, format: uri }
+        integrations:
+          type: array
+          items: { $ref: '#/components/schemas/IntegrationStatus' }
+    IntegrationSetup:
+      type: object
+      required: [provider_id, plugin_id, install_command, format, config_file, content, verify]
+      properties:
+        provider_id: { type: string, const: offgrid }
+        plugin_id: { type: string }
+        install_command: { type: string }
+        format: { type: string }
+        config_file: { type: string }
+        content: { type: string }
+        environment: { type: object, additionalProperties: { type: string } }
+        verify: { type: array, items: { type: string } }
+        notes: { type: array, items: { type: string } }
+    IntegrationSetupResponse:
+      type: object
+      required: [integration, setup]
+      properties:
+        integration: { $ref: '#/components/schemas/IntegrationStatus' }
+        setup: { $ref: '#/components/schemas/IntegrationSetup' }
     CatalogModel:
       type: object
       required: [id, name, description, category, parameters, size, size_bytes, repo, file, quant, min_ram_gb, recommended, provider, type, license]
@@ -611,8 +704,23 @@ components:
       type: object
       required: [role, content]
       properties:
-        role: { type: string, enum: [system, user, assistant] }
+        role: { type: string, enum: [system, developer, user, assistant, tool] }
         content: { type: string }
+        tool_call_id: { type: string }
+        tool_calls:
+          type: array
+          items:
+            type: object
+            required: [id, type, function]
+            properties:
+              id: { type: string }
+              type: { type: string, const: function }
+              function:
+                type: object
+                required: [name, arguments]
+                properties:
+                  name: { type: string }
+                  arguments: { type: string }
     SessionMessage:
       allOf:
         - $ref: '#/components/schemas/ChatMessage'
@@ -640,6 +748,25 @@ components:
           minItems: 1
           items: { $ref: '#/components/schemas/ChatMessage' }
         stream: { type: boolean, default: false }
+        stream_options:
+          type: object
+          properties:
+            include_usage: { type: boolean, default: false }
+        tools:
+          type: array
+          items:
+            type: object
+            required: [type, function]
+            properties:
+              type: { type: string, const: function }
+              function:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string }
+                  description: { type: string }
+                  parameters: { type: object, additionalProperties: true }
+        tool_choice: {}
         use_knowledge_base: { type: boolean, default: false }
     ChatCompletionResponse:
       type: object

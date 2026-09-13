@@ -18,6 +18,8 @@ export type RunSummary = { id: string; status: string; started_at: string; updat
 export type RunEvent = { id: string; run_id: string; sequence: number; type: string; time: string; data?: Record<string, any> };
 export type RAGStatus = components['schemas']['RAGStatus'];
 export type ComputerStatus = { available: boolean; emergency_stop: boolean; active_sessions: number };
+export type ExternalIntegration = components['schemas']['IntegrationStatus'];
+export type IntegrationSetup = components['schemas']['IntegrationSetup'];
 export type SystemConfig = { version: string; inference_slots: number; multi_user_mode: boolean; require_auth: boolean; guest_access: boolean; features: Record<string, boolean> };
 
 export class APIError extends Error {
@@ -93,6 +95,16 @@ export const api = {
   stats: async () => (await request<Record<string, any> | null>('/v1/stats')) ?? {},
   systemConfig: () => request<SystemConfig>('/v1/system/config'),
   computerStatus: () => request<ComputerStatus>('/v1/computer/status'),
+  integrations: async (modelID?: string) => {
+    const query = modelID ? `?model=${encodeURIComponent(modelID)}` : '';
+    const result = await request<{ provider: string; base_url: string; integrations: ExternalIntegration[] | null }>(`/v1/integrations${query}`);
+    return { ...result, integrations: Array.isArray(result.integrations) ? result.integrations : [] };
+  },
+  integrationSetup: (id: string, modelID?: string) => {
+    const query = new URLSearchParams({ base_url: window.location.origin });
+    if (modelID) query.set('model', modelID);
+    return request<{ integration: ExternalIntegration; setup: IntegrationSetup }>(`/v1/integrations/${encodeURIComponent(id)}/setup?${query}`);
+  },
   emergencyStop: () => request<{ status: string }>('/v1/computer/stop', { method: 'POST', body: '{}' }),
   runs: async () => {
     const result = await request<{ runs: RunSummary[] | null }>('/v1/runs');

@@ -33,6 +33,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/degradation"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
+	"github.com/takuphilchan/offgrid-llm/internal/integrations"
 	"github.com/takuphilchan/offgrid-llm/internal/mcp"
 	"github.com/takuphilchan/offgrid-llm/internal/metrics"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
@@ -77,37 +78,38 @@ type Server struct {
 	sessionHandlers      *SessionHandlers
 	authMiddleware       *users.Middleware
 	// New feature managers
-	userStore          *users.UserStore
-	quotaManager       *users.QuotaManager
-	kbManager          *users.KnowledgeBaseManager
-	loraManager        *inference.LoRAManager
-	agentManager       *agents.Manager
-	agentOrchestrator  *agents.Orchestrator
-	toolRegistry       *agents.ToolRegistry
-	mcpHandler         http.Handler
-	p2pDiscovery       *p2p.Discovery
-	p2pTransfer        *p2p.TransferManager
-	p2pIdentity        *p2p.Identity
-	p2pTrust           *p2p.TrustStore
-	offgridMetrics     *metrics.OffGridMetrics
-	wsHub              *websocket.Hub
-	powerManager       *power.PowerManager
-	degradationMgr     *degradation.Manager     // Graceful degradation under resource pressure
-	auditLogger        *audit.AuditLogger       // Enterprise audit logging (optional)
-	ldapAuth           *users.LDAPAuthenticator // LDAP/Active Directory authentication
-	mcpMarketplace     *mcp.Marketplace         // MCP server marketplace
-	loadBalancer       *inference.LoadBalancer  // Multi-backend load balancer
-	distributedRAG     *rag.DistributedRAG      // Distributed RAG index
-	pluginManager      *tools.PluginManager     // Plugin system for custom tools
-	capabilityBroker   *capabilities.Broker     // Shared authorization boundary for tools and agents
-	runLog             *runs.Log                // Durable event stream for agent runs
-	artifactStore      *artifacts.Store         // Content-addressed agent outputs and captures
-	computerController *computer.Controller     // Governed computer-use control plane
-	sandbox            agents.Sandbox           // Long-lived agent sandbox owned by this server
-	closeOnce          sync.Once
-	closeErr           error
-	runtimeCtx         context.Context
-	runtimeCancel      context.CancelFunc
+	userStore           *users.UserStore
+	quotaManager        *users.QuotaManager
+	kbManager           *users.KnowledgeBaseManager
+	loraManager         *inference.LoRAManager
+	agentManager        *agents.Manager
+	agentOrchestrator   *agents.Orchestrator
+	toolRegistry        *agents.ToolRegistry
+	mcpHandler          http.Handler
+	p2pDiscovery        *p2p.Discovery
+	p2pTransfer         *p2p.TransferManager
+	p2pIdentity         *p2p.Identity
+	p2pTrust            *p2p.TrustStore
+	offgridMetrics      *metrics.OffGridMetrics
+	wsHub               *websocket.Hub
+	powerManager        *power.PowerManager
+	degradationMgr      *degradation.Manager     // Graceful degradation under resource pressure
+	auditLogger         *audit.AuditLogger       // Enterprise audit logging (optional)
+	ldapAuth            *users.LDAPAuthenticator // LDAP/Active Directory authentication
+	mcpMarketplace      *mcp.Marketplace         // MCP server marketplace
+	loadBalancer        *inference.LoadBalancer  // Multi-backend load balancer
+	distributedRAG      *rag.DistributedRAG      // Distributed RAG index
+	pluginManager       *tools.PluginManager     // Plugin system for custom tools
+	capabilityBroker    *capabilities.Broker     // Shared authorization boundary for tools and agents
+	runLog              *runs.Log                // Durable event stream for agent runs
+	artifactStore       *artifacts.Store         // Content-addressed agent outputs and captures
+	computerController  *computer.Controller     // Governed computer-use control plane
+	integrationRegistry *integrations.Registry   // External agent adapters (Hermes, OpenClaw, ...)
+	sandbox             agents.Sandbox           // Long-lived agent sandbox owned by this server
+	closeOnce           sync.Once
+	closeErr            error
+	runtimeCtx          context.Context
+	runtimeCancel       context.CancelFunc
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -246,6 +248,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		log.Printf("Warning: Failed to initialize artifact store: %v", artifactErr)
 	}
 	computerController := computer.NewController(computer.UnsupportedDriver{}, capabilityBroker, artifactStore)
+	integrationRegistry := integrations.NewDefaultRegistry()
 	computerController.SetAudit(func(auditEvent computer.AuditEvent) {
 		if runLog == nil {
 			return
@@ -486,6 +489,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		runLog:               runLog,
 		artifactStore:        artifactStore,
 		computerController:   computerController,
+		integrationRegistry:  integrationRegistry,
 		sandbox:              sandbox,
 		version:              serverVersion,
 		runtimeCtx:           runtimeCtx,
@@ -563,6 +567,7 @@ func createModelCache(cfg *config.Config) *inference.ModelCache {
 	cache.SetContextSize(cfg.MaxContextSize)
 	cache.SetBatchSize(cfg.BatchSize)
 	cache.SetNumThreads(cfg.NumThreads)
+	cache.SetGPUEnabled(cfg.EnableGPU)
 	cache.SetKVCacheType(cfg.KVCacheType)
 	cache.SetFlashAttention(cfg.FlashAttention)
 	cache.SetContinuousBatching(cfg.ContBatching)
@@ -711,6 +716,11 @@ func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
 		return fmt.Errorf("model not found: %w", err)
 	}
 
+	// ModelCache owns the llama-server process, so the effective context must
+	// be set before GetOrLoadContext launches it.
+	effectiveContext := s.effectiveContextWindow()
+	s.modelCache.SetContextSize(effectiveContext)
+
 	// Load or get cached model instance
 	instance, err := s.modelCache.GetOrLoadContext(ctx, modelID, metadata.Path, metadata.ProjectorPath)
 	if err != nil {
@@ -736,17 +746,7 @@ func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
 	}
 	loadOptions := inference.DefaultLoadOptions()
 	loadOptions.NumThreads = s.config.NumThreads
-	loadOptions.ContextSize = s.config.MaxContextSize
-	if s.powerManager != nil {
-		if limit := s.powerManager.GetMaxContext(); limit > 0 && limit < loadOptions.ContextSize {
-			loadOptions.ContextSize = limit
-		}
-	}
-	if s.degradationMgr != nil {
-		if limit := s.degradationMgr.MaxContextSize(); limit > 0 && limit < loadOptions.ContextSize {
-			loadOptions.ContextSize = limit
-		}
-	}
+	loadOptions.ContextSize = effectiveContext
 	if err := s.engine.Load(ctx, metadata.Path, loadOptions); err != nil {
 		return fmt.Errorf("connect inference engine: %w", err)
 	}
@@ -881,21 +881,14 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/models/download/progress", modelsOnly(s.handleDownloadProgress))
 	mux.HandleFunc("/v1/models/download/cancel", modelManagerOnly(s.handleCancelDownload))
 	mux.HandleFunc("/v1/models/verify", modelManagerOnly(s.handleVerifyModel))
+	mux.HandleFunc("/v1/integrations", modelsOnly(s.handleIntegrations))
+	mux.HandleFunc("/v1/integrations/", modelsOnly(s.handleIntegration))
 
 	// Inference endpoints with strict rate limiting
 	mux.HandleFunc("/v1/chat/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleChatCompletions)))
 	mux.HandleFunc("/v1/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleCompletions)))
 	mux.HandleFunc("/v1/embeddings", chatOnly(s.inferenceRateLimiter.Middleware(s.handleEmbeddings)))
 	mux.HandleFunc("/v1/responses", chatOnly(s.inferenceRateLimiter.Middleware(s.handleResponses)))
-
-	// Ollama-compatible API for Hermes, OpenClaw, and existing Ollama clients.
-	mux.HandleFunc("/api/version", s.handleOllamaVersion)
-	mux.HandleFunc("/api/tags", modelsOnly(s.handleOllamaTags))
-	mux.HandleFunc("/api/show", modelsOnly(s.handleOllamaShow))
-	mux.HandleFunc("/api/ps", modelsOnly(s.handleOllamaPS))
-	mux.HandleFunc("/api/chat", chatOnly(s.inferenceRateLimiter.Middleware(s.handleOllamaChat)))
-	mux.HandleFunc("/api/generate", chatOnly(s.inferenceRateLimiter.Middleware(s.handleOllamaGenerate)))
-	mux.HandleFunc("/api/embed", chatOnly(s.inferenceRateLimiter.Middleware(s.handleOllamaEmbed)))
 
 	// Model search and discovery (OffGrid-specific)
 	mux.HandleFunc("/v1/search", modelsOnly(s.handleModelSearch))
@@ -1869,6 +1862,16 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 
 	s.syncRegistryLoadState()
 	models := s.registry.ListModels()
+	contextWindow := s.effectiveContextWindow()
+	for index := range models {
+		if models[index].Type == "embedding" {
+			models[index].Capabilities = []string{"embeddings"}
+			continue
+		}
+		models[index].ContextWindow = contextWindow
+		models[index].ContextLength = contextWindow
+		models[index].Capabilities = []string{"chat", "streaming", "tools"}
+	}
 	response := api.ModelListResponse{
 		Object: "list",
 		Data:   models,
@@ -2023,6 +2026,8 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 	chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 	tokenIndex := 0
+	emittedChunks := 0
+	rawEngine, supportsStructuredStream := s.engine.(inference.RawStreamingEngine)
 
 	// Define callback to reuse
 	callback := func(token string) error {
@@ -2052,16 +2057,52 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		flusher.Flush()
 		tokenIndex++
+		emittedChunks++
 		return nil
+	}
+	rawCallback := func(data json.RawMessage) error {
+		var chunk map[string]interface{}
+		if err := json.Unmarshal(data, &chunk); err != nil {
+			return err
+		}
+		chunk["id"] = chunkID
+		chunk["object"] = "chat.completion.chunk"
+		chunk["created"] = time.Now().Unix()
+		chunk["model"] = req.Model
+		if choices, ok := chunk["choices"].([]interface{}); ok {
+			for _, rawChoice := range choices {
+				choice, _ := rawChoice.(map[string]interface{})
+				delta, _ := choice["delta"].(map[string]interface{})
+				if content, _ := delta["content"].(string); content != "" {
+					tokenIndex++
+				}
+			}
+		}
+		normalized, err := json.Marshal(chunk)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", normalized); err != nil {
+			return err
+		}
+		flusher.Flush()
+		emittedChunks++
+		return nil
+	}
+	stream := func() error {
+		if supportsStructuredStream {
+			return rawEngine.ChatCompletionStreamRaw(ctx, req, rawCallback)
+		}
+		return s.engine.ChatCompletionStream(ctx, req, callback)
 	}
 
 	// Send tokens as they arrive
-	err := s.engine.ChatCompletionStream(ctx, req, callback)
+	err := stream()
 
 	// Retry logic: If we haven't sent any tokens yet and encountered a network error,
 	// it likely means the llama-server process crashed or was dead.
 	// We should try to reload the model and retry the request once.
-	if err != nil && tokenIndex == 0 {
+	if err != nil && emittedChunks == 0 {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "EOF") || strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "connection reset") {
 			log.Printf("Inference failed before generation started: %v. Attempting to reload model and retry...", err)
@@ -2072,7 +2113,7 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 			// Switch model (reloads it)
 			if reloadErr := s.switchModel(req.Model); reloadErr == nil {
 				log.Printf("Model reloaded successfully. Retrying inference...")
-				err = s.engine.ChatCompletionStream(ctx, req, callback)
+				err = stream()
 			} else {
 				log.Printf("Failed to reload model during retry: %v", reloadErr)
 			}
@@ -2082,10 +2123,10 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 	// If we already sent tokens and then the stream was interrupted,
 	// gracefully end instead of showing an error to the user.
 	// The partial response is still useful, and errors mid-generation are often OOM.
-	if err != nil && tokenIndex > 0 {
+	if err != nil && emittedChunks > 0 {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "EOF") || strings.Contains(errMsg, "interrupted") || strings.Contains(errMsg, "connection") {
-			log.Printf("Stream interrupted after %d tokens (possible OOM or server crash): %v", tokenIndex, err)
+			log.Printf("Stream interrupted after %d chunks (possible OOM or server crash): %v", emittedChunks, err)
 			// Don't send error - just end gracefully with what we have
 			err = nil
 		}
@@ -2116,6 +2157,15 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		data, _ := json.Marshal(errChunk)
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		flusher.Flush()
+		return
+	}
+	if supportsStructuredStream {
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		flusher.Flush()
+		if tokenIndex > 0 {
+			atomic.AddInt64(&s.tokensGenerated, int64(tokenIndex))
+			s.offgridMetrics.TokensOutputTotal.Add(float64(tokenIndex))
+		}
 		return
 	}
 
