@@ -7,7 +7,7 @@ OffGrid LLM is designed for **truly offline environments** where internet may be
 - Intermittent (rural areas, disaster zones)
 - Expensive/metered (satellite connections)
 
-Unlike Ollama (assumes internet for initial download), we need **multiple distribution paths**.
+The platform needs **multiple distribution paths** rather than assuming reliable internet access.
 
 ## Distribution Strategy
 
@@ -204,7 +204,7 @@ func (t *Transfer) Start() error {
 
 ## Cost Analysis
 
-**Traditional Approach (Ollama-style):**
+**Centralized hosting approach:**
 - Need servers to host models
 - 7B model = ~4GB × 1000 downloads = 4TB transfer/month
 - AWS S3: ~$40/TB = $160/month minimum

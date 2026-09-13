@@ -1443,7 +1443,7 @@ EOF
     echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} llama-server bound to 127.0.0.1 only (internal IPC)"
     echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Random high port ${INTERNAL_PORT} not exposed externally"
     echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Only OffGrid port 11611 is publicly accessible"
-    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Same architecture as Ollama for security and isolation"
+    echo -e "${BRAND_PRIMARY}│${RESET}  ${BRAND_SUCCESS}✓${RESET} Inference runtime isolated behind the OffGrid service"
     echo -e "${BRAND_PRIMARY}╰─────────────────────────────────────────────────────────────────╯${RESET}"
     
     echo ""

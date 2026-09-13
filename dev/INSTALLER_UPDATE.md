@@ -58,7 +58,7 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
    - No manual prerequisites needed
    - Downloads from https://github.com/ggml-org/llama.cpp/releases
    - True one-command installation experience
-   - Closes gap identified in Ollama comparison"
+   - Delivers a complete one-command installation experience"
    git push origin main
    ```
 
@@ -66,5 +66,4 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/insta
 **Before**: Users had to manually install llama.cpp first  
 **After**: Everything installs automatically in one command  
 
-**Comparison to Ollama**: While Ollama bundles llama.cpp via CGo, we achieve the same user experience by auto-downloading it. Result: equally easy installation!
-
+The installer auto-downloads the correct llama.cpp runtime so users receive a complete setup from one command.

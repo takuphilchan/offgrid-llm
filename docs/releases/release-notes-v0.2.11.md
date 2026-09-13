@@ -166,7 +166,7 @@ New orchestration modes for complex workflows:
 ### Inference Load Balancer
 Distribute load across multiple inference backends:
 - Round-robin, weighted, least-connections, latency-based strategies
-- Support for llama-server, Ollama, LocalAI, vLLM, OpenAI-compatible APIs
+- Support for llama-server, LocalAI, vLLM, and OpenAI-compatible APIs
 - Health checks with automatic failover
 
 ### On-Device Model Quantization

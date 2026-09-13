@@ -9,7 +9,7 @@
 
 ## Vision Statement
 
-**OffGrid LLM is not "poor man's Ollama" - it's the AI platform for people who can't or won't use the cloud.**
+**OffGrid LLM is the AI platform for people who cannot or choose not to use the cloud.**
 
 Our unique positioning:
 - **True air-gapped operation** (USB transfer, P2P sharing)
@@ -56,9 +56,9 @@ Our unique positioning:
 
 ---
 
-## Phase 2: User Experience Parity
+## Phase 2: First-Class User Experience
 
-**Goal:** Match or exceed Ollama's ease of use.
+**Goal:** Make local inference easy to install, understand, and operate.
 
 ### 2.1 One-Command Model Run
 ```bash
@@ -93,7 +93,7 @@ offgrid run ./my.gguf    # Local files work
 
 ## Phase 3: Unique Value Propositions
 
-**Goal:** Features Ollama doesn't have.
+**Goal:** Build capabilities designed specifically for private and disconnected environments.
 
 ### 3.1 P2P Model Sharing (Polish)
 - [x] CLI command for P2P status - `offgrid peers` command
@@ -154,7 +154,7 @@ offgrid run ./my.gguf    # Local files work
 
 ### 4.3 Horizontal Scaling
 - [x] Load balancer mode - Multi-backend load balancing with round-robin, weighted, least-connections, and latency strategies
-- [x] Multiple inference backends - Support for llama-server, Ollama, LocalAI, vLLM, OpenAI-compatible APIs
+- [x] Multiple inference backends - Support for llama-server, LocalAI, vLLM, and OpenAI-compatible APIs
 - [x] Distributed RAG index - Federated search across multiple OffGrid nodes with result merging
 
 ---
@@ -163,7 +163,7 @@ offgrid run ./my.gguf    # Local files work
 
 ### 5.1 Marketing & Positioning
 - [ ] New landing page with clear value prop
-- [ ] Comparison table (vs Ollama, LM Studio, LocalAI)
+- [ ] Capability and maturity matrix for supported deployment modes
 - [ ] Video demo (30 second hero video)
 - [ ] Blog posts on use cases
 
@@ -193,9 +193,9 @@ offgrid run ./my.gguf    # Local files work
 
 ---
 
-## Competitive Advantages to Emphasize
+## Capability Matrix
 
-| Feature | OffGrid | Ollama | LM Studio |
+| Feature | OffGrid | Other local runtimes | Desktop-only tools |
 |---------|---------|--------|-----------|
 | Air-gapped USB deploy | ✅ | ❌ | ❌ |
 | P2P model sharing | ✅ | ❌ | ❌ |

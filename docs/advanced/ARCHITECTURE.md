@@ -127,7 +127,7 @@ should not dictate the local engine architecture.
 
 ## Capability maturity
 
-- **Core:** inference, CLI, OpenAI/Ollama compatibility, sessions, web/desktop
+- **Core:** inference, CLI, OpenAI-compatible APIs, sessions, web/desktop
   UI, model download/resume/verify, and authentication for network use.
 - **Optional:** RAG, MCP, governed agents, and audio when their local
   dependencies are configured.

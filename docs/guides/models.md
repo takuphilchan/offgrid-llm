@@ -190,7 +190,6 @@ export OFFGRID_NUM_THREADS=4
 ## Popular Model Sources
 
 - [TheBloke on Hugging Face](https://huggingface.co/TheBloke) - Large collection of GGUF models
-- [Ollama Model Library](https://ollama.com/library) - Pre-configured models
 - [LM Studio Community](https://lmstudio.ai/models) - Curated model collection
 
 ## Next Steps

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build OffGrid LLM as a single static binary with embedded llama.cpp
-# This creates a self-contained bundle like Ollama - no external dependencies!
+# This creates a self-contained bundle with no external runtime dependencies.
 # 
 # Usage:
 #   ./build-static-bundle.sh              # Auto-detect GPU and build
@@ -25,7 +25,7 @@ print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  Building OffGrid LLM Static Bundle (Like Ollama)         ║${NC}"
+echo -e "${CYAN}║  Building OffGrid LLM Static Bundle                       ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

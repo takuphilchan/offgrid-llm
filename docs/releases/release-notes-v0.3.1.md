@@ -11,8 +11,8 @@ not finish every runtime bundle.
   localization foundations.
 - Stateful chat, model, knowledge, and agent workspaces backed by real server
   APIs rather than demonstration-only UI state.
-- OpenAI- and Ollama-compatible API surfaces for connecting external agent
-  clients and existing local-AI tooling.
+- OpenAI-compatible API surfaces for connecting external agent clients and
+  local-AI tooling.
 - A durable agent run/event store, official MCP SDK integration, capability
   discovery, sandbox controls, and guarded computer-use foundations.
 - A persistent SQLite RAG store with index metadata, lifecycle checks,

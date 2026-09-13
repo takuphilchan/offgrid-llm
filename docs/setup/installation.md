@@ -154,7 +154,7 @@ The installer performs these steps:
 │  llama-server bound to 127.0.0.1 only (internal IPC)
 │  Random high port 52341 not exposed externally
 │  Only OffGrid port 11611 is publicly accessible
-│  Same architecture as Ollama for security and isolation
+│  Inference runtime isolated behind the OffGrid service
 ╰─────────────────────────────────────────────────────────────────╯
 ```
 

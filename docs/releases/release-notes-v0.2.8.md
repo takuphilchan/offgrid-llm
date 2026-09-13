@@ -1,6 +1,6 @@
 # Release Notes v0.2.8
 
-Version 0.2.8 delivers major performance improvements for model switching, bringing load times from 60+ seconds down to under 1 second for cached models. This release focuses on making OffGrid LLM competitive with Ollama's model switching speed while maintaining zero-configuration simplicity.
+Version 0.2.8 delivers major performance improvements for model switching, bringing load times from 60+ seconds down to under 1 second for cached models while maintaining zero-configuration simplicity.
 
 ## Performance Improvements
 

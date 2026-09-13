@@ -1,17 +1,15 @@
 # HuggingFace Hub Integration
 
-OffGrid LLM now features **direct HuggingFace Hub integration**, giving you access to thousands of models without waiting for approval from centralized registries like Ollama's.
+OffGrid LLM features **direct HuggingFace Hub integration**, giving you access to thousands of community-published GGUF models.
 
 ## Why This Matters
 
-**OffGrid Advantage over Ollama:**
+**OffGrid model workflow:**
 -  **No waiting** - Pull any GGUF model from HuggingFace instantly
 -  **Search by metrics** - Find models by downloads, likes, size, quantization
 -  **Automatic discovery** - Browse thousands of models with smart filtering
 -  **Direct downloads** - No intermediary servers or approval process
 -  **Community-driven** - Access bleeding-edge models the day they're released
-
-**Ollama's limitation:** Models must be manually uploaded and approved by Ollama's team before you can use them.
 
 ## Features
 
@@ -87,7 +85,7 @@ offgrid download-hf TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
 
 ### 3. Interactive CLI Chat
 
-Chat with models directly from your terminal (like `ollama run`):
+Chat with models directly from your terminal:
 
 ```bash
 # Start interactive chat
@@ -340,18 +338,13 @@ download_url = file_info['download_url']
 # ... implement download logic
 ```
 
-## Advantages Over Ollama
+## OffGrid capabilities
 
-| Feature | OffGrid LLM | Ollama |
-|---------|-------------|--------|
-| Model Discovery | [Yes] Search HuggingFace directly | [No] Limited to Ollama registry |
-| Model Availability | [Yes] 10,000+ GGUF models | [Limited] ~100 curated models |
-| New Model Access | [Done] Instant (day of release) | [Failed] Wait for approval/upload |
-| Search Filters | [Done] Size, quant, downloads, likes | [Warning] Limited filtering |
-| API Access | [Done] Full search API | [Failed] No search API |
-| CLI Chat | [Done] Built-in (`offgrid run`) | [Done] (`ollama run`) |
-| Benchmarking | [Done] Automated benchmarks | [Failed] Manual only |
-| Custom Models | [Done] Any GGUF from anywhere | [Warning] Manual Modelfile needed |
+- Search HuggingFace directly by model, size, quantization, downloads, or likes.
+- Download community GGUF models without an intermediary catalog.
+- Use search and benchmark APIs from automation.
+- Chat through the built-in `offgrid run` command.
+- Import compatible GGUF files from other trusted sources.
 
 ## Technical Details
 
