@@ -873,8 +873,11 @@ jobs:
           existing_assets="$(gh release view "${version}" --repo "${repo}" --json assets --jq '.assets[].name')"
           upload_if_missing() {
             local file="$1"
-            if grep -Fxq "${file}" <<< "${existing_assets}"; then
-              echo "Release asset ${file} already exists; keeping it."
+            # GitHub replaces spaces in uploaded filenames with dots. Electron
+            # outputs files with spaces, so compare the name GitHub stores.
+            local asset_name="${file// /.}"
+            if grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
+              echo "Release asset ${asset_name} already exists; keeping it."
             else
               gh release upload "${version}" "${file}" --repo "${repo}"
             fi
