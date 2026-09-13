@@ -35,7 +35,10 @@ jobs:
 
       - name: Validate release automation
         run: |
-          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+          # Existing inline release scripts have ShellCheck debt. Validate
+          # workflow syntax here and lint the new standalone script directly.
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= .github/workflows/*.yml
+          shellcheck .github/scripts/finalize-release.sh
           node dev/scripts/test-finalize-release.mjs
 
       - name: Test Go packages
