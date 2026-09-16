@@ -792,7 +792,48 @@ jobs:
         run: |
           echo "version=${{ needs.release-context.outputs.version }}" >> "${GITHUB_OUTPUT}"
 
+      - name: Reuse verified desktop assets on rerun
+        id: existing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          package_version="${version#v}"
+          case "${{ matrix.os }}" in
+            linux)
+              expected=(
+                "OffGrid.LLM.Desktop-${package_version}-amd64.deb"
+                "OffGrid.LLM.Desktop-${package_version}-x86_64.AppImage"
+              )
+              ;;
+            macos)
+              expected=(
+                "OffGrid.LLM.Desktop-${package_version}-arm64.zip"
+                "OffGrid.LLM.Desktop-${package_version}-x64.zip"
+              )
+              ;;
+            windows)
+              expected=(
+                "OffGrid.LLM.Desktop-${package_version}-Portable.exe"
+                "OffGrid.LLM.Desktop-Setup-${package_version}.exe"
+              )
+              ;;
+          esac
+          existing_assets="$(gh api "repos/${{ github.repository }}/releases/tags/${version}" \
+            --jq '.assets[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
+          for asset_name in "${expected[@]}"; do
+            if ! grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
+              echo "Desktop asset ${asset_name} is missing or not fully indexed; rebuilding ${{ matrix.os }}"
+              exit 0
+            fi
+          done
+          echo "Verified all ${{ matrix.os }} desktop assets; skipping their rebuild"
+          echo "skip=true" >> "${GITHUB_OUTPUT}"
+
       - name: Build CLI binaries for bundling
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -818,11 +859,12 @@ jobs:
           fi
 
       - name: Install desktop dependencies
+        if: steps.existing.outputs.skip != 'true'
         working-directory: desktop
         run: npm ci
 
       - name: Clean electron-builder cache
-        if: matrix.os == 'macos'
+        if: matrix.os == 'macos' && steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           # Remove electron-builder cache that might have old DMG settings
@@ -832,7 +874,7 @@ jobs:
           echo "Electron-builder cache cleaned"
 
       - name: Prepare architecture-specific binaries (macOS)
-        if: matrix.os == 'macos'
+        if: matrix.os == 'macos' && steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           # List what we have
@@ -842,6 +884,7 @@ jobs:
           echo "macOS binaries prepared: offgrid-amd64 and offgrid-arm64"
 
       - name: Build desktop app
+        if: steps.existing.outputs.skip != 'true'
         working-directory: desktop
         run: |
           echo "Building desktop app for ${{ matrix.os }}..."
@@ -850,6 +893,7 @@ jobs:
         shell: bash
           
       - name: List build output
+        if: steps.existing.outputs.skip != 'true'
         working-directory: desktop
         shell: bash
         run: |
@@ -861,6 +905,7 @@ jobs:
           fi
           
       - name: Verify build artifacts exist
+        if: steps.existing.outputs.skip != 'true'
         working-directory: desktop/dist
         shell: bash
         run: |
@@ -892,6 +937,7 @@ jobs:
 
       - name: Find and upload artifacts
         id: artifacts
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         working-directory: desktop/dist
         run: |
@@ -922,6 +968,7 @@ jobs:
           fi
 
       - name: Upload artifacts
+        if: steps.existing.outputs.skip != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os }}
@@ -929,6 +976,7 @@ jobs:
           retention-days: 7
 
       - name: Upload to release
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         working-directory: desktop/dist
         run: |
