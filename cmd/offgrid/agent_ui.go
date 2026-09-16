@@ -97,17 +97,30 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 		return
 	}
 	defer resp.Body.Close()
-	if err := renderAgentStream(os.Stdout, resp.Body); err != nil {
+	if err := renderAgentStreamTo(os.Stdout, os.Stderr, resp.Body); err != nil {
 		printError(err.Error())
 	}
 }
 
-// The durable runner streams committed steps and state, not speculative model
-// tokens. Losing this connection does not cancel work or resubmit the prompt.
+// Public response previews are provisional; committed steps/results remain
+// separate. Losing this connection does not cancel work or resubmit the prompt.
 func renderAgentStream(w io.Writer, body io.Reader) error {
+	return renderAgentStreamTo(w, w, body)
+}
+
+func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	runID := ""
+	lastPhase, lastPreview, iteration := "", "", 0
+	previewOpen := false
+	endPreview := func() {
+		if previewOpen {
+			fmt.Fprintln(progress)
+			previewOpen = false
+		}
+	}
+	defer endPreview()
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -125,14 +138,49 @@ func renderAgentStream(w io.Writer, body io.Reader) error {
 		}
 		if runID == "" && event.RunID != "" {
 			runID = event.RunID
-			fmt.Fprintf(w, "Run: %s\n", terminalSafe(runID))
+			fmt.Fprintf(progress, "Run: %s\n", terminalSafe(runID))
+		}
+		if p := event.Progress; p != nil && event.Type == "status" {
+			phase := fmt.Sprintf("%d:%s:%s", p.Iteration, p.Phase, p.Tool)
+			if phase != lastPhase {
+				endPreview()
+				labels := map[string]string{"queued": "Waiting for inference", "loading": "Loading model", "processing": "Preparing prompt", "generating": "Generating response", "preparing_tool": "Preparing tool call", "tool": "Running tool", "approval": "Awaiting approval"}
+				label := labels[p.Phase]
+				if label == "" {
+					label = "Running"
+				}
+				fmt.Fprintf(progress, "Step %d · %s", p.Iteration, label)
+				if p.Tool != "" {
+					fmt.Fprintf(progress, " · %s", terminalSafe(p.Tool))
+				}
+				fmt.Fprintln(progress)
+				lastPhase = phase
+			}
+			if p.Iteration != iteration {
+				lastPreview = ""
+				iteration = p.Iteration
+			}
+			if p.Preview != "" && p.Preview != lastPreview {
+				if !previewOpen {
+					fmt.Fprintln(progress, "Response preview (not complete):")
+					previewOpen = true
+				}
+				if strings.HasPrefix(p.Preview, lastPreview) {
+					fmt.Fprint(progress, terminalSafe(strings.TrimPrefix(p.Preview, lastPreview)))
+				} else {
+					fmt.Fprint(progress, "\n", terminalSafe(p.Preview))
+				}
+				lastPreview = p.Preview
+			}
 		}
 		switch event.Type {
 		case "step":
+			endPreview()
 			if event.ToolName != "" {
-				fmt.Fprintf(w, "  %s · %s\n", terminalSafe(event.ToolName), truncateTerminalText(terminalSafe(event.ToolResult), 180))
+				fmt.Fprintf(progress, "  %s · %s\n", terminalSafe(event.ToolName), truncateTerminalText(terminalSafe(event.ToolResult), 180))
 			}
 		case "done", "approval_required", "error":
+			endPreview()
 			renderAgentSnapshot(w, event.agentRunSnapshot)
 			if event.Type == "error" {
 				return fmt.Errorf("agent run stopped; use offgrid agent status %s before taking further action", terminalSafe(runID))

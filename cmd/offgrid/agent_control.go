@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,18 +13,19 @@ import (
 	"unicode"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
-	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/output"
+	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
 
 type agentRunSnapshot struct {
-	RunID           string           `json:"run_id"`
-	Status          string           `json:"status"`
-	Output          string           `json:"output"`
-	Error           string           `json:"error,omitempty"`
-	Resumable       bool             `json:"resumable"`
-	PendingApproval *agents.Approval `json:"pending_approval"`
-	UncertainCallID string           `json:"uncertain_call_id,omitempty"`
+	RunID           string              `json:"run_id"`
+	Status          string              `json:"status"`
+	Output          string              `json:"output"`
+	Error           string              `json:"error,omitempty"`
+	Resumable       bool                `json:"resumable"`
+	PendingApproval *agents.Approval    `json:"pending_approval"`
+	UncertainCallID string              `json:"uncertain_call_id,omitempty"`
+	Progress        *agents.RunProgress `json:"progress,omitempty"`
 }
 
 // Terminal output contains model/tool data, not terminal control instructions.
@@ -37,56 +39,57 @@ func terminalSafe(value string) string {
 }
 
 func agentRequest(client *http.Client, method, endpoint string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequest(method, endpoint, body)
+	return agentRequestContext(context.Background(), client, method, endpoint, body)
+}
+
+func agentRequestContext(ctx context.Context, transport *http.Client, method, endpoint string, body io.Reader) (*http.Response, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.User != nil || u.Fragment != "" {
+		return nil, usage("Invalid agent service URL")
+	}
+	client, err := serviceclient.New(u.Scheme+"://"+u.Host, os.Getenv("OFFGRID_API_KEY"), transport)
 	if err != nil {
 		return nil, err
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if key := strings.TrimSpace(os.Getenv("OFFGRID_API_KEY")); key != "" {
-		req.Header.Set("Authorization", "Bearer "+key)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		defer resp.Body.Close()
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("agent service returned HTTP %d: %s", resp.StatusCode, terminalSafe(strings.TrimSpace(string(data))))
-	}
-	return resp, nil
+	return client.Do(ctx, method, u.RequestURI(), "application/json", body)
 }
 
 func agentControl(base string, args []string) (*agentRunSnapshot, error) {
+	return agentControlContext(context.Background(), base, args)
+}
+
+func agentControlContext(ctx context.Context, base string, args []string) (*agentRunSnapshot, error) {
 	if len(args) < 2 {
-		return nil, fmt.Errorf("usage: offgrid agent status|approve|deny|cancel|resume|reconcile RUN_ID [APPROVAL_ID or CALL_ID RESULT]")
+		return nil, usage("usage: offgrid agent status|approve|deny|cancel|resume|reconcile RUN_ID [APPROVAL_ID or CALL_ID RESULT]")
 	}
 	action, id := args[0], args[1]
 	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, "/\\?#") {
-		return nil, fmt.Errorf("invalid run ID")
+		return nil, usage("invalid run ID")
 	}
-	endpoint := strings.TrimRight(base, "/") + "/v1/agents/tasks/" + url.PathEscape(id)
+	client, err := serviceclient.New(base, os.Getenv("OFFGRID_API_KEY"), httpClient)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := "/v1/agents/tasks/" + url.PathEscape(id)
 	method := http.MethodPost
 	data := map[string]any{"async": true}
 	switch action {
 	case "status", "resume", "cancel":
 		if len(args) != 2 {
-			return nil, fmt.Errorf("usage: offgrid agent %s RUN_ID", action)
+			return nil, usage("usage: offgrid agent %s RUN_ID", action)
 		}
 	case "approve", "deny":
 		if len(args) != 3 || args[2] == "" {
-			return nil, fmt.Errorf("usage: offgrid agent %s RUN_ID APPROVAL_ID", action)
+			return nil, usage("usage: offgrid agent %s RUN_ID APPROVAL_ID", action)
 		}
 		data["approval_id"] = args[2]
 	case "reconcile":
 		if len(args) < 4 || args[2] == "" || strings.TrimSpace(strings.Join(args[3:], " ")) == "" {
-			return nil, fmt.Errorf("usage: offgrid agent reconcile RUN_ID CALL_ID \"verified outcome\"")
+			return nil, usage("usage: offgrid agent reconcile RUN_ID CALL_ID \"verified outcome\"")
 		}
 		data["call_id"], data["result"] = args[2], strings.Join(args[3:], " ")
 	default:
-		return nil, fmt.Errorf("unknown run action %q", action)
+		return nil, usage("unknown run action %q", action)
 	}
 	var body io.Reader
 	if action == "status" {
@@ -96,31 +99,52 @@ func agentControl(base string, args []string) (*agentRunSnapshot, error) {
 		encoded, _ := json.Marshal(data)
 		body = bytes.NewReader(encoded)
 	}
-	resp, err := agentRequest(httpClient, method, endpoint, body)
+	resp, err := client.Do(ctx, method, endpoint, "application/json", body)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	var snapshot agentRunSnapshot
-	if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
+	if err := serviceclient.DecodeContext(ctx, resp.Body, &snapshot); err != nil {
 		return nil, err
+	}
+	if snapshot.RunID != id || !validAgentStatus(snapshot.Status) {
+		return nil, &serviceclient.Error{Code: "invalid_response", Message: "OffGrid returned an invalid run snapshot. Check the service version."}
 	}
 	return &snapshot, nil
 }
 
-func handleAgentControl(args []string) {
-	cfg := config.LoadConfig()
-	snapshot, err := agentControl(fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort), args)
+func validAgentStatus(status string) bool {
+	switch agents.TaskStatus(status) {
+	case agents.TaskPending, agents.TaskRunning, agents.TaskWaiting, agents.TaskInterrupted, agents.TaskUncertain, agents.TaskCompleted, agents.TaskFailed, agents.TaskCancelled:
+		return true
+	}
+	return false
+}
+
+func isAgentControl(action string) bool {
+	switch action {
+	case "status", "approve", "deny", "cancel", "resume", "reconcile":
+		return true
+	}
+	return false
+}
+
+func runAgentControl(ctx context.Context, args []string) error {
+	snapshot, err := agentControlContext(ctx, commandServerURL(), args)
 	if err != nil {
-		printError(err.Error())
-		return
+		return err
 	}
 	if output.JSONMode {
-		output.PrintJSON(snapshot)
-		return
+		return json.NewEncoder(os.Stdout).Encode(snapshot)
 	}
 	fmt.Printf("Run: %s\n", terminalSafe(snapshot.RunID))
 	renderAgentSnapshot(os.Stdout, *snapshot)
+	return nil
+}
+
+func handleAgentControl(args []string) {
+	executeCommand(func(ctx context.Context) error { return runAgentControl(ctx, args) })
 }
 
 func renderAgentSnapshot(w io.Writer, snapshot agentRunSnapshot) {

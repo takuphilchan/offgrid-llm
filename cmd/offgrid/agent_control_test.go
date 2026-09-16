@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,6 +43,26 @@ func TestAgentControlUsesExistingRunAndAuthenticatedRequest(t *testing.T) {
 	}
 }
 
+func TestAgentStreamShowsLivePreviewOnceOnStderr(t *testing.T) {
+	var stream strings.Builder
+	for _, text := range []string{"Hel", "Hello", "Hello"} {
+		event := map[string]any{"type": "status", "run_id": "run-1", "status": "running", "progress": map[string]any{"phase": "generating", "iteration": 1, "preview": text}}
+		data, _ := json.Marshal(event)
+		fmt.Fprintf(&stream, "data: %s\n\n", data)
+	}
+	stream.WriteString("data: {\"type\":\"done\",\"run_id\":\"run-1\",\"status\":\"completed\",\"output\":\"Hello\"}\n\n")
+	var out, progress bytes.Buffer
+	if err := renderAgentStreamTo(&out, &progress, strings.NewReader(stream.String())); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(progress.String(), "Hello") != 1 || !strings.Contains(progress.String(), "Generating response") || !strings.Contains(progress.String(), "not complete") {
+		t.Fatalf("wrong progress: %s", progress.String())
+	}
+	if strings.Contains(out.String(), "preview") || !strings.Contains(out.String(), "Hello") {
+		t.Fatalf("wrong final output: %s", out.String())
+	}
+}
+
 func TestAgentStreamRendersResultAndExactApproval(t *testing.T) {
 	for _, tc := range []struct {
 		data string
@@ -65,5 +86,17 @@ func TestAgentStreamRendersResultAndExactApproval(t *testing.T) {
 	}
 	if safe := terminalSafe("\x1b[31mtest\u202e\r"); strings.ContainsAny(safe, "\x1b\u202e\r") {
 		t.Fatalf("unsafe output: %q", safe)
+	}
+}
+
+func TestAgentControlRejectsInvalidSnapshotAndOrigin(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"run_id":"wrong-run","status":"completed"}`))
+	}))
+	defer server.Close()
+	for _, base := range []string{server.URL, server.URL + "/wrong", server.URL + "?query=wrong"} {
+		if _, err := agentControl(base, []string{"status", "run-1"}); err == nil {
+			t.Fatalf("accepted %s", base)
+		}
 	}
 }
