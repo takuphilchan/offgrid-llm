@@ -293,26 +293,37 @@ jobs:
           # Detect host architecture and validate CPU flags compatibility
           HOST_ARCH="$(uname -m)"
           MATRIX_CPU_FLAGS="${{ matrix.cpu_flags }}"
+          MATRIX_CPU_FEATURES="${{ matrix.cpu_features }}"
           
           echo "Host architecture: $HOST_ARCH"
           echo "Matrix CPU flags: $MATRIX_CPU_FLAGS"
+          echo "Matrix CPU features: $MATRIX_CPU_FEATURES"
           
-          # Clear CPU_FLAGS by default, only set if compatible
+          # Global architecture flags also affect build-time executables. Keep
+          # x86 tuning on GGML targets so helpers remain runnable even when a
+          # hosted build runner does not support the release's instruction set.
           CPU_FLAGS=""
+          GGML_CPU_ARGS=()
           
-          # Only apply CPU flags if they match the host architecture
           case "$HOST_ARCH" in
             x86_64|amd64)
-              # Only use flags if they're x86-related
-              if echo "$MATRIX_CPU_FLAGS" | grep -qE 'x86|x86-64|v3|v4|haswell|native'; then
-                CPU_FLAGS="$MATRIX_CPU_FLAGS"
-                echo "Using x86 CPU flags: $CPU_FLAGS"
+              GGML_CPU_ARGS+=(
+                -DGGML_SSE42=ON
+                -DGGML_AVX=ON
+                -DGGML_AVX2=ON
+                -DGGML_F16C=ON
+                -DGGML_FMA=ON
+                -DGGML_BMI2=ON
+              )
+              if [ "$MATRIX_CPU_FEATURES" = "avx512" ]; then
+                GGML_CPU_ARGS+=("-DGGML_AVX512=ON")
+                echo "Enabling AVX-512 for GGML runtime targets only"
               else
-                echo "Skipping incompatible CPU flags for x86_64 host"
+                GGML_CPU_ARGS+=("-DGGML_AVX512=OFF")
+                echo "Enabling AVX2 for GGML runtime targets only"
               fi
               ;;
             aarch64|arm64)
-              # Only use flags if they're ARM-related
               if echo "$MATRIX_CPU_FLAGS" | grep -qE 'arm|aarch64|armv|apple'; then
                 CPU_FLAGS="$MATRIX_CPU_FLAGS"
                 echo "Using ARM CPU flags: $CPU_FLAGS"
@@ -336,6 +347,7 @@ jobs:
             -DGGML_STATIC=ON
             -DLLAMA_CURL=OFF
           )
+          CMAKE_ARGS+=("${GGML_CPU_ARGS[@]}")
           
           # Add static linking flags for Linux to avoid GLIBC version requirements
           if [ "${{ matrix.platform }}" = "linux" ]; then
