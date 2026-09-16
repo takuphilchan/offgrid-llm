@@ -17,17 +17,8 @@ RUN npm run build
 # =============================================================================
 FROM golang:1.26.6-alpine3.24 AS go-builder
 
-ARG VERSION=dev
-
-# Install build dependencies
-RUN apk add --no-cache \
-    git \
-    make \
-    gcc \
-    g++ \
-    musl-dev \
-    linux-headers
-
+# OffGrid uses the HTTP inference engine; native CUDA/C++ lives in the separate
+# llama-builder stage. Match release binaries with a portable, pure-Go build.
 WORKDIR /build
 
 # Copy go mod files first for caching
@@ -39,8 +30,10 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 
+ARG VERSION=dev
+
 # Build the application as a static binary for the CUDA runtime image.
-RUN CGO_ENABLED=1 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath -ldflags="-s -w -X main.Version=${VERSION} -extldflags=-static" \
     -o offgrid ./cmd/offgrid/
 
@@ -105,6 +98,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     wget \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # The Ubuntu-based CUDA image already has UID/GID 1000 (the "ubuntu" account).
@@ -122,6 +116,11 @@ COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
 COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgrid/bin/llama-server
 
 RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
+
+# The NVIDIA runtime injects libcuda at container startup, not during build.
+# All other linked libraries must already be present in this final image.
+RUN ldd /var/lib/offgrid/bin/llama-server | \
+    awk '/not found/ { print; if ($1 != "libcuda.so.1") missing = 1 } END { exit missing }'
 
 # Copy the exact UI built from this source revision.
 COPY --from=ui-builder --chown=1000:1000 /build/web/dist /var/lib/offgrid/web/ui

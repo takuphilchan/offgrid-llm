@@ -24,6 +24,9 @@ services:
       # 0 asks llama.cpp to fit GPU layers to the model, KV cache, and VRAM.
       OFFGRID_GPU_LAYERS: ${OFFGRID_GPU_LAYERS:-0}
       OFFGRID_MAX_CONTEXT: ${OFFGRID_MAX_CONTEXT:-4096}
+      OFFGRID_CHAT_CONTEXT: ${OFFGRID_CHAT_CONTEXT:-8192}
+      # A residency limit, not an estimate based on GGUF file sizes alone.
+      OFFGRID_MAX_MODELS: ${OFFGRID_MAX_MODELS:-1}
       OFFGRID_ADAPTIVE_CONTEXT: ${OFFGRID_ADAPTIVE_CONTEXT:-true}
       OFFGRID_KV_CACHE_TYPE: ${OFFGRID_KV_CACHE_TYPE:-q8_0}
     security_opt:

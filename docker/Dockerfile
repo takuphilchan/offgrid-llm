@@ -24,17 +24,8 @@ RUN npm run build
 # =============================================================================
 FROM golang:1.26.6-alpine3.24 AS go-builder
 
-ARG VERSION=dev
-
-# Install build dependencies
-RUN apk add --no-cache \
-    git \
-    make \
-    gcc \
-    g++ \
-    musl-dev \
-    linux-headers
-
+# OffGrid uses the HTTP inference engine; native CUDA/C++ lives in the separate
+# llama-builder stage. Match release binaries with a portable, pure-Go build.
 WORKDIR /build
 
 # Copy go mod files first for caching
@@ -52,8 +43,10 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 
+ARG VERSION=dev
+
 # Build the application with static linking
-RUN CGO_ENABLED=1 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=linux go build \
 	-trimpath -ldflags="-s -w -X main.Version=${VERSION} -extldflags=-static" \
 	-o offgrid ./cmd/offgrid/
 
