@@ -3,7 +3,9 @@ package inference
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,6 +21,56 @@ func TestLlamaHTTPPortUsesExplicitIPv4Loopback(t *testing.T) {
 	engine.SetPort(43123)
 	if engine.baseURL != "http://127.0.0.1:43123" {
 		t.Fatalf("base URL after SetPort = %q", engine.baseURL)
+	}
+}
+
+func TestRawStreamRequiresTerminalMarkerAndPropagatesCallbackFailure(t *testing.T) {
+	chunk := "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n"
+	for _, test := range []struct {
+		name, body   string
+		failCallback bool
+		want         error
+	}{
+		{"complete", chunk + "data: [DONE]\n\n", false, nil},
+		{"empty EOF", "", false, io.ErrUnexpectedEOF},
+		{"partial EOF", chunk, false, io.ErrUnexpectedEOF},
+		{"callback after partial", chunk + chunk + "data: [DONE]\n\n", true, io.ErrClosedPipe},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, test.body)
+			}))
+			defer backend.Close()
+			calls := 0
+			err := NewLlamaHTTPEngine(backend.URL).ChatCompletionStreamRaw(context.Background(), &api.ChatCompletionRequest{}, func(json.RawMessage) error {
+				calls++
+				if test.failCallback && calls == 2 {
+					return io.ErrClosedPipe
+				}
+				return nil
+			})
+			if !errors.Is(err, test.want) {
+				t.Fatalf("got %v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
+func TestRawStreamCancellationIsNotSuccess(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := NewLlamaHTTPEngine("http://127.0.0.1:1").ChatCompletionStreamRaw(ctx, &api.ChatCompletionRequest{}, func(json.RawMessage) error { return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestContextOverflowGivesActionableProfileError(t *testing.T) {
+	err := classifyLlamaServerError(400, []byte(`{"error":{"message":"request exceeds the available context size"}}`))
+	typed := AsEngineError(err)
+	if typed == nil || typed.Code != "context_exceeded" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

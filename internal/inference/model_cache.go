@@ -24,6 +24,7 @@ var httpClient = &http.Client{
 // ModelInstance represents a running llama-server instance with a loaded model
 type ModelInstance struct {
 	ModelID       string
+	ContextSize   int
 	Port          int
 	Cmd           *exec.Cmd
 	LastAccess    time.Time
@@ -478,7 +479,7 @@ func (mc *ModelCache) GetOrLoadContext(ctx context.Context, modelID, modelPath, 
 
 	// Check if model is already loaded and process is alive
 	if instance, exists := mc.instances[modelID]; exists {
-		if mc.instanceHealthy(instance) {
+		if mc.instanceHealthy(instance) && (mc.contextSize <= 0 || instance.ContextSize == mc.contextSize) {
 			instance.LastAccess = time.Now()
 			log.Printf("Model %s already loaded on port %d", modelID, instance.Port)
 			// Mark as ready immediately if already loaded
@@ -490,7 +491,7 @@ func (mc *ModelCache) GetOrLoadContext(ctx context.Context, modelID, modelPath, 
 			return instance, nil
 		}
 		// Process is dead, clean it up
-		log.Printf("Model %s process died, cleaning up", modelID)
+		log.Printf("Model %s requires restart (process health or context changed)", modelID)
 		mc.cleanupInstance(modelID)
 	}
 
@@ -720,7 +721,8 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 	// cleanup if startup is interrupted.
 	cmd := exec.Command(binaryPath, args...)
 
-	cmd.Env = append(cmd.Env, "NO_PROXY=*")
+	// Preserve CUDA visibility and loader paths supplied by the container runtime.
+	cmd.Env = append(os.Environ(), "NO_PROXY=*", "no_proxy=*")
 
 	// Redirect output to parent process for debugging
 	cmd.Stdout = os.Stdout
@@ -741,6 +743,7 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 
 	instance := &ModelInstance{
 		ModelID:       modelID,
+		ContextSize:   contextSize,
 		Port:          port,
 		Cmd:           cmd,
 		LastAccess:    time.Now(),

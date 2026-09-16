@@ -27,6 +27,33 @@ func TestLifecycleGateSharesActiveModel(t *testing.T) {
 	releaseTwo()
 }
 
+func TestLifecycleContextSwitchIsExclusive(t *testing.T) {
+	gate := NewLifecycleGate(2)
+	calls := 0
+	switcher := func(context.Context, string) error { calls++; return nil }
+	release, err := gate.AcquireWithContext(context.Background(), "same-model", 8192, switcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := gate.AcquireWithContext(ctx, "same-model", 65536, switcher); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("profile changed during active inference: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("switches=%d", calls)
+	}
+	release()
+	release, err = gate.AcquireWithContext(context.Background(), "same-model", 65536, switcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if gate.Status().ContextWindow != 65536 || calls != 2 {
+		t.Fatalf("wrong profile: %+v", gate.Status())
+	}
+}
+
 func TestLifecycleGateCancelsQueuedModelSwitch(t *testing.T) {
 	gate := NewLifecycleGate(1)
 	release, err := gate.Acquire(context.Background(), "model-a", func(context.Context, string) error { return nil })

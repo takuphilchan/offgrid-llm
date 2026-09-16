@@ -17,12 +17,13 @@ type Config struct {
 	ServerHost string `yaml:"server_host" json:"server_host"`
 
 	// Model settings
-	ModelsDir      string `yaml:"models_dir" json:"models_dir"`
-	DataDir        string `yaml:"data_dir" json:"data_dir"`
-	DefaultModel   string `yaml:"default_model" json:"default_model"`
-	MaxContextSize int    `yaml:"max_context_size" json:"max_context_size"`
-	NumThreads     int    `yaml:"num_threads" json:"num_threads"`
-	UseMockEngine  bool   `yaml:"use_mock_engine" json:"use_mock_engine"` // Use mock instead of llama.cpp
+	ModelsDir       string `yaml:"models_dir" json:"models_dir"`
+	DataDir         string `yaml:"data_dir" json:"data_dir"`
+	DefaultModel    string `yaml:"default_model" json:"default_model"`
+	MaxContextSize  int    `yaml:"max_context_size" json:"max_context_size"`
+	ChatContextSize int    `yaml:"chat_context_size" json:"chat_context_size"`
+	NumThreads      int    `yaml:"num_threads" json:"num_threads"`
+	UseMockEngine   bool   `yaml:"use_mock_engine" json:"use_mock_engine"` // Use mock instead of llama.cpp
 
 	// Resource limits
 	MaxMemoryMB  uint64 `yaml:"max_memory_mb" json:"max_memory_mb"`
@@ -142,6 +143,7 @@ func LoadConfig() *Config {
 		DataDir:         getEnv("OFFGRID_DATA_DIR", defaultDataDir),
 		DefaultModel:    getEnv("OFFGRID_DEFAULT_MODEL", ""),
 		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 4096),
+		ChatContextSize: getEnvInt("OFFGRID_CHAT_CONTEXT", 8192),
 		NumThreads:      getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
 		MaxMemoryMB:     uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
 		MaxModels:       getEnvInt("OFFGRID_MAX_MODELS", 3), // Cache up to 3 models for fast switching
@@ -394,6 +396,9 @@ func (c *Config) applyDefaults() {
 	if c.MaxContextSize == 0 {
 		c.MaxContextSize = 4096
 	}
+	if c.ChatContextSize <= 0 {
+		c.ChatContextSize = 8192
+	}
 	// NumThreads 0 means auto-detect (don't override)
 	if c.MaxMemoryMB == 0 {
 		c.MaxMemoryMB = 4096
@@ -445,6 +450,9 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if ctx := getEnvInt("OFFGRID_MAX_CONTEXT", 0); ctx != 0 {
 		c.MaxContextSize = ctx
+	}
+	if ctx := getEnvInt("OFFGRID_CHAT_CONTEXT", 0); ctx > 0 {
+		c.ChatContextSize = ctx
 	}
 	if threads := getEnvInt("OFFGRID_NUM_THREADS", 0); threads != 0 {
 		c.NumThreads = threads

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -226,7 +225,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		// Check if context was cancelled before making request
 		select {
 		case <-ctx.Done():
-			return nil // Client disconnected, not an error
+			return ctx.Err()
 		default:
 		}
 
@@ -239,9 +238,9 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 
 		resp, err := e.httpClient.Do(httpReq)
 		if err != nil {
-			// If context was cancelled, just return without error (client disconnected)
+			// Cancellation is not a successful generation.
 			if ctx.Err() != nil {
-				return nil
+				return ctx.Err()
 			}
 			return fmt.Errorf("request to llama-server failed: %w", err)
 		}
@@ -260,7 +259,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 				}
 				select {
 				case <-ctx.Done():
-					return nil
+					return ctx.Err()
 				case <-time.After(waitTime):
 				}
 				continue
@@ -280,7 +279,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		// exceed Scanner's 64 KiB default token size.
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-		receivedChunks := false
+		completed := false
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -290,33 +289,27 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 
 			data := strings.TrimPrefix(line, "data: ")
 			if data == "[DONE]" {
+				completed = true
 				break
 			}
 
 			if !json.Valid([]byte(data)) {
-				continue // Skip malformed chunks
+				return fmt.Errorf("invalid JSON in inference stream")
 			}
 			if err := callback(json.RawMessage(append([]byte(nil), data...))); err != nil {
-				if receivedChunks {
-					return nil
-				}
 				return err
 			}
-			receivedChunks = true
 		}
 
-		// Check for scanner errors (including unexpected EOF)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// A partial response must never masquerade as a completed turn.
 		if err := scanner.Err(); err != nil {
-			// If client disconnected (context cancelled), not an error
-			if ctx.Err() != nil {
-				return nil
-			}
-			// If we already sent chunks, treat as success (partial response is better than error)
-			if receivedChunks {
-				log.Printf("Stream ended after sending chunks (possible EOF): %v", err)
-				return nil // Not an error - user got their response
-			}
 			return fmt.Errorf("generation failed: %w (try reducing context size or using a smaller model)", err)
+		}
+		if !completed {
+			return fmt.Errorf("inference stream interrupted: %w", io.ErrUnexpectedEOF)
 		}
 
 		return nil
@@ -381,6 +374,9 @@ func classifyLlamaServerError(status int, body []byte) error {
 	}
 
 	lower := strings.ToLower(message)
+	if status == http.StatusBadRequest && (strings.Contains(lower, "exceed_context_size") || strings.Contains(lower, "exceeds the available context") || strings.Contains(lower, "context size") || strings.Contains(lower, "context window")) {
+		return &EngineError{Code: "context_exceeded", Message: "This conversation exceeds the allocated context. Select Extended in Response settings if supported, or start a new conversation. History has not been removed.", Details: message}
+	}
 	if strings.Contains(lower, "mmproj") || strings.Contains(lower, "image input is not supported") {
 		return &EngineError{
 			Code:    ErrCodeMissingMmproj,
