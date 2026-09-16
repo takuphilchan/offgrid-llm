@@ -51,7 +51,7 @@ FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS llama-builder
 
 ARG LLAMA_CPP_COMMIT=e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
 ARG CUDA_ARCHITECTURES="75;80;86;89;90;120"
-ARG BUILD_JOBS=2
+ARG BUILD_JOBS=4
 
 RUN apt-get update && apt-get install -y \
     git \

@@ -28,10 +28,19 @@ env:
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'takuphilchan' }}
 
 jobs:
-  publish:
-    name: Build, verify, and publish
+  prepare:
+    name: Resolve source and existing images
     runs-on: ubuntu-latest
-
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+      minor_version: ${{ steps.version.outputs.minor }}
+      source_ref: ${{ steps.version.outputs.source_ref }}
+      created: ${{ steps.version.outputs.created }}
+      source_sha: ${{ steps.source.outputs.sha }}
+      source_short_sha: ${{ steps.source.outputs.short_sha }}
+      is_latest: ${{ steps.source.outputs.is_latest }}
+      cpu_exists: ${{ steps.existing.outputs.cpu }}
+      gpu_exists: ${{ steps.existing.outputs.gpu }}
     steps:
       - name: Resolve build version
         id: version
@@ -54,6 +63,9 @@ jobs:
           fi
           {
             echo "value=${value}"
+            if [[ "${value}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "minor=${value%.*}"
+            fi
             echo "source_ref=${source_ref}"
             echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } >> "${GITHUB_OUTPUT}"
@@ -70,26 +82,25 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
           echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "${GITHUB_OUTPUT}"
+          latest_tag="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n 1)"
+          if [[ "${{ steps.version.outputs.source_ref }}" == "${latest_tag}" ]]; then
+            echo "is_latest=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "is_latest=false" >> "${GITHUB_OUTPUT}"
+          fi
 
-      - name: Apply reviewed GPU packaging fix on repair branch
-        if: startsWith(github.ref, 'refs/heads/release-container/v')
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The application remains pinned to its immutable release tag. Only
-          # the repaired Dockerfile comes from the reviewed repair branch.
-          git show "${GITHUB_SHA}:docker/Dockerfile.gpu" > docker/Dockerfile.gpu
-
-      - name: Reuse published versioned images on repair branch
-        if: startsWith(github.ref, 'refs/heads/release-container/v')
+      - name: Reuse complete published versioned images
         id: existing
+        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release-container/v')
         shell: bash
         run: |
           set -euo pipefail
+          echo "cpu=false" >> "${GITHUB_OUTPUT}"
+          echo "gpu=false" >> "${GITHUB_OUTPUT}"
           for flavor in cpu gpu; do
             tag="${{ steps.version.outputs.value }}"
             if [[ "${flavor}" == gpu ]]; then tag="${tag}-gpu"; fi
-            status="$(curl --silent --show-error --max-time 20 --retry 3 \
+            status="$(curl --silent --show-error --max-time 20 --retry 3 --retry-all-errors \
               --output "${RUNNER_TEMP}/offgrid-${flavor}-tag.json" \
               --write-out '%{http_code}' \
               "https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/${tag}/")"
@@ -110,8 +121,28 @@ jobs:
             esac
           done
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+  cpu:
+    name: Build CPU image (${{ matrix.arch }})
+    needs: prepare
+    if: needs.prepare.outputs.cpu_exists != 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_ref }}
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -133,48 +164,40 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          flavor: |
-            latest=false
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
-            type=raw,value=${{ steps.version.outputs.value }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
-            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=sha-${{ steps.source.outputs.short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
-          labels: |
-            org.opencontainers.image.title=OffGrid LLM
-            org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
-
-      - name: Build smoke-test image
-        if: steps.existing.outputs.cpu != 'true'
+      - name: Build and push image by digest
+        id: push
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: offgrid-llm:smoke-test
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.title=OffGrid LLM
+            org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.source_sha }}
+            org.opencontainers.image.created=${{ needs.prepare.outputs.created }}
           build-args: |
-            VERSION=${{ steps.version.outputs.value }}
-            VCS_REF=${{ steps.source.outputs.sha }}
-            BUILD_DATE=${{ steps.version.outputs.created }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            VERSION=${{ needs.prepare.outputs.version }}
+            VCS_REF=${{ needs.prepare.outputs.source_sha }}
+            BUILD_DATE=${{ needs.prepare.outputs.created }}
+          cache-from: type=gha,scope=cpu-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=cpu-${{ matrix.arch }}
+          provenance: mode=max
+          sbom: true
 
-      - name: Verify container startup and CLI
-        if: steps.existing.outputs.cpu != 'true'
+      - name: Verify AMD64 startup and CLI
+        if: matrix.arch == 'amd64'
         shell: bash
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           set -euo pipefail
-          docker run --rm offgrid-llm:smoke-test version
-          docker run -d --name offgrid-smoke -p 127.0.0.1:11611:11611 offgrid-llm:smoke-test
+          image="${IMAGE_NAME}@${DIGEST}"
+          docker pull "${image}"
+          docker run --rm "${image}" version
+          docker run -d --name offgrid-smoke -p 127.0.0.1:11611:11611 "${image}"
           trap 'docker logs offgrid-smoke || true; docker rm -f offgrid-smoke >/dev/null 2>&1 || true' EXIT
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:11611/health >/dev/null; then
@@ -186,37 +209,139 @@ jobs:
           echo "Container did not become healthy" >&2
           exit 1
 
-      - name: Build and push multi-platform image
-        if: steps.existing.outputs.cpu != 'true'
-        id: push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ steps.version.outputs.value }}
-            VCS_REF=${{ steps.source.outputs.sha }}
-            BUILD_DATE=${{ steps.version.outputs.created }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: mode=max
-          sbom: true
+      - name: Export image digest
+        shell: bash
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
 
-      - name: Attest published image
-        if: steps.existing.outputs.cpu != 'true'
+      - name: Upload image digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: offgrid-cpu-digest-${{ matrix.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  cpu-manifest:
+    name: Publish multi-platform CPU manifest
+    needs: [prepare, cpu]
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.cpu_exists != 'true' && needs.cpu.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download image digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: offgrid-cpu-digest-*-${{ github.run_id }}
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate CPU image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
+            type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
+            type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}
+            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=sha-${{ needs.prepare.outputs.source_short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
+          labels: |
+            org.opencontainers.image.title=OffGrid LLM
+            org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
+
+      - name: Create and inspect multi-platform manifest
+        id: manifest
+        shell: bash
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          mapfile -t digests < <(printf '%s\n' * | sort)
+          if [[ "${#digests[@]}" -ne 2 ]]; then
+            echo "::error::Expected exactly two CPU image digests, found ${#digests[@]}"
+            exit 1
+          fi
+          readarray -t tags < <(jq -r '.tags[]' <<< "${DOCKER_METADATA_OUTPUT_JSON}")
+          create_args=()
+          for tag in "${tags[@]}"; do create_args+=(--tag "${tag}"); done
+          sources=()
+          for digest in "${digests[@]}"; do sources+=("${IMAGE_NAME}@sha256:${digest}"); done
+          docker buildx imagetools create "${create_args[@]}" "${sources[@]}"
+          docker buildx imagetools inspect "${tags[0]}"
+          manifest_digest="$(docker buildx imagetools inspect "${tags[0]}" | awk '/^Digest:/ {print $2; exit}')"
+          if [[ ! "${manifest_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Could not resolve the published manifest digest"
+            exit 1
+          fi
+          echo "digest=${manifest_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Attest published CPU manifest
         uses: actions/attest@v4
         with:
           subject-name: index.docker.io/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
 
+  gpu:
+    name: Build NVIDIA CUDA image
+    needs: prepare
+    if: (github.event_name == 'push' || inputs.publish_gpu) && needs.prepare.outputs.gpu_exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_ref }}
+          fetch-depth: 0
+
+      - name: Apply reviewed GPU packaging on repair branch
+        if: startsWith(github.ref, 'refs/heads/release-container/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git show "${GITHUB_SHA}:docker/Dockerfile.gpu" > docker/Dockerfile.gpu
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Validate Docker Hub credentials
+        shell: bash
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DOCKERHUB_TOKEN}" ]]; then
+            echo "::error::Add a repository Actions secret named DOCKERHUB_TOKEN containing a Docker Hub read/write access token."
+            exit 1
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Generate NVIDIA image metadata
-        if: (github.event_name == 'push' || inputs.publish_gpu) && steps.existing.outputs.gpu != 'true'
-        id: meta_gpu
+        id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME }}
@@ -226,39 +351,39 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
-            type=raw,value=${{ steps.version.outputs.value }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
+            type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
+            type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=sha-${{ steps.source.outputs.short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
+            type=raw,value=sha-${{ needs.prepare.outputs.source_short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
           labels: |
             org.opencontainers.image.title=OffGrid LLM (NVIDIA CUDA)
             org.opencontainers.image.description=Private, local-first LLM inference with NVIDIA CUDA acceleration
             org.offgrid.packaging.revision=${{ github.sha }}
 
       - name: Build and push NVIDIA image
-        if: (github.event_name == 'push' || inputs.publish_gpu) && steps.existing.outputs.gpu != 'true'
-        id: push_gpu
+        id: push
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile.gpu
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.meta_gpu.outputs.tags }}
-          labels: ${{ steps.meta_gpu.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.version.outputs.value }}
-            VCS_REF=${{ steps.source.outputs.sha }}
-            BUILD_DATE=${{ steps.version.outputs.created }}
+            VERSION=${{ needs.prepare.outputs.version }}
+            VCS_REF=${{ needs.prepare.outputs.source_sha }}
+            BUILD_DATE=${{ needs.prepare.outputs.created }}
+            BUILD_JOBS=4
           cache-from: type=gha,scope=gpu
           cache-to: type=gha,mode=max,scope=gpu
           provenance: mode=max
           sbom: true
 
       - name: Attest NVIDIA image
-        if: (github.event_name == 'push' || inputs.publish_gpu) && steps.existing.outputs.gpu != 'true'
         uses: actions/attest@v4
         with:
           subject-name: index.docker.io/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push_gpu.outputs.digest }}
+          subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true

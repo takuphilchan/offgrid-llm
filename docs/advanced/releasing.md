@@ -24,6 +24,12 @@ size, and GitHub SHA-256 digest before attaching the checksum file. Desktop
 filenames contain spaces locally, but GitHub stores them with dots; reruns
 compare the stored names.
 
+The container workflow builds AMD64 and ARM64 CPU images concurrently on
+native GitHub-hosted runners and joins their immutable digests into one
+multi-platform manifest. The CUDA image is an independent AMD64 job. Every
+large build has a timeout, so a stalled architecture cannot occupy a runner
+indefinitely or prevent the completed platform from being diagnosed.
+
 ## Repairing an existing version
 
 If one or more GitHub assets are missing, run `release-unified.yml` with
@@ -36,8 +42,10 @@ If Docker Hub did not publish, push a branch named `release-container/vX.Y.Z`
 from the reviewed workflow commit. `docker-publish.yml` checks out the existing
 tagged application source; a reviewed GPU Dockerfile repair can come from the
 repair branch. Already-published CPU and GPU tags are reused when their
-platforms are complete. This path publishes only the exact `X.Y.Z` and
-`X.Y.Z-gpu` tags and does not move `latest` or minor-version aliases backward.
+platforms are complete. This path always publishes the exact `X.Y.Z` and
+`X.Y.Z-gpu` tags. It updates `latest`, `latest-gpu`, and the minor-version
+aliases only when `vX.Y.Z` is the repository's highest stable tag, so repairing
+an older release cannot move those aliases backward.
 Confirm both the multi-platform CPU tag and AMD64 GPU tag are pullable before
 proceeding.
 
