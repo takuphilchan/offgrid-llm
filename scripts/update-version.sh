@@ -38,7 +38,7 @@ fi
 # Update internal/p2p/discovery.go
 if [ -f "$ROOT_DIR/internal/p2p/discovery.go" ]; then
     echo "Updating internal/p2p/discovery.go..."
-    sed -i "s/Version: \"[^\"]*\"/Version: \"$VERSION\"/" "$ROOT_DIR/internal/p2p/discovery.go"
+    sed -i -E "s/(Version:[[:space:]]*)\"[0-9]+\.[0-9]+\.[0-9]+\"/\1\"$VERSION\"/g" "$ROOT_DIR/internal/p2p/discovery.go"
 fi
 
 # Update python/pyproject.toml
