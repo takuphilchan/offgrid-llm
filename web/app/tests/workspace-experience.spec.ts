@@ -31,6 +31,20 @@ async function mockWorkspace(page: Page, hasChatModel: boolean) {
   });
 }
 
+test('browser chrome uses the monochrome workspace identity', async ({ page, request }) => {
+  await mockWorkspace(page, false);
+  await page.goto('/ui/');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/ui/app-mark.svg');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', /#(?:101011|f7f7f6)/);
+
+  const response = await request.get('/ui/app-mark.svg');
+  expect(response.ok()).toBeTruthy();
+  const favicon = await response.text();
+  expect(favicon).toContain('#111112');
+  expect(favicon).toContain('#f5f5f4');
+  expect(favicon).not.toMatch(/#(?:9aafff|526fc9|22d3ee|0d1220)/i);
+});
+
 test('first-run stays pending while a chat model is not available', async ({ page }) => {
   await mockWorkspace(page, false);
   await page.goto('/ui/#/chat');

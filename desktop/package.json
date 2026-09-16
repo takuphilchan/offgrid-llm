@@ -11,6 +11,7 @@
   "license": "MIT",
   "main": "main.js",
   "scripts": {
+    "icons": "node ../dev/scripts/generate-icons.mjs",
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",

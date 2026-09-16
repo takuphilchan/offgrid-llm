@@ -15,7 +15,7 @@ function preferredTheme(): 'dark' | 'light' {
 
 function applyTheme(theme: 'dark' | 'light') {
   document.documentElement.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101010' : '#f7f7f6');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101011' : '#f7f7f6');
 }
 
 export function initializeTheme() {
