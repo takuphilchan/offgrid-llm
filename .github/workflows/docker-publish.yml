@@ -97,7 +97,9 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
           echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "${GITHUB_OUTPUT}"
           latest_tag="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n 1)"
-          if [[ "${{ steps.version.outputs.source_ref }}" == "${latest_tag}" ]]; then
+          source_version="${{ steps.version.outputs.source_ref }}"
+          source_version="${source_version#refs/tags/}"
+          if [[ "${source_version}" == "${latest_tag}" ]]; then
             echo "is_latest=true" >> "${GITHUB_OUTPUT}"
           else
             echo "is_latest=false" >> "${GITHUB_OUTPUT}"
@@ -105,7 +107,6 @@ jobs:
 
       - name: Reuse complete published versioned images
         id: existing
-        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release-container/v')
         shell: bash
         run: |
           set -euo pipefail
@@ -246,8 +247,8 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=v${{ needs.prepare.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
             type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}
@@ -360,8 +361,8 @@ jobs:
             latest=false
             suffix=-gpu,onlatest=true
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=v${{ needs.prepare.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
             type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}

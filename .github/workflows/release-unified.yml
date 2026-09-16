@@ -3,6 +3,8 @@ name: Release
 on:
   push:
     tags: ['v*']
+    branches:
+      - 'release-build/v*'
   workflow_dispatch:
     inputs:
       version:
@@ -24,13 +26,32 @@ env:
   LLAMA_CPP_WINDOWS_COMMIT: 718f7b4175bf8b6af6f5eac09fee10754b3ecddd
 
 jobs:
+  release-context:
+    name: Resolve immutable release source
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      source_ref: ${{ steps.release.outputs.source_ref }}
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@v6
+
+      - name: Resolve and verify release tag
+        id: release
+        shell: bash
+        run: |
+          bash .github/scripts/resolve-release-context.sh \
+            "${GITHUB_EVENT_NAME}" "${GITHUB_REF}" "${{ inputs.version || '' }}"
+          version="$(sed -n 's/^version=//p' "${GITHUB_OUTPUT}")"
+          git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null
+
   publish-containers:
     name: Publish and verify containers
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: release-context
     uses: ./.github/workflows/docker-publish.yml
     with:
-      version: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
-      source_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+      version: ${{ needs.release-context.outputs.version }}
+      source_ref: ${{ needs.release-context.outputs.source_ref }}
       publish_gpu: true
     secrets: inherit
 
@@ -38,30 +59,16 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: release-context
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
-
-      - name: Get version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
-      
       - name: Create draft release if missing
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
+          version="${{ needs.release-context.outputs.version }}"
           if gh release view "${version}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "Release ${version} already exists; preserving its assets for this rerun."
           else
@@ -76,12 +83,12 @@ jobs:
   build-ui:
     name: Build Web UI
     runs-on: ubuntu-latest
-    needs: create-release
+    needs: [release-context, create-release]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+          ref: ${{ needs.release-context.outputs.source_ref }}
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -96,7 +103,7 @@ jobs:
           npm run check
           npm run build
       - name: Upload UI bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-ui
           path: web/dist
@@ -107,7 +114,7 @@ jobs:
   build-bundles:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [create-release, build-ui]
+    needs: [release-context, create-release, build-ui]
     strategy:
       fail-fast: false
       matrix:
@@ -190,12 +197,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+          ref: ${{ needs.release-context.outputs.source_ref }}
 
       - name: Download UI bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: web-ui
           path: web/dist
@@ -209,15 +216,10 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          echo "version=${{ needs.release-context.outputs.version }}" >> "${GITHUB_OUTPUT}"
 
-      - name: Reuse verified release bundle on manual rerun
+      - name: Reuse verified release bundle on rerun
         id: existing
-        if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -714,14 +716,14 @@ jobs:
 
       - name: Upload artifact
         if: steps.existing.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BUNDLE_NAME }}
           path: ${{ env.ASSET_PATH }}
           retention-days: 7
 
       - name: Upload to release
-        if: (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && steps.existing.outputs.skip != 'true'
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -741,7 +743,7 @@ jobs:
   build-desktop:
     name: Build Desktop App (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
-    needs: [create-release, build-ui]
+    needs: [release-context, create-release, build-ui]
     strategy:
       fail-fast: false
       matrix:
@@ -760,12 +762,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+          ref: ${{ needs.release-context.outputs.source_ref }}
 
       - name: Download UI bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: web-ui
           path: web/dist
@@ -784,11 +786,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          echo "version=${{ needs.release-context.outputs.version }}" >> "${GITHUB_OUTPUT}"
 
       - name: Build CLI binaries for bundling
         shell: bash
@@ -920,14 +918,13 @@ jobs:
           fi
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os }}
           path: desktop/dist/*
           retention-days: 7
 
       - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         shell: bash
         working-directory: desktop/dist
         run: |
@@ -1023,25 +1020,16 @@ jobs:
   finalize-release:
     name: Finalize Release
     runs-on: ubuntu-latest
-    needs: [build-bundles, build-desktop, publish-containers]
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: [release-context, build-bundles, build-desktop, publish-containers]
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # Manual repair needs the current verification script even when the
-          # old release tag predates it. Tag builds use their tagged script.
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+        uses: actions/checkout@v6
 
       - name: Get version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          echo "version=${{ needs.release-context.outputs.version }}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify assets, generate checksums, and publish
         shell: bash

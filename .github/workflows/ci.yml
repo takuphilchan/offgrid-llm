@@ -38,8 +38,9 @@ jobs:
           # Existing inline release scripts have ShellCheck debt. Validate
           # workflow syntax here and lint the new standalone script directly.
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= .github/workflows/*.yml
-          shellcheck .github/scripts/finalize-release.sh .github/scripts/verify-release-containers.sh
+          shellcheck .github/scripts/finalize-release.sh .github/scripts/resolve-release-context.sh .github/scripts/verify-release-containers.sh
           node dev/scripts/test-finalize-release.mjs
+          node dev/scripts/test-release-context.mjs
           node dev/scripts/test-release-containers.mjs
 
       - name: Test Go packages
