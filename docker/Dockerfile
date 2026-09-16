@@ -9,7 +9,13 @@ FROM node:22-alpine AS ui-builder
 
 WORKDIR /build/web/app
 COPY web/app/package.json web/app/package-lock.json ./
-RUN npm ci
+RUN set -eu; \
+    for attempt in 1 2 3; do \
+        npm ci && exit 0; \
+        if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+        echo "npm dependency download failed (attempt $attempt/3); retrying..." >&2; \
+        sleep $((attempt * 5)); \
+    done
 COPY web/app/ ./
 RUN npm run build
 
@@ -33,7 +39,13 @@ WORKDIR /build
 
 # Copy go mod files first for caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN set -eu; \
+    for attempt in 1 2 3; do \
+        go mod download && exit 0; \
+        if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+        echo "Go module download failed (attempt $attempt/3); retrying..." >&2; \
+        sleep $((attempt * 5)); \
+    done
 
 # Copy source code
 COPY cmd/ ./cmd/
