@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,14 @@ const names = [
 ];
 const digest = 'a'.repeat(64);
 
-function run(assetNames, { initialAssetNames = assetNames, attempts = '1' } = {}) {
+const asset = (name) => ({ name, state: 'uploaded', size: 1, digest: `sha256:${digest}` });
+
+function run(assetNames, {
+  initialAssets = assetNames.map(asset),
+  assets = assetNames.map(asset),
+  attempts = '1',
+  apiFailure = false,
+} = {}) {
   const root = mkdtempSync(join(tmpdir(), 'offgrid-release-finalize-'));
   try {
     mkdirSync(join(root, 'docs/releases'), { recursive: true });
@@ -35,30 +42,47 @@ function run(assetNames, { initialAssetNames = assetNames, attempts = '1' } = {}
       join(repo, `docs/releases/release-notes-${version}.md`),
       join(root, `docs/releases/release-notes-${version}.md`),
     );
-    const rows = assetNames.map((name) => `${name}\tuploaded\t1\tsha256:${digest}`);
-    const initialRows = initialAssetNames.map((name) => `${name}\tuploaded\t1\tsha256:${digest}`);
-    const rowArgs = rows.map((row) => `'${row}'`).join(' ');
-    const initialRowArgs = initialRows.map((row) => `'${row}'`).join(' ');
+    writeFileSync(join(root, 'initial-assets.json'), JSON.stringify(initialAssets));
+    writeFileSync(join(root, 'assets.json'), JSON.stringify(assets));
     const mock = `
 gh() {
+  local filter='' arg previous=''
+  for arg in "$@"; do
+    if [[ "$previous" == '--jq' ]]; then filter="$arg"; fi
+    previous="$arg"
+  done
   if [[ "$1 $2" == "release view" ]]; then
-    if [[ "$*" == *"@tsv"* ]]; then
-      api_count_file='.mock-gh-api-count'
-      api_count=$(cat "$api_count_file" 2>/dev/null || echo 0)
-      api_count=$((api_count + 1))
-      printf '%s' "$api_count" > "$api_count_file"
-      if [[ "$api_count" -eq 1 ]]; then
-        printf '%s\\n' ${initialRowArgs}
-      else
-        printf '%s\\n' ${rowArgs}
-      fi
-    elif [[ "$*" == *"--json assets"* ]]; then
-      printf '%s\\n' 'checksums-v0.3.1.sha256'
+    if [[ "$*" == *"--json databaseId"* ]]; then
+      printf '%s' '{"databaseId":123,"isDraft":true}' | jq -r "$filter"
+    elif [[ "$*" == *"--json assets"* && -f .mock-published ]]; then
+      printf '%s' '{"assets":[{"name":"checksums-v0.3.1.sha256"}]}' | jq -r "$filter"
+    else
+      echo 'Unexpected release query' >&2
+      return 1
+    fi
+  elif [[ "$1" == 'api' ]]; then
+    if [[ "$2" != 'repos/example/offgrid-llm/releases/123/assets?per_page=100' || "$*" != *'--paginate'* ]]; then
+      echo 'Draft assets must be requested by release ID with pagination' >&2
+      return 1
+    fi
+    if [[ "${apiFailure}" == true ]]; then
+      echo 'gh: Forbidden (HTTP 403)' >&2
+      return 1
+    fi
+    api_count_file='.mock-gh-api-count'
+    api_count=$(cat "$api_count_file" 2>/dev/null || echo 0)
+    api_count=$((api_count + 1))
+    printf '%s' "$api_count" > "$api_count_file"
+    if [[ "$api_count" -eq 1 ]]; then
+      jq -r "$filter" initial-assets.json
+    else
+      jq -r "$filter" assets.json
     fi
   elif [[ "$1 $2" == "release upload" ]]; then
     test -s "$4" || return 1
     echo MOCK_UPLOAD
   elif [[ "$1 $2" == "release edit" ]]; then
+    touch .mock-published
     echo MOCK_EDIT
   else
     return 1
@@ -101,8 +125,22 @@ assert.notEqual(incomplete.status, 0, 'A partial release must not publish');
 assert.match(incomplete.stdout, /Missing required release asset/);
 assert.doesNotMatch(incomplete.stdout, /MOCK_UPLOAD|MOCK_EDIT/);
 
-const eventuallyComplete = run(names, { initialAssetNames: names.slice(1), attempts: '2' });
+const eventuallyComplete = run(names, { initialAssets: names.slice(1).map(asset), attempts: '2' });
 assert.equal(eventuallyComplete.status, 0, eventuallyComplete.stdout + eventuallyComplete.stderr);
 assert.match(eventuallyComplete.stdout, /not fully indexed yet/);
 assert.match(eventuallyComplete.stdout, /MOCK_UPLOAD/);
-console.log('Release finalization accepts 14 verified assets, retries indexing, and rejects a partial release');
+const pendingDigests = names.map((name) => ({ ...asset(name), digest: null }));
+const eventuallyIndexed = run(names, { initialAssets: pendingDigests, attempts: '2' });
+assert.equal(eventuallyIndexed.status, 0, eventuallyIndexed.stdout + eventuallyIndexed.stderr);
+assert.match(eventuallyIndexed.stdout, /digest=pending/);
+
+for (const initialAssets of [[], pendingDigests, names.map((name) => ({ ...asset(name), size: 0 }))]) {
+  const invalid = run(names, { initialAssets });
+  assert.notEqual(invalid.status, 0, 'Unverified assets must not publish');
+  assert.doesNotMatch(invalid.stdout, /MOCK_UPLOAD|MOCK_EDIT/);
+}
+const denied = run(names, { apiFailure: true });
+assert.notEqual(denied.status, 0);
+assert.match(denied.stderr, /Forbidden/);
+assert.doesNotMatch(denied.stdout, /MOCK_UPLOAD|MOCK_EDIT/);
+console.log('Draft finalization uses release IDs, evaluates real JSON filters, retries digests, and rejects incomplete or inaccessible assets');

@@ -25,6 +25,14 @@ size, and GitHub SHA-256 digest before attaching the checksum file. Desktop
 filenames contain spaces locally, but GitHub stores them with dots; reruns
 compare the stored names.
 
+Before starting platform builders, the workflow resolves the draft with
+`gh release view --json databaseId` and checks asset access by numeric release
+ID. Drafts are not available through the REST `releases/tags/{tag}` endpoint;
+a 404 there does **not** prove the release or its assets are missing. Asset
+queries use the paginated `releases/{id}/assets` endpoint, including raw SHA-256
+digests. CI exercises the actual workflow filters against empty drafts,
+complete assets, pending digests, and access errors.
+
 The container workflow builds AMD64 and ARM64 CPU images concurrently on
 native GitHub-hosted runners, publishes resumable architecture tags, and joins
 them into one multi-platform manifest with bounded registry-indexing retries.
@@ -36,9 +44,11 @@ exact CPU and GPU tags again before publishing the release.
 ## Repairing an existing version
 
 If one or more GitHub assets are missing, run `release-unified.yml` with
-`workflow_dispatch` on `main` and `version=vX.Y.Z`. Existing verified CLI
-bundles are reused. The version's source is checked out from the tag; the
-current finalizer script comes from `main`. Never rerun an old failed Actions
+`workflow_dispatch` on `main` and `version=vX.Y.Z`, or push a
+`release-build/vX.Y.Z` branch from the reviewed workflow commit. Existing
+verified CLI bundles, desktop installers, and containers are reused. The
+version's source is checked out from the tag; the current workflow and finalizer
+come from the dispatch or repair-branch revision. Never rerun an old failed Actions
 attempt to pick up a workflow fix: it uses the old workflow revision.
 
 If Docker Hub did not publish, push a branch named `release-container/vX.Y.Z`

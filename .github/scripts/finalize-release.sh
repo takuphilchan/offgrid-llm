@@ -28,7 +28,13 @@ expected=(
   "OffGrid.LLM.Desktop-Setup-${package_version}.exe"
 )
 
-gh release view "${version}" --repo "${repo}" >/dev/null
+# gh resolves both drafts and published releases. The REST tag endpoint only
+# resolves published releases; use the numeric ID for all draft asset reads.
+release_id="$(gh release view "${version}" --repo "${repo}" --json databaseId --jq '.databaseId')"
+if [[ ! "${release_id}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "::error::Could not resolve the release ID for ${version}"
+  exit 1
+fi
 max_attempts="${OFFGRID_FINALIZE_ATTEMPTS:-18}"
 retry_seconds="${OFFGRID_FINALIZE_RETRY_SECONDS:-10}"
 if [[ ! "${max_attempts}" =~ ^[1-9][0-9]*$ || ! "${retry_seconds}" =~ ^[0-9]+$ ]]; then
@@ -45,8 +51,8 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
   asset_states=()
   asset_sizes=()
   asset_digests=()
-  asset_rows="$(gh release view "${version}" --repo "${repo}" --json assets \
-    --jq '.assets[] | [.name, .state, .size, (.digest // "")] | @tsv')"
+  asset_rows="$(gh api "repos/${repo}/releases/${release_id}/assets?per_page=100" \
+    --paginate --jq '.[] | [.name, .state, .size, (.digest // "")] | @tsv')"
   while IFS=$'\t' read -r name state size digest; do
     [[ -n "${name}" ]] || continue
     asset_states["${name}"]="${state}"

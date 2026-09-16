@@ -64,6 +64,8 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs: release-context
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
     
     steps:
       - name: Create draft release if missing
@@ -83,6 +85,26 @@ jobs:
               --notes "Release is being built. Artifacts will appear after verification." \
               --draft
           fi
+
+      - name: Verify draft asset access before starting builds
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+        run: |
+          set -euo pipefail
+          release_id="$(gh release view "${RELEASE_VERSION}" --repo "${GITHUB_REPOSITORY}" \
+            --json databaseId --jq '.databaseId')"
+          if [[ ! "${release_id}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Could not resolve the release ID for ${RELEASE_VERSION}"
+            exit 1
+          fi
+          # Drafts are addressable by ID, not the published-release tag endpoint.
+          # Read raw REST assets so digest support does not depend on gh's JSON exporter.
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?per_page=100" \
+            --paginate --jq '.[] | [.name, .state, .size, (.digest // "pending")] | @tsv'
+          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
 
   build-ui:
     name: Build Web UI
@@ -233,8 +255,8 @@ jobs:
           extension=.tar.gz
           if [ "${{ matrix.platform }}" = "windows" ]; then extension=.zip; fi
           asset_name="offgrid-${version}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ matrix.cpu_features }}${extension}"
-          existing_assets="$(gh release view "${version}" --repo "${{ github.repository }}" --json assets \
-            --jq '.assets[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
+          existing_assets="$(gh api "repos/${{ github.repository }}/releases/${{ needs.create-release.outputs.release_id }}/assets?per_page=100" \
+            --paginate --jq '.[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
           if grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
             echo "Verified release asset ${asset_name} already exists; skipping its rebuild"
             echo "skip=true" >> "${GITHUB_OUTPUT}"
@@ -821,8 +843,8 @@ jobs:
               )
               ;;
           esac
-          existing_assets="$(gh release view "${version}" --repo "${{ github.repository }}" --json assets \
-            --jq '.assets[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
+          existing_assets="$(gh api "repos/${{ github.repository }}/releases/${{ needs.create-release.outputs.release_id }}/assets?per_page=100" \
+            --paginate --jq '.[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
           for asset_name in "${expected[@]}"; do
             if ! grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
               echo "Desktop asset ${asset_name} is missing or not fully indexed; rebuilding ${{ matrix.os }}"
