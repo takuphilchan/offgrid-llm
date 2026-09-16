@@ -1,9 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ar } from './locales/ar';
+import { de } from './locales/de';
 import { en } from './locales/en';
 import { es } from './locales/es';
 import { fr } from './locales/fr';
+import { nd } from './locales/nd';
+import { sn } from './locales/sn';
 import { sw } from './locales/sw';
+import { zu } from './locales/zu';
 import type { LocaleDefinition, Messages } from './types';
 
 export const locales = {
@@ -11,7 +15,11 @@ export const locales = {
   fr: { code: 'fr', label: 'Français', direction: 'ltr', messages: fr },
   es: { code: 'es', label: 'Español', direction: 'ltr', messages: es },
   ar: { code: 'ar', label: 'العربية', direction: 'rtl', messages: ar },
-  sw: { code: 'sw', label: 'Kiswahili', direction: 'ltr', messages: sw }
+  sw: { code: 'sw', label: 'Kiswahili', direction: 'ltr', messages: sw },
+  sn: { code: 'sn', label: 'ChiShona', direction: 'ltr', messages: sn },
+  nd: { code: 'nd', label: 'isiNdebele', direction: 'ltr', messages: nd },
+  zu: { code: 'zu', label: 'isiZulu', direction: 'ltr', messages: zu },
+  de: { code: 'de', label: 'Deutsch', direction: 'ltr', messages: de }
 } as const satisfies Record<string, LocaleDefinition>;
 
 export type LocaleCode = keyof typeof locales;

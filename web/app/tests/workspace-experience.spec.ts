@@ -3,7 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 const now = '2026-09-15T12:00:00Z';
 
 async function mockWorkspace(page: Page, hasChatModel: boolean) {
-  await page.addInitScript(() => localStorage.setItem('offgrid.locale', 'en'));
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale', 'en');
+  });
   await page.route('**/health', route => route.fulfill({ contentType: 'application/json', body: '{"status":"healthy"}' }));
   await page.route('**/v1/**', route => {
     const path = new URL(route.request().url()).pathname;
@@ -88,6 +90,33 @@ test('appearance choice survives reload and changes the whole shell', async ({ p
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('settings.png') });
+});
+
+test('southern African languages are complete, selectable, and persistent', async ({ page }) => {
+  await mockWorkspace(page, false);
+  await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
+  await page.goto('/ui/#/settings');
+
+  const language = page.getByLabel('Language');
+  await expect(language.locator('option')).toHaveCount(9);
+
+  await language.selectOption('sn');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'sn');
+  await expect(page.getByRole('heading', { name: 'Zvirongwa' })).toBeVisible();
+
+  await page.getByLabel('Mutauro').selectOption('nd');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'nd');
+  await expect(page.getByRole('heading', { name: 'Izilungiselelo' })).toBeVisible();
+
+  await page.getByLabel('Ulimi').selectOption('zu');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zu');
+  await page.getByLabel('Ulimi').selectOption('de');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+  await expect(page.getByRole('heading', { name: 'Einstellungen' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('offgrid.locale'))).toBe('de');
+  await page.reload();
+  await expect(page.getByLabel('Sprache')).toHaveValue('de');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de');
 });
 
 test('conversation history remains accessible at narrow desktop width', async ({ page }) => {

@@ -49,6 +49,12 @@ forwards operating-system theme changes through the constrained preload bridge.
 The quick-action palette opens with `Ctrl+K` or `Command+K` and provides
 keyboard-accessible navigation and appearance actions.
 
+The interface ships with English, French, Spanish, German, Arabic, Kiswahili,
+ChiShona, isiNdebele (Northern Ndebele), and isiZulu. Locale packs implement the
+shared typed `Messages` contract, so adding a language cannot silently omit
+interface copy. The selected locale is stored as `offgrid.locale` and is shared
+by the web and Electron interfaces.
+
 ## Desktop boundary
 
 Desktop-only behavior is represented by the optional typed bridge in
