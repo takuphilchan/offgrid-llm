@@ -47,6 +47,11 @@ Stable release tags will publish `latest`, full semantic versions, immutable
 
 ## Build and run from source
 
+Saved chat streams by default in the web and desktop UI. Response settings
+separate smaller interactive context from extended context without changing
+external-agent allocations. See [inference performance](docs/advanced/PERFORMANCE.md)
+for GPU setup, memory tradeoffs, and meaningful latency measurements.
+
 Requirements: Go 1.25+ with the toolchain declared in `go.mod`, Node.js 22,
 and npm. OffGrid uses a compatible `llama-server` on `PATH` when present;
 otherwise the native CPU/Metal build downloads a checksum-pinned llama.cpp
@@ -194,6 +199,7 @@ OffGrid service; local test runs manage their own UI server.
 - [CLI experience](docs/advanced/cli-experience.md)
 - [Workspace UI](docs/advanced/workspace-ui.md)
 - [Maintainability and generation](docs/advanced/maintainability.md)
+- [Product reliability plan and acceptance gates](docs/advanced/product-reliability-plan.md)
 - [API reference](docs/reference/api.md)
 - [CLI reference](docs/reference/cli.md)
 - [Docker deployment](docs/setup/docker.md)
@@ -208,6 +214,31 @@ The unauthenticated quick start is for loopback use only. Remote deployments
 must enable authentication, restrict permissions, terminate TLS at a trusted
 proxy, and review agent/computer-use policies. Do not expose model management,
 terminal, or tool execution endpoints directly to an untrusted network.
+
+With authentication enabled, conversations are scoped to their owner. Existing
+unowned/local conversations remain accessible to administrators with `sessions:all`,
+not ordinary signed-in users; no data is automatically reassigned or deleted.
+Conversation names currently remain unique within an installation; creating an
+existing name returns a conflict instead of replacing its contents.
+
+Knowledge requests require the `rag` permission as well as `chat`, including when
+made through chat or saved conversations. If knowledge storage or retrieval is
+unavailable, the request fails explicitly instead of silently generating without
+sources. No matching evidence also produces an explicit error; users can turn off
+knowledge for a general answer. Failed storage initialization disables ingestion
+without disabling ordinary chat.
+
+Agent approvals now continue a saved run rather than resubmit its prompt. Each
+approval authorizes one exact invocation, expires after 15 minutes, and is bound
+to the initiating account. Restarted work requires explicit resume; a tool with
+an unknown outcome must be inspected and reconciled, never silently replayed.
+The web UI and `offgrid agent status/approve/deny/cancel/resume/reconcile` use the
+same durable state. See the [agent recovery guide](docs/guides/agents.md).
+
+Chat and agent drafts are saved locally as you type, separately for each account.
+They survive navigation and failed sends; browser storage failures show a warning.
+Drafts are not encrypted or synchronized across devices. See the reliability plan
+for remaining collection isolation, replayable chat progress, and release gates.
 
 ## License
 

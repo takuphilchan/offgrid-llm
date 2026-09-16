@@ -1,222 +1,82 @@
-# Performance Optimization Guide
+# Inference performance
 
-## Fast Model Loading
+Separate cold model loading, prompt processing and decoding when measuring
+performance. No fixed first-token latency or GPU speedup is guaranteed.
 
-OffGrid LLM now includes optimizations for **significantly faster startup and first response times**, especially on low-end hardware.
+## Streaming saved conversations
 
-### Automatic Optimizations
+Web and Electron share the chat renderer. Saved chat now streams by default,
+with queue, retrieval, loading, prompt-processing, generation and saving stages.
+Stop cancels generation, including queue waits. Text is provisional until the
+server confirms persistence. Broken streams retain the draft and label partial
+output as unsaved. Reload before retrying an uncertain final save.
 
-When you run `offgrid run <model>`, the llama-server is automatically started with these performance flags:
+Response settings offer Interactive and Extended context, and output budgets
+of 256, 1024 (default) or 4096 tokens. Interactive allocates the smaller of
+`OFFGRID_CHAT_CONTEXT` (8192 by default) and the service's effective context.
+Extended uses the service context. Profile changes wait for active inference
+and may reload the model. No history is silently removed: use Extended or a
+new conversation if a prompt exceeds its context.
 
-#### Adaptive Memory Mode
-- **Low RAM (<8GB)**: Uses memory-mapped files (mmap) to prevent crashes
-- **High RAM (≥8GB)**: Loads model directly into RAM with mlock for speed
-- **Automatic detection**: System RAM is checked at startup
+External agents and `/v1/chat/completions` retain the service context. Set
+`OFFGRID_MAX_CONTEXT=65536`, `OFFGRID_CHAT_CONTEXT=8192`,
+`OFFGRID_ADAPTIVE_CONTEXT=false` and `OFFGRID_MAX_MODELS=1` to separate
+interactive chat from a deliberately configured 65K agent service. Only choose
+65K if your model and memory support it. Disabling adaptation does not create
+memory. Health's `inference.context_window` shows the admitted profile; public
+model discovery describes the context allocated to public agent API requests.
 
-#### Flash Attention (-fa)
-- Enables optimized attention mechanism
-- **Speed improvement**: 20-40% faster inference
-- Lower memory usage during inference
+## NVIDIA GPU containers
 
-#### Continuous Batching (--cont-batching)
-- Better throughput for multiple requests
-- Reduces latency when handling concurrent requests
-
-#### Quantized KV Cache (--cache-type-k q8_0 --cache-type-v q8_0)
-- Uses INT8 quantization for key-value cache
-- **Memory savings**: ~50% less cache memory
-- Minimal quality loss (imperceptible in most cases)
-
-#### Prompt Caching (--cache-prompt)
-- **NEW**: Reuses computed prompt tokens across requests
-- **Speed improvement**: 2-5x faster for multi-turn conversations
-- Critical for chat applications where system prompts repeat
-
-#### Lower Batch Size (-b 256)
-- Reduces latency for first token generation
-- Better for interactive chat on low-end hardware
-
-#### Adaptive Context Size
-- Context window automatically scales based on available RAM:
-  - <4GB RAM: 1024 tokens
-  - 4-6GB RAM: 2048 tokens
-  - 6-12GB RAM: 4096 tokens
-  - 12GB+ RAM: 8192 tokens
-
-#### Optimal Thread Configuration
-- Automatically uses physical cores (not hyperthreads)
-- Leaves 1 core for OS operations
-- No manual configuration needed
-
-### Performance Comparison
-
-| Configuration | First Response | Subsequent Responses | RAM Usage |
-|--------------|----------------|---------------------|-----------|
-| **Old Defaults** | 8-15 seconds | 0.5-2 seconds | 4-6 GB |
-| **New Optimized** | **2-4 seconds** | **0.2-0.8 seconds** | 4-8 GB |
-| **Low RAM Mode** | 3-6 seconds | 0.4-1.2 seconds | 3-4 GB |
-
-### Manual Configuration
-
-If you need to customize these settings:
-
-1. **Direct startup**: Edit `/cmd/offgrid/main.go` in `startLlamaServerInBackground()`
-2. **System service**: Edit `/usr/local/bin/llama-server-start.sh`
-3. **Environment variables** (see below)
-
-### Environment Variables
+You need a CUDA-built inference binary, GPU device access, and GPU offloading
+enabled. A GPU flag on the CPU image is insufficient.
 
 ```bash
-# Performance tuning
-export OFFGRID_BATCH_SIZE=256          # Token batch size (lower = faster first token)
-export OFFGRID_FLASH_ATTENTION=true    # Enable flash attention
-export OFFGRID_KV_CACHE_TYPE=q8_0      # KV cache quantization: f16, q8_0, q4_0
-export OFFGRID_USE_MMAP=true           # Memory-map model (good for low RAM)
-export OFFGRID_USE_MLOCK=false         # Lock model in RAM (only if RAM >= model size)
-export OFFGRID_CONT_BATCHING=true      # Continuous batching
-export OFFGRID_LOW_MEMORY=true         # Enable all low-memory optimizations
-export OFFGRID_ADAPTIVE_CONTEXT=true   # Auto-adjust context based on RAM
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+docker buildx build --load -f docker/Dockerfile.gpu --build-arg VERSION=local-gpu -t offgrid-llm:local-gpu .
 ```
 
-### Low-End Hardware Tips
+Run the image with `--gpus all`, loopback port publishing and your existing
+model/data volumes. The GPU Compose example is `docker/docker-compose.gpu.yml`.
+Back up data and stop the old service before replacement. Never run two servers
+against one writable data volume or delete volumes to update an image.
 
-For systems with **4GB RAM or less**:
+The GPU image enables `OFFGRID_ENABLE_GPU=true`. `OFFGRID_GPU_LAYERS=0` means
+automatic fitting with the requested context as a floor; a positive value
+explicitly requests that many layers. Do not publish architecture-specific local
+CUDA builds as universal images.
 
-1. **Use 1B-3B models**: 
-   ```bash
-   offgrid search llama --ram 4
-   offgrid download-hf bartowski/Llama-3.2-1B-Instruct-GGUF
-   ```
+Verify CUDA initialization and offloaded layer counts in container logs during
+real generation, plus VRAM usage from `docker exec offgrid nvidia-smi`.
+An idle GPU percentage or successful hardware probe alone is not proof of
+accelerated inference. Large contexts on small GPUs may require partial offload.
 
-2. **Use aggressive quantization**: Q3_K_M or Q4_K_S
+## Memory and tuning
 
-3. **Reduce context size**:
-   ```bash
-   export OFFGRID_MAX_CONTEXT=1024
-   ```
+GGUF size is not total memory: account for KV cache, compute buffers, embeddings
+and the OS. OffGrid no longer increases residency using average model file size.
+Use `OFFGRID_MAX_MODELS=1` on constrained machines; keep one inference slot
+until throughput and memory have been measured.
 
-4. **Enable low memory mode**:
-   ```bash
-   export OFFGRID_LOW_MEMORY=true
-   ```
+WSL memory is a ceiling shared by processes and containers. Increasing it
+blindly on a 16 GB Windows machine can starve Windows. Inspect `free -h`,
+`vmstat 1`, and `docker stats`. Persistent swap-in/out indicates pressure;
+occupied swap alone does not prove thrashing. Prefer suitable models/context
+and verified GPU placement over more swap or forced mlock.
 
-### Advanced Optimizations
+Advanced startup settings include `OFFGRID_NUM_THREADS`,
+`OFFGRID_BATCH_SIZE`, `OFFGRID_KV_CACHE_TYPE` (f16, q8_0, q4_0) and
+`OFFGRID_FLASH_ATTENTION`. Benchmark changes individually: more threads and
+smaller batches are not always faster; aggressive KV quantization affects quality.
 
-#### Keep llama-server Running (Daemon Mode)
+## Verification
 
-For the **absolute fastest** experience, keep llama-server running persistently:
+Chat reports first-text latency, context and throughput when the backend returns
+actual token usage. SSE timings are documented in [the API reference](../reference/api.md).
+Streaming improves time to visible output, not computation speed itself.
 
-```bash
-# Enable the systemd service to start on boot
-sudo systemctl enable llama-server
-
-# Start it now
-sudo systemctl start llama-server
-
-# Check status
-sudo systemctl status llama-server
-```
-
-**Benefits**:
-- Zero startup time
-- Model stays loaded in RAM
-- Instant responses (< 500ms for first token)
-
-#### GPU Acceleration
-
-If you have a CUDA-capable GPU:
-
-```bash
-# Rebuild llama.cpp with GPU support
-cd /tmp
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp
-make LLAMA_CUBLAS=1
-
-# Install the GPU-enabled binary
-sudo cp llama-server /usr/local/bin/
-
-# Restart the service
-sudo systemctl restart llama-server
-```
-
-**Speed improvement**: 5-20x faster inference depending on GPU
-
-#### Model Quantization
-
-Use smaller quantizations for faster loading:
-
-| Quantization | Model Size | Load Time | Quality |
-|-------------|-----------|-----------|---------|
-| Q4_K_M | ~2.5 GB | 1-2 sec | [Star][Star][Star][Star][ ] (Recommended) |
-| Q5_K_M | ~3.0 GB | 2-3 sec | [Star][Star][Star][Star][Star] |
-| Q8_0 | ~5.0 GB | 4-6 sec | [Star][Star][Star][Star][Star] |
-| F16 | ~7.0 GB | 6-10 sec | [Star][Star][Star][Star][Star] |
-
-**Recommendation**: Use `Q4_K_M` for the best balance of speed and quality.
-
-### Troubleshooting
-
-#### "Out of Memory" Errors
-
-If you get OOM errors with `--no-mmap --mlock`:
-
-1. **Use mmap mode** (slower first response, less RAM):
-   ```bash
-   # Edit the startup command to remove --no-mmap --mlock
-   # Use mmap instead (automatic in llama-server)
-   ```
-
-2. **Use a smaller model**:
-   ```bash
-   # Download a smaller quantization
-   offgrid download-hf <model-id> --quant Q4_K_S
-   ```
-
-3. **Increase swap space** (not recommended for performance):
-   ```bash
-   sudo fallocate -l 8G /swapfile
-   sudo chmod 600 /swapfile
-   sudo mkswap /swapfile
-   sudo swapon /swapfile
-   ```
-
-#### First Response Still Slow
-
-Check if model is actually loaded:
-
-```bash
-# Check llama-server logs
-sudo journalctl -u llama-server -f
-
-# Test the endpoint
-curl http://localhost:<llama-port>/health
-```
-
-If "status" shows "loading model", wait for it to complete. Large models (>10GB) can take 30-60 seconds.
-
-### Benchmarking
-
-Test your model's performance:
-
-```bash
-# Run built-in benchmark
-offgrid benchmark <model-name>
-
-# Test end-to-end latency
-time offgrid run <model-name> <<< "Hello, how are you?"
-```
-
-## Summary
-
-**For fastest experience**:
-1. Use Q4_K_M quantization (best speed/quality balance)
-2. Enable systemd service for persistent llama-server
-3. Use optimized flags (automatic in offgrid v0.1.6+)
-4. Add GPU support if available
-5. Ensure enough RAM for --mlock
-
-**Current defaults provide**:
-- 2-4 second first response (vs 8-15 seconds before)
-- <1 second subsequent responses
-- Minimal quality loss with optimized caching
+Compare identical models, prompts, output budgets, profiles and cache states.
+Record cold loading separately from several warm runs. Test short chat, long
+prompts, retrieval, cancellation and agents. Avoid concurrent builds/downloads
+while benchmarking. Inspect runtime logs if output stops midway; never treat a
+partial answer as completed or blindly resubmit an uncertain final save.
