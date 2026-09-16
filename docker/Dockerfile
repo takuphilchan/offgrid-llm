@@ -44,10 +44,11 @@ COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 
 ARG VERSION=dev
+ARG VCS_REF=unknown
 
 # Build the application with static linking
 RUN CGO_ENABLED=0 GOOS=linux go build \
-	-trimpath -ldflags="-s -w -X main.Version=${VERSION} -extldflags=-static" \
+	-trimpath -ldflags="-s -w -X main.Version=${VERSION} -X github.com/takuphilchan/offgrid-llm/internal/server.BuildRevision=${VCS_REF} -extldflags=-static" \
 	-o offgrid ./cmd/offgrid/
 
 # =============================================================================

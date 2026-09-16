@@ -9,6 +9,10 @@ The project is being hardened from a prototype into a dependable local tool.
 Core paths are tested; optional subsystems are exposed according to their
 actual readiness rather than being presented as universally available.
 
+Development is tracked against the [production-readiness gates](docs/advanced/production-readiness.md).
+See [client contracts](docs/advanced/client-contracts.md) for the new CLI error
+behavior, desktop compatibility checks, and their current coverage limits.
+
 ## Run with Docker
 
 Use the versioned stable image for a repeatable installation:
@@ -200,6 +204,8 @@ OffGrid service; local test runs manage their own UI server.
 - [Architecture](docs/advanced/ARCHITECTURE.md)
 - [CLI experience](docs/advanced/cli-experience.md)
 - [Workspace UI](docs/advanced/workspace-ui.md)
+- [Managing chat and agent history](docs/guides/history-management.md)
+- [Workspace ownership, backup, and recovery](docs/advanced/workspace-recovery.md)
 - [Maintainability and generation](docs/advanced/maintainability.md)
 - [Product reliability plan and acceptance gates](docs/advanced/product-reliability-plan.md)
 - [API reference](docs/reference/api.md)

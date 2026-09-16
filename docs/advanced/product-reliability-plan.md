@@ -3,6 +3,11 @@
 This is the implementation plan following the September 2026 system review.
 It is a delivery checklist, not a claim that every capability is production-ready.
 
+The [approved production-readiness delivery contract](production-readiness.md)
+defines the next five milestones and release gates. The historical stages below
+record earlier work; their checked boxes do **not** imply that the newer milestones
+or cross-edition qualification have passed.
+
 ## Product outcome
 
 Make OffGrid a dependable private workspace for conversations, document-grounded
@@ -301,3 +306,304 @@ GPU validation follow-up:
 - The temporary GPU container was stopped and automatically removed, including
   its disposable test conversations. The normal container on port 11611 remains
   unchanged because the replacement operation was blocked.
+
+### 2026-09-16: production-readiness correctness foundation
+
+The approved five-milestone [delivery contract](production-readiness.md) now
+tracks the next stage without treating historical unit-test passes as production
+qualification. This checkpoint does not complete Milestone 1 or the full plan.
+
+Implemented:
+
+- Shared authenticated CLI service transport with bounded responses, deadlines,
+  cancellation, redirect refusal, and redacted service errors. Knowledge commands
+  and agent lifecycle controls use it and return explicit process exit codes and
+  JSON errors. Directory imports stream files and stop on failure; clear requires
+  explicit confirmation and retains partial-operation counts on failure.
+- Exact public `/api/v2/system` identity route, generated client contract, and
+  settings display. Electron checks product/API/version/capabilities/UI identity
+  before attachment; CRLF/LF checkout differences do not create false mismatches.
+  Navigation and IPC require the exact origin and trusted main frame. External
+  services are never killed or presented as desktop-owned storage.
+- Completion-reason checks in durable and structured agents. Truncated/filtered/
+  missing terminal reasons cannot execute tools or produce completed tasks.
+  Partial text stays explicitly incomplete, outside completed model context.
+- Pinned `modernc.org/sqlite v1.48.2` (SQLite 3.51.3) and matching libc dependency.
+  The shared opener checks the WAL fix and applies foreign keys, FULL durability
+  and a bounded busy timeout to every connection. Tests force four separate
+  connections, check orphan rejection/cascades and reopen integrity, and cover
+  Unicode/escaped filesystem paths. Existing RAG uses this opener.
+- Composition-safe Enter handling and resilient browser preferences. Storage
+  denial leaves the workspace usable without pretending drafts were persisted.
+- Native Windows/macOS Intel/Apple Silicon CI contract jobs and expanded Linux
+  race checks. Newly added CI jobs have not been observed running remotely yet.
+
+Validation passed locally:
+
+- Windows: `go test ./...`.
+- WSL/Linux: `go test -race ./internal/storage ./internal/serviceclient
+  ./internal/agents ./internal/rag ./internal/server ./cmd/offgrid`.
+- `go vet ./internal/serviceclient ./internal/storage ./internal/agents
+  ./internal/server ./cmd/offgrid`.
+- Web: `npm run api:check`, TypeScript checking, production UI build; 21 Edge
+  browser tests across workspace experience, reliability, streaming, and functional
+  pages with controlled API/model fixtures. These are browser behavior tests, not
+  real model task-quality results or full service integration tests.
+- Desktop: syntax checks and six Node handshake/IPC/URL/build-identity/loading
+  recovery tests. Retry opens the compatible workspace instead of reloading the
+  loading page indefinitely, and startup text no longer invents model-load progress.
+- Actionlint v1.7.12 for the changed CI workflow; `git diff --check`.
+- WSL `govulncheck ./...`: no reachable vulnerable symbols reported. It also
+  reported one vulnerability in imported packages and 21 in required modules
+  without detected calls; these still require dependency triage. This result
+  is not a clean bill of health or independent security review.
+
+Limits and outstanding checks:
+
+- The temporary-service launch for the full browser integration suite was blocked
+  by execution policy. The existing service/container and user data were untouched.
+  No container rebuild, installation replacement, commit, push or release occurred.
+- `go mod tidy` was attempted but could not fetch the pre-existing optional
+  `go-skynet/go-llama.cpp` module (proxy EOF). The SQLite dependency update succeeded;
+  ordinary builds/tests passed. A successful tidy is not claimed.
+- No workspace database cutover, generated conversation IDs, durable v2 chat/jobs,
+  SSE replay, or whole-workspace backup/restore exists yet. Existing prompt-derived
+  session filenames still need migration; punctuation/Unicode/duplicate-title
+  acceptance is not passed. Do not substitute another sanitization patch.
+- Not all CLI commands use the new transport/error contract. Shared collections,
+  citation persistence, artifact verification, fairness and full localization
+  remain pending. Structured-agent completion safety is not proof of task quality.
+- No installed-Electron, Mac hardware, offline-pack/update/signing, quantitative
+  agent/RAG, soak or pilot qualification is claimed.
+
+Next delivery slice: exclusive workspace ownership, staged legacy migration with
+generated IDs and recovery manifest, then authoritative conversation/job services
+and a coordinated CLI/web/desktop cutover. Preserve old data and test malformed and
+unowned fixtures before any activation. Do not dual-write.
+
+### 2026-09-16: ownership, recovery, admission, and approved local deployment
+
+This later checkpoint supersedes the earlier notes that ownership, offline
+backup/restore, and container rebuilding were not yet implemented. The full
+production-readiness plan is still incomplete; no milestone is certified.
+
+Implemented and tested:
+
+- Process-scoped Windows/Linux/macOS workspace ownership, including rejection of
+  simultaneous service/maintenance access and lock release after a process crash.
+  Startup validation fails closed. Shutdown drains HTTP/agent workers, persists
+  interrupted work and closes storage before releasing ownership; a failed drain
+  retains the lock until process exit.
+- Offline `workspace backup`, `verify`, and `restore` commands. Whole stopped data
+  directories are inventoried and hashed; unsafe paths, symlinks, collisions,
+  tampering, existing targets, mismatched application versions and damaged SQLite
+  state are rejected. Restore stages privately and recovers/checks SQLite WAL and
+  foreign keys before non-overwriting activation. These primitives do not yet
+  implement application/data revision manifests, migration or the recovery UI.
+- Nonblocking persistent agent-event publication; slow subscribers disconnect for
+  replay instead of stalling execution. Invalid sequences, duplicate event IDs and
+  uncertain writes fail closed. Transactional v2 events/compaction remain pending.
+- Bounded FIFO inference admission with cancellation and explicit queue-full
+  responses. Model switches cannot be starved by new active-model requests.
+  The default is one active generation and 32 queued requests. This is not yet
+  per-actor/workload scheduling or coordinated indexing admission.
+- Saved-conversation `session` and `export-session` commands use the shared
+  authenticated API with machine-readable errors and no local fallback. Exports
+  do not overwrite files. Interactive chat saving and other CLI commands remain
+  outside this completed slice; conversation identity still needs migration.
+- Container builds inject source revision in `/api/v2/system` even when `.git`
+  is excluded from the build context.
+
+Additional validation:
+
+- Full Windows `go test ./...`; WSL race tests for storage, inference, runs,
+  agents, server and CLI; `go vet` for those components and the shared client.
+- Darwin Intel/ARM64 storage-test cross-compilation (not execution on Macs).
+- UI contract/TypeScript/build checks, six desktop Node tests, and 25 Edge browser
+  tests against an isolated container. Some browser scenarios use controlled API
+  fixtures; these do not establish model quality or installed-Electron behavior.
+- Isolated final-image startup, backend/renderer identity, JSON session listing,
+  GPU visibility, exclusive service/backup rejection, and offline backup/verify/
+  restore smoke checks. Temporary verification containers were removed afterward;
+  no user volumes were removed.
+
+Deployment explicitly approved by the user:
+
+- Built CPU image `offgrid-llm:readiness-20260916` and local GPU refresh
+  `offgrid-llm:readiness-gpu-20260916`, version `0.4.3-readiness-dev`, source revision
+  `1b3334ff39cb204313d21dca75bc2792ea7f4989-dirty`.
+- Final GPU image ID:
+  `sha256:47fcc8590d0898992fe26a9c7de8c9b5524261c4250d44d970752b55dbbc47d0`.
+  It contains the newly built Go application/UI and reuses the existing local
+  CUDA/llama runtime. It is **not** a clean from-source GPU release build. A separate
+  full GPU build first encountered Docker Hub credential rejection, then was
+  intentionally cancelled during the large anonymous CUDA toolchain download.
+  Saved Docker credentials were not modified, and publishing was not attempted.
+- Stopped `offgrid`, archived the complete `offgrid-data` volume, compared the
+  archive against the stopped source and verified SHA-256, then replaced the
+  container on `127.0.0.1:11611`. The existing model volume and runtime settings
+  were retained, including GPU access and 65,536 configured context.
+- The original container remains stopped as `offgrid-rollback-20260916-readiness`,
+  with automatic restart disabled so it cannot become a second writer. Its image
+  and a private configuration snapshot are retained. The backup location is in
+  the private local deployment record, not a portable public recovery package.
+  Do not downgrade against newer data without checking compatibility/restoring
+  the matched snapshot.
+- New `/health`, `/api/v2/system`, UI content hash and authenticated-client session
+  listing passed on the active instance. NVIDIA RTX 5060 Laptop GPU was visible.
+- Two real, unsaved streaming Phi 3.5 requests at 65,536 context and a 16-token
+  output limit returned the requested `OFFGRID_READY` marker. Cold first text:
+  29.77 s, total 30.63 s. Warm first text: 1.19 s, total 2.19 s. Both ended with
+  `length` and extra newlines; they prove working streaming, not correct natural
+  completion or agent-task readiness. GPU memory afterward was about 5902 MiB.
+  These two samples are not a qualified performance benchmark.
+
+Still required: transactional workspace migration and generated IDs, v2 durable
+chat/jobs/collections, shared client recovery state, permission-scoped knowledge
+and citations, full CLI conversion/localization, matched signed installation and
+update/offline packs, independent security review, platform/hardware qualification,
+quantitative RAG/agent evaluation, soak and pilot evidence. No commit, push, tag or
+release was made in this checkpoint.
+
+### 2026-09-16: live agent response previews and runtime progress
+
+Implemented [live agent progress](agent-live-progress.md) across the shared
+web/Electron renderer and interactive CLI streams:
+
+- Durable provisional response previews, explicit queue/loading/prompt/generation/
+  tool/approval phases, model-turn numbers, elapsed time and last-progress age.
+  The preview is bounded at 64 KiB; per-token writes are coalesced. It is never
+  treated as completed output or complete conversation context.
+- Structured model streaming preserves native tool-call fragments and terminal
+  reasons privately. Reasoning fields and provisional arguments are excluded
+  from previews. Truncation cannot execute tools or mark a run completed.
+- Owner-scoped GET snapshot streaming, heartbeats, bounded viewer writes and
+  reconnect-to-latest-snapshot behavior. Disconnect/navigation never cancels or
+  resubmits the job. The UI detects actions on paused runs from another client.
+  This is a v1 snapshot contract, not the planned v2 durable event-replay API.
+- A default-on live-preview checkbox; disabling display does not stop execution.
+  Terminal partial output is explicitly incomplete. Monochrome presentation and
+  labels for all nine interface languages; new translations need speaker review.
+- CLI phases/preview text go to stderr, final results to stdout. Snapshot updates
+  do not duplicate printed fragments. CLI automatic reconnect and full localization
+  are not implemented by this slice.
+
+Validation:
+
+- Windows `go test ./...`; Linux race tests and `go vet` for agents/server/CLI.
+- Added tests for provisional persistence/restart, Unicode preview bounds,
+  cancellation winning over later writes, missing/truncated terminal responses,
+  structured tool assembly, reasoning-field exclusion, response limits, SSE owner
+  isolation and disconnect/reconnect without cancelling execution.
+- Contract generation/drift checks and production UI build passed. All 27 Edge
+  browser tests passed against an isolated rebuilt container, including preview
+  before completion, reconnection without resubmission, navigation recovery,
+  hiding the preview without cancellation, and explicit incomplete cancellation.
+  Controlled API fixtures remain distinct from real-model qualification.
+- Six desktop compatibility/security Node tests passed. No new installed-Electron
+  packaging or native macOS qualification is claimed.
+- User explicitly approved another backup/replacement. The complete stopped data
+  volume was archived, compared and SHA-256 verified before activation. Models,
+  environment, GPU access and security settings were retained. The previous
+  container is stopped as `offgrid-rollback-20260916-agent-live` with restart
+  disabled. Temporary verification containers were removed without deleting any
+  user volumes.
+- Active development version: `0.4.3-agent-live-dev`; GPU image ID
+  `sha256:6b7d915caa339b8f617f58a2f42a5b12a83dcb86e09453c18f11a730ac8ea819`;
+  renderer identity
+  `9bf2d3255fef761f5f4739260004415131dc7307c515c6ab3899d359c2762125`.
+  The Go application/UI are newly built; the existing CUDA/llama runtime is reused
+  locally, not represented as a fresh release-runtime qualification.
+- A clearly labelled, harmless live-agent smoke task on the active Phi 3.5 model
+  produced successive 1-, 11-, and 32-character previews while still running.
+  Observed loading, processing and generating phases. Disconnecting the viewer
+  left the same run active; explicit cancellation returned `cancelled`. Its
+  cancelled test entry is retained in history for inspection. This proves the
+  actual progress path, not general task quality or external-agent integration.
+
+The broader production-readiness milestones remain incomplete. No commit, push,
+tag or release was performed.
+
+### 2026-09-16 — Stable agent task/output layout
+
+- Separated task-form sizing from the growing results column. Run task stays
+  directly below its input; content-width container queries stack narrow panes.
+- Added one bounded, labelled, keyboard-scrollable output region. Status, Cancel
+  and preview controls stay outside it. Long model names, paths, previews and
+  step histories cannot widen the workspace.
+- Live output follows within its pane only while the reader is at the bottom.
+  Reading earlier text preserves scroll position and focus. Size observation
+  covers new steps, wrapping and connection-notice changes; approval/reconciliation
+  transitions return to the decision rather than prior output.
+- Production renderer build, TypeScript and API drift checks passed. All 35 Edge
+  tests passed against the final isolated image (two workers), including eight
+  new layout cases covering 390/768/1024/1440px, 100-step histories, long Unicode
+  output, live read-back, approval transitions, German and Arabic/RTL. Dark and
+  light captures were inspected. An earlier run exposed a scroll sizing defect
+  that was fixed; overloaded parallel runs also timed out and were not counted
+  as passes. Six desktop Node compatibility/security tests passed; this is shared
+  renderer coverage, not a new installed-Electron qualification.
+- With explicit user approval, backed up the complete stopped data volume,
+  compared the archive with its source and verified SHA-256 before replacement.
+  Backup: `/home/phil/offgrid-backups/agent-layout-20260916/deploy.YzCTrWYC`.
+  Previous container: `offgrid-rollback-20260916-agent-layout` (stopped, restart
+  disabled). Models and original environment/security/GPU settings retained.
+- Active local version: `0.4.3-agent-layout-dev`; GPU image
+  `sha256:afecbfe4bef77deee60c61a32bcd29f1e8e4faca56e9c25ae3c4c29cb6dc1b16`;
+  UI identity `35ffc20c49e28ae947d9376c21ceafd12c1c4c671496d659bcc9ebab6cc8b0f2`.
+  Health, CLI session JSON, UI identity and NVIDIA visibility checks passed.
+  This local rebuild reuses the existing CUDA/llama runtime; no new runtime,
+  model-quality, native-platform, or production-release qualification is claimed.
+
+No commits, pushes, tags or releases were made for this layout change.
+
+### 2026-09-16 — Safe chat and agent history controls
+
+- Made conversation deletion visible rather than hover-only. Added confirmation,
+  title search, refresh, filtered bulk deletion and honest partial-failure retry.
+  The confirmation captures a fixed set of records; successful deletions are not
+  retried, and other conversations' drafts are preserved.
+- Agent history now supports search, Show more beyond twenty entries, prompt reuse
+  without replacing a draft, and copying results. Finished owned runs can be
+  deleted individually or together. Pending/active work, unsettled workers,
+  approvals and unresolved tool outcomes cannot be deleted. Busy conversations
+  reject deletion immediately instead of deleting a newly completed answer.
+- Persisted scrubbed tombstones prevent retained agent events from recreating
+  deleted history after restart. History deletion is explicitly not secure
+  erasure: tool-created files, separate event/audit logs, artifacts and backups
+  remain. See [history management](../guides/history-management.md).
+- Added regression tests for cross-owner denial, protected states, storage
+  failure, restart, Activity projections, Unicode, selected-item removal,
+  filtering, partial retry, draft preservation and mobile confirmation. Windows
+  `go test ./...`, Linux race tests and vet for agents/server/sessions, TypeScript,
+  API generation/drift checks and the production UI build passed. All 39 Edge
+  browser tests passed against isolated data. Six desktop compatibility/security
+  Node tests passed; installed Electron/native macOS qualification is not claimed.
+  The nine language catalogs contain the new controls; speaker review is pending.
+- With explicit user approval, backed up the complete stopped `offgrid-data`
+  volume, compared its archive against the source and verified SHA-256 before
+  replacement. Backup:
+  `/home/phil/offgrid-backups/history-20260916/deploy.3zVFfxP6`.
+  Prior container: `offgrid-rollback-20260916-history` (stopped, restart disabled).
+  Models and original environment/security/GPU settings were retained. No user
+  conversations or tasks were deleted during testing or deployment.
+- Active local version: `0.4.3-history-dev`; GPU image
+  `sha256:a7ee8f52f76ce59a700bf298f15523e345d1ae0e14c14ae4b75c3ebaa33503a0`;
+  UI identity `e34308498f21bb3b0b981e9a0e8c382ae1f5fa7db936a9e8c567bbde35f776cb`.
+  Health, UI identity, CLI session JSON and NVIDIA visibility checks passed. A
+  read-only browser check verified chat/agent controls on port 11611 with zero
+  page errors or write requests. The Go application/UI are rebuilt; the unchanged
+  CUDA/llama runtime is reused locally, not newly release-qualified.
+
+No commits, pushes, tags or releases were made. Broader production-readiness
+milestones remain open; these checks do not certify the whole product.
+
+### 2026-09-16 — Requested local commit checkpoint
+
+After the verified history deployment, the user requested local commits. The
+pending changes were grouped by storage/recovery, agent runtime, server contracts,
+CLI behavior, desktop compatibility, shared UI, and build/evidence updates. The
+earlier no-commit notes describe those earlier deployment checkpoints. No push,
+tag, release publication or additional live-data mutation accompanies this
+checkpoint. The running development image contains the tested source from before
+these commits; its recorded dirty revision is retained honestly.

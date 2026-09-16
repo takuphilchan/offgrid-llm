@@ -1,0 +1,22 @@
+# Local application/UI refresh only. Not used by release CI.
+# Reuse a locally verified, unchanged runtime while building the application
+# separately with docker/Dockerfile. Supply both image references explicitly.
+ARG APPLICATION_IMAGE=offgrid-llm:local-application
+ARG RUNTIME_IMAGE=offgrid-llm:local-runtime
+FROM ${APPLICATION_IMAGE} AS application
+FROM ${RUNTIME_IMAGE}
+
+ARG RUNTIME_IMAGE
+ARG VERSION=dev
+ARG VCS_REF=unknown
+
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.offgrid.build-kind="local-runtime-reuse" \
+      org.offgrid.runtime-image="${RUNTIME_IMAGE}"
+
+# The application is a static Go binary. Preserve the base runtime's user,
+# CUDA libraries, llama-server, healthcheck, permissions and startup settings.
+COPY --from=application --chmod=0755 /usr/local/bin/offgrid /usr/local/bin/offgrid
+COPY --from=application --chown=1000:1000 /var/lib/offgrid/web/ui /var/lib/offgrid/web/ui
+ENV OFFGRID_VERSION=${VERSION}

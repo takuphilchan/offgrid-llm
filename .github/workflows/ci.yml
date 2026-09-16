@@ -48,7 +48,7 @@ jobs:
         run: go test ./...
 
       - name: Race-test privacy, storage, and request lifecycle
-        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs
+        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient
 
       - name: Generate and build web UI
         working-directory: web/app
@@ -95,4 +95,33 @@ jobs:
           npm ci
           node --check main.js
           node --check preload.js
+          npm test
           npx electron-builder --dir --linux
+
+  native-contracts:
+    name: Native client and storage (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.6'
+          cache: true
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Test native CLI, persistence, and agent contracts
+        # These tests use subprocesses and real local files, not OS emulation.
+        # They do not substitute for installed-app or hardware qualification.
+        run: go test ./cmd/offgrid ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents
+      - name: Test desktop compatibility and IPC trust policy
+        working-directory: desktop
+        run: npm test
