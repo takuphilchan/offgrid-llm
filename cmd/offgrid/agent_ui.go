@@ -35,7 +35,8 @@ func startInteractiveAgent(modelName string) {
 		// Prefer a model with "instruct" or "chat" in the name if multiple exist
 		selected := models[0]
 		for _, m := range models {
-			if strings.Contains(m, "instruct") || strings.Contains(m, "chat") {
+			candidate := strings.ToLower(m)
+			if strings.Contains(candidate, "instruct") || strings.Contains(candidate, "chat") {
 				selected = m
 				break
 			}
@@ -43,30 +44,17 @@ func startInteractiveAgent(modelName string) {
 		modelName = selected
 	}
 
-	// Clear screen
-	fmt.Print("\033[H\033[2J")
-
-	// Print Header
-	fmt.Printf("%s%s OffGrid Agent%s  %s%s%s\n", brandPrimary+colorBold, iconBolt, colorReset, brandMuted, getVersion(), colorReset)
-	fmt.Printf("%sPrivate AI workspace  |  Model: %s%s\n", colorDim, modelName, colorReset)
-	fmt.Println()
+	printSectionHeader("Agent workspace")
+	printKeyValue("Model", modelName)
+	printKeyValue("Mode", "governed task runner")
+	fmt.Printf("  %sEach prompt creates a durable task. Type /help for commands.%s\n\n", brandMuted, colorReset)
 
 	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/run", cfg.ServerPort)
 
-	// History context (simple session memory)
-	// In a real implementation, the server handles memory, but we might want to keep track locally if needed.
-	// For now, we rely on the server's session management if we pass a session ID,
-	// but the current /v1/agents/run endpoint might be stateless per request unless we update it.
-	// Let's assume for now each run is independent or the server handles context if we implement it.
-	// Actually, the current agent implementation in server.go creates a NEW agent for each request.
-	// To support chat, we need to persist the agent or pass history.
-	// For this "futuristic" demo, we'll stick to single-turn or assume the server is updated later for multi-turn.
-	// But to make it useful, let's just run the loop.
-
 	for {
-		// Prompt
-		fmt.Printf("\n%sYou%s\n%s>%s ", colorBold, colorReset, brandPrimary, colorReset)
+		fmt.Printf("%s%s%s ", brandPrimary, iconChevron, colorReset)
 
 		if !scanner.Scan() {
 			break
@@ -76,16 +64,25 @@ func startInteractiveAgent(modelName string) {
 		if input == "" {
 			continue
 		}
-		if input == "exit" || input == "quit" {
-			break
-		}
-		if input == "clear" {
+		switch strings.ToLower(input) {
+		case "exit", "quit", "/exit", "/quit":
+			fmt.Printf("\n%sSession closed.%s\n", brandMuted, colorReset)
+			return
+		case "clear", "/clear":
 			fmt.Print("\033[H\033[2J")
+			continue
+		case "help", "/help", "?":
+			fmt.Printf("\n  %s/help%s   Show commands\n", brandPrimary, colorReset)
+			fmt.Printf("  %s/clear%s  Clear the terminal\n", brandPrimary, colorReset)
+			fmt.Printf("  %s/exit%s   Close the workspace\n\n", brandPrimary, colorReset)
 			continue
 		}
 
-		// Run Agent
 		runAgentRequest(serverURL, input, modelName, "react", 10)
+		fmt.Println()
+	}
+	if err := scanner.Err(); err != nil {
+		printError(fmt.Sprintf("Input failed: %v", err))
 	}
 }
 
@@ -99,7 +96,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := httpClientLong.Post(url, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		printError(fmt.Sprintf("Connection failed: %v", err))
 		return
@@ -131,7 +128,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 	suppressLine := false
 	isStartOfLine := true
 
-	fmt.Printf("\n%sAgent%s\n", brandPrimary, colorReset)
+	fmt.Printf("\n%sOffGrid%s\n", colorBold, colorReset)
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -167,7 +164,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 				if char == '\n' {
 					if !suppressLine {
 						if lineBuffer.Len() > 0 {
-							fmt.Printf("%s%s%s", brandPrimary, lineBuffer.String(), colorReset)
+							fmt.Print(lineBuffer.String())
 						}
 						fmt.Print("\n")
 					}
@@ -212,7 +209,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 				}
 
 				// Safe to print
-				fmt.Printf("%s%s%s", brandPrimary, lineBuffer.String(), colorReset)
+				fmt.Print(lineBuffer.String())
 				lineBuffer.Reset()
 				isStartOfLine = false
 			}
@@ -234,9 +231,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 				fmt.Printf("%s%s  Using %s%s\n", brandAccent, iconChevron, toolName, colorReset)
 				if len(toolArgs) > 0 {
 					// Truncate args if too long
-					if len(toolArgs) > 60 {
-						toolArgs = toolArgs[:57] + "..."
-					}
+					toolArgs = truncateTerminalText(toolArgs, 60)
 					fmt.Printf("    %s%s%s\n", colorDim, toolArgs, colorReset)
 				}
 
@@ -247,9 +242,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 
 			} else if stepType == "tool_result" {
 				result, _ := event["result"].(string)
-				if len(result) > 100 {
-					result = result[:100] + "..."
-				}
+				result = truncateTerminalText(result, 100)
 				fmt.Printf("\r\033[K") // Clear any spinner line
 				fmt.Printf("%s%s  Result: %s%s\n", brandSuccess, iconCheck, result, colorReset)
 
@@ -271,7 +264,7 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 		case "done":
 			// Flush remaining buffer
 			if !suppressLine && lineBuffer.Len() > 0 {
-				fmt.Printf("%s%s%s", brandPrimary, lineBuffer.String(), colorReset)
+				fmt.Print(lineBuffer.String())
 			}
 
 			// Ensure spinner is stopped
@@ -291,14 +284,13 @@ func runAgentRequest(url, prompt, model, style string, maxSteps int) {
 }
 
 func showSpinner(msg string, stop chan bool) {
-	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	i := 0
 	for {
 		select {
 		case <-stop:
 			return
 		default:
-			fmt.Printf("\r%s %s %s", brandPrimary, frames[i%len(frames)], msg)
+			fmt.Printf("\r%s%s%s %s", brandPrimary, spinnerFrames[i%len(spinnerFrames)], colorReset, msg)
 			time.Sleep(100 * time.Millisecond)
 			i++
 		}
@@ -306,8 +298,7 @@ func showSpinner(msg string, stop chan bool) {
 }
 
 func printAgentHelp() {
-	fmt.Printf("%sOffGrid Agent Commands:%s\n", colorBold, colorReset)
-	fmt.Println()
+	printSectionHeader("Agent commands")
 	fmt.Printf("  %soffgrid agent [chat]%s           Start interactive agent session (default)\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent run <prompt>%s     Run a single agent task\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent templates%s        List pre-built agent personas\n", brandPrimary, colorReset)

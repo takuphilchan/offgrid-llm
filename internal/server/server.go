@@ -1114,23 +1114,14 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to bind to port %d: %w", s.config.ServerPort, err)
 	}
 
-	// Clean startup message with colors
-	const (
-		colorReset   = "\033[0m"
-		colorCyan    = "\033[36m"
-		colorGreen   = "\033[32m"
-		colorDim     = "\033[90m"
-		brandPrimary = "\033[38;5;45m"
-	)
-
 	fmt.Println()
-	fmt.Printf("%sOffGrid LLM Server%s\n", colorCyan, colorReset)
+	fmt.Println("OffGrid server")
 	fmt.Println()
 
 	// Show hardware info
 	if res, err := resource.DetectResources(); err == nil {
 		if res.GPUAvailable && res.GPUName != "" {
-			fmt.Printf("Device:  %s%s%s (%dMB VRAM)\n", colorGreen, res.GPUName, colorReset, res.GPUMemory)
+			fmt.Printf("Device:  %s (%dMB VRAM)\n", res.GPUName, res.GPUMemory)
 		} else {
 			fmt.Printf("Device:  CPU (%d cores, %dMB RAM)\n", res.CPUCores, res.AvailableRAM)
 		}
@@ -1139,12 +1130,12 @@ func (s *Server) Start() error {
 	fmt.Printf("Server:  http://%s\n", listenAddr)
 	fmt.Printf("Web UI:  http://%s/ui/\n", listenAddr)
 	fmt.Println()
-	fmt.Printf("%sOpenAI-Compatible API:%s\n", colorDim, colorReset)
+	fmt.Println("API:")
 	fmt.Printf("  POST /v1/chat/completions\n")
 	fmt.Printf("  POST /v1/embeddings\n")
 	fmt.Printf("  GET  /v1/models\n")
 	fmt.Println()
-	fmt.Printf("%s[OK]%s Server ready on port %d\n", colorGreen, colorReset, s.config.ServerPort)
+	fmt.Printf("OK Server ready on port %d\n", s.config.ServerPort)
 	fmt.Println()
 
 	if err := s.httpServer.Serve(listener); err != http.ErrServerClosed {

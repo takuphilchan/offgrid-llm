@@ -219,22 +219,26 @@ type chatTUIModel struct {
 }
 
 var (
-	chatTitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#9AAFFF"))
-	chatMuteStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#929DB5"))
-	chatFaintStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#68738C"))
-	chatUserStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F4F6FB"))
-	chatAIStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#9AAFFF"))
-	chatReadyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#60D5A6"))
-	chatErrStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF7F8D"))
-	chatHeaderStyle = lipgloss.NewStyle().Padding(0, 1).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true).BorderForeground(lipgloss.Color("#252D42"))
+	chatTextColor   = lipgloss.AdaptiveColor{Light: terminalLightText, Dark: terminalDarkText}
+	chatMutedColor  = lipgloss.AdaptiveColor{Light: terminalLightMuted, Dark: terminalDarkMuted}
+	chatFaintColor  = lipgloss.AdaptiveColor{Light: terminalLightFaint, Dark: terminalDarkFaint}
+	chatLineColor   = lipgloss.AdaptiveColor{Light: terminalLightLine, Dark: terminalDarkLine}
+	chatTitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(chatTextColor)
+	chatMuteStyle   = lipgloss.NewStyle().Foreground(chatMutedColor)
+	chatFaintStyle  = lipgloss.NewStyle().Foreground(chatFaintColor)
+	chatUserStyle   = lipgloss.NewStyle().Bold(true).Foreground(chatTextColor)
+	chatAIStyle     = lipgloss.NewStyle().Bold(true).Foreground(chatTextColor)
+	chatReadyStyle  = lipgloss.NewStyle().Foreground(chatMutedColor)
+	chatErrStyle    = lipgloss.NewStyle().Bold(true).Foreground(chatTextColor)
+	chatHeaderStyle = lipgloss.NewStyle().Padding(0, 1).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true).BorderForeground(chatLineColor)
 )
 
 func newChatTUIModel(rt *ChatRuntime) chatTUIModel {
 	ti := textinput.New()
 	ti.Placeholder = "Ask, draft, analyze, or plan..."
 	ti.Prompt = "› "
-	ti.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#9AAFFF")).Bold(true)
-	ti.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#F4F6FB"))
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(chatTextColor).Bold(true)
+	ti.TextStyle = lipgloss.NewStyle().Foreground(chatTextColor)
 	ti.PlaceholderStyle = chatFaintStyle
 	ti.Focus()
 	ti.CharLimit = 8000
@@ -360,7 +364,7 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m chatTUIModel) View() string {
-	header := chatTitleStyle.Render("◈ OffGrid") + "  " + chatMuteStyle.Render("Private AI workspace") + "  " + chatFaintStyle.Render(m.rt.ResolvedModel)
+	header := chatTitleStyle.Render("◆ OffGrid") + "  " + chatMuteStyle.Render("Private workspace") + "  " + chatFaintStyle.Render(m.rt.ResolvedModel)
 	if m.rt.UseKnowledgeBase {
 		header += "  " + chatReadyStyle.Render("● Knowledge on")
 	}

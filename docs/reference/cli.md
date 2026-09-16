@@ -517,6 +517,10 @@ offgrid config reset           # Reset to defaults
 | `OFFGRID_MULTI_USER` | Enable multi-user mode |
 | `OFFGRID_LOG_LEVEL` | Log level (debug, info, warn, error) |
 | `NO_COLOR` | Disable colored output |
+| `FORCE_COLOR` | Force terminal styling for compatible non-interactive output |
+| `OFFGRID_UNICODE` | Force (`1`) or disable (`0`) Unicode terminal symbols |
+| `OFFGRID_TUI` | Set to `0` to disable the full-screen chat interface |
+| `OFFGRID_PLAIN` | Set to `1` to use line-oriented chat output |
 
 ---
 

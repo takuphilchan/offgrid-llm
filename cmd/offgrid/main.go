@@ -90,133 +90,6 @@ var (
 	}
 )
 
-// Check if colors should be disabled
-func init() {
-	if !terminalSupportsColor() {
-		disableColors()
-	}
-	if os.Getenv("OFFGRID_UNICODE") == "1" || strings.EqualFold(os.Getenv("OFFGRID_UNICODE"), "true") {
-		enableUnicodeSymbols()
-	}
-}
-
-// Visual identity constants
-var (
-	// Colors (ANSI escape codes)
-	colorReset   = "\033[0m"
-	colorBold    = "\033[1m"
-	colorDim     = "\033[2m"
-	colorCyan    = "\033[36m"
-	colorGreen   = "\033[32m"
-	colorYellow  = "\033[33m"
-	colorRed     = "\033[31m"
-	colorBlue    = "\033[34m"
-	colorMagenta = "\033[35m"
-
-	// Brand colors
-	brandPrimary   = "\033[38;2;154;175;255m" // Indigo accent (#9aafff)
-	brandSecondary = "\033[38;2;244;246;251m" // Primary text (#f4f6fb)
-	brandAccent    = "\033[38;2;229;187;104m" // Amber (#e5bb68)
-	brandSuccess   = "\033[38;2;96;213;166m"  // Green (#60d5a6)
-	brandError     = "\033[38;2;255;127;141m" // Red (#ff7f8d)
-	brandMuted     = "\033[38;2;146;157;181m" // Muted text (#929db5)
-)
-
-var (
-	// ASCII-first terminal symbols. Keep the default output readable on
-	// Windows consoles, SSH sessions, serial terminals, and log files.
-	boxTL     = "+"
-	boxTR     = "+"
-	boxBL     = "+"
-	boxBR     = "+"
-	boxH      = "-"
-	boxV      = "|"
-	boxVR     = "+"
-	boxVL     = "+"
-	boxHD     = "+"
-	boxHU     = "+"
-	boxCross  = "+"
-	separator = "-"
-
-	iconBolt     = "*"
-	iconCheck    = "OK"
-	iconCross    = "ERR"
-	iconArrow    = "->"
-	iconDot      = "-"
-	iconStar     = "*"
-	iconBox      = "-"
-	iconCircle   = "o"
-	iconDiamond  = "*"
-	iconChevron  = ">"
-	iconDownload = "down"
-	iconUpload   = "up"
-	iconSearch   = "search"
-	iconModel    = "model"
-	iconCpu      = "CPU"
-	iconGpu      = "GPU"
-)
-
-func enableUnicodeSymbols() {
-	boxTL = "╭"
-	boxTR = "╮"
-	boxBL = "╰"
-	boxBR = "╯"
-	boxH = "─"
-	boxV = "│"
-	boxVR = "├"
-	boxVL = "┤"
-	boxHD = "┬"
-	boxHU = "┴"
-	boxCross = "┼"
-	separator = "━"
-
-	iconBolt = "◈"
-	iconCheck = "✓"
-	iconCross = "✗"
-	iconArrow = "→"
-	iconDot = "•"
-	iconStar = "★"
-	iconBox = "▪"
-	iconCircle = "◉"
-	iconDiamond = "◆"
-	iconChevron = "›"
-	iconDownload = "⇣"
-	iconUpload = "⇡"
-	iconSearch = "⌕"
-	iconModel = "◭"
-	iconCpu = "⟨⟩"
-	iconGpu = "⟪⟫"
-}
-
-func terminalSupportsColor() bool {
-	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
-		return false
-	}
-	if os.Getenv("FORCE_COLOR") != "" {
-		return true
-	}
-	info, err := os.Stdout.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
-func disableColors() {
-	colorReset = ""
-	colorBold = ""
-	colorDim = ""
-	colorCyan = ""
-	colorGreen = ""
-	colorYellow = ""
-	colorRed = ""
-	colorBlue = ""
-	colorMagenta = ""
-	brandPrimary = ""
-	brandSecondary = ""
-	brandAccent = ""
-	brandSuccess = ""
-	brandError = ""
-	brandMuted = ""
-}
-
 func printBanner() {
 	if output.JSONMode {
 		return
@@ -693,9 +566,6 @@ func stripAnsi(str string) string {
 	return result
 }
 
-// Modern spinner characters for loading animations
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 // Spinner represents an animated loading indicator
 type Spinner struct {
 	message string
@@ -808,7 +678,7 @@ func (p *ProgressBar) Update(current int64) {
 	}
 
 	// Build progress bar
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
+	bar := strings.Repeat(progressFull, filled) + strings.Repeat(progressEmpty, empty)
 
 	// Render
 	fmt.Printf("\r  %s%s%s %s%s%s %s%.1f%%%s %s%.1f MB/s%s %s%s%s",
@@ -824,7 +694,7 @@ func (p *ProgressBar) Complete() {
 	if output.JSONMode {
 		return
 	}
-	bar := strings.Repeat("█", p.width)
+	bar := strings.Repeat(progressFull, p.width)
 	fmt.Printf("\r  %s%s%s %s%s%s %s100.0%%%s\n", brandPrimary, bar, colorReset, colorBold, p.label, colorReset, brandSuccess, colorReset)
 }
 
@@ -871,10 +741,10 @@ func printCard(title string, lines []string) {
 		if padding < 0 {
 			padding = 0
 		}
-		fmt.Printf("%s│%s %s%s %s│%s\n",
-			brandMuted, colorReset,
+		fmt.Printf("%s%s%s %s%s %s%s%s\n",
+			brandMuted, boxV, colorReset,
 			line, strings.Repeat(" ", padding),
-			brandMuted, colorReset)
+			brandMuted, boxV, colorReset)
 	}
 
 	// Bottom border
@@ -886,7 +756,7 @@ func printSubtleDivider() {
 	if output.JSONMode {
 		return
 	}
-	fmt.Printf("%s%s%s\n", brandMuted, strings.Repeat("─", 50), colorReset)
+	fmt.Printf("%s%s%s\n", brandMuted, strings.Repeat(boxH, 50), colorReset)
 }
 
 func reloadLlamaServer() error {
@@ -1122,6 +992,7 @@ func main() {
 	// Set global JSON mode
 	output.JSONMode = jsonFlag
 	if jsonFlag || noColorFlag {
+		_ = os.Setenv("NO_COLOR", "1")
 		disableColors()
 	}
 
