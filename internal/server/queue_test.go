@@ -233,48 +233,51 @@ func TestQueuePriority(t *testing.T) {
 
 	queue := NewRequestQueue(config, monitor, nil)
 
-	processOrder := []string{}
+	processed := make(chan string, 4)
 	queue.SetProcessFunc(func(ctx context.Context, req interface{}) (interface{}, error) {
 		id := req.(string)
-		processOrder = append(processOrder, id)
-		time.Sleep(100 * time.Millisecond)
+		processed <- id
 		return id, nil
 	})
 
+	ctx := context.Background()
+	completed := make(chan error, 4)
+	// Queue all requests before starting workers so scheduler timing cannot
+	// change which priorities are available at the first dispatch.
+	for index, request := range []struct {
+		id       string
+		priority RequestPriority
+	}{{"low1", PriorityLow}, {"high1", PriorityHigh}, {"normal1", PriorityNormal}, {"high2", PriorityHigh}} {
+		go func() {
+			response, err := queue.Enqueue(ctx, request.id, request.priority)
+			if err == nil {
+				err = response.Error
+			}
+			completed <- err
+		}()
+		deadline := time.Now().Add(5 * time.Second)
+		for queue.GetStats().CurrentQueue != index+1 {
+			if time.Now().After(deadline) {
+				t.Fatal("request did not enter the queue")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
 	queue.Start()
 	defer queue.Stop()
-
-	ctx := context.Background()
-
-	// Enqueue in specific order with different priorities
-	go queue.Enqueue(ctx, "low1", PriorityLow)
-	time.Sleep(10 * time.Millisecond)
-	go queue.Enqueue(ctx, "high1", PriorityHigh)
-	time.Sleep(10 * time.Millisecond)
-	go queue.Enqueue(ctx, "normal1", PriorityNormal)
-	time.Sleep(10 * time.Millisecond)
-	go queue.Enqueue(ctx, "high2", PriorityHigh)
-
-	// Wait for processing
-	time.Sleep(2 * time.Second)
-
-	t.Logf("Process order: %v", processOrder)
-
-	// High priority should be processed before low priority
-	// (Note: first request starts immediately, so check relative ordering)
-	if len(processOrder) >= 4 {
-		highIdx := -1
-		lowIdx := -1
-		for i, id := range processOrder {
-			if (id == "high1" || id == "high2") && highIdx == -1 {
-				highIdx = i
+	for _, want := range []string{"high1", "high2", "normal1", "low1"} {
+		select {
+		case got := <-processed:
+			if got != want {
+				t.Errorf("processing order: got %q, want %q", got, want)
 			}
-			if id == "low1" && lowIdx == -1 {
-				lowIdx = i
-			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for dispatch")
 		}
-		if highIdx != -1 && lowIdx != -1 && highIdx > lowIdx {
-			t.Log("Priority ordering verified (high before low)")
+	}
+	for range 4 {
+		if err := <-completed; err != nil {
+			t.Errorf("enqueue failed: %v", err)
 		}
 	}
 }

@@ -113,6 +113,8 @@ func NewRequestQueue(config QueueConfig, monitor *resource.Monitor, gpuMonitor *
 
 // SetProcessFunc sets the function used to process requests
 func (q *RequestQueue) SetProcessFunc(fn ProcessFunc) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	q.processFunc = fn
 }
 
@@ -139,8 +141,9 @@ func (q *RequestQueue) Enqueue(ctx context.Context, request interface{}, priorit
 	// Check queue size limit
 	if len(q.queue) >= q.maxQueueSize {
 		q.stats.Rejected++
+		queueSize := len(q.queue)
 		q.mu.Unlock()
-		return nil, fmt.Errorf("queue full: %d/%d requests", len(q.queue), q.maxQueueSize)
+		return nil, fmt.Errorf("queue full: %d/%d requests", queueSize, q.maxQueueSize)
 	}
 
 	// Check available memory
@@ -271,14 +274,15 @@ func (q *RequestQueue) processRequest(request *QueuedRequest) {
 	} else {
 		q.stats.AvgWaitTime = (q.stats.AvgWaitTime + waitTime) / 2
 	}
+	process := q.processFunc
 	q.mu.Unlock()
 
 	// Process the request
 	var response interface{}
 	var err error
 
-	if q.processFunc != nil {
-		response, err = q.processFunc(request.Context, request.Request)
+	if process != nil {
+		response, err = process(request.Context, request.Request)
 	} else {
 		err = errors.New("no process function configured")
 	}

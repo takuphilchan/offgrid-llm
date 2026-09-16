@@ -21,14 +21,16 @@ type CacheEntry struct {
 
 // ResponseCache implements an LRU cache for model responses
 type ResponseCache struct {
-	mu         sync.RWMutex
-	entries    map[string]*CacheEntry
-	maxEntries int
-	ttl        time.Duration
-	hits       int64 // Use atomic operations for thread-safe counters
-	misses     int64
-	enabled    bool
-	stopChan   chan struct{} // For stopping cleanup goroutine
+	mu          sync.RWMutex
+	entries     map[string]*CacheEntry
+	maxEntries  int
+	ttl         time.Duration
+	hits        int64 // Use atomic operations for thread-safe counters
+	misses      int64
+	enabled     bool
+	cleanupMu   sync.Mutex // Serializes the cleanup lifecycle, independently of entries
+	stopChan    chan struct{}
+	cleanupDone chan struct{}
 }
 
 // NewResponseCache creates a new response cache
@@ -78,11 +80,12 @@ func generateKey(model, prompt string, params map[string]interface{}) string {
 
 // Get retrieves a cached response
 func (c *ResponseCache) Get(model, prompt string, params map[string]interface{}) (string, bool) {
+	c.mu.RLock()
 	if !c.enabled {
+		c.mu.RUnlock()
 		return "", false
 	}
 
-	c.mu.RLock()
 	key := generateKey(model, prompt, params)
 	entry, exists := c.entries[key]
 
@@ -112,12 +115,11 @@ func (c *ResponseCache) Get(model, prompt string, params map[string]interface{})
 
 // Set stores a response in the cache
 func (c *ResponseCache) Set(model, prompt, response string, params map[string]interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if !c.enabled {
 		return
 	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	key := generateKey(model, prompt, params)
 
@@ -243,9 +245,18 @@ func (c *ResponseCache) CleanExpired() int {
 
 // StartCleanupRoutine runs periodic cleanup of expired entries
 func (c *ResponseCache) StartCleanupRoutine(interval time.Duration) {
-	c.stopChan = make(chan struct{})
+	c.cleanupMu.Lock()
+	defer c.cleanupMu.Unlock()
+	if c.stopChan != nil {
+		return
+	}
 	ticker := time.NewTicker(interval)
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	c.stopChan = stop
+	c.cleanupDone = done
 	go func() {
+		defer close(done)
 		defer ticker.Stop()
 		for {
 			select {
@@ -254,7 +265,7 @@ func (c *ResponseCache) StartCleanupRoutine(interval time.Duration) {
 				if removed > 0 {
 					fmt.Printf("Cache cleanup: removed %d expired entries\n", removed)
 				}
-			case <-c.stopChan:
+			case <-stop:
 				return
 			}
 		}
@@ -263,8 +274,12 @@ func (c *ResponseCache) StartCleanupRoutine(interval time.Duration) {
 
 // StopCleanupRoutine stops the cleanup goroutine
 func (c *ResponseCache) StopCleanupRoutine() {
+	c.cleanupMu.Lock()
+	defer c.cleanupMu.Unlock()
 	if c.stopChan != nil {
 		close(c.stopChan)
+		<-c.cleanupDone
 		c.stopChan = nil
+		c.cleanupDone = nil
 	}
 }
