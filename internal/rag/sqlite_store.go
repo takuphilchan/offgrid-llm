@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/takuphilchan/offgrid-llm/internal/storage"
 )
 
 // SQLiteStore implements a persistent vector store using SQLite
@@ -30,7 +30,7 @@ func NewSQLiteStore(dataDir string) (*SQLiteStore, error) {
 	}
 
 	dbPath := filepath.Join(dataDir, "rag.db")
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := storage.OpenSQLite(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -50,15 +50,6 @@ func NewSQLiteStore(dataDir string) (*SQLiteStore, error) {
 
 // initSchema initializes the database schema
 func (s *SQLiteStore) initSchema() error {
-	// Enable WAL mode for better concurrency
-	if _, err := s.db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		return fmt.Errorf("failed to set WAL mode: %w", err)
-	}
-	// Enable foreign keys for cascade delete
-	if _, err := s.db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		return fmt.Errorf("failed to enable foreign keys: %w", err)
-	}
-
 	// Create tables
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS documents (

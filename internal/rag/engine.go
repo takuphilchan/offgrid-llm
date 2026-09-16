@@ -109,6 +109,16 @@ func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engi
 // Fix the underlying storage issue and restart to reopen the database.
 func (e *Engine) StorageError() error { return e.storageErr }
 
+// Close is called after the service has drained requests and ingestion.
+func (e *Engine) Close() error {
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	if e.store != nil {
+		return e.store.Close()
+	}
+	return nil
+}
+
 // GetPersistedModel returns the embedding model from persisted data (if any)
 // This is used to auto-restore RAG on server startup
 func (e *Engine) GetPersistedModel() string {
