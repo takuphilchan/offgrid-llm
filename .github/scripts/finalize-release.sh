@@ -29,25 +29,62 @@ expected=(
 )
 
 gh release view "${version}" --repo "${repo}" >/dev/null
-asset_rows="$(gh api "repos/${repo}/releases/tags/${version}" \
-  --jq '.assets[] | [.name, .state, .size, .digest] | @tsv')"
+max_attempts="${OFFGRID_FINALIZE_ATTEMPTS:-18}"
+retry_seconds="${OFFGRID_FINALIZE_RETRY_SECONDS:-10}"
+if [[ ! "${max_attempts}" =~ ^[1-9][0-9]*$ || ! "${retry_seconds}" =~ ^[0-9]+$ ]]; then
+  echo "::error::Invalid finalizer retry configuration"
+  exit 1
+fi
+
+declare -A asset_states=()
+declare -A asset_sizes=()
 declare -A asset_digests=()
-while IFS=$'\t' read -r name state size digest; do
-  [[ -n "${name}" ]] || continue
-  if [[ "${state}" != "uploaded" || ! "${size}" =~ ^[1-9][0-9]*$ || ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-    echo "::error::Invalid release asset ${name}: state=${state}, size=${size}, digest=${digest}"
-    exit 1
+ready=false
+problems=()
+for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+  asset_states=()
+  asset_sizes=()
+  asset_digests=()
+  asset_rows="$(gh api "repos/${repo}/releases/tags/${version}" \
+    --jq '.assets[] | [.name, .state, .size, (.digest // "")] | @tsv')"
+  while IFS=$'\t' read -r name state size digest; do
+    [[ -n "${name}" ]] || continue
+    asset_states["${name}"]="${state}"
+    asset_sizes["${name}"]="${size}"
+    asset_digests["${name}"]="${digest#sha256:}"
+  done <<< "${asset_rows}"
+
+  problems=()
+  for name in "${expected[@]}"; do
+    state="${asset_states[${name}]:-missing}"
+    size="${asset_sizes[${name}]:-0}"
+    digest="${asset_digests[${name}]:-}"
+    if [[ "${state}" == "missing" ]]; then
+      problems+=("Missing required release asset: ${name}")
+    elif [[ "${state}" != "uploaded" || ! "${size}" =~ ^[1-9][0-9]*$ || ! "${digest}" =~ ^[0-9a-f]{64}$ ]]; then
+      problems+=("Invalid release asset ${name}: state=${state}, size=${size}, digest=${digest:-pending}")
+    fi
+  done
+
+  if ((${#problems[@]} == 0)); then
+    ready=true
+    break
   fi
-  asset_digests["${name}"]="${digest#sha256:}"
-done <<< "${asset_rows}"
+  if ((attempt < max_attempts)); then
+    echo "Release assets are not fully indexed yet (attempt ${attempt}/${max_attempts}); retrying in ${retry_seconds}s"
+    printf '  - %s\n' "${problems[@]}"
+    sleep "${retry_seconds}"
+  fi
+done
+
+if [[ "${ready}" != true ]]; then
+  printf '::error::%s\n' "${problems[@]}"
+  exit 1
+fi
 
 checksum_file="checksums-${version}.sha256"
 : > "${checksum_file}"
 for name in "${expected[@]}"; do
-  if [[ -z "${asset_digests[${name}]:-}" ]]; then
-    echo "::error::Missing required release asset: ${name}"
-    exit 1
-  fi
   printf '%s  %s\n' "${asset_digests[${name}]}" "${name}" >> "${checksum_file}"
 done
 sort -k2 -o "${checksum_file}" "${checksum_file}"

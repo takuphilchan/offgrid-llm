@@ -27,7 +27,7 @@ const names = [
 ];
 const digest = 'a'.repeat(64);
 
-function run(assetNames) {
+function run(assetNames, { initialAssetNames = assetNames, attempts = '1' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'offgrid-release-finalize-'));
   try {
     mkdirSync(join(root, 'docs/releases'), { recursive: true });
@@ -36,7 +36,9 @@ function run(assetNames) {
       join(root, `docs/releases/release-notes-${version}.md`),
     );
     const rows = assetNames.map((name) => `${name}\tuploaded\t1\tsha256:${digest}`);
+    const initialRows = initialAssetNames.map((name) => `${name}\tuploaded\t1\tsha256:${digest}`);
     const rowArgs = rows.map((row) => `'${row}'`).join(' ');
+    const initialRowArgs = initialRows.map((row) => `'${row}'`).join(' ');
     const mock = `
 gh() {
   if [[ "$1 $2" == "release view" ]]; then
@@ -44,7 +46,15 @@ gh() {
       printf '%s\\n' 'checksums-v0.3.1.sha256'
     fi
   elif [[ "$1" == "api" ]]; then
-    printf '%s\\n' ${rowArgs}
+    api_count_file='.mock-gh-api-count'
+    api_count=$(cat "$api_count_file" 2>/dev/null || echo 0)
+    api_count=$((api_count + 1))
+    printf '%s' "$api_count" > "$api_count_file"
+    if [[ "$api_count" -eq 1 ]]; then
+      printf '%s\\n' ${initialRowArgs}
+    else
+      printf '%s\\n' ${rowArgs}
+    fi
   elif [[ "$1 $2" == "release upload" ]]; then
     test -s "$4" || return 1
     echo MOCK_UPLOAD
@@ -60,6 +70,11 @@ set -- '${version}' 'example/offgrid-llm'
       cwd: root,
       input: mock + script,
       encoding: 'utf8',
+      env: {
+        ...process.env,
+        OFFGRID_FINALIZE_ATTEMPTS: attempts,
+        OFFGRID_FINALIZE_RETRY_SECONDS: '0',
+      },
     });
     const checksumPath = join(root, `checksums-${version}.sha256`);
     const checksums = result.status === 0 ? readFileSync(checksumPath, 'utf8') : '';
@@ -85,4 +100,9 @@ const incomplete = run(names.slice(1));
 assert.notEqual(incomplete.status, 0, 'A partial release must not publish');
 assert.match(incomplete.stdout, /Missing required release asset/);
 assert.doesNotMatch(incomplete.stdout, /MOCK_UPLOAD|MOCK_EDIT/);
-console.log('Release finalization accepts 14 verified assets and rejects a partial release');
+
+const eventuallyComplete = run(names, { initialAssetNames: names.slice(1), attempts: '2' });
+assert.equal(eventuallyComplete.status, 0, eventuallyComplete.stdout + eventuallyComplete.stderr);
+assert.match(eventuallyComplete.stdout, /not fully indexed yet/);
+assert.match(eventuallyComplete.stdout, /MOCK_UPLOAD/);
+console.log('Release finalization accepts 14 verified assets, retries indexing, and rejects a partial release');
