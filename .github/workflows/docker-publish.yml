@@ -2,10 +2,20 @@ name: Publish container image
 
 on:
   push:
-    tags:
-      - "v*"
     branches:
       - 'release-container/v*'
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      source_ref:
+        required: true
+        type: string
+      publish_gpu:
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       version:
@@ -47,7 +57,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ -n "${{ inputs.source_ref || '' }}" ]]; then
+            value="${{ inputs.version }}"
+            value="${value#v}"
+            source_ref="${{ inputs.source_ref }}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             value="${{ inputs.version }}"
             source_ref="${GITHUB_REF}"
           elif [[ "${GITHUB_REF}" == refs/heads/release-container/v* ]]; then
@@ -171,7 +185,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}
           labels: |
             org.opencontainers.image.title=OffGrid LLM
             org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
@@ -190,11 +205,9 @@ jobs:
       - name: Verify AMD64 startup and CLI
         if: matrix.arch == 'amd64'
         shell: bash
-        env:
-          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           set -euo pipefail
-          image="${IMAGE_NAME}@${DIGEST}"
+          image="${IMAGE_NAME}:${{ needs.prepare.outputs.version }}-amd64"
           docker pull "${image}"
           docker run --rm "${image}" version
           docker run -d --name offgrid-smoke -p 127.0.0.1:11611:11611 "${image}"
@@ -209,22 +222,6 @@ jobs:
           echo "Container did not become healthy" >&2
           exit 1
 
-      - name: Export image digest
-        shell: bash
-        env:
-          DIGEST: ${{ steps.push.outputs.digest }}
-        run: |
-          mkdir -p "${RUNNER_TEMP}/digests"
-          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
-
-      - name: Upload image digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: offgrid-cpu-digest-${{ matrix.arch }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
   cpu-manifest:
     name: Publish multi-platform CPU manifest
     needs: [prepare, cpu]
@@ -232,13 +229,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Download image digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: offgrid-cpu-digest-*-${{ github.run_id }}
-          merge-multiple: true
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -270,22 +260,43 @@ jobs:
       - name: Create and inspect multi-platform manifest
         id: manifest
         shell: bash
-        working-directory: ${{ runner.temp }}/digests
         run: |
           set -euo pipefail
-          mapfile -t digests < <(printf '%s\n' * | sort)
-          if [[ "${#digests[@]}" -ne 2 ]]; then
-            echo "::error::Expected exactly two CPU image digests, found ${#digests[@]}"
+          readarray -t tags < <(jq -r '.tags[]' <<< "${DOCKER_METADATA_OUTPUT_JSON}")
+          if [[ "${#tags[@]}" -eq 0 ]]; then
+            echo "::error::Image metadata produced no destination tags"
             exit 1
           fi
-          readarray -t tags < <(jq -r '.tags[]' <<< "${DOCKER_METADATA_OUTPUT_JSON}")
           create_args=()
           for tag in "${tags[@]}"; do create_args+=(--tag "${tag}"); done
-          sources=()
-          for digest in "${digests[@]}"; do sources+=("${IMAGE_NAME}@sha256:${digest}"); done
-          docker buildx imagetools create "${create_args[@]}" "${sources[@]}"
-          docker buildx imagetools inspect "${tags[0]}"
-          manifest_digest="$(docker buildx imagetools inspect "${tags[0]}" | awk '/^Digest:/ {print $2; exit}')"
+          sources=(
+            "${IMAGE_NAME}:${{ needs.prepare.outputs.version }}-amd64"
+            "${IMAGE_NAME}:${{ needs.prepare.outputs.version }}-arm64"
+          )
+          created=false
+          for attempt in {1..6}; do
+            if docker buildx imagetools create "${create_args[@]}" "${sources[@]}"; then
+              created=true
+              break
+            fi
+            echo "Manifest sources are not fully indexed yet (${attempt}/6); retrying..."
+            sleep 10
+          done
+          if [[ "${created}" != true ]]; then
+            echo "::error::Could not create the multi-platform manifest after bounded retries"
+            exit 1
+          fi
+          manifest_digest=""
+          for attempt in {1..6}; do
+            inspect_output="$(docker buildx imagetools inspect "${tags[0]}" 2>/dev/null || true)"
+            manifest_digest="$(awk '/^Digest:/ {print $2; exit}' <<< "${inspect_output}")"
+            if [[ "${manifest_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              printf '%s\n' "${inspect_output}"
+              break
+            fi
+            echo "Published manifest is not fully indexed yet (${attempt}/6); retrying..."
+            sleep 10
+          done
           if [[ ! "${manifest_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "::error::Could not resolve the published manifest digest"
             exit 1
@@ -387,3 +398,23 @@ jobs:
           subject-name: index.docker.io/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  verify:
+    name: Verify published container release
+    needs: [prepare, cpu, cpu-manifest, gpu]
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      (needs.prepare.outputs.cpu_exists == 'true' || needs.cpu-manifest.result == 'success') &&
+      (needs.prepare.outputs.gpu_exists == 'true' || needs.gpu.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@v6
+
+      - name: Verify exact CPU and GPU tags
+        env:
+          OFFGRID_CONTAINER_VERIFY_ATTEMPTS: 18
+          OFFGRID_CONTAINER_VERIFY_RETRY_SECONDS: 10
+        run: bash .github/scripts/verify-release-containers.sh "v${{ needs.prepare.outputs.version }}"

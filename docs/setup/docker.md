@@ -175,11 +175,12 @@ bash ./docker/docker-build.sh
 `PUSH=true` uses Buildx and publishes the configured `IMAGE` for AMD64 and
 ARM64. `BUILD_GPU=true` additionally publishes the AMD64 CUDA tag.
 
-Git tags matching `v*` trigger `.github/workflows/docker-publish.yml`. Configure
-the GitHub Actions variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN`
-with a Docker Hub access token. The workflow builds and smoke-tests the image,
-publishes version and source-revision tags, generates provenance and an SBOM,
-and creates an image attestation.
+Git tags matching `v*` trigger `.github/workflows/release-unified.yml`, which
+calls `.github/workflows/docker-publish.yml` as a release gate. Configure the
+GitHub Actions variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN` with
+a Docker Hub access token. The container workflow builds and smoke-tests the
+image, publishes version and source-revision tags, generates provenance and an
+SBOM, and creates an image attestation.
 
 ## Validation and troubleshooting
 

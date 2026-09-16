@@ -35,23 +35,9 @@ jobs:
 
       - name: Verify published multi-platform container
         shell: bash
-        env:
-          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          set -euo pipefail
-          image_version="${VERSION#v}"
-          image_json="$(curl --fail --silent --show-error --retry 3 --retry-all-errors \
-            "https://hub.docker.com/v2/repositories/takuphilchan/offgrid-llm/tags/${image_version}/")"
-          if ! jq -e '.images | any(.[]; .os == "linux" and .architecture == "amd64") and any(.[]; .os == "linux" and .architecture == "arm64")' <<< "${image_json}" >/dev/null; then
-            echo "::error::Docker Hub image ${image_version} is missing Linux AMD64 or ARM64"
-            exit 1
-          fi
-          gpu_json="$(curl --fail --silent --show-error --retry 3 --retry-all-errors \
-            "https://hub.docker.com/v2/repositories/takuphilchan/offgrid-llm/tags/${image_version}-gpu/")"
-          if ! jq -e '.images | any(.[]; .os == "linux" and .architecture == "amd64")' <<< "${gpu_json}" >/dev/null; then
-            echo "::error::Docker Hub image ${image_version}-gpu is missing Linux AMD64"
-            exit 1
-          fi
+          bash .github/scripts/verify-release-containers.sh \
+            "${{ steps.release.outputs.version }}"
 
       - name: Verify and publish existing release
         shell: bash

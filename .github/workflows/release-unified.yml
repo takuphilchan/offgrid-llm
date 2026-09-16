@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   GO_VERSION: '1.26.6'
@@ -22,6 +24,16 @@ env:
   LLAMA_CPP_WINDOWS_COMMIT: 718f7b4175bf8b6af6f5eac09fee10754b3ecddd
 
 jobs:
+  publish-containers:
+    name: Publish and verify containers
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      version: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+      source_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+      publish_gpu: true
+    secrets: inherit
+
   # Create release first
   create-release:
     name: Create Release
@@ -1011,7 +1023,7 @@ jobs:
   finalize-release:
     name: Finalize Release
     runs-on: ubuntu-latest
-    needs: [build-bundles, build-desktop]
+    needs: [build-bundles, build-desktop, publish-containers]
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     
     steps:
@@ -1036,5 +1048,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          bash .github/scripts/verify-release-containers.sh \
+            "${{ steps.version.outputs.version }}"
           bash .github/scripts/finalize-release.sh \
             "${{ steps.version.outputs.version }}" "${{ github.repository }}"
