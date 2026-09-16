@@ -64,6 +64,8 @@ Complete guide to OffGrid LLM.
 | Guide | Description |
 |-------|-------------|
 | [Architecture](advanced/architecture.md) | System design |
+| [Workspace UI](advanced/workspace-ui.md) | Web and desktop UI architecture and quality gates |
+| [CLI experience](advanced/cli-experience.md) | Terminal design system, interaction, and automation contracts |
 | [Repository Structure](repository-structure.md) | Source tree map and ownership |
 | [Performance](advanced/performance.md) | Optimization |
 | [Low Memory](advanced/low-memory.md) | Running on 4GB RAM |

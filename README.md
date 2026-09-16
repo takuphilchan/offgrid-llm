@@ -175,6 +175,7 @@ cd web/app
 npm run api:check
 npm run check
 npm run build
+# Starts an isolated UI server automatically.
 npm run test:e2e
 
 cd ../../desktop
@@ -183,11 +184,15 @@ node --check preload.js
 ```
 
 The CI workflow runs Go tests, contract generation checks, the UI build, live
-browser integration tests, and an unpacked Electron package build.
+browser integration tests, and an unpacked Electron package build. Set
+`OFFGRID_E2E_URL` only when the browser suite should target an already-running
+OffGrid service; local test runs manage their own UI server.
 
 ## Documentation
 
 - [Architecture](docs/advanced/ARCHITECTURE.md)
+- [CLI experience](docs/advanced/cli-experience.md)
+- [Workspace UI](docs/advanced/workspace-ui.md)
 - [Maintainability and generation](docs/advanced/maintainability.md)
 - [API reference](docs/reference/api.md)
 - [CLI reference](docs/reference/cli.md)
