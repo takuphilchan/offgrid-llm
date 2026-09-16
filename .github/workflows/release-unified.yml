@@ -17,6 +17,10 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: release-${{ inputs.version || github.ref }}
+  cancel-in-progress: true
+
 env:
   GO_VERSION: '1.26.6'
   # Linux and macOS bundles passed at this pinned revision in v0.3.1.
@@ -90,7 +94,7 @@ jobs:
         with:
           ref: ${{ needs.release-context.outputs.source_ref }}
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -208,7 +212,7 @@ jobs:
           path: web/dist
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -230,7 +234,7 @@ jobs:
           if [ "${{ matrix.platform }}" = "windows" ]; then extension=.zip; fi
           asset_name="offgrid-${version}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ matrix.cpu_features }}${extension}"
           existing_assets="$(gh api "repos/${{ github.repository }}/releases/tags/${version}" \
-            --jq '.assets[] | select(.state == "uploaded" and .size > 0 and (.digest | test("^sha256:[0-9a-f]{64}$"))) | .name')"
+            --jq '.assets[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
           if grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
             echo "Verified release asset ${asset_name} already exists; skipping its rebuild"
             echo "skip=true" >> "${GITHUB_OUTPUT}"
@@ -773,12 +777,12 @@ jobs:
           path: web/dist
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
