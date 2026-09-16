@@ -337,6 +337,14 @@ function stopOffgridServer() {
   });
 }
 
+function isSafeExternalLink(value) {
+  try {
+    return ['http:', 'https:', 'mailto:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
 // Create main window with optimized settings
 function createWindow() {
   // Load saved window state
@@ -357,10 +365,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       // Performance optimizations
       backgroundThrottling: true,
-      spellcheck: false
+      spellcheck: true
     },
     icon: path.join(__dirname, 'assets/icon.png'),
-    backgroundColor: '#070a12',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#101011' : '#f7f7f6',
     show: false,
     autoHideMenuBar: true
   });
@@ -410,13 +418,13 @@ function createWindow() {
   // The renderer is a local application surface. Keep untrusted navigation
   // out of the privileged desktop window and hand safe web links to the OS.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url);
+    if (isSafeExternalLink(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith(SERVER_URL) || url.startsWith('file:')) return;
     event.preventDefault();
-    if (url.startsWith('https://')) void shell.openExternal(url);
+    if (isSafeExternalLink(url)) void shell.openExternal(url);
   });
 
   // Prevent close, minimize to tray instead
@@ -590,6 +598,7 @@ ipcMain.handle('get-system-theme', () => {
 nativeTheme.on('updated', () => {
   const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
   if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setBackgroundColor(theme === 'dark' ? '#101011' : '#f7f7f6');
     mainWindow.webContents.send('system-theme-changed', theme);
   }
 });

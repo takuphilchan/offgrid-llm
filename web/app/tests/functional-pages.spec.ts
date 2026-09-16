@@ -41,6 +41,7 @@ test('knowledge setup downloads one stable model and enables RAG', async ({ page
   await expect.poll(() => downloadRequests).toBe(1);
   await expect.poll(() => enableRequests).toBe(1);
   await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
+  if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('knowledge.png'), fullPage: true });
 });
 
 test('models page starts only one download for a rapid repeated click', async ({ page }) => {
@@ -60,6 +61,7 @@ test('models page starts only one download for a rapid repeated click', async ({
   await expect(page.getByRole('heading', { name: 'BGE M3' })).toBeVisible();
   await page.getByRole('button', { name: 'Download' }).dblclick();
   await expect.poll(() => downloadRequests).toBe(1);
+  if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('models.png'), fullPage: true });
 });
 
 test('agents page exposes runtime tools, durable tasks, MCP, and computer status', async ({ page }) => {
@@ -74,11 +76,22 @@ test('agents page exposes runtime tools, durable tasks, MCP, and computer status
   await page.route('**/v1/agents/tasks', route => route.fulfill({ json: [{ id: 'run-1', prompt: 'Summarize the report', status: 'completed', created_at: new Date().toISOString() }] }));
   await page.route('**/v1/agents/mcp', route => route.fulfill({ json: { servers: [{ name: 'local-docs', url: 'http://127.0.0.1:3000/mcp', transport: 'http', tools: 2, status: 'connected' }] } }));
   await page.route('**/v1/computer/status', route => route.fulfill({ json: { available: false, emergency_stop: false, active_sessions: 0 } }));
+  await page.route('**/v1/integrations?*', route => route.fulfill({ json: { provider: 'offgrid', base_url: 'http://127.0.0.1:11611/v1', integrations: [{ id: 'hermes', provider_id: 'offgrid', plugin_id: 'offgrid', name: 'Hermes Agent', description: 'Private OffGrid inference', transport: 'openai-chat-completions', documentation_url: 'https://example.com', minimum_context: 64000, recommended_context: 65536, requires_tools: true, capabilities: ['chat', 'tools'], ready: false, status: 'needs_configuration', model_id: 'chat-model', context_window: 8192, warnings: ['A larger context window is recommended.'] }] } }));
 
   await page.goto('/ui/#/agents');
   await expect(page.getByText('1/1 enabled').first()).toBeVisible();
   await expect(page.getByText('Summarize the report')).toBeVisible();
-  await expect(page.getByText('local-docs')).toBeVisible();
   await expect(page.getByText('Driver unavailable')).toBeVisible();
+  if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agents-workspace.png'), fullPage: true });
+  await page.getByRole('tab', { name: 'Available tools' }).click();
+  await expect(page).toHaveURL(/#\/agents\/tools$/);
   await expect(page.getByText('Calculate an expression')).toBeVisible();
+  await page.getByRole('tab', { name: 'MCP connections' }).click();
+  await expect(page).toHaveURL(/#\/agents\/connections$/);
+  await expect(page.getByText('local-docs')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hermes Agent' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'MCP connections' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('local-docs')).toBeVisible();
+  if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agent-connections.png'), fullPage: true });
 });

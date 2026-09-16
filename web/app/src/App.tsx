@@ -1,17 +1,26 @@
 import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
-import { APIError, api, type Model, type PublicUser, type RunEvent, type RunSummary } from './api/client';
+import { APIError, api, type Model, type PublicUser } from './api/client';
+import { CommandPalette, type CommandAction } from './components/CommandPalette';
 import { Icon } from './components/Icon';
+import { ActivityPage } from './features/activity/ActivityPage';
 import { AgentPage } from './features/agents/AgentPage';
 import { ChatPage } from './features/chat/ChatPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { KnowledgePage } from './features/knowledge/KnowledgePage';
 import { ModelsPage } from './features/models/ModelsPage';
+import { SettingsPage } from './features/settings/SettingsPage';
 import { useI18n, type LocaleCode } from './i18n';
+import { useTheme } from './theme';
 
 type Page = 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings';
 type Health = 'checking' | 'ready' | 'offline';
 
 const pages: Page[] = ['chat', 'knowledge', 'agents', 'models', 'activity', 'settings'];
+const navigationGroups: { label: 'work' | 'library' | 'system'; items: Page[] }[] = [
+  { label: 'work', items: ['chat', 'agents'] },
+  { label: 'library', items: ['knowledge', 'models'] },
+  { label: 'system', items: ['activity', 'settings'] }
+];
 
 function pageFromLocation(): Page {
   const candidate = window.location.hash.replace(/^#\/?/, '').split('/')[0];
@@ -30,6 +39,7 @@ class PageBoundary extends Component<{ children: ReactNode; message: string; ret
 
 export function App() {
   const { messages: text, locale, setLocale, available } = useI18n();
+  const theme = useTheme();
   const [page, setPage] = useState<Page>(pageFromLocation);
   const [health, setHealth] = useState<Health>('checking');
   const [models, setModels] = useState<Model[]>([]);
@@ -37,7 +47,9 @@ export function App() {
   const [access, setAccess] = useState<'checking' | 'ready' | 'login'>('checking');
   const [authUser, setAuthUser] = useState<PublicUser | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true');
+  const [onboardingPending, setOnboardingPending] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true');
+  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true' && localStorage.getItem('offgrid.onboarding.stage') !== 'working');
+  const [showCommands, setShowCommands] = useState(false);
 
   const refreshBase = useCallback(async () => {
     setLoadError('');
@@ -47,8 +59,8 @@ export function App() {
       setAccess('ready');
       setModels(modelResult.value);
       setModel(current => {
-        if (current && modelResult.value.some(item => item.id === current)) return current;
-        return modelResult.value.find(item => item.type !== 'embedding')?.id ?? modelResult.value[0]?.id ?? '';
+        if (current && modelResult.value.some(item => item.id === current && item.type !== 'embedding')) return current;
+        return modelResult.value.find(item => item.type !== 'embedding')?.id ?? '';
       });
       void api.currentUser().then(result => setAuthUser(result.user)).catch(reason => {
         if (reason instanceof APIError && reason.status === 401) setAccess('login');
@@ -71,6 +83,38 @@ export function App() {
   }, []);
   useEffect(() => { void refreshBase(); const timer = window.setInterval(() => void api.health().then(() => setHealth('ready')).catch(() => setHealth('offline')), 15_000); return () => clearInterval(timer); }, [refreshBase]);
   useEffect(() => { if (model) localStorage.setItem('offgrid.model', model); }, [model]);
+  useEffect(() => {
+    const toggleCommands = (event: globalThis.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k' && !showOnboarding) {
+        event.preventDefault();
+        setShowCommands(current => !current);
+      }
+    };
+    window.addEventListener('keydown', toggleCommands);
+    return () => window.removeEventListener('keydown', toggleCommands);
+  }, [showOnboarding]);
+
+  const finishOnboarding = useCallback(() => {
+    localStorage.setItem('offgrid.onboarding.complete', 'true');
+    localStorage.removeItem('offgrid.onboarding.stage');
+    setOnboardingPending(false);
+    setShowOnboarding(false);
+  }, []);
+
+  const continueSetup = (target: 'chat' | 'models') => {
+    if (onboardingPending) localStorage.setItem('offgrid.onboarding.stage', 'working');
+    setShowOnboarding(false);
+    window.location.hash = `#/${target}`;
+  };
+  const chatModels = models.filter(item => item.type !== 'embedding');
+  const currentGroup = navigationGroups.find(group => group.items.includes(page))?.label ?? 'work';
+  const commandActions: CommandAction[] = [
+    ...navigationGroups.flatMap(group => group.items.map(item => ({ id: `page-${item}`, label: text.nav[item], group: text.shell[group.label], icon: item, run: () => { window.location.hash = `#/${item}`; } }))),
+    { id: 'theme-system', label: text.shell.systemTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('system') },
+    { id: 'theme-dark', label: text.shell.darkTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('dark') },
+    { id: 'theme-light', label: text.shell.lightTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('light') }
+  ];
+  const commandShortcut = navigator.userAgent.includes('Mac') ? '⌘ K' : 'Ctrl K';
 
   const titles = {
     chat: [text.chat.title, text.chat.subtitle], knowledge: [text.knowledge.title, text.knowledge.subtitle],
@@ -89,9 +133,12 @@ export function App() {
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><span /></div><div><strong>{text.product}</strong><small>{text.privateWorkspace}</small></div></div>
       <nav className="primary-nav" aria-label="Primary">
-        {pages.map(item => <a key={item} href={`#/${item}`} className={page === item ? 'nav-link active' : 'nav-link'} aria-current={page === item ? 'page' : undefined}>
-          <Icon name={item} /><span>{text.nav[item]}</span>
-        </a>)}
+        {navigationGroups.map(group => <div className="nav-group" key={group.label}>
+          <span className="nav-group-label">{text.shell[group.label]}</span>
+          {group.items.map(item => <a key={item} href={`#/${item}`} className={page === item ? 'nav-link active' : 'nav-link'} aria-current={page === item ? 'page' : undefined} title={text.nav[item]}>
+            <Icon name={item} /><span>{text.nav[item]}</span>
+          </a>)}
+        </div>)}
       </nav>
       <div className="sidebar-foot">
         <div className={`service-state ${health}`}><i /> <span>{health === 'ready' ? text.status.ready : health === 'offline' ? text.status.offline : text.status.checking}</span></div>
@@ -101,8 +148,9 @@ export function App() {
 
     <main className="workspace">
       <header className="topbar">
-        <div><h1>{titles[page][0]}</h1><p>{titles[page][1]}</p></div>
+        <div><span className="workspace-kicker">{text.shell[currentGroup]}</span><h1>{titles[page][0]}</h1><p>{titles[page][1]}</p></div>
         <div className="topbar-actions">
+          <button className="command-trigger" onClick={() => setShowCommands(true)} aria-label={`${text.shell.quickActions} (${commandShortcut})`}><Icon name="search" size={16} /><span>{text.shell.quickActions}</span><kbd>{commandShortcut}</kbd></button>
           <label className="locale-picker"><span>{text.common.language}</span><select value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
           <button className="icon-button" onClick={() => void refreshBase()} aria-label={text.common.refresh}><Icon name="refresh" size={18} /></button>
           {authUser && <button className="text-button" onClick={() => void logout()}>{text.auth.signOut}</button>}
@@ -111,53 +159,42 @@ export function App() {
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
       <section className="page-content">
         <PageBoundary key={page} message={text.common.error} retry={text.common.retry}>
-          {page === 'chat' && <ChatPage models={models} model={model} setModel={setModel} />}
+          {page === 'chat' && <ChatPage models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'knowledge' && <KnowledgePage models={models} onModelsChanged={refreshBase} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'agents' && <AgentPage models={models} model={model} setModel={setModel} />}
-          {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} />}
+          {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} onboardingPending={onboardingPending} />}
           {page === 'activity' && <ActivityPage health={health} />}
-          {page === 'settings' && <SettingsPage health={health} onShowOnboarding={() => setShowOnboarding(true)} />}
+          {page === 'settings' && <SettingsPage health={health} themeChoice={theme.choice} onThemeChange={theme.setChoice} onShowOnboarding={() => setShowOnboarding(true)} />}
         </PageBoundary>
       </section>
     </main>
     <nav className="mobile-nav" aria-label="Primary">{pages.map(item => <a key={item} href={`#/${item}`} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined}><Icon name={item} size={19} /><span>{text.nav[item]}</span></a>)}</nav>
-    {showOnboarding && <Onboarding health={health} models={models} onDone={() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); setShowOnboarding(false); }} />}
+    {showCommands && !showOnboarding && <CommandPalette actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} onClose={() => setShowCommands(false)} />}
+    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} pending={onboardingPending} onAction={() => continueSetup(chatModels.length > 0 ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
   </div>;
 }
 
-function ActivityPage({ health }: { health: Health }) {
-  const { messages: text } = useI18n(); const [stats, setStats] = useState<Record<string, any> | null>(null); const [runs, setRuns] = useState<RunSummary[]>([]); const [events, setEvents] = useState<RunEvent[]>([]); const [selected, setSelected] = useState(''); const [error, setError] = useState('');
-  useEffect(() => { Promise.all([api.stats(), api.runs()]).then(([nextStats, nextRuns]) => { setStats(nextStats); setRuns(nextRuns); }).catch(reason => setError(reason instanceof Error ? reason.message : text.common.error)); }, []);
-  const inspect = async (run: RunSummary) => { setSelected(run.id); try { setEvents(await api.runEvents(run.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); } };
-  const server = stats?.server ?? {}; const aggregate = stats?.inference?.aggregate ?? {};
-  return <div className="stack">{error && <div className="inline-error">{error}</div>}<div className="metric-grid"><Metric label={text.activity.uptime} value={server.uptime ?? '—'} /><Metric label={text.activity.requests} value={String(aggregate.total_requests ?? '—')} /><Metric label={text.activity.currentModel} value={server.current_model || text.status.noModel} /><Metric label={text.activity.version} value={server.version ?? '—'} /></div><div className="health-panel"><div className={`health-visual ${health}`}><span /><span /><span /></div><div><span className="eyebrow">{text.common.runtime}</span><h2>{health === 'ready' ? text.status.ready : health === 'offline' ? text.status.offline : text.status.checking}</h2><p>{text.activity.subtitle}</p></div></div><section><span className="eyebrow">{text.activity.runs}</span>{runs.length === 0 ? <EmptyPanel text={text.activity.noRuns} /> : <div className="run-layout"><div className="run-list">{runs.map(run => <button key={run.id} className={selected === run.id ? 'run-row selected' : 'run-row'} onClick={() => void inspect(run)}><i className={run.status} /><span><strong>{String(run.data?.prompt ?? run.id)}</strong><small>{run.status} · {new Date(run.updated_at).toLocaleString()}</small></span><b>{run.event_count}</b></button>)}</div><div className="event-list">{events.length === 0 ? <p>{text.activity.selectRun}</p> : events.map(event => <article key={event.id}><i /><div><strong>{event.type}</strong><small>#{event.sequence} · {new Date(event.time).toLocaleTimeString()}</small>{event.data && <pre>{JSON.stringify(event.data, null, 2)}</pre>}</div></article>)}</div></div>}</section></div>;
-}
-
-function SettingsPage({ health, onShowOnboarding }: { health: Health; onShowOnboarding: () => void }) {
+function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClose }: {
+  health: Health;
+  chatModelCount: number;
+  pending: boolean;
+  onAction: () => void;
+  onRetry: () => Promise<void>;
+  onClose: () => void;
+}) {
   const { messages: text } = useI18n();
-  const [details, setDetails] = useState<{ config?: Awaited<ReturnType<typeof api.systemConfig>>; rag?: Awaited<ReturnType<typeof api.ragStatus>>; computer?: Awaited<ReturnType<typeof api.computerStatus>> }>({});
-  const [error, setError] = useState('');
-  const refresh = async () => {
-    setError('');
-    const [config, rag, computer] = await Promise.allSettled([api.systemConfig(), api.ragStatus(), api.computerStatus()]);
-    setDetails({ config: config.status === 'fulfilled' ? config.value : undefined, rag: rag.status === 'fulfilled' ? rag.value : undefined, computer: computer.status === 'fulfilled' ? computer.value : undefined });
-    const failed = [config, rag, computer].find(item => item.status === 'rejected');
-    if (failed?.status === 'rejected') setError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
-  };
-  useEffect(() => { void refresh(); }, []);
-  const stopComputer = async () => { try { await api.emergencyStop(); await refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); } };
-  return <div className="stack">
-    {error && <div className="inline-error">{error}</div>}
-    <div className="metric-grid"><Metric label={text.settings.service} value={health === 'ready' ? text.status.ready : text.status.offline} /><Metric label={text.settings.version} value={details.config?.version ?? '—'} /><Metric label={text.settings.inferenceSlots} value={String(details.config?.inference_slots ?? '—')} /><Metric label={text.settings.knowledge} value={details.rag?.enabled ? text.settings.enabled : text.settings.disabled} /></div>
-    <section className="settings-panel"><div><span className="eyebrow">{text.settings.safety}</span><h2>{text.settings.computerUse}</h2><p>{details.computer?.available ? text.settings.available : text.settings.unavailable}</p></div><div className="settings-actions"><span className={details.computer?.emergency_stop ? 'status-pill danger' : 'status-pill'}>{details.computer?.emergency_stop ? text.settings.stopped : `${details.computer?.active_sessions ?? 0} ${text.settings.sessions}`}</span><button className="danger-button" onClick={() => void stopComputer()}>{text.settings.emergencyStop}</button></div></section>
-    <section className="settings-panel"><div><span className="eyebrow">{text.settings.setup}</span><h2>{text.onboarding.title}</h2><p>{text.onboarding.body}</p></div><button className="secondary-button" onClick={onShowOnboarding}>{text.settings.showGuide}</button></section>
-  </div>;
+  useEffect(() => {
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+  const action = !pending ? text.onboarding.close : health !== 'ready' ? text.onboarding.retryService : chatModelCount > 0 ? text.onboarding.startChat : text.onboarding.chooseModel;
+  return <div className="modal-backdrop" role="presentation"><section className="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+    <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
+    <div className="onboarding-mark"><span /></div><span className="eyebrow">{text.privateWorkspace}</span>
+    <h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p>
+    <div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div><div><i className="ready" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div>
+    {pending && <p className="onboarding-next">{chatModelCount > 0 ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</p>}
+    <button autoFocus className="primary-button" onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : onAction}>{action}</button>
+  </section></div>;
 }
-
-function Onboarding({ health, models, onDone }: { health: Health; models: Model[]; onDone: () => void }) {
-  const { messages: text } = useI18n();
-  return <div className="modal-backdrop" role="presentation"><section className="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title"><div className="orb"><div /></div><span className="eyebrow">{text.privateWorkspace}</span><h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p><div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={models.length > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{models.length}</strong></div><div><i className="ready" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div><button className="primary-button" onClick={onDone}>{text.onboarding.continue}</button></section></div>;
-}
-
-function Metric({ label, value }: { label: string; value: string }) { return <article className="metric"><span>{label}</span><strong>{value}</strong></article>; }
-function EmptyPanel({ text }: { text: string }) { return <div className="empty-panel"><div className="empty-lines"><i /><i /><i /></div><p>{text}</p></div>; }

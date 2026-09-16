@@ -1,6 +1,8 @@
 import { defineConfig, devices, type BrowserChannel } from '@playwright/test';
 
 const channel = process.env.PLAYWRIGHT_CHANNEL as BrowserChannel | undefined;
+const externalURL = process.env.OFFGRID_E2E_URL;
+const localURL = 'http://127.0.0.1:5173';
 
 export default defineConfig({
   testDir: './tests',
@@ -9,9 +11,17 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: {
-    baseURL: process.env.OFFGRID_E2E_URL ?? 'http://127.0.0.1:11611',
+    baseURL: externalURL ?? localURL,
     ...devices['Desktop Edge'],
     ...(channel ? { channel } : {}),
     trace: 'retain-on-failure'
-  }
+  },
+  ...(externalURL ? {} : {
+    webServer: {
+      command: 'npm run dev -- --host 127.0.0.1',
+      url: `${localURL}/ui/`,
+      reuseExistingServer: false,
+      timeout: 120_000
+    }
+  })
 });

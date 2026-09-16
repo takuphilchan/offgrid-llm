@@ -16,7 +16,7 @@ function downloadFor(model: CatalogModel, progress: Record<string, DownloadProgr
   return progress[`${model.id}.gguf`];
 }
 
-export function ModelsPage({ models, selected, setSelected, onRefresh }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void> }) {
+export function ModelsPage({ models, selected, setSelected, onRefresh, onboardingPending }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void>; onboardingPending: boolean }) {
   const { messages: text } = useI18n();
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const [progress, setProgress] = useState<Record<string, DownloadProgress>>({});
@@ -27,6 +27,11 @@ export function ModelsPage({ models, selected, setSelected, onRefresh }: { model
   const [verification, setVerification] = useState<Verification | null>(null);
   const completed = useRef(new Set<string>());
   const activeOperations = useRef(new Set<string>());
+  const needsChatModel = onboardingPending && !models.some(item => item.type !== 'embedding');
+  const sortedCatalog = [...catalog].sort((a, b) => {
+    const rank = (item: CatalogModel) => (item.type !== 'embedding' ? 2 : 0) + (item.recommended ? 1 : 0);
+    return rank(b) - rank(a);
+  });
 
   const load = async () => {
     setLoading(true);
@@ -109,6 +114,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh }: { model
   };
 
   return <div className="stack models-workspace">
+    {needsChatModel && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
     {error && <div className="inline-error" role="alert">{error}</div>}
     {verification && <div className={verification.verified ? 'verification success' : 'verification'}><Icon name={verification.verified ? 'check' : 'models'} size={17} /><div><strong>{verification.file_name}</strong><span>{verification.message} {verification.sha256 && `· SHA-256 ${verification.sha256}`}</span></div></div>}
     <section className="model-section">
@@ -120,7 +126,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh }: { model
     </section>
     <section className="model-section">
       <div className="section-heading"><div><span className="eyebrow">{text.models.catalog}</span><h2>{text.models.discover}</h2></div><button className="secondary-button" onClick={() => void load()}>{text.common.refresh}</button></div>
-      {loading && catalog.length === 0 ? <div className="catalog-grid"><div className="catalog-card skeleton-card" /><div className="catalog-card skeleton-card" /></div> : <div className="catalog-grid">{catalog.map(model => {
+      {loading && catalog.length === 0 ? <div className="catalog-grid"><div className="catalog-card skeleton-card" /><div className="catalog-card skeleton-card" /></div> : <div className="catalog-grid">{sortedCatalog.map(model => {
         const current = downloadFor(model, progress);
         const installed = installedCatalogModel(model, models);
         return <article className="catalog-card" key={model.id}>

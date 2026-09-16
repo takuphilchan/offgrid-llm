@@ -81,7 +81,7 @@ jobs:
           done
           cd web/app
           npx playwright install --with-deps chromium
-          npm run test:e2e
+          OFFGRID_E2E_URL=http://127.0.0.1:11611 npm run test:e2e
 
       - name: Validate Electron package
         working-directory: desktop

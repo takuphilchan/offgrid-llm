@@ -12,10 +12,36 @@
             box-sizing: border-box;
         }
         
+        :root {
+            color-scheme: dark;
+            --background: #101011;
+            --surface: #222223;
+            --text: #f5f5f4;
+            --muted: #b9b9b7;
+            --faint: #989896;
+            --border: rgba(255, 255, 255, .2);
+            --action: #f5f5f4;
+            --on-action: #111112;
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                color-scheme: light;
+                --background: #f7f7f6;
+                --surface: #efefed;
+                --text: #171717;
+                --muted: #535351;
+                --faint: #696967;
+                --border: rgba(0, 0, 0, .2);
+                --action: #171717;
+                --on-action: #ffffff;
+            }
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: radial-gradient(circle at 50% 20%, rgba(85, 110, 190, .18), transparent 36%), #070a12;
-            color: #eef2ff;
+            background: var(--background);
+            color: var(--text);
             height: 100vh;
             display: flex;
             flex-direction: column;
@@ -28,7 +54,7 @@
             width: 80px;
             height: 80px;
             margin-bottom: 24px;
-            animation: pulse 2s ease-in-out infinite;
+            color: var(--text);
         }
         
         .logo svg {
@@ -36,21 +62,16 @@
             height: 100%;
         }
         
-        @keyframes pulse {
-            0%, 100% { opacity: 0.7; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.05); }
-        }
-        
         h1 {
             font-size: 28px;
             font-weight: 600;
             margin-bottom: 8px;
-            color: #f8fafc;
+            color: var(--text);
         }
         
         .status {
             font-size: 14px;
-            color: #94a3b8;
+            color: var(--muted);
             margin-bottom: 32px;
         }
         
@@ -64,8 +85,8 @@
         .spinner {
             width: 48px;
             height: 48px;
-            border: 3px solid #192235;
-            border-top-color: #9aafff;
+            border: 2px solid var(--border);
+            border-top-color: var(--text);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -76,7 +97,7 @@
         
         .progress-text {
             font-size: 12px;
-            color: #64748b;
+            color: var(--muted);
             text-align: center;
             max-width: 300px;
         }
@@ -85,7 +106,7 @@
             position: absolute;
             bottom: 24px;
             font-size: 11px;
-            color: #475569;
+            color: var(--faint);
         }
         
         /* Error state */
@@ -101,19 +122,19 @@
         .error-icon {
             width: 48px;
             height: 48px;
-            color: #f87171;
+            color: var(--text);
             margin-bottom: 16px;
         }
         
         .error-message {
-            color: #f87171;
+            color: var(--text);
             font-size: 14px;
             margin-bottom: 16px;
         }
         
         .retry-btn {
-            background: #9aafff;
-            color: #0f172a;
+            background: var(--action);
+            color: var(--on-action);
             border: none;
             padding: 10px 24px;
             border-radius: 8px;
@@ -124,18 +145,20 @@
         }
         
         .retry-btn:hover {
-            background: #b4c2ff;
-            transform: translateY(-1px);
+            opacity: .85;
         }
+
+        .retry-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+        @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
     </style>
 </head>
 <body>
     <div id="loading-state">
         <div class="logo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#9aafff"/>
-                <path d="M2 17l10 5 10-5" stroke="#9aafff"/>
-                <path d="M2 12l10 5 10-5" stroke="#7c9cff"/>
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
             </svg>
         </div>
         <h1>OffGrid LLM</h1>
