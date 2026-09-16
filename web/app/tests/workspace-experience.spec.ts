@@ -23,7 +23,8 @@ async function mockWorkspace(page: Page, hasChatModel: boolean) {
       status = 201;
     } else if (/^\/v1\/sessions\/[^/]+\/generate$/.test(path)) {
       const sessionName = decodeURIComponent(path.split('/')[3]);
-      body = { session: { name: sessionName, model_id: model.id, messages: [user, assistant], created_at: now, updated_at: now }, message: assistant };
+      body = { type: 'done', session: { name: sessionName, model_id: model.id, messages: [user, assistant], created_at: now, updated_at: now }, message: assistant };
+      return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify(body)}\n\n` });
     } else if (path === '/v1/catalog') body = { models: [] };
     else if (path === '/v1/models/download/progress') body = {};
     else if (path === '/v1/system/config') body = { version: 'test', inference_slots: 1 };

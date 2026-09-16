@@ -5,8 +5,17 @@ import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ModelSelect } from '../../components/ModelSelect';
 import { useI18n } from '../../i18n';
 import { copyText } from '../../lib/clipboard';
+import { clearSubmittedDraft, draftKey, readDraft, useDraft, writeDraft } from '../../lib/drafts';
+import { type ChatMetrics, type ChatPhase } from '../../api/session-stream';
 
 const activeSessionKey = 'offgrid.active-session';
+
+function readPreferences(key: string): { profile: string; maxTokens: number } {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? '{}');
+    return { profile: value.profile === 'extended' ? 'extended' : 'interactive', maxTokens: [256, 1024, 4096].includes(value.maxTokens) ? value.maxTokens : 1024 };
+  } catch { return { profile: 'interactive', maxTokens: 1024 }; }
+}
 
 function newSessionName(prompt: string): string {
   const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
@@ -18,7 +27,8 @@ function visibleSessionName(name: string): string {
   return name.replace(/ · \d{14}$/, '');
 }
 
-export function ChatPage({ models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: {
+export function ChatPage({ scope, models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: {
+  scope: string;
   models: Model[];
   model: string;
   setModel: (model: string) => void;
@@ -27,28 +37,43 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
   onOpenModels: () => void;
 }) {
   const { messages: text, locale } = useI18n();
+  const sessionKey = `${activeSessionKey}:${encodeURIComponent(scope)}`;
+  const preferencesKey = `offgrid.chat.preferences:${encodeURIComponent(scope)}`;
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeName, setActiveName] = useState(localStorage.getItem(activeSessionKey) ?? '');
+  const [activeName, setActiveName] = useState(localStorage.getItem(sessionKey) ?? '');
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState('');
+  const { value: draft, setValue: setDraft, unsaved, key: composerDraftKey } = useDraft(scope, 'chat', activeName);
   const [knowledge, setKnowledge] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<ChatPhase>('queued');
+  const [streamed, setStreamed] = useState('');
+  const [interrupted, setInterrupted] = useState(false);
+  const [metrics, setMetrics] = useState<ChatMetrics>();
+  const [limited, setLimited] = useState(false);
+  const [preferences, setPreferences] = useState(() => readPreferences(preferencesKey));
+  const { profile, maxTokens } = preferences;
+  const updatePreferences = (next: typeof preferences) => {
+    setPreferences(next);
+    try { localStorage.setItem(preferencesKey, JSON.stringify(next)); } catch { /* Settings still apply to this page. */ }
+  };
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState('');
   const controller = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement | null>(null);
+  const followOutput = useRef(true);
   const composerInput = useRef<HTMLTextAreaElement | null>(null);
 
   const activate = (session?: ChatSession) => {
     const name = session?.name ?? '';
     setActiveName(name);
     setConversation(session?.messages ?? []);
+    setStreamed(''); setInterrupted(false); setMetrics(undefined); setLimited(false);
     if (session?.model_id && models.some(item => item.id === session.model_id)) setModel(session.model_id);
-    if (name) localStorage.setItem(activeSessionKey, name);
-    else localStorage.removeItem(activeSessionKey);
+    if (name) localStorage.setItem(sessionKey, name);
+    else localStorage.removeItem(sessionKey);
     setHistoryOpen(false);
   };
 
@@ -58,7 +83,7 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
     try {
       const next = await api.sessions();
       setSessions(next);
-      activate(next.find(item => item.name === preferred) ?? next[0]);
+      activate(!preferred && readDraft(draftKey(scope, 'chat')) ? undefined : next.find(item => item.name === preferred) ?? next[0]);
       if (onboardingPending && next.some(item => item.messages.some(message => message.role === 'assistant' && message.content.trim()))) onFirstResponse();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : text.common.error);
@@ -68,7 +93,8 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
   };
 
   useEffect(() => { void loadSessions(); }, []);
-  useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }); }, [conversation, busy]);
+  useEffect(() => { if (followOutput.current) end.current?.scrollIntoView({ behavior: 'instant' }); }, [conversation, busy, streamed, phase]);
+  useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     if (!composerInput.current) return;
     composerInput.current.style.height = '0';
@@ -78,7 +104,6 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
   const startNew = () => {
     if (busy) return;
     activate(undefined);
-    setDraft('');
     setError('');
     setCopiedMessage('');
   };
@@ -110,27 +135,46 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
 
   const send = async () => {
     const prompt = draft.trim();
-    if (!prompt || !model || busy) return;
+    if (!prompt || !model || busy || controller.current) return;
+    const requestController = new AbortController();
+    controller.current = requestController;
+    const submitted = draft;
     setBusy(true);
-    setDraft('');
+    setPhase('queued'); setStreamed(''); setInterrupted(false); setMetrics(undefined); setLimited(false);
+    followOutput.current = true;
     setError('');
     let sessionName = activeName;
+    let partial = '';
+    let flush: ReturnType<typeof setTimeout> | undefined;
     try {
       if (!sessionName) {
-        const created = await api.createSession(newSessionName(prompt), model);
+        const created = await api.createSession(newSessionName(prompt), model, requestController.signal);
         sessionName = created.name;
+        writeDraft(draftKey(scope, 'chat', sessionName), readDraft(composerDraftKey));
+        writeDraft(composerDraftKey, '');
         setActiveName(sessionName);
-        localStorage.setItem(activeSessionKey, sessionName);
+        localStorage.setItem(sessionKey, sessionName);
         setSessions(current => [created, ...current]);
       }
       setConversation(current => [...current, { role: 'user', content: prompt }]);
-      controller.current = new AbortController();
-      const result = await api.generateSession(sessionName, prompt, model, knowledge, controller.current.signal);
+      const result = await api.streamSession(sessionName, prompt, model, knowledge, profile, maxTokens, event => {
+        if (event.type === 'phase') setPhase(event.phase);
+        else {
+          partial += event.delta;
+          // Bound React/Markdown updates during fast GPU decoding.
+          if (!flush) flush = setTimeout(() => { setStreamed(partial); flush = undefined; }, 40);
+        }
+      }, requestController.signal);
+      clearTimeout(flush); flush = undefined;
+      setStreamed(''); setMetrics(result.metrics); setLimited(result.finish_reason === 'length');
+      clearSubmittedDraft(draftKey(scope, 'chat', sessionName), submitted);
       setConversation(result.session.messages);
       setSessions(current => [result.session, ...current.filter(item => item.name !== result.session.name)]);
       if (onboardingPending && result.message.role === 'assistant' && result.message.content.trim()) onFirstResponse();
     } catch (reason) {
-      if ((reason as Error).name !== 'AbortError') setError(reason instanceof Error ? reason.message : text.common.error);
+      clearTimeout(flush); flush = undefined;
+      setStreamed(partial); setInterrupted(true);
+      setError(requestController.signal.aborted ? text.chatStreaming.cancelled : reason instanceof Error ? reason.message : text.common.error);
       if (sessionName) {
         try {
           const stored = await api.session(sessionName);
@@ -139,6 +183,7 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
         } catch { /* The primary error is more useful. */ }
       }
     } finally {
+      clearTimeout(flush);
       setBusy(false);
       controller.current = null;
     }
@@ -176,7 +221,12 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
     <div className="chat-layout">
       <div className="chat-toolbar"><div className="chat-toolbar-leading"><button className="history-toggle icon-button" onClick={() => setHistoryOpen(true)} aria-label={text.chat.showHistory} aria-expanded={historyOpen} aria-controls="conversation-history"><Icon name="menu" size={19} /></button><ModelSelect models={models} value={model} onChange={setModel} /></div><label className="switch"><input type="checkbox" checked={knowledge} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label></div>
       {(!model || onboardingPending) && <div className="setup-inline" role="status"><span>{model ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</span>{!model && <button className="secondary-button" onClick={onOpenModels}>{text.onboarding.chooseModel}</button>}</div>}
-      <div className="conversation" aria-live="polite">
+      <details className="chat-performance"><summary>{text.chatStreaming.options}</summary><div>
+        <label>{text.chatStreaming.profile}<select value={profile} disabled={busy} onChange={event => updatePreferences({ ...preferences, profile: event.target.value })}><option value="interactive">{text.chatStreaming.interactive}</option><option value="extended">{text.chatStreaming.extended}</option></select></label>
+        <label>{text.chatStreaming.responseLimit}<select value={maxTokens} disabled={busy} onChange={event => updatePreferences({ ...preferences, maxTokens: Number(event.target.value) })}>{[256, 1024, 4096].map(count => <option value={count} key={count}>{count.toLocaleString(locale)}</option>)}</select></label>
+        <p>{text.chatStreaming.profileHint}</p>
+      </div></details>
+      <div className="conversation" onScroll={event => { const el = event.currentTarget; followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
         {conversation.length === 0 && !loading && <div className="empty-chat"><div className="orb"><div /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
         {conversation.map((message, index) => {
           const messageKey = `${index}-${'timestamp' in message ? message.timestamp : message.content.slice(0, 24)}`;
@@ -185,8 +235,14 @@ export function ChatPage({ models, model, setModel, onboardingPending, onFirstRe
             <div className="message-body">{message.role === 'assistant' ? <MarkdownMessage content={message.content} /> : message.content}</div>
           </article>;
         })}
-        {busy && <article className="message assistant"><div className="message-label">{text.chat.assistant}</div><div className="thinking"><i /><i /><i /></div></article>}
+        {(busy || streamed) && <article className="message assistant streaming-response"><div className="message-heading"><div className="message-label">{text.chat.assistant}</div>{streamed && <button type="button" className="message-copy" onClick={() => void copyMessage('partial', streamed)}>{copiedMessage === 'partial' ? text.chat.copied : text.chat.copy}</button>}</div>
+          {streamed && <div className="message-body"><MarkdownMessage content={streamed} /></div>}
+          <div className="generation-status" role="status">{interrupted ? text.chatStreaming.unsaved : text.chatStreaming[phase]}</div>
+        </article>}
+        {metrics && <div className="generation-status">{text.chatStreaming.firstText}: {(metrics.first_text_ms / 1000).toLocaleString(locale, { maximumFractionDigits: 2 })} s{metrics.tokens_per_second ? ` · ${metrics.tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 })} ${text.chatStreaming.tokensPerSecond}` : ''} · {metrics.context_window.toLocaleString(locale)} {text.chatStreaming.contextTokens}</div>}
+        {limited && <div className="generation-status" role="status">{text.chatStreaming.limitReached}</div>}
         {error && <div className="inline-error" role="alert">{error}</div>}<div ref={end} />
+        {unsaved && <div className="inline-error" role="alert">{text.recovery.draftWarning}</div>}
       </div>
       <div className="composer"><div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} /><small>{text.chat.enterHint}</small></div><button disabled={busy ? false : !draft.trim() || !model} onClick={busy ? () => controller.current?.abort() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
     </div>

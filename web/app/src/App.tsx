@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { APIError, api, type Model, type PublicUser } from './api/client';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
 import { Icon } from './components/Icon';
@@ -50,20 +50,26 @@ export function App() {
   const [onboardingPending, setOnboardingPending] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true');
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true' && localStorage.getItem('offgrid.onboarding.stage') !== 'working');
   const [showCommands, setShowCommands] = useState(false);
+  const accessRevision = useRef(0);
 
   const refreshBase = useCallback(async () => {
+    const revision = ++accessRevision.current;
     setLoadError('');
-    const [healthResult, modelResult] = await Promise.allSettled([api.health(), api.models()]);
+    const [healthResult, modelResult, userResult] = await Promise.allSettled([api.health(), api.models(), api.currentUser()]);
+    if (revision !== accessRevision.current) return;
     setHealth(healthResult.status === 'fulfilled' ? 'ready' : 'offline');
+    if (userResult.status === 'rejected') {
+      if (userResult.reason instanceof APIError && userResult.reason.status === 401) { setAuthUser(null); setAccess('login'); }
+      else { setLoadError(userResult.reason instanceof Error ? userResult.reason.message : text.common.error); setAccess('checking'); }
+      return;
+    }
+    setAuthUser(userResult.value.authenticated ? userResult.value.user : null);
     if (modelResult.status === 'fulfilled') {
       setAccess('ready');
       setModels(modelResult.value);
       setModel(current => {
         if (current && modelResult.value.some(item => item.id === current && item.type !== 'embedding')) return current;
         return modelResult.value.find(item => item.type !== 'embedding')?.id ?? '';
-      });
-      void api.currentUser().then(result => setAuthUser(result.user)).catch(reason => {
-        if (reason instanceof APIError && reason.status === 401) setAccess('login');
       });
     } else if (modelResult.reason instanceof APIError && modelResult.reason.status === 401) {
       setAccess('login');
@@ -122,11 +128,14 @@ export function App() {
     activity: [text.activity.title, text.activity.subtitle], settings: [text.settings.title, text.settings.subtitle]
   };
 
-  if (access === 'checking') return <div className="boot-screen"><div className="orb"><div /></div><span>{text.status.checking}</span></div>;
+  if (access === 'checking') return <div className="boot-screen"><div className="orb"><div /></div><span>{loadError || text.status.checking}</span>{loadError && <button onClick={() => void refreshBase()}>{text.common.retry}</button>}</div>;
   if (access === 'login') return <LoginPage onAuthenticated={user => { setAuthUser(user); setAccess('ready'); void refreshBase(); }} />;
 
   const logout = async () => {
-    try { await api.logout(); } finally { setAuthUser(null); await refreshBase(); }
+    accessRevision.current++;
+    try {
+      await api.logout(); accessRevision.current++; setAccess('login'); setAuthUser(null);
+    } catch (reason) { setLoadError(reason instanceof Error ? reason.message : text.common.error); }
   };
 
   return <div className="app-shell">
@@ -158,10 +167,10 @@ export function App() {
       </header>
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
       <section className="page-content">
-        <PageBoundary key={page} message={text.common.error} retry={text.common.retry}>
-          {page === 'chat' && <ChatPage models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
+        <PageBoundary key={`${page}:${authUser?.id ?? 'local'}`} message={text.common.error} retry={text.common.retry}>
+          {page === 'chat' && <ChatPage scope={authUser?.id ?? 'local'} models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'knowledge' && <KnowledgePage models={models} onModelsChanged={refreshBase} onOpenModels={() => { window.location.hash = '#/models'; }} />}
-          {page === 'agents' && <AgentPage models={models} model={model} setModel={setModel} />}
+          {page === 'agents' && <AgentPage scope={authUser?.id ?? 'local'} models={models} model={model} setModel={setModel} />}
           {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} onboardingPending={onboardingPending} />}
           {page === 'activity' && <ActivityPage health={health} />}
           {page === 'settings' && <SettingsPage health={health} themeChoice={theme.choice} onThemeChange={theme.setChoice} onShowOnboarding={() => setShowOnboarding(true)} />}

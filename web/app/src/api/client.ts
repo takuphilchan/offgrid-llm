@@ -1,4 +1,5 @@
 import type { components } from './schema.generated';
+import { readSessionStream, type SessionEvent } from './session-stream';
 
 export type Model = components['schemas']['Model'];
 export type Document = components['schemas']['Document'];
@@ -9,9 +10,10 @@ export type CatalogModel = components['schemas']['CatalogModel'];
 export type DownloadProgress = components['schemas']['DownloadProgress'];
 export type Verification = components['schemas']['Verification'];
 export type PublicUser = components['schemas']['PublicUser'];
-export type ToolApproval = { tool: string; arguments: Record<string, unknown> };
-export type AgentStep = { id?: string; type?: string; content?: string; tool_name?: string; tool_args?: Record<string, unknown>; tool_result?: string };
-export type AgentTask = { id: string; prompt: string; status: string; result?: string; error?: string; steps?: AgentStep[]; created_at: string; started_at?: string; completed_at?: string };
+export type ToolApproval = components['schemas']['ToolApproval'];
+export type AgentStep = components['schemas']['AgentStep'];
+export type AgentTask = components['schemas']['AgentTask'];
+export type AgentRun = components['schemas']['AgentRunResponse'];
 export type AgentTool = { name: string; description: string; enabled: boolean; source: string; capability?: { name: string; namespace: string; source: string; kind: string; risk: string; description?: string } };
 export type MCPServer = { name: string; url?: string; transport: string; tools: number; status: string };
 export type RunSummary = { id: string; status: string; started_at: string; updated_at: string; event_count: number; data?: Record<string, unknown> };
@@ -62,13 +64,27 @@ export const api = {
     return Array.isArray(result.sessions) ? result.sessions : [];
   },
   session: (name: string) => request<ChatSession>(`/v1/sessions/${encodeURIComponent(name)}`),
-  createSession: (name: string, modelID: string) => request<ChatSession>('/v1/sessions', {
-    method: 'POST', body: JSON.stringify({ name, model_id: modelID })
+  createSession: (name: string, modelID: string, signal?: AbortSignal) => request<ChatSession>('/v1/sessions', {
+    method: 'POST', signal, body: JSON.stringify({ name, model_id: modelID })
   }),
   deleteSession: (name: string) => request<{ success: boolean }>(`/v1/sessions/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   generateSession: (name: string, content: string, modelID: string, useKnowledgeBase: boolean, signal?: AbortSignal) => request<{ session: ChatSession; message: SessionMessage }>(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
     method: 'POST', signal, body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase })
   }),
+  streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal) => {
+    const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
+      method: 'POST', credentials: 'same-origin', signal,
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase, stream: true, profile, max_tokens: maxTokens })
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      let message = `${response.status} ${response.statusText}`;
+      try { const error = JSON.parse(body); message = error.error?.message ?? error.error ?? message; } catch { /* Do not show an HTML proxy page. */ }
+      throw new APIError(message, response.status);
+    }
+    return readSessionStream(response, onEvent);
+  },
   catalog: async () => {
     const result = await request<{ models: CatalogModel[] | null }>('/v1/catalog');
     return Array.isArray(result.models) ? result.models : [];
@@ -120,9 +136,11 @@ export const api = {
     });
     return result.choices[0]?.message.content ?? '';
   },
-  runAgent: (model: string, prompt: string, style: string, approvedToolCalls: ToolApproval[] = []) => request<{ output: string; task_id: string; run_id: string; steps: AgentStep[] }>('/v1/agents/run', {
-    method: 'POST', body: JSON.stringify({ model, prompt, style, max_iterations: 12, approved_tool_calls: approvedToolCalls })
+  runAgent: (model: string, prompt: string, style: string) => request<AgentRun>('/v1/agents/run', {
+    method: 'POST', body: JSON.stringify({ model, prompt, style, max_iterations: 12, async: true })
   }),
+  agentRun: (id: string) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}`),
+  agentAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'resume' | 'reconcile', data: { approval_id?: string; call_id?: string; result?: string } = {}) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: JSON.stringify({ ...data, async: true }) }),
   agentTasks: async () => {
     const result = await request<AgentTask[] | null>('/v1/agents/tasks');
     return Array.isArray(result) ? result : [];
