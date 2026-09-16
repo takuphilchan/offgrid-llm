@@ -162,11 +162,11 @@
             </svg>
         </div>
         <h1>OffGrid LLM</h1>
-        <p class="status" id="status-text">Starting server...</p>
+        <p class="status" id="status-text">Connecting to OffGrid...</p>
         <div class="spinner-container">
             <div class="spinner"></div>
         </div>
-        <p class="progress-text" id="progress-text">Initializing local AI environment</p>
+        <p class="progress-text" id="progress-text">Checking service and interface compatibility</p>
     </div>
     
     <div id="error-state" class="error-container">
@@ -181,21 +181,6 @@
     <p class="version" id="version"></p>
     
     <script>
-        const statusMessages = [
-            'Starting server...',
-            'Loading models...',
-            'Preparing interface...',
-            'Almost ready...'
-        ];
-        
-        let messageIndex = 0;
-        
-        // Cycle through status messages
-        setInterval(() => {
-            messageIndex = (messageIndex + 1) % statusMessages.length;
-            document.getElementById('status-text').textContent = statusMessages[messageIndex];
-        }, 3000);
-        
         // Show error state
         function showError(message) {
             document.getElementById('loading-state').style.display = 'none';
@@ -204,23 +189,25 @@
         }
         
         // Retry connection
-        function retryConnection() {
+        async function retryConnection(navigate = true) {
             document.getElementById('error-state').classList.remove('visible');
             document.getElementById('loading-state').style.display = 'block';
-            messageIndex = 0;
-            document.getElementById('status-text').textContent = statusMessages[0];
-            
-            // Notify main process to retry (if API available)
-            if (window.electron && window.electron.getServerStatus) {
-                window.electron.getServerStatus().then(isRunning => {
-                    if (isRunning) {
-                        window.location.reload();
-                    } else {
-                        setTimeout(() => showError('Server is not responding'), 5000);
-                    }
-                });
-            } else {
-                window.location.reload();
+            document.getElementById('status-text').textContent = 'Checking service compatibility...';
+            try {
+                if (!window.electron?.getBackendInfo) {
+                    showError('The desktop bridge is unavailable. Restart the desktop application.');
+                    return;
+                }
+                const backend = await window.electron.getBackendInfo();
+                if (backend.state === 'ready') {
+                    // Do not reload this loading file forever after a successful
+                    // retry. The main process checked this exact backend origin.
+                    if (navigate) window.location.assign(`${backend.url}/ui/`);
+                } else {
+                    showError(backend.reason || 'OffGrid is not ready. Check the service and retry.');
+                }
+            } catch {
+                showError('Cannot check the OffGrid service. Restart the desktop application or retry.');
             }
         }
         
@@ -228,8 +215,10 @@
         if (window.electron && window.electron.getVersion) {
             window.electron.getVersion().then(version => {
                 document.getElementById('version').textContent = 'OffGrid ' + version;
-            });
+            }).catch(() => {});
         }
+        // Initial navigation remains owned by the main-process startup wait.
+        void retryConnection(false);
     </script>
 </body>
 </html>

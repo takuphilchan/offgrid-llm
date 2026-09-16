@@ -11,6 +11,7 @@
   "license": "MIT",
   "main": "main.js",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "icons": "node ../dev/scripts/generate-icons.mjs",
     "start": "electron .",
     "dev": "electron . --dev",
@@ -32,6 +33,7 @@
     },
     "files": [
       "main.js",
+      "backend.js",
       "preload.js",
       "loading.html",
       "assets/icon.png",

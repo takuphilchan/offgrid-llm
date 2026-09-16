@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electron', {
   
   // Get server status
   getServerStatus: () => ipcRenderer.invoke('get-server-status'),
+  getBackendInfo: () => ipcRenderer.invoke('get-backend-info'),
   
   // Get app paths (config, models, data directories)
   getPaths: () => ipcRenderer.invoke('get-paths'),

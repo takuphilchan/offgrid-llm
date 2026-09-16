@@ -1,10 +1,12 @@
 export type DesktopPaths = { config: string; models: string; data: string };
+export type DesktopBackend = { state: 'ready' | 'offline' | 'incompatible' | 'unavailable'; url: string; managedByDesktop: boolean; desktopVersion: string; version?: string; revision?: string; uiBuildID?: string; apiVersion?: number; reason?: string };
 
 export type DesktopBridge = {
   isDesktop: true;
   platform: string;
   getApiUrl: () => Promise<string>;
   getServerStatus: () => Promise<boolean>;
+  getBackendInfo: () => Promise<DesktopBackend>;
   getVersion: () => Promise<string>;
   selectDirectory: () => Promise<string | null>;
   getSystemTheme: () => Promise<'dark' | 'light'>;

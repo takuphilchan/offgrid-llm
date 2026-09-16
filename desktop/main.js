@@ -2,7 +2,8 @@ const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nat
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
-const http = require('http');
+const { pathToFileURL } = require('node:url');
+const { inspectBackend, isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
 
 // Single instance lock - prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
@@ -32,6 +33,10 @@ const SERVER_PORT = Number.isInteger(configuredPort) && configuredPort > 0 && co
   ? configuredPort
   : 11611;
 const SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
+const LOADING_URL = pathToFileURL(path.join(__dirname, 'loading.html')).href;
+const uiIndex = app.isPackaged ? path.join(process.resourcesPath, 'ui/index.html') : path.join(__dirname, '../web/dist/index.html');
+const expectedUIBuild = fs.existsSync(uiIndex) ? fingerprintUI(fs.readFileSync(uiIndex)) : null;
+let backendStatus = { state: 'offline', url: SERVER_URL };
 
 // Paths configuration
 const paths = {
@@ -142,6 +147,8 @@ function waitForServer(callback, maxAttempts = 60) {
     const ready = await checkServer();
     if (ready) {
       callback();
+    } else if (backendStatus.state === 'incompatible') {
+      if (mainWindow) dialog.showErrorBox('Service compatibility', backendStatus.reason);
     } else if (attempts < maxAttempts) {
       attempts++;
       delay = Math.min(delay * 1.2, maxDelay); // Exponential backoff
@@ -181,20 +188,9 @@ function ensureDirectories() {
 }
 
 // Check if server is running (with timeout and proper cleanup)
-function checkServer() {
-  return new Promise((resolve) => {
-    const req = http.get(`${SERVER_URL}/health`, (res) => {
-      // Consume response data to free up memory
-      res.resume();
-      resolve(res.statusCode === 200);
-    });
-    
-    req.on('error', () => resolve(false));
-    req.setTimeout(2000, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
+async function checkServer() {
+  backendStatus = await inspectBackend(SERVER_URL, app.getVersion(), expectedUIBuild);
+  return backendStatus.state === 'ready';
 }
 
 // Start OffGrid server
@@ -207,6 +203,10 @@ async function startOffgridServer() {
   if (isRunning) {
     console.log('OffGrid server is already running');
     return true;
+  }
+  if (backendStatus.state !== 'offline') {
+    dialog.showErrorBox('Cannot attach to service', backendStatus.reason);
+    return false;
   }
 
   if (!fs.existsSync(offgridBinary)) {
@@ -254,6 +254,7 @@ async function startOffgridServer() {
     });
 
     offgridProcess.on('close', (code) => {
+      offgridProcess = null;
       console.log(`OffGrid server exited with code ${code}`);
       if (!isQuitting && mainWindow) {
         dialog.showMessageBox(mainWindow, {
@@ -391,7 +392,7 @@ function createWindow() {
   mainWindow.on('unmaximize', saveWindowState);
 
   // Load the lightweight loading page first
-  mainWindow.loadFile('loading.html');
+  mainWindow.loadFile(path.join(__dirname, 'loading.html'));
 
   // Show window when ready (avoids white flash)
   mainWindow.once('ready-to-show', () => {
@@ -411,7 +412,7 @@ function createWindow() {
     console.error('Page load failed:', errorCode, errorDescription);
     // Only show error for non-abort errors (user navigation cancels are -3)
     if (errorCode !== -3) {
-      mainWindow.loadFile('loading.html');
+      mainWindow.loadFile(path.join(__dirname, 'loading.html'));
     }
   });
 
@@ -422,7 +423,7 @@ function createWindow() {
     return { action: 'deny' };
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith(SERVER_URL) || url.startsWith('file:')) return;
+    if (isTrustedPage(url, SERVER_URL, LOADING_URL)) return;
     event.preventDefault();
     if (isSafeExternalLink(url)) void shell.openExternal(url);
   });
@@ -559,17 +560,29 @@ function createTray() {
 }
 
 // IPC Handlers
-ipcMain.handle('get-api-url', () => {
+function handleTrustedIPC(channel, handler) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isTrustedSender(event, mainWindow?.webContents, SERVER_URL, LOADING_URL)) throw new Error('Untrusted desktop IPC sender');
+    return handler(...args);
+  });
+}
+
+handleTrustedIPC('get-api-url', () => {
   return SERVER_URL;
 });
 
-ipcMain.handle('get-app-version', () => app.getVersion());
+handleTrustedIPC('get-app-version', () => app.getVersion());
 
-ipcMain.handle('get-server-status', async () => {
+handleTrustedIPC('get-server-status', async () => {
   return await checkServer();
 });
 
-ipcMain.handle('select-directory', async () => {
+handleTrustedIPC('get-backend-info', async () => {
+  await checkServer();
+  return { ...backendStatus, managedByDesktop: Boolean(offgridProcess), desktopVersion: app.getVersion() };
+});
+
+handleTrustedIPC('select-directory', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
     title: 'Select Directory'
@@ -581,7 +594,8 @@ ipcMain.handle('select-directory', async () => {
   return null;
 });
 
-ipcMain.handle('get-paths', () => {
+handleTrustedIPC('get-paths', () => {
+  if (!offgridProcess) throw new Error('Paths belong to the externally managed service, not the desktop host');
   return {
     config: paths.getConfigDir(),
     models: paths.getModelsDir(),
@@ -590,7 +604,7 @@ ipcMain.handle('get-paths', () => {
 });
 
 // System theme support
-ipcMain.handle('get-system-theme', () => {
+handleTrustedIPC('get-system-theme', () => {
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
 });
 
