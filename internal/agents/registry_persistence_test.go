@@ -61,7 +61,10 @@ func TestMCPServerConfigurationPersists(t *testing.T) {
 func TestApprovalWaitingTaskPersists(t *testing.T) {
 	dataDir := t.TempDir()
 	manager := NewManagerWithPersistence(nil, nil, nil, dataDir)
-	task := manager.CreateTask("run-1", "read a protected file", nil)
+	task, err := manager.CreateTask("run-1", "read a protected file", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := manager.StartTask(task.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +74,7 @@ func TestApprovalWaitingTaskPersists(t *testing.T) {
 
 	reloaded := NewManagerWithPersistence(nil, nil, nil, dataDir)
 	loaded, ok := reloaded.GetTask(task.ID)
-	if !ok || loaded.Status != TaskWaiting {
-		t.Fatalf("waiting task was not restored: %#v", loaded)
+	if !ok || loaded.Status != TaskInterrupted {
+		t.Fatalf("legacy task without checkpoint must require review: %#v", loaded)
 	}
 }

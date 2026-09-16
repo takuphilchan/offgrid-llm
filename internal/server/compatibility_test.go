@@ -7,27 +7,6 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-func TestToolApprovalKeyBindsExactCanonicalArguments(t *testing.T) {
-	first, err := toolApprovalKey("write_file", json.RawMessage(`{"path":"notes.txt","content":"hello"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	reordered, err := toolApprovalKey("write_file", json.RawMessage(`{"content":"hello","path":"notes.txt"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed, err := toolApprovalKey("write_file", json.RawMessage(`{"path":"other.txt","content":"hello"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first != reordered {
-		t.Fatal("semantically identical arguments produced different approval keys")
-	}
-	if first == changed {
-		t.Fatal("changed arguments reused an approval key")
-	}
-}
-
 func TestResponsesInputAndFunctionCallContract(t *testing.T) {
 	input := json.RawMessage(`[{"role":"user","content":[{"type":"input_text","text":"hello"}]}]`)
 	messages, err := responseInputMessages(input)

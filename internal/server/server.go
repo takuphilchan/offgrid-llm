@@ -70,6 +70,7 @@ type Server struct {
 	exportMutex          sync.RWMutex
 	modelCache           *inference.ModelCache
 	currentModelID       string
+	currentContext       int
 	currentPort          int
 	modelMutex           sync.Mutex
 	inferenceLifecycle   *inference.LifecycleGate
@@ -83,6 +84,7 @@ type Server struct {
 	kbManager           *users.KnowledgeBaseManager
 	loraManager         *inference.LoRAManager
 	agentManager        *agents.Manager
+	agentRunner         *agents.Runner
 	agentOrchestrator   *agents.Orchestrator
 	toolRegistry        *agents.ToolRegistry
 	mcpHandler          http.Handler
@@ -495,6 +497,17 @@ func NewWithConfig(cfg *config.Config) *Server {
 		runtimeCtx:           runtimeCtx,
 		runtimeCancel:        runtimeCancel,
 	}
+	sessionHandlers.requireAuth = cfg.RequireAuth
+	sessionHandlers.streamer = server.streamSessionChat
+	server.agentRunner = agents.NewRunner(agentManager, toolRegistry, server.callAgentModel)
+	server.agentRunner.Observer = func(task *agents.Task) {
+		server.publishRunEvent(context.Background(), task.ID, runs.RunStateChanged, map[string]any{"status": task.Status, "prompt": task.Prompt, "model": task.Model, "actor": task.Actor, "pending_approval": task.PendingApproval})
+		if task.Status == agents.TaskCompleted {
+			if _, err := server.persistRunOutput(context.Background(), task.ID, task.Result); err != nil {
+				log.Printf("Agent output artifact unavailable (result retained in task): %v", err)
+			}
+		}
+	}
 	sessionHandlers.SetCompleter(func(ctx context.Context, modelID string, messages []api.ChatMessage, useKnowledgeBase bool) (string, error) {
 		response, err := server.completeChat(ctx, &api.ChatCompletionRequest{
 			Model: modelID, Messages: messages, UseKnowledgeBase: &useKnowledgeBase,
@@ -518,45 +531,19 @@ func NewWithConfig(cfg *config.Config) *Server {
 func createModelCache(cfg *config.Config) *inference.ModelCache {
 	binDir := filepath.Join(cfg.ModelsDir, "..", "bin")
 
-	// Auto-scale MaxModels based on system RAM if not explicitly configured
+	// Never raise the configured residency limit from weight-file sizes alone:
+	// KV caches, compute buffers, embeddings and other applications also need RAM.
 	maxModels := cfg.MaxModels
-	resources, err := resource.DetectResources()
+	resources, _ := resource.DetectResources()
 
 	// Low memory mode is opt-in via config only
 	// Auto-detection was removed as it can cause more problems than it solves
 	lowMemoryMode := cfg.LowMemoryMode
 
-	if err == nil && resources != nil {
-		// Calculate optimal max_models based on available RAM
-		// Reserve 2GB for OS and other processes
-		availableForModels := resources.TotalRAM - 2048
-		if availableForModels < 1024 {
-			availableForModels = 1024 // Minimum 1GB for models
-		}
-
-		// Estimate average model size by scanning model directory
-		avgModelSize := estimateAverageModelSize(cfg.ModelsDir)
-		if avgModelSize > 0 {
-			optimalMax := int(availableForModels / avgModelSize)
-			if optimalMax < 1 {
-				optimalMax = 1
-			}
-			if optimalMax > 10 {
-				optimalMax = 10 // Safety cap
-			}
-
-			// Only auto-scale if user has default config value (3)
-			// This respects explicit user configuration
-			if cfg.MaxModels == 3 && optimalMax > maxModels {
-				log.Printf("Auto-scaling max_models: %d -> %d (RAM: %dMB, avg model: %dMB)",
-					maxModels, optimalMax, resources.TotalRAM, avgModelSize)
-				maxModels = optimalMax
-			}
-		}
-	}
-
 	// Use the new warmer-enabled cache for faster model switching
 	cache := inference.NewModelCacheWithWarmer(maxModels, cfg.NumGPULayers, binDir, cfg.ModelsDir)
+	// Runtime restarts must go through the lifecycle gate, including profiles.
+	cache.SetAutoRestart(false)
 
 	// Always set system RAM for auto-detection of context size
 	if resources != nil {
@@ -691,6 +678,10 @@ func (s *Server) switchModel(modelID string) error {
 }
 
 func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
+	return s.switchModelWithContextSize(ctx, modelID, s.effectiveContextWindow())
+}
+
+func (s *Server) switchModelWithContextSize(ctx context.Context, modelID string, effectiveContext int) error {
 	s.modelMutex.Lock()
 	defer s.modelMutex.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -698,7 +689,7 @@ func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
 	}
 
 	// Fast path: if model is already loaded and active, skip reload
-	if s.currentModelID == modelID && s.currentPort > 0 {
+	if s.currentModelID == modelID && s.currentPort > 0 && s.currentContext == effectiveContext {
 		// Verify the cached instance is still alive
 		if s.modelCache.IsModelAlive(modelID) {
 			log.Printf("Model %s already loaded on port %d, skipping reload", modelID, s.currentPort)
@@ -718,7 +709,6 @@ func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
 
 	// ModelCache owns the llama-server process, so the effective context must
 	// be set before GetOrLoadContext launches it.
-	effectiveContext := s.effectiveContextWindow()
 	s.modelCache.SetContextSize(effectiveContext)
 
 	// Load or get cached model instance
@@ -726,10 +716,6 @@ func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load model: %w", err)
 	}
-
-	// Update current model tracking
-	s.currentModelID = modelID
-	s.currentPort = instance.Port
 
 	// Update engine to point to the correct port
 	type PortSetter interface {
@@ -750,6 +736,10 @@ func (s *Server) switchModelContext(ctx context.Context, modelID string) error {
 	if err := s.engine.Load(ctx, metadata.Path, loadOptions); err != nil {
 		return fmt.Errorf("connect inference engine: %w", err)
 	}
+	// Do not mark the profile active until the engine has connected.
+	s.currentModelID = modelID
+	s.currentContext = effectiveContext
+	s.currentPort = instance.Port
 	// Registry state is committed only after the runtime is reachable.
 	if err := s.registry.LoadModel(modelID); err != nil {
 		return err
@@ -774,8 +764,23 @@ func (s *Server) syncRegistryLoadState() {
 }
 
 func (s *Server) acquireInference(ctx context.Context, modelID string) (func(), error) {
+	return s.acquireInferenceContext(ctx, modelID, s.effectiveContextWindow(), nil)
+}
+
+func (s *Server) acquireInferenceContext(ctx context.Context, modelID string, contextWindow int, loading func() error) (func(), error) {
+	if s.inferenceLifecycle != nil && s.modelCache != nil && !s.modelCache.IsModelAlive(modelID) {
+		s.inferenceLifecycle.Invalidate(modelID)
+	}
+	switcher := func(ctx context.Context, model string) error {
+		if loading != nil {
+			if err := loading(); err != nil {
+				return err
+			}
+		}
+		return s.switchModelWithContextSize(ctx, model, contextWindow)
+	}
 	if s.inferenceLifecycle == nil {
-		if err := s.switchModelContext(ctx, modelID); err != nil {
+		if err := switcher(ctx, modelID); err != nil {
 			return nil, err
 		}
 		return func() {}, nil
@@ -786,7 +791,7 @@ func (s *Server) acquireInference(ctx context.Context, modelID string) (func(), 
 		loadCtx, cancel = context.WithTimeout(ctx, time.Duration(s.config.ModelLoadTimeout)*time.Second)
 	}
 	defer cancel()
-	return s.inferenceLifecycle.Acquire(loadCtx, modelID, s.switchModelContext)
+	return s.inferenceLifecycle.AcquireWithContext(loadCtx, modelID, contextWindow, switcher)
 }
 
 func serverListenAddress(host string, port int) string {
@@ -989,6 +994,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/mcp", adminOnly(s.mcpHandler.ServeHTTP))
 	mux.HandleFunc("/v1/agents/run", adminOnly(s.handleAgentRun))
 	mux.HandleFunc("/v1/agents/tasks", adminOnly(s.handleAgentTasks))
+	mux.HandleFunc("/v1/agents/tasks/", adminOnly(s.handleAgentTaskAction))
 	mux.HandleFunc("/v1/agents/workflows", adminOnly(s.handleAgentWorkflows))
 	mux.HandleFunc("/v1/agents/orchestrate", adminOnly(s.handleAgentOrchestrate))
 	mux.HandleFunc("/v1/runs", adminOnly(s.handleRuns))
@@ -1916,6 +1922,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	if err := s.authorizeChat(r.Context(), &req); err != nil {
+		writeServiceError(w, err)
+		return
+	}
 	if !req.Stream {
 		response, err := s.completeChat(r.Context(), &req)
 		if err != nil {
@@ -1956,6 +1966,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Streaming and durable chat use the same retrieval and error contract.
+	// Check optional knowledge before loading a potentially expensive chat model.
+	if err := s.enhanceChatWithKnowledge(r.Context(), &req); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
 	// Admit bounded same-model concurrency; model changes remain exclusive.
 	releaseInference, err := s.acquireInference(r.Context(), req.Model)
 	if err != nil {
@@ -1963,39 +1980,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer releaseInference()
-
-	// Apply RAG enhancement if enabled
-	log.Printf("[RAG] Check: UseKnowledgeBase=%v, RAGEnabled=%v", req.UseKnowledgeBase, s.ragEngine.IsEnabled())
-	if req.UseKnowledgeBase != nil && *req.UseKnowledgeBase {
-		if !s.ragEngine.IsEnabled() {
-			log.Printf("Knowledge Base requested but RAG is not enabled")
-		} else {
-			// Find the last user message
-			for i := len(req.Messages) - 1; i >= 0; i-- {
-				if req.Messages[i].Role == "user" {
-					userContent := req.Messages[i].StringContent()
-					log.Printf("[RAG] Searching for: %s", userContent)
-					_, ragCtx, err := s.ragEngine.EnhancePrompt(r.Context(), userContent)
-					if err != nil {
-						log.Printf("RAG enhancement failed: %v", err)
-					} else if ragCtx != nil && len(ragCtx.Results) > 0 {
-						// Keep the user's message intact. Retrieved text is a separate,
-						// explicitly untrusted system context so its provenance and
-						// instruction boundary survive downstream processing.
-						ragMessage := api.ChatMessage{Role: "system", Content: ragCtx.Context}
-						req.Messages = append(req.Messages, api.ChatMessage{})
-						copy(req.Messages[i+1:], req.Messages[i:])
-						req.Messages[i] = ragMessage
-						log.Printf("[RAG] Injected %d chunks from %d documents (context length: %d chars)",
-							len(ragCtx.Results), ragCtx.UniqueDocumentCount(), len(ragCtx.Context))
-					} else {
-						log.Printf("RAG found no relevant results for query")
-					}
-					break
-				}
-			}
-		}
-	}
 
 	s.handleChatCompletionsStream(w, r, &req)
 }
@@ -2045,7 +2029,9 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 			return err
 		}
 
-		fmt.Fprintf(w, "data: %s\n\n", data)
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+			return err
+		}
 		flusher.Flush()
 		tokenIndex++
 		emittedChunks++
@@ -2093,7 +2079,7 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 	// Retry logic: If we haven't sent any tokens yet and encountered a network error,
 	// it likely means the llama-server process crashed or was dead.
 	// We should try to reload the model and retry the request once.
-	if err != nil && emittedChunks == 0 {
+	if err != nil && emittedChunks == 0 && ctx.Err() == nil && s.modelCache != nil && s.inferenceLifecycle == nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "EOF") || strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "connection reset") {
 			log.Printf("Inference failed before generation started: %v. Attempting to reload model and retry...", err)
@@ -2111,16 +2097,8 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// If we already sent tokens and then the stream was interrupted,
-	// gracefully end instead of showing an error to the user.
-	// The partial response is still useful, and errors mid-generation are often OOM.
-	if err != nil && emittedChunks > 0 {
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "EOF") || strings.Contains(errMsg, "interrupted") || strings.Contains(errMsg, "connection") {
-			log.Printf("Stream interrupted after %d chunks (possible OOM or server crash): %v", emittedChunks, err)
-			// Don't send error - just end gracefully with what we have
-			err = nil
-		}
+	if ctx.Err() != nil {
+		return
 	}
 
 	if err != nil {
@@ -4766,388 +4744,26 @@ func (s *Server) handleLoRA(w http.ResponseWriter, r *http.Request) {
 // Agent Handlers
 // ============================================================================
 
-func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req struct {
-		Prompt            string   `json:"prompt"`
-		Task              string   `json:"task"` // Alias for prompt
-		Model             string   `json:"model"`
-		Style             string   `json:"style"`
-		Stream            bool     `json:"stream"`
-		MaxIterations     int      `json:"max_iterations"`
-		MaxSteps          int      `json:"max_steps"`
-		SystemPrompt      string   `json:"system_prompt"`
-		ApprovedTools     []string `json:"approved_tools,omitempty"` // Rejected: name-only grants are unsafe.
-		ApprovedToolCalls []struct {
-			Tool      string          `json:"tool"`
-			Arguments json.RawMessage `json:"arguments"`
-		} `json:"approved_tool_calls,omitempty"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
-		return
-	}
-	if len(req.ApprovedTools) > 0 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "approved_tools is unsafe and no longer supported; use approved_tool_calls with the exact arguments"})
-		return
-	}
-
-	// Use Task as fallback for Prompt
-	if req.Prompt == "" && req.Task != "" {
-		req.Prompt = req.Task
-	}
-
-	// Validate prompt
-	if req.Prompt == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "prompt or task is required"})
-		return
-	}
-
-	// Validate model
-	if req.Model == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "model is required"})
-		return
-	}
-
-	// Get model metadata
-	_, err := s.registry.GetModel(req.Model)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("model not found: %s", req.Model)})
-		return
-	}
-
-	// Hold a lifecycle lease for the complete agent run so no concurrent
-	// request can switch the shared engine out from under its reasoning loop.
-	releaseInference, err := s.acquireInference(r.Context(), req.Model)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to switch model: %v", err)})
-		return
-	}
-	defer releaseInference()
-
-	style := "react"
-	switch req.Style {
-	case "cot":
-		style = "cot"
-	case "plan", "plan-execute":
-		style = "plan-execute"
-	}
-
-	maxIter := req.MaxIterations
-	if maxIter == 0 {
-		maxIter = req.MaxSteps
-	}
-	if maxIter == 0 {
-		maxIter = 10
-	}
-
-	// A run ID is created before any tool boundary is crossed so policy and
-	// audit events can always be correlated with the task returned to clients.
-	taskID := fmt.Sprintf("run-%d", time.Now().UnixNano())
-	actor := users.GetUserID(r)
-	if actor == "" {
-		actor = "local-admin"
-	}
-	approvedToolCalls := make(map[string]bool, len(req.ApprovedToolCalls))
-	for _, approval := range req.ApprovedToolCalls {
-		key, keyErr := toolApprovalKey(approval.Tool, approval.Arguments)
-		if keyErr != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": keyErr.Error()})
-			return
-		}
-		approvedToolCalls[key] = true
-	}
-
-	// Get tools from registry (includes built-in + user-defined + MCP tools)
-	tools := s.toolRegistry.GetTools()
-	executor := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
-		descriptor, _ := s.toolRegistry.Capability(name)
-		approvalKey, approvalKeyErr := toolApprovalKey(name, args)
-		if approvalKeyErr != nil {
-			return "", approvalKeyErr
-		}
-		s.publishRunEvent(ctx, taskID, runs.ToolRequested, map[string]any{
-			"tool": name, "arguments": args, "capability": descriptor, "approval_key": approvalKey,
-		})
-		result, execErr := s.toolRegistry.ExecuteWithPolicy(ctx, name, args, agents.ToolExecution{
-			RunID: taskID, Actor: actor, Approved: approvedToolCalls[approvalKey],
-		})
-		if errors.Is(execErr, capabilities.ErrApprovalRequired) {
-			s.publishRunEvent(ctx, taskID, runs.ApprovalRequired, map[string]any{
-				"tool": name, "arguments": args, "capability": descriptor, "approval_key": approvalKey,
-			})
-			return "", execErr
-		}
-		eventData := map[string]any{"tool": name, "success": execErr == nil}
-		if execErr != nil {
-			eventData["error"] = execErr.Error()
-		}
-		s.publishRunEvent(ctx, taskID, runs.ToolCompleted, eventData)
-		return result, execErr
-	}
-
-	// Use ReAct system prompt if not provided
-	systemPrompt := req.SystemPrompt
-	if systemPrompt == "" {
-		systemPrompt = agents.ReActSystemPrompt(tools)
-	}
-
-	agentCfg := agents.AgentConfig{
-		SystemPrompt:   systemPrompt,
-		ReasoningStyle: style,
-		MaxIterations:  maxIter,
-		MaxTokens:      2048,
-		Temperature:    0.7,
-		TimeoutPerStep: 10 * time.Minute, // 10 minutes per step for model loading and slow operations on low-end machines
-	}
-
-	// Check if streaming is requested
-	stream := req.Stream
-
-	// Create task for tracking and publish the durable source-of-truth event.
-	s.agentManager.CreateTask(taskID, req.Prompt, &agentCfg)
-	s.publishRunEvent(r.Context(), taskID, runs.RunStarted, map[string]any{
-		"prompt": req.Prompt, "model": req.Model, "style": style, "actor": actor,
-	})
-
-	if stream {
-		s.agentManager.StartTask(taskID)
-
-		// Stream the agent output using SSE
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("X-Accel-Buffering", "no")
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "Streaming not supported", http.StatusInternalServerError)
-			return
-		}
-
-		// Send initial status
-		statusData, _ := json.Marshal(map[string]interface{}{
-			"type":    "status",
-			"status":  "thinking",
-			"task_id": taskID,
-		})
-		fmt.Fprintf(w, "data: %s\n\n", statusData)
-		flusher.Flush()
-
-		// Create streaming LLM caller
-		var fullResponse strings.Builder
-		llmCaller := func(ctx context.Context, messages []api.ChatMessage, opts map[string]interface{}) (string, error) {
-			if s.engine == nil {
-				return "", fmt.Errorf("no LLM configured - load a model first")
-			}
-
-			// Build streaming chat request
-			chatReq := api.ChatCompletionRequest{
-				Model:    req.Model,
-				Messages: messages,
-				Stream:   true,
-			}
-			if temp, ok := opts["temperature"].(float64); ok {
-				t := float32(temp)
-				chatReq.Temperature = &t
-			}
-			if maxTokens, ok := opts["max_tokens"].(int); ok {
-				chatReq.MaxTokens = &maxTokens
-			}
-
-			// Stream tokens
-			fullResponse.Reset()
-			err := s.engine.ChatCompletionStream(ctx, &chatReq, func(chunk string) error {
-				fullResponse.WriteString(chunk)
-				// Send each token to the client
-				tokenData, _ := json.Marshal(map[string]interface{}{
-					"type":  "token",
-					"token": chunk,
-				})
-				fmt.Fprintf(w, "data: %s\n\n", tokenData)
-				flusher.Flush()
-				return nil
-			})
-
-			if err != nil {
-				return "", err
-			}
-
-			return fullResponse.String(), nil
-		}
-
-		// Create agent with streaming LLM
-		agent := agents.NewAgent(agentCfg, tools, executor, llmCaller)
-
-		// Set up step callback
-		agent.SetStepCallback(func(step agents.Step) {
-			s.agentManager.AddTaskStep(taskID, step)
-
-			stepData := map[string]interface{}{
-				"type":        "step",
-				"step_type":   step.Type,
-				"step_id":     step.ID,
-				"content":     step.Content,
-				"tool_name":   step.ToolName,
-				"tool_args":   step.ToolArgs,
-				"tool_result": step.ToolResult,
-			}
-			jsonData, _ := json.Marshal(stepData)
-			fmt.Fprintf(w, "data: %s\n\n", jsonData)
-			flusher.Flush()
-		})
-
-		// Run the agent
-		result, err := agent.Run(r.Context(), req.Prompt)
-
-		// Send final result
-		if err != nil {
-			if errors.Is(err, capabilities.ErrApprovalRequired) {
-				s.agentManager.WaitForApproval(taskID, err)
-			} else {
-				s.agentManager.CompleteTask(taskID, "", err)
-				s.publishRunEvent(r.Context(), taskID, runs.RunFailed, map[string]any{"error": err.Error()})
-			}
-			errData, _ := json.Marshal(map[string]interface{}{
-				"type":   map[bool]string{true: "approval_required", false: "error"}[errors.Is(err, capabilities.ErrApprovalRequired)],
-				"error":  err.Error(),
-				"run_id": taskID,
-			})
-			fmt.Fprintf(w, "data: %s\n\n", errData)
-		} else {
-			s.agentManager.CompleteTask(taskID, result, nil)
-			artifact, _ := s.persistRunOutput(r.Context(), taskID, result)
-			completion := map[string]any{"model": req.Model}
-			if artifact != nil {
-				completion["artifact_digest"] = artifact.Digest
-			}
-			s.publishRunEvent(r.Context(), taskID, runs.RunCompleted, completion)
-			doneData, _ := json.Marshal(map[string]interface{}{
-				"type":   "done",
-				"output": result,
-				"run_id": taskID,
-			})
-			fmt.Fprintf(w, "data: %s\n\n", doneData)
-		}
-		flusher.Flush()
-		return
-	}
-
-	// Non-streaming: preserve native tool calls end-to-end. Text-only models
-	// still work because a response without tool_calls is treated as the answer.
-	structuredLLMCaller := func(ctx context.Context, messages []api.ChatMessage, tools []api.Tool, opts map[string]interface{}) (*api.ChatCompletionResponse, error) {
-		// Check if a model is loaded
-		if s.engine == nil {
-			return nil, fmt.Errorf("no LLM configured - load a model first")
-		}
-
-		// Build chat request
-		chatReq := api.ChatCompletionRequest{
-			Model:      req.Model,
-			Messages:   messages,
-			Tools:      tools,
-			ToolChoice: "auto",
-		}
-		if temp, ok := opts["temperature"].(float64); ok {
-			t := float32(temp)
-			chatReq.Temperature = &t
-		}
-		if maxTokens, ok := opts["max_tokens"].(int); ok {
-			chatReq.MaxTokens = &maxTokens
-		}
-
-		// Use server's chat completion
-		return s.engine.ChatCompletion(ctx, &chatReq)
-	}
-
-	s.agentManager.StartTask(taskID)
-
-	// Non-streaming agent
-	agent := agents.NewStructuredAgent(agentCfg, tools, executor, structuredLLMCaller)
-	agent.SetStepCallback(func(step agents.Step) {
-		s.agentManager.AddTaskStep(taskID, step)
-	})
-
-	result, err := agent.Run(r.Context(), req.Prompt)
-	if err != nil {
-		log.Printf("[Agent] Error: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		status := http.StatusInternalServerError
-		if errors.Is(err, capabilities.ErrApprovalRequired) {
-			s.agentManager.WaitForApproval(taskID, err)
-			status = http.StatusConflict
-		} else {
-			s.agentManager.CompleteTask(taskID, "", err)
-			s.publishRunEvent(r.Context(), taskID, runs.RunFailed, map[string]any{"error": err.Error()})
-		}
-		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error(), "run_id": taskID})
-		return
-	}
-
-	s.agentManager.CompleteTask(taskID, result, nil)
-	artifact, _ := s.persistRunOutput(r.Context(), taskID, result)
-	completion := map[string]any{"model": req.Model}
-	if artifact != nil {
-		completion["artifact_digest"] = artifact.Digest
-	}
-	s.publishRunEvent(r.Context(), taskID, runs.RunCompleted, completion)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"output":   result,
-		"steps":    agent.GetSteps(),
-		"task_id":  taskID,
-		"run_id":   taskID,
-		"artifact": artifact,
-	})
-}
-
-func toolApprovalKey(tool string, arguments json.RawMessage) (string, error) {
-	tool = strings.TrimSpace(tool)
-	if tool == "" {
-		return "", fmt.Errorf("approved tool call requires a tool name")
-	}
-	var decoded any
-	if len(arguments) == 0 {
-		decoded = map[string]any{}
-	} else if err := json.Unmarshal(arguments, &decoded); err != nil {
-		return "", fmt.Errorf("approved tool call %q has invalid arguments: %w", tool, err)
-	}
-	canonical, err := json.Marshal(decoded)
-	if err != nil {
-		return "", fmt.Errorf("canonicalize approved tool call %q: %w", tool, err)
-	}
-	digest := sha256.Sum256(append(append([]byte(tool), '\n'), canonical...))
-	return hex.EncodeToString(digest[:]), nil
-}
-
 func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	if err := s.agentManager.StorageError(); err != nil {
+		writeAgentError(w, err)
+		return
+	}
+	tasks := []*agents.Task{}
+	for _, task := range s.agentManager.ListTasks() {
+		if task.Actor != "" && task.Actor != s.agentActor(r) {
+			continue
+		}
+		task.Checkpoint = nil
+		tasks = append(tasks, task)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.agentManager.ListTasks())
+	json.NewEncoder(w).Encode(tasks)
 }
 
 func (s *Server) handleAgentWorkflows(w http.ResponseWriter, r *http.Request) {

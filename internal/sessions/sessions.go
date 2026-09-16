@@ -13,7 +13,12 @@ import (
 	"unicode"
 )
 
-var ErrInvalidSessionName = errors.New("invalid session name")
+var (
+	ErrInvalidSessionName = errors.New("invalid session name")
+	ErrSessionNotFound    = errors.New("session not found")
+	ErrSessionExists      = errors.New("session name is already in use")
+	ErrAccessDenied       = errors.New("session access denied")
+)
 
 // Message represents a single chat message
 type Message struct {
@@ -25,6 +30,7 @@ type Message struct {
 // Session represents a conversation session
 type Session struct {
 	Name      string    `json:"name"`
+	OwnerID   string    `json:"owner_id,omitempty"`
 	ModelID   string    `json:"model_id"`
 	Messages  []Message `json:"messages"`
 	CreatedAt time.Time `json:"created_at"`
@@ -167,7 +173,7 @@ func (sm *SessionManager) Load(name string) (*Session, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("session '%s' not found", name)
+			return nil, ErrSessionNotFound
 		}
 		return nil, fmt.Errorf("failed to read session file: %w", err)
 	}
@@ -296,6 +302,10 @@ func (sm *SessionManager) ListMeta() ([]SessionMeta, error) {
 func (sm *SessionManager) Delete(name string) error {
 	sm.mutationMu.Lock()
 	defer sm.mutationMu.Unlock()
+	return sm.delete(name)
+}
+
+func (sm *SessionManager) delete(name string) error {
 	filePath, err := sm.sessionFilePath(name)
 	if err != nil {
 		return err
@@ -303,7 +313,7 @@ func (sm *SessionManager) Delete(name string) error {
 
 	if err := os.Remove(filePath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("session '%s' not found", name)
+			return ErrSessionNotFound
 		}
 		return fmt.Errorf("failed to delete session: %w", err)
 	}

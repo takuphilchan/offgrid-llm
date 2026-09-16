@@ -33,3 +33,18 @@ func (s *Server) effectiveContextWindow() int {
 	}
 	return resolveContextWindow(s.config.MaxContextSize, s.config.AdaptiveContext, limits...)
 }
+
+// Interactive chat can use a smaller allocation without changing the context
+// advertised and allocated to external agent requests. Never truncate history;
+// callers can select extended when a conversation exceeds this profile.
+func (s *Server) chatContextWindow(profile string) int {
+	limit := s.effectiveContextWindow()
+	if profile == "extended" {
+		return limit
+	}
+	chat := 8192
+	if s.config != nil && s.config.ChatContextSize > 0 {
+		chat = s.config.ChatContextSize
+	}
+	return min(chat, limit)
+}

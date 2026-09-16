@@ -675,7 +675,13 @@ const userContextKey contextKey = "user"
 
 // GetUser gets the user from request context
 func GetUser(r *http.Request) *User {
-	if user, ok := r.Context().Value(userContextKey).(*User); ok {
+	return UserFromContext(r.Context())
+}
+
+// UserFromContext makes authenticated identity available to application services
+// without coupling them to HTTP requests.
+func UserFromContext(ctx context.Context) *User {
+	if user, ok := ctx.Value(userContextKey).(*User); ok {
 		return user
 	}
 	return nil

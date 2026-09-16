@@ -27,6 +27,7 @@ const (
 	ArtifactCreated   EventType = "artifact.created"
 	RunCompleted      EventType = "run.completed"
 	RunFailed         EventType = "run.failed"
+	RunStateChanged   EventType = "run.state_changed"
 	ComputerSession   EventType = "computer.session"
 	ComputerAction    EventType = "computer.action"
 	ComputerEmergency EventType = "computer.emergency"

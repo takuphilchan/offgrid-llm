@@ -20,6 +20,7 @@ type Engine struct {
 	mu              sync.RWMutex
 	ingestMu        sync.Mutex
 	store           Store // Interface for vector store
+	storageErr      error // Startup failure; never substitute volatile storage.
 	chunker         *Chunker
 	embeddingEngine *inference.EmbeddingEngine
 	embeddingModel  string
@@ -85,14 +86,14 @@ func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engi
 	var store Store
 	sqliteStore, err := NewSQLiteStore(ragDir)
 	if err != nil {
-		log.Printf("Failed to initialize SQLite store, falling back to in-memory: %v", err)
-		store = NewVectorStore()
+		log.Printf("Knowledge storage unavailable; ingestion is disabled: %v", err)
 	} else {
 		store = sqliteStore
 	}
 
 	return &Engine{
 		store:           store,
+		storageErr:      err,
 		chunker:         NewChunker(DefaultChunkingOptions()),
 		embeddingEngine: embeddingEngine,
 		dataDir:         dataDir,
@@ -103,6 +104,10 @@ func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engi
 		autoTuneChunks:  true, // Enable automatic chunking tuning by default
 	}
 }
+
+// StorageError reports a startup failure without preventing ordinary chat.
+// Fix the underlying storage issue and restart to reopen the database.
+func (e *Engine) StorageError() error { return e.storageErr }
 
 // GetPersistedModel returns the embedding model from persisted data (if any)
 // This is used to auto-restore RAG on server startup
@@ -173,6 +178,9 @@ func (e *Engine) AutoEnableWithModel(ctx context.Context, availableModels []stri
 func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.storageErr != nil {
+		return fmt.Errorf("knowledge storage unavailable: %w", e.storageErr)
+	}
 	embeddingModel = strings.TrimSpace(embeddingModel)
 	if embeddingModel == "" {
 		return fmt.Errorf("embedding model is required")
@@ -755,6 +763,9 @@ func (e *Engine) EnhancePrompt(ctx context.Context, userMessage string) (string,
 func (e *Engine) ListDocuments() []*Document {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	if e.store == nil {
+		return []*Document{}
+	}
 	docs, err := e.store.ListDocuments()
 	if err != nil {
 		log.Printf("Failed to list documents: %v", err)
@@ -767,6 +778,9 @@ func (e *Engine) ListDocuments() []*Document {
 func (e *Engine) GetDocument(id string) *Document {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	if e.store == nil {
+		return nil
+	}
 	doc, err := e.store.GetDocument(id)
 	if err != nil {
 		log.Printf("Failed to get document %s: %v", id, err)
@@ -779,6 +793,9 @@ func (e *Engine) GetDocument(id string) *Document {
 func (e *Engine) DeleteDocument(id string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.store == nil {
+		return false
+	}
 
 	if err := e.store.DeleteDocument(id); err == nil {
 		return true
@@ -790,8 +807,15 @@ func (e *Engine) DeleteDocument(id string) bool {
 func (e *Engine) Stats() map[string]interface{} {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	if e.storageErr != nil {
+		return map[string]interface{}{
+			"enabled": false, "storage_available": false, "persistent": false,
+			"error": "Knowledge storage is unavailable. Check disk space and data-directory access, then restart OffGrid.",
+		}
+	}
 
 	stats := e.store.Stats()
+	stats["storage_available"] = true
 	stats["enabled"] = e.enabled
 	stats["embedding_model"] = e.embeddingModel
 	return stats

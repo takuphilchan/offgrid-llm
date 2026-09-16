@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -7335,17 +7336,17 @@ func handleAgent(args []string) {
 	// Interactive mode if no args or "chat" or flags
 	if len(args) < 1 || args[0] == "chat" || strings.HasPrefix(args[0], "--") {
 		modelName := ""
-		// Simple flag parsing for interactive mode
-		for i, arg := range args {
-			if arg == "--model" && i+1 < len(args) {
-				modelName = args[i+1]
+		for i := 0; i < len(args); i++ {
+			if i == 0 && args[i] == "chat" {
+				continue
 			}
+			if args[i] != "--model" || i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
+				printError("Usage: offgrid agent chat [--model <name>]. Unknown or incomplete option: " + args[i])
+				return
+			}
+			i++
+			modelName = args[i]
 		}
-
-		// If no model specified, try to find a reasonable default
-		// if modelName == "" {
-		// 	modelName = "llama3.2:3b" // Default to a fast model
-		// }
 
 		startInteractiveAgent(modelName)
 		return
@@ -7353,6 +7354,8 @@ func handleAgent(args []string) {
 
 	subCmd := args[0]
 	switch subCmd {
+	case "status", "approve", "deny", "cancel", "resume", "reconcile":
+		handleAgentControl(args)
 	case "run":
 		if len(args) < 2 {
 			printError("Usage: offgrid agent run <prompt> --model <name>")
@@ -7373,16 +7376,26 @@ func handleAgent(args []string) {
 			}
 			if arg == "--style" && i+1 < len(args[1:]) {
 				switch args[i+2] {
+				case "react":
+					style = "react"
 				case "cot":
 					style = "cot"
-				case "plan":
+				case "plan", "plan-execute":
 					style = "plan-execute"
+				default:
+					printError("--style must be react, cot, or plan")
+					return
 				}
 				skipNext = true
 				continue
 			}
 			if arg == "--max-steps" && i+1 < len(args[1:]) {
-				fmt.Sscanf(args[i+2], "%d", &maxSteps)
+				var err error
+				maxSteps, err = strconv.Atoi(args[i+2])
+				if err != nil || maxSteps < 1 || maxSteps > 50 {
+					printError("--max-steps must be an integer between 1 and 50")
+					return
+				}
 				skipNext = true
 				continue
 			}
@@ -7393,6 +7406,9 @@ func handleAgent(args []string) {
 			}
 			if !strings.HasPrefix(arg, "--") {
 				promptParts = append(promptParts, arg)
+			} else {
+				printError("Unknown or incomplete agent run option: " + arg)
+				return
 			}
 		}
 
@@ -7427,7 +7443,7 @@ func handleAgent(args []string) {
 		cfg := config.LoadConfig()
 		serverURL := fmt.Sprintf("http://localhost:%d/v1/agents/tasks", cfg.ServerPort)
 
-		resp, err := http.Get(serverURL)
+		resp, err := agentRequest(httpClient, http.MethodGet, serverURL, nil)
 		if err != nil {
 			printError(fmt.Sprintf("Cannot connect to server: %v\n\n  Start the server with: offgrid serve", err))
 			return
@@ -7473,12 +7489,7 @@ func handleAgent(args []string) {
 				}
 
 				displayID := id
-				if len(id) > 8 {
-					displayID = id[:8]
-				}
-				if len(prompt) > 50 {
-					prompt = prompt[:47] + "..."
-				}
+				prompt = truncateTerminalText(terminalSafe(prompt), 50)
 				fmt.Printf("  %s%s%s %s%-10s%s  %s%s%s  %s\n", statusColor, statusIcon, colorReset, statusColor, status, colorReset, colorDim, displayID, colorReset, prompt)
 			}
 		}

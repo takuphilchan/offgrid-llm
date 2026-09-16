@@ -121,7 +121,7 @@ func (a *Agent) SetStepCallback(callback func(Step)) {
 }
 
 // Run executes the agent with the given task
-func (a *Agent) Run(ctx context.Context, task string) (string, error) {
+func (a *Agent) Run(ctx context.Context, task string) (output string, runErr error) {
 	// Check if LLM caller is configured
 	if a.llmCaller == nil && a.structuredLLMCaller == nil {
 		return "", fmt.Errorf("no LLM configured - start the server first with 'offgrid serve' or use the API")
@@ -135,7 +135,9 @@ func (a *Agent) Run(ctx context.Context, task string) (string, error) {
 
 	defer func() {
 		a.mu.Lock()
-		if a.state != StateFailed {
+		if runErr != nil && a.state != StateWaiting {
+			a.state = StateFailed
+		} else if a.state != StateFailed && a.state != StateWaiting {
 			a.state = StateCompleted
 		}
 		a.mu.Unlock()

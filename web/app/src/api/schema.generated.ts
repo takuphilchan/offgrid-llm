@@ -187,8 +187,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Lists owned conversations; sessions:all administrators and local single-user mode can also access unowned legacy conversations. */
         get: operations["listSessions"];
         put?: never;
+        /** @description Creates a conversation owned by the authenticated caller. Names are installation-wide unique; an existing name returns 409 without overwriting history. Client-supplied ownership is ignored. */
         post: operations["createSession"];
         delete?: never;
         options?: never;
@@ -205,9 +207,11 @@ export interface paths {
             };
             cookie?: never;
         };
+        /** @description Returns 404 for an absent conversation or one owned by another user unless the caller has sessions:all. */
         get: operations["getSession"];
         put?: never;
         post?: never;
+        /** @description Requires ownership or sessions:all; other users' conversations return 404. */
         delete: operations["deleteSession"];
         options?: never;
         head?: never;
@@ -225,6 +229,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Requires session ownership (or sessions:all) and chat permission. Requested knowledge additionally requires rag permission. With stream=true, sends SSE phase and delta events immediately, followed by done only after atomic persistence, or error without saving a partial exchange. Transport closure is not completion. Retrieval failures after SSE starts are error events. JSON generation returns 503 for unavailable retrieval and 422 for no evidence. */
         post: operations["generateSessionTurn"];
         delete?: never;
         options?: never;
@@ -241,6 +246,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Requested knowledge requires rag permission in addition to chat. Disabled/failed retrieval returns 503 and no matching evidence returns 422 before inference or streaming begins. Turn off use_knowledge_base explicitly to request an ordinary answer. */
         post: operations["createChatCompletion"];
         delete?: never;
         options?: never;
@@ -271,6 +277,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Remains available when knowledge storage fails; reports enabled false and stats.storage_available false with an actionable error. No volatile fallback is used. */
         get: operations["getRAGStatus"];
         put?: never;
         post?: never;
@@ -337,6 +344,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Starts a checkpointed run. Use async for a background task and poll by run ID. New runs cannot contain preapproved tools; approve the pending call on its existing run instead. */
         post: operations["runAgent"];
         delete?: never;
         options?: never;
@@ -354,6 +362,44 @@ export interface paths {
         get: operations["listAgentTasks"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/tasks/{id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                action: "approve" | "deny" | "cancel" | "resume" | "reconcile";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Requires the initiating actor. Approve/deny require the pending approval_id. Resume never replays an uncertain tool call; reconcile requires its call_id and a human-verified result. Expired approvals can be refreshed with resume. Reconciliation records a result without executing the tool. */
+        post: operations["changeAgentRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -476,6 +522,41 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        ChatStreamPhase: "queued" | "retrieving" | "loading" | "processing" | "generating" | "saving";
+        ChatTimings: {
+            total_ms: number;
+            ready_ms: number;
+            queue_ms: number;
+            load_ms: number;
+            prompt_ms: number;
+            first_text_ms: number;
+            generation_ms: number;
+            context_window: number;
+            completion_tokens?: number;
+            tokens_per_second?: number;
+        };
+        SessionStreamEvent: {
+            /** @enum {string} */
+            type: "phase";
+            phase: components["schemas"]["ChatStreamPhase"];
+        } | {
+            /** @enum {string} */
+            type: "delta";
+            delta: string;
+        } | {
+            /** @enum {string} */
+            type: "done";
+            session: components["schemas"]["ChatSession"];
+            message: components["schemas"]["SessionMessage"];
+            metrics: components["schemas"]["ChatTimings"];
+            /** @enum {string} */
+            finish_reason: "stop" | "length";
+        } | {
+            /** @enum {string} */
+            type: "error";
+            error: string;
+        };
         ErrorResponse: {
             error: string | {
                 message: string;
@@ -655,6 +736,8 @@ export interface components {
         };
         ChatSession: {
             name: string;
+            /** @description Authenticated owner assigned by the service. Absent for legacy/local sessions, which require sessions:all in authenticated mode. */
+            readonly owner_id?: string;
             model_id: string;
             messages: components["schemas"]["SessionMessage"][];
             /** Format: date-time */
@@ -722,35 +805,73 @@ export interface components {
             };
         };
         ToolApproval: {
+            id: string;
+            run_id: string;
+            call_id: string;
+            actor: string;
             tool: string;
             arguments: {
                 [key: string]: unknown;
             };
+            /** @description Exact canonical JSON for review without JavaScript numeric precision loss. */
+            canonical_arguments: string;
+            capability?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            expires_at: string;
         };
         AgentRunRequest: {
             model: string;
             prompt: string;
             /** @enum {string} */
-            style?: "react" | "cot" | "plan" | "plan-execute";
+            style?: "react" | "cot" | "plan-execute";
             max_iterations?: number;
-            approved_tool_calls?: components["schemas"]["ToolApproval"][];
+            /** @default false */
+            async: boolean;
+            /**
+             * @description Streams run status and completed steps; disconnecting does not cancel execution.
+             * @default false
+             */
+            stream: boolean;
+            system_prompt?: string;
         };
         AgentStep: {
-            [key: string]: unknown;
+            id?: number;
+            type?: string;
+            content?: string;
+            tool_name?: string;
+            tool_args?: string;
+            tool_result?: string;
+            /** Format: date-time */
+            timestamp?: string;
         };
         AgentRunResponse: {
             output: string;
             task_id: string;
             run_id: string;
-            steps: components["schemas"]["AgentStep"][];
-            artifact?: {
-                [key: string]: unknown;
+            /** @enum {string} */
+            status: "pending" | "running" | "waiting_for_approval" | "interrupted" | "uncertain" | "completed" | "failed" | "cancelled";
+            error?: string;
+            pending_approval: components["schemas"]["ToolApproval"] | null;
+            /** @description Whether this run has a safe checkpoint for explicit resume. Legacy history without checkpoints is read-only. */
+            resumable: boolean;
+            uncertain_call_id?: string;
+            uncertain_call?: {
+                tool: string;
+                arguments: {
+                    [key: string]: unknown;
+                };
             };
+            steps: components["schemas"]["AgentStep"][];
         };
         AgentTask: {
             id: string;
             prompt: string;
             status: string;
+            model?: string;
+            actor?: string;
+            pending_approval?: components["schemas"]["ToolApproval"];
             result?: string;
             error?: string;
             steps?: components["schemas"]["AgentStep"][];
@@ -1085,6 +1206,8 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
         };
     };
     createSession: {
@@ -1112,6 +1235,10 @@ export interface operations {
                     "application/json": components["schemas"]["ChatSession"];
                 };
             };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     getSession: {
@@ -1134,6 +1261,8 @@ export interface operations {
                     "application/json": components["schemas"]["ChatSession"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };
@@ -1160,6 +1289,9 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     generateSessionTurn: {
@@ -1178,22 +1310,43 @@ export interface operations {
                     model_id?: string;
                     /** @default false */
                     use_knowledge_base?: boolean;
+                    /** @default false */
+                    stream?: boolean;
+                    /**
+                     * @description Streaming chat context profile. Interactive uses min(OFFGRID_CHAT_CONTEXT
+                     * @default interactive
+                     * @enum {string}
+                     */
+                    profile?: "interactive" | "extended";
+                    /**
+                     * @description Streaming response token budget.
+                     * @default 1024
+                     */
+                    max_tokens?: number;
                 };
             };
         };
         responses: {
-            /** @description Complete persisted user/assistant turn */
+            /** @description Complete persisted turn as JSON, or SSE events ending with persisted done or error */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+                    /** @description Each SSE data field is a SessionStreamEvent JSON object. Heartbeat comments carry no data. */
+                    "text/event-stream": string;
                     "application/json": {
                         session: components["schemas"]["ChatSession"];
                         message: components["schemas"]["SessionMessage"];
                     };
                 };
             };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     createChatCompletion: {
@@ -1218,6 +1371,11 @@ export interface operations {
                     "application/json": components["schemas"]["ChatCompletionResponse"];
                 };
             };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     listDocuments: {
@@ -1241,6 +1399,7 @@ export interface operations {
                     };
                 };
             };
+            503: components["responses"]["Error"];
         };
     };
     getRAGStatus: {
@@ -1291,6 +1450,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     ingestDocument: {
@@ -1321,6 +1481,7 @@ export interface operations {
                     };
                 };
             };
+            503: components["responses"]["Error"];
         };
     };
     reindexDocument: {
@@ -1350,6 +1511,7 @@ export interface operations {
                     };
                 };
             };
+            503: components["responses"]["Error"];
         };
     };
     runAgent: {
@@ -1365,7 +1527,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Completed governed agent run */
+            /** @description Governed agent run status */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1374,7 +1536,18 @@ export interface operations {
                     "application/json": components["schemas"]["AgentRunResponse"];
                 };
             };
+            /** @description Persisted background run accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     listAgentTasks: {
@@ -1395,6 +1568,77 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTask"][];
                 };
             };
+            503: components["responses"]["Error"];
+        };
+    };
+    getAgentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authoritative run snapshot, including pending approval or uncertain tool call */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    changeAgentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                action: "approve" | "deny" | "cancel" | "resume" | "reconcile";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    approval_id?: string;
+                    call_id?: string;
+                    result?: string;
+                    /** @default false */
+                    async?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Persisted run state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            /** @description Continuation accepted on the same run */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     listAgentTools: {

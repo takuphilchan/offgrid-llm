@@ -34,9 +34,10 @@ type ToolRegistry struct {
 // Approval is deliberately scoped to one tool invocation rather than a whole
 // agent run.
 type ToolExecution struct {
-	RunID    string
-	Actor    string
-	Approved bool
+	RunID              string
+	Actor              string
+	Approved           bool
+	ExpectedCapability *capabilities.Descriptor
 }
 
 // SimpleExecutor wraps tool execution with just context and args
@@ -614,6 +615,20 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, args json.RawMe
 
 // ExecuteWithPolicy authorizes and executes one tool invocation.
 func (r *ToolRegistry) ExecuteWithPolicy(ctx context.Context, name string, args json.RawMessage, execution ToolExecution) (string, error) {
+	executor, err := r.prepareExecution(ctx, name, args, execution)
+	if err != nil {
+		return "", err
+	}
+	return executor(ctx, args)
+}
+
+// Authorize checks policy without crossing a tool's side-effect boundary.
+func (r *ToolRegistry) Authorize(ctx context.Context, name string, args json.RawMessage, execution ToolExecution) error {
+	_, err := r.prepareExecution(ctx, name, args, execution)
+	return err
+}
+
+func (r *ToolRegistry) prepareExecution(ctx context.Context, name string, args json.RawMessage, execution ToolExecution) (SimpleExecutor, error) {
 	r.mu.RLock()
 	executor, ok := r.executors[name]
 	disabled := r.disabledTools[name]
@@ -622,16 +637,19 @@ func (r *ToolRegistry) ExecuteWithPolicy(ctx context.Context, name string, args 
 	r.mu.RUnlock()
 
 	if !ok {
-		return "", fmt.Errorf("unknown tool: %s", name)
+		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
 	if disabled {
-		return "", fmt.Errorf("tool is disabled: %s", name)
+		return nil, fmt.Errorf("tool is disabled: %s", name)
+	}
+	if execution.ExpectedCapability != nil && descriptor != *execution.ExpectedCapability {
+		return nil, capabilities.ErrDenied
 	}
 	if broker != nil {
 		arguments := make(map[string]any)
 		if len(args) > 0 && string(args) != "null" {
 			if err := json.Unmarshal(args, &arguments); err != nil {
-				return "", fmt.Errorf("decode tool arguments: %w", err)
+				return nil, fmt.Errorf("decode tool arguments: %w", err)
 			}
 		}
 		_, err := broker.Authorize(ctx, capabilities.Request{
@@ -642,11 +660,11 @@ func (r *ToolRegistry) ExecuteWithPolicy(ctx context.Context, name string, args 
 			Approved:   execution.Approved,
 		})
 		if err != nil {
-			return "", fmt.Errorf("authorize %s: %w", name, err)
+			return nil, fmt.Errorf("authorize %s: %w", name, err)
 		}
 	}
 
-	return executor(ctx, args)
+	return executor, nil
 }
 
 // Capability returns the policy descriptor associated with a tool.

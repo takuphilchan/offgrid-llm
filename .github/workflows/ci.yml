@@ -47,6 +47,9 @@ jobs:
       - name: Test Go packages
         run: go test ./...
 
+      - name: Race-test privacy, storage, and request lifecycle
+        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs
+
       - name: Generate and build web UI
         working-directory: web/app
         run: |

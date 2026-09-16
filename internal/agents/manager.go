@@ -17,27 +17,33 @@ import (
 type TaskStatus string
 
 const (
-	TaskPending   TaskStatus = "pending"
-	TaskRunning   TaskStatus = "running"
-	TaskWaiting   TaskStatus = "waiting_for_approval"
-	TaskCompleted TaskStatus = "completed"
-	TaskFailed    TaskStatus = "failed"
-	TaskCancelled TaskStatus = "cancelled"
+	TaskPending     TaskStatus = "pending"
+	TaskRunning     TaskStatus = "running"
+	TaskWaiting     TaskStatus = "waiting_for_approval"
+	TaskCompleted   TaskStatus = "completed"
+	TaskFailed      TaskStatus = "failed"
+	TaskCancelled   TaskStatus = "cancelled"
+	TaskInterrupted TaskStatus = "interrupted"
+	TaskUncertain   TaskStatus = "uncertain"
 )
 
 // Task represents an agent task
 type Task struct {
-	ID          string      `json:"id"`
-	Prompt      string      `json:"prompt"`
-	Status      TaskStatus  `json:"status"`
-	Result      string      `json:"result,omitempty"`
-	Error       string      `json:"error,omitempty"`
-	Steps       []Step      `json:"steps,omitempty"`
-	Config      AgentConfig `json:"config"`
-	CreatedAt   time.Time   `json:"created_at"`
-	StartedAt   *time.Time  `json:"started_at,omitempty"`
-	CompletedAt *time.Time  `json:"completed_at,omitempty"`
-	cancel      context.CancelFunc
+	ID              string      `json:"id"`
+	Prompt          string      `json:"prompt"`
+	Status          TaskStatus  `json:"status"`
+	Result          string      `json:"result,omitempty"`
+	Error           string      `json:"error,omitempty"`
+	Steps           []Step      `json:"steps,omitempty"`
+	Config          AgentConfig `json:"config"`
+	CreatedAt       time.Time   `json:"created_at"`
+	StartedAt       *time.Time  `json:"started_at,omitempty"`
+	CompletedAt     *time.Time  `json:"completed_at,omitempty"`
+	Model           string      `json:"model,omitempty"`
+	Actor           string      `json:"actor,omitempty"`
+	PendingApproval *Approval   `json:"pending_approval,omitempty"`
+	Checkpoint      *Checkpoint `json:"checkpoint,omitempty"`
+	cancel          context.CancelFunc
 }
 
 // Manager manages agent tasks and workflows
@@ -51,6 +57,7 @@ type Manager struct {
 	running     int
 	logger      func(string, ...interface{})
 	dataDir     string // Directory for persisting tasks
+	storageErr  error
 }
 
 // NewManager creates a new agent manager
@@ -87,7 +94,6 @@ func (m *Manager) SetDataDir(dataDir string) {
 	defer m.mu.Unlock()
 	m.dataDir = dataDir
 	if dataDir != "" {
-		os.MkdirAll(filepath.Join(dataDir, "agent_tasks"), 0755)
 		m.loadTasks()
 	}
 }
@@ -99,6 +105,8 @@ func (m *Manager) SetLogger(logger func(string, ...interface{})) {
 
 // SetMaxParallel sets the maximum number of parallel tasks
 func (m *Manager) SetMaxParallel(max int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.maxParallel = max
 }
 
@@ -123,270 +131,211 @@ func (m *Manager) RegisterTool(tool api.Tool) {
 	m.tools = append(m.tools, tool)
 }
 
-// CreateTask creates a new task (doesn't start it)
-func (m *Manager) CreateTask(id, prompt string, config *AgentConfig) *Task {
+// CreateTask persists a new task before exposing it to callers.
+func (m *Manager) CreateTask(id, prompt string, config *AgentConfig) (*Task, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
+	if _, exists := m.tasks[id]; exists {
+		return nil, ErrRunConflict
+	}
 	cfg := DefaultAgentConfig()
 	if config != nil {
 		cfg = *config
 	}
-
-	task := &Task{
-		ID:        id,
-		Prompt:    prompt,
-		Status:    TaskPending,
-		Config:    cfg,
-		CreatedAt: time.Now(),
+	task := &Task{ID: id, Prompt: prompt, Status: TaskPending, Config: cfg, CreatedAt: time.Now().UTC()}
+	if err := m.saveTask(task); err != nil {
+		return nil, err
 	}
-
 	m.tasks[id] = task
-	m.saveTask(task)
-	return task
+	return copyTask(task)
 }
 
-// StartTask marks a task as running
 func (m *Manager) StartTask(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	task, exists := m.tasks[id]
-	if !exists {
-		return fmt.Errorf("task not found: %s", id)
-	}
-
-	now := time.Now()
-	task.StartedAt = &now
-	task.Status = TaskRunning
-	m.saveTask(task)
-	return nil
+	_, err := m.updateTask(id, func(task *Task) error {
+		if task.Status != TaskPending {
+			return ErrRunConflict
+		}
+		now := time.Now().UTC()
+		task.StartedAt, task.Status = &now, TaskRunning
+		return nil
+	})
+	return err
 }
 
-// AddTaskStep adds a step to a task
 func (m *Manager) AddTaskStep(id string, step Step) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	task, exists := m.tasks[id]
-	if !exists {
-		return fmt.Errorf("task not found: %s", id)
-	}
-
-	task.Steps = append(task.Steps, step)
-	m.saveTask(task)
-	return nil
+	_, err := m.updateTask(id, func(task *Task) error {
+		task.Steps = append(task.Steps, step)
+		return nil
+	})
+	return err
 }
 
-// WaitForApproval keeps a task resumable instead of recording a policy pause
-// as an execution failure.
-func (m *Manager) WaitForApproval(id string, err error) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	task, exists := m.tasks[id]
-	if !exists {
-		return fmt.Errorf("task not found: %s", id)
-	}
-	task.Status = TaskWaiting
-	task.CompletedAt = nil
-	if err != nil {
-		task.Error = err.Error()
-	}
-	m.saveTask(task)
-	return nil
+func (m *Manager) WaitForApproval(id string, reason error) error {
+	_, err := m.updateTask(id, func(task *Task) error {
+		task.Status, task.CompletedAt = TaskWaiting, nil
+		if reason != nil {
+			task.Error = reason.Error()
+		}
+		return nil
+	})
+	return err
 }
 
-// CompleteTask marks a task as completed or failed
-func (m *Manager) CompleteTask(id string, result string, err error) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	task, exists := m.tasks[id]
-	if !exists {
-		return fmt.Errorf("task not found: %s", id)
-	}
-
-	completedAt := time.Now()
-	task.CompletedAt = &completedAt
-
-	if err != nil {
-		task.Status = TaskFailed
-		task.Error = err.Error()
-	} else {
-		task.Status = TaskCompleted
-		task.Result = result
-	}
-
-	// Save to disk for persistence
-	m.saveTask(task)
-
-	return nil
+func (m *Manager) CompleteTask(id string, result string, cause error) error {
+	_, err := m.updateTask(id, func(task *Task) error {
+		if task.Status == TaskCancelled {
+			return nil
+		}
+		if cause != nil {
+			finishTask(task, TaskFailed, cause.Error())
+		} else {
+			finishTask(task, TaskCompleted, "")
+			task.Result = result
+		}
+		return nil
+	})
+	return err
 }
 
-// RunTask runs a task synchronously
 func (m *Manager) RunTask(ctx context.Context, id string) (*Task, error) {
-	m.mu.RLock()
-	task, exists := m.tasks[id]
-	m.mu.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("task not found: %s", id)
+	if err := m.StartTask(id); err != nil {
+		return nil, err
 	}
-
-	if task.Status != TaskPending {
-		return nil, fmt.Errorf("task already started or completed")
-	}
-
-	return m.executeTask(ctx, task)
+	return m.executeTask(ctx, id)
 }
 
-// RunTaskAsync runs a task asynchronously
 func (m *Manager) RunTaskAsync(id string) error {
 	m.mu.Lock()
-	task, exists := m.tasks[id]
-	if !exists {
-		m.mu.Unlock()
-		return fmt.Errorf("task not found: %s", id)
-	}
-
-	if task.Status != TaskPending {
-		m.mu.Unlock()
-		return fmt.Errorf("task already started or completed")
-	}
-
 	if m.running >= m.maxParallel {
 		m.mu.Unlock()
-		return fmt.Errorf("maximum parallel tasks reached (%d)", m.maxParallel)
+		return ErrRunConflict
 	}
-
 	m.running++
-	ctx, cancel := context.WithCancel(context.Background())
-	task.cancel = cancel
 	m.mu.Unlock()
-
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := m.StartTask(id); err != nil {
+		cancel()
+		m.mu.Lock()
+		m.running--
+		m.mu.Unlock()
+		return err
+	}
+	if _, err := m.updateTask(id, func(task *Task) error { task.cancel = cancel; return nil }); err != nil {
+		cancel()
+		m.mu.Lock()
+		m.running--
+		m.mu.Unlock()
+		return err
+	}
 	go func() {
-		defer func() {
-			m.mu.Lock()
-			m.running--
-			m.mu.Unlock()
-		}()
-
-		m.executeTask(ctx, task)
+		defer cancel()
+		defer func() { m.mu.Lock(); m.running--; m.mu.Unlock() }()
+		if _, err := m.executeTask(ctx, id); err != nil {
+			m.logger("Agent task failed: %v", err)
+		}
 	}()
-
 	return nil
 }
 
-// executeTask executes a task
-func (m *Manager) executeTask(ctx context.Context, task *Task) (*Task, error) {
-	now := time.Now()
-	task.StartedAt = &now
-	task.Status = TaskRunning
-
-	// Create agent
-	agent := NewAgent(task.Config, m.tools, m.executor, m.llmCaller)
-	agent.SetStepCallback(func(step Step) {
-		m.mu.Lock()
-		task.Steps = append(task.Steps, step)
-		m.mu.Unlock()
-	})
-
-	// Run agent
-	result, err := agent.Run(ctx, task.Prompt)
-
-	completedAt := time.Now()
-	task.CompletedAt = &completedAt
-
-	if err != nil {
-		task.Status = TaskFailed
-		task.Error = err.Error()
-		return task, err
+func (m *Manager) executeTask(ctx context.Context, id string) (*Task, error) {
+	task, ok := m.GetTask(id)
+	if !ok {
+		return nil, ErrTaskNotFound
 	}
-
-	task.Status = TaskCompleted
-	task.Result = result
-	return task, nil
+	m.mu.RLock()
+	toolList := append([]api.Tool(nil), m.tools...)
+	executor, caller := m.executor, m.llmCaller
+	m.mu.RUnlock()
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	agent := NewAgent(task.Config, toolList, executor, caller)
+	var persistenceErr error
+	agent.SetStepCallback(func(step Step) {
+		if persistenceErr == nil {
+			persistenceErr = m.AddTaskStep(id, step)
+		}
+		if persistenceErr != nil {
+			cancel()
+		}
+	})
+	result, err := agent.Run(runCtx, task.Prompt)
+	if persistenceErr != nil {
+		return nil, persistenceErr
+	}
+	if saveErr := m.CompleteTask(id, result, err); saveErr != nil {
+		return nil, saveErr
+	}
+	task, _ = m.GetTask(id)
+	return task, err
 }
 
-// RunImmediate creates and runs a task immediately
 func (m *Manager) RunImmediate(ctx context.Context, prompt string, config *AgentConfig) (string, []Step, error) {
 	id := fmt.Sprintf("immediate-%d", time.Now().UnixNano())
-	task := m.CreateTask(id, prompt, config)
-
-	_, err := m.RunTask(ctx, id)
-	if err != nil {
-		return "", task.Steps, err
+	if _, err := m.CreateTask(id, prompt, config); err != nil {
+		return "", nil, err
 	}
-
-	return task.Result, task.Steps, nil
+	task, err := m.RunTask(ctx, id)
+	if task == nil {
+		return "", nil, err
+	}
+	return task.Result, task.Steps, err
 }
 
-// GetTask returns a task by ID
+// GetTask and ListTasks return detached snapshots; callers cannot mutate storage
+// or race with execution through a returned pointer.
 func (m *Manager) GetTask(id string) (*Task, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	task, exists := m.tasks[id]
-	return task, exists
+	task, ok := m.tasks[id]
+	if !ok {
+		return nil, false
+	}
+	copy, err := copyTask(task)
+	return copy, err == nil
 }
 
-// ListTasks returns all tasks
 func (m *Manager) ListTasks() []*Task {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
 	tasks := make([]*Task, 0, len(m.tasks))
 	for _, task := range m.tasks {
-		tasks = append(tasks, task)
+		if copy, err := copyTask(task); err == nil {
+			tasks = append(tasks, copy)
+		}
 	}
 	return tasks
 }
 
-// CancelTask cancels a running task
 func (m *Manager) CancelTask(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	task, exists := m.tasks[id]
-	if !exists {
-		return fmt.Errorf("task not found: %s", id)
-	}
-
-	if task.Status != TaskRunning {
-		return fmt.Errorf("task is not running")
-	}
-
-	if task.cancel != nil {
-		task.cancel()
-	}
-
-	task.Status = TaskCancelled
-	m.saveTask(task)
-	return nil
-}
-
-// DeleteTask removes a task from memory and disk
-func (m *Manager) DeleteTask(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	task, exists := m.tasks[id]
-	if !exists {
-		return fmt.Errorf("task not found: %s", id)
-	}
-
-	if task.Status == TaskRunning {
+	_, err := m.updateTask(id, func(task *Task) error {
+		if task.Status != TaskRunning && task.Status != TaskWaiting && task.Status != TaskPending && task.Status != TaskInterrupted {
+			return ErrRunConflict
+		}
 		if task.cancel != nil {
 			task.cancel()
 		}
+		finishTask(task, TaskCancelled, "Cancelled by user.")
+		return nil
+	})
+	return err
+}
+
+func (m *Manager) DeleteTask(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task, exists := m.tasks[id]
+	if !exists {
+		return ErrTaskNotFound
 	}
-
-	delete(m.tasks, id)
-
-	// Delete from disk if persistence is enabled
+	if task.Status == TaskRunning || task.Status == TaskWaiting {
+		return ErrRunConflict
+	}
 	if m.dataDir != "" {
-		os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json"))
+		if err := os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json")); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
-
+	delete(m.tasks, id)
 	return nil
 }
 
@@ -642,71 +591,26 @@ func (e *WorkflowEngine) evaluateCondition(condition string, vars map[string]any
 // Task Persistence
 // ============================================================================
 
-// saveTask saves every task state to disk. Persisting pending, running, and
-// approval-waiting states makes service restarts observable instead of losing
-// in-flight work from the task history.
-func (m *Manager) saveTask(task *Task) {
-	if m.dataDir == "" {
-		return
-	}
-
-	tasksDir := filepath.Join(m.dataDir, "agent_tasks")
-	os.MkdirAll(tasksDir, 0755)
-
-	data, err := json.MarshalIndent(task, "", "  ")
-	if err != nil {
-		return
-	}
-
-	filename := filepath.Join(tasksDir, task.ID+".json")
-	os.WriteFile(filename, data, 0644)
-}
-
-// loadTasks loads all tasks from disk
-func (m *Manager) loadTasks() {
-	if m.dataDir == "" {
-		return
-	}
-
-	tasksDir := filepath.Join(m.dataDir, "agent_tasks")
-	entries, err := os.ReadDir(tasksDir)
-	if err != nil {
-		return
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-
-		data, err := os.ReadFile(filepath.Join(tasksDir, entry.Name()))
-		if err != nil {
-			continue
-		}
-
-		var task Task
-		if err := json.Unmarshal(data, &task); err != nil {
-			continue
-		}
-
-		m.tasks[task.ID] = &task
-	}
-}
-
 // ClearHistory clears all completed/failed tasks
-func (m *Manager) ClearHistory() int {
+func (m *Manager) ClearHistory() (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.storageErr != nil {
+		return 0, fmt.Errorf("%w: %v", ErrRunStorage, m.storageErr)
+	}
 
 	count := 0
 	for id, task := range m.tasks {
 		if task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled {
-			delete(m.tasks, id)
 			if m.dataDir != "" {
-				os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json"))
+				if err := os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json")); err != nil && !os.IsNotExist(err) {
+					m.storageErr = err
+					return count, fmt.Errorf("%w: %v", ErrRunStorage, err)
+				}
 			}
+			delete(m.tasks, id)
 			count++
 		}
 	}
-	return count
+	return count, nil
 }

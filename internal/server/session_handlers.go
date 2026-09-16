@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
+	"github.com/takuphilchan/offgrid-llm/internal/users"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -18,7 +19,80 @@ type SessionCompleter func(context.Context, string, []api.ChatMessage, bool) (st
 type SessionHandlers struct {
 	manager      *sessions.SessionManager
 	completer    SessionCompleter
-	sessionLocks sync.Map
+	streamer     SessionStreamer
+	requireAuth  bool
+	locksMu      sync.Mutex
+	sessionLocks map[string]*sessionLock
+}
+
+type sessionLock struct {
+	gate chan struct{}
+	refs int
+}
+
+// Serialize all mutations, including deletion, with generation for this name.
+// Reference counting also prevents arbitrary names accumulating locks forever.
+func (h *SessionHandlers) lockSession(name string) func() {
+	unlock, _ := h.lockSessionContext(context.Background(), name)
+	return unlock
+}
+
+func (h *SessionHandlers) lockSessionContext(ctx context.Context, name string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	h.locksMu.Lock()
+	if h.sessionLocks == nil {
+		h.sessionLocks = make(map[string]*sessionLock)
+	}
+	lock := h.sessionLocks[name]
+	if lock == nil {
+		lock = &sessionLock{gate: make(chan struct{}, 1)}
+		h.sessionLocks[name] = lock
+	}
+	lock.refs++
+	h.locksMu.Unlock()
+	drop := func() {
+		h.locksMu.Lock()
+		lock.refs--
+		if lock.refs == 0 {
+			delete(h.sessionLocks, name)
+		}
+		h.locksMu.Unlock()
+	}
+	select {
+	case lock.gate <- struct{}{}:
+		return func() { <-lock.gate; drop() }, nil
+	case <-ctx.Done():
+		drop()
+		return nil, ctx.Err()
+	}
+}
+
+func (h *SessionHandlers) scoped(r *http.Request) *sessions.ScopedManager {
+	if !h.requireAuth {
+		return h.manager.WithAccess(sessions.Access{All: true})
+	}
+	user := users.GetUser(r)
+	if user == nil || !user.HasPermission(users.PermissionSessions) {
+		return h.manager.WithAccess(sessions.Access{})
+	}
+	return h.manager.WithAccess(sessions.Access{UserID: user.ID, All: user.HasPermission(users.PermissionSessionsAll)})
+}
+
+func writeSessionError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, sessions.ErrInvalidSessionName):
+		writeError(w, "Invalid session name", http.StatusBadRequest)
+	case errors.Is(err, sessions.ErrSessionNotFound):
+		writeError(w, "Session not found", http.StatusNotFound)
+	case errors.Is(err, sessions.ErrSessionExists):
+		writeError(w, "Session name is already in use", http.StatusConflict)
+	case errors.Is(err, sessions.ErrAccessDenied):
+		writeError(w, "Forbidden", http.StatusForbidden)
+	default:
+		writeServiceError(w, newServiceError(http.StatusInternalServerError, "Session storage operation failed", err))
+	}
 }
 
 func (h *SessionHandlers) SetCompleter(completer SessionCompleter) {
@@ -39,9 +113,9 @@ func (h *SessionHandlers) HandleSessionsList(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	sessionsList, err := h.manager.List()
+	sessionsList, err := h.scoped(r).List()
 	if err != nil {
-		writeError(w, "Failed to list sessions: "+err.Error(), http.StatusInternalServerError)
+		writeSessionError(w, err)
 		return
 	}
 
@@ -73,13 +147,11 @@ func (h *SessionHandlers) HandleSessionCreate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	session := sessions.NewSession(req.Name, req.ModelID)
-	if err := h.manager.Save(session); err != nil {
-		if errors.Is(err, sessions.ErrInvalidSessionName) {
-			writeError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeError(w, "Failed to create session: "+err.Error(), http.StatusInternalServerError)
+	unlock := h.lockSession(req.Name)
+	defer unlock()
+	session, err := h.scoped(r).Create(req.Name, req.ModelID)
+	if err != nil {
+		writeSessionError(w, err)
 		return
 	}
 
@@ -95,9 +167,9 @@ func (h *SessionHandlers) HandleSessionGet(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	session, err := h.manager.Load(name)
+	session, err := h.scoped(r).Load(name)
 	if err != nil {
-		writeError(w, "Session not found: "+err.Error(), http.StatusNotFound)
+		writeSessionError(w, err)
 		return
 	}
 
@@ -112,12 +184,10 @@ func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.manager.Delete(name); err != nil {
-		if errors.Is(err, sessions.ErrInvalidSessionName) {
-			writeError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeError(w, "Failed to delete session: "+err.Error(), http.StatusInternalServerError)
+	unlock := h.lockSession(name)
+	defer unlock()
+	if err := h.scoped(r).Delete(name); err != nil {
+		writeSessionError(w, err)
 		return
 	}
 
@@ -150,16 +220,10 @@ func (h *SessionHandlers) HandleSessionAddMessage(w http.ResponseWriter, r *http
 		return
 	}
 
-	session, err := h.manager.Load(name)
-	if err != nil {
-		writeError(w, "Session not found: "+err.Error(), http.StatusNotFound)
-		return
-	}
-
-	session.AddMessage(req.Role, req.Content)
-
-	if err := h.manager.Save(session); err != nil {
-		writeError(w, "Failed to save session: "+err.Error(), http.StatusInternalServerError)
+	unlock := h.lockSession(name)
+	defer unlock()
+	if err := h.scoped(r).AddMessage(name, req.Role, req.Content); err != nil {
+		writeSessionError(w, err)
 		return
 	}
 
@@ -178,14 +242,13 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.completer == nil {
-		writeError(w, "Session chat is unavailable", http.StatusServiceUnavailable)
-		return
-	}
 	var req struct {
 		Content          string `json:"content"`
 		ModelID          string `json:"model_id,omitempty"`
 		UseKnowledgeBase bool   `json:"use_knowledge_base,omitempty"`
+		Stream           bool   `json:"stream,omitempty"`
+		Profile          string `json:"profile,omitempty"`
+		MaxTokens        int    `json:"max_tokens,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -197,14 +260,35 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	lockValue, _ := h.sessionLocks.LoadOrStore(name, &sync.Mutex{})
-	lock := lockValue.(*sync.Mutex)
-	lock.Lock()
-	defer lock.Unlock()
+	if err := authorizeChatAccess(r.Context(), h.requireAuth, req.UseKnowledgeBase); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	if req.Stream {
+		if req.Profile != "" && req.Profile != "interactive" && req.Profile != "extended" {
+			writeError(w, "Unknown chat profile", http.StatusBadRequest)
+			return
+		}
+		if req.MaxTokens < 0 || req.MaxTokens > 4096 {
+			writeError(w, "max_tokens must be between 1 and 4096", http.StatusBadRequest)
+			return
+		}
+		if req.MaxTokens == 0 {
+			req.MaxTokens = 1024
+		}
+		h.generateStream(w, r, name, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens)
+		return
+	}
+	if h.completer == nil {
+		writeError(w, "Session chat is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	unlock := h.lockSession(name)
+	defer unlock()
 
-	session, err := h.manager.Load(name)
+	session, err := h.scoped(r).Load(name)
 	if err != nil {
-		writeError(w, "Session not found: "+err.Error(), http.StatusNotFound)
+		writeSessionError(w, err)
 		return
 	}
 	modelID := req.ModelID
@@ -225,9 +309,9 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		writeServiceError(w, err)
 		return
 	}
-	updated, err := h.manager.AppendExchange(name, modelID, req.Content, answer)
+	updated, err := h.scoped(r).AppendExchange(name, modelID, req.Content, answer)
 	if err != nil {
-		writeError(w, "Failed to save session: "+err.Error(), http.StatusInternalServerError)
+		writeSessionError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -239,6 +323,17 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 
 // HandleSessions is the main router for session endpoints
 func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request) {
+	if h.requireAuth {
+		user := users.GetUser(r)
+		if user == nil {
+			writeError(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !user.HasPermission(users.PermissionSessions) {
+			writeError(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
 	path := strings.TrimPrefix(r.URL.Path, "/v1/sessions")
 	path = strings.TrimPrefix(path, "/")
 

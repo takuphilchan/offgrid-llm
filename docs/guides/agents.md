@@ -1,273 +1,127 @@
-# AI Agents
+# Governed agent tasks
 
-OffGrid LLM includes autonomous AI agents that can reason, use tools, and complete complex tasks.
+OffGrid's built-in task runner uses a local chat model and enabled tools. The
+model must support structured tool calls; an installed model or successful
+health check alone does not prove it can complete a useful task.
 
----
+Hermes and OpenClaw are separate runtimes using OffGrid inference. Their own
+tool execution is **not** governed by this runner's approval broker. See
+[external agents](external-agents.md) for provider setup.
 
-## Quick Start
+## Start and inspect work
 
-### CLI
+Start the service with `offgrid serve`, then choose an installed model from
+`offgrid list`. With authentication enabled, set `OFFGRID_API_KEY` in the client
+environment; do not put keys in screenshots or issue reports.
 
 ```bash
-offgrid agent chat                     # Interactive agent session
-offgrid agent run "What is 25 * 47?"   # Run single task
-offgrid agent templates                # List available templates
+offgrid agent chat --model YOUR_INSTALLED_MODEL_ID
+offgrid agent run "Calculate 25 * 47 and report the result" --model YOUR_INSTALLED_MODEL_ID
+offgrid agent tasks
+offgrid agent status RUN_ID
 ```
 
-### Web UI
+The web UI uses **Agents → Work**. It restores the selected run after navigation
+or reload, including pending approvals and committed tool results. Task drafts
+save while editing, separately per signed-in account. Browser drafts are not
+encrypted or synchronized between devices; a warning means storage failed and
+the page must remain open to retain the in-memory text.
 
-1. Open `http://127.0.0.1:11611/ui/#/agents`
-2. Select an installed chat model and reasoning style
-3. Enter a task and click **Run**
+Run styles influence the instructions, not permissions:
+`react` uses incremental tool/result steps, `cot` requests careful analysis with
+a concise justification, and `plan-execute` asks for a short plan and verified
+steps. CLI `--style plan` selects `plan-execute`. No private reasoning trace is
+promised. Use `--max-steps` (1–50) to bound model iterations. This runner does not
+implement the old `--template` examples; use clear task instructions or the API's
+`system_prompt`.
 
-The page also shows durable task history, enabled tools, MCP connections, and
-the real computer-use driver status. An unavailable driver is reported as
-unavailable; the UI does not imply that desktop control is active.
+## Review one exact action
 
----
+A risky tool pauses the existing run. Review its tool name, full canonical
+arguments, and expiry in the UI or CLI. Approval lasts 15 minutes and applies
+to one invocation, even if another invocation has identical arguments.
 
-## Templates
-
-Pre-configured agent personas for common tasks:
-
-| Template | Best For |
-|----------|----------|
-| `researcher` | Information gathering, summarization, fact-checking |
-| `coder` | Writing code, debugging, code review |
-| `analyst` | Data analysis, pattern recognition, reporting |
-| `writer` | Content creation, editing, documentation |
-| `sysadmin` | System administration, DevOps, troubleshooting |
-| `planner` | Task breakdown, project planning, scheduling |
-
-### Using Templates
-
-**CLI:**
 ```bash
-offgrid agent chat --template coder
-offgrid agent chat --template researcher
-offgrid agent run "Write a Python web server" --template coder
+offgrid agent approve RUN_ID APPROVAL_ID
+offgrid agent deny RUN_ID APPROVAL_ID
+offgrid agent cancel RUN_ID
 ```
 
-**API:**
+Approving resumes that checkpoint. It does not rerun earlier successful tools.
+Deny is saved on the server; closing the page is not denial or cancellation.
+A duplicate or stale approval is rejected. If approval expired, inspect the
+run and use `offgrid agent resume RUN_ID` to issue a fresh approval request.
+
+## Restart and uncertain outcomes
+
+The service writes each pending call before executing it, then writes its
+result before proceeding. It never resumes side effects automatically at startup.
+
+- `interrupted`: execution stopped at a safe checkpoint. Inspect, then
+  `offgrid agent resume RUN_ID`.
+- `uncertain`: a tool may have changed an external target, but its result was
+  not durably confirmed. Inspect files/services affected by that exact call.
+  Cancellation cannot undo side effects.
+- `waiting_for_approval`: review and approve/deny the existing call.
+- `failed` or `cancelled`: terminal; not silently retried.
+
+For an uncertain call, record only an outcome you actually verified:
+
 ```bash
-curl -X POST http://localhost:11611/v1/agents/run \
+offgrid agent reconcile RUN_ID CALL_ID "Verified the requested file exists with the expected content"
+offgrid agent resume RUN_ID
+```
+
+Reconciliation appends this verified result to the conversation; it does not
+execute the uncertain tool again. If you cannot determine the outcome, leave the
+run uncertain. Do not invent success or retry a destructive operation blindly.
+
+Old task history without a checkpoint remains visible but is not resumable.
+A damaged or unwritable task store disables task operations with an explicit
+error. Preserve the data directory, repair the cause, and restart. Do not delete
+history as a routine repair.
+
+## API lifecycle
+
+```bash
+curl -X POST http://127.0.0.1:11611/v1/agents/run \
   -H "Content-Type: application/json" \
-  -d '{
-    "model": "llama3",
-    "prompt": "Debug this code: [code here]",
-    "template": "coder"
-  }'
+  -d '{"model":"YOUR_INSTALLED_MODEL_ID","prompt":"Calculate 25 * 47","async":true}'
 ```
 
----
+Creation returns HTTP 202 with `run_id`. Poll `GET /v1/agents/tasks/{id}`.
+POST actions to `/v1/agents/tasks/{id}/{action}`; approve/deny take
+`{"approval_id":"...","async":true}`, resume/cancel take `{"async":true}`,
+and reconcile takes `{"call_id":"...","result":"verified outcome"}`.
 
-## Agent Styles
+Do not submit `approved_tools`, `approved_tool_calls`, or a replacement prompt
+to resume work. These are rejected. Run actions are bound to the initiating
+account and are administrator-level surfaces. Task history is scoped to that
+account plus legacy unowned history.
 
-| Style | Description | Best For |
-|-------|-------------|----------|
-| `react` | Reasoning + Acting, step-by-step | Multi-step tasks, tool use |
-| `cot` | Chain of Thought | Analysis, explanations |
+SSE mode (`stream: true`) reports durable status and completed steps, followed
+by `done`, `approval_required`, or `error`. It does not emit model-token deltas.
+A disconnect leaves the run active: recover by ID instead of resubmitting it.
 
-```bash
-offgrid agent chat --style react
-offgrid agent chat --style cot
-```
+## Tools and MCP
 
----
+**Agents → Available tools** shows actual enabled tools and risk descriptors.
+Disable unneeded tools there; choices persist across service restarts.
+**Agents → MCP connections** tests and connects supported HTTP endpoints.
+Supply a server URL, not an `npx` command in the URL field. Successful connection
+configuration is persisted. External tools are still privileged, even when
+served locally; inspect their capabilities and restrict what the service can access.
 
-## Built-in Tools
+Computer use is unavailable unless a supported driver is configured. Do not
+interpret a page or status card as evidence of working desktop control.
 
-Agents can use these tools automatically:
+## Validation boundary
 
-| Tool | Description |
-|------|-------------|
-| `calculator` | Math calculations |
-| `read_file` | Read file contents |
-| `write_file` | Write to files |
-| `list_files` | List directory contents |
-| `http_get` | HTTP GET requests |
-| `shell` | Execute shell commands |
-| `current_time` | Read the current local time |
+Regression tests cover run-ID approvals, duplicate/expired grants, denial,
+cancellation, process-restart recovery, storage failure before execution,
+checkpoint isolation, and browser reload/draft handling. Model/tool interactions
+in those tests use controlled fixtures. They do not certify model reasoning,
+external MCP servers, or real Hermes/OpenClaw tasks on every machine.
 
-### Manage Tools
-
-```bash
-offgrid agent tools                    # List all tools
-```
-
-Tool enable/disable choices are persisted in the OffGrid data directory and
-restored on restart. The web UI exposes the same state through
-`GET/PATCH /v1/agents/tools`.
-
-**API:**
-```bash
-# Disable a tool
-curl -X PATCH http://localhost:11611/v1/agents/tools \
-  -H "Content-Type: application/json" \
-  -d '{"name": "write_file", "enabled": false}'
-```
-
----
-
-## MCP Integration
-
-Extend agents with [Model Context Protocol](https://modelcontextprotocol.io/) servers.
-
-### Add MCP Servers
-
-**CLI:**
-```bash
-offgrid agent mcp list
-offgrid agent mcp add filesystem "npx -y @modelcontextprotocol/server-filesystem /tmp"
-offgrid agent mcp test "npx -y @modelcontextprotocol/server-memory"
-offgrid agent mcp remove filesystem
-```
-
-**API:**
-```bash
-curl -X POST http://localhost:11611/v1/agents/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "filesystem",
-    "url": "npx -y @modelcontextprotocol/server-filesystem /tmp"
-  }'
-```
-
-Successful HTTP MCP connections are persisted and restored from the OffGrid
-data directory. Test a URL before connecting it; external MCP tools inherit the
-same policy and approval boundaries as built-in tools.
-
-### Popular MCP Servers
-
-| Server | Command | Purpose |
-|--------|---------|---------|
-| Filesystem | `npx -y @modelcontextprotocol/server-filesystem /tmp` | File operations |
-| Memory | `npx -y @modelcontextprotocol/server-memory` | Key-value store |
-| SQLite | `npx -y @modelcontextprotocol/server-sqlite /tmp/db.sqlite` | Database |
-| GitHub | `npx -y @modelcontextprotocol/server-github` | GitHub API |
-| Brave Search | `npx -y @modelcontextprotocol/server-brave-search` | Web search |
-
----
-
-## API Reference
-
-### Run Agent
-
-```bash
-curl -X POST http://localhost:11611/v1/agents/run \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "llama3",
-    "prompt": "Calculate factorial of 10",
-    "style": "react",
-    "max_steps": 10,
-    "stream": true
-  }'
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `model` | string | Model to use |
-| `prompt` | string | Task description |
-| `style` | string | `react` or `cot` |
-| `template` | string | Template name (optional) |
-| `max_steps` | int | Max reasoning steps (default: 10) |
-| `stream` | bool | Stream step-by-step output |
-
-### Streaming Response
-
-```javascript
-const response = await fetch('/v1/agents/run', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    model: 'llama3',
-    prompt: 'Search for Python models',
-    stream: true
-  })
-});
-
-const reader = response.body.getReader();
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  
-  const text = new TextDecoder().decode(value);
-  for (const line of text.split('\n')) {
-    if (line.startsWith('data: ')) {
-      const data = JSON.parse(line.slice(6));
-      console.log(data.step_type, data.content);
-    }
-  }
-}
-```
-
-### Step Types
-
-| Type | Description |
-|------|-------------|
-| `thought` | Agent reasoning |
-| `action` | Tool call |
-| `observation` | Tool result |
-| `answer` | Final answer |
-| `error` | Error message |
-
----
-
-## Example Tasks
-
-**Research:**
-```bash
-offgrid agent run "Find the top 3 Python ML libraries and compare them" --template researcher
-```
-
-**Coding:**
-```bash
-offgrid agent run "Write a REST API in Go with CRUD operations" --template coder
-```
-
-**Analysis:**
-```bash
-offgrid agent run "Analyze this CSV data and identify trends" --template analyst
-```
-
-**System Admin:**
-```bash
-offgrid agent run "Check disk usage and find large files" --template sysadmin
-```
-
-**Planning:**
-```bash
-offgrid agent run "Create a project plan for building a mobile app" --template planner
-```
-
----
-
-## Best Practices
-
-1. **Be specific** - Clear prompts get better results
-2. **Choose the right model** - 7B+ models reason better
-3. **Use templates** - They provide optimized system prompts
-4. **Limit tools** - Disable unused tools to reduce confusion
-5. **Set max_steps** - Start with 10, increase for complex tasks
-6. **Watch streaming** - Monitor step-by-step to understand behavior
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Agent loops | Use larger model, be more specific, reduce tools |
-| MCP won't connect | Check command, ensure npx installed, use `mcp test` |
-| Tool fails | Check permissions, network access, review observation |
-| Slow responses | Use smaller model, reduce max_steps |
-| Wrong answers | Use template, add context, try different model |
-
----
-
-## See Also
-
-- [CLI Reference](../reference/cli.md)
-- [API Reference](../reference/api.md)
-- [RAG Guide](embeddings.md)
+See the [API contract](../reference/api.md) and
+[delivery plan](../advanced/product-reliability-plan.md) for remaining work.

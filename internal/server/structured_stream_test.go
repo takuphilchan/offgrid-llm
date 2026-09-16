@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -13,6 +14,25 @@ import (
 
 type structuredStreamTestEngine struct {
 	inference.Engine
+}
+
+type interruptedStreamTestEngine struct{ inference.Engine }
+
+func (e *interruptedStreamTestEngine) ChatCompletionStreamRaw(_ context.Context, _ *api.ChatCompletionRequest, callback inference.ChatCompletionStreamCallback) error {
+	if err := callback(json.RawMessage(`{"choices":[{"delta":{"content":"partial"},"finish_reason":null}]}`)); err != nil {
+		return err
+	}
+	return io.ErrUnexpectedEOF
+}
+
+func TestPublicStreamDoesNotConvertPartialEOFToSuccess(t *testing.T) {
+	s := &Server{engine: &interruptedStreamTestEngine{}}
+	w := httptest.NewRecorder()
+	s.handleChatCompletionsStream(w, httptest.NewRequest("POST", "/v1/chat/completions", nil), &api.ChatCompletionRequest{Model: "test"})
+	body := w.Body.String()
+	if !strings.Contains(body, `"error"`) || strings.Contains(body, "[DONE]") || strings.Contains(body, `"finish_reason":"stop"`) {
+		t.Fatalf("partial output reported as success: %s", body)
+	}
 }
 
 func (e *structuredStreamTestEngine) ChatCompletionStreamRaw(_ context.Context, _ *api.ChatCompletionRequest, callback inference.ChatCompletionStreamCallback) error {

@@ -71,6 +71,15 @@ type EvaluateRAGRequest struct {
 	Cases []rag.EvaluationCase `json:"cases"`
 }
 
+func (s *Server) requireKnowledgeStorage(w http.ResponseWriter) bool {
+	if s.ragEngine == nil || s.ragEngine.StorageError() != nil {
+		writeRAGJSONError(w, http.StatusServiceUnavailable,
+			"Knowledge storage is unavailable. Check disk space and data-directory access, then restart OffGrid.")
+		return false
+	}
+	return true
+}
+
 // handleRAGStatus returns the status of the RAG engine
 func (s *Server) handleRAGStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -78,10 +87,11 @@ func (s *Server) handleRAGStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	if s.ragEngine == nil {
 		json.NewEncoder(w).Encode(RAGStatusResponse{
 			Enabled: false,
-			Stats:   map[string]interface{}{"error": "RAG engine not initialized"},
+			Stats:   map[string]interface{}{"storage_available": false, "error": "RAG engine not initialized"},
 		})
 		return
 	}
@@ -92,7 +102,6 @@ func (s *Server) handleRAGStatus(w http.ResponseWriter, r *http.Request) {
 		embeddingModel = model
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(RAGStatusResponse{
 		Enabled:        s.ragEngine.IsEnabled(),
 		EmbeddingModel: embeddingModel,
@@ -106,6 +115,9 @@ func (s *Server) handleRAGEnable(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !s.requireKnowledgeStorage(w) {
+		return
+	}
 
 	var req EnableRAGRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -115,11 +127,6 @@ func (s *Server) handleRAGEnable(w http.ResponseWriter, r *http.Request) {
 
 	if req.EmbeddingModel == "" {
 		http.Error(w, "embedding_model is required", http.StatusBadRequest)
-		return
-	}
-
-	if s.ragEngine == nil {
-		http.Error(w, "RAG engine not initialized", http.StatusInternalServerError)
 		return
 	}
 
@@ -160,9 +167,7 @@ func (s *Server) handleDocumentsList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	if s.ragEngine == nil {
-		http.Error(w, "RAG engine not initialized", http.StatusInternalServerError)
+	if !s.requireKnowledgeStorage(w) {
 		return
 	}
 
@@ -181,9 +186,7 @@ func (s *Server) handleDocumentIngest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	if s.ragEngine == nil {
-		http.Error(w, "RAG engine not initialized", http.StatusInternalServerError)
+	if !s.requireKnowledgeStorage(w) {
 		return
 	}
 
@@ -291,9 +294,7 @@ func (s *Server) handleDocumentDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	if s.ragEngine == nil {
-		http.Error(w, "RAG engine not initialized", http.StatusInternalServerError)
+	if !s.requireKnowledgeStorage(w) {
 		return
 	}
 
@@ -335,9 +336,7 @@ func (s *Server) handleDocumentSearch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	if s.ragEngine == nil {
-		http.Error(w, "RAG engine not initialized", http.StatusInternalServerError)
+	if !s.requireKnowledgeStorage(w) {
 		return
 	}
 
@@ -394,7 +393,10 @@ func (s *Server) handleDocumentReindex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
+	if !s.requireKnowledgeStorage(w) {
+		return
+	}
+	if !s.ragEngine.IsEnabled() {
 		http.Error(w, "RAG is not enabled", http.StatusBadRequest)
 		return
 	}
@@ -424,7 +426,10 @@ func (s *Server) handleRAGEvaluate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
+	if !s.requireKnowledgeStorage(w) {
+		return
+	}
+	if !s.ragEngine.IsEnabled() {
 		http.Error(w, "RAG is not enabled", http.StatusBadRequest)
 		return
 	}
@@ -459,9 +464,7 @@ func (s *Server) handleDocumentIngestURL(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	if s.ragEngine == nil {
-		http.Error(w, "RAG engine not initialized", http.StatusInternalServerError)
+	if !s.requireKnowledgeStorage(w) {
 		return
 	}
 

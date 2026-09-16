@@ -87,200 +87,63 @@ func startInteractiveAgent(modelName string) {
 }
 
 func runAgentRequest(url, prompt, model, style string, maxSteps int) {
-	reqBody := map[string]interface{}{
-		"prompt":    prompt,
-		"model":     model,
-		"style":     style,
-		"max_steps": maxSteps,
-		"stream":    true,
-	}
-	jsonBody, _ := json.Marshal(reqBody)
-
-	resp, err := httpClientLong.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	jsonBody, _ := json.Marshal(map[string]any{
+		"prompt": prompt, "model": model, "style": style,
+		"max_steps": maxSteps, "stream": true,
+	})
+	resp, err := agentRequest(httpClientLong, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		printError(fmt.Sprintf("Connection failed: %v", err))
+		printError(err.Error())
 		return
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		var errResp map[string]interface{}
-		if err := json.Unmarshal(body, &errResp); err == nil {
-			if e, ok := errResp["error"].(string); ok {
-				printError(fmt.Sprintf("Server error: %s", e))
-				return
-			}
-		}
-		printError(fmt.Sprintf("Server error (%d): %s", resp.StatusCode, string(body)))
-		return
+	if err := renderAgentStream(os.Stdout, resp.Body); err != nil {
+		printError(err.Error())
 	}
+}
 
-	// Spinner for initial connection/thinking
-	stopSpinner := make(chan bool)
-	go showSpinner("Thinking...", stopSpinner)
-
-	reader := bufio.NewReader(resp.Body)
-
-	// State tracking
-	isSpinnerRunning := true
-	var lineBuffer strings.Builder
-	suppressLine := false
-	isStartOfLine := true
-
-	fmt.Printf("\n%sOffGrid%s\n", colorBold, colorReset)
-
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "data: ") {
+// The durable runner streams committed steps and state, not speculative model
+// tokens. Losing this connection does not cancel work or resubmit the prompt.
+func renderAgentStream(w io.Writer, body io.Reader) error {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
+	runID := ""
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
 			continue
 		}
-
-		data := strings.TrimPrefix(line, "data: ")
-		var event map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &event); err != nil {
-			continue
+		var event struct {
+			agentRunSnapshot
+			Type       string `json:"type"`
+			StepType   string `json:"step_type"`
+			ToolName   string `json:"tool_name"`
+			ToolResult string `json:"tool_result"`
 		}
-
-		eventType, _ := event["type"].(string)
-
-		switch eventType {
-		case "token":
-			token, _ := event["token"].(string)
-
-			if isSpinnerRunning {
-				stopSpinner <- true
-				isSpinnerRunning = false
-				fmt.Printf("\r\033[K")
-			}
-
-			// Process token character by character to handle filtering
-			for _, char := range token {
-				if char == '\n' {
-					if !suppressLine {
-						if lineBuffer.Len() > 0 {
-							fmt.Print(lineBuffer.String())
-						}
-						fmt.Print("\n")
-					}
-					lineBuffer.Reset()
-					suppressLine = false
-					isStartOfLine = true
-					continue
-				}
-
-				lineBuffer.WriteRune(char)
-
-				if suppressLine {
-					continue
-				}
-
-				if isStartOfLine {
-					currentStr := lineBuffer.String()
-					forbidden := []string{"Action:", "Action Input:", "Observation:"}
-
-					matchedPrefix := false
-					fullMatch := false
-
-					for _, prefix := range forbidden {
-						if strings.HasPrefix(prefix, currentStr) {
-							matchedPrefix = true
-							if prefix == currentStr {
-								fullMatch = true
-							}
-							break
-						}
-					}
-
-					if fullMatch {
-						suppressLine = true
-						continue
-					}
-
-					if matchedPrefix {
-						// Wait for more chars
-						continue
-					}
-				}
-
-				// Safe to print
-				fmt.Print(lineBuffer.String())
-				lineBuffer.Reset()
-				isStartOfLine = false
-			}
-
+		if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "data:"))), &event); err != nil {
+			return fmt.Errorf("invalid agent progress; inspect the saved run before retrying: %w", err)
+		}
+		if runID == "" && event.RunID != "" {
+			runID = event.RunID
+			fmt.Fprintf(w, "Run: %s\n", terminalSafe(runID))
+		}
+		switch event.Type {
 		case "step":
-			// Step event confirms what happened
-			stepType, _ := event["step_type"].(string)
-
-			if isSpinnerRunning {
-				stopSpinner <- true
-				isSpinnerRunning = false
-				fmt.Printf("\r\033[K")
+			if event.ToolName != "" {
+				fmt.Fprintf(w, "  %s · %s\n", terminalSafe(event.ToolName), truncateTerminalText(terminalSafe(event.ToolResult), 180))
 			}
-
-			if stepType == "tool_use" {
-				toolName, _ := event["tool"].(string)
-				toolArgs, _ := event["args"].(string)
-				fmt.Printf("\r\033[K") // Clear any spinner line
-				fmt.Printf("%s%s  Using %s%s\n", brandAccent, iconChevron, toolName, colorReset)
-				if len(toolArgs) > 0 {
-					// Truncate args if too long
-					toolArgs = truncateTerminalText(toolArgs, 60)
-					fmt.Printf("    %s%s%s\n", colorDim, toolArgs, colorReset)
-				}
-
-				// Tool execution takes time
-				stopSpinner = make(chan bool)
-				go showSpinner("Running tool...", stopSpinner)
-				isSpinnerRunning = true
-
-			} else if stepType == "tool_result" {
-				result, _ := event["result"].(string)
-				result = truncateTerminalText(result, 100)
-				fmt.Printf("\r\033[K") // Clear any spinner line
-				fmt.Printf("%s%s  Result: %s%s\n", brandSuccess, iconCheck, result, colorReset)
-
-				// Back to thinking
-				stopSpinner = make(chan bool)
-				go showSpinner("Thinking...", stopSpinner)
-				isSpinnerRunning = true
+		case "done", "approval_required", "error":
+			renderAgentSnapshot(w, event.agentRunSnapshot)
+			if event.Type == "error" {
+				return fmt.Errorf("agent run stopped; use offgrid agent status %s before taking further action", terminalSafe(runID))
 			}
-
-		case "error":
-			if isSpinnerRunning {
-				stopSpinner <- true
-				isSpinnerRunning = false
-				fmt.Printf("\r\033[K")
-			}
-			errMsg, _ := event["error"].(string)
-			fmt.Printf("\n%sError: %s%s\n", brandError, errMsg, colorReset)
-
-		case "done":
-			// Flush remaining buffer
-			if !suppressLine && lineBuffer.Len() > 0 {
-				fmt.Print(lineBuffer.String())
-			}
-
-			// Ensure spinner is stopped
-			if isSpinnerRunning {
-				stopSpinner <- true
-				isSpinnerRunning = false
-				fmt.Printf("\r\033[K")
-			}
+			return nil
 		}
 	}
-
-	if isSpinnerRunning {
-		stopSpinner <- true
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("progress disconnected; run %s may still be active: %w", terminalSafe(runID), err)
 	}
-
-	fmt.Println()
+	return fmt.Errorf("progress ended before a terminal state; inspect with offgrid agent status %s", terminalSafe(runID))
 }
 
 func showSpinner(msg string, stop chan bool) {
@@ -299,6 +162,12 @@ func showSpinner(msg string, stop chan bool) {
 
 func printAgentHelp() {
 	printSectionHeader("Agent commands")
+	fmt.Println("  offgrid agent status RUN_ID                 Inspect a saved run")
+	fmt.Println("  offgrid agent approve RUN_ID APPROVAL_ID     Approve one pending call")
+	fmt.Println("  offgrid agent deny RUN_ID APPROVAL_ID        Deny a pending call")
+	fmt.Println("  offgrid agent cancel RUN_ID                 Stop work (does not undo tools)")
+	fmt.Println("  offgrid agent resume RUN_ID                 Resume a safe checkpoint")
+	fmt.Println("  offgrid agent reconcile RUN_ID CALL_ID RESULT  Record a verified outcome")
 	fmt.Printf("  %soffgrid agent [chat]%s           Start interactive agent session (default)\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent run <prompt>%s     Run a single agent task\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent templates%s        List pre-built agent personas\n", brandPrimary, colorReset)
@@ -308,15 +177,16 @@ func printAgentHelp() {
 	fmt.Println()
 	fmt.Printf("%sOptions:%s\n", colorBold, colorReset)
 	fmt.Printf("  %s--model <name>%s                 Specify model to use\n", colorCyan, colorReset)
-	fmt.Printf("  %s--template <id>%s                Use a pre-built agent template\n", colorCyan, colorReset)
+	fmt.Printf("  %s--style react|cot|plan%s         Instruction style for agent run\n", brandPrimary, colorReset)
+	fmt.Printf("  %s--max-steps <1-50>%s             Bound agent run model iterations\n", brandPrimary, colorReset)
 	fmt.Println()
-	fmt.Printf("%sTemplates:%s researcher, coder, analyst, writer, sysadmin, planner\n", colorBold, colorReset)
+	fmt.Println("  Review available personas with 'offgrid agent templates'; task commands do not apply --template.")
 	fmt.Println()
 }
 
 func fetchModels(port int) ([]string, error) {
 	url := fmt.Sprintf("http://localhost:%d/v1/models", port)
-	resp, err := http.Get(url)
+	resp, err := agentRequest(httpClient, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

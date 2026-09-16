@@ -573,7 +573,9 @@ func (o *Orchestrator) runSingleAgent(ctx context.Context, agent AgentRole, prom
 	taskID := fmt.Sprintf("orch-%s-%d", agent.Name, time.Now().UnixNano())
 
 	// Create and run task (for tracking)
-	o.manager.CreateTask(taskID, prompt, &config)
+	if _, err := o.manager.CreateTask(taskID, prompt, &config); err != nil {
+		return nil, err
+	}
 	if err := o.manager.StartTask(taskID); err != nil {
 		return nil, err
 	}
@@ -581,11 +583,15 @@ func (o *Orchestrator) runSingleAgent(ctx context.Context, agent AgentRole, prom
 	// Run agent using RunImmediate
 	result, _, err := o.manager.RunImmediate(ctx, prompt, &config)
 	if err != nil {
-		o.manager.CompleteTask(taskID, "", err)
+		if saveErr := o.manager.CompleteTask(taskID, "", err); saveErr != nil {
+			return nil, saveErr
+		}
 		return nil, err
 	}
 
-	o.manager.CompleteTask(taskID, result, nil)
+	if err := o.manager.CompleteTask(taskID, result, nil); err != nil {
+		return nil, err
+	}
 
 	return &AgentResult{
 		AgentName: agent.Name,

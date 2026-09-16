@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -30,6 +31,7 @@ func (s *Server) publishRunEvent(ctx context.Context, runID string, eventType ru
 	}
 	event, err := runs.NewEvent(runID, eventType, data)
 	if err != nil {
+		log.Printf("Run event encoding failed for %s: %v", runID, err)
 		return
 	}
 	// A disconnected HTTP client must not prevent the terminal event from
@@ -37,7 +39,9 @@ func (s *Server) publishRunEvent(ctx context.Context, runID string, eventType ru
 	if ctx == nil || ctx.Err() != nil {
 		ctx = context.Background()
 	}
-	_ = s.runLog.Publish(ctx, event)
+	if err := s.runLog.Publish(ctx, event); err != nil {
+		log.Printf("Run event projection failed for %s: %v", runID, err)
+	}
 }
 
 func (s *Server) persistRunOutput(ctx context.Context, runID, output string) (*artifacts.Metadata, error) {
@@ -62,17 +66,16 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if s.runLog == nil {
-		json.NewEncoder(w).Encode(map[string]any{"runs": []runSummary{}})
-		return
-	}
-
 	path := strings.TrimPrefix(r.URL.Path, "/v1/runs")
 	path = strings.Trim(path, "/")
 	if path != "" {
 		parts := strings.Split(path, "/")
 		if len(parts) != 2 || parts[1] != "events" || parts[0] == "" {
 			http.NotFound(w, r)
+			return
+		}
+		if s.runLog == nil {
+			writeError(w, "Run event history unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		after, err := strconv.ParseUint(r.URL.Query().Get("after"), 10, 64)
@@ -89,10 +92,15 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	events, err := s.runLog.Replay("", 0)
-	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
-		return
+	events := []runs.Event{}
+	projectionAvailable := s.runLog != nil
+	if s.runLog != nil {
+		var err error
+		events, err = s.runLog.Replay("", 0)
+		if err != nil {
+			log.Printf("Run event history unavailable: %v", err)
+			projectionAvailable = false
+		}
 	}
 	byID := make(map[string]*runSummary)
 	for _, event := range events {
@@ -107,6 +115,14 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 			_ = json.Unmarshal(event.Data, &summary.Data)
 		}
 		switch event.Type {
+		case runs.RunStateChanged:
+			var data map[string]any
+			if json.Unmarshal(event.Data, &data) == nil {
+				if status, ok := data["status"].(string); ok {
+					summary.Status = status
+				}
+				summary.Data = data
+			}
 		case runs.ApprovalRequired:
 			summary.Status = "approval_required"
 		case runs.RunCompleted:
@@ -115,12 +131,32 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 			summary.Status = "failed"
 		}
 	}
+	// Checkpoint snapshots override event projections, including recovery states
+	// written at startup and state changes whose event projection could not save.
+	if s.agentManager != nil {
+		if err := s.agentManager.StorageError(); err != nil {
+			writeAgentError(w, err)
+			return
+		}
+		for _, task := range s.agentManager.ListTasks() {
+			summary := byID[task.ID]
+			if summary == nil {
+				summary = &runSummary{ID: task.ID, StartedAt: task.CreatedAt, UpdatedAt: task.CreatedAt}
+				byID[task.ID] = summary
+			}
+			summary.Status = string(task.Status)
+			summary.Data = map[string]any{"prompt": task.Prompt, "model": task.Model, "actor": task.Actor}
+			if task.CompletedAt != nil {
+				summary.UpdatedAt = *task.CompletedAt
+			}
+		}
+	}
 	summaries := make([]runSummary, 0, len(byID))
 	for _, summary := range byID {
 		summaries = append(summaries, *summary)
 	}
 	sort.Slice(summaries, func(i, j int) bool { return summaries[i].UpdatedAt.After(summaries[j].UpdatedAt) })
-	json.NewEncoder(w).Encode(map[string]any{"runs": summaries})
+	json.NewEncoder(w).Encode(map[string]any{"runs": summaries, "event_history_available": projectionAvailable})
 }
 
 func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request) {
