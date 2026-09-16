@@ -44,6 +44,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/runs"
 	"github.com/takuphilchan/offgrid-llm/internal/stats"
+	"github.com/takuphilchan/offgrid-llm/internal/storage"
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
 	"github.com/takuphilchan/offgrid-llm/internal/tools"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
@@ -112,6 +113,9 @@ type Server struct {
 	closeErr            error
 	runtimeCtx          context.Context
 	runtimeCancel       context.CancelFunc
+	startupErr          error
+	workspaceOwner      *storage.Ownership
+	startupWorkers      sync.WaitGroup
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -151,10 +155,15 @@ func New() *Server {
 // NewWithConfig creates a new server instance with provided config
 func NewWithConfig(cfg *config.Config) *Server {
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
+		return &Server{config: cfg, startupErr: fmt.Errorf("invalid configuration: %w", err)}
+	}
+	owner, err := storage.AcquireOwnership(cfg.DataDir)
+	if err != nil {
+		return &Server{config: cfg, startupErr: err}
 	}
 	if err := prepareDataLayout(cfg.ModelsDir, cfg.DataDir); err != nil {
-		log.Printf("Warning: failed to prepare application data directory: %v", err)
+		owner.Close()
+		return &Server{config: cfg, startupErr: fmt.Errorf("prepare workspace: %w", err)}
 	}
 
 	// Initialize components
@@ -496,10 +505,12 @@ func NewWithConfig(cfg *config.Config) *Server {
 		version:              serverVersion,
 		runtimeCtx:           runtimeCtx,
 		runtimeCancel:        runtimeCancel,
+		workspaceOwner:       owner,
 	}
 	sessionHandlers.requireAuth = cfg.RequireAuth
 	sessionHandlers.streamer = server.streamSessionChat
 	server.agentRunner = agents.NewRunner(agentManager, toolRegistry, server.callAgentModel)
+	server.agentRunner.StreamCaller = server.streamAgentModel
 	server.agentRunner.Observer = func(task *agents.Task) {
 		server.publishRunEvent(context.Background(), task.ID, runs.RunStateChanged, map[string]any{"status": task.Status, "prompt": task.Prompt, "model": task.Model, "actor": task.Actor, "pending_approval": task.PendingApproval})
 		if task.Status == agents.TaskCompleted {
@@ -840,12 +851,16 @@ func (s *Server) requirePermissionWhenAuthEnabled(permission users.Permission, n
 // Start starts the HTTP server
 func (s *Server) Start() error {
 	defer s.Close()
+	if s.startupErr != nil {
+		return s.startupErr
+	}
 
 	if err := validateServerExposure(s.config); err != nil {
 		return err
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v2/system", s.handleSystemIdentity)
 	adminOnly := func(handler http.HandlerFunc) http.HandlerFunc {
 		return s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, handler)
 	}
@@ -1053,6 +1068,7 @@ func (s *Server) Start() error {
 	}
 
 	s.httpServer = &http.Server{
+		BaseContext:  func(net.Listener) context.Context { return s.runtimeCtx },
 		Addr:         listenAddr,
 		Handler:      handler,
 		ReadTimeout:  5 * time.Minute,  // Increased for low-end machines
@@ -1070,7 +1086,9 @@ func (s *Server) Start() error {
 	}
 
 	// Auto-enable RAG if an embedding model is available
+	s.startupWorkers.Add(1)
 	go func() {
+		defer s.startupWorkers.Done()
 		ctx, cancel := context.WithTimeout(s.runtimeCtx, 60*time.Second)
 		defer cancel()
 
@@ -1159,6 +1177,23 @@ func (s *Server) Close() error {
 		if s.runtimeCancel != nil {
 			s.runtimeCancel()
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if s.httpServer != nil {
+			if err := s.httpServer.Shutdown(ctx); err != nil {
+				// Retain ownership if a handler can still write. Process exit
+				// releases the OS lock; a new service must not race cleanup.
+				s.closeErr = fmt.Errorf("drain HTTP requests: %w", err)
+				return
+			}
+		}
+		if s.agentRunner != nil {
+			if err := s.agentRunner.Shutdown(ctx); err != nil {
+				s.closeErr = fmt.Errorf("drain agent workers: %w", err)
+				return
+			}
+		}
+		s.startupWorkers.Wait()
 		if s.modelCache != nil {
 			s.modelCache.UnloadAll()
 			s.modelCache.StopMonitor()
@@ -1184,6 +1219,10 @@ func (s *Server) Close() error {
 		if s.sandbox != nil {
 			s.closeErr = s.sandbox.Cleanup()
 		}
+		if s.ragEngine != nil {
+			s.closeErr = errors.Join(s.closeErr, s.ragEngine.Close())
+		}
+		s.closeErr = errors.Join(s.closeErr, s.workspaceOwner.Close())
 	})
 	return s.closeErr
 }
@@ -1203,27 +1242,13 @@ func requestBodyLimitMiddleware(next http.Handler) http.Handler {
 func (s *Server) handleShutdown() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	<-sigChan
+	defer signal.Stop(sigChan)
+	select {
+	case <-s.runtimeCtx.Done():
+		return
+	case <-sigChan:
+	}
 	log.Println("\nShutdown signal received...")
-
-	// Stop all cached llama-server instances
-	log.Println("Stopping all llama-server instances...")
-	s.modelCache.UnloadAll()
-	log.Println("All llama-server instances stopped")
-
-	// Stop P2P services
-	if s.config.EnableP2P && s.p2pDiscovery != nil {
-		log.Println("Stopping P2P services...")
-		s.p2pDiscovery.Stop()
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := s.httpServer.Shutdown(ctx); err != nil {
-		log.Printf("Shutdown error: %v", err)
-	}
 	if err := s.Close(); err != nil {
 		log.Printf("Runtime cleanup error: %v", err)
 	}
@@ -1976,7 +2001,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Admit bounded same-model concurrency; model changes remain exclusive.
 	releaseInference, err := s.acquireInference(r.Context(), req.Model)
 	if err != nil {
-		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
+		writeServiceError(w, newServiceError(http.StatusServiceUnavailable, "Model could not be loaded; check runtime availability", err))
 		return
 	}
 	defer releaseInference()
@@ -2199,7 +2224,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	// Admit bounded same-model concurrency; model changes remain exclusive.
 	releaseInference, err := s.acquireInference(r.Context(), req.Model)
 	if err != nil {
-		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
+		writeServiceError(w, newServiceError(http.StatusServiceUnavailable, "Model could not be loaded; check runtime availability", err))
 		return
 	}
 	defer releaseInference()
@@ -3228,7 +3253,7 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 	}
 	releaseInference, err := s.acquireInference(r.Context(), req.Model)
 	if err != nil {
-		writeError(w, fmt.Sprintf("Failed to switch model: %v", err), http.StatusInternalServerError)
+		writeServiceError(w, newServiceError(http.StatusServiceUnavailable, "Model could not be loaded; check runtime availability", err))
 		return
 	}
 	defer releaseInference()
@@ -4754,13 +4779,17 @@ func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 		writeAgentError(w, err)
 		return
 	}
-	tasks := []*agents.Task{}
+	tasks := []any{}
 	for _, task := range s.agentManager.ListTasks() {
 		if task.Actor != "" && task.Actor != s.agentActor(r) {
 			continue
 		}
+		deletable := agents.CanDeleteTask(task) && (task.Actor == s.agentActor(r) || (task.Actor == "" && s.agentActor(r) == "local-admin"))
 		task.Checkpoint = nil
-		tasks = append(tasks, task)
+		tasks = append(tasks, struct {
+			*agents.Task
+			Deletable bool `json:"deletable"`
+		}{task, deletable})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tasks)

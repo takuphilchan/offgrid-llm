@@ -9,6 +9,16 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /api/v2/system:
+    get:
+      operationId: getSystemIdentity
+      security: []
+      responses:
+        '200':
+          description: Public product identity and implemented client contracts, without private runtime state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemIdentity' }
   /health:
     get:
       operationId: getHealth
@@ -240,7 +250,7 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
     delete:
       operationId: deleteSession
-      description: Requires ownership or sessions:all; other users' conversations return 404.
+      description: Requires ownership or sessions:all; other users' conversations return 404. Returns 409 immediately while generation or another mutation is active; deletion never waits to erase a newly completed turn.
       responses:
         '200':
           description: Conversation deleted
@@ -253,6 +263,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /v1/sessions/{name}/generate:
     parameters:
       - $ref: '#/components/parameters/SessionName'
@@ -454,6 +465,39 @@ paths:
               schema: { $ref: '#/components/schemas/AgentRunResponse' }
         '404': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteAgentRun
+      description: Owner-only removal of completed, failed or cancelled history. Active workers, pending approvals, interrupted and uncertain outcomes return 409. A durable scrubbed tombstone prevents event projections restoring history. Separate audit logs, backups and tool-created files are not erased.
+      responses:
+        '200':
+          description: Removed from task and activity history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties: { success: { type: boolean } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/agents/tasks/{id}/events:
+    get:
+      operationId: streamAgentProgress
+      summary: Stream durable agent snapshots without owning execution
+      description: Starts with the latest saved snapshot, then sends changed snapshots and heartbeat comments. Reconnect to recover the latest bounded preview; this is not an event-history replay endpoint. Disconnect does not cancel work. Only the run owner can subscribe.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: SSE data frames contain AgentRunResponse plus type=status, done, approval_required or error. A preview is provisional, never a completed answer. Terminal snapshots close the stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '404': { description: Run not found or not owned by the current actor }
+        '503': { description: Agent storage unavailable }
   /v1/agents/tasks/{id}/{action}:
     parameters:
       - in: path
@@ -630,6 +674,16 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    SystemIdentity:
+      type: object
+      required: [product, version, revision, api_version, ui_build_id, capabilities]
+      properties:
+        product: { type: string, const: offgrid }
+        version: { type: string }
+        revision: { type: string }
+        api_version: { type: integer, const: 2 }
+        ui_build_id: { type: string, description: SHA-256 of the served UI index; empty when not installed. }
+        capabilities: { type: array, items: { type: string } }
     ChatStreamPhase:
       type: string
       enum: [queued, retrieving, loading, processing, generating, saving]
@@ -992,6 +1046,17 @@ components:
         tool_args: { type: string }
         tool_result: { type: string }
         timestamp: { type: string, format: date-time }
+    AgentProgress:
+      type: object
+      required: [phase, iteration, preview, truncated, started_at, updated_at]
+      properties:
+        phase: { type: string, enum: [queued, loading, processing, generating, preparing_tool, tool, approval] }
+        iteration: { type: integer }
+        tool: { type: string }
+        preview: { type: string, description: Bounded public model response preview, separate from completed output and model context. }
+        truncated: { type: boolean }
+        started_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     AgentRunResponse:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
@@ -1006,6 +1071,11 @@ components:
             - { $ref: '#/components/schemas/ToolApproval' }
             - { type: 'null' }
         resumable: { type: boolean, description: Whether this run has a safe checkpoint for explicit resume. Legacy history without checkpoints is read-only. }
+        started_at: { type: [string, 'null'], format: date-time }
+        progress:
+          anyOf:
+            - { $ref: '#/components/schemas/AgentProgress' }
+            - { type: 'null' }
         uncertain_call_id: { type: string }
         uncertain_call:
           type: object
@@ -1018,6 +1088,7 @@ components:
       type: object
       required: [id, prompt, status, created_at]
       properties:
+        deletable: { type: boolean, description: Whether this actor may remove this terminal run; the server rechecks state at deletion time. }
         id: { type: string }
         prompt: { type: string }
         status: { type: string }

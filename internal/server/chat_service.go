@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -28,6 +29,9 @@ func (e *serviceError) Unwrap() error   { return e.cause }
 func (e *serviceError) HTTPStatus() int { return e.status }
 
 func newServiceError(status int, message string, cause error) error {
+	if errors.Is(cause, inference.ErrInferenceQueueFull) {
+		return &serviceError{status: http.StatusTooManyRequests, message: inference.ErrInferenceQueueFull.Error(), cause: cause}
+	}
 	return &serviceError{status: status, message: message, cause: cause}
 }
 
@@ -155,6 +159,11 @@ func injectKnowledge(ctx context.Context, request *api.ChatCompletionRequest, kn
 }
 
 func writeServiceError(w http.ResponseWriter, err error) {
+	if errors.Is(err, inference.ErrInferenceQueueFull) {
+		w.Header().Set("Retry-After", "2")
+		writeErrorWithCode(w, inference.ErrInferenceQueueFull.Error(), http.StatusTooManyRequests, "inference_queue_full")
+		return
+	}
 	status := http.StatusInternalServerError
 	message := err.Error()
 	if typed, ok := err.(*serviceError); ok {

@@ -600,6 +600,12 @@ func (m *Middleware) AddBypassPath(path string) {
 // Wrap wraps an HTTP handler with authentication
 func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// This exact endpoint exposes only the public desktop compatibility
+		// handshake. Do not prefix-match future authenticated system routes.
+		if r.URL.Path == "/api/v2/system" && r.Method == http.MethodGet {
+			next.ServeHTTP(w, r)
+			return
+		}
 		// Always bypass root path (serves UI redirect)
 		if r.URL.Path == "/" {
 			next.ServeHTTP(w, r)

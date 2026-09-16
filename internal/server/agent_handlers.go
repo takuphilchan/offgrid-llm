@@ -72,6 +72,8 @@ func taskResponse(task *agents.Task) map[string]any {
 		steps = []agents.Step{}
 	}
 	response := map[string]any{"task_id": task.ID, "run_id": task.ID, "status": task.Status, "output": task.Result, "steps": steps, "pending_approval": task.PendingApproval}
+	response["progress"] = task.Progress
+	response["started_at"] = task.StartedAt
 	response["resumable"] = task.Checkpoint != nil && task.Checkpoint.ExecutingCall == "" && (task.Status == agents.TaskInterrupted || task.Status == agents.TaskPending || task.Status == agents.TaskWaiting)
 	if task.Error != "" {
 		response["error"] = task.Error
@@ -198,6 +200,24 @@ func (s *Server) handleAgentTaskAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, actor := parts[0], s.agentActor(r)
+	if len(parts) == 1 && r.Method == http.MethodDelete {
+		if err := s.agentRunner.Delete(id, actor); err != nil {
+			writeAgentError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		return
+	}
+	if len(parts) == 2 && parts[1] == "events" && r.Method == http.MethodGet {
+		task, ok := s.agentManager.GetTask(id)
+		if !ok || task.Actor != actor {
+			writeAgentError(w, agents.ErrTaskNotFound)
+			return
+		}
+		s.streamAgentTask(w, r, id)
+		return
+	}
 	if len(parts) == 1 && r.Method == http.MethodGet {
 		task, ok := s.agentManager.GetTask(id)
 		if !ok || (task.Actor != actor && task.Actor != "") {
@@ -260,14 +280,20 @@ func (s *Server) streamAgentTask(w http.ResponseWriter, r *http.Request, id stri
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	steps := 0
+	lastPayload := ""
+	lastSent := time.Now()
+	controller := http.NewResponseController(w)
+	defer controller.SetWriteDeadline(time.Time{})
 	for {
+		// Slow/disconnected viewers must not retain a blocked handler indefinitely.
+		_ = controller.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err := s.agentManager.StorageError(); err != nil {
 			fmt.Fprint(w, "data: {\"type\":\"error\",\"error\":\"Agent task storage unavailable; inspect service logs.\"}\n\n")
 			flusher.Flush()
 			return
 		}
 		task, ok := s.agentManager.GetTask(id)
-		if !ok {
+		if !ok || task.Actor != s.agentActor(r) {
 			return
 		}
 		data := taskResponse(task)
@@ -288,10 +314,19 @@ func (s *Server) streamAgentTask(w http.ResponseWriter, r *http.Request, id stri
 			data["type"] = "error"
 		}
 		payload, _ := json.Marshal(data)
-		if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
-			return
+		if string(payload) != lastPayload {
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+				return
+			}
+			lastPayload, lastSent = string(payload), time.Now()
+			flusher.Flush()
+		} else if time.Since(lastSent) >= 5*time.Second {
+			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+				return
+			}
+			lastSent = time.Now()
+			flusher.Flush()
 		}
-		flusher.Flush()
 		if task.Status != agents.TaskRunning && task.Status != agents.TaskPending {
 			return
 		}

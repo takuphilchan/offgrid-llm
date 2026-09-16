@@ -30,6 +30,31 @@ type sessionLock struct {
 	refs int
 }
 
+// Deletion must not queue behind an in-flight turn and silently remove the
+// answer once it finishes. Reject busy sessions so the user can decide later.
+func (h *SessionHandlers) tryLockSession(name string) (func(), bool) {
+	h.locksMu.Lock()
+	defer h.locksMu.Unlock()
+	if h.sessionLocks == nil {
+		h.sessionLocks = make(map[string]*sessionLock)
+	}
+	if h.sessionLocks[name] != nil {
+		return nil, false
+	}
+	lock := &sessionLock{gate: make(chan struct{}, 1), refs: 1}
+	lock.gate <- struct{}{}
+	h.sessionLocks[name] = lock
+	return func() {
+		<-lock.gate
+		h.locksMu.Lock()
+		defer h.locksMu.Unlock()
+		lock.refs--
+		if lock.refs == 0 {
+			delete(h.sessionLocks, name)
+		}
+	}, true
+}
+
 // Serialize all mutations, including deletion, with generation for this name.
 // Reference counting also prevents arbitrary names accumulating locks forever.
 func (h *SessionHandlers) lockSession(name string) func() {
@@ -184,7 +209,16 @@ func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	unlock := h.lockSession(name)
+	// Authorize before reporting contention; do not reveal another user's work.
+	if _, err := h.scoped(r).Load(name); err != nil {
+		writeSessionError(w, err)
+		return
+	}
+	unlock, available := h.tryLockSession(name)
+	if !available {
+		writeError(w, "Conversation is busy. Stop generation or wait, then retry deletion.", http.StatusConflict)
+		return
+	}
 	defer unlock()
 	if err := h.scoped(r).Delete(name); err != nil {
 		writeSessionError(w, err)

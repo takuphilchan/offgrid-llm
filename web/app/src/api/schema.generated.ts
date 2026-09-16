@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v2/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSystemIdentity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -211,7 +227,7 @@ export interface paths {
         get: operations["getSession"];
         put?: never;
         post?: never;
-        /** @description Requires ownership or sessions:all; other users' conversations return 404. */
+        /** @description Requires ownership or sessions:all; other users' conversations return 404. Returns 409 immediately while generation or another mutation is active; deletion never waits to erase a newly completed turn. */
         delete: operations["deleteSession"];
         options?: never;
         head?: never;
@@ -380,6 +396,27 @@ export interface paths {
         get: operations["getAgentRun"];
         put?: never;
         post?: never;
+        /** @description Owner-only removal of completed, failed or cancelled history. Active workers, pending approvals, interrupted and uncertain outcomes return 409. A durable scrubbed tombstone prevents event projections restoring history. Separate audit logs, backups and tool-created files are not erased. */
+        delete: operations["deleteAgentRun"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/tasks/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream durable agent snapshots without owning execution
+         * @description Starts with the latest saved snapshot, then sends changed snapshots and heartbeat comments. Reconnect to recover the latest bounded preview; this is not an event-history replay endpoint. Disconnect does not cancel work. Only the run owner can subscribe.
+         */
+        get: operations["streamAgentProgress"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -522,6 +559,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        SystemIdentity: {
+            /** @constant */
+            product: "offgrid";
+            version: string;
+            revision: string;
+            /** @constant */
+            api_version: 2;
+            /** @description SHA-256 of the served UI index; empty when not installed. */
+            ui_build_id: string;
+            capabilities: string[];
+        };
         /** @enum {string} */
         ChatStreamPhase: "queued" | "retrieving" | "loading" | "processing" | "generating" | "saving";
         ChatTimings: {
@@ -846,6 +894,19 @@ export interface components {
             /** Format: date-time */
             timestamp?: string;
         };
+        AgentProgress: {
+            /** @enum {string} */
+            phase: "queued" | "loading" | "processing" | "generating" | "preparing_tool" | "tool" | "approval";
+            iteration: number;
+            tool?: string;
+            /** @description Bounded public model response preview */
+            preview: string;
+            truncated: boolean;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         AgentRunResponse: {
             output: string;
             task_id: string;
@@ -856,6 +917,9 @@ export interface components {
             pending_approval: components["schemas"]["ToolApproval"] | null;
             /** @description Whether this run has a safe checkpoint for explicit resume. Legacy history without checkpoints is read-only. */
             resumable: boolean;
+            /** Format: date-time */
+            started_at?: string | null;
+            progress?: components["schemas"]["AgentProgress"] | null;
             uncertain_call_id?: string;
             uncertain_call?: {
                 tool: string;
@@ -866,6 +930,8 @@ export interface components {
             steps: components["schemas"]["AgentStep"][];
         };
         AgentTask: {
+            /** @description Whether this actor may remove this terminal run; the server rechecks state at deletion time. */
+            deletable?: boolean;
             id: string;
             prompt: string;
             status: string;
@@ -917,6 +983,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getSystemIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public product identity and implemented client contracts, without private runtime state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemIdentity"];
+                };
+            };
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -1292,6 +1378,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     generateSessionTurn: {
@@ -1593,6 +1680,69 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             503: components["responses"]["Error"];
+        };
+    };
+    deleteAgentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed from task and activity history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    streamAgentProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE data frames contain AgentRunResponse plus type=status, done, approval_required or error. A preview is provisional, never a completed answer. Terminal snapshots close the stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Run not found or not owned by the current actor */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent storage unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     changeAgentRun: {

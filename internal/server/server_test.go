@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,7 +16,15 @@ import (
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
-	server := New()
+	cfg := config.LoadConfig()
+	root := t.TempDir()
+	cfg.DataDir = filepath.Join(root, "data")
+	cfg.ModelsDir = filepath.Join(root, "models")
+	cfg.UseMockEngine = true
+	server := NewWithConfig(cfg)
+	if server.startupErr != nil {
+		t.Fatal(server.startupErr)
+	}
 	t.Cleanup(func() {
 		if err := server.Close(); err != nil {
 			t.Errorf("close test server: %v", err)

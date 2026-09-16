@@ -74,6 +74,10 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
+		if s.agentManager != nil && s.agentManager.IsDeleted(parts[0]) {
+			writeError(w, "Run not found", http.StatusNotFound)
+			return
+		}
 		if s.runLog == nil {
 			writeError(w, "Run event history unavailable", http.StatusServiceUnavailable)
 			return
@@ -104,6 +108,9 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 	}
 	byID := make(map[string]*runSummary)
 	for _, event := range events {
+		if s.agentManager != nil && s.agentManager.IsDeleted(event.RunID) {
+			continue
+		}
 		summary := byID[event.RunID]
 		if summary == nil {
 			summary = &runSummary{ID: event.RunID, Status: "running", StartedAt: event.Time, Data: make(map[string]any)}
