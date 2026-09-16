@@ -142,7 +142,26 @@
   .history-open { padding: 10px 8px; color: var(--muted); }
   .history-open strong { font-size: 13px; font-weight: 500; }
   .history-open small { color: var(--faint); font-size: 11px; }
-  .history-delete { width: 32px; height: 32px; }
+  .history-delete { width: 36px; height: 36px; color: var(--muted); flex-shrink: 0; }
+  .history-search { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--muted); background: var(--surface-0); }
+  .history-search input { min-width: 0; width: 100%; color: var(--text); background: transparent; border: 0; font-size: 13px; }
+  .history-search svg { flex-shrink: 0; }
+  .history-tools, .history-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .conversation-history .history-tools { margin-block: 10px; justify-content: space-between; }
+  .history-tools button, .history-row-actions button { min-height: 36px; white-space: normal; }
+  .history-row-actions { margin-block-start: 8px; }
+  .history-row-actions button { display: inline-flex; gap: 6px; align-items: center; }
+  .history-notice { margin-block: 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .history-more { margin-block-start: 12px; }
+  .agent-history-panel > .section-heading { flex-wrap: wrap; gap: 12px; }
+  .conversation-history > :not(.history-list) { flex-shrink: 0; }
+  .history-delete-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; margin: auto; overflow: auto; color: var(--text); background: var(--surface-1); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); }
+  .history-delete-dialog::backdrop { background: var(--scrim); }
+  .history-delete-dialog h2 { margin: 0 0 12px; font-size: 20px; }
+  .history-delete-dialog p, .history-delete-dialog li { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+  .history-delete-dialog ul { max-height: 160px; overflow: auto; padding-inline-start: 22px; }
+  .history-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-block-start: 24px; }
+  .history-dialog-actions button { min-height: 44px; }
   .history-delete:hover, .history-delete.armed { color: var(--text); background: var(--surface-2); }
   .history-empty, .model-select, .switch { color: var(--muted); font-size: 13px; }
   .switch > span { background: var(--surface-3); }
@@ -230,8 +249,48 @@
   .section-tabs button { min-height: 36px; padding: 0 15px; color: var(--muted); background: transparent; border-radius: 6px; font-size: 12px; cursor: pointer; }
   .section-tabs button:hover { color: var(--text); }
   .section-tabs button[aria-selected='true'] { color: var(--text); background: var(--surface-2); font-weight: 600; }
-  .agent-view { display: grid; gap: 20px; }
-  .task-card, .result-card { min-height: 450px; }
+  .agents-page { container-type: inline-size; }
+  .agent-view { display: grid; gap: 20px; min-width: 0; }
+  /* Size against the workspace, not the window (the sidebar takes space too). */
+  .agent-workspace { grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; }
+  @container (min-width: 760px) {
+    .agent-workspace { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+  }
+  .task-card, .result-card { min-width: 0; min-height: 0; overflow-wrap: anywhere; }
+  .task-card { gap: 20px; }
+  .task-card > *, .task-card .model-select { min-width: 0; }
+  .task-card select { min-width: 0; max-width: 100%; }
+  .task-card .model-select select { flex: 1; }
+  .task-card textarea { min-height: 160px; max-height: 50dvh; }
+  .agent-task-actions { padding-block-start: 16px; border-block-start: 1px solid var(--line); }
+  .agent-task-actions .primary-button { width: 100%; min-height: 44px; margin: 0; white-space: normal; }
+  .result-card { display: grid; grid-template-rows: auto minmax(0, 1fr); height: clamp(420px, 72dvh, 800px); padding: 0; overflow: hidden; }
+  .agent-result-header { min-width: 0; padding: 18px 20px; border-block-end: 1px solid var(--line); }
+  .agent-result-header .section-heading { margin: 10px 0 0; gap: 12px; flex-wrap: wrap; }
+  .agent-result-header .section-heading button { flex-shrink: 0; }
+  .agent-result-body { min-width: 0; min-height: 0; padding: 20px; overflow: auto; scrollbar-gutter: stable; overscroll-behavior-y: contain; overflow-anchor: none; }
+  .agent-result-body:focus-visible { outline-offset: -3px; }
+  .agent-result-content { display: flow-root; min-width: 0; min-height: 100%; }
+  .agent-result-body pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .agent-result-content > pre:first-child { margin-block-start: 0; }
+  .agent-result-body .quiet-state { min-height: 100%; }
+  .agent-result-body .approval-card { margin-block-start: 0; min-width: 0; }
+  .agent-result-body .approval-card pre { max-height: none; overflow: visible; }
+  .agent-result-body .approval-card > div:last-child { flex-wrap: wrap; }
+  .agent-result-body .approval-card textarea { max-width: 100%; }
+  .task-history .text-button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+  /* Live agent progress uses real phases, not synthetic completion percentages. */
+  .agent-progress { display: grid; gap: 12px; margin-block-start: 16px; }
+  .agent-progress-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .agent-progress-heading strong { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .agent-progress-heading small { margin-inline-start: auto; color: var(--muted); }
+  .agent-progress-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+  .agent-progress-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .agent-preview-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .agent-preview-toggle input { width: auto; accent-color: currentColor; }
+  .agent-live-preview { border-inline-start: 2px solid currentColor; padding-inline-start: 16px; min-width: 0; }
+  .agent-result-content > * + .agent-live-preview { margin-block-start: 24px; }
+  .agent-connection-note { margin: 0; font-size: 13px; color: var(--muted); }
   .task-card > label, .task-card .form-row, .connector-panel form label { color: var(--muted); font-size: 13px; }
   .result-card pre, .approval-card pre, .provider-setup pre, .event-list pre { color: var(--text); background: var(--surface-0); font: 12px/1.6 var(--mono); }
   .quiet-state, .quiet-state p { color: var(--muted); font-size: 13px; }

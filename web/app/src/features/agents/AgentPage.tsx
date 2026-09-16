@@ -2,8 +2,14 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { APIError, api, type AgentRun, type AgentTask, type AgentTool, type ComputerStatus, type ExternalIntegration, type IntegrationSetup, type MCPServer, type Model } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { ModelSelect } from '../../components/ModelSelect';
+import { HistoryDeleteDialog, type HistoryItem } from '../../components/HistoryDeleteDialog';
+import { copyText } from '../../lib/clipboard';
 import { useI18n } from '../../i18n';
 import { clearSubmittedDraft, useDraft } from '../../lib/drafts';
+import { agentActive } from '../../api/agent-stream';
+import { readPreference, writePreference } from '../../lib/preferences';
+import { AgentPreview, AgentProgress } from './AgentProgress';
+import { useAgentOutputScroll } from './useAgentOutputScroll';
 
 type AgentView = 'workspace' | 'tools' | 'connections';
 
@@ -19,6 +25,8 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
   const [style, setStyle] = useState('react');
   const [busy, setBusy] = useState(false);
   const [execution, setExecution] = useState<AgentRun | null>(null);
+  const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
+  const [livePreview, setLivePreview] = useState(() => readPreference('offgrid.agent.livePreview') !== 'false');
   const result = execution?.output ?? '';
   const steps = execution?.steps ?? [];
   const [error, setError] = useState('');
@@ -42,10 +50,19 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
   const [integrationBusy, setIntegrationBusy] = useState('');
   const [copied, setCopied] = useState(false);
   const [view, setView] = useState<AgentView>(viewFromLocation);
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyLimit, setHistoryLimit] = useState(20);
+  const [deleteItems, setDeleteItems] = useState<HistoryItem[] | null>(null);
+  const [historyNotice, setHistoryNotice] = useState('');
+  const [resultCopied, setResultCopied] = useState(false);
+  const outputScroll = useAgentOutputScroll(execution, livePreview, view);
+  const runtimeRequest = useRef(0);
 
   const refreshRuntime = async () => {
+    const request = ++runtimeRequest.current;
     setLoadingRuntime(true);
     const [toolResult, taskResult, serverResult, computerResult, integrationResult] = await Promise.allSettled([api.agentTools(), api.agentTasks(), api.mcpServers(), api.computerStatus(), api.integrations(model)]);
+    if (request !== runtimeRequest.current) return;
     if (toolResult.status === 'fulfilled') { setTools(toolResult.value.tools); setEnabledTools(toolResult.value.enabled_count); }
     if (taskResult.status === 'fulfilled') setTasks([...taskResult.value].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
     if (serverResult.status === 'fulfilled') setServers(serverResult.value);
@@ -75,32 +92,58 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
     if (!selectedRun) { setExecution(null); return; }
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
+    let watchdog: ReturnType<typeof setTimeout>;
+    let controller: AbortController | undefined;
+    let retries = 0;
+    setConnection('connecting');
+    const follow = async () => {
+      let fetchingSnapshot = true;
       try {
         const next = await api.agentRun(selectedRun);
         if (disposed) return;
         setExecution(next);
-        if (next.status === 'running' || next.status === 'pending' || next.status === 'waiting_for_approval') timer = setTimeout(() => void poll(), next.status === 'waiting_for_approval' ? 5000 : 1000);
-        else void refreshRuntime();
+        if (!agentActive(next)) {
+          setConnection('live');
+          // Approvals can expire or be resolved in another client. Paused runs
+          // must discover that transition without resubmitting any work.
+          if (['waiting_for_approval','interrupted','uncertain'].includes(next.status)) timer = setTimeout(() => void follow(), 5000);
+          else void refreshRuntime();
+          return;
+        }
+        fetchingSnapshot = false;
+        controller = new AbortController();
+        const alive = () => {
+          if (disposed) return;
+          retries = 0; setConnection('live'); clearTimeout(watchdog);
+          watchdog = setTimeout(() => controller?.abort(), 20_000);
+        };
+        watchdog = setTimeout(() => controller?.abort(), 20_000);
+        await api.streamAgent(selectedRun, snapshot => { if (!disposed) setExecution(snapshot); }, alive, controller.signal);
+        if (!disposed) void refreshRuntime();
       } catch (reason) {
         if (!disposed) {
-          setError(reason instanceof Error ? reason.message : text.common.error);
-          timer = setTimeout(() => void poll(), 3000);
+          if (reason instanceof APIError && ([401,403].includes(reason.status) || (fetchingSnapshot && reason.status === 404))) {
+            setExecution(null); setError(text.common.error); return;
+          }
+          setConnection('reconnecting');
+          // Snapshot polling is also the compatibility fallback for old servers;
+          // reconnect never resubmits a task or sends a cancel action.
+          timer = setTimeout(() => void follow(), Math.min(10_000, 1000 * 2 ** retries++));
         }
-      }
+      } finally { clearTimeout(watchdog); }
     };
-    void poll();
-    return () => { disposed = true; clearTimeout(timer); };
-  }, [selectedRun, execution?.status]);
+    void follow();
+    return () => { disposed = true; clearTimeout(timer); clearTimeout(watchdog); controller?.abort(); };
+  }, [scope, selectedRun, execution?.status]);
 
   const run = async (event: FormEvent) => {
     event.preventDefault();
-    if (actionLock.current || !task.trim() || !model) return;
+    if (actionLock.current || working || approval || deleteItems || !task.trim() || !model) return;
     actionLock.current = true; setBusy(true); setError('');
     const submitted = task;
     try {
       const next = await api.runAgent(model, task.trim(), style);
-      selectRun(next.run_id); setExecution(next);
+      selectRun(next.run_id); setExecution(next); setResultCopied(false);
       clearSubmittedDraft(taskDraftKey, submitted);
       await refreshRuntime();
     } catch (reason) {
@@ -174,8 +217,19 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
     }
   };
 
-  const recentTasks = useMemo(() => tasks.slice(0, 8), [tasks]);
+  const matchingTasks = useMemo(() => tasks.filter(item => `${item.prompt} ${item.id}`.toLocaleLowerCase().includes(historyQuery.trim().toLocaleLowerCase())), [tasks, historyQuery]);
+  const historyDeleted = (ids: string[]) => {
+    runtimeRequest.current++; setLoadingRuntime(false);
+    setTasks(current => current.filter(item => !ids.includes(item.id)));
+    if (ids.includes(selectedRun)) { selectRun(''); setExecution(null); setError(''); }
+    if (ids.length) setHistoryNotice(text.history.removed.replace('{count}', String(ids.length)));
+  };
+  const copyResult = async () => {
+    try { await copyText(result); setResultCopied(true); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
+  };
   return <div className="stack agents-page">
+    {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="tasks" remove={api.deleteAgentRun} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     {error && <div className="inline-error" role="alert">{error}</div>}
     <div className="metric-grid agent-metrics">
       <Metric label={text.agentRuntime.tools} value={loadingRuntime ? '…' : `${enabledTools}/${tools.length} ${text.agentRuntime.enabled}`} />
@@ -195,35 +249,54 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
         <form className="task-card" onSubmit={run}>
           <div className="form-row"><ModelSelect models={models} value={model} onChange={setModel} /></div>
           <label><span>{text.agentRuntime.style}</span><select value={style} onChange={event => setStyle(event.target.value)}><option value="react">{text.agentRuntime.react}</option><option value="plan-execute">{text.agentRuntime.plan}</option><option value="cot">{text.agentRuntime.reasoning}</option></select></label>
-          <label><span>{text.agents.task}</span><textarea rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label>
+          <label><span>{text.agents.task}</span><textarea id="agent-task-input" rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label>
           {unsaved && <p role="alert">{text.recovery.draftWarning}</p>}
-          <button className="primary-button" disabled={working || !!approval || !task.trim() || !model}>{working ? text.agents.running : text.agents.run}</button>
+          <div className="agent-task-actions"><button className="primary-button" disabled={working || !!approval || !task.trim() || !model}>{working ? text.agents.running : text.agents.run}</button></div>
         </form>
         <section className="result-card">
-          <span className="eyebrow">{text.agents.result}</span>
-          {execution && <div className="section-heading"><span role="status">{text.recovery[execution.status as keyof typeof text.recovery] ?? execution.status}</span>
-            {(working || approval || (execution.status === 'interrupted' && execution.resumable)) && <button className="secondary-button" disabled={busy} onClick={() => void act('cancel')}>{text.models.cancel}</button>}
-          </div>}
-          {approval ? <div className="approval-card" role="alertdialog" aria-labelledby="approval-title">
-            <span className="status-pill danger">{text.agents.approvalTitle}</span><h2 id="approval-title">{approval.tool}</h2><p>{text.agents.approvalBody}</p>
-            <pre>{approval.canonical_arguments ?? JSON.stringify(approval.arguments, null, 2)}</pre>
-            <div><button className="danger-button" disabled={busy} onClick={deny}>{text.agents.deny}</button>
-              {Date.parse(approval.expires_at) <= Date.now()
-                ? <button className="primary-button" disabled={busy} onClick={() => void act('resume')}>{text.common.refresh}</button>
-                : <button className="primary-button" disabled={busy} onClick={approve}>{text.agents.approve}</button>}
+          <header className="agent-result-header">
+            <span id="agent-result-title" className="eyebrow">{text.agents.result}</span>
+            {execution && <div className="section-heading"><span role="status">{text.recovery[execution.status as keyof typeof text.recovery] ?? execution.status}</span>
+              {result && <button className="secondary-button" onClick={() => void copyResult()}>{resultCopied ? text.chat.copied : text.history.copyResult}</button>}
+              {(working || approval || (execution.status === 'interrupted' && execution.resumable)) && <button className="secondary-button" disabled={busy} onClick={() => void act('cancel')}>{text.models.cancel}</button>}
+            </div>}
+            {execution && <AgentProgress run={execution} connection={connection} showPreview={livePreview} setShowPreview={value => { setLivePreview(value); writePreference('offgrid.agent.livePreview', String(value)); }} />}
+          </header>
+          <div className="agent-result-body" role="region" aria-labelledby="agent-result-title" tabIndex={0} ref={outputScroll.ref} onScroll={outputScroll.onScroll}>
+            <div className="agent-result-content" ref={outputScroll.contentRef}>
+            {approval ? <div className="approval-card" role="alertdialog" aria-labelledby="approval-title">
+              <span className="status-pill danger">{text.agents.approvalTitle}</span><h2 id="approval-title">{approval.tool}</h2><p>{text.agents.approvalBody}</p>
+              <pre>{approval.canonical_arguments ?? JSON.stringify(approval.arguments, null, 2)}</pre>
+              <div><button className="danger-button" disabled={busy} onClick={deny}>{text.agents.deny}</button>
+                {Date.parse(approval.expires_at) <= Date.now()
+                  ? <button className="primary-button" disabled={busy} onClick={() => void act('resume')}>{text.common.refresh}</button>
+                  : <button className="primary-button" disabled={busy} onClick={approve}>{text.agents.approve}</button>}
+              </div>
+            </div> : execution?.status === 'uncertain' ? <div className="approval-card">
+              <h2>{text.recovery.uncertain}</h2><p>{text.recovery.verifyOutcome}</p>
+              <pre>{JSON.stringify(execution.uncertain_call, null, 2)}</pre>
+              <textarea aria-label={text.recovery.reconcile} value={verifiedResult} onChange={event => setVerifiedResult(event.target.value)} />
+              <button className="primary-button" disabled={busy || !verifiedResult.trim()} onClick={() => void act('reconcile')}>{text.recovery.reconcile}</button>
+            </div> : result ? <pre>{result}</pre> : !execution && <div className="quiet-state"><Icon name="agents" size={30} /><p>{text.agents.subtitle}</p></div>}
+            {(execution?.status === 'interrupted' || execution?.status === 'pending') && execution.resumable && <button className="primary-button" disabled={busy} onClick={() => void act('resume')}>{text.models.resume}</button>}
+            {execution?.error && <p role="alert">{execution.error}</p>}
+            {steps.length > 0 && <div className="agent-steps"><span className="eyebrow">{text.agentRuntime.steps}</span>{steps.map((step, index) => <article key={step.id ?? index}><strong>{step.type}{step.tool_name ? ` · ${step.tool_name}` : ''}</strong><p>{step.content || step.tool_result}</p></article>)}</div>}
+            {execution && <AgentPreview run={execution} showPreview={livePreview} />}
             </div>
-          </div> : execution?.status === 'uncertain' ? <div className="approval-card">
-            <h2>{text.recovery.uncertain}</h2><p>{text.recovery.verifyOutcome}</p>
-            <pre>{JSON.stringify(execution.uncertain_call, null, 2)}</pre>
-            <textarea aria-label={text.recovery.reconcile} value={verifiedResult} onChange={event => setVerifiedResult(event.target.value)} />
-            <button className="primary-button" disabled={busy || !verifiedResult.trim()} onClick={() => void act('reconcile')}>{text.recovery.reconcile}</button>
-          </div> : result ? <pre>{result}</pre> : !execution && <div className="quiet-state"><Icon name="agents" size={30} /><p>{text.agents.subtitle}</p></div>}
-          {(execution?.status === 'interrupted' || execution?.status === 'pending') && execution.resumable && <button className="primary-button" disabled={busy} onClick={() => void act('resume')}>{text.models.resume}</button>}
-          {execution?.error && <p role="alert">{execution.error}</p>}
-          {steps.length > 0 && <div className="agent-steps"><span className="eyebrow">{text.agentRuntime.steps}</span>{steps.map((step, index) => <article key={step.id ?? index}><strong>{step.type}{step.tool_name ? ` · ${step.tool_name}` : ''}</strong><p>{step.content || step.tool_result}</p></article>)}</div>}
+          </div>
         </section>
       </div>
-      <section className="runtime-panel"><span className="eyebrow">{text.agentRuntime.history}</span>{recentTasks.length === 0 ? <p className="compact-empty">{text.agentRuntime.noTasks}</p> : <div className="task-history">{recentTasks.map(item => <article key={item.id}><i className={item.status} /><div><button className="text-button" disabled={busy} onClick={() => { selectRun(item.id); setExecution(null); setError(''); }}>{item.prompt}</button><small>{text.recovery[item.status as keyof typeof text.recovery] ?? item.status} · {new Date(item.created_at).toLocaleString()}</small>{item.error && <p>{item.error}</p>}</div></article>)}</div>}</section>
+      <section className="runtime-panel agent-history-panel">
+        <div className="section-heading"><span className="eyebrow">{text.agentRuntime.history} · {tasks.length}</span><div className="history-tools"><button className="secondary-button" disabled={loadingRuntime || busy} onClick={() => void refreshRuntime()}>{text.common.refresh}</button><button className="secondary-button" disabled={loadingRuntime || busy || !matchingTasks.some(item => item.deletable)} onClick={() => setDeleteItems(matchingTasks.filter(item => item.deletable).map(item => ({ id: item.id, label: item.prompt })))}>{text.history.clearTasks}</button></div></div>
+        <label className="history-search"><Icon name="search" size={15} /><input type="search" value={historyQuery} onChange={event => { setHistoryQuery(event.target.value); setHistoryLimit(20); }} placeholder={text.history.searchTasks} aria-label={text.history.searchTasks} /></label>
+        <p className="history-notice">{text.history.protectedTasks}</p>
+        {historyNotice && <p className="history-notice" role="status">{historyNotice}</p>}
+        {matchingTasks.length === 0 ? <p className="compact-empty">{tasks.length ? text.history.noMatches : text.agentRuntime.noTasks}</p> : <div className="task-history">{matchingTasks.slice(0, historyLimit).map(item => <article key={item.id}>
+          <i className={item.status} /><div><button className="text-button" disabled={busy} onClick={() => { selectRun(item.id); setExecution(null); setError(''); setResultCopied(false); }}>{item.prompt}</button><small>{text.recovery[item.status as keyof typeof text.recovery] ?? item.status} · {new Date(item.created_at).toLocaleString()}</small>{item.error && <p>{item.error}</p>}
+            <div className="history-row-actions"><button className="text-button" disabled={working || !!approval || !!task.trim()} title={task.trim() ? text.history.draftProtected : text.history.reuseTask} onClick={() => { setTask(item.prompt); document.getElementById('agent-task-input')?.focus(); }}>{text.history.reuseTask}</button><button className="text-button" disabled={busy || !item.deletable} title={item.deletable ? text.history.deleteTask : text.history.protectedTasks} onClick={() => setDeleteItems([{ id: item.id, label: item.prompt }])}><Icon name="trash" size={14} />{text.history.deleteTask}</button></div>
+          </div></article>)}</div>}
+        {matchingTasks.length > historyLimit && <button className="secondary-button history-more" onClick={() => setHistoryLimit(limit => limit + 20)}>{text.history.showMore} ({matchingTasks.length - historyLimit})</button>}
+      </section>
     </div>}
 
     {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-tools-tab"><section className="runtime-panel"><div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.tools}</span><h2>{enabledTools}/{tools.length} {text.agentRuntime.enabled}</h2></div><button className="secondary-button" onClick={() => void refreshRuntime()}>{text.common.refresh}</button></div>{tools.length === 0 ? <p className="compact-empty">{text.agentRuntime.noTools}</p> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><strong>{tool.name}</strong><p>{tool.description}</p><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></div><label className="switch"><input type="checkbox" checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}</section></div>}

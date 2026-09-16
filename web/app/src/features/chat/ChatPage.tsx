@@ -3,16 +3,18 @@ import { api, type ChatMessage, type ChatSession, type Model } from '../../api/c
 import { Icon } from '../../components/Icon';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ModelSelect } from '../../components/ModelSelect';
+import { HistoryDeleteDialog, type HistoryItem } from '../../components/HistoryDeleteDialog';
 import { useI18n } from '../../i18n';
 import { copyText } from '../../lib/clipboard';
 import { clearSubmittedDraft, draftKey, readDraft, useDraft, writeDraft } from '../../lib/drafts';
 import { type ChatMetrics, type ChatPhase } from '../../api/session-stream';
+import { readPreference, writePreference } from '../../lib/preferences';
 
 const activeSessionKey = 'offgrid.active-session';
 
 function readPreferences(key: string): { profile: string; maxTokens: number } {
   try {
-    const value = JSON.parse(localStorage.getItem(key) ?? '{}');
+    const value = JSON.parse(readPreference(key) ?? '{}');
     return { profile: value.profile === 'extended' ? 'extended' : 'interactive', maxTokens: [256, 1024, 4096].includes(value.maxTokens) ? value.maxTokens : 1024 };
   } catch { return { profile: 'interactive', maxTokens: 1024 }; }
 }
@@ -40,7 +42,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const sessionKey = `${activeSessionKey}:${encodeURIComponent(scope)}`;
   const preferencesKey = `offgrid.chat.preferences:${encodeURIComponent(scope)}`;
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeName, setActiveName] = useState(localStorage.getItem(sessionKey) ?? '');
+  const [activeName, setActiveName] = useState(() => readPreference(sessionKey) ?? '');
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const { value: draft, setValue: setDraft, unsaved, key: composerDraftKey } = useDraft(scope, 'chat', activeName);
   const [knowledge, setKnowledge] = useState(false);
@@ -55,10 +57,12 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const { profile, maxTokens } = preferences;
   const updatePreferences = (next: typeof preferences) => {
     setPreferences(next);
-    try { localStorage.setItem(preferencesKey, JSON.stringify(next)); } catch { /* Settings still apply to this page. */ }
+    writePreference(preferencesKey, JSON.stringify(next));
   };
   const [error, setError] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState('');
+  const [deleteItems, setDeleteItems] = useState<HistoryItem[] | null>(null);
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyNotice, setHistoryNotice] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState('');
   const controller = useRef<AbortController | null>(null);
@@ -72,8 +76,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     setConversation(session?.messages ?? []);
     setStreamed(''); setInterrupted(false); setMetrics(undefined); setLimited(false);
     if (session?.model_id && models.some(item => item.id === session.model_id)) setModel(session.model_id);
-    if (name) localStorage.setItem(sessionKey, name);
-    else localStorage.removeItem(sessionKey);
+    writePreference(sessionKey, name || null);
     setHistoryOpen(false);
   };
 
@@ -102,7 +105,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   }, [draft]);
 
   const startNew = () => {
-    if (busy) return;
+    if (busy || deleteItems) return;
     activate(undefined);
     setError('');
     setCopiedMessage('');
@@ -110,32 +113,20 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
 
   const selectSession = (session: ChatSession) => {
     if (!busy) {
-      setConfirmDelete('');
       activate(session);
     }
   };
 
-  const removeSession = async (session: ChatSession) => {
-    if (busy) return;
-    if (confirmDelete !== session.name) {
-      setConfirmDelete(session.name);
-      return;
-    }
-    setError('');
-    try {
-      await api.deleteSession(session.name);
-      setConfirmDelete('');
-      const next = sessions.filter(item => item.name !== session.name);
-      setSessions(next);
-      if (activeName === session.name) activate(next[0]);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : text.common.error);
-    }
+  const historyDeleted = (names: string[]) => {
+    setSessions(current => current.filter(item => !names.includes(item.name)));
+    names.forEach(name => writeDraft(draftKey(scope, 'chat', name), ''));
+    if (names.includes(activeName)) activate(undefined);
+    if (names.length) setHistoryNotice(text.history.removed.replace('{count}', String(names.length)));
   };
 
   const send = async () => {
     const prompt = draft.trim();
-    if (!prompt || !model || busy || controller.current) return;
+    if (!prompt || !model || busy || controller.current || deleteItems) return;
     const requestController = new AbortController();
     controller.current = requestController;
     const submitted = draft;
@@ -153,7 +144,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         writeDraft(draftKey(scope, 'chat', sessionName), readDraft(composerDraftKey));
         writeDraft(composerDraftKey, '');
         setActiveName(sessionName);
-        localStorage.setItem(sessionKey, sessionName);
+        writePreference(sessionKey, sessionName);
         setSessions(current => [created, ...current]);
       }
       setConversation(current => [...current, { role: 'user', content: prompt }]);
@@ -190,6 +181,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter can confirm an IME candidate rather than submit. Some WebKit
+    // composition-end events clear isComposing but retain keyCode 229.
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       void send();
@@ -205,16 +199,22 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     }
   };
 
+  const filteredSessions = sessions.filter(session => visibleSessionName(session.name).toLocaleLowerCase(locale).includes(historyQuery.trim().toLocaleLowerCase(locale)));
   return <div className="chat-workspace">
+    {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="chats" remove={api.deleteSession} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     {historyOpen && <button className="history-scrim" onClick={() => setHistoryOpen(false)} aria-label={text.chat.closeHistory} />}
     <aside id="conversation-history" className={historyOpen ? 'conversation-history open' : 'conversation-history'} aria-label={text.chat.conversations}>
       <button className="history-close icon-button" onClick={() => setHistoryOpen(false)} aria-label={text.chat.closeHistory}><Icon name="close" size={18} /></button>
-      <button className="new-chat-button" onClick={startNew}><Icon name="plus" size={16} />{text.chat.newChat}</button>
+      <button className="new-chat-button" disabled={busy} onClick={startNew}><Icon name="plus" size={16} />{text.chat.newChat}</button>
       <div className="history-label">{text.chat.conversations}</div>
+      <label className="history-search"><Icon name="search" size={15} /><input type="search" value={historyQuery} onChange={event => setHistoryQuery(event.target.value)} placeholder={text.history.searchChats} aria-label={text.history.searchChats} /></label>
+      <div className="history-tools"><button className="text-button" disabled={busy || loading} onClick={() => void loadSessions()}>{text.common.refresh}</button><button className="text-button" disabled={busy || loading || !filteredSessions.length} onClick={() => setDeleteItems(filteredSessions.map(session => ({ id: session.name, label: visibleSessionName(session.name) })))}>{text.history.clearChats}</button></div>
+      {historyNotice && <p className="history-notice" role="status">{historyNotice}</p>}
       {loading ? <div className="history-empty">{text.common.loading}</div> : sessions.length === 0 ? <div className="history-empty">{text.chat.noConversations}</div> : <div className="history-list">
-        {sessions.map(session => <div className={activeName === session.name ? 'history-row active' : 'history-row'} key={session.name}>
-          <button className="history-open" onClick={() => selectSession(session)} title={visibleSessionName(session.name)}><strong>{visibleSessionName(session.name)}</strong><small>{session.messages.length} · {new Date(session.updated_at).toLocaleDateString(locale)}</small></button>
-          <button className={confirmDelete === session.name ? 'history-delete armed' : 'history-delete'} aria-label={confirmDelete === session.name ? text.models.confirmDelete : text.chat.deleteConversation} title={confirmDelete === session.name ? text.models.confirmDelete : text.chat.deleteConversation} onClick={() => void removeSession(session)}><Icon name="trash" size={14} /></button>
+        {filteredSessions.length === 0 && <div className="history-empty">{text.history.noMatches}</div>}
+        {filteredSessions.map(session => <div className={activeName === session.name ? 'history-row active' : 'history-row'} key={session.name}>
+          <button className="history-open" disabled={busy} onClick={() => selectSession(session)} title={visibleSessionName(session.name)}><strong>{visibleSessionName(session.name)}</strong><small>{session.messages.length} · {new Date(session.updated_at).toLocaleDateString(locale)}</small></button>
+          <button className="history-delete" disabled={busy} aria-label={`${text.chat.deleteConversation}: ${visibleSessionName(session.name)}`} title={text.chat.deleteConversation} onClick={() => setDeleteItems([{ id: session.name, label: visibleSessionName(session.name) }])}><Icon name="trash" size={16} /></button>
         </div>)}
       </div>}
     </aside>

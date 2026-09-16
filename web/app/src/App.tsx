@@ -11,6 +11,7 @@ import { ModelsPage } from './features/models/ModelsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { useI18n, type LocaleCode } from './i18n';
 import { useTheme } from './theme';
+import { readPreference, writePreference } from './lib/preferences';
 
 type Page = 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings';
 type Health = 'checking' | 'ready' | 'offline';
@@ -43,12 +44,12 @@ export function App() {
   const [page, setPage] = useState<Page>(pageFromLocation);
   const [health, setHealth] = useState<Health>('checking');
   const [models, setModels] = useState<Model[]>([]);
-  const [model, setModel] = useState(localStorage.getItem('offgrid.model') ?? '');
+  const [model, setModel] = useState(() => readPreference('offgrid.model') ?? '');
   const [access, setAccess] = useState<'checking' | 'ready' | 'login'>('checking');
   const [authUser, setAuthUser] = useState<PublicUser | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [onboardingPending, setOnboardingPending] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true');
-  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('offgrid.onboarding.complete') !== 'true' && localStorage.getItem('offgrid.onboarding.stage') !== 'working');
+  const [onboardingPending, setOnboardingPending] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true');
+  const [showOnboarding, setShowOnboarding] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true' && readPreference('offgrid.onboarding.stage') !== 'working');
   const [showCommands, setShowCommands] = useState(false);
   const accessRevision = useRef(0);
 
@@ -88,7 +89,7 @@ export function App() {
     return () => { window.removeEventListener('hashchange', syncPage); window.removeEventListener('popstate', syncPage); };
   }, []);
   useEffect(() => { void refreshBase(); const timer = window.setInterval(() => void api.health().then(() => setHealth('ready')).catch(() => setHealth('offline')), 15_000); return () => clearInterval(timer); }, [refreshBase]);
-  useEffect(() => { if (model) localStorage.setItem('offgrid.model', model); }, [model]);
+  useEffect(() => { if (model) writePreference('offgrid.model', model); }, [model]);
   useEffect(() => {
     const toggleCommands = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k' && !showOnboarding) {
@@ -101,14 +102,14 @@ export function App() {
   }, [showOnboarding]);
 
   const finishOnboarding = useCallback(() => {
-    localStorage.setItem('offgrid.onboarding.complete', 'true');
-    localStorage.removeItem('offgrid.onboarding.stage');
+    writePreference('offgrid.onboarding.complete', 'true');
+    writePreference('offgrid.onboarding.stage', null);
     setOnboardingPending(false);
     setShowOnboarding(false);
   }, []);
 
   const continueSetup = (target: 'chat' | 'models') => {
-    if (onboardingPending) localStorage.setItem('offgrid.onboarding.stage', 'working');
+    if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working');
     setShowOnboarding(false);
     window.location.hash = `#/${target}`;
   };

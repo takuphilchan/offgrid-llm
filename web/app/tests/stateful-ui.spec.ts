@@ -18,8 +18,8 @@ test('saved conversations survive reload and can be deleted', async ({ page, req
 
   const deleteButton = page.locator('.history-row', { hasText: name }).locator('.history-delete');
   await deleteButton.click();
-  await expect(deleteButton).toHaveClass(/armed/);
-  await deleteButton.click();
+  await expect(page.getByRole('dialog')).toContainText(name);
+  await page.getByRole('dialog').getByRole('button', { name: 'Confirm delete', exact: true }).click();
   await expect(page.locator('.history-row', { hasText: name })).toHaveCount(0);
   expect((await request.get(`/v1/sessions/${encodeURIComponent(name)}`)).status()).toBe(404);
 });

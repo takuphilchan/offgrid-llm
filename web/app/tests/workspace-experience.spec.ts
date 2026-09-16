@@ -4,9 +4,10 @@ const now = '2026-09-15T12:00:00Z';
 
 async function mockWorkspace(page: Page, hasChatModel: boolean) {
   await page.addInitScript(() => {
-    if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale', 'en');
+    try { if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale', 'en'); } catch { /* Storage-denial fixture. */ }
   });
   await page.route('**/health', route => route.fulfill({ contentType: 'application/json', body: '{"status":"healthy"}' }));
+  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', revision: 'test-revision', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'] } }));
   await page.route('**/v1/**', route => {
     const path = new URL(route.request().url()).pathname;
     const model = { id: 'workspace-test-model', type: 'chat', context_window: 8192 };
@@ -56,6 +57,50 @@ test('first-run stays pending while a chat model is not available', async ({ pag
   await expect(page).toHaveURL(/#\/models$/);
   expect(await page.evaluate(() => localStorage.getItem('offgrid.onboarding.complete'))).toBeNull();
   await expect(page.getByText('Download a chat model to begin working.').first()).toBeVisible();
+});
+
+test('IME confirmation does not accidentally submit a chat turn', async ({ page }) => {
+  await mockWorkspace(page, true);
+  await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
+  await page.goto('/ui/#/chat');
+  const composer = page.locator('.composer textarea');
+  await composer.fill('日本語の入力');
+  let submissions = 0;
+  page.on('request', request => { if (request.method() === 'POST') submissions++; });
+  await composer.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+  await expect(composer).toHaveValue('日本語の入力');
+  await composer.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229 });
+  await expect(composer).toHaveValue('日本語の入力');
+  expect(submissions).toBe(0);
+  await composer.press('Shift+Enter');
+  expect(submissions).toBe(0);
+  await composer.press('Enter');
+  await expect(page.locator('.message.assistant')).toBeVisible();
+  expect(submissions).toBe(2); // create conversation, submit turn
+});
+
+test('denied browser storage does not blank the workspace or discard its draft', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await mockWorkspace(page, true);
+  // Keep initialization in one script so storage is seeded before it is denied.
+  await page.addInitScript(() => {
+    localStorage.setItem('offgrid.onboarding.complete', 'true');
+    for (const method of ['getItem', 'setItem', 'removeItem']) {
+      Object.defineProperty(Storage.prototype, method, { configurable: true, value() { throw new DOMException('Storage is disabled', 'SecurityError'); } });
+    }
+  });
+  await page.goto('/ui/#/chat');
+  await page.getByRole('button', { name: 'Start your first chat' }).click();
+  const composer = page.locator('.composer textarea');
+  await composer.fill('Keep this unsent text');
+  await expect(page.locator('.chat-workspace [role="alert"]')).toBeVisible();
+  await page.locator('.sidebar').getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.locator('.sidebar').getByRole('link', { name: 'Chat', exact: true }).click();
+  await expect(composer).toHaveValue('Keep this unsent text');
+  expect(errors).toEqual([]);
 });
 
 test('first-run completes only after a returned assistant message', async ({ page }) => {

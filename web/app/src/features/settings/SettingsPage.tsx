@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { useI18n } from '../../i18n';
-import type { DesktopPaths } from '../../platform';
+import type { DesktopPaths, DesktopBackend } from '../../platform';
 import type { ThemeChoice } from '../../theme';
 
 type Health = 'checking' | 'ready' | 'offline';
 type Details = {
+  identity?: Awaited<ReturnType<typeof api.systemIdentity>>;
   config?: Awaited<ReturnType<typeof api.systemConfig>>;
   rag?: Awaited<ReturnType<typeof api.ragStatus>>;
   computer?: Awaited<ReturnType<typeof api.computerStatus>>;
@@ -21,22 +22,25 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
   const [details, setDetails] = useState<Details>({});
   const [error, setError] = useState('');
   const [desktopPaths, setDesktopPaths] = useState<DesktopPaths | null>(null);
+  const [backend, setBackend] = useState<DesktopBackend | null>(null);
 
   const refresh = async () => {
     setError('');
-    const [config, rag, computer] = await Promise.allSettled([api.systemConfig(), api.ragStatus(), api.computerStatus()]);
+    const [config, rag, computer, identity] = await Promise.allSettled([api.systemConfig(), api.ragStatus(), api.computerStatus(), api.systemIdentity()]);
     setDetails({
+      identity: identity.status === 'fulfilled' ? identity.value : undefined,
       config: config.status === 'fulfilled' ? config.value : undefined,
       rag: rag.status === 'fulfilled' ? rag.value : undefined,
       computer: computer.status === 'fulfilled' ? computer.value : undefined
     });
-    const failed = [config, rag, computer].find(item => item.status === 'rejected');
+    const failed = [config, rag, computer, identity].find(item => item.status === 'rejected');
     if (failed?.status === 'rejected') setError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
   };
 
   useEffect(() => {
     void refresh();
     if (window.electron) void window.electron.getPaths().then(setDesktopPaths).catch(() => setDesktopPaths(null));
+    if (window.electron?.getBackendInfo) void window.electron.getBackendInfo().then(setBackend).catch(() => setBackend(null));
   }, []);
   const stopComputer = async () => {
     try { await api.emergencyStop(); await refresh(); }
@@ -51,6 +55,14 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
 
   return <div className="stack settings-page">
     {error && <div className="inline-error" role="alert">{error}</div>}
+    {backend?.reason && <div className="inline-error" role="alert">{backend.reason}</div>}
+    <section className="settings-panel desktop-storage"><div><span className="eyebrow">{text.settings.service}</span><h2>{text.common.runtime}</h2></div><dl>
+      <div><dt>{text.settings.service}</dt><dd>{backend?.url ?? window.location.origin}</dd></div>
+      <div><dt>{text.settings.version}</dt><dd>{details.identity?.version ?? '—'}</dd></div>
+      {backend && <div><dt>Desktop</dt><dd>{backend.desktopVersion}</dd></div>}
+      <div><dt>API</dt><dd>{details.identity?.api_version ?? '—'}</dd></div>
+      <div><dt>UI SHA-256</dt><dd><code>{details.identity?.ui_build_id || '—'}</code></dd></div>
+    </dl></section>
     <section className="settings-panel"><div><span className="eyebrow">{text.shell.appearance}</span><h2>{text.shell.theme}</h2></div><div className="segmented-control" role="group" aria-label={text.shell.theme}>{options.map(option => <button key={option.choice} aria-pressed={themeChoice === option.choice} onClick={() => onThemeChange(option.choice)}>{option.label}</button>)}</div></section>
     <div className="metric-grid"><Metric label={text.settings.service} value={health === 'ready' ? text.status.ready : text.status.offline} /><Metric label={text.settings.version} value={details.config?.version ?? '—'} /><Metric label={text.settings.inferenceSlots} value={String(details.config?.inference_slots ?? '—')} /><Metric label={text.settings.knowledge} value={details.rag?.enabled ? text.settings.enabled : text.settings.disabled} /></div>
     <section className="settings-panel"><div><span className="eyebrow">{text.settings.safety}</span><h2>{text.settings.computerUse}</h2><p>{details.computer?.available ? text.settings.available : text.settings.unavailable}</p></div>{details.computer?.available && <div className="settings-actions"><span className={details.computer.emergency_stop ? 'status-pill danger' : 'status-pill'}>{details.computer.emergency_stop ? text.settings.stopped : `${details.computer.active_sessions} ${text.settings.sessions}`}</span><button className="danger-button" onClick={() => void stopComputer()}>{text.settings.emergencyStop}</button></div>}</section>

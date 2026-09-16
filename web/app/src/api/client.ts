@@ -1,5 +1,6 @@
 import type { components } from './schema.generated';
 import { readSessionStream, type SessionEvent } from './session-stream';
+import { readAgentStream } from './agent-stream';
 
 export type Model = components['schemas']['Model'];
 export type Document = components['schemas']['Document'];
@@ -49,6 +50,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  systemIdentity: () => request<components['schemas']['SystemIdentity']>('/api/v2/system'),
   health: () => request<{ status: string; version?: string }>('/health'),
   currentUser: () => request<{ user: PublicUser | null; authenticated: boolean; guest?: boolean }>('/v1/users/me'),
   login: (username: string, password: string) => request<{ user: PublicUser; expires_at: string; auth_method: string }>('/v1/auth/login', {
@@ -140,6 +142,12 @@ export const api = {
     method: 'POST', body: JSON.stringify({ model, prompt, style, max_iterations: 12, async: true })
   }),
   agentRun: (id: string) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}`),
+  deleteAgentRun: (id: string) => request<{ success: boolean }>(`/v1/agents/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void, onHeartbeat: () => void, signal: AbortSignal) => {
+    const response = await fetch(`/v1/agents/tasks/${encodeURIComponent(id)}/events`, { credentials: 'same-origin', headers: { Accept: 'text/event-stream' }, signal });
+    if (!response.ok) throw new APIError('Agent progress unavailable', response.status);
+    return readAgentStream(response, id, onSnapshot, onHeartbeat);
+  },
   agentAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'resume' | 'reconcile', data: { approval_id?: string; call_id?: string; result?: string } = {}) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: JSON.stringify({ ...data, async: true }) }),
   agentTasks: async () => {
     const result = await request<AgentTask[] | null>('/v1/agents/tasks');

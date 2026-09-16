@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import './platform';
+import { readPreference, writePreference } from './lib/preferences';
 
 export type ThemeChoice = 'system' | 'dark' | 'light';
 const themeKey = 'offgrid.theme';
 
 function readThemeChoice(): ThemeChoice {
-  const saved = localStorage.getItem(themeKey);
+  const saved = readPreference(themeKey);
   return saved === 'dark' || saved === 'light' ? saved : 'system';
 }
 
@@ -41,7 +42,7 @@ export function useTheme() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(themeKey, choice);
+    writePreference(themeKey, choice);
     applyTheme(choice === 'system' ? systemTheme : choice);
   }, [choice, systemTheme]);
 

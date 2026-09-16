@@ -9,6 +9,7 @@ import { sn } from './locales/sn';
 import { sw } from './locales/sw';
 import { zu } from './locales/zu';
 import type { LocaleDefinition, Messages } from './types';
+import { readPreference, writePreference } from '../lib/preferences';
 
 export const locales = {
   en: { code: 'en', label: 'English', direction: 'ltr', messages: en },
@@ -27,7 +28,7 @@ type I18nValue = { locale: LocaleCode; setLocale: (locale: LocaleCode) => void; 
 const I18nContext = createContext<I18nValue | null>(null);
 
 function initialLocale(): LocaleCode {
-  const saved = localStorage.getItem('offgrid.locale');
+  const saved = readPreference('offgrid.locale');
   if (saved && saved in locales) return saved as LocaleCode;
   const language = navigator.language.toLowerCase().split('-')[0];
   return language in locales ? language as LocaleCode : 'en';
@@ -37,7 +38,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<LocaleCode>(initialLocale);
   const definition = locales[locale];
   useEffect(() => {
-    localStorage.setItem('offgrid.locale', locale);
+    writePreference('offgrid.locale', locale);
     document.documentElement.lang = locale;
     document.documentElement.dir = definition.direction;
   }, [definition.direction, locale]);
