@@ -22,11 +22,13 @@ func TestAgentHTTPApprovalResumesPersistedRun(t *testing.T) {
 	registry.RegisterTool(api.Tool{Type: "function", Function: api.FunctionDef{Name: "test_write"}}, func(context.Context, json.RawMessage) (string, error) { executed.Add(1); return "saved", nil })
 	runner := agents.NewRunner(manager, registry, func(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (*api.ChatCompletionResponse, error) {
 		message := api.ChatMessage{Role: "assistant", Content: "Finished"}
+		reason := "stop"
 		if len(messages) == 2 {
+			reason = "tool_calls"
 			message.Content = ""
 			message.ToolCalls = []api.ToolCall{{Type: "function", Function: api.FunctionCall{Name: "test_write", Arguments: `{"value":1}`}}}
 		}
-		return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message}}}, nil
+		return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message, FinishReason: reason}}}, nil
 	})
 	task, err := runner.Create("write", "model", "local-admin", agents.DefaultAgentConfig())
 	if err != nil {

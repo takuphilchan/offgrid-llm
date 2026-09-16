@@ -157,7 +157,7 @@ func (m *Manager) updateTask(id string, change func(*Task) error) (*Task, error)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	task, ok := m.tasks[id]
-	if !ok {
+	if !ok || task.DeletedAt != nil {
 		return nil, ErrTaskNotFound
 	}
 	next, err := copyTask(task)

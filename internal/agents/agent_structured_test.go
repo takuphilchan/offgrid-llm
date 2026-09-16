@@ -19,7 +19,7 @@ func TestStructuredAgentUsesNativeToolMessages(t *testing.T) {
 			t.Fatalf("tools were not forwarded: %#v", tools)
 		}
 		if calls == 1 {
-			return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: api.ChatMessage{
+			return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{FinishReason: "tool_calls", Message: api.ChatMessage{
 				Role: "assistant",
 				ToolCalls: []api.ToolCall{{ID: "call-1", Type: "function", Function: api.FunctionCall{
 					Name: "lookup", Arguments: `{"key":"answer"}`,
@@ -30,7 +30,7 @@ func TestStructuredAgentUsesNativeToolMessages(t *testing.T) {
 		if last.Role != "tool" || last.ToolCallID != "call-1" || last.StringContent() != "42" {
 			t.Fatalf("native tool result was not preserved: %#v", last)
 		}
-		return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: api.ChatMessage{Role: "assistant", Content: "The answer is 42."}}}}, nil
+		return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{FinishReason: "stop", Message: api.ChatMessage{Role: "assistant", Content: "The answer is 42."}}}}, nil
 	}
 	executor := func(_ context.Context, name string, arguments json.RawMessage) (string, error) {
 		if name != "lookup" || string(arguments) != `{"key":"answer"}` {

@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -29,20 +27,22 @@ const (
 
 // Task represents an agent task
 type Task struct {
-	ID              string      `json:"id"`
-	Prompt          string      `json:"prompt"`
-	Status          TaskStatus  `json:"status"`
-	Result          string      `json:"result,omitempty"`
-	Error           string      `json:"error,omitempty"`
-	Steps           []Step      `json:"steps,omitempty"`
-	Config          AgentConfig `json:"config"`
-	CreatedAt       time.Time   `json:"created_at"`
-	StartedAt       *time.Time  `json:"started_at,omitempty"`
-	CompletedAt     *time.Time  `json:"completed_at,omitempty"`
-	Model           string      `json:"model,omitempty"`
-	Actor           string      `json:"actor,omitempty"`
-	PendingApproval *Approval   `json:"pending_approval,omitempty"`
-	Checkpoint      *Checkpoint `json:"checkpoint,omitempty"`
+	ID              string       `json:"id"`
+	Prompt          string       `json:"prompt"`
+	Status          TaskStatus   `json:"status"`
+	Result          string       `json:"result,omitempty"`
+	Error           string       `json:"error,omitempty"`
+	Steps           []Step       `json:"steps,omitempty"`
+	Config          AgentConfig  `json:"config"`
+	CreatedAt       time.Time    `json:"created_at"`
+	StartedAt       *time.Time   `json:"started_at,omitempty"`
+	CompletedAt     *time.Time   `json:"completed_at,omitempty"`
+	DeletedAt       *time.Time   `json:"deleted_at,omitempty"`
+	Model           string       `json:"model,omitempty"`
+	Actor           string       `json:"actor,omitempty"`
+	PendingApproval *Approval    `json:"pending_approval,omitempty"`
+	Checkpoint      *Checkpoint  `json:"checkpoint,omitempty"`
+	Progress        *RunProgress `json:"progress,omitempty"`
 	cancel          context.CancelFunc
 }
 
@@ -287,7 +287,7 @@ func (m *Manager) GetTask(id string) (*Task, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	task, ok := m.tasks[id]
-	if !ok {
+	if !ok || task.DeletedAt != nil {
 		return nil, false
 	}
 	copy, err := copyTask(task)
@@ -299,6 +299,9 @@ func (m *Manager) ListTasks() []*Task {
 	defer m.mu.RUnlock()
 	tasks := make([]*Task, 0, len(m.tasks))
 	for _, task := range m.tasks {
+		if task.DeletedAt != nil {
+			continue
+		}
 		if copy, err := copyTask(task); err == nil {
 			tasks = append(tasks, copy)
 		}
@@ -323,19 +326,39 @@ func (m *Manager) CancelTask(id string) error {
 func (m *Manager) DeleteTask(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.deleteTaskLocked(id)
+}
+
+// Only terminal, reconciled runs can be removed. A persisted tombstone prevents
+// the event projection resurrecting history after restart; it retains no prompt,
+// response, arguments, progress or checkpoint. Audit logs/backups are separate.
+func CanDeleteTask(task *Task) bool {
+	return task != nil && task.DeletedAt == nil && task.PendingApproval == nil &&
+		(task.Checkpoint == nil || task.Checkpoint.ExecutingCall == "") &&
+		(task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled)
+}
+
+func (m *Manager) IsDeleted(id string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	task := m.tasks[id]
+	return task != nil && task.DeletedAt != nil
+}
+
+func (m *Manager) deleteTaskLocked(id string) error {
 	task, exists := m.tasks[id]
-	if !exists {
+	if !exists || task.DeletedAt != nil {
 		return ErrTaskNotFound
 	}
-	if task.Status == TaskRunning || task.Status == TaskWaiting {
+	if !CanDeleteTask(task) {
 		return ErrRunConflict
 	}
-	if m.dataDir != "" {
-		if err := os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json")); err != nil && !os.IsNotExist(err) {
-			return err
-		}
+	now := time.Now().UTC()
+	tombstone := &Task{ID: task.ID, Actor: task.Actor, Status: task.Status, CreatedAt: task.CreatedAt, DeletedAt: &now}
+	if err := m.saveTask(tombstone); err != nil {
+		return err
 	}
-	delete(m.tasks, id)
+	m.tasks[id] = tombstone
 	return nil
 }
 
@@ -601,14 +624,10 @@ func (m *Manager) ClearHistory() (int, error) {
 
 	count := 0
 	for id, task := range m.tasks {
-		if task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled {
-			if m.dataDir != "" {
-				if err := os.Remove(filepath.Join(m.dataDir, "agent_tasks", id+".json")); err != nil && !os.IsNotExist(err) {
-					m.storageErr = err
-					return count, fmt.Errorf("%w: %v", ErrRunStorage, err)
-				}
+		if CanDeleteTask(task) {
+			if err := m.deleteTaskLocked(id); err != nil {
+				return count, err
 			}
-			delete(m.tasks, id)
 			count++
 		}
 	}

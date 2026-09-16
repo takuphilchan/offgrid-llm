@@ -226,7 +226,7 @@ func (a *Agent) Run(ctx context.Context, task string) (output string, runErr err
 			if err == nil {
 				if structuredResponse == nil || len(structuredResponse.Choices) == 0 {
 					err = fmt.Errorf("model returned no choices")
-				} else {
+				} else if err = validateCompletion(structuredResponse.Choices[0]); err == nil {
 					message := structuredResponse.Choices[0].Message
 					response = message.StringContent()
 					if len(message.ToolCalls) > 0 {

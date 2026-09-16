@@ -27,6 +27,95 @@ func TestLifecycleGateSharesActiveModel(t *testing.T) {
 	releaseTwo()
 }
 
+func waitForQueued(t *testing.T, gate *LifecycleGate, want int) {
+	t.Helper()
+	deadline := time.After(3 * time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for gate.Status().Queued != want {
+		select {
+		case <-deadline:
+			t.Fatalf("queued=%d want=%d", gate.Status().Queued, want)
+		case <-ticker.C:
+		}
+	}
+}
+
+func TestLifecycleQueueBoundAndCancellation(t *testing.T) {
+	gate := NewLifecycleGateWithQueue(1, 1)
+	switcher := func(context.Context, string) error { return nil }
+	release, err := gate.Acquire(context.Background(), "a", switcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		release, err := gate.Acquire(ctx, "b", switcher)
+		if release != nil {
+			release()
+		}
+		done <- err
+	}()
+	waitForQueued(t, gate, 1)
+	if _, err := gate.Acquire(context.Background(), "c", switcher); !errors.Is(err, ErrInferenceQueueFull) {
+		t.Fatalf("unbounded admission: %v", err)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	waitForQueued(t, gate, 0)
+}
+
+func TestLifecycleOlderSwitchCannotBeBypassed(t *testing.T) {
+	gate := NewLifecycleGateWithQueue(2, 3)
+	switcher := func(context.Context, string) error { return nil }
+	release, err := gate.Acquire(context.Background(), "a", switcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	order := make(chan string, 2)
+	secondRelease := make(chan func(), 1)
+	go func() {
+		release, err := gate.Acquire(ctx, "b", switcher)
+		if err != nil {
+			order <- "error"
+			return
+		}
+		order <- "b"
+		secondRelease <- release
+	}()
+	waitForQueued(t, gate, 1)
+	go func() {
+		release, err := gate.Acquire(ctx, "a", switcher)
+		if err != nil {
+			order <- "error"
+			return
+		}
+		order <- "a"
+		release()
+	}()
+	waitForQueued(t, gate, 2)
+	select {
+	case early := <-order:
+		t.Fatalf("request bypassed older switch: %s", early)
+	default:
+	}
+	release()
+	if first := <-order; first != "b" {
+		t.Fatalf("unfair admission: %s", first)
+	}
+	(<-secondRelease)()
+	if next := <-order; next != "a" {
+		t.Fatalf("next=%s", next)
+	}
+}
+
 func TestLifecycleContextSwitchIsExclusive(t *testing.T) {
 	gate := NewLifecycleGate(2)
 	calls := 0

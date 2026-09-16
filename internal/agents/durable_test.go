@@ -23,6 +23,38 @@ type runTestTools struct {
 	release chan struct{}
 }
 
+func TestShutdownPersistsInterruptedRunAndStopsAdmission(t *testing.T) {
+	manager := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	started := make(chan struct{})
+	caller := func(ctx context.Context, _ *Task, _ []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	runner := NewRunner(manager, &runTestTools{}, caller)
+	config := AgentConfig{MaxIterations: 2, TimeoutPerStep: time.Minute}
+	task, err := runner.Create("test", "model", "alice", config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Continue(context.Background(), task.ID, "alice", "start", "", true); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	if err := runner.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := manager.GetTask(task.ID)
+	if !ok || got.Status != TaskInterrupted {
+		t.Fatalf("checkpoint not persisted: %+v", got)
+	}
+	if _, err := runner.Continue(context.Background(), task.ID, "alice", "resume", "", true); !errors.Is(err, ErrRunConflict) {
+		t.Fatalf("admitted work during shutdown: %v", err)
+	}
+}
+
 func (t *runTestTools) GetTools() []api.Tool { return nil }
 func (t *runTestTools) Capability(name string) (capabilities.Descriptor, bool) {
 	return capabilities.Descriptor{Name: name, Source: "test", Kind: capabilities.Write, Risk: capabilities.RiskHigh}, true
@@ -55,7 +87,11 @@ func (t *runTestTools) ExecuteWithPolicy(ctx context.Context, name string, args 
 	return "saved", nil
 }
 func runAnswer(message api.ChatMessage) *api.ChatCompletionResponse {
-	return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message}}}
+	reason := "stop"
+	if len(message.ToolCalls) > 0 {
+		reason = "tool_calls"
+	}
+	return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message, FinishReason: reason}}}
 }
 
 func testRunCaller(_ context.Context, _ *Task, messages []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {

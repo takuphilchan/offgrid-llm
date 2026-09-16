@@ -56,8 +56,10 @@ type Log struct {
 	mu          sync.Mutex
 	path        string
 	sequences   map[string]uint64
+	identities  map[string]bool
 	subscribers map[uint64]chan Event
 	nextSubID   uint64
+	storageErr  error
 }
 
 func NewLog(path string) (*Log, error) {
@@ -67,12 +69,13 @@ func NewLog(path string) (*Log, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	log := &Log{path: path, sequences: make(map[string]uint64), subscribers: make(map[uint64]chan Event)}
+	log := &Log{path: path, sequences: make(map[string]uint64), identities: make(map[string]bool), subscribers: make(map[uint64]chan Event)}
 	events, err := log.Replay("", 0)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	for _, event := range events {
+		log.identities[event.ID] = true
 		if event.Sequence > log.sequences[event.RunID] {
 			log.sequences[event.RunID] = event.Sequence
 		}
@@ -81,19 +84,34 @@ func NewLog(path string) (*Log, error) {
 }
 
 func (l *Log) Publish(ctx context.Context, event Event) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if event.RunID == "" || event.Type == "" {
 		return fmt.Errorf("run ID and event type are required")
 	}
 	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.storageErr != nil {
+		return fmt.Errorf("event log requires recovery: %w", l.storageErr)
+	}
 	if event.ID == "" {
 		event.ID = newID()
+	}
+	if l.identities[event.ID] {
+		return fmt.Errorf("duplicate event ID")
 	}
 	if event.Time.IsZero() {
 		event.Time = time.Now().UTC()
 	}
-	l.sequences[event.RunID]++
-	event.Sequence = l.sequences[event.RunID]
+	event.Sequence = l.sequences[event.RunID] + 1
 	encoded, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	if len(encoded) >= 4*1024*1024-1 {
+		return fmt.Errorf("event exceeds durable log record limit")
+	}
 	if err == nil {
 		var file *os.File
 		file, err = os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
@@ -108,20 +126,21 @@ func (l *Log) Publish(ctx context.Context, event Event) error {
 		}
 	}
 	if err != nil {
-		l.sequences[event.RunID]--
-		l.mu.Unlock()
+		// A partial append or failed sync has an uncertain on-disk outcome.
+		// Do not append another event over it or reuse the sequence in-process.
+		l.storageErr = err
 		return err
 	}
-	subscribers := make([]chan Event, 0, len(l.subscribers))
-	for _, subscriber := range l.subscribers {
-		subscribers = append(subscribers, subscriber)
-	}
-	l.mu.Unlock()
-	for _, subscriber := range subscribers {
+	l.sequences[event.RunID] = event.Sequence
+	l.identities[event.ID] = true
+	for id, subscriber := range l.subscribers {
 		select {
 		case subscriber <- event:
-		case <-ctx.Done():
-			return ctx.Err()
+		default:
+			// Disconnect lagging projections; replay is authoritative. Never
+			// make model/tool execution wait for a disconnected UI consumer.
+			close(subscriber)
+			delete(l.subscribers, id)
 		}
 	}
 	return nil
@@ -141,13 +160,21 @@ func (l *Log) Subscribe(buffer int) (<-chan Event, func()) {
 	return channel, func() {
 		once.Do(func() {
 			l.mu.Lock()
-			delete(l.subscribers, id)
+			if subscriber, ok := l.subscribers[id]; ok {
+				close(subscriber)
+				delete(l.subscribers, id)
+			}
 			l.mu.Unlock()
 		})
 	}
 }
 
 func (l *Log) Replay(runID string, after uint64) ([]Event, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.storageErr != nil {
+		return nil, fmt.Errorf("event log requires recovery: %w", l.storageErr)
+	}
 	file, err := os.Open(l.path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -160,11 +187,18 @@ func (l *Log) Replay(runID string, after uint64) ([]Event, error) {
 	scanner := bufio.NewScanner(file)
 	buffer := make([]byte, 64*1024)
 	scanner.Buffer(buffer, 4*1024*1024)
+	sequences := make(map[string]uint64)
+	identities := make(map[string]bool)
 	for scanner.Scan() {
 		var event Event
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
 			return nil, fmt.Errorf("decode event log: %w", err)
 		}
+		if event.ID == "" || event.RunID == "" || event.Type == "" || event.Time.IsZero() || identities[event.ID] || event.Sequence != sequences[event.RunID]+1 {
+			return nil, fmt.Errorf("invalid or non-contiguous event log; preserve the file and repair from a verified backup")
+		}
+		identities[event.ID] = true
+		sequences[event.RunID] = event.Sequence
 		if (runID == "" || event.RunID == runID) && event.Sequence > after {
 			events = append(events, event)
 		}

@@ -48,17 +48,38 @@ type RunTools interface {
 // Runner owns execution independently of HTTP/UI lifetimes. Checkpoints are
 // authoritative; event logs and browser state are projections only.
 type Runner struct {
-	manager     *Manager
-	tools       RunTools
-	caller      RunCaller
-	mu          sync.Mutex
-	active      map[string]context.CancelFunc
-	approvalTTL time.Duration
-	Observer    func(*Task)
+	manager *Manager
+	tools   RunTools
+	caller  RunCaller
+	// Configure before accepting runs. Only public response text is emitted.
+	StreamCaller RunStreamCaller
+	mu           sync.Mutex
+	active       map[string]context.CancelFunc
+	approvalTTL  time.Duration
+	Observer     func(*Task)
+	closing      bool
+	workers      sync.WaitGroup
 }
 
 func NewRunner(manager *Manager, tools RunTools, caller RunCaller) *Runner {
 	return &Runner{manager: manager, tools: tools, caller: caller, active: make(map[string]context.CancelFunc), approvalTTL: 15 * time.Minute}
+}
+
+// Delete serializes with admission and worker teardown, not just terminal state:
+// a cancelled task can still have a worker settling its last write.
+func (r *Runner) Delete(id, actor string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.manager.mu.Lock()
+	defer r.manager.mu.Unlock()
+	task := r.manager.tasks[id]
+	if task == nil || task.DeletedAt != nil || (task.Actor != actor && !(task.Actor == "" && actor == "local-admin")) {
+		return ErrTaskNotFound
+	}
+	if _, active := r.active[id]; active || r.closing {
+		return ErrRunConflict
+	}
+	return r.manager.deleteTaskLocked(id)
 }
 
 func runID() string {
@@ -88,6 +109,11 @@ func CanonicalArguments(args json.RawMessage) (json.RawMessage, error) {
 }
 
 func (r *Runner) Create(prompt, model, actor string, config AgentConfig) (*Task, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closing {
+		return nil, ErrRunConflict
+	}
 	if prompt == "" || model == "" || actor == "" || config.MaxIterations < 1 || config.MaxIterations > 50 || config.TimeoutPerStep <= 0 {
 		return nil, fmt.Errorf("invalid agent run configuration")
 	}
@@ -121,6 +147,10 @@ func (r *Runner) Create(prompt, model, actor string, config AgentConfig) (*Task,
 // service context; sync mode waits under the caller's context.
 func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID string, async bool) (*Task, error) {
 	r.mu.Lock()
+	if r.closing || ctx.Err() != nil {
+		r.mu.Unlock()
+		return nil, ErrRunConflict
+	}
 	if _, exists := r.active[id]; exists {
 		r.mu.Unlock()
 		return nil, ErrRunConflict
@@ -172,9 +202,11 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		return nil, err
 	}
 	r.active[id] = cancel
+	r.workers.Add(1)
 	r.mu.Unlock()
 	r.observe(task)
 	work := func() (*Task, error) {
+		defer r.workers.Done()
 		defer func() { cancel(); r.mu.Lock(); delete(r.active, id); r.mu.Unlock() }()
 		result, err := r.execute(runCtx, task, grant)
 		if err != nil {
@@ -203,6 +235,7 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		initial, err := copyTask(task)
 		if err != nil {
 			cancel()
+			r.workers.Done()
 			r.mu.Lock()
 			delete(r.active, id)
 			r.mu.Unlock()
@@ -212,6 +245,25 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		return initial, nil
 	}
 	return work()
+}
+
+// Shutdown stops admission before waiting. Keep workspace ownership until
+// workers have persisted their interrupted or uncertain checkpoints.
+func (r *Runner) Shutdown(ctx context.Context) error {
+	r.mu.Lock()
+	r.closing = true
+	for _, cancel := range r.active {
+		cancel()
+	}
+	r.mu.Unlock()
+	done := make(chan struct{})
+	go func() { r.workers.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (r *Runner) persist(task *Task) error {
@@ -258,6 +310,7 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 					return r.fail(task, "Tool authorization denied. Review available tools and policy.")
 				}
 				task.Status = TaskWaiting
+				setRunPhase(task, "approval", call.Function.Name)
 				task.PendingApproval = &Approval{ID: "approval-" + runID(), RunID: task.ID, CallID: call.ID, Actor: task.Actor, Tool: call.Function.Name, Arguments: args, ArgumentsJSON: string(args), Capability: descriptor, ExpiresAt: time.Now().UTC().Add(r.approvalTTL)}
 				if err := r.persist(task); err != nil {
 					return nil, err
@@ -267,6 +320,7 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			// Persist consumption BEFORE invoking the tool. Crash after this
 			// point is uncertain, even when the process never reached the tool.
 			cp.ExecutingCall = call.ID
+			setRunPhase(task, "tool", call.Function.Name)
 			task.PendingApproval = nil
 			grant = nil
 			if err := r.persist(task); err != nil {
@@ -289,17 +343,25 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 		if cp.Iteration >= task.Config.MaxIterations {
 			return r.fail(task, "Maximum agent iterations reached; task did not complete.")
 		}
-		if r.caller == nil {
+		if r.caller == nil && r.StreamCaller == nil {
 			return r.fail(task, "Model runtime is unavailable.")
 		}
 		stepCtx, cancel := context.WithTimeout(ctx, task.Config.TimeoutPerStep)
-		response, err := r.caller(stepCtx, task, cp.Messages, r.tools.GetTools())
+		response, err := r.callWithProgress(stepCtx, task, cp.Messages, r.tools.GetTools())
 		cancel()
 		if err != nil {
 			return nil, err
 		}
 		if response == nil || len(response.Choices) == 0 {
 			return r.fail(task, "Model returned no response.")
+		}
+		if err := validateCompletion(response.Choices[0]); err != nil {
+			// Preserve partial text as explicitly incomplete history, never as
+			// completed context, an executable tool call, or a successful result.
+			if partial := response.Choices[0].Message.StringContent(); partial != "" {
+				task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "incomplete", Content: partial, Timestamp: time.Now().UTC()})
+			}
+			return r.fail(task, err.Error())
 		}
 		message := response.Choices[0].Message
 		message.Role = "assistant"
