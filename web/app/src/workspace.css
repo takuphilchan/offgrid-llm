@@ -287,10 +287,16 @@
   .modal-backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
   .command-backdrop { align-items: flex-start; padding: max(76px, 12vh) 20px 20px; }
   .command-palette { width: min(620px, 100%); overflow: hidden; background: var(--surface-1); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); }
-  .command-search { min-height: 58px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 0 14px; border-block-end: 1px solid var(--line); color: var(--faint); }
+  .command-search { min-height: 58px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 0 14px; border-block-end: 1px solid var(--line); color: var(--faint); transition: background .12s ease, border-color .12s ease; }
+  .command-search:focus-within { background: var(--accent-soft); border-block-end-color: var(--line-strong); }
   .command-search input { width: 100%; height: 56px; padding: 0; color: var(--text); background: transparent; border: 0; font-size: 15px; }
+  .command-search input:focus-visible { outline: 0; box-shadow: none; }
   .command-search input::placeholder { color: var(--faint); }
-  .command-results { max-height: min(440px, 60vh); padding: 8px; overflow-y: auto; }
+  .command-results { max-height: min(440px, 60vh); padding: 8px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .command-results::-webkit-scrollbar { width: 10px; }
+  .command-results::-webkit-scrollbar-track { background: transparent; }
+  .command-results::-webkit-scrollbar-thumb { background: var(--line-strong); border: 3px solid var(--surface-1); border-radius: 999px; }
+  .command-results::-webkit-scrollbar-button { display: none; }
   .command-results > p { margin: 0; padding: 28px 12px; color: var(--muted); font-size: 13px; text-align: center; }
   .command-group > span { display: block; padding: 10px 10px 5px; color: var(--faint); font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
   .command-group button { width: 100%; min-height: 42px; display: flex; align-items: center; gap: 11px; padding: 0 10px; color: var(--muted); background: transparent; border-radius: 7px; cursor: pointer; text-align: start; }

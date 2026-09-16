@@ -138,6 +138,8 @@ test('command palette navigates and applies appearance with the keyboard', async
   const palette = page.getByRole('dialog', { name: 'Quick actions' });
   await expect(palette).toBeVisible();
   const search = palette.getByRole('textbox', { name: 'Search pages and actions…' });
+  await expect(search).toHaveCSS('outline-style', 'none');
+  await expect(search).toHaveCSS('box-shadow', 'none');
   await search.fill('models');
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('command-palette.png') });
   await search.press('Enter');
