@@ -15,11 +15,13 @@ their npm lockfiles.
 
 3. Review changes to `VERSION`, `desktop/package.json`,
    `desktop/package-lock.json`, `web/app/package.json`, and
-   `web/app/package-lock.json`.
+   `web/app/package-lock.json`, along with the advertised P2P and MCP client
+   versions in `internal/p2p/discovery.go` and `internal/agents/mcp_sdk.go`.
 4. Run the checks in the root README before creating a release.
 
-The update script is idempotent. It does not rewrite generated UI assets or Go
-source to publish a version.
+The update script is idempotent. It updates package and protocol version
+metadata, but does not rewrite generated UI assets. The Go executable's runtime
+version is injected at build time.
 
 ## Build-time injection
 

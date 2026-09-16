@@ -11,10 +11,10 @@ actual readiness rather than being presented as universally available.
 
 ## Run with Docker
 
-The current development image is `edge`:
+Use the versioned stable image for a repeatable installation:
 
 ```bash
-docker pull takuphilchan/offgrid-llm:edge
+docker pull takuphilchan/offgrid-llm:0.4.3
 
 docker run -d \
   --name offgrid \
@@ -25,7 +25,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:edge
+  takuphilchan/offgrid-llm:0.4.3
 ```
 
 Open <http://127.0.0.1:11611/ui/>. The named volumes survive container
@@ -41,9 +41,11 @@ docker exec -it offgrid offgrid download phi-3.5-mini-instruct
 docker logs -f offgrid
 ```
 
-Stable release tags will publish `latest`, full semantic versions, immutable
-`sha-*` tags, provenance, SBOMs, and AMD64/ARM64 manifests. See
-[Docker deployment](docs/setup/docker.md).
+Stable releases publish `latest`, full semantic versions, `sha-*` tags,
+provenance, SBOMs, and AMD64/ARM64 CPU manifests. NVIDIA images use the separate
+`0.4.3-gpu` tag (Linux AMD64). The `edge` tag is for development, not a stable
+upgrade channel. See [Docker deployment](docs/setup/docker.md) and the
+[v0.4.3 release notes](docs/releases/release-notes-v0.4.3.md).
 
 ## Build and run from source
 
