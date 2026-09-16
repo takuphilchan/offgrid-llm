@@ -304,6 +304,7 @@ jobs:
           # hosted build runner does not support the release's instruction set.
           CPU_FLAGS=""
           GGML_CPU_ARGS=()
+          HAS_GGML_CPU_ARGS=false
           
           case "$HOST_ARCH" in
             x86_64|amd64)
@@ -322,6 +323,7 @@ jobs:
                 GGML_CPU_ARGS+=("-DGGML_AVX512=OFF")
                 echo "Enabling AVX2 for GGML runtime targets only"
               fi
+              HAS_GGML_CPU_ARGS=true
               ;;
             aarch64|arm64)
               if echo "$MATRIX_CPU_FLAGS" | grep -qE 'arm|aarch64|armv|apple'; then
@@ -347,7 +349,12 @@ jobs:
             -DGGML_STATIC=ON
             -DLLAMA_CURL=OFF
           )
-          CMAKE_ARGS+=("${GGML_CPU_ARGS[@]}")
+          # macOS ships Bash 3.2. With `set -u`, expanding an empty array is an
+          # unbound-variable error. ARM builds have no x86 GGML arguments, so
+          # only expand the array after the x86 branch populated it.
+          if [ "$HAS_GGML_CPU_ARGS" = true ]; then
+            CMAKE_ARGS+=("${GGML_CPU_ARGS[@]}")
+          fi
           
           # Add static linking flags for Linux to avoid GLIBC version requirements
           if [ "${{ matrix.platform }}" = "linux" ]; then
