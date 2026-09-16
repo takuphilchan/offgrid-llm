@@ -45,7 +45,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
   asset_states=()
   asset_sizes=()
   asset_digests=()
-  asset_rows="$(gh api "repos/${repo}/releases/tags/${version}" \
+  asset_rows="$(gh release view "${version}" --repo "${repo}" --json assets \
     --jq '.assets[] | [.name, .state, .size, (.digest // "")] | @tsv')"
   while IFS=$'\t' read -r name state size digest; do
     [[ -n "${name}" ]] || continue

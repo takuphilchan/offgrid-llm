@@ -42,18 +42,18 @@ function run(assetNames, { initialAssetNames = assetNames, attempts = '1' } = {}
     const mock = `
 gh() {
   if [[ "$1 $2" == "release view" ]]; then
-    if [[ "$*" == *"--json assets"* ]]; then
+    if [[ "$*" == *"@tsv"* ]]; then
+      api_count_file='.mock-gh-api-count'
+      api_count=$(cat "$api_count_file" 2>/dev/null || echo 0)
+      api_count=$((api_count + 1))
+      printf '%s' "$api_count" > "$api_count_file"
+      if [[ "$api_count" -eq 1 ]]; then
+        printf '%s\\n' ${initialRowArgs}
+      else
+        printf '%s\\n' ${rowArgs}
+      fi
+    elif [[ "$*" == *"--json assets"* ]]; then
       printf '%s\\n' 'checksums-v0.3.1.sha256'
-    fi
-  elif [[ "$1" == "api" ]]; then
-    api_count_file='.mock-gh-api-count'
-    api_count=$(cat "$api_count_file" 2>/dev/null || echo 0)
-    api_count=$((api_count + 1))
-    printf '%s' "$api_count" > "$api_count_file"
-    if [[ "$api_count" -eq 1 ]]; then
-      printf '%s\\n' ${initialRowArgs}
-    else
-      printf '%s\\n' ${rowArgs}
     fi
   elif [[ "$1 $2" == "release upload" ]]; then
     test -s "$4" || return 1

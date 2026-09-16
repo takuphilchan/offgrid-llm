@@ -233,7 +233,7 @@ jobs:
           extension=.tar.gz
           if [ "${{ matrix.platform }}" = "windows" ]; then extension=.zip; fi
           asset_name="offgrid-${version}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ matrix.cpu_features }}${extension}"
-          existing_assets="$(gh api "repos/${{ github.repository }}/releases/tags/${version}" \
+          existing_assets="$(gh release view "${version}" --repo "${{ github.repository }}" --json assets \
             --jq '.assets[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
           if grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
             echo "Verified release asset ${asset_name} already exists; skipping its rebuild"
@@ -821,7 +821,7 @@ jobs:
               )
               ;;
           esac
-          existing_assets="$(gh api "repos/${{ github.repository }}/releases/tags/${version}" \
+          existing_assets="$(gh release view "${version}" --repo "${{ github.repository }}" --json assets \
             --jq '.assets[] | select(.state == "uploaded" and .size > 0 and ((.digest // "") | test("^sha256:[0-9a-f]{64}$"))) | .name')"
           for asset_name in "${expected[@]}"; do
             if ! grep -Fxq "${asset_name}" <<< "${existing_assets}"; then
