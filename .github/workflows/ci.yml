@@ -64,6 +64,7 @@ jobs:
           go build -trimpath -o build/linux/offgrid ./cmd/offgrid
 
       - name: Run browser integration tests
+        id: browser-tests
         shell: bash
         run: |
           mkdir -p /tmp/offgrid-ci/models /tmp/offgrid-ci/data
@@ -87,7 +88,19 @@ jobs:
           done
           cd web/app
           npx playwright install --with-deps chromium
-          OFFGRID_E2E_URL=http://127.0.0.1:11611 npm run test:e2e
+          OFFGRID_E2E_URL=http://127.0.0.1:11611 npm run test:e2e -- --reporter=line,github
+
+      - name: Preserve failed browser diagnostics
+        if: failure() && steps.browser-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-failure-diagnostics
+          # This service uses isolated CI data, never a user's workspace.
+          path: |
+            web/app/test-results/
+            /tmp/offgrid-ci/server.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Validate Electron package
         working-directory: desktop
