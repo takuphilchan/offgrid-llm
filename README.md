@@ -111,6 +111,10 @@ npm run dev
 
 If no server is already listening, the packaged desktop app starts its bundled
 runtime. Desktop data defaults to `~/.offgrid-llm`.
+If a different service is already running, the startup window explains the
+mismatch and offers safe recovery choices. See [desktop setup and
+recovery](docs/setup/desktop-startup.md), including Windows SmartScreen and macOS
+signing requirements. Source changes do not update an already-installed app.
 
 ## Interfaces
 
@@ -195,7 +199,7 @@ node --check preload.js
 ```
 
 The CI workflow runs Go tests, contract generation checks, the UI build, live
-browser integration tests, and an unpacked Electron package build. Set
+browser integration tests, and native packaged-Electron startup/recovery checks. Set
 `OFFGRID_E2E_URL` only when the browser suite should target an already-running
 OffGrid service; local test runs manage their own UI server.
 

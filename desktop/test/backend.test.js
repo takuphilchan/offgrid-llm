@@ -47,6 +47,25 @@ test('an occupied unresponsive port is not treated as free', async t => {
   assert.equal((await inspectBackend(`http://127.0.0.1:${server.address().port}`, '0.4.3', hash, 30)).state, 'unavailable');
 });
 
+test('version mismatch includes actual version; cancellation closes a pending handshake', async t => {
+  let pending = false;
+  const server = http.createServer((_request, response) => {
+    if (!pending) response.end(JSON.stringify({ ...identity, version: '0.4.3-history-dev' }));
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const result = await inspectBackend(base, '0.4.4', hash);
+  assert.equal(result.state, 'incompatible');
+  assert.equal(result.version, '0.4.3-history-dev');
+  assert.equal(result.canOpenBrowser, true);
+  pending = true;
+  const abort = new AbortController();
+  const check = inspectBackend(base, '0.4.4', hash, 10000, abort.signal);
+  abort.abort();
+  assert.match((await check).reason, /cancelled/);
+});
+
 test('navigation and IPC use exact origin and the main frame', () => {
   const origin = 'http://127.0.0.1:11611';
   const loading = 'file:///app/loading.html';

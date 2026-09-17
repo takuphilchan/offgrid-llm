@@ -11,6 +11,15 @@ contextBridge.exposeInMainWorld('electron', {
   // Get server status
   getServerStatus: () => ipcRenderer.invoke('get-server-status'),
   getBackendInfo: () => ipcRenderer.invoke('get-backend-info'),
+  retryStartup: () => ipcRenderer.invoke('startup-retry'),
+  startDesktopWorkspace: () => ipcRenderer.invoke('startup-local'),
+  openExistingWorkspace: () => ipcRenderer.invoke('startup-browser'),
+  openStartupHelp: () => ipcRenderer.invoke('startup-help'),
+  onStartupState: (callback) => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('startup-state', listener);
+    return () => ipcRenderer.removeListener('startup-state', listener);
+  },
   
   // Get app paths (config, models, data directories)
   getPaths: () => ipcRenderer.invoke('get-paths'),

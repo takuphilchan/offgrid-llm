@@ -1,699 +1,269 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme } = require('electron');
-const path = require('path');
-const { spawn } = require('child_process');
-const fs = require('fs');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen } = require('electron');
+const path = require('node:path');
+const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
-const { inspectBackend, isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
-
-// Single instance lock - prevent multiple instances
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    // Focus the existing window when user tries to open second instance
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-}
-
-let mainWindow = null;
-let tray = null;
-let offgridProcess = null;
-let isQuitting = false;
-let serverCheckInterval = null;
+const { isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
+const { DesktopRuntime } = require('./runtime');
 
 const APP_NAME = 'OffGrid LLM Desktop';
-const configuredPort = Number.parseInt(process.env.OFFGRID_PORT || '11611', 10);
-const SERVER_PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
-  ? configuredPort
-  : 11611;
-const SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
+const customHome = process.env.OFFGRID_DESKTOP_HOME;
+if (customHome && !path.isAbsolute(customHome)) throw new Error('OFFGRID_DESKTOP_HOME must be an absolute path');
+const configRoot = customHome || path.join(app.getPath('home'), '.offgrid-llm');
+// Explicit alternate profiles allow isolated qualification without attaching to
+// or changing the installed desktop application's cookies, settings, or data.
+if (customHome) app.setPath('userData', path.join(configRoot, 'electron'));
+if (!app.requestSingleInstanceLock()) app.exit(0);
+
+const portValue = process.env.OFFGRID_PORT || '11611';
+const port = /^\d+$/.test(portValue) && Number(portValue) > 0 && Number(portValue) <= 65535 ? Number(portValue) : 11611;
 const LOADING_URL = pathToFileURL(path.join(__dirname, 'loading.html')).href;
-const uiIndex = app.isPackaged ? path.join(process.resourcesPath, 'ui/index.html') : path.join(__dirname, '../web/dist/index.html');
-const expectedUIBuild = fs.existsSync(uiIndex) ? fingerprintUI(fs.readFileSync(uiIndex)) : null;
-let backendStatus = { state: 'offline', url: SERVER_URL };
+const uiDir = app.isPackaged ? path.join(process.resourcesPath, 'ui') : path.join(__dirname, '../web/dist');
+const binaryRoot = app.isPackaged ? path.join(process.resourcesPath, 'bin') : path.join(__dirname, '../build', { win32: 'windows', darwin: 'macos', linux: 'linux' }[process.platform]);
+const binaryName = process.platform === 'win32' ? 'offgrid.exe' : process.platform === 'darwin' ? 'offgrid-' + (process.arch === 'arm64' ? 'arm64' : 'amd64') : 'offgrid';
+const workspace = root => ({ config: root, models: path.join(root, 'models'), data: path.join(root, 'data') });
+const runtime = new DesktopRuntime({
+  url: 'http://127.0.0.1:' + port, version: app.getVersion(), binary: path.join(binaryRoot, binaryName), uiDir,
+  workspace: workspace(configRoot), isolatedWorkspace: workspace(path.join(configRoot, 'desktop-workspace')),
+  uiBuildID: fs.existsSync(path.join(uiDir, 'index.html')) ? fingerprintUI(fs.readFileSync(path.join(uiDir, 'index.html'))) : null
+});
+let mainWindow = null;
+let tray = null;
+let quitting = false;
+let shutdownComplete = false;
+let saveTimer;
+let saveQueue = Promise.resolve();
+let connectionQueue = Promise.resolve();
+let windowCreation;
+let nextWorkspace = 'default';
+const statePath = path.join(configRoot, 'window-state.json');
+const connectionPath = path.join(configRoot, 'desktop-connection.json');
 
-// Paths configuration
-const paths = {
-  getOffgridBinary() {
-    if (app.isPackaged) {
-      if (process.platform === 'win32') {
-        return path.join(process.resourcesPath, 'bin', 'offgrid.exe');
-      } else if (process.platform === 'darwin') {
-        // Use architecture-specific binary for macOS
-        const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
-        return path.join(process.resourcesPath, 'bin', `offgrid-${arch}`);
-      } else {
-        return path.join(process.resourcesPath, 'bin', 'offgrid');
-      }
-    } else {
-      // Development mode
-      const platform = process.platform;
-      const basePath = path.join(__dirname, '../build');
-      
-      if (platform === 'win32') {
-        return path.join(basePath, 'windows/offgrid.exe');
-      } else if (platform === 'darwin') {
-        const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
-        return path.join(basePath, `macos/offgrid-${arch}`);
-      } else {
-        return path.join(basePath, 'linux/offgrid');
-      }
-    }
-  },
-  
-  getConfigDir() {
-    return path.join(app.getPath('home'), '.offgrid-llm');
-  },
-  
-  getModelsDir() {
-    return path.join(this.getConfigDir(), 'models');
-  },
-  
-  getDataDir() {
-    return path.join(this.getConfigDir(), 'data');
-  },
-  
-  getWindowStatePath() {
-    return path.join(this.getConfigDir(), 'window-state.json');
-  }
-};
-
-// Window state management - save and restore window position/size
-const defaultWindowState = {
-  width: 1400,
-  height: 900,
-  x: undefined,
-  y: undefined,
-  isMaximized: false
-};
-
-function loadWindowState() {
+async function loadWindowState() {
+  const defaults = { width: 1400, height: 900 };
   try {
-    const statePath = paths.getWindowStatePath();
-    if (fs.existsSync(statePath)) {
-      const data = fs.readFileSync(statePath, 'utf8');
-      const state = JSON.parse(data);
-      // Validate state has required fields
-      if (typeof state.width === 'number' && typeof state.height === 'number') {
-        return { ...defaultWindowState, ...state };
-      }
+    const state = JSON.parse(await fs.promises.readFile(statePath, 'utf8'));
+    if (![state.width, state.height].every(Number.isFinite)) return defaults;
+    const bounds = { width: Math.max(760, Math.min(3840, state.width)), height: Math.max(560, Math.min(2160, state.height)) };
+    if ([state.x, state.y].every(Number.isFinite) && screen.getAllDisplays().some(({ workArea: a }) =>
+      state.x + bounds.width > a.x && state.x < a.x + a.width && state.y + bounds.height > a.y && state.y < a.y + a.height)) {
+      Object.assign(bounds, { x: state.x, y: state.y });
     }
-  } catch (err) {
-    console.warn('Could not load window state:', err.message);
-  }
-  return { ...defaultWindowState };
+    return { ...bounds, isMaximized: state.isMaximized === true };
+  } catch { return defaults; }
 }
 
 function saveWindowState() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  
-  try {
-    const isMaximized = mainWindow.isMaximized();
-    const bounds = mainWindow.getBounds();
-    
-    const state = {
-      width: bounds.width,
-      height: bounds.height,
-      x: bounds.x,
-      y: bounds.y,
-      isMaximized: isMaximized
-    };
-    
-    // Ensure config directory exists
-    const configDir = paths.getConfigDir();
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-    }
-    
-    fs.writeFileSync(paths.getWindowStatePath(), JSON.stringify(state, null, 2));
-  } catch (err) {
-    console.warn('Could not save window state:', err.message);
-  }
+  if (!mainWindow || mainWindow.isDestroyed()) return saveQueue;
+  const state = { ...mainWindow.getNormalBounds(), isMaximized: mainWindow.isMaximized() };
+  saveQueue = saveQueue.then(async () => {
+    await fs.promises.mkdir(configRoot, { recursive: true });
+    await fs.promises.writeFile(statePath + '.tmp', JSON.stringify(state));
+    await fs.promises.rename(statePath + '.tmp', statePath);
+  }).catch(() => console.warn('Window geometry could not be saved.'));
+  return saveQueue;
 }
 
-// Wait for server to be ready with exponential backoff
-function waitForServer(callback, maxAttempts = 60) {
-  let attempts = 0;
-  let delay = 500;
-  const maxDelay = 3000;
-  
-  const check = async () => {
-    const ready = await checkServer();
-    if (ready) {
-      callback();
-    } else if (backendStatus.state === 'incompatible') {
-      if (mainWindow) dialog.showErrorBox('Service compatibility', backendStatus.reason);
-    } else if (attempts < maxAttempts) {
-      attempts++;
-      delay = Math.min(delay * 1.2, maxDelay); // Exponential backoff
-      setTimeout(check, delay);
-    } else {
-      // Server didn't start - show error
-      if (mainWindow) {
-        dialog.showMessageBox(mainWindow, {
-          type: 'error',
-          title: 'Server Timeout',
-          message: 'OffGrid server did not respond in time',
-          detail: 'The server may still be starting. Try refreshing the page in a few seconds.'
-        });
-      }
-    }
-  };
-  setTimeout(check, 1000);
+function showWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return void createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 }
 
-// Ensure directories exist
-function ensureDirectories() {
-  const dirs = [
-    paths.getConfigDir(),
-    paths.getModelsDir(),
-    paths.getDataDir()
-  ];
-  
-  for (const dir of dirs) {
-    try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    } catch (err) {
-      console.error(`Failed to create directory ${dir}:`, err.message);
-    }
-  }
+function safeExternal(value) {
+  try { const url = new URL(value); return !url.username && !url.password && ['https:', 'http:', 'mailto:'].includes(url.protocol); }
+  catch { return false; }
 }
 
-// Check if server is running (with timeout and proper cleanup)
-async function checkServer() {
-  backendStatus = await inspectBackend(SERVER_URL, app.getVersion(), expectedUIBuild);
-  return backendStatus.state === 'ready';
+function showWorkspace() {
+  if (!mainWindow || mainWindow.isDestroyed() || runtime.state.state !== 'ready' || quitting) return;
+  const current = mainWindow.webContents.getURL();
+  if (current.startsWith(LOADING_URL)) void mainWindow.loadURL(runtime.url + '/ui/').catch(() => {});
 }
 
-// Start OffGrid server
-async function startOffgridServer() {
-  const offgridBinary = paths.getOffgridBinary();
-
-  // A separately managed server (for example Docker) is a valid desktop
-  // backend even when a development checkout has no bundled native binary.
-  const isRunning = await checkServer();
-  if (isRunning) {
-    console.log('OffGrid server is already running');
-    return true;
+runtime.on('status', status => {
+  if (!mainWindow || mainWindow.isDestroyed() || quitting) return;
+  mainWindow.webContents.send('startup-state', status);
+  if (status.state === 'ready') showWorkspace();
+  else if (status.state === 'error' && !mainWindow.webContents.getURL().startsWith(LOADING_URL)) {
+    void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
   }
-  if (backendStatus.state !== 'offline') {
-    dialog.showErrorBox('Cannot attach to service', backendStatus.reason);
-    return false;
-  }
+});
 
-  if (!fs.existsSync(offgridBinary)) {
-    console.error('OffGrid binary not found:', offgridBinary);
-    dialog.showErrorBox(
-      'Binary Not Found',
-      `OffGrid binary not found at:\n${offgridBinary}\n\nPlease ensure the application is properly installed.`
-    );
-    return false;
-  }
-
-  console.log('Starting OffGrid server:', offgridBinary);
-  
-  try {
-    // Make binary executable on Unix systems
-    if (process.platform !== 'win32') {
-      try {
-        fs.chmodSync(offgridBinary, '755');
-      } catch (err) {
-        console.warn('Could not chmod binary:', err);
-      }
-    }
-
-    offgridProcess = spawn(offgridBinary, ['serve'], {
-      stdio: 'pipe',
-      cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'),
-      env: {
-        ...process.env,
-        OFFGRID_PORT: SERVER_PORT.toString(),
-        OFFGRID_MODELS_DIR: paths.getModelsDir(),
-        OFFGRID_DATA_DIR: paths.getDataDir(),
-        OFFGRID_UI_DIR: app.isPackaged
-          ? path.join(process.resourcesPath, 'ui')
-          : path.join(__dirname, '../web/dist')
-      },
-      detached: false
-    });
-
-    offgridProcess.stdout.on('data', (data) => {
-      console.log(`[OffGrid] ${data.toString().trim()}`);
-    });
-
-    offgridProcess.stderr.on('data', (data) => {
-      console.error(`[OffGrid Error] ${data.toString().trim()}`);
-    });
-
-    offgridProcess.on('close', (code) => {
-      offgridProcess = null;
-      console.log(`OffGrid server exited with code ${code}`);
-      if (!isQuitting && mainWindow) {
-        dialog.showMessageBox(mainWindow, {
-          type: 'warning',
-          title: 'Server Stopped',
-          message: 'OffGrid server has stopped',
-          detail: `Exit code: ${code}\n\nThe application may not function correctly.`
-        });
-      }
-    });
-
-    offgridProcess.on('error', (err) => {
-      console.error('Failed to start OffGrid server:', err);
-      dialog.showErrorBox(
-        'Server Start Failed',
-        `Failed to start OffGrid server:\n${err.message}`
-      );
-    });
-
-    // Wait for server to be ready
-    let attempts = 0;
-    while (attempts < 30) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const ready = await checkServer();
-      if (ready) {
-        console.log('OffGrid server is ready');
-        return true;
-      }
-      attempts++;
-    }
-
-    console.warn('Server did not become ready in time');
-    return false;
-
-  } catch (err) {
-    console.error('Error starting server:', err);
-    return false;
-  }
-}
-
-// Stop OffGrid server with proper cleanup
-function stopOffgridServer() {
-  return new Promise((resolve) => {
-    if (!offgridProcess) {
-      resolve();
-      return;
-    }
-    
-    console.log('Stopping OffGrid server...');
-    
-    // Set up a timeout for force kill
-    const forceKillTimeout = setTimeout(() => {
-      if (offgridProcess) {
-        console.log('Force killing OffGrid server');
-        try {
-          offgridProcess.kill('SIGKILL');
-        } catch (err) {
-          // Process may already be dead
-        }
-        offgridProcess = null;
-        resolve();
-      }
-    }, 5000);
-    
-    // Listen for the process to exit cleanly
-    offgridProcess.once('exit', () => {
-      clearTimeout(forceKillTimeout);
-      offgridProcess = null;
-      console.log('OffGrid server stopped');
-      resolve();
-    });
-    
-    // Send SIGTERM for graceful shutdown
-    try {
-      offgridProcess.kill('SIGTERM');
-    } catch (err) {
-      clearTimeout(forceKillTimeout);
-      offgridProcess = null;
-      resolve();
-    }
-  });
-}
-
-function isSafeExternalLink(value) {
-  try {
-    return ['http:', 'https:', 'mailto:'].includes(new URL(value).protocol);
-  } catch {
-    return false;
-  }
-}
-
-// Create main window with optimized settings
 function createWindow() {
-  // Load saved window state
-  const windowState = loadWindowState();
-  
+  if (windowCreation) return windowCreation;
+  if (mainWindow && !mainWindow.isDestroyed()) return Promise.resolve();
+  windowCreation = createMainWindow().finally(() => { windowCreation = null; });
+  return windowCreation;
+}
+
+async function createMainWindow() {
+  const state = await loadWindowState();
+  if (quitting) return;
   mainWindow = new BrowserWindow({
-    width: windowState.width,
-    height: windowState.height,
-    x: windowState.x,
-    y: windowState.y,
-    minWidth: 760,
-    minHeight: 560,
-    title: APP_NAME,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      preload: path.join(__dirname, 'preload.js'),
-      // Performance optimizations
-      backgroundThrottling: true,
-      spellcheck: true
-    },
+    ...state, minWidth: 760, minHeight: 560, title: APP_NAME, show: false, autoHideMenuBar: true,
     icon: path.join(__dirname, 'assets/icon.png'),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#101011' : '#f7f7f6',
-    show: false,
-    autoHideMenuBar: true
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true }
   });
-
-  // Restore maximized state if applicable
-  if (windowState.isMaximized) {
-    mainWindow.maximize();
-  }
-
-  // Save window state on resize/move (debounced)
-  let saveStateTimeout = null;
-  const debouncedSaveState = () => {
-    if (saveStateTimeout) clearTimeout(saveStateTimeout);
-    saveStateTimeout = setTimeout(saveWindowState, 500);
-  };
-  
-  mainWindow.on('resize', debouncedSaveState);
-  mainWindow.on('move', debouncedSaveState);
-  mainWindow.on('maximize', saveWindowState);
-  mainWindow.on('unmaximize', saveWindowState);
-
-  // Load the lightweight loading page first
-  mainWindow.loadFile(path.join(__dirname, 'loading.html'));
-
-  // Show window when ready (avoids white flash)
+  if (state.isMaximized) mainWindow.maximize();
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    mainWindow.focus();
-    
-    // Once server is ready, load the actual web UI
-    waitForServer(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadURL(`${SERVER_URL}/ui/`);
-      }
-    });
+    if (process.env.OFFGRID_DESKTOP_TEST_HIDDEN !== '1') { mainWindow.show(); mainWindow.focus(); }
   });
-
-  // Handle navigation errors gracefully
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('Page load failed:', errorCode, errorDescription);
-    // Only show error for non-abort errors (user navigation cancels are -3)
-    if (errorCode !== -3) {
-      mainWindow.loadFile(path.join(__dirname, 'loading.html'));
-    }
-  });
-
-  // The renderer is a local application surface. Keep untrusted navigation
-  // out of the privileged desktop window and hand safe web links to the OS.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (isSafeExternalLink(url)) void shell.openExternal(url);
+    if (safeExternal(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (isTrustedPage(url, SERVER_URL, LOADING_URL)) return;
+    if (isTrustedPage(url, runtime.url, LOADING_URL)) return;
     event.preventDefault();
-    if (isSafeExternalLink(url)) void shell.openExternal(url);
+    if (safeExternal(url)) void shell.openExternal(url);
   });
-
-  // Prevent close, minimize to tray instead
-  mainWindow.on('close', (event) => {
-    if (!isQuitting && process.platform !== 'darwin') {
+  mainWindow.webContents.on('did-fail-load', (_event, code, _description, _url, isMainFrame) => {
+    if (code === -3 || !isMainFrame || quitting) return;
+    runtime.publish({ state: 'error', reason: 'The workspace page could not load. Retry to check the service and reopen it.' });
+    if (!mainWindow.webContents.getURL().startsWith(LOADING_URL)) void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
+  });
+  mainWindow.webContents.on('render-process-gone', () => {
+    runtime.publish({ state: 'error', reason: 'The workspace window stopped responding. Retry to reopen it; the service and saved work have not been stopped.' });
+    void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
+  });
+  for (const event of ['resize', 'move', 'maximize', 'unmaximize']) {
+    mainWindow.on(event, () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveWindowState, 500); });
+  }
+  mainWindow.on('close', event => {
+    void saveWindowState();
+    // Do not strand failed first launches invisibly in the tray.
+    if (!quitting && process.platform !== 'darwin' && runtime.state.state === 'ready' && tray) {
       event.preventDefault();
       mainWindow.hide();
-      
-      // Show notification on first minimize (only once per session)
-      if (!app.minimizedNotificationShown) {
-        const { Notification } = require('electron');
-        if (Notification.isSupported()) {
-          new Notification({
-            title: APP_NAME,
-            body: 'Running in background. Click tray icon to restore.',
-            silent: true
-          }).show();
-        }
-        app.minimizedNotificationShown = true;
-      }
     }
   });
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  // Memory optimization: reduce renderer memory when hidden
-  mainWindow.on('hide', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.setBackgroundThrottling(true);
-    }
-  });
-
-  mainWindow.on('show', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.setBackgroundThrottling(false);
-    }
-  });
-
-  // Open DevTools only in development
-  if (!app.isPackaged) {
-    mainWindow.webContents.openDevTools();
-  }
+  mainWindow.on('closed', () => { mainWindow = null; });
+  // Render first. Backend discovery/startup never blocks creation of the window.
+  await mainWindow.loadFile(path.join(__dirname, 'loading.html'));
+  showWorkspace();
 }
 
-// Create system tray with optimized menu
+function rememberConnection(mode) {
+  connectionQueue = connectionQueue.catch(() => {}).then(async () => {
+    await fs.promises.mkdir(configRoot, { recursive: true });
+    await fs.promises.writeFile(connectionPath + '.tmp', JSON.stringify({ mode }));
+    await fs.promises.rename(connectionPath + '.tmp', connectionPath);
+    nextWorkspace = mode;
+    updateMenus();
+  });
+  return connectionQueue;
+}
+
+function connectionMenu() {
+  const select = mode => void rememberConnection(mode).catch(() => {
+    void dialog.showMessageBox(mainWindow, { type: 'warning', message: 'The next-launch preference could not be saved.', detail: 'The current workspace has not changed. Check that your desktop settings folder is writable.' });
+  });
+  return [
+    { label: 'Applies after you quit and reopen OffGrid', enabled: false },
+    { type: 'separator' },
+    { id: 'connection-default', label: 'Configured local service', type: 'radio', checked: nextWorkspace === 'default', click: () => select('default') },
+    { id: 'connection-isolated', label: 'Separate desktop workspace', type: 'radio', checked: nextWorkspace === 'isolated', click: () => select('isolated') }
+  ];
+}
+
+function updateMenus() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    { label: 'File', submenu: [
+      { label: 'Connection on next launch', submenu: connectionMenu() },
+      { type: 'separator' },
+      { role: process.platform === 'darwin' ? 'close' : 'quit' }
+    ] },
+    { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
+    { role: 'help', submenu: [{ label: 'Setup and recovery guide', click: () => void shell.openExternal('https://github.com/takuphilchan/offgrid-llm/blob/main/docs/setup/desktop-startup.md') }] }
+  ]));
+  tray?.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open OffGrid', click: showWindow },
+    { label: 'Connection on next launch', submenu: connectionMenu() },
+    { type: 'separator' },
+    { label: 'Quit OffGrid', click: () => app.quit() }
+  ]));
+}
+
 function createTray() {
-  const iconPath = path.join(__dirname, 'assets/icon.png');
-  let trayIcon;
-  
   try {
-    trayIcon = nativeImage.createFromPath(iconPath);
-    // Resize for optimal tray display
-    if (!trayIcon.isEmpty()) {
-      trayIcon = trayIcon.resize({ width: 16, height: 16 });
-    }
-  } catch (err) {
-    console.warn('Could not load tray icon:', err.message);
-    trayIcon = nativeImage.createEmpty();
-  }
-
-  tray = new Tray(trayIcon);
-  
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Show App',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Server Status',
-      enabled: false
-    },
-    {
-      label: 'Check Server',
-      click: async () => {
-        const running = await checkServer();
-        dialog.showMessageBox({
-          type: running ? 'info' : 'warning',
-          title: 'Server Status',
-          message: running ? 'Server is running' : 'Server is not responding',
-          detail: `Port: ${SERVER_PORT}`
-        });
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Open Config Folder',
-      click: () => {
-        shell.openPath(paths.getConfigDir());
-      }
-    },
-    {
-      label: 'Open Models Folder',
-      click: () => {
-        shell.openPath(paths.getModelsDir());
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
-
-  tray.setToolTip(APP_NAME);
-  tray.setContextMenu(contextMenu);
-
-  tray.on('click', () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
-      } else {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    } else {
-      createWindow();
-    }
-  });
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'assets/icon.png')).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    tray.setToolTip(APP_NAME);
+    tray.on('click', showWindow);
+  } catch { console.warn('System tray is unavailable; closing the window will quit OffGrid.'); }
 }
 
-// IPC Handlers
-function handleTrustedIPC(channel, handler) {
+function handleTrustedIPC(channel, handler, startupOnly = false) {
   ipcMain.handle(channel, (event, ...args) => {
-    if (!isTrustedSender(event, mainWindow?.webContents, SERVER_URL, LOADING_URL)) throw new Error('Untrusted desktop IPC sender');
+    if (!isTrustedSender(event, mainWindow?.webContents, runtime.url, LOADING_URL) ||
+        (startupOnly && event.senderFrame.url !== LOADING_URL)) throw new Error('Untrusted desktop IPC sender');
     return handler(...args);
   });
 }
 
-handleTrustedIPC('get-api-url', () => {
-  return SERVER_URL;
-});
-
+handleTrustedIPC('get-api-url', () => runtime.url);
 handleTrustedIPC('get-app-version', () => app.getVersion());
-
-handleTrustedIPC('get-server-status', async () => {
-  return await checkServer();
-});
-
-handleTrustedIPC('get-backend-info', async () => {
-  await checkServer();
-  return { ...backendStatus, managedByDesktop: Boolean(offgridProcess), desktopVersion: app.getVersion() };
-});
-
-handleTrustedIPC('select-directory', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory'],
-    title: 'Select Directory'
-  });
-  
-  if (!result.canceled && result.filePaths.length > 0) {
-    return result.filePaths[0];
+handleTrustedIPC('get-server-status', () => runtime.state.state === 'ready');
+handleTrustedIPC('get-backend-info', () => runtime.snapshot());
+handleTrustedIPC('startup-retry', () => runtime.connect(), true);
+handleTrustedIPC('startup-local', async () => {
+  const status = await runtime.connect(true);
+  if (status.state === 'ready' && status.workspaceMode === 'isolated') {
+    await rememberConnection('isolated');
   }
-  return null;
-});
-
+  return status;
+}, true);
+handleTrustedIPC('startup-browser', async () => {
+  if (!runtime.state.canOpenBrowser) throw new Error('No identified external OffGrid workspace is available');
+  await shell.openExternal(runtime.url + '/ui/');
+}, true);
+handleTrustedIPC('startup-help', () => shell.openExternal('https://github.com/takuphilchan/offgrid-llm/blob/main/docs/setup/desktop-startup.md'), true);
 handleTrustedIPC('get-paths', () => {
-  if (!offgridProcess) throw new Error('Paths belong to the externally managed service, not the desktop host');
-  return {
-    config: paths.getConfigDir(),
-    models: paths.getModelsDir(),
-    data: paths.getDataDir()
-  };
+  if (!runtime.child) throw new Error('Paths belong to the externally managed service, not the desktop host');
+  return { ...runtime.workspace };
 });
-
-// System theme support
-handleTrustedIPC('get-system-theme', () => {
-  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+handleTrustedIPC('select-directory', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], title: 'Select Directory' });
+  return result.canceled ? null : result.filePaths[0] || null;
 });
-
-// Notify renderer when system theme changes
+handleTrustedIPC('get-system-theme', () => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
 nativeTheme.on('updated', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setBackgroundColor(theme === 'dark' ? '#101011' : '#f7f7f6');
-    mainWindow.webContents.send('system-theme-changed', theme);
-  }
+  mainWindow.setBackgroundColor(theme === 'dark' ? '#101011' : '#f7f7f6');
+  mainWindow.webContents.send('system-theme-changed', theme);
 });
-
-// App lifecycle
+app.on('second-instance', showWindow);
 app.whenReady().then(async () => {
-  console.log(`${APP_NAME} starting...`);
-  console.log(`Version: ${app.getVersion()} | Electron: ${process.versions.electron} | Platform: ${process.platform}`);
-  console.log(`Packaged: ${app.isPackaged}`);
-  
-  // Set app user model ID for Windows notifications
-  if (process.platform === 'win32') {
-    app.setAppUserModelId(APP_NAME);
-  }
-  
-  // Ensure directories exist
-  ensureDirectories();
-  
-  // Create tray first (so user sees app is starting)
+  if (process.platform === 'win32') app.setAppUserModelId('com.offgrid.llm.desktop');
+  await createWindow();
   createTray();
-  
-  // Start server
-  const serverStarted = await startOffgridServer();
-  
-  if (!serverStarted) {
-    console.warn('Server may not have started successfully');
-  }
-  
-  // Create window (it will show loading page and wait for server)
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    } else if (mainWindow) {
-      mainWindow.show();
-    }
-  });
+  try { nextWorkspace = JSON.parse(await fs.promises.readFile(connectionPath, 'utf8')).mode === 'isolated' ? 'isolated' : 'default'; } catch {}
+  updateMenus();
+  void runtime.connect(nextWorkspace === 'isolated');
+  app.on('activate', showWindow);
 });
-
 app.on('window-all-closed', () => {
-  // Keep running in tray on Windows/Linux
-  // On macOS, only quit if explicitly quitting
-  if (process.platform === 'darwin' && isQuitting) {
-    app.quit();
-  }
+  if (runtime.state.state !== 'ready' || !tray) app.quit();
 });
-
-app.on('before-quit', async (event) => {
-  isQuitting = true;
-  
-  // Clear any intervals
-  if (serverCheckInterval) {
-    clearInterval(serverCheckInterval);
-    serverCheckInterval = null;
-  }
-});
-
-app.on('will-quit', async (event) => {
+app.on('before-quit', event => {
+  if (shutdownComplete) return;
   event.preventDefault();
-  console.log('App quitting, stopping server...');
-  await stopOffgridServer();
-  
-  // Destroy tray
-  if (tray) {
-    tray.destroy();
-    tray = null;
-  }
-  
-  app.exit(0);
+  if (quitting) return;
+  quitting = true;
+  clearTimeout(saveTimer);
+  void (async () => {
+    await saveWindowState();
+    await connectionQueue.catch(() => {});
+    await runtime.stop(); // Only our child, never a Docker/external service.
+    tray?.destroy();
+    shutdownComplete = true;
+    app.quit();
+  })();
 });
-
-// Handle uncaught errors gracefully
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
-  // Only show dialog in packaged app (dev mode has better error handling)
-  if (app.isPackaged) {
-    dialog.showErrorBox('Application Error', `An unexpected error occurred:\n\n${error.message}`);
-  }
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled promise rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', () => {
+  if (!quitting) runtime.publish({ state: 'error', reason: 'A desktop operation failed. Retry the connection or close and reopen OffGrid.' });
 });

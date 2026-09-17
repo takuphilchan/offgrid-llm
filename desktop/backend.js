@@ -13,13 +13,13 @@ function assessIdentity(value, expectedVersion, expectedUIBuild) {
       !Array.isArray(value.capabilities) || !requiredCapabilities.every(item => value.capabilities.includes(item))) {
     return 'This service does not implement the required OffGrid client contract.';
   }
-  if (value.version !== expectedVersion) return `Desktop ${expectedVersion} requires the matching OffGrid service. Update the service or use its web UI.`;
+  if (value.version !== expectedVersion) return `Desktop ${expectedVersion} and service ${String(value.version || 'unknown').slice(0, 80)} are different versions. Your existing workspace has not been changed.`;
   if (typeof value.ui_build_id !== 'string' || !/^[a-f0-9]{64}$/.test(value.ui_build_id)) return 'The service has no identifiable web UI build installed.';
   if (expectedUIBuild && value.ui_build_id !== expectedUIBuild) return 'The running service contains a different UI build. Rebuild or update it before connecting this desktop app.';
   return null;
 }
 
-function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs = 2000) {
+function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs = 2000, signal) {
   return new Promise(resolve => {
     let settled = false;
     let timer;
@@ -27,7 +27,12 @@ function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs =
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
       resolve({ url: serverURL, ...result });
+    };
+    const abort = () => {
+      finish({ state: 'unavailable', reason: 'Connection check cancelled.' });
+      request.destroy();
     };
     const request = http.get(`${serverURL}/api/v2/system`, response => {
       if (response.statusCode !== 200) {
@@ -49,7 +54,9 @@ function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs =
         try {
           const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
           const reason = assessIdentity(value, expectedVersion, expectedUIBuild);
-          if (reason) finish({ state: 'incompatible', reason });
+          if (reason) finish({ state: 'incompatible', reason,
+            version: typeof value?.version === 'string' ? value.version.slice(0, 80) : undefined,
+            canOpenBrowser: value?.product === 'offgrid' && typeof value?.ui_build_id === 'string' && /^[a-f0-9]{64}$/.test(value.ui_build_id) });
           else finish({ state: 'ready', version: value.version, revision: String(value.revision || 'unknown'), uiBuildID: value.ui_build_id, apiVersion: value.api_version });
         } catch {
           finish({ state: 'incompatible', reason: 'The service returned invalid identity metadata.' });
@@ -61,6 +68,8 @@ function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs =
       finish({ state: 'unavailable', reason: 'The compatibility handshake timed out. The occupied port will not be replaced.' });
       request.destroy();
     }, timeoutMs);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
   });
 }
 

@@ -13,6 +13,7 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "icons": "node ../dev/scripts/generate-icons.mjs",
+    "installer:branding": "node ../dev/scripts/generate-installer-branding.mjs",
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
@@ -34,8 +35,11 @@
     "files": [
       "main.js",
       "backend.js",
+      "runtime.js",
       "preload.js",
       "loading.html",
+      "startup.css",
+      "startup.js",
       "assets/icon.png",
       "package.json"
     ],
@@ -46,6 +50,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
       }
     ],
     "linux": {
@@ -181,7 +189,10 @@
       "shortcutName": "OffGrid LLM Desktop",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
-      "license": "../LICENSE",
+      "include": "assets/installer.nsh",
+      "installerHeader": "assets/installer-header.bmp",
+      "installerSidebar": "assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "assets/installer-sidebar.bmp",
       "warningsAsErrors": false
     },
     "portable": {

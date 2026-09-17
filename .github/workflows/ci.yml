@@ -61,7 +61,8 @@ jobs:
       - name: Build runtime for integration and desktop packaging
         run: |
           mkdir -p build/linux
-          go build -trimpath -o build/linux/offgrid ./cmd/offgrid
+          version=$(node -p "require('./desktop/package.json').version")
+          go build -trimpath -ldflags "-X main.Version=v$version" -o build/linux/offgrid ./cmd/offgrid
 
       - name: Run browser integration tests
         id: browser-tests
@@ -111,6 +112,23 @@ jobs:
           npm test
           npx electron-builder --dir --linux
 
+      - name: Exercise packaged Linux desktop startup and recovery
+        run: |
+          # An unpacked archive does not have a root-owned setuid sandbox helper.
+          # Configure this isolated CI package without disabling Chromium sandboxing.
+          sudo chown root:root desktop/dist/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 desktop/dist/linux-unpacked/chrome-sandbox
+          xvfb-run -a node dev/scripts/test-desktop-startup.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
+
+      - name: Preserve desktop startup diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-startup-linux
+          path: /tmp/offgrid-desktop-startup-*/
+          if-no-files-found: ignore
+          retention-days: 7
+
   native-contracts:
     name: Native client and storage (${{ matrix.os }})
     strategy:
@@ -118,7 +136,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -138,3 +156,67 @@ jobs:
       - name: Test desktop compatibility and IPC trust policy
         working-directory: desktop
         run: npm test
+
+      - name: Build the shared renderer and matching native runtime
+        shell: bash
+        run: |
+          cd web/app
+          npm ci
+          npm run build
+          cd ../..
+          version=$(node -p "require('./desktop/package.json').version")
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            mkdir -p build/windows
+            go build -trimpath -ldflags "-X main.Version=v$version" -o build/windows/offgrid.exe ./cmd/offgrid
+          else
+            mkdir -p build/macos
+            for arch in amd64 arm64; do
+              CGO_ENABLED=0 GOARCH="$arch" go build -trimpath -ldflags "-X main.Version=v$version" -o "build/macos/offgrid-$arch" ./cmd/offgrid
+            done
+          fi
+
+      - name: Exercise packaged native desktop startup and recovery
+        shell: bash
+        env:
+          # This is an isolated functional test, not signing qualification.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          cd desktop
+          npm ci
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            npx electron-builder --dir --win --x64 --publish never
+            node ../dev/scripts/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+          else
+            arch=$(node -p process.arch)
+            npx electron-builder --dir --mac "--$arch" --publish never
+            package_dir=mac
+            if [[ "$arch" == arm64 ]]; then package_dir=mac-arm64; fi
+            node ../dev/scripts/test-desktop-startup.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
+          fi
+
+      - name: Build isolated Windows installer test package
+        if: runner.os == 'Windows'
+        working-directory: desktop
+        run: npx electron-builder --config installer-test.cjs --win nsis --x64 --publish never
+
+      - name: Test Windows installation, reinstall and uninstall
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content desktop/package.json | ConvertFrom-Json).version
+          ./dev/scripts/test-windows-installer.ps1 -InstallerPath "build/windows-installer-smoke/OffGrid Desktop Install Test-Setup-$version.exe"
+
+      - name: Locate desktop diagnostics
+        if: failure()
+        id: desktop-diagnostics
+        shell: bash
+        run: node -e 'console.log("path=" + require("node:os").tmpdir().replaceAll("\\", "/") + "/offgrid-desktop-startup-*/")' >> "$GITHUB_OUTPUT"
+
+      - name: Preserve desktop startup diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-startup-${{ matrix.os }}
+          path: ${{ steps.desktop-diagnostics.outputs.path }}
+          if-no-files-found: ignore
+          retention-days: 7

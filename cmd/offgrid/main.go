@@ -43,6 +43,11 @@ var Version = "dev"
 // getVersion returns the current version, reading from VERSION file if needed
 func getVersion() string {
 	if Version != "dev" {
+		// Git release tags use vX.Y.Z; package managers and Electron use X.Y.Z.
+		// Expose one product version without altering labels such as "validation".
+		if len(Version) > 1 && Version[0] == 'v' && Version[1] >= '0' && Version[1] <= '9' {
+			return Version[1:]
+		}
 		return Version
 	}
 	// Try to read from VERSION file for development builds

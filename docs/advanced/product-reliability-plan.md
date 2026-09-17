@@ -607,3 +607,81 @@ earlier no-commit notes describe those earlier deployment checkpoints. No push,
 tag, release publication or additional live-data mutation accompanies this
 checkpoint. The running development image contains the tested source from before
 these commits; its recorded dirty revision is retained honestly.
+
+### 2026-09-17 — Desktop startup and installer recovery
+
+- Confirmed the reported Windows attachment failure: installed desktop `0.4.4`
+  was connecting to the still-running `0.4.3-history-dev` service. Retained the
+  correct product/API/version/UI identity checks; removed the blocking startup
+  dialog and duplicate readiness loops instead of bypassing compatibility.
+- All desktop editions now share one bounded, cancellable lifecycle controller.
+  The monochrome startup window renders before service discovery. Recovery offers
+  retry, opening an identified external web workspace, or an explicitly separate
+  local workspace with distinct data/models and another loopback port. Native
+  menus let users change the remembered next-launch choice without interrupting
+  work. The desktop never stops/replaces an externally managed service.
+- Window geometry uses debounced asynchronous writes. Windows child launches do
+  not flash a console. Missing binaries, hung ports and child exits are visible
+  recovery states. IPC controls remain restricted to the trusted startup main
+  frame; renderer navigation cannot start services. Keyboard focus, dark mode,
+  reduced motion and minimum-window overflow were checked.
+- Windows Setup/portable packages build successfully using monochrome NSIS
+  branding and Segoe UI; native scope/location controls remain. The redundant
+  MIT acceptance page is removed, with the license retained in resources. This
+  is not a measured decompression or installation-speed improvement.
+- Fifteen Node compatibility/lifecycle/security tests pass on native Windows and
+  WSL Linux. UI type checks/build and workflow lint pass. A real, unpacked Windows
+  Electron package passed mismatch recovery, separate bundled-runtime startup,
+  persisted relaunch, native next-launch selection, matching external attachment,
+  hung-port timeout, keyboard retry and startup-only IPC denial. Local warm-fixture
+  recovery was visible after 236 ms; this is not a cross-hardware latency promise.
+  Evidence: `C:\Users\phil\AppData\Local\Temp\offgrid-desktop-startup-0j5pzG`.
+  An initial hidden-window screenshot attempt hit a transient compositor error;
+  bounded capture retries fixed the test harness, not the application behavior.
+- Added the real packaged-app smoke to CI for Linux, Windows, macOS Intel and
+  Apple Silicon. The new remote jobs have not run in this change. Native Mac and
+  packaged Linux results remain pending; Linux Node tests are not Mac validation.
+- The actual generated Windows installer reports `NotSigned`. SmartScreen cannot
+  be removed by changing the UI, and signing does not guarantee immediate
+  reputation. Windows verified signing/Store distribution and macOS Developer ID
+  signing/notarization remain external release requirements. Do not describe
+  these preview artifacts as trusted, notarized or production-qualified.
+
+The existing installed desktop and live container/data were preserved. Local
+preview artifacts are under `build/desktop-startup-preview`; no installer was
+applied to the user's machine, and no push, tag, release or container replacement
+was performed. Installed upgrade/uninstall flows, speaker review of native shell
+translations (currently English), signing and full performance qualification
+remain outstanding. See [desktop startup](../setup/desktop-startup.md).
+Final read-only environment checks also found Ubuntu/WSL stopped between commands:
+the old service answered inside WSL after startup, while Windows localhost probes
+failed. This external environment lifecycle issue is separate from the isolated
+native-app tests; Windows access to the user's container is not reported as passed.
+
+### 2026-09-17 — Installation qualification and patch preparation
+
+- After the user restored WSL, Windows reached the existing service at port 11611
+  again. It still identifies as `0.4.3-history-dev`; no container was replaced.
+- Found an additional release-only mismatch: Go binaries embedded `v0.4.4`, while
+  Electron metadata used `0.4.4`. Canonicalized numeric release-tag prefixes in
+  the CLI/service identity, retaining labels such as `validation` unchanged.
+  Added Go regression cases and made native CI use the actual tag-form ldflag.
+  Genuine version, contract and UI mismatches are still rejected.
+- Full Windows Go tests, Windows/Linux CLI version tests, 15 desktop Node tests
+  on both hosts, type/contract checks and workflow lint passed. Real packaged
+  Windows startup was rechecked; timings varied with load and are not an SLA.
+- Built a separate `OffGrid Desktop Install Test` NSIS identity, with its own
+  registry GUID and temporary directory. Clean install, installed Electron/Go
+  startup, same-version reinstall, uninstall, and SHA-256 preservation of a
+  workspace fixture passed. The test uninstaller removed only its test application
+  and registry entries. Evidence: `C:\Users\phil\AppData\Local\Temp\offgrid-desktop-startup-6nNDdw`.
+  The production app, shortcuts, container, models and conversations were untouched.
+- The installer smoke is now also in Windows CI. Linux CI configures its isolated
+  unpacked sandbox helper without disabling Chromium sandboxing. Mac and remote
+  packaged-platform results remain pending until those jobs run. Interactive
+  installer accessibility, elevated installs, historical-version upgrades and
+  signing/notarization still require qualification.
+
+The user requested commits and a patch release after these checks. Prepare a new
+0.4.5 version rather than overwrite published 0.4.4 artifacts. A prepared version
+or pushed commit is not proof that CI or publication completed.
