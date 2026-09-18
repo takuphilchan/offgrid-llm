@@ -2,6 +2,15 @@ param([Parameter(Mandatory = $true)][string]$InstallerPath)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
+$stage = 'validate the isolated installer package'
+
+trap {
+    $message = "${stage}: $($_.Exception.Message)" -replace '[\r\n]+', ' '
+    if ($env:GITHUB_ACTIONS -eq 'true') {
+        Write-Output "::error title=Windows installer qualification::$message"
+    }
+    throw
+}
 
 # Only the deliberately isolated installer-test.cjs identity is accepted.
 $installer = (Resolve-Path -LiteralPath $InstallerPath).Path
@@ -25,6 +34,7 @@ function Invoke-TestProcess([string]$Executable, [string]$Arguments, [int]$Expec
     if ($process.ExitCode -ne $ExpectedExit) { throw "Test process failed with exit code $($process.ExitCode), expected $ExpectedExit. Evidence: $testRoot" }
 }
 
+$stage = 'install the isolated package silently'
 Write-Output "Installing isolated test package into $installRoot"
 Invoke-TestProcess $installer "/S /currentuser /D=$installRoot"
 if (-not (Test-Path -LiteralPath $appExe)) { throw 'Installed application is missing.' }
@@ -32,6 +42,7 @@ $registered = (Get-ItemProperty -LiteralPath $registryPath).InstallLocation
 if ([IO.Path]::GetFullPath($registered).TrimEnd('\') -ne $installRoot) { throw 'Unexpected test install registration; refusing further actions.' }
 
 # Real installed Electron and bundled Go service, with disposable profiles.
+$stage = 'start the installed desktop and bundled service'
 $smokeOutput = & node (Join-Path $PSScriptRoot 'test-desktop-startup.mjs') $appExe
 if ($LASTEXITCODE -ne 0) { throw 'Installed-app startup checks failed; test installation retained for inspection.' }
 $smoke = ($smokeOutput -join "`n") | ConvertFrom-Json
@@ -40,6 +51,7 @@ $sentinel = Join-Path $smoke.evidence 'isolated-profile/desktop-workspace/data/i
 $before = (Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash
 
 # Exercise same-version repair/update; this does not qualify every older upgrade.
+$stage = 'repair the installed package silently'
 Invoke-TestProcess $installer "/S /currentuser /D=$installRoot"
 if (-not (Test-Path -LiteralPath $appExe)) { throw 'Reinstall removed the application.' }
 if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) { throw 'Reinstall changed the workspace fixture.' }
@@ -58,6 +70,7 @@ $listener.Start()
 $env:OFFGRID_PORT = [string]$listener.LocalEndpoint.Port
 $listener.Stop()
 try {
+    $stage = 'complete the installer and launch the application'
     $finish = Invoke-InstallerWizard $installer $installRoot $true $false
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
@@ -69,9 +82,11 @@ try {
     }
     if (-not $ready) { throw 'Finish did not launch a working installed application.' }
     # Silent installation cannot terminate active work without user consent.
+    $stage = 'refuse a silent reinstall while the application is running'
     Invoke-TestProcess $installer "/S /currentuser /D=$installRoot" 2
     $identity = Invoke-RestMethod -Uri "http://127.0.0.1:$env:OFFGRID_PORT/api/v2/system" -TimeoutSec 2
     if ($identity.product -ne 'offgrid') { throw 'Silent reinstall stopped active work.' }
+    $stage = 'repair interactively while the application is running'
     $reinstall = Invoke-InstallerWizard $installer $installRoot $false $true
     # Unchecked launch must not leave a desktop/backend running after reinstall.
     $testProcesses = @(Get-Process -Name $testName -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $appExe })
@@ -89,6 +104,7 @@ try {
 $resolvedUninstaller = (Resolve-Path -LiteralPath $uninstaller).Path
 if (-not $resolvedUninstaller.StartsWith($testRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Uninstaller escaped test directory.' }
 if ([IO.Path]::GetFullPath((Get-ItemProperty -LiteralPath $registryPath).InstallLocation).TrimEnd('\') -ne $installRoot) { throw 'Test registration changed; refusing cleanup.' }
+$stage = 'uninstall the isolated package and preserve its workspace'
 Invoke-TestProcess $resolvedUninstaller "/S /currentuser _?=$installRoot"
 if (Test-Path -LiteralPath $appExe) { throw 'Uninstall did not remove the test application.' }
 if (Test-Path -LiteralPath $uninstallKey) { throw 'Uninstall left its test registration.' }

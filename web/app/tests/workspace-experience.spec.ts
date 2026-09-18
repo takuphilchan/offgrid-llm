@@ -76,7 +76,10 @@ test('IME confirmation does not accidentally submit a chat turn', async ({ page 
   expect(submissions).toBe(0);
   await composer.press('Enter');
   await expect(page.locator('.message.assistant')).toBeVisible();
-  expect(submissions).toBe(2); // create conversation, submit turn
+  // Playwright may deliver the request event just after the streamed response
+  // has updated the DOM. Wait for the observable network boundary instead of
+  // making this IME regression test depend on event-loop ordering.
+  await expect.poll(() => submissions).toBe(2); // create conversation, submit turn
 });
 
 test('denied browser storage does not blank the workspace or discard its draft', async ({ page }) => {
