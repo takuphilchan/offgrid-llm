@@ -30,6 +30,8 @@ test('installer keeps native DPI support and exposes installation details', () =
   assert.match(source, /IsHighContrastModeActive/);
   assert.match(source, /!macro customCheckAppRunning[\s\S]*?SetDetailsPrint listonly/);
   assert.match(source, /Function \.onInstFailed[\s\S]*?DetailPrint/);
+  assert.match(source, /GetDlgItem \$0 \$1 1006[\s\S]*?SetCtlColors \$0 "202020" "FFFFFF"[\s\S]*?GetDlgItem \$0 \$1 1004/,
+    'The current-file label must use the page background, separate from the progress track');
   for (const [name, width, height] of [['installer-header.bmp', 600, 228], ['installer-sidebar.bmp', 656, 1256]]) {
     const bitmap = fs.readFileSync(path.join(__dirname, '../assets', name));
     assert.equal(bitmap.readInt32LE(18), width);

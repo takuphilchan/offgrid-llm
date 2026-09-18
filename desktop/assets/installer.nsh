@@ -40,6 +40,11 @@ Function OffGridStyleProgress
     SetCtlColors $0 "202020" "FFFFFF"
     FindWindow $1 "#32770" "" $HWNDPARENT
     SetCtlColors $1 "202020" "FFFFFF"
+    ; The current-file label sits directly above the progress control. NSIS
+    ; gives it the progress-track background by default, which reads as a
+    ; second empty bar at high DPI. Keep the label on the page background.
+    GetDlgItem $0 $1 1006
+    SetCtlColors $0 "202020" "FFFFFF"
     GetDlgItem $0 $1 1004
     ; Only the progress bar opts out of visual themes, to honor monochrome.
     System::Call 'uxtheme::SetWindowTheme(p r0, w"", w"")'

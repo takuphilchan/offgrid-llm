@@ -108,15 +108,20 @@ function createWindow() {
 async function createMainWindow() {
   const state = await loadWindowState();
   if (quitting) return;
+  const showOnCreate = process.env.OFFGRID_DESKTOP_TEST_HIDDEN !== '1';
   mainWindow = new BrowserWindow({
-    ...state, minWidth: 760, minHeight: 560, title: APP_NAME, show: false, autoHideMenuBar: true,
+    ...state, minWidth: 760, minHeight: 560, title: APP_NAME, show: showOnCreate, autoHideMenuBar: true,
     icon: path.join(__dirname, 'assets/icon.png'),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#101011' : '#f7f7f6',
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true }
   });
   if (state.isMaximized) mainWindow.maximize();
+  // A first launch can spend several seconds in Windows reputation scanning
+  // and Chromium initialization. Put a real native surface on screen as soon
+  // as Electron is ready instead of leaving the user with no feedback until
+  // the renderer's first paint. The background color prevents a white flash.
   mainWindow.once('ready-to-show', () => {
-    if (process.env.OFFGRID_DESKTOP_TEST_HIDDEN !== '1') { mainWindow.show(); mainWindow.focus(); }
+    if (showOnCreate) mainWindow.focus();
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (safeExternal(url)) void shell.openExternal(url);

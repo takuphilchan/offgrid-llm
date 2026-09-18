@@ -35,7 +35,8 @@ server.listen(0, '127.0.0.1'); await once(server, 'listening');
 const url = `http://127.0.0.1:${server.address().port}`;
 const launch = async profile => {
   await mkdir(profile, { recursive: true });
-  const env = { ...process.env, OFFGRID_PORT: String(server.address().port), OFFGRID_DESKTOP_HOME: profile, OFFGRID_DESKTOP_TEST_HIDDEN: '1' };
+  const env = { ...process.env, OFFGRID_PORT: String(server.address().port), OFFGRID_DESKTOP_HOME: profile };
+  delete env.OFFGRID_DESKTOP_TEST_HIDDEN;
   delete env.ELECTRON_RUN_AS_NODE;
   return electron.launch({ executablePath: binary, env, timeout: 30000 });
 };
@@ -61,6 +62,9 @@ try {
   const start = performance.now();
   app = await launch(profile);
   const page = await app.firstWindow();
+  const firstWindowMs = Math.round(performance.now() - start);
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true,
+    'Desktop must show its native startup window before backend recovery completes');
   await page.locator('#recovery:not([hidden])').waitFor();
   const recoveryMs = Math.round(performance.now() - start);
   assert.equal(await page.locator('#service-version').innerText(), responseVersion);
@@ -145,7 +149,7 @@ try {
     assert.equal(await app.evaluate(({ app }) => app.getPath('userData')), join(testProfile, 'electron'));
     await app.close(); app = null;
   }
-  console.log(JSON.stringify({ passed: true, platform: process.platform, recoveryMs, evidence }, null, 2));
+  console.log(JSON.stringify({ passed: true, platform: process.platform, firstWindowMs, recoveryMs, evidence }, null, 2));
 } finally {
   if (app) await app.close();
   server.closeAllConnections();
