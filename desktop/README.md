@@ -55,7 +55,8 @@ runtime and the prebuilt `web/dist` bundle, then creates:
 
 Windows uses a per-user install by default so administrator access is not
 required. `npm run installer:branding` regenerates the checked-in monochrome NSIS
-artwork. Setup uses native Segoe UI controls and retains scope/directory choices;
+artwork at 4× source resolution. Setup declares system DPI awareness, uses native
+Segoe UI controls, and retains scope/directory choices;
 the MIT license is included in resources without a redundant acceptance page.
 Code signing and notarization require verified release identities; successful
 packaging alone does not mean a package is signed. See the recovery guide for
@@ -113,7 +114,8 @@ and leaves screenshots/test data as evidence. It does not perform installation,
 uninstallation, signing, notarization, upgrades or real-model qualification.
 
 On Windows, the separate installer smoke uses its own application identity and
-temporary installation path, with shortcuts/elevation/automatic launch disabled:
+temporary installation path, with shortcuts/elevation disabled. The test explicitly
+exercises the interactive Finish checkbox as well as silent installation:
 
 ```powershell
 cd desktop
@@ -123,7 +125,13 @@ $version = (Get-Content desktop/package.json | ConvertFrom-Json).version
 ./dev/scripts/test-windows-installer.ps1 -InstallerPath "build/windows-installer-smoke/OffGrid Desktop Install Test-Setup-$version.exe"
 ```
 
-It checks clean installation, real installed-app startup, same-version reinstall,
-uninstall and workspace-fixture preservation. It refuses normal release installers
+It checks clean installation, real installed-app startup, Show details with real
+log entries, DPI awareness, Finish closing within two seconds, both launch checkbox
+states, refusal to silently replace a running app, consent-driven same-version
+reinstall, uninstall and workspace-fixture preservation. It refuses normal release installers
 and existing test registrations. It removes only its own test application and
 retains evidence; it does not qualify all historical upgrades or elevated installs.
+The native wizard test needs an interactive Windows desktop. Its screenshot capture
+is limited to the test window; it never captures the whole desktop. Clear the
+development-only `ELECTRON_RUN_AS_NODE` variable before launching an installed
+Electron application; the test runner does this for its Finish-launch check.

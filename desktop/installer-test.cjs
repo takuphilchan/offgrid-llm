@@ -13,7 +13,7 @@ module.exports = {
     shortcutName: 'OffGrid Desktop Install Test',
     createDesktopShortcut: false,
     createStartMenuShortcut: false,
-    runAfterFinish: false,
+    runAfterFinish: true,
     allowElevation: false
   },
   publish: null

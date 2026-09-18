@@ -6,15 +6,23 @@ const { isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
 const { DesktopRuntime } = require('./runtime');
 
 const APP_NAME = 'OffGrid LLM Desktop';
-const customHome = process.env.OFFGRID_DESKTOP_HOME;
+// Test packages must remain isolated even when an elevated installer launches
+// through Explorer, which does not inherit the installer's environment.
+const installerTest = require('./package.json').name === 'offgrid-desktop-install-test';
+const testArgument = name => installerTest ? process.argv.find(arg => arg.startsWith(name + '='))?.slice(name.length + 1) : undefined;
+const customHome = testArgument('--offgrid-test-profile') || process.env.OFFGRID_DESKTOP_HOME;
+if (installerTest && !customHome) throw new Error('Installer test package requires an isolated profile');
 if (customHome && !path.isAbsolute(customHome)) throw new Error('OFFGRID_DESKTOP_HOME must be an absolute path');
 const configRoot = customHome || path.join(app.getPath('home'), '.offgrid-llm');
 // Explicit alternate profiles allow isolated qualification without attaching to
 // or changing the installed desktop application's cookies, settings, or data.
 if (customHome) app.setPath('userData', path.join(configRoot, 'electron'));
-if (!app.requestSingleInstanceLock()) app.exit(0);
+const quitForInstall = process.argv.includes('--offgrid-quit-for-install');
+// A second process requests a normal, bounded app shutdown. If no desktop is
+// running, this command exits without creating a window or starting a service.
+if (!app.requestSingleInstanceLock({ quitForInstall }) || quitForInstall) app.exit(0);
 
-const portValue = process.env.OFFGRID_PORT || '11611';
+const portValue = testArgument('--offgrid-test-port') || process.env.OFFGRID_PORT || '11611';
 const port = /^\d+$/.test(portValue) && Number(portValue) > 0 && Number(portValue) <= 65535 ? Number(portValue) : 11611;
 const LOADING_URL = pathToFileURL(path.join(__dirname, 'loading.html')).href;
 const uiDir = app.isPackaged ? path.join(process.resourcesPath, 'ui') : path.join(__dirname, '../web/dist');
@@ -236,7 +244,10 @@ nativeTheme.on('updated', () => {
   mainWindow.setBackgroundColor(theme === 'dark' ? '#101011' : '#f7f7f6');
   mainWindow.webContents.send('system-theme-changed', theme);
 });
-app.on('second-instance', showWindow);
+app.on('second-instance', (_event, _argv, _directory, request) => {
+  if (request?.quitForInstall === true) app.quit();
+  else showWindow();
+});
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.offgrid.llm.desktop');
   await createWindow();

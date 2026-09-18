@@ -79,9 +79,27 @@ Windows Setup retains native, accessible installation controls, per-user install
 by default, and the option to change the install location/scope. Its branding is
 monochrome and uses Segoe UI. The redundant license-acceptance page is removed;
 the MIT license is still shipped inside the application resources. Native
-installation details remain available. Decompression, antivirus inspection and
-disk performance still affect installation time; these appearance changes are
-not a measured installation-speed improvement.
+installation details remain available: **Show details** expands the actual
+installation log, including extraction, file copying and registration. Setup now
+restores those log messages instead of showing an empty panel. A failure leaves
+recovery guidance; it must not be read as a successful installation.
+
+Setup declares system DPI awareness and uses 4× monochrome source artwork, native
+Segoe UI text and a monochrome progress bar. It retains Windows focus indicators
+and contrast handling. Moving between monitors with different scales and every
+accessibility configuration still require separate qualification.
+
+The Finish callback records whether you chose to launch; app activation runs after
+the wizard closes. Setup no longer waits for application startup with a frozen
+Finish window. Decompression, antivirus inspection and disk performance still
+affect installation time; no artificial progress/acceleration is claimed.
+
+Reinstalling a running app asks you to finish active work and approve a normal
+close. It does not use repeated PowerShell process scans or force-kill processes.
+Older versions without the quit-request handler must be exited with **File → Quit**
+or **Quit OffGrid** in the tray before Retry. Silent installation exits 2 if the
+app is running; it does not silently interrupt tasks. An externally managed
+OffGrid service or Docker container is not stopped by this process.
 
 ### Windows SmartScreen
 
@@ -133,6 +151,8 @@ ownership. CI runs it on Windows, Linux and both Mac architectures.
 The separate Windows installer smoke builds a test-only application identity,
 installs into a temporary directory, exercises the installed app, reinstalls the
 same version and uninstalls while checking its workspace fixture is preserved.
+It exercises the real Finish button with launch checked/unchecked, populated Show
+details, DPI awareness, silent running-app refusal, and consent-driven reinstall.
 It does not replace a user's real desktop installation. See the
 [desktop development guide](../../desktop/README.md) for the exact commands.
 

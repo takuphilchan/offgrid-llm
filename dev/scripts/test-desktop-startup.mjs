@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve, join } from 'node:path';
+import { resolve, join, basename } from 'node:path';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -130,6 +130,21 @@ try {
   await timeout.keyboard.press('Enter');
   await timeout.waitForURL(url + '/ui/');
   await app.close(); app = null;
+  if (basename(binary) === 'OffGrid Desktop Install Test.exe') {
+    // Explorer-based launch from an elevated installer drops environment
+    // overrides. Verify the test-only arguments still isolate profile and port.
+    const testProfile = join(evidence, 'installer-argument-profile');
+    await mkdir(testProfile);
+    const env = { ...process.env, OFFGRID_DESKTOP_TEST_HIDDEN: '1' };
+    delete env.ELECTRON_RUN_AS_NODE;
+    delete env.OFFGRID_DESKTOP_HOME;
+    delete env.OFFGRID_PORT;
+    app = await electron.launch({ executablePath: binary, env, args: [`--offgrid-test-profile=${testProfile}`, `--offgrid-test-port=${server.address().port}`] });
+    const argumentWindow = await app.firstWindow();
+    await argumentWindow.waitForURL(url + '/ui/');
+    assert.equal(await app.evaluate(({ app }) => app.getPath('userData')), join(testProfile, 'electron'));
+    await app.close(); app = null;
+  }
   console.log(JSON.stringify({ passed: true, platform: process.platform, recoveryMs, evidence }, null, 2));
 } finally {
   if (app) await app.close();

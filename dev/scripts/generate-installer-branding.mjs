@@ -3,14 +3,15 @@
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-function bitmap(width, height, dark, scale) {
+function bitmap(width, height, dark, scale, density = 4) {
+  width *= density; height *= density; scale *= density;
   const stride = (width * 3 + 3) & ~3;
   const file = Buffer.alloc(54 + stride * height, dark ? 17 : 255);
   file.fill(0, 0, 54);
   file.write('BM'); file.writeUInt32LE(file.length, 2); file.writeUInt32LE(54, 10);
   file.writeUInt32LE(40, 14); file.writeInt32LE(width, 18); file.writeInt32LE(height, 22);
   file.writeUInt16LE(1, 26); file.writeUInt16LE(24, 28); file.writeUInt32LE(stride * height, 34);
-  const ox = (width - 24 * scale) / 2, oy = dark ? 62 : (height - 24 * scale) / 2;
+  const ox = (width - 24 * scale) / 2, oy = dark ? 62 * density : (height - 24 * scale) / 2;
   const paths = [[[12,2],[2,7],[12,12],[22,7],[12,2]], [[2,12],[12,17],[22,12]], [[2,17],[12,22],[22,17]]];
   const segments = paths.flatMap(points => points.slice(1).map((point, i) => [points[i], point]));
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
@@ -29,7 +30,7 @@ function bitmap(width, height, dark, scale) {
 }
 for (const [name, width, height, dark, scale] of [
   ['installer-sidebar.bmp', 164, 314, true, 3],
-  ['installer-header.bmp', 150, 57, false, 1.7]
+  ['installer-header.bmp', 150, 57, false, 1.3]
 ]) {
   await writeFile(fileURLToPath(new URL(`../../desktop/assets/${name}`, import.meta.url)), bitmap(width, height, dark, scale));
 }
