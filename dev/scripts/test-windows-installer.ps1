@@ -8,8 +8,10 @@ trap {
     $message = "${stage}: $($_.Exception.Message)" -replace '[\r\n]+', ' '
     if ($env:GITHUB_ACTIONS -eq 'true') {
         Write-Output "::error title=Windows installer qualification::$message"
+    } else {
+        Write-Output "Windows installer qualification failed: $message"
     }
-    throw
+    break
 }
 
 # Only the deliberately isolated installer-test.cjs identity is accepted.

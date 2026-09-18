@@ -103,7 +103,15 @@ FunctionEnd
   ${EndIf}
   MessageBox MB_OKCANCEL|MB_ICONINFORMATION "Setup needs to close OffGrid before changing application files. Finish any active tasks first. Your models and saved workspace will be kept.$\r$\n$\r$\nClick OK to close OffGrid and continue, or Cancel to leave it running." /SD IDCANCEL IDCANCEL offgrid_cancel_install
   ${If} $R0 == 0
-    Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --offgrid-quit-for-install'
+    StrCpy $4 ""
+    !if "${APP_ID}" == "com.offgrid.llm.desktop.installtest"
+      ; The isolated test app uses a separate Electron single-instance scope.
+      ; Pass the same profile so the quit request reaches that running app.
+      ReadEnvStr $2 "OFFGRID_DESKTOP_HOME"
+      ReadEnvStr $3 "OFFGRID_PORT"
+      StrCpy $4 '--offgrid-test-profile="$2" --offgrid-test-port=$3'
+    !endif
+    Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --offgrid-quit-for-install $4'
   ${EndIf}
   StrCpy $R1 0
   offgrid_wait_for_exit:

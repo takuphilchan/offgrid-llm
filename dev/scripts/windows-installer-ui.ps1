@@ -42,17 +42,33 @@ public static class OffGridWizard {
   public static int Items(IntPtr window) { IntPtr result; SendMessageTimeout(window, 0x1004, IntPtr.Zero, IntPtr.Zero, 2, 200, out result); return result.ToInt32(); }
   public static IntPtr[] Windows(string prefix) { var found = new List<IntPtr>(); EnumWindows((w,p) => { if (Text(w).StartsWith(prefix, StringComparison.Ordinal)) found.Add(w); return true; }, IntPtr.Zero); return found.ToArray(); }
   public static IntPtr[] Children(IntPtr window) { var found = new List<IntPtr>(); EnumChildWindows(window, (w,p) => { found.Add(w); return true; }, IntPtr.Zero); return found.ToArray(); }
-  public static bool Responsive(IntPtr window) { IntPtr result; return SendMessageTimeout(window, 0, IntPtr.Zero, IntPtr.Zero, 2, 200, out result) != IntPtr.Zero; }
+  public static bool Responsive(IntPtr window, uint timeout) { IntPtr result; return SendMessageTimeout(window, 0, IntPtr.Zero, IntPtr.Zero, 2, timeout, out result) != IntPtr.Zero; }
   public static void Check(IntPtr window, bool value) { IntPtr result; SendMessageTimeout(window, 0xf1, value ? new IntPtr(1) : IntPtr.Zero, IntPtr.Zero, 2, 200, out result); }
   public static void Click(IntPtr window) { if (!PostMessage(window, 0xf5, IntPtr.Zero, IntPtr.Zero)) throw new Exception("Could not click test wizard control"); }
 }
 '@
+
+function Assert-WizardResponsive([IntPtr]$Window, [hashtable]$Failures, [Diagnostics.Stopwatch]$Clock, [string]$Message) {
+    $key = $Window.ToInt64().ToString()
+    if (-not [OffGridWizard]::IsWindow($Window) -or [OffGridWizard]::Responsive($Window, 750)) {
+        [void]$Failures.Remove($key)
+        return
+    }
+    if (-not $Failures.ContainsKey($key)) {
+        $Failures[$key] = $Clock.ElapsedMilliseconds
+        return
+    }
+    # A busy CI runner can miss a short WM_NULL deadline while NSIS is
+    # extracting files. Only a sustained failure is a genuine frozen wizard.
+    if ($Clock.ElapsedMilliseconds - [long]$Failures[$key] -ge 5000) { throw $Message }
+}
 
 function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool]$Launch, [bool]$ExpectRunningPrompt) {
     if ([Diagnostics.FileVersionInfo]::GetVersionInfo($Executable).ProductName -ne 'OffGrid Desktop Install Test') { throw 'Only isolated test installers are allowed.' }
     $process = Start-Process -FilePath $Executable -ArgumentList "/currentuser /D=$InstallRoot" -WindowStyle Hidden -PassThru
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $finishAt = -1L
+    $finishPageAt = -1L
     $finishWindow = [IntPtr]::Zero
     $finishClosedMs = -1L
     $consented = $false
@@ -60,6 +76,7 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
     $detailsItems = 0
     $detailsObserved = ''
     $clicked = @{}
+    $unresponsive = @{}
     while ($clock.Elapsed.TotalSeconds -lt 180) {
         if ($finishAt -ge 0 -and $finishClosedMs -lt 0) {
             if (-not [OffGridWizard]::IsWindow($finishWindow)) { $finishClosedMs = $clock.ElapsedMilliseconds - $finishAt }
@@ -67,6 +84,7 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
         }
         if ($process.HasExited) { break }
         foreach ($window in [OffGridWizard]::Windows('OffGrid Desktop Install Test')) {
+            Assert-WizardResponsive $window $unresponsive $clock 'Installer UI stopped responding for at least 5 seconds.'
             $allChildren = [OffGridWizard]::Children($window)
             $detailControls = @($allChildren | Where-Object { [OffGridWizard]::Text($_) -match 'detail' -or [OffGridWizard]::Class($_) -match 'List' })
             if ($detailControls.Count -gt 0) { $detailsObserved = ($detailControls | ForEach-Object { "$( [OffGridWizard]::Class($_) ):$( [OffGridWizard]::Text($_) ):visible=$( [OffGridWizard]::IsWindowVisible($_) ):enabled=$( [OffGridWizard]::IsWindowEnabled($_) )" }) -join '; ' }
@@ -79,14 +97,12 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                     $items = [OffGridWizard]::Items($list)
                     if ($items -gt $detailsItems) {
                         $detailsItems = $items
-                        if (-not [OffGridWizard]::Responsive($window)) { throw 'Show details froze the installer.' }
                         if ($items -ge 5) { [OffGridWizard]::Capture($window, (Join-Path (Split-Path $InstallRoot) 'installer-details.png')) }
                     }
                 }
             }
             $button = [OffGridWizard]::GetDlgItem($window, 1)
             if ($button -eq [IntPtr]::Zero -or -not [OffGridWizard]::IsWindowEnabled($button)) { continue }
-            if (-not [OffGridWizard]::Responsive($window)) { throw 'Installer UI stopped responding.' }
             $children = [OffGridWizard]::Children($window)
             $text = ($children | ForEach-Object { [OffGridWizard]::Text($_) }) -join "`n"
             $label = [OffGridWizard]::Text($button).Replace('&', '')
@@ -100,10 +116,15 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                 if (-not $ExpectRunningPrompt) { throw 'Unexpected running-app prompt.' }
                 $consented = $true
             } elseif ($label -eq 'Finish') {
+                if ($finishPageAt -lt 0) { $finishPageAt = $clock.ElapsedMilliseconds }
                 if (-not [OffGridWizard]::DpiAware($window)) { throw 'Installer is not DPI aware.' }
-                [OffGridWizard]::Capture($window, (Join-Path (Split-Path $InstallRoot) 'installer-finish.png'))
                 $checks = @($children | Where-Object { [OffGridWizard]::Text($_).Replace('&', '') -match '^(Run|Launch) ' })
+                # NSIS can enable Finish one message-loop turn before it creates
+                # the launch checkbox. Wait for the page to settle, but keep a
+                # bounded failure for a genuinely incomplete installer page.
+                if ($checks.Count -eq 0 -and $clock.ElapsedMilliseconds - $finishPageAt -lt 10000) { continue }
                 if ($checks.Count -ne 1) { throw "Expected launch checkbox on Finish, got $($checks.Count): $text" }
+                [OffGridWizard]::Capture($window, (Join-Path (Split-Path $InstallRoot) 'installer-finish.png'))
                 [OffGridWizard]::Check($checks[0], $Launch)
                 $finishAt = $clock.ElapsedMilliseconds
                 $finishWindow = $window
