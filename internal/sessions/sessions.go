@@ -29,12 +29,14 @@ type Message struct {
 
 // Session represents a conversation session
 type Session struct {
-	Name      string    `json:"name"`
-	OwnerID   string    `json:"owner_id,omitempty"`
-	ModelID   string    `json:"model_id"`
-	Messages  []Message `json:"messages"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name         string          `json:"name"`
+	OwnerID      string          `json:"owner_id,omitempty"`
+	ModelID      string          `json:"model_id"`
+	Messages     []Message       `json:"messages"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+	Turn         *Turn           `json:"turn,omitempty"`
+	TurnRequests map[string]bool `json:"turn_requests,omitempty"`
 }
 
 // SessionMeta contains lightweight session metadata for fast listing

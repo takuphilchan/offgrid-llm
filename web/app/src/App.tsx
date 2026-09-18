@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
 import { APIError, api, type Model, type PublicUser } from './api/client';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
 import { Icon } from './components/Icon';
@@ -52,6 +52,11 @@ export function App() {
   const [showOnboarding, setShowOnboarding] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true' && readPreference('offgrid.onboarding.stage') !== 'working');
   const [showCommands, setShowCommands] = useState(false);
   const accessRevision = useRef(0);
+  useEffect(() => {
+    const expired = () => { accessRevision.current++; setAccess('login'); setAuthUser(null); };
+    window.addEventListener('offgrid:unauthenticated', expired);
+    return () => window.removeEventListener('offgrid:unauthenticated', expired);
+  }, []);
 
   const refreshBase = useCallback(async () => {
     const revision = ++accessRevision.current;
@@ -193,18 +198,28 @@ function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClos
   onClose: () => void;
 }) {
   const { messages: text } = useI18n();
+  const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
+    const element = dialog.current!;
+    const previous = document.activeElement as HTMLElement | null;
+    element.showModal();
+    return () => { element.close(); previous?.focus(); };
+  }, []);
+  const containFocus = (event: KeyboardEvent<HTMLDialogElement>) => {
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    if (focusable.length === 0) { event.preventDefault(); event.currentTarget.focus(); return; }
+    const first = focusable[0], last = focusable[focusable.length - 1], active = document.activeElement;
+    if (event.shiftKey && (active === first || !event.currentTarget.contains(active))) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && (active === last || !event.currentTarget.contains(active))) { event.preventDefault(); first.focus(); }
+  };
   const action = !pending ? text.onboarding.close : health !== 'ready' ? text.onboarding.retryService : chatModelCount > 0 ? text.onboarding.startChat : text.onboarding.chooseModel;
-  return <div className="modal-backdrop" role="presentation"><section className="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+  return <dialog ref={dialog} className="onboarding" aria-labelledby="onboarding-title" onKeyDown={containFocus} onCancel={event => { event.preventDefault(); onClose(); }}>
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
     <div className="onboarding-mark"><span /></div><span className="eyebrow">{text.privateWorkspace}</span>
     <h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p>
     <div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div><div><i className="ready" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div>
     {pending && <p className="onboarding-next">{chatModelCount > 0 ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</p>}
     <button autoFocus className="primary-button" onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : onAction}>{action}</button>
-  </section></div>;
+  </dialog>;
 }

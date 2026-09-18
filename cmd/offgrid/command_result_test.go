@@ -64,6 +64,14 @@ func TestCLIProcessExitAndJSON(t *testing.T) {
 			_, _ = io.WriteString(w, `{"enabled":true}`)
 			return
 		}
+		if r.URL.Path == "/v1/models" {
+			io.WriteString(w, `{"data":[{"id":"service-model","size":1024}]}`)
+			return
+		}
+		if r.URL.Path == "/v1/catalog" {
+			io.WriteString(w, `{"models":[]}`)
+			return
+		}
 		http.Error(w, "Forbidden secret", 403)
 	}))
 	defer server.Close()
@@ -72,6 +80,11 @@ func TestCLIProcessExitAndJSON(t *testing.T) {
 		status   int
 		contains string
 	}{
+		{[]string{"list", "--json"}, 0, `"service-model"`},
+		{[]string{"download", "--help", "--json"}, 0, `"usage"`},
+		{[]string{"download", "missing", "--json"}, 2, `"invalid_usage"`},
+		{[]string{"download", "--file", "--json"}, 2, `"invalid_usage"`},
+		{[]string{"list", "--invalid", "--json"}, 2, `"invalid_usage"`},
 		{[]string{"agent", "status", "--json"}, 2, `"invalid_usage"`},
 		{[]string{"agent", "status", "run-1", "--json"}, 1, `"forbidden"`},
 		{[]string{"kb", "enable", "--json"}, 2, `"invalid_usage"`},

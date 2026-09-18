@@ -1182,152 +1182,7 @@ func main() {
 }
 
 func handleDownload(args []string) {
-	// Check for help flag
-	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
-		args = []string{} // Trigger help display
-	}
-
-	if len(args) < 1 {
-		fmt.Println()
-		fmt.Printf("  %s◈ Download Model%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("  %sDownload models from catalog or HuggingFace%s\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sUsage%s\n", brandPrimary, colorReset)
-		fmt.Printf("    offgrid download %s<model>%s [options]\n", brandPrimary, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sOptions%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %-22s %sFilter by quantization (e.g., Q4_K_M)%s\n", "--quant <type>", colorDim, colorReset)
-		fmt.Printf("    %-22s %sSpecific GGUF file to download%s\n", "--file <name>", colorDim, colorReset)
-		fmt.Printf("    %-22s %sSkip confirmation prompts%s\n", "--yes, -y", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sCatalog Models%s %s(curated, verified)%s\n", brandPrimary, colorReset, colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid download llama-3.1-8b-instruct\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid download phi-3.5-mini-instruct\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid download mistral-7b-instruct-v0.3\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sHuggingFace Models%s %s(owner/repo format)%s\n", brandPrimary, colorReset, colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid download bartowski/Llama-3.2-3B-Instruct-GGUF\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid download MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF --quant Q4_K_M\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sTip:%s Use %soffgrid search <query>%s to find models\n", brandMuted, colorReset, colorBold, colorReset)
-		fmt.Println()
-		os.Exit(1)
-	}
-
-	modelID := args[0]
-	var quantFilter string
-	var filename string
-	var skipConfirm bool
-
-	// Parse options
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--quant":
-			if i+1 < len(args) {
-				quantFilter = args[i+1]
-				i++
-			}
-		case "--file":
-			if i+1 < len(args) {
-				filename = args[i+1]
-				i++
-			}
-		case "--yes", "-y":
-			skipConfirm = true
-		default:
-			// If no flag, treat as quantization for backward compatibility
-			if !strings.HasPrefix(args[i], "-") && quantFilter == "" {
-				quantFilter = args[i]
-			}
-		}
-	}
-
-	// Detect if this is a HuggingFace model (contains /)
-	if strings.Contains(modelID, "/") {
-		// HuggingFace download path
-		handleHuggingFaceDownload(modelID, quantFilter, filename, skipConfirm)
-		return
-	}
-
-	// Catalog download path
-	cfg := config.LoadConfig()
-	catalog := models.DefaultCatalog()
-	downloader := models.NewDownloader(cfg.ModelsDir, catalog)
-
-	// Find the model in catalog
-	var modelEntry *models.CatalogEntry
-	for i := range catalog.Models {
-		if strings.EqualFold(catalog.Models[i].ID, modelID) {
-			modelEntry = &catalog.Models[i]
-			break
-		}
-	}
-
-	if modelEntry == nil {
-		fmt.Println()
-		printError(fmt.Sprintf("Model '%s' not found in catalog", modelID))
-		fmt.Println()
-		fmt.Printf("  %sTry one of these:%s\n", brandMuted, colorReset)
-		fmt.Printf("    • Use %soffgrid search %s%s to find HuggingFace models\n", colorBold, modelID, colorReset)
-		fmt.Printf("    • Use %soffgrid list --catalog%s to see available catalog models\n", colorBold, colorReset)
-		fmt.Println()
-		os.Exit(1)
-	}
-
-	// Determine quantization
-	quantization := quantFilter
-	if quantization == "" {
-		if len(modelEntry.Variants) > 0 {
-			quantization = modelEntry.Variants[0].Quantization
-		} else {
-			quantization = "Q4_K_M"
-		}
-	}
-
-	// Set progress callback
-	var startTime time.Time
-	downloader.SetProgressCallback(func(p models.DownloadProgress) {
-		if p.Status == "complete" {
-			fmt.Println()
-			fmt.Printf("  %s%s%s Download complete\n", brandSuccess, iconCheck, colorReset)
-		} else if p.Status == "verifying" {
-			fmt.Println()
-			fmt.Printf("  %sVerifying checksum...%s\n", brandMuted, colorReset)
-		} else {
-			if startTime.IsZero() {
-				startTime = time.Now()
-			}
-			printProgressBar(p.BytesDone, p.BytesTotal, float64(p.Speed), 30)
-		}
-		os.Stdout.Sync()
-	})
-
-	fmt.Println()
-	fmt.Printf("  %s%s Download Model%s\n", brandPrimary+colorBold, iconBolt, colorReset)
-	fmt.Printf("  %s%s%s %s%s%s\n", brandPrimary, modelEntry.Name, colorReset, brandMuted, quantization, colorReset)
-	fmt.Println()
-
-	if err := downloader.Download(modelEntry.ID, quantization); err != nil {
-		fmt.Fprintf(os.Stderr, "\n  %sX%s Download failed: %v\n", brandError, colorReset, err)
-		os.Exit(1)
-	}
-
-	modelPath := filepath.Join(cfg.ModelsDir, fmt.Sprintf("%s.%s.gguf", modelEntry.ID, quantization))
-	if modelEntry.Type == "embedding" {
-		modelPath = filepath.Join(cfg.ModelsDir, modelEntry.ID+".gguf")
-		fmt.Println()
-		printInfo(fmt.Sprintf("Enable the knowledge base with: offgrid kb enable %s", modelEntry.ID))
-		return
-	}
-
-	if err := reloadLlamaServerWithModel(modelPath); err != nil {
-		fmt.Println()
-		printWarning(fmt.Sprintf("Could not auto-reload server: %v", err))
-		fmt.Println()
-		printInfo("Manually restart the server:")
-		printItem("Restart service", "sudo systemctl restart llama-server")
-		fmt.Println()
-	}
+	executeCommand(func(ctx context.Context) error { return runModelDownload(ctx, args) })
 }
 
 // handleHuggingFaceDownload handles downloading from HuggingFace Hub
@@ -2673,129 +2528,7 @@ func handleTest(args []string) {
 }
 
 func handleList(args []string) {
-	cfg := config.LoadConfig()
-	registry := models.NewRegistry(cfg.ModelsDir)
-
-	if err := registry.ScanModels(); err != nil {
-		if output.JSONMode {
-			output.Error("Error scanning models", err)
-		}
-		printError(fmt.Sprintf("Error scanning models: %v", err))
-		os.Exit(1)
-	}
-
-	modelList := registry.ListModels()
-
-	// JSON output mode
-	if output.JSONMode {
-		var jsonModels []output.ModelInfo
-		for _, model := range modelList {
-			meta, err := registry.GetModel(model.ID)
-			modelInfo := output.ModelInfo{
-				Name: model.ID,
-			}
-			if err == nil {
-				if meta.Size > 0 {
-					modelInfo.Size = formatBytes(meta.Size)
-				}
-				if meta.Quantization != "" && meta.Quantization != "unknown" {
-					modelInfo.Quantization = meta.Quantization
-				}
-				modelInfo.Format = meta.Format
-				if meta.Path != "" {
-					modelInfo.Path = meta.Path
-				}
-			}
-			jsonModels = append(jsonModels, modelInfo)
-		}
-		output.PrintModels(jsonModels)
-		return
-	}
-
-	// Human-readable output - Modern design
-	fmt.Println()
-	fmt.Printf("  %s%s Installed Models%s\n", brandPrimary+colorBold, iconModel, colorReset)
-
-	if len(modelList) == 0 {
-		fmt.Println()
-		fmt.Printf("    %sNo models installed%s\n", brandMuted, colorReset)
-		fmt.Println()
-
-		// Show quick-start recommendations based on system RAM
-		res, _ := resource.DetectResources()
-		ramGB := res.AvailableRAM / 1024
-
-		fmt.Printf("    %sQuick start — just run:%s\n\n", colorBold, colorReset)
-
-		if ramGB >= 16 {
-			// 16GB+ RAM - show larger models
-			fmt.Printf("      %s$%s offgrid run llama3       %s# Llama 3.2 3B — great all-rounder%s\n", brandMuted, colorReset, brandMuted, colorReset)
-			fmt.Printf("      %s$%s offgrid run qwen         %s# Qwen 2.5 7B — powerful reasoning%s\n", brandMuted, colorReset, brandMuted, colorReset)
-			fmt.Printf("      %s$%s offgrid run codellama    %s# Code Llama 7B — for programming%s\n", brandMuted, colorReset, brandMuted, colorReset)
-		} else if ramGB >= 8 {
-			// 8-16GB RAM
-			fmt.Printf("      %s$%s offgrid run llama3       %s# Llama 3.2 3B — best for 8GB RAM%s\n", brandMuted, colorReset, brandMuted, colorReset)
-			fmt.Printf("      %s$%s offgrid run phi          %s# Phi 3 Mini — fast & capable%s\n", brandMuted, colorReset, brandMuted, colorReset)
-			fmt.Printf("      %s$%s offgrid run gemma        %s# Gemma 2 2B — Google's compact model%s\n", brandMuted, colorReset, brandMuted, colorReset)
-		} else {
-			// <8GB RAM - show tiny models
-			fmt.Printf("      %s$%s offgrid run tiny         %s# TinyLlama 1.1B — runs anywhere%s\n", brandMuted, colorReset, brandMuted, colorReset)
-			fmt.Printf("      %s$%s offgrid run smollm       %s# SmolLM 360M — ultra lightweight%s\n", brandMuted, colorReset, brandMuted, colorReset)
-		}
-
-		fmt.Println()
-		fmt.Printf("    %sModels download automatically on first run.%s\n", brandMuted, colorReset)
-		fmt.Printf("    %sSee all options: %soffgrid alias list%s\n", brandMuted, colorReset+colorBold, colorReset)
-		fmt.Println()
-		return
-	}
-
-	fmt.Printf("    %s%d model(s) · %s total%s\n", brandMuted, len(modelList), func() string {
-		var total int64
-		for _, m := range modelList {
-			if meta, err := registry.GetModel(m.ID); err == nil && meta.Size > 0 {
-				total += meta.Size
-			}
-		}
-		return formatBytes(total)
-	}(), colorReset)
-	fmt.Println()
-
-	// Modern table header with subtle styling
-	headerFormat := "    %s%-36s  %-10s  %-10s%s\n"
-	fmt.Printf(headerFormat, brandMuted, "MODEL", "SIZE", "QUANT", colorReset)
-	fmt.Printf("    %s%s%s\n", brandMuted, strings.Repeat("─", 60), colorReset)
-
-	for _, model := range modelList {
-		meta, err := registry.GetModel(model.ID)
-
-		modelName := model.ID
-		maxNameLen := 36
-		if len(modelName) > maxNameLen {
-			modelName = modelName[:maxNameLen-1] + "…"
-		}
-
-		sizeStr := "—"
-		quantStr := "—"
-
-		if err == nil {
-			if meta.Size > 0 {
-				sizeStr = formatBytes(meta.Size)
-			}
-			if meta.Quantization != "" && meta.Quantization != "unknown" {
-				quantStr = meta.Quantization
-			}
-		}
-
-		fmt.Printf("    %s%-36s%s  %s%-10s%s  %s%-10s%s\n",
-			colorBold, modelName, colorReset,
-			brandMuted, sizeStr, colorReset,
-			brandMuted, quantStr, colorReset)
-	}
-
-	fmt.Println()
-	fmt.Printf("    %sRun:%s offgrid run <model>%s\n", brandMuted, colorReset+colorBold, colorReset)
-	fmt.Println()
+	executeCommand(func(ctx context.Context) error { return runModelList(ctx, args) })
 }
 
 func handleQuantization() {
@@ -3555,49 +3288,16 @@ func handleConfig(args []string) {
 }
 
 func handleSearch(args []string) {
-	// Parse search query and filters
-	var query string
-	var filters models.SearchFilter
-	var maxRAM int // Maximum RAM in GB (0 = no filter)
+	executeCommand(func(ctx context.Context) error { return runModelSearch(ctx, args) })
+}
 
-	// Default filters
-	filters.OnlyGGUF = true
-	filters.ExcludeGated = true
-	filters.Limit = 20
-	filters.SortBy = "downloads"
-
-	// Parse arguments
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--author" || arg == "-a":
-			if i+1 < len(args) {
-				filters.Author = args[i+1]
-				i++
-			}
-		case arg == "--quant" || arg == "-q":
-			if i+1 < len(args) {
-				filters.Quantization = args[i+1]
-				i++
-			}
-		case arg == "--ram" || arg == "-r":
-			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%d", &maxRAM)
-				i++
-			}
-		case arg == "--sort" || arg == "-s":
-			if i+1 < len(args) {
-				filters.SortBy = args[i+1]
-				i++
-			}
-		case arg == "--limit" || arg == "-l":
-			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%d", &filters.Limit)
-				i++
-			}
-		case arg == "--all":
-			filters.ExcludeGated = false
-		case arg == "--help" || arg == "-h":
+func runModelSearch(ctx context.Context, args []string) error {
+	filters, maxRAM, showFiles, err := parseModelSearchArgs(args)
+	if err != nil {
+		return err
+	}
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
 			fmt.Println()
 			fmt.Printf("  %s%s Search HuggingFace%s\n", brandPrimary+colorBold, iconSearch, colorReset)
 			fmt.Println()
@@ -3610,36 +3310,26 @@ func handleSearch(args []string) {
 			fmt.Printf("    %s-s, --sort%s <field>     Sort by: downloads, likes, created\n", brandPrimary, colorReset)
 			fmt.Printf("    %s-l, --limit%s <n>        Limit results (default: 20)\n", brandPrimary, colorReset)
 			fmt.Printf("    %s--all%s                  Include gated models\n", brandPrimary, colorReset)
+			fmt.Printf("    --files                Show individual GGUF files and download commands\n")
+			fmt.Println("    No RAM limit is applied unless --ram is supplied; estimates are not a compatibility guarantee.")
 			fmt.Println()
 			fmt.Printf("  %sExamples%s\n", colorBold, colorReset)
 			fmt.Printf("    %s$%s offgrid search llama\n", brandMuted, colorReset)
 			fmt.Printf("    %s$%s offgrid search llama --ram 4\n", brandMuted, colorReset)
 			fmt.Printf("    %s$%s offgrid search mistral --author TheBloke --quant Q4_K_M\n", brandMuted, colorReset)
 			fmt.Println()
-			return
-		default:
-			if query == "" {
-				query = arg
-			}
+			return nil
 		}
 	}
 
-	filters.Query = query
-
 	if !output.JSONMode {
-		fmt.Printf("\n%s%s%s Searching HuggingFace Hub%s\n", brandPrimary, iconSearch, colorBold, colorReset)
-		fmt.Println()
+		fmt.Fprintln(os.Stderr, "Searching Hugging Face Hub…")
 	}
 
 	hf := models.NewHuggingFaceClient()
-	results, err := hf.SearchModels(filters)
+	results, err := hf.SearchModelsContext(ctx, filters)
 	if err != nil {
-		if output.JSONMode {
-			output.Error("Search failed", err)
-		}
-		printError(fmt.Sprintf("Search failed: %v", err))
-		fmt.Println()
-		os.Exit(1)
+		return fmt.Errorf("search failed: %w", err)
 	}
 
 	// Filter by RAM if specified
@@ -3667,7 +3357,7 @@ func handleSearch(args []string) {
 		}
 	} // JSON output mode
 	if output.JSONMode {
-		var jsonResults []output.SearchResult
+		jsonResults := make([]output.SearchResult, 0, len(results))
 		for _, result := range results {
 			searchResult := output.SearchResult{
 				Name:      result.Model.ID,
@@ -3678,10 +3368,13 @@ func handleSearch(args []string) {
 			if len(result.Model.Tags) > 0 {
 				searchResult.Tags = result.Model.Tags
 			}
+			for _, file := range result.GGUFFiles {
+				searchResult.Files = append(searchResult.Files, output.SearchFile{File: file.Filename, Size: file.Size, Quant: file.Quantization})
+			}
 			jsonResults = append(jsonResults, searchResult)
 		}
 		output.PrintSearchResults(jsonResults)
-		return
+		return nil
 	}
 
 	// Human-readable output
@@ -3691,7 +3384,7 @@ func handleSearch(args []string) {
 		fmt.Println()
 		fmt.Printf("    %sTry:%s offgrid search llama --ram 4\n", brandMuted, colorReset)
 		fmt.Println()
-		return
+		return nil
 	}
 
 	fmt.Printf("    %s%d model(s) found%s\n", brandMuted, len(results), colorReset)
@@ -3733,6 +3426,12 @@ func handleSearch(args []string) {
 			}
 		}
 		fmt.Printf("     %s%s%s\n", colorDim, strings.Join(infoParts, " · "), colorReset)
+		if showFiles {
+			for _, file := range result.GGUFFiles {
+				fmt.Printf("     %s · %.2f GB · %s\n", terminalSafe(file.Filename), file.SizeGB, file.Quantization)
+				fmt.Printf("       offgrid download %q --file %q\n", terminalSafe(model.ID), terminalSafe(file.Filename))
+			}
+		}
 
 		// Add spacing between results
 		if i < len(results)-1 {
@@ -3742,8 +3441,9 @@ func handleSearch(args []string) {
 
 	// Footer hint
 	fmt.Println()
-	fmt.Printf("  %sTip: offgrid download <model-name> to download%s\n", brandMuted, colorReset)
+	fmt.Printf("  %sTip: add --files to choose a quantization; use offgrid download owner/repo --file model.gguf%s\n", brandMuted, colorReset)
 	fmt.Println()
+	return nil
 }
 
 func handleDownloadHF(args []string) {

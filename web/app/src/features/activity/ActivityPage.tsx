@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type RunEvent, type RunSummary } from '../../api/client';
 import { useI18n } from '../../i18n';
 
@@ -15,6 +15,9 @@ export function ActivityPage({ health }: { health: Health }) {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
+  const requestRevision = useRef(0);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  useEffect(() => () => { requestRevision.current++; }, []);
 
   useEffect(() => {
     void Promise.all([api.stats(), api.runs()])
@@ -23,10 +26,13 @@ export function ActivityPage({ health }: { health: Health }) {
   }, [text.common.error]);
 
   const inspect = async (run: RunSummary) => {
+    const revision = ++requestRevision.current;
     setSelected(run.id);
+    setEvents([]); setLoadingEvents(true);
     setError('');
-    try { setEvents(await api.runEvents(run.id)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
+    try { const next = await api.runEvents(run.id); if (revision === requestRevision.current) setEvents(next); }
+    catch (reason) { if (revision === requestRevision.current) setError(reason instanceof Error ? reason.message : text.common.error); }
+    finally { if (revision === requestRevision.current) setLoadingEvents(false); }
   };
 
   const server = stats?.server;
@@ -42,7 +48,7 @@ export function ActivityPage({ health }: { health: Health }) {
     <section className="runtime-summary"><div className={`runtime-indicator ${health}`} /><div><span className="eyebrow">{text.common.runtime}</span><h2>{health === 'ready' ? text.status.ready : health === 'offline' ? text.status.offline : text.status.checking}</h2><p>{text.activity.subtitle}</p></div></section>
     <section className="stack"><span className="eyebrow">{text.activity.runs}</span>{runs.length === 0 ? <div className="empty-panel"><p>{text.activity.noRuns}</p></div> : <div className="run-layout">
       <div className="run-list">{runs.map(run => <button key={run.id} className={selected === run.id ? 'run-row selected' : 'run-row'} onClick={() => void inspect(run)}><i className={run.status} /><span><strong>{String(run.data?.prompt ?? run.id)}</strong><small>{run.status} · {new Date(run.updated_at).toLocaleString(locale)}</small></span><b>{run.event_count}</b></button>)}</div>
-      <div className="event-list">{events.length === 0 ? <p>{text.activity.selectRun}</p> : events.map(event => <article key={event.id}><i /><div><strong>{event.type}</strong><small>#{event.sequence} · {new Date(event.time).toLocaleTimeString(locale)}</small>{event.data && <pre>{JSON.stringify(event.data, null, 2)}</pre>}</div></article>)}</div>
+      <div className="event-list" aria-busy={loadingEvents}>{loadingEvents ? <p role="status">{text.common.loading}</p> : events.length === 0 ? <p>{text.activity.selectRun}</p> : events.map(event => <article key={event.id}><i /><div><strong>{event.type}</strong><small>#{event.sequence} · {new Date(event.time).toLocaleTimeString(locale)}</small>{event.data && <pre>{JSON.stringify(event.data, null, 2)}</pre>}</div></article>)}</div>
     </div>}</section>
   </div>;
 }

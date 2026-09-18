@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { api, type ChatMessage, type ChatSession, type Model } from '../../api/client';
+import { api, type ChatMessage, type ChatSession, type Model, type SessionTurn } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ModelSelect } from '../../components/ModelSelect';
@@ -48,6 +48,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const [knowledge, setKnowledge] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [checkingTurn, setCheckingTurn] = useState(false);
   const [phase, setPhase] = useState<ChatPhase>('queued');
   const [streamed, setStreamed] = useState('');
   const [interrupted, setInterrupted] = useState(false);
@@ -69,8 +70,43 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const end = useRef<HTMLDivElement | null>(null);
   const followOutput = useRef(true);
   const composerInput = useRef<HTMLTextAreaElement | null>(null);
+  const activeTurn = useRef<{ name: string; id: string } | null>(null);
+  const mounted = useRef(true);
+  const selectionRevision = useRef(0);
+
+  const recoverTurn = async (session: ChatSession, turn: SessionTurn, revision: number) => {
+    if (!mounted.current || revision !== selectionRevision.current) return;
+    activeTurn.current = { name: session.name, id: turn.id };
+    if (!['pending', 'running'].includes(turn.status)) {
+      if (turn.status === 'completed') {
+        const key = draftKey(scope, 'chat', session.name), savedDraft = readDraft(key);
+        if (savedDraft.trim() === turn.prompt) clearSubmittedDraft(key, savedDraft);
+        setMetrics(turn.metrics); setLimited(turn.finish_reason === 'length');
+      } else { setConversation([...session.messages, { role: 'user', content: turn.prompt }]); setStreamed(turn.output); setInterrupted(true); setError(turn.error || text.chatStreaming.unsaved); }
+      return;
+    }
+    const watch = new AbortController(); controller.current = watch;
+    setBusy(true); setConversation([...session.messages, { role: 'user', content: turn.prompt }]);
+    let partial = '';
+    try {
+      const result = await api.followTurn(session.name, turn.id, event => {
+        if (!mounted.current || revision !== selectionRevision.current) return;
+        if (event.type === 'phase') setPhase(event.phase);
+        else { partial += event.delta; setStreamed(partial); }
+      }, watch.signal);
+      if (!mounted.current || revision !== selectionRevision.current) return;
+      setConversation(result.session.messages); setStreamed(''); setMetrics(result.metrics); setLimited(result.finish_reason === 'length');
+      const key = draftKey(scope, 'chat', session.name), savedDraft = readDraft(key);
+      if (savedDraft.trim() === turn.prompt) clearSubmittedDraft(key, savedDraft);
+      setSessions(current => [result.session, ...current.filter(item => item.name !== session.name)]);
+    } catch (reason) {
+      if (mounted.current && revision === selectionRevision.current) { setStreamed(partial || turn.output); setInterrupted(true); setError(reason instanceof Error ? reason.message : text.common.error); }
+    } finally { if (controller.current === watch) { controller.current = null; if (mounted.current) setBusy(false); } }
+  };
 
   const activate = (session?: ChatSession) => {
+    const revision = ++selectionRevision.current;
+    controller.current?.abort(); controller.current = null; activeTurn.current = null; setBusy(false); setCheckingTurn(Boolean(session)); setError('');
     const name = session?.name ?? '';
     setActiveName(name);
     setConversation(session?.messages ?? []);
@@ -78,6 +114,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     if (session?.model_id && models.some(item => item.id === session.model_id)) setModel(session.model_id);
     writePreference(sessionKey, name || null);
     setHistoryOpen(false);
+    if (session) void api.currentTurn(session.name).then(({ turn }) => { if (turn?.id) void recoverTurn(session, turn, revision); }).catch(reason => { if (mounted.current && revision === selectionRevision.current) setError(reason instanceof Error ? reason.message : text.common.error); }).finally(() => { if (mounted.current && revision === selectionRevision.current) setCheckingTurn(false); });
   };
 
   const loadSessions = async (preferred = activeName) => {
@@ -97,7 +134,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
 
   useEffect(() => { void loadSessions(); }, []);
   useEffect(() => { if (followOutput.current) end.current?.scrollIntoView({ behavior: 'instant' }); }, [conversation, busy, streamed, phase]);
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; selectionRevision.current++; controller.current?.abort(); }; }, []);
   useEffect(() => {
     if (!composerInput.current) return;
     composerInput.current.style.height = '0';
@@ -126,8 +163,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
 
   const send = async () => {
     const prompt = draft.trim();
-    if (!prompt || !model || busy || controller.current || deleteItems) return;
+    if (!prompt || !model || busy || checkingTurn || controller.current || deleteItems) return;
     const requestController = new AbortController();
+    const requestID = crypto.randomUUID();
     controller.current = requestController;
     const submitted = draft;
     setBusy(true);
@@ -148,6 +186,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         setSessions(current => [created, ...current]);
       }
       setConversation(current => [...current, { role: 'user', content: prompt }]);
+      activeTurn.current = { name: sessionName, id: requestID };
       const result = await api.streamSession(sessionName, prompt, model, knowledge, profile, maxTokens, event => {
         if (event.type === 'phase') setPhase(event.phase);
         else {
@@ -155,7 +194,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           // Bound React/Markdown updates during fast GPU decoding.
           if (!flush) flush = setTimeout(() => { setStreamed(partial); flush = undefined; }, 40);
         }
-      }, requestController.signal);
+      }, requestController.signal, requestID);
       clearTimeout(flush); flush = undefined;
       setStreamed(''); setMetrics(result.metrics); setLimited(result.finish_reason === 'length');
       clearSubmittedDraft(draftKey(scope, 'chat', sessionName), submitted);
@@ -178,6 +217,12 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       setBusy(false);
       controller.current = null;
     }
+  };
+
+  const stop = async () => {
+    if (!activeTurn.current) { controller.current?.abort(); return; }
+    try { await api.cancelTurn(activeTurn.current.name, activeTurn.current.id); controller.current?.abort(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
   };
 
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -241,10 +286,10 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         </article>}
         {metrics && <div className="generation-status">{text.chatStreaming.firstText}: {(metrics.first_text_ms / 1000).toLocaleString(locale, { maximumFractionDigits: 2 })} s{metrics.tokens_per_second ? ` · ${metrics.tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 })} ${text.chatStreaming.tokensPerSecond}` : ''} · {metrics.context_window.toLocaleString(locale)} {text.chatStreaming.contextTokens}</div>}
         {limited && <div className="generation-status" role="status">{text.chatStreaming.limitReached}</div>}
-        {error && <div className="inline-error" role="alert">{error}</div>}<div ref={end} />
+        {error && <div className="inline-error" role="alert">{error}<button className="secondary-button" onClick={() => void loadSessions()}>{text.common.retry}</button></div>}<div ref={end} />
         {unsaved && <div className="inline-error" role="alert">{text.recovery.draftWarning}</div>}
       </div>
-      <div className="composer"><div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} /><small>{text.chat.enterHint}</small></div><button disabled={busy ? false : !draft.trim() || !model} onClick={busy ? () => controller.current?.abort() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
+      <div className="composer"><div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={checkingTurn} /><small>{text.chat.enterHint}</small></div><button disabled={busy ? false : checkingTurn || !draft.trim() || !model} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
     </div>
   </div>;
 }

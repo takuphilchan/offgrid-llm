@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, type CatalogModel, type Document, type DownloadProgress, type Model, type RAGStatus } from '../../api/client';
 import { Icon } from '../../components/Icon';
+import { ModelDownloadProgress } from '../../components/ModelDownloadProgress';
 import { useI18n } from '../../i18n';
+import { workflow } from '../../i18n/workflow';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { DocumentSourceDialog } from './DocumentSourceDialog';
 
 type Props = {
   models: Model[];
@@ -10,7 +14,11 @@ type Props = {
 };
 
 export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) {
-  const { messages: text } = useI18n();
+  const { messages: text, locale } = useI18n();
+  const copy = workflow[locale];
+  const [deleting, setDeleting] = useState<Document | null>(null);
+  const [sourceID, setSourceID] = useState('');
+  const [query, setQuery] = useState('');
   const [documents, setDocuments] = useState<Document[]>([]);
   const [status, setStatus] = useState<RAGStatus | null>(null);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
@@ -21,7 +29,6 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
   const [reindexing, setReindexing] = useState('');
   const [downloadKey, setDownloadKey] = useState('');
   const [download, setDownload] = useState<DownloadProgress | null>(null);
-  const setupModel = useRef('');
   const input = useRef<HTMLInputElement | null>(null);
 
   const installedEmbeddings = useMemo(() => models.filter(model => model.type === 'embedding'), [models]);
@@ -32,10 +39,15 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
     setBusy(true);
     setError('');
     try {
-      const [list, nextStatus, nextCatalog] = await Promise.all([api.documents(), api.ragStatus(), api.catalog()]);
+      const [list, nextStatus, nextCatalog, downloads] = await Promise.all([api.documents(), api.ragStatus(), api.catalog(), api.downloadProgress()]);
       setDocuments(list.documents);
       setStatus(nextStatus);
       setCatalog(nextCatalog);
+      const setup = Object.values(downloads).filter(item => item.enable_knowledge).sort((a,b) => b.started_at - a.started_at)[0];
+      if (setup) {
+        setDownload(setup);
+        if (setup.status === 'downloading' || setup.status === 'finalizing') { setDownloadKey(setup.file_name); setSetupBusy(true); }
+      }
       setEmbeddingModel(current => current || nextStatus.embedding_model || installedEmbeddings[0]?.id || nextCatalog.find(model => model.id === 'bge-m3')?.id || nextCatalog.find(model => model.type === 'embedding')?.id || '');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : text.common.error);
@@ -56,7 +68,6 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
         if (progress.status === 'complete') {
           setDownloadKey('');
           await onModelsChanged();
-          await api.enableRAG(setupModel.current);
           await refresh();
           setSetupBusy(false);
         } else if (progress.status === 'failed' || progress.status === 'cancelled') {
@@ -81,20 +92,12 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
     if (!embeddingModel || setupBusy) return;
     setSetupBusy(true);
     setError('');
-    setupModel.current = embeddingModel;
     try {
-      if (selectedInstalled) {
-        await api.enableRAG(embeddingModel);
-        await refresh();
-        setSetupBusy(false);
-        return;
-      }
-      const model = embeddingCatalog.find(item => item.id === embeddingModel);
+      const model = embeddingCatalog.find(item => item.id === embeddingModel) ?? (selectedInstalled ? { id: embeddingModel, repo: '', file: `${embeddingModel}.gguf`, quant: '', size_bytes: 0 } : undefined);
       if (!model) throw new Error('Selected embedding model is not available in the catalog.');
-      const accepted = await api.downloadModel(model);
+      const accepted = await api.downloadModel(model, true);
       if (accepted.exists) {
         await onModelsChanged();
-        await api.enableRAG(embeddingModel);
         await refresh();
         setSetupBusy(false);
         return;
@@ -117,6 +120,7 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
   };
 
   const reindex = async (document: Document) => {
+    if (reindexing) return;
     setReindexing(document.id);
     setError('');
     try { await api.reindexDocument(document.id); await refresh(); }
@@ -125,7 +129,11 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
   };
 
   const enabled = status?.enabled === true;
+  const shownDocuments = documents.filter(document => document.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   return <div className="stack knowledge-workspace">
+    {enabled && <button className="secondary-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
+    {sourceID && <DocumentSourceDialog id={sourceID} close={() => setSourceID('')} />}
+    {deleting && <ConfirmDialog title={deleting.name} body={copy.deleteDocument} close={() => setDeleting(null)} confirm={async () => { await api.deleteDocument(deleting.id); await refresh(); }} />}
     {!enabled && !busy && <section className="knowledge-setup">
       <div className="knowledge-setup-copy"><div className="model-glyph"><Icon name="knowledge" /></div><div><span className="eyebrow">{text.knowledgeSetup.title}</span><h2>{text.knowledge.disabled}</h2><p>{text.knowledgeSetup.body}</p></div></div>
       <div className="knowledge-setup-controls">
@@ -136,12 +144,14 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
         <button className="primary-button" onClick={() => void prepare()} disabled={!embeddingModel || setupBusy}>{setupBusy ? text.knowledgeSetup.preparing : selectedInstalled ? text.knowledgeSetup.enable : text.knowledgeSetup.installEnable}</button>
         <button className="secondary-button" onClick={onOpenModels}>{text.knowledgeSetup.openModels}</button>
       </div>
-      {download && setupBusy && <div className={`download-state ${download.status}`}><div><span style={{ width: `${Math.max(0, Math.min(100, download.percent))}%` }} /></div><small>{download.status} · {download.percent.toFixed(1)}% · {formatBytes(download.speed)}/s</small></div>}
+      {download && <ModelDownloadProgress download={download} />}
     </section>}
 
-    {enabled && <div className="section-actions"><div className="notice success"><i />{documents.length} {text.knowledge.chunks}<span className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model}</span></div><input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} /><button className="primary-button" onClick={() => input.current?.click()} disabled={busy}><Icon name="upload" size={17} />{text.knowledge.add}</button></div>}
-    {error && <div className="inline-error" role="alert">{error}</div>}
-    {enabled && (busy && documents.length === 0 ? <SkeletonCards /> : documents.length === 0 ? <EmptyPanel text={text.knowledge.empty} /> : <div className="card-grid">{documents.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><small>{document.chunk_count} {text.knowledge.chunks} · {document.index_status ?? 'ready'}</small><div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button disabled={!document.source_retained || reindexing === document.id} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button></div></div></article>)}</div>)}
+    <div className="section-actions"><div className="notice"><span>{documents.length} · {text.knowledge.title}</span>{enabled && <span className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model}</span>}</div><input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} /><button className="primary-button" onClick={() => input.current?.click()} disabled={busy || !enabled}><Icon name="upload" size={17} />{busy ? text.common.loading : text.knowledge.add}</button><button className="secondary-button" disabled={busy} onClick={() => void refresh()}>{text.common.refresh}</button></div>
+    {!enabled && documents.length > 0 && <p>{copy.offlineLibrary}</p>}
+    {error && <div className="inline-error" role="alert">{error}<button onClick={() => void refresh()}>{text.common.retry}</button></div>}
+    {documents.length > 0 && <input type="search" aria-label={text.knowledge.title} placeholder={text.knowledge.title} value={query} onChange={event => setQuery(event.target.value)} />}
+    {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? <EmptyPanel text={query ? text.history.noMatches : text.knowledge.empty} /> : <div className="card-grid">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><small>{document.chunk_count} {text.knowledge.chunks} · {document.index_status ?? 'ready'}</small><div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button disabled={!document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><button className="danger-button" disabled={busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></div></div></article>)}</div>}
   </div>;
 }
 

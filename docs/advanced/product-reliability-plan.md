@@ -685,3 +685,91 @@ native-app tests; Windows access to the user's container is not reported as pass
 The user requested commits and a patch release after these checks. Prepare a new
 0.4.5 version rather than overwrite published 0.4.4 artifacts. A prepared version
 or pushed commit is not proof that CI or publication completed.
+
+### 2026-09-17 — Installer handoff, Windows downloads, and model discovery
+
+- Fixed the Hugging Face download path promoting its `.tmp` while its own file
+  handle remained open. Flush/close now precede promotion; Windows sharing locks
+  receive bounded, cancellable retries and preserve partial bytes on failure.
+  Native Windows tests reproduce an actual sharing violation, release it, and
+  exercise persistent locks, cancellation, resumed transfers and HTTP 416 recovery.
+- Web/desktop distinguish transfer from finalization; failed/cancelled partial
+  downloads offer Resume. Cancellation uses exact filenames, not substring
+  matching. Model discovery refresh happens before completion is published.
+- Restored model search to the shared Models page. It makes one explicit public
+  Hugging Face search, then loads files only for a selected repository. Choices
+  include large quantizations without a catalog/RAM cap. Repository/file-derived
+  IDs isolate identically named files. Split weights/projectors are labelled as
+  requiring companion files, not advertised as standalone models.
+- CLI search remains available, adds `--files` and file metadata in JSON, validates
+  arguments with exit code 2, propagates cancellation, and bounds file-list
+  concurrency/deadlines. Live upstream TinyLlama search returned twelve GGUF
+  variants without downloading model weights. Unknown upstream failures now
+  surface as errors instead of an apparently successful empty search.
+- Windows setup uses system DPI awareness, 4× monochrome artwork, Segoe UI 9,
+  a monochrome progress bar and concise completion text. Show details previously
+  opened an empty log because the template disabled interactive detail output;
+  it now displays real extraction/copy/registration messages and failure guidance.
+- Finish records launch intent, closes the wizard, then starts the app. Running
+  app detection no longer repeatedly spawns PowerShell or force-kills processes.
+  Silent reinstall refuses active applications; interactive reinstall requires
+  consent and requests a normal quit. Legacy apps offer a manual-quit retry.
+- The isolated native Windows installer test passed clean install, real installed
+  Electron/Go startup, both Finish checkbox states, populated details, silent
+  running-app refusal, consent-driven same-version reinstall, uninstall, and
+  SHA-256 fixture preservation. Final wizard-close measurements were 73 and 119 ms;
+  these are warm local observations, not a cross-hardware SLA. Evidence is under
+  `%TEMP%/offgrid-install-74663d8e08c9455390cf642d5aad768d` and
+  `%TEMP%/offgrid-desktop-startup-mnI3xj`. The final installed-app smoke also
+  passed with profile/port environment overrides removed and only test-package
+  launch arguments supplied. A test-driver race reading a destroyed page's empty
+  button text was fixed by ignoring that transition while retaining hard deadlines.
+- 41 browser tests passed against disposable real services on native Windows/Edge
+  and WSL/Linux/Chromium. They cover navigation/history, streaming, recovery,
+  keyboard/IME, locales, responsive layouts and model search/download fixtures.
+  Added a cross-platform fixture wrapper so these tests do not touch a developer's
+  normal service. Fixed Vite's missing `/api` proxy. Go model/server/CLI tests passed
+  on Windows and with the race detector on WSL; 18 desktop Node checks passed on
+  both hosts. Contract generation, UI build and workflow lint pass. Native CLI
+  subprocess validation confirmed JSON `invalid_usage` with exit code 2.
+  These checks do not certify model inference quality or throughput.
+
+Test packages, data and registration are isolated from the installed product.
+Test-app arguments preserve that isolation if an elevated installer launches via
+Explorer without inheriting its environment; release packages ignore those test
+arguments. Native Windows test capture uses Windows PowerShell, not a new runtime
+dependency for end users. The test launcher clears `ELECTRON_RUN_AS_NODE`, which
+otherwise makes an IDE-launched Electron executable behave as Node and exit.
+
+No production desktop/container was replaced, and no commit, push, tag or release
+was made in this slice. Native macOS packaging, elevated/historical upgrades,
+mixed-DPI monitors, independent accessibility review, signing/notarization, and
+speaker review of translations remain separately required. Installer shell text
+is still English. See [model discovery](../guides/model-discovery.md) and
+[desktop recovery](../setup/desktop-startup.md).
+
+## September 2026 recovery and workflow slice
+
+- Durable chat turns are admitted before inference, survive navigation and stream
+  disconnects, and replay their persisted snapshot without resubmitting model
+  work. Explicit Stop is tied to the exact turn ID; partial, cancelled, failed,
+  and interrupted output never enters completed conversation context.
+- Model downloads persist repository, source file, local identity, progress, and
+  knowledge-setup intent. Restart exposes retained work for explicit Resume;
+  partial bytes cannot be reassigned to another source. Completion is persisted
+  after model discovery and optional knowledge activation.
+- The CLI model list/download paths now use the running service, have stable
+  success/usage/operational/cancellation exit codes, and keep JSON stdout clean
+  while human progress goes to stderr.
+- Knowledge documents remain visible while retrieval is disabled. Retained
+  extracted text can be inspected with authorization rechecked by the service;
+  deletion and model removal require explicit confirmation, and active runtime or
+  knowledge use blocks unsafe model removal.
+- Activity selection ignores late responses, onboarding wraps keyboard focus,
+  API reads have bounded deadlines, and recovery controls use localized labels.
+
+Evidence for this slice includes Go unit tests, Windows and Linux race tests,
+real-service browser tests, contract generation, renderer builds, and desktop
+host tests. It does not replace the remaining multi-user SQLite migration,
+installed-package qualification, signing/notarization, representative-hardware
+benchmarks, security review, soak test, or user pilot gates above.

@@ -4,6 +4,39 @@
  */
 
 export interface paths {
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Explicit online search of public GGUF repositories. Requires model permissions. No hardware size cap. */
+        get: operations["searchPublicModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/search/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPublicModelFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/system": {
         parameters: {
             query?: never;
@@ -247,6 +280,80 @@ export interface paths {
         put?: never;
         /** @description Requires session ownership (or sessions:all) and chat permission. Requested knowledge additionally requires rag permission. With stream=true, sends SSE phase and delta events immediately, followed by done only after atomic persistence, or error without saving a partial exchange. Transport closure is not completion. Retrieval failures after SSE starts are error events. JSON generation returns 503 for unavailable retrieval and 422 for no evidence. */
         post: operations["generateSessionTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/turn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        get: operations["getSessionTurn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/turn/events": {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        /** @description Authorized snapshot recovery. Replays the entire current partial output, followed by live deltas. A new attachment must replace its previous partial output, not append a replay. Slow/disconnected readers do not control execution. */
+        get: operations["followSessionTurn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/turn/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancelSessionTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Requires knowledge read permission. Returns retained extracted text, not the original file. Available while inference is disabled. */
+        get: operations["getDocumentSource"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -559,6 +666,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        DiscoveredModel: {
+            id: string;
+            author: string;
+            name: string;
+            downloads: number;
+            likes: number;
+        };
+        DiscoveredFile: {
+            id: string;
+            file: string;
+            size_bytes: number;
+            quant: string;
+            supported: boolean;
+            reason?: string;
+        };
         SystemIdentity: {
             /** @constant */
             product: "offgrid";
@@ -733,6 +855,11 @@ export interface components {
             license: string;
         };
         ModelDownloadRequest: {
+            /**
+             * @description Requires knowledge management permission as well as model management. Persist activation intent and enable knowledge after installation without relying on an attached page. Empty repository is allowed only for an already installed model.
+             * @default false
+             */
+            enable_knowledge: boolean;
             repository: string;
             file_name?: string;
             quantization?: string;
@@ -740,6 +867,11 @@ export interface components {
             model_id?: string;
         };
         DownloadProgress: {
+            repository?: string;
+            source_file?: string;
+            model_id?: string;
+            quantization?: string;
+            enable_knowledge?: boolean;
             file_name: string;
             /** Format: int64 */
             bytes_total: number;
@@ -750,7 +882,7 @@ export interface components {
             /** Format: int64 */
             started_at: number;
             /** @enum {string} */
-            status: "downloading" | "complete" | "failed" | "cancelled";
+            status: "downloading" | "finalizing" | "complete" | "failed" | "cancelled";
             error?: string;
         };
         Verification: {
@@ -782,7 +914,23 @@ export interface components {
             /** Format: date-time */
             timestamp: string;
         };
+        SessionTurn: {
+            id: string;
+            prompt: string;
+            model: string;
+            profile: string;
+            knowledge: boolean;
+            max_tokens: number;
+            /** @enum {string} */
+            status: "pending" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+            phase: string;
+            output: string;
+            error?: string;
+            finish_reason?: string;
+            metrics?: components["schemas"]["ChatTimings"];
+        };
         ChatSession: {
+            turn?: components["schemas"]["SessionTurn"];
             name: string;
             /** @description Authenticated owner assigned by the service. Absent for legacy/local sessions, which require sessions:all in authenticated mode. */
             readonly owner_id?: string;
@@ -983,6 +1131,86 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    searchPublicModels: {
+        parameters: {
+            query: {
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repository metadata; file lists are fetched on selection, not for every result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        total: number;
+                        results: components["schemas"]["DiscoveredModel"][];
+                    };
+                };
+            };
+            /** @description Invalid search query or limit. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Upstream search unavailable; this is not an empty successful search. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPublicModelFiles: {
+        parameters: {
+            query: {
+                repo: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description GGUF choices with repository-scoped local IDs and exact sizes when available; first 1000 tree entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        repo: string;
+                        files: components["schemas"]["DiscoveredFile"][];
+                    };
+                };
+            };
+            /** @description Invalid repository name. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Upstream file discovery unavailable. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getSystemIdentity: {
         parameters: {
             query?: never;
@@ -1400,6 +1628,13 @@ export interface operations {
                     /** @default false */
                     stream?: boolean;
                     /**
+                     * @description Persist admission and run independently of the stream connection. Reconnect using the turn endpoints.
+                     * @default false
+                     */
+                    durable?: boolean;
+                    /** @description Required for durable streaming. Reusing the current ID with identical input attaches to existing work; conflicting or superseded reuse returns 409. */
+                    request_id?: string;
+                    /**
                      * @description Streaming chat context profile. Interactive uses min(OFFGRID_CHAT_CONTEXT
                      * @default interactive
                      * @enum {string}
@@ -1434,6 +1669,111 @@ export interface operations {
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
             503: components["responses"]["Error"];
+        };
+    };
+    getSessionTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest saved turn, or null. Restarted work is interrupted, never automatically replayed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        turn: components["schemas"]["SessionTurn"] | null;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    followSessionTurn: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session phase/delta/done/error SSE stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            409: components["responses"]["Error"];
+        };
+    };
+    cancelSessionTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Cancellation requested for this exact turn. Refresh for terminal state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Error"];
+        };
+    };
+    getDocumentSource: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Safe text preview (maximum 200000 Unicode characters) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        document: components["schemas"]["Document"];
+                        content: string;
+                        truncated: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            410: components["responses"]["Error"];
         };
     };
     createChatCompletion: {

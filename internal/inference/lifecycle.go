@@ -7,6 +7,28 @@ import (
 )
 
 var ErrInferenceQueueFull = errors.New("inference queue is full; wait for active work to finish before retrying")
+var ErrRuntimeBusy = errors.New("models are in use; stop active work and retry")
+
+// Maintenance never queues a destructive operation behind work the user may
+// not have seen. Hold the exclusive lifecycle boundary through unload/delete.
+func (g *LifecycleGate) Maintain(operation func() error) error {
+	g.mu.Lock()
+	if g.active > 0 || g.switching || len(g.waiters) > 0 {
+		g.mu.Unlock()
+		return ErrRuntimeBusy
+	}
+	g.switching = true
+	g.mu.Unlock()
+	defer func() {
+		g.mu.Lock()
+		g.switching = false
+		g.currentModel = ""
+		g.contextWindow = 0
+		g.signalLocked()
+		g.mu.Unlock()
+	}()
+	return operation()
+}
 
 // LifecycleGate coordinates inference leases with model switches. Requests for
 // the active model may run concurrently up to the configured limit; changing

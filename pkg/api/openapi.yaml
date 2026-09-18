@@ -9,6 +9,45 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /v1/search:
+    get:
+      operationId: searchPublicModels
+      description: Explicit online search of public GGUF repositories. Requires model permissions. No hardware size cap.
+      parameters:
+        - { name: query, in: query, required: true, schema: { type: string, maxLength: 200 } }
+      responses:
+        '200':
+          description: Repository metadata; file lists are fetched on selection, not for every result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, results]
+                properties:
+                  total: { type: integer }
+                  results: { type: array, items: { $ref: '#/components/schemas/DiscoveredModel' } }
+        '400': { description: Invalid search query or limit. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '502': { description: Upstream search unavailable; this is not an empty successful search. }
+  /v1/search/files:
+    get:
+      operationId: listPublicModelFiles
+      parameters:
+        - { name: repo, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: GGUF choices with repository-scoped local IDs and exact sizes when available; first 1000 tree entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [repo, files]
+                properties:
+                  repo: { type: string }
+                  files: { type: array, items: { $ref: '#/components/schemas/DiscoveredFile' } }
+        '400': { description: Invalid repository name. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '502': { description: Upstream file discovery unavailable. }
   /api/v2/system:
     get:
       operationId: getSystemIdentity
@@ -282,6 +321,8 @@ paths:
                 model_id: { type: string }
                 use_knowledge_base: { type: boolean, default: false }
                 stream: { type: boolean, default: false }
+                durable: { type: boolean, default: false, description: Persist admission and run independently of the stream connection. Reconnect using the turn endpoints. }
+                request_id: { type: string, maxLength: 128, description: Required for durable streaming. Reusing the current ID with identical input attaches to existing work; conflicting or superseded reuse returns 409. }
                 profile: { type: string, enum: [interactive, extended], default: interactive, description: Streaming chat context profile. Interactive uses min(OFFGRID_CHAT_CONTEXT, effective service context); extended uses the service context. History is not truncated. }
                 max_tokens: { type: integer, minimum: 1, maximum: 4096, default: 1024, description: Streaming response token budget. }
       responses:
@@ -305,6 +346,75 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/turn:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+    get:
+      operationId: getSessionTurn
+      responses:
+        '200':
+          description: Latest saved turn, or null. Restarted work is interrupted, never automatically replayed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [turn]
+                properties:
+                  turn:
+                    anyOf:
+                      - $ref: '#/components/schemas/SessionTurn'
+                      - type: 'null'
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/turn/events:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: id, in: query, required: true, schema: { type: string } }
+    get:
+      operationId: followSessionTurn
+      description: Authorized snapshot recovery. Replays the entire current partial output, followed by live deltas. A new attachment must replace its previous partial output, not append a replay. Slow/disconnected readers do not control execution.
+      responses:
+        '200':
+          description: Session phase/delta/done/error SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/turn/cancel:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+    post:
+      operationId: cancelSessionTurn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties: { id: { type: string } }
+      responses:
+        '200': { description: Cancellation requested for this exact turn. Refresh for terminal state. }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/documents/source:
+    get:
+      operationId: getDocumentSource
+      description: Requires knowledge read permission. Returns retained extracted text, not the original file. Available while inference is disabled.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Safe text preview (maximum 200000 Unicode characters)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document, content, truncated]
+                properties:
+                  document: { $ref: '#/components/schemas/Document' }
+                  content: { type: string }
+                  truncated: { type: boolean }
+        '404': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
   /v1/chat/completions:
     post:
       operationId: createChatCompletion
@@ -674,6 +784,25 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    DiscoveredModel:
+      type: object
+      required: [id, author, name, downloads, likes]
+      properties:
+        id: { type: string }
+        author: { type: string }
+        name: { type: string }
+        downloads: { type: integer }
+        likes: { type: integer }
+    DiscoveredFile:
+      type: object
+      required: [id, file, size_bytes, quant, supported]
+      properties:
+        id: { type: string }
+        file: { type: string }
+        size_bytes: { type: integer }
+        quant: { type: string }
+        supported: { type: boolean }
+        reason: { type: string }
     SystemIdentity:
       type: object
       required: [product, version, revision, api_version, ui_build_id, capabilities]
@@ -870,6 +999,7 @@ components:
       type: object
       required: [repository]
       properties:
+        enable_knowledge: { type: boolean, default: false, description: Requires knowledge management permission as well as model management. Persist activation intent and enable knowledge after installation without relying on an attached page. Empty repository is allowed only for an already installed model. }
         repository: { type: string }
         file_name: { type: string }
         quantization: { type: string }
@@ -882,13 +1012,18 @@ components:
       type: object
       required: [file_name, bytes_total, bytes_done, percent, speed, started_at, status]
       properties:
+        repository: { type: string }
+        source_file: { type: string }
+        model_id: { type: string }
+        quantization: { type: string }
+        enable_knowledge: { type: boolean }
         file_name: { type: string }
         bytes_total: { type: integer, format: int64 }
         bytes_done: { type: integer, format: int64 }
         percent: { type: number, minimum: 0, maximum: 100 }
         speed: { type: number, minimum: 0 }
         started_at: { type: integer, format: int64 }
-        status: { type: string, enum: [downloading, complete, failed, cancelled] }
+        status: { type: string, enum: [downloading, finalizing, complete, failed, cancelled] }
         error: { type: string }
     Verification:
       type: object
@@ -928,10 +1063,27 @@ components:
         - type: object
           required: [timestamp]
           properties: { timestamp: { type: string, format: date-time } }
+    SessionTurn:
+      type: object
+      required: [id, prompt, model, profile, knowledge, max_tokens, status, phase, output]
+      properties:
+        id: { type: string }
+        prompt: { type: string }
+        model: { type: string }
+        profile: { type: string }
+        knowledge: { type: boolean }
+        max_tokens: { type: integer }
+        status: { type: string, enum: [pending, running, completed, failed, cancelled, interrupted] }
+        phase: { type: string }
+        output: { type: string }
+        error: { type: string }
+        finish_reason: { type: string }
+        metrics: { $ref: '#/components/schemas/ChatTimings' }
     ChatSession:
       type: object
       required: [name, model_id, messages, created_at, updated_at]
       properties:
+        turn: { $ref: '#/components/schemas/SessionTurn' }
         name: { type: string }
         owner_id:
           type: string

@@ -41,7 +41,9 @@ async function streamingWorkspace(page: Page) {
     if (path === '/v1/sessions') {
       if (request.method() === 'GET') json = { sessions: Object.values(sessions) };
       else { const data = request.postDataJSON(); json = sessions[data.name] = { ...data, messages: [], updated_at: new Date().toISOString() }; }
-    } else if (path.startsWith('/v1/sessions/')) json = sessions[decodeURIComponent(path.split('/')[3])];
+    } else if (path.endsWith('/turn/cancel')) json = { success: true };
+    else if (path.endsWith('/turn')) json = { turn: null };
+    else if (path.startsWith('/v1/sessions/')) json = sessions[decodeURIComponent(path.split('/')[3])];
     return route.fulfill({ json });
   });
   await page.goto('/ui/#/chat');

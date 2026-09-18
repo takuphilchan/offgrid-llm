@@ -83,15 +83,27 @@ go build -trimpath -o bin/offgrid ./cmd/offgrid
 Open <http://127.0.0.1:11611/ui/>. On Windows, use `bin\offgrid.exe`; in WSL,
 use the Linux command above from `/mnt/d/offgrid-llm`.
 
+Keep `offgrid serve` running while using another terminal for ordinary CLI
+commands. Model listing and downloads intentionally go through that same service,
+so the CLI, browser, desktop app, and container share one registry, permission
+boundary, and durable download state. Set `OFFGRID_SERVER_URL` when the service is
+not at `http://127.0.0.1:11611`.
+
 The CLI is also the container entry point:
 
 ```bash
 ./bin/offgrid --help
 ./bin/offgrid search phi
+./bin/offgrid search "large model" --files --limit 5
 ./bin/offgrid download phi-3.5-mini-instruct
 ./bin/offgrid list
 ./bin/offgrid run phi-3.5-mini-instruct.Q4_K_M
 ```
+
+The catalog is a starting point, not a model-size limit. In the web/desktop app,
+open **Models → Find more models** to search public GGUF repositories and choose
+a specific file/quantization. Search uses Hugging Face online; installed models
+remain available offline. See [model discovery and download recovery](docs/guides/model-discovery.md).
 
 ## Desktop app
 
@@ -190,18 +202,23 @@ cd web/app
 npm run api:check
 npm run check
 npm run build
-# Starts an isolated UI server automatically.
-npm run test:e2e
+cd ../..
+go build -o bin/offgrid ./cmd/offgrid
+# Runs the built UI against a real service with disposable data and a random port.
+# Use bin/offgrid.exe on Windows. Install Playwright's Chromium once beforehand.
+node dev/scripts/test-web-workspace.mjs bin/offgrid
 
-cd ../../desktop
+cd desktop
 node --check main.js
 node --check preload.js
 ```
 
 The CI workflow runs Go tests, contract generation checks, the UI build, live
 browser integration tests, and native packaged-Electron startup/recovery checks. Set
-`OFFGRID_E2E_URL` only when the browser suite should target an already-running
-OffGrid service; local test runs manage their own UI server.
+`OFFGRID_E2E_URL` only for a disposable test service. Do not target your normal
+workspace: integration tests deliberately create/delete fixture conversations.
+Running `npm run test:e2e` alone starts Vite, whose API proxy targets port 11611;
+use the isolated wrapper above for the full suite.
 
 ## Documentation
 

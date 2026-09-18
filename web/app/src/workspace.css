@@ -443,4 +443,28 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
+
+  dialog.onboarding { color: var(--text); margin: auto; max-height: calc(100dvh - 32px); overflow: auto; }
+  dialog.onboarding::backdrop { background: rgb(0 0 0 / .6); backdrop-filter: blur(6px); }
+  .document-source-dialog { color: var(--text); background: var(--surface-1); border: 1px solid var(--line); border-radius: 14px; width: min(850px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; overflow: auto; }
+  .document-source-dialog::backdrop { background: rgb(0 0 0 / .6); }
+  .document-source-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .document-source-dialog h2 { overflow-wrap: anywhere; }
+  .document-source-dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; }
+  .model-search-hint { color: var(--muted); line-height: 1.6; max-width: 78ch; margin: 0 0 16px; }
+  .model-search-form { display: flex; gap: 12px; margin-bottom: 20px; }
+  .model-search-form input { flex: 1; min-width: 0; }
+  .model-search-results { display: grid; gap: 12px; }
+  .model-search-result { border: 1px solid var(--line); border-radius: 12px; padding: 20px; min-width: 0; background: var(--surface-1); }
+  .model-search-repo { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .model-search-repo h3 { margin: 0 0 8px; overflow-wrap: anywhere; font-size: 15px; }
+  .model-search-repo a { font-size: 13px; color: var(--muted); text-underline-offset: 3px; }
+  .model-search-repo button { flex-shrink: 0; }
+  .model-search-files { display: grid; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .model-search-files select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+  .model-search-files .model-search-hint { font-size: 13px; margin: 0; }
+  @media (max-width: 600px) {
+    .model-search-repo { flex-direction: column; align-items: stretch; }
+    .model-search-form { flex-wrap: wrap; }
+  }
 }

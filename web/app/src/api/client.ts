@@ -1,13 +1,17 @@
 import type { components } from './schema.generated';
 import { readSessionStream, type SessionEvent } from './session-stream';
 import { readAgentStream } from './agent-stream';
+import { workflowText } from '../i18n/workflow';
 
 export type Model = components['schemas']['Model'];
 export type Document = components['schemas']['Document'];
 export type ChatMessage = components['schemas']['ChatMessage'];
 export type SessionMessage = components['schemas']['SessionMessage'];
+export type SessionTurn = components['schemas']['SessionTurn'];
 export type ChatSession = components['schemas']['ChatSession'];
 export type CatalogModel = components['schemas']['CatalogModel'];
+export type DiscoveredModel = components['schemas']['DiscoveredModel'];
+export type DiscoveredFile = components['schemas']['DiscoveredFile'];
 export type DownloadProgress = components['schemas']['DownloadProgress'];
 export type Verification = components['schemas']['Verification'];
 export type PublicUser = components['schemas']['PublicUser'];
@@ -29,27 +33,40 @@ export class APIError extends Error {
   constructor(message: string, readonly status: number, readonly data?: Record<string, any>) { super(message); }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, timeout = 30_000): Promise<T> {
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), timeout);
+  try {
   const response = await fetch(path, {
     ...init,
     credentials: 'same-origin',
+    signal: init?.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal,
     headers: { ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...init?.headers }
   });
   if (!response.ok) {
     const body = await response.text();
-    let message = body || `${response.status} ${response.statusText}`;
+    let message = `OffGrid returned HTTP ${response.status}. Refresh the workspace before retrying.`;
     let data: Record<string, any> | undefined;
     try {
       const parsed = JSON.parse(body);
       data = parsed;
-      message = parsed.error?.message ?? parsed.error ?? parsed.message ?? message;
+      const candidate = parsed.error?.message ?? parsed.error ?? parsed.message;
+      if (typeof candidate === 'string') message = candidate;
     } catch { /* text response */ }
+    if (response.status === 401 && !path.startsWith('/v1/auth/') && path !== '/v1/users/me') window.dispatchEvent(new Event('offgrid:unauthenticated'));
     throw new APIError(message, response.status, data);
   }
-  return response.json() as Promise<T>;
+  if (!response.headers.get('content-type')?.includes('application/json')) throw new APIError('Unexpected service response. Check the backend address and version.', 502);
+  return await response.json() as T;
+  } catch (reason) {
+    if (deadline.signal.aborted) throw new APIError(workflowText().timeout, 408);
+    throw reason;
+  } finally { clearTimeout(timer); }
 }
 
 export const api = {
+  searchModels: (query: string, signal: AbortSignal) => request<{ results: DiscoveredModel[]; total: number }>(`/v1/search?${new URLSearchParams({ query })}`, { signal }),
+  modelFiles: (repo: string, signal: AbortSignal) => request<{ repo: string; files: DiscoveredFile[] }>(`/v1/search/files?${new URLSearchParams({ repo })}`, { signal }),
   systemIdentity: () => request<components['schemas']['SystemIdentity']>('/api/v2/system'),
   health: () => request<{ status: string; version?: string }>('/health'),
   currentUser: () => request<{ user: PublicUser | null; authenticated: boolean; guest?: boolean }>('/v1/users/me'),
@@ -73,11 +90,18 @@ export const api = {
   generateSession: (name: string, content: string, modelID: string, useKnowledgeBase: boolean, signal?: AbortSignal) => request<{ session: ChatSession; message: SessionMessage }>(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
     method: 'POST', signal, body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase })
   }),
-  streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal) => {
+  currentTurn: (name: string) => request<{ turn: SessionTurn | null }>(`/v1/sessions/${encodeURIComponent(name)}/turn`),
+  cancelTurn: (name: string, id: string) => request<{ success: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/turn/cancel`, { method: 'POST', body: JSON.stringify({ id }) }),
+  followTurn: async (name: string, id: string, onEvent: (event: SessionEvent) => void, signal: AbortSignal) => {
+    const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/turn/events?id=${encodeURIComponent(id)}`, { credentials: 'same-origin', signal });
+    if (!response.ok) throw new APIError('Conversation progress unavailable. Refresh to reconnect.', response.status);
+    return readSessionStream(response, onEvent);
+  },
+  streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal, requestID = crypto.randomUUID()) => {
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
       method: 'POST', credentials: 'same-origin', signal,
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase, stream: true, profile, max_tokens: maxTokens })
+      body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase, stream: true, durable: true, request_id: requestID, profile, max_tokens: maxTokens })
     });
     if (!response.ok) {
       const body = await response.text();
@@ -91,8 +115,8 @@ export const api = {
     const result = await request<{ models: CatalogModel[] | null }>('/v1/catalog');
     return Array.isArray(result.models) ? result.models : [];
   },
-  downloadModel: (model: Pick<CatalogModel, 'id' | 'repo' | 'file' | 'quant'>) => request<{ success: boolean; exists?: boolean; status: string; file_name: string }>('/v1/models/download', {
-    method: 'POST', body: JSON.stringify({ model_id: model.id, repository: model.repo, file_name: model.file, quantization: model.quant })
+  downloadModel: (model: Pick<CatalogModel, 'id' | 'repo' | 'file' | 'quant'>, enableKnowledge = false) => request<{ success: boolean; exists?: boolean; status: string; file_name: string }>('/v1/models/download', {
+    method: 'POST', body: JSON.stringify({ model_id: model.id, repository: model.repo, file_name: model.file, quantization: model.quant, enable_knowledge: enableKnowledge })
   }),
   downloadProgress: () => request<Record<string, DownloadProgress>>('/v1/models/download/progress'),
   cancelDownload: (fileName: string) => request<{ success: boolean }>('/v1/models/download/cancel', {
@@ -110,6 +134,7 @@ export const api = {
   enableRAG: (embeddingModel: string) => request<{ success: boolean; message: string }>('/v1/rag/enable', {
     method: 'POST', body: JSON.stringify({ embedding_model: embeddingModel })
   }),
+  disableRAG: () => request<{ success: boolean }>('/v1/rag/disable', { method:'POST',body:'{}' }),
   stats: async () => (await request<Record<string, any> | null>('/v1/stats')) ?? {},
   systemConfig: () => request<SystemConfig>('/v1/system/config'),
   computerStatus: () => request<ComputerStatus>('/v1/computer/status'),
@@ -172,10 +197,12 @@ export const api = {
   }),
   reindexDocument: (documentID: string) => request<{ success: boolean; document: Document }>('/v1/documents/reindex', {
     method: 'POST', body: JSON.stringify({ document_id: documentID })
-  }),
+  }, 5 * 60_000),
+  deleteDocument: (id: string) => request<{ success: boolean }>(`/v1/documents/delete?id=${encodeURIComponent(id)}`, { method:'DELETE' }),
+  documentSource: (id: string) => request<{ document: Document; content: string; truncated: boolean }>(`/v1/documents/source?id=${encodeURIComponent(id)}`),
   ingest: (file: File) => {
     const form = new FormData();
     form.append('file', file);
-    return request<{ success: boolean; document: Document }>('/v1/documents/ingest', { method: 'POST', body: form });
+    return request<{ success: boolean; document: Document }>('/v1/documents/ingest', { method: 'POST', body: form }, 5 * 60_000);
   }
 };

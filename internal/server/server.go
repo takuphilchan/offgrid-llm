@@ -67,6 +67,7 @@ type Server struct {
 	downloadProgress     map[string]*DownloadProgress
 	downloadMutex        sync.RWMutex
 	downloadCancelFuncs  map[string]context.CancelFunc // Cancel functions for active downloads
+	downloadWorkers      sync.WaitGroup
 	exportProgress       map[string]*ExportProgress
 	exportMutex          sync.RWMutex
 	modelCache           *inference.ModelCache
@@ -127,14 +128,19 @@ type Server struct {
 }
 
 type DownloadProgress struct {
-	FileName   string  `json:"file_name"`
-	BytesTotal int64   `json:"bytes_total"`
-	BytesDone  int64   `json:"bytes_done"`
-	Percent    float64 `json:"percent"`
-	Speed      float64 `json:"speed"`      // bytes per second
-	StartedAt  int64   `json:"started_at"` // unix timestamp
-	Status     string  `json:"status"`     // "downloading", "complete", "failed"
-	Error      string  `json:"error,omitempty"`
+	FileName        string  `json:"file_name"`
+	BytesTotal      int64   `json:"bytes_total"`
+	BytesDone       int64   `json:"bytes_done"`
+	Percent         float64 `json:"percent"`
+	Speed           float64 `json:"speed"`      // bytes per second
+	StartedAt       int64   `json:"started_at"` // unix timestamp
+	Status          string  `json:"status"`     // "downloading", "complete", "failed"
+	Error           string  `json:"error,omitempty"`
+	Repository      string  `json:"repository,omitempty"`
+	SourceFile      string  `json:"source_file,omitempty"`
+	ModelID         string  `json:"model_id,omitempty"`
+	Quantization    string  `json:"quantization,omitempty"`
+	EnableKnowledge bool    `json:"enable_knowledge,omitempty"`
 }
 
 type ExportProgress struct {
@@ -221,6 +227,10 @@ func NewWithConfig(cfg *config.Config) *Server {
 	// Initialize session handlers
 	sessionsDir := filepath.Join(cfg.DataDir, "sessions")
 	sessionHandlers := NewSessionHandlers(sessionsDir)
+	if err := sessionHandlers.manager.RecoverTurns(); err != nil {
+		owner.Close()
+		return &Server{config: cfg, startupErr: fmt.Errorf("recover conversations: %w", err)}
+	}
 
 	// Initialize new feature components
 	dataDir := cfg.DataDir
@@ -508,7 +518,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 		workspaceOwner:       owner,
 	}
 	sessionHandlers.requireAuth = cfg.RequireAuth
+	if err := server.loadDownloads(); err != nil {
+		server.startupErr = fmt.Errorf("recover downloads: %w", err)
+	}
 	sessionHandlers.streamer = server.streamSessionChat
+	sessionHandlers.runtimeContext = server.runtimeCtx
 	server.agentRunner = agents.NewRunner(agentManager, toolRegistry, server.callAgentModel)
 	server.agentRunner.StreamCaller = server.streamAgentModel
 	server.agentRunner.Observer = func(task *agents.Task) {
@@ -912,6 +926,7 @@ func (s *Server) Start() error {
 
 	// Model search and discovery (OffGrid-specific)
 	mux.HandleFunc("/v1/search", modelsOnly(s.handleModelSearch))
+	mux.HandleFunc("/v1/search/files", modelsOnly(s.handleModelSearchFiles))
 	mux.HandleFunc("/v1/catalog", modelsOnly(s.handleModelCatalog))
 	mux.HandleFunc("/v1/benchmark", chatOnly(s.handleBenchmark))
 	mux.HandleFunc("/v1/quantize", modelManagerOnly(s.handleQuantize))
@@ -952,6 +967,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/documents/ingest", ragManagerOnly(s.handleDocumentIngest))
 	mux.HandleFunc("/v1/documents/ingest-url", ragManagerOnly(s.handleDocumentIngestURL))
 	mux.HandleFunc("/v1/documents/delete", ragManagerOnly(s.handleDocumentDelete))
+	mux.HandleFunc("/v1/documents/source", ragOnly(s.handleDocumentSource))
 	mux.HandleFunc("/v1/documents/search", ragOnly(s.handleDocumentSearch))
 	mux.HandleFunc("/v1/documents/reindex", ragManagerOnly(s.handleDocumentReindex))
 	mux.HandleFunc("/v1/rag/evaluate", ragManagerOnly(s.handleRAGEvaluate))
@@ -1194,6 +1210,10 @@ func (s *Server) Close() error {
 			}
 		}
 		s.startupWorkers.Wait()
+		s.downloadWorkers.Wait()
+		if s.sessionHandlers != nil {
+			s.sessionHandlers.closeTurns()
+		}
 		if s.modelCache != nil {
 			s.modelCache.UnloadAll()
 			s.modelCache.StopMonitor()
@@ -2325,139 +2345,6 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleModelSearch searches HuggingFace Hub for models
-func (s *Server) handleModelSearch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	// Parse query parameters
-	query := r.URL.Query().Get("query")
-	if query == "" {
-		// Return empty results instead of error
-		response := map[string]interface{}{
-			"total":   0,
-			"results": []interface{}{},
-		}
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	author := r.URL.Query().Get("author")
-	quant := r.URL.Query().Get("quantization")
-	sortBy := r.URL.Query().Get("sort")
-
-	filter := models.SearchFilter{
-		Query:          query,
-		Author:         author,
-		Quantization:   quant,
-		SortBy:         sortBy,
-		OnlyGGUF:       true,
-		ExcludeGated:   true,
-		Limit:          20,
-		ExcludePrivate: true,
-	}
-
-	// Allow JSON body for more complex filters
-	if r.Method == http.MethodPost {
-		if err := json.NewDecoder(r.Body).Decode(&filter); err != nil {
-			writeError(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-	}
-
-	hf := models.NewHuggingFaceClient()
-	results, err := hf.SearchModels(filter)
-	if err != nil {
-		// Return empty results on error instead of 500
-		log.Printf("Search error: %v", err)
-		response := map[string]interface{}{
-			"total":   0,
-			"results": []interface{}{},
-			"error":   err.Error(),
-		}
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	// Transform results to include computed fields for UI
-	type UIModel struct {
-		ID              string   `json:"id"`
-		Author          string   `json:"author"`
-		Name            string   `json:"name"`
-		Description     string   `json:"description,omitempty"`
-		Downloads       int64    `json:"downloads"`
-		Likes           int      `json:"likes"`
-		Tags            []string `json:"tags,omitempty"`
-		TotalSize       int64    `json:"total_size,omitempty"`
-		SizeGB          string   `json:"size_gb,omitempty"`
-		BestFile        string   `json:"best_file,omitempty"`
-		BestQuant       string   `json:"best_quant,omitempty"`
-		DownloadCommand string   `json:"download_command,omitempty"`
-	}
-
-	uiModels := make([]UIModel, 0, len(results))
-	for _, result := range results {
-		// Extract author from model ID
-		modelID := result.Model.ID
-		if modelID == "" {
-			modelID = result.Model.ModelID
-		}
-
-		author := result.Model.Author
-		name := modelID
-
-		// Parse author from ID if not explicitly set
-		if author == "" && strings.Contains(modelID, "/") {
-			parts := strings.SplitN(modelID, "/", 2)
-			if len(parts) == 2 {
-				author = parts[0]
-				name = parts[1]
-			}
-		}
-
-		// Calculate size in GB from best variant
-		sizeGB := float64(result.TotalSize) / (1024 * 1024 * 1024)
-		bestFile := ""
-		bestQuant := ""
-		downloadCmd := ""
-
-		if result.BestVariant != nil {
-			sizeGB = result.BestVariant.SizeGB
-			bestFile = result.BestVariant.Filename
-			bestQuant = result.BestVariant.Quantization
-			downloadCmd = fmt.Sprintf("offgrid download %s --file %s", modelID, bestFile)
-		}
-
-		uiModels = append(uiModels, UIModel{
-			ID:              modelID,
-			Author:          author,
-			Name:            name,
-			Description:     result.Model.Description,
-			Downloads:       result.Model.Downloads,
-			Likes:           result.Model.Likes,
-			Tags:            result.Model.Tags,
-			TotalSize:       result.TotalSize,
-			SizeGB:          fmt.Sprintf("%.2f", sizeGB),
-			BestFile:        bestFile,
-			BestQuant:       bestQuant,
-			DownloadCommand: downloadCmd,
-		})
-	}
-
-	response := map[string]interface{}{
-		"total":   len(uiModels),
-		"results": uiModels,
-	}
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding response: %v", err)
-	}
-}
-
 // handleDeleteModel deletes a model from the registry and filesystem
 func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
@@ -2481,8 +2368,45 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.registry.DeleteModel(req.ModelID); err != nil {
-		writeError(w, fmt.Sprintf("Failed to delete model: %v", err), http.StatusInternalServerError)
+	remove := func() error {
+		s.downloadMutex.Lock()
+		defer s.downloadMutex.Unlock()
+		if len(s.downloadCancelFuncs) > 0 {
+			return inference.ErrRuntimeBusy
+		}
+		s.modelMutex.Lock()
+		defer s.modelMutex.Unlock()
+		if s.modelCache != nil && s.modelCache.IsModelAlive(req.ModelID) {
+			if err := s.modelCache.Unload(req.ModelID); err != nil {
+				return err
+			}
+		}
+		if s.currentModelID == req.ModelID {
+			if s.engine != nil && s.engine.IsLoaded() {
+				if err := s.engine.Unload(); err != nil {
+					return err
+				}
+			}
+			s.currentModelID = ""
+			s.currentPort = 0
+			s.currentContext = 0
+		}
+		return s.registry.DeleteModel(req.ModelID)
+	}
+	guardKnowledge := func() error {
+		if s.ragEngine != nil {
+			return s.ragEngine.WithModelRemoval(req.ModelID, remove)
+		}
+		return remove()
+	}
+	var removeErr error
+	if s.inferenceLifecycle != nil {
+		removeErr = s.inferenceLifecycle.Maintain(guardKnowledge)
+	} else {
+		removeErr = guardKnowledge()
+	}
+	if removeErr != nil {
+		writeError(w, fmt.Sprintf("Model could not be removed: %v. Stop active work or disable knowledge, then retry.", removeErr), http.StatusConflict)
 		return
 	}
 
@@ -2741,10 +2665,11 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req struct {
-		Repository   string `json:"repository"`
-		FileName     string `json:"file_name"`
-		Quantization string `json:"quantization"` // Optional: just the quant like "Q4_K_M"
-		ModelID      string `json:"model_id"`     // Optional stable catalog ID used as the local filename.
+		Repository      string `json:"repository"`
+		FileName        string `json:"file_name"`
+		Quantization    string `json:"quantization"` // Optional: just the quant like "Q4_K_M"
+		ModelID         string `json:"model_id"`     // Optional stable catalog ID used as the local filename.
+		EnableKnowledge bool   `json:"enable_knowledge"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2752,9 +2677,16 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Repository == "" {
+	if req.Repository == "" && !req.EnableKnowledge {
 		writeError(w, "repository is required", http.StatusBadRequest)
 		return
+	}
+	if req.EnableKnowledge && s.config.RequireAuth {
+		user := users.GetUser(r)
+		if user == nil || !user.HasPermission(users.PermissionRAGManage) {
+			writeError(w, "Knowledge setup requires permission to manage knowledge", http.StatusForbidden)
+			return
+		}
 	}
 
 	// If only quantization is provided, fetch the model to find the actual filename
@@ -2812,18 +2744,46 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		sourceFileName += ".gguf"
 	}
 	destPath := filepath.Join(s.config.ModelsDir, destFileName)
-	if _, err := os.Stat(destPath); err == nil {
-		// Model already exists
-		response := map[string]interface{}{
-			"success":   false,
-			"exists":    true,
-			"message":   fmt.Sprintf("Model %s already exists", destFileName),
-			"file_name": destFileName,
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Printf("Error encoding response: %v", err)
-		}
+	if !isSafeModelID(strings.TrimSuffix(destFileName, ".gguf")) {
+		writeError(w, "Invalid local model filename; provide a safe model_id", 400)
 		return
+	}
+	if _, err := os.Stat(destPath); err == nil {
+		if !req.EnableKnowledge {
+			if err := s.registry.ScanModels(); err != nil {
+				writeError(w, "Model exists but could not be discovered. Check storage access.", 500)
+				return
+			}
+			// Clear stale retry UI only after discovery and durable state agree.
+			s.downloadMutex.Lock()
+			if _, active := s.downloadCancelFuncs[destFileName]; !active {
+				s.downloadProgress[destFileName] = &DownloadProgress{FileName: destFileName, Status: "complete", Percent: 100, StartedAt: time.Now().Unix(), Repository: req.Repository, SourceFile: sourceFileName, ModelID: strings.TrimSuffix(destFileName, ".gguf"), Quantization: req.Quantization}
+				if err := s.saveDownloadsLocked(); err != nil {
+					s.downloadMutex.Unlock()
+					writeError(w, "Model exists but its saved state could not be updated. Check storage access.", 500)
+					return
+				}
+			}
+			s.downloadMutex.Unlock()
+			// Model already exists.
+			response := map[string]interface{}{
+				"success":   true,
+				"status":    "complete",
+				"exists":    true,
+				"message":   fmt.Sprintf("Model %s already exists", destFileName),
+				"file_name": destFileName,
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				log.Printf("Error encoding response: %v", err)
+			}
+			return
+		}
+	}
+	if req.Repository == "" {
+		if _, err := os.Stat(destPath); err != nil {
+			writeError(w, "Embedding model is not installed", 404)
+			return
+		}
 	}
 
 	// Create one authoritative progress/cancellation record before launching the
@@ -2840,16 +2800,38 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "download is already active for "+destFileName, http.StatusConflict)
 		return
 	}
+	if previous := s.downloadProgress[destFileName]; previous != nil && req.Repository != "" {
+		if info, statErr := os.Stat(destPath + ".tmp"); statErr == nil && info.Size() > 0 &&
+			(previous.Repository != req.Repository || previous.SourceFile != sourceFileName) {
+			s.downloadMutex.Unlock()
+			cancel()
+			writeError(w, "A retained partial download belongs to a different source. Remove or finish it before reusing this model ID.", http.StatusConflict)
+			return
+		}
+	}
 	s.downloadCancelFuncs[destFileName] = cancel
 	s.downloadProgress[destFileName] = &DownloadProgress{
-		FileName:  destFileName,
-		Status:    "downloading",
-		StartedAt: time.Now().Unix(),
+		FileName:   destFileName,
+		Status:     "downloading",
+		StartedAt:  time.Now().Unix(),
+		Repository: req.Repository, SourceFile: sourceFileName, ModelID: strings.TrimSuffix(destFileName, ".gguf"), Quantization: req.Quantization, EnableKnowledge: req.EnableKnowledge,
 	}
+	if err := s.saveDownloadsLocked(); err != nil {
+		delete(s.downloadCancelFuncs, destFileName)
+		delete(s.downloadProgress, destFileName)
+		s.downloadMutex.Unlock()
+		cancel()
+		writeError(w, "Cannot save download request. Check storage access and free space.", 500)
+		return
+	}
+	s.downloadWorkers.Add(1)
 	s.downloadMutex.Unlock()
 
 	// Start download in background
-	go s.downloadModelAsync(ctx, req.Repository, sourceFileName, destFileName)
+	go func() {
+		defer s.downloadWorkers.Done()
+		s.downloadModelAsync(ctx, req.Repository, sourceFileName, destFileName)
+	}()
 
 	// Audit model download initiation
 	user := users.GetUser(r)
@@ -2892,7 +2874,16 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 	// Clean up cancel func when done
 	defer func() {
 		s.downloadMutex.Lock()
+		if cancel := s.downloadCancelFuncs[progressKey]; cancel != nil {
+			cancel()
+		}
 		delete(s.downloadCancelFuncs, progressKey)
+		if err := s.saveDownloadsLocked(); err != nil {
+			if progress := s.downloadProgress[progressKey]; progress != nil {
+				progress.Status = "failed"
+				progress.Error = "Could not save download state. Check disk space; refresh installed models before retrying."
+			}
+		}
 		s.downloadMutex.Unlock()
 	}()
 
@@ -2900,7 +2891,11 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 	startTime := time.Now()
 	destPath := filepath.Join(s.config.ModelsDir, progressKey)
 	hf := models.NewHuggingFaceClient()
-	err := hf.DownloadGGUFContext(ctx, repository, sourceFileName, destPath, func(done, total int64) {
+	var initialBytes int64 = -1
+	progressCallback := func(done, total int64) {
+		if initialBytes < 0 {
+			initialBytes = done
+		}
 		s.downloadMutex.Lock()
 		if progress := s.downloadProgress[progressKey]; progress != nil {
 			progress.BytesDone = done
@@ -2909,14 +2904,51 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 				progress.Percent = min(100, float64(done)/float64(total)*100)
 			}
 			if elapsed := time.Since(startTime).Seconds(); elapsed > 0 {
-				progress.Speed = float64(done) / elapsed
+				progress.Speed = float64(done-initialBytes) / elapsed
+			}
+			if total > 0 && done >= total && progress.Status == "downloading" {
+				progress.Status = "finalizing"
+				progress.Speed = 0
 			}
 		}
 		s.downloadMutex.Unlock()
-	})
+	}
+	var err error
+	if info, statErr := os.Stat(destPath); statErr == nil {
+		progressCallback(info.Size(), info.Size())
+	} else {
+		err = hf.DownloadGGUFContext(ctx, repository, sourceFileName, destPath, progressCallback)
+	}
+	if err == nil {
+		err = s.registry.ScanModels()
+	}
+	if err == nil {
+		_, err = s.registry.GetModel(strings.TrimSuffix(progressKey, ".gguf"))
+	}
+	s.downloadMutex.RLock()
+	progress := s.downloadProgress[progressKey]
+	enableKnowledge := progress != nil && progress.EnableKnowledge
+	s.downloadMutex.RUnlock()
+	if err == nil && enableKnowledge {
+		if s.ragEngine == nil {
+			err = fmt.Errorf("knowledge engine is unavailable")
+		} else {
+			err = s.ragEngine.Enable(ctx, strings.TrimSuffix(progressKey, ".gguf"))
+		}
+		if err != nil {
+			err = fmt.Errorf("model is installed, but knowledge setup failed: %w; choose Resume to retry setup", err)
+		}
+	}
+	fileInfo, statErr := os.Stat(destPath)
+	if err == nil {
+		err = statErr
+	}
 	if err != nil {
 		status := "failed"
 		message := err.Error()
+		if errors.Is(err, models.ErrFinalizeDownload) {
+			message = "Downloaded data was kept, but the model file is still in use or could not be moved. Close applications using it, then choose Resume."
+		}
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 			status = "cancelled"
 			message = "Download cancelled; partial data was kept for resume"
@@ -2926,12 +2958,20 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 		if progress := s.downloadProgress[progressKey]; progress != nil {
 			progress.Status = status
 			progress.Error = message
+			progress.Speed = 0
+		}
+		if saveErr := s.saveDownloadsLocked(); saveErr != nil {
+			if progress := s.downloadProgress[progressKey]; progress != nil {
+				progress.Status = "failed"
+				progress.Error = "Download stopped, but its recovery state could not be saved. Check storage access and refresh installed models."
+			}
 		}
 		s.downloadMutex.Unlock()
 		return
 	}
 
-	fileInfo, statErr := os.Stat(destPath)
+	// Publish completion only after discovery. Otherwise a client's one-time
+	// completion refresh can race the scan and never show the installed model.
 	s.downloadMutex.Lock()
 	if progress := s.downloadProgress[progressKey]; progress != nil {
 		if statErr == nil {
@@ -2941,14 +2981,17 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 		progress.Status = "complete"
 		progress.Percent = 100
 		progress.Error = ""
+		progress.Speed = 0
+	}
+	if saveErr := s.saveDownloadsLocked(); saveErr != nil {
+		if progress := s.downloadProgress[progressKey]; progress != nil {
+			progress.Status = "failed"
+			progress.Error = "The model was installed, but completion could not be saved. Check storage access and refresh installed models."
+		}
 	}
 	s.downloadMutex.Unlock()
 	log.Printf("Download completed: %s", progressKey)
 
-	// Rescan models to pick up the new file
-	if err := s.registry.ScanModels(); err != nil {
-		log.Printf("Failed to rescan models: %v", err)
-	}
 }
 
 // handleDownloadProgress returns download progress for all active downloads
@@ -2998,12 +3041,12 @@ func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
 	canceled := false
 	for fileName, cancelFunc := range s.downloadCancelFuncs {
 		// Match by exact name or if request is empty (cancel all)
-		if req.FileName == "" || fileName == req.FileName || strings.Contains(fileName, req.FileName) {
+		if req.FileName == "" || fileName == req.FileName {
 			cancelFunc()
-			// Update progress status
+			// The worker owns the terminal state. Keeping it active here prevents
+			// Resume from racing the file handle that is still winding down.
 			if progress, ok := s.downloadProgress[fileName]; ok {
-				progress.Status = "cancelled"
-				progress.Error = "Download cancelled by user"
+				progress.Error = "Cancellation requested; waiting for the download worker to stop."
 			}
 			canceled = true
 			log.Printf("Cancelled download: %s", fileName)
@@ -3159,6 +3202,13 @@ func (s *Server) handleModelCatalog(w http.ResponseWriter, r *http.Request) {
 			variant := &entry.Variants[0]
 			if preferred := entry.FindVariant("Q4_K_M"); preferred != nil {
 				variant = preferred
+			}
+			if quant := r.URL.Query().Get("quant"); quant != "" {
+				if requested := entry.FindVariant(quant); requested != nil {
+					variant = requested
+				} else {
+					continue
+				}
 			}
 			var repo, file string
 

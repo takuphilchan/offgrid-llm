@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,7 +32,7 @@ type HFModel struct {
 	CreatedAt     time.Time `json:"createdAt"`               // Creation date
 	LastModified  time.Time `json:"lastModified"`            // Last update
 	Private       bool      `json:"private"`                 // Is private
-	Gated         bool      `json:"gated,omitempty"`         // Requires approval (optional)
+	Gated         HFGated   `json:"gated,omitempty"`         // false, true, "auto", or "manual"
 	LibraryName   string    `json:"library_name"`            // e.g., "transformers", "gguf"
 	PipelineTag   string    `json:"pipeline_tag"`            // e.g., "text-generation"
 	Siblings      []HFFile  `json:"siblings,omitempty"`      // Files in the repo (only in detailed view)
@@ -63,6 +64,7 @@ type HFCard struct {
 
 // SearchFilter contains search and filter options
 type SearchFilter struct {
+	MetadataOnly   bool     `json:"-"` // Load file choices only after the user selects a repository.
 	Query          string   // Search query
 	Tags           []string // Filter by tags (e.g., "gguf", "llama", "q4_k_m")
 	Author         string   // Filter by author
@@ -118,6 +120,12 @@ func NewHuggingFaceClient() *HuggingFaceClient {
 
 // SearchModels searches HuggingFace Hub for models matching the filter
 func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, error) {
+	return hf.SearchModelsContext(context.Background(), filter)
+}
+
+func (hf *HuggingFaceClient) SearchModelsContext(ctx context.Context, filter SearchFilter) ([]SearchResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
 	// Build search URL
 	searchURL := fmt.Sprintf("%s/models", hf.baseURL)
 	params := url.Values{}
@@ -149,6 +157,17 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 	if sortBy == "" {
 		sortBy = "downloads" // Default to most popular
 	}
+	switch sortBy {
+	case "created":
+		sortBy = "createdAt"
+	case "modified":
+		sortBy = "lastModified"
+	case "relevance":
+		sortBy = "downloads"
+	case "downloads", "likes", "createdAt", "lastModified":
+	default:
+		return nil, fmt.Errorf("unsupported search sort")
+	}
 	params.Add("sort", sortBy)
 	params.Add("direction", "-1") // Descending
 
@@ -157,11 +176,14 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 	if limit == 0 {
 		limit = 50 // Default limit
 	}
+	if limit < 1 || limit > 50 {
+		return nil, fmt.Errorf("search limit must be between 1 and 50")
+	}
 	params.Add("limit", fmt.Sprintf("%d", limit))
 
 	// Make API request
 	fullURL := fmt.Sprintf("%s?%s", searchURL, params.Encode())
-	req, err := http.NewRequest("GET", fullURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -175,19 +197,64 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Hugging Face search returned HTTP %d", resp.StatusCode)
 	}
 
 	// Parse response
 	var models []HFModel
-	if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&models); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	if len(models) > limit {
+		models = models[:limit]
+	}
+	// CLI file discovery is bounded to four requests, not one blocking request
+	// per result in series. The UI uses metadata-only search and lazy file lists.
+	fileLists := make([][]HFFile, len(models))
+	fileErrors := make([]error, len(models))
+	var group sync.WaitGroup
+	workers := make(chan struct{}, 4)
+	if !filter.MetadataOnly {
+		for i := range models {
+			if models[i].ID == "" {
+				models[i].ID = models[i].ModelID
+			}
+			if (filter.ExcludeGated && bool(models[i].Gated)) || models[i].Private || models[i].Disabled {
+				continue
+			}
+			workers <- struct{}{}
+			group.Add(1)
+			go func(index int) {
+				defer group.Done()
+				defer func() { <-workers }()
+				fileLists[index], fileErrors[index] = hf.GetModelFilesContext(ctx, models[index].ID)
+			}(i)
+		}
+		group.Wait()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		readable := false
+		var firstError error
+		for index := range fileLists {
+			if fileLists[index] != nil {
+				readable = true
+			}
+			if firstError == nil && fileErrors[index] != nil {
+				firstError = fileErrors[index]
+			}
+		}
+		if !readable && firstError != nil {
+			return nil, fmt.Errorf("model file discovery failed: %w", firstError)
+		}
 	}
 
 	// Process and filter results
 	results := make([]SearchResult, 0, len(models))
-	for _, model := range models {
+	for index, model := range models {
+		if model.ID == "" {
+			model.ID = model.ModelID
+		}
 		// Skip if not a GGUF model (check tags)
 		isGGUF := false
 		for _, tag := range model.Tags {
@@ -201,10 +268,10 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 		}
 
 		// Apply additional filters
-		if filter.ExcludeGated && model.Gated {
+		if filter.ExcludeGated && bool(model.Gated) {
 			continue
 		}
-		if filter.ExcludePrivate && model.Private {
+		if model.Disabled || (filter.ExcludePrivate && model.Private) {
 			continue
 		}
 		if filter.MinDownloads > 0 && model.Downloads < filter.MinDownloads {
@@ -213,17 +280,16 @@ func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, 
 		if filter.MinLikes > 0 && model.Likes < filter.MinLikes {
 			continue
 		}
+		if filter.MetadataOnly {
+			results = append(results, SearchResult{Model: model})
+			continue
+		}
 
 		// For GGUF models, fetch file details with sizes
 		var ggufFiles []GGUFFileInfo
 		if isGGUF {
 			// Use tree API to get actual file sizes
-			files, err := hf.GetModelFiles(model.ID)
-			if err != nil {
-				// Skip models we can't fetch files for
-				continue
-			}
-			ggufFiles = hf.parseGGUFFilesFromTree(model.ID, files)
+			ggufFiles = hf.parseGGUFFilesFromTree(model.ID, fileLists[index])
 		}
 
 		if filter.OnlyGGUF && len(ggufFiles) == 0 {
@@ -300,7 +366,7 @@ func (hf *HuggingFaceClient) parseGGUFFilesFromTree(modelID string, files []HFFi
 		filename := file.Filename
 
 		// Only include .gguf files
-		if !strings.HasSuffix(strings.ToLower(filename), ".gguf") {
+		if !strings.HasSuffix(strings.ToLower(filename), ".gguf") || standaloneFileReason(filename) != "" {
 			continue
 		}
 
@@ -610,11 +676,18 @@ func (hf *HuggingFaceClient) GetModelInfo(modelID string) (*HFModel, error) {
 // GetModelFiles fetches file list with sizes using the tree API
 
 func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
+	return hf.GetModelFilesContext(context.Background(), modelID)
+}
+
+func (hf *HuggingFaceClient) GetModelFilesContext(ctx context.Context, modelID string) ([]HFFile, error) {
+	if !ValidHubRepository(modelID) {
+		return nil, fmt.Errorf("repository must be owner/name")
+	}
 	// Use the tree API which includes file sizes
 	// Note: modelID is in format "owner/repo" - don't escape the slash
-	apiURL := fmt.Sprintf("%s/models/%s/tree/main", hf.baseURL, modelID)
+	apiURL := fmt.Sprintf("%s/models/%s/tree/main?recursive=true&limit=1000", hf.baseURL, modelID)
 
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -628,8 +701,7 @@ func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Hugging Face files returned HTTP %d", resp.StatusCode)
 	}
 
 	// Parse tree response
@@ -639,7 +711,7 @@ func (hf *HuggingFaceClient) GetModelFiles(modelID string) ([]HFFile, error) {
 		Size int64  `json:"size"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&treeFiles); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&treeFiles); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -664,7 +736,7 @@ func (hf *HuggingFaceClient) DownloadGGUF(modelID, filename, destPath string, on
 	return hf.DownloadGGUFContext(context.Background(), modelID, filename, destPath, onProgress)
 }
 
-// DownloadGGUFContext downloads a GGUF file, retaining a verified partial
+// DownloadGGUFContext downloads a GGUF file, retaining a partial
 // .tmp file when the context is cancelled so the next attempt can resume.
 func (hf *HuggingFaceClient) DownloadGGUFContext(ctx context.Context, modelID, filename, destPath string, onProgress func(int64, int64)) error {
 	downloadURL := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", modelID, filename)
@@ -677,18 +749,19 @@ func (hf *HuggingFaceClient) DownloadGGUFContext(ctx context.Context, modelID, f
 	}
 
 	// Use a client with no timeout for large downloads
-	client := &http.Client{Timeout: 0}
-	resume, err := openResumableResponseContext(ctx, client, downloadURL, tmpPath, "OffGrid-LLM")
+	client := *hf.client
+	client.Timeout = 0
+	resume, err := openResumableResponseContext(ctx, &client, downloadURL, tmpPath, "OffGrid-LLM")
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
 	written := resume.offset
 	totalSize := resume.total
+	if onProgress != nil {
+		onProgress(written, totalSize)
+	}
 	if resume.complete {
-		if err := os.Rename(tmpPath, destPath); err != nil {
-			return fmt.Errorf("failed to finalize download: %w", err)
-		}
-		return nil
+		return finalizeDownload(ctx, tmpPath, destPath)
 	}
 	resp := resume.response
 	defer resp.Body.Close()
@@ -722,6 +795,9 @@ func (hf *HuggingFaceClient) DownloadGGUFContext(ctx context.Context, modelID, f
 			if ew != nil {
 				return ew
 			}
+			if nw != nr {
+				return io.ErrShortWrite
+			}
 		}
 		if err == io.EOF {
 			break
@@ -736,12 +812,15 @@ func (hf *HuggingFaceClient) DownloadGGUFContext(ctx context.Context, modelID, f
 		return fmt.Errorf("incomplete download: got %d bytes, expected %d", written, totalSize)
 	}
 
-	// Move .tmp to final destination
-	if err := os.Rename(tmpPath, destPath); err != nil {
-		return fmt.Errorf("failed to finalize download: %w", err)
+	// Flush and release our own write handle before promotion. A deferred close
+	// is too late on Windows: it runs only after Rename has already failed.
+	if err := out.Sync(); err != nil {
+		return fmt.Errorf("flush downloaded model: %w", err)
 	}
-
-	return nil
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close downloaded model: %w", err)
+	}
+	return finalizeDownload(ctx, tmpPath, destPath)
 }
 
 // DetectProjectorFile returns the best matching projector/mmproj companion for a GGUF

@@ -27,10 +27,12 @@ test('knowledge setup downloads one stable model and enables RAG', async ({ page
     const body = route.request().postDataJSON();
     expect(body.model_id).toBe('bge-m3');
     expect(body.file_name).toBe('bge-m3-Q4_K_M.gguf');
+    expect(body.enable_knowledge).toBe(true);
     await route.fulfill({ json: { success: true, status: 'downloading', file_name: 'bge-m3.gguf' } });
   });
   await page.route('**/v1/models/download/progress', route => {
-    installed = true;
+    installed = downloadRequests > 0;
+    enabled = installed;
     return route.fulfill({ json: { 'bge-m3.gguf': { file_name: 'bge-m3.gguf', bytes_total: 437800000, bytes_done: 437800000, percent: 100, speed: 1, started_at: 1, status: 'complete' } } });
   });
   await page.route('**/v1/rag/enable', async route => { enableRequests++; enabled = true; await route.fulfill({ json: { success: true, message: 'enabled' } }); });
@@ -39,7 +41,8 @@ test('knowledge setup downloads one stable model and enables RAG', async ({ page
   await expect(page.getByRole('heading', { name: 'Knowledge retrieval is not enabled.' })).toBeVisible();
   await page.getByRole('button', { name: 'Install and enable' }).dblclick();
   await expect.poll(() => downloadRequests).toBe(1);
-  await expect.poll(() => enableRequests).toBe(1);
+  await expect.poll(() => enabled).toBe(true);
+  expect(enableRequests).toBe(0); // Activation belongs to the service worker.
   await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('knowledge.png'), fullPage: true });
 });

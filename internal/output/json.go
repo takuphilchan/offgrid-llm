@@ -31,12 +31,19 @@ type SessionInfo struct {
 
 // SearchResult represents a search result in JSON output
 type SearchResult struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Downloads   int      `json:"downloads,omitempty"`
-	Likes       int      `json:"likes,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	ModelID     string   `json:"model_id"`
+	Files       []SearchFile `json:"files"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Downloads   int          `json:"downloads,omitempty"`
+	Likes       int          `json:"likes,omitempty"`
+	Tags        []string     `json:"tags,omitempty"`
+	ModelID     string       `json:"model_id"`
+}
+
+type SearchFile struct {
+	File  string `json:"file"`
+	Size  int64  `json:"size_bytes"`
+	Quant string `json:"quant"`
 }
 
 // DownloadProgress represents download progress in JSON output

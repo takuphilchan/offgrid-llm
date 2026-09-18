@@ -2,6 +2,10 @@
 
 This guide explains how to download and set up models for OffGrid LLM.
 
+Start with the current [built-in model search and download recovery guide](model-discovery.md)
+for the web, desktop, and CLI. The older manual examples below are not an exhaustive
+catalog or current model recommendation; check upstream model cards and runtime support.
+
 ## Quick Start
 
 1. **Create models directory:**

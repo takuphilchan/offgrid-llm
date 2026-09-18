@@ -17,12 +17,17 @@ type SessionCompleter func(context.Context, string, []api.ChatMessage, bool) (st
 
 // SessionHandlers provides HTTP handlers for session management
 type SessionHandlers struct {
-	manager      *sessions.SessionManager
-	completer    SessionCompleter
-	streamer     SessionStreamer
-	requireAuth  bool
-	locksMu      sync.Mutex
-	sessionLocks map[string]*sessionLock
+	manager        *sessions.SessionManager
+	completer      SessionCompleter
+	streamer       SessionStreamer
+	requireAuth    bool
+	locksMu        sync.Mutex
+	sessionLocks   map[string]*sessionLock
+	turnMu         sync.Mutex
+	turnCancels    map[string]context.CancelFunc
+	turnWorkers    sync.WaitGroup
+	turnClosed     bool
+	runtimeContext context.Context
 }
 
 type sessionLock struct {
@@ -113,6 +118,8 @@ func writeSessionError(w http.ResponseWriter, err error) {
 		writeError(w, "Session not found", http.StatusNotFound)
 	case errors.Is(err, sessions.ErrSessionExists):
 		writeError(w, "Session name is already in use", http.StatusConflict)
+	case errors.Is(err, sessions.ErrTurnConflict):
+		writeError(w, "Conversation changed or has active work. Refresh before retrying.", http.StatusConflict)
 	case errors.Is(err, sessions.ErrAccessDenied):
 		writeError(w, "Forbidden", http.StatusForbidden)
 	default:
@@ -209,9 +216,16 @@ func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	h.turnMu.Lock()
+	defer h.turnMu.Unlock()
 	// Authorize before reporting contention; do not reveal another user's work.
-	if _, err := h.scoped(r).Load(name); err != nil {
+	current, err := h.scoped(r).Load(name)
+	if err != nil {
 		writeSessionError(w, err)
+		return
+	}
+	if current.Turn.Active() {
+		writeError(w, "Conversation has active work. Stop it before deleting.", http.StatusConflict)
 		return
 	}
 	unlock, available := h.tryLockSession(name)
@@ -283,6 +297,8 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		Stream           bool   `json:"stream,omitempty"`
 		Profile          string `json:"profile,omitempty"`
 		MaxTokens        int    `json:"max_tokens,omitempty"`
+		Durable          bool   `json:"durable,omitempty"`
+		RequestID        string `json:"request_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -309,6 +325,10 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		}
 		if req.MaxTokens == 0 {
 			req.MaxTokens = 1024
+		}
+		if req.Durable {
+			h.generateDurable(w, r, name, req.RequestID, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens)
+			return
 		}
 		h.generateStream(w, r, name, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens)
 		return
@@ -400,6 +420,10 @@ func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request)
 	}
 
 	// POST /v1/sessions/{name}/messages
+	if parts[1] == "turn" || parts[1] == "turn/events" || parts[1] == "turn/cancel" {
+		h.handleTurn(w, r, sessionName, parts[1])
+		return
+	}
 	if parts[1] == "messages" && r.Method == http.MethodPost {
 		h.HandleSessionAddMessage(w, r, sessionName)
 		return

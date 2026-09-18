@@ -152,7 +152,7 @@ jobs:
       - name: Test native CLI, persistence, and agent contracts
         # These tests use subprocesses and real local files, not OS emulation.
         # They do not substitute for installed-app or hardware qualification.
-        run: go test ./cmd/offgrid ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents
+        run: go test ./cmd/offgrid ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models
       - name: Test desktop compatibility and IPC trust policy
         working-directory: desktop
         run: npm test
@@ -201,7 +201,8 @@ jobs:
 
       - name: Test Windows installation, reinstall and uninstall
         if: runner.os == 'Windows'
-        shell: pwsh
+        # Native wizard capture uses Windows PowerShell's System.Drawing bridge.
+        shell: powershell
         run: |
           $version = (Get-Content desktop/package.json | ConvertFrom-Json).version
           ./dev/scripts/test-windows-installer.ps1 -InstallerPath "build/windows-installer-smoke/OffGrid Desktop Install Test-Setup-$version.exe"

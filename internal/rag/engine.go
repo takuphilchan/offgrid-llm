@@ -269,6 +269,25 @@ func (e *Engine) Disable() {
 	log.Println("[RAG] Disabled")
 }
 
+// Keep deletion from racing knowledge setup, retrieval, or ingestion.
+func (e *Engine) WithModelRemoval(model string, remove func() error) error {
+	if !e.mu.TryLock() {
+		return inference.ErrRuntimeBusy
+	}
+	defer e.mu.Unlock()
+	if model == e.embeddingModel {
+		if e.enabled {
+			return fmt.Errorf("disable knowledge before deleting its embedding model")
+		}
+		if e.embeddingEngine != nil {
+			if err := e.embeddingEngine.Unload(); err != nil {
+				return err
+			}
+		}
+	}
+	return remove()
+}
+
 // IsEnabled returns whether RAG is enabled
 func (e *Engine) IsEnabled() bool {
 	e.mu.RLock()
