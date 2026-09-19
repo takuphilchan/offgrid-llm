@@ -748,7 +748,169 @@ speaker review of translations remain separately required. Installer shell text
 is still English. See [model discovery](../guides/model-discovery.md) and
 [desktop recovery](../setup/desktop-startup.md).
 
+## 2026-09-19 — Real embedding and inference correctness slice
+
+- Replaced the default hash-derived embedding backend with an owned loopback
+  llama-server worker. Missing files and failed readiness checks fail closed;
+  vectors are checked for count, indices, dimensions, finite values and nonzero
+  norm. Requests and queued embedding calls honor cancellation; shutdown reaps
+  only the owned child. Windows workers do not open console windows.
+- Knowledge schema 3 records model/runtime digest-based embedding identity.
+  Unverifiable prior indexes cannot be activated. Sources remain accessible.
+  Offline `workspace rebuild-knowledge` makes a backup, takes exclusive ownership,
+  stages documents resumably and publishes vectors plus metadata in one SQLite
+  transaction. It does not silently skip missing sources or delete old data.
+- Removed filename-derived chat stop tokens and blanket tool-capability claims.
+  Seed zero is preserved; unsupported research controls fail explicitly instead
+  of being silently discarded. Batch milliseconds and completion-token throughput
+  now have explicit units/basis. Unicode truncation no longer splits UTF-8 bytes.
+- Removed port-based process killing and unfiltered retrieval fallback. Shared
+  embedding API calls bind model loading and execution together; knowledge checks
+  embedding identity so another model cannot silently contaminate its vectors.
+- Validation: full native Go suite passed; Linux race checks passed for inference,
+  RAG, batch and API packages; generated API contracts and renderer type checks
+  passed. Real local BGE-M3 returned 1024 dimensions, 36 measured prompt tokens,
+  and related/unrelated cosine scores 0.7291/0.3305 on a three-sentence smoke test.
+  Real-runtime interrupted/retried index rebuilding and retrieval passed on
+  disposable data. Transaction tests cover cancellation, changed sources, invalid
+  dimensions and injected write failure without replacing original vectors.
+- Local container checkpoint: application and renderer rebuilt as
+  `0.4.8-repair-20260919`; unchanged pinned CUDA runtime reused after a registry
+  connection failure prevented the full GPU rebuild. Runtime binary hashes match
+  before/after. Packaged BGE-M3 produced 1024 dimensions and 36 prompt tokens;
+  paraphrase/unrelated cosine scores were 0.7252/0.3371. An isolated ingest/query
+  returned its correct source. Nine browser navigation/recovery checks passed
+  (recovery cases use fixtures; navigation uses the real packaged service).
+  After a stopped-workspace backup and checksum verification, the authorized
+  local container replacement preserved its existing model/data volumes and
+  settings. Live health, build/UI identity, knowledge activation and real-service
+  browser navigation passed. No release images or stable aliases were published.
+
+This smoke evidence is **not** retrieval-quality qualification. Online durable
+rebuild controls, shared inference admission for indexing, full sampling
+provenance/diagnostic bundles, transactional workspace migration, project/team
+permissions and research workflows remain unfinished. The native `llama` build
+tag is not qualified by the default HTTP-runtime tests. No new release is certified.
+
 ## September 2026 recovery and workflow slice
+
+Commit checkpoint (2026-09-19): the complete Go suite and targeted race suites
+for inference, RAG, batch, agents, server and API packages passed. API contract
+drift, TypeScript checks, renderer build, 28 desktop host tests and all 79 Edge
+browser tests against an isolated packaged service passed. The renderer build
+still reports its existing large-chunk warning. Opt-in real-runtime tests were
+not rerun at this checkpoint; their earlier smoke evidence is recorded above.
+Changes are grouped into runtime, history, shared-client, local-build and evidence
+commits. The application version remains 0.4.8; this is not a new release or an
+installed-platform qualification.
+
+UI control consistency checkpoint (2026-09-19): shared web/Electron renderer
+controls now use one sizing/focus/disabled contract. Knowledge actions are grouped
+with document status rather than presenting Disable as a full-width first action.
+Search and reconciliation fields have explicit form styling/labels. Action rows,
+connector forms and long localized headings wrap at narrow widths. Type checking,
+35 browser checks (including long-label/RTL/light/dark control regressions) and
+18 desktop host tests passed. These are renderer/host checks, not evidence of
+freshly installed Windows/macOS/Linux packages.
+The local container was rebuilt as `0.4.8-ui-controls-20260919`, reusing the
+unchanged verified GPU runtime. Six packaged-browser checks passed before the
+authorized replacement. A stopped-workspace backup was verified; model/data
+volumes and configuration were retained. Live health, new stylesheet/build
+identity and real-service navigation passed after replacement. The previous
+container remains stopped for recovery. No installers or release aliases were
+published.
+
+UI workflow presentation checkpoint (2026-09-19): removed badge backgrounds from
+download status text and terminal progress bars. Installed models now have status
+indicators instead of disabled primary actions. Knowledge setup tracks only its
+selected embedding activation, distinguishes installation from retrieval readiness,
+and unlocks recovery if its progress record disappears. Model search precedes the
+catalog; catalog filtering, in-place page refresh, explicit unknown feature status,
+named tool switches, keyboard tabs, fully visible narrow-screen navigation, safe
+Markdown results and expandable Activity diagnostics are covered by regressions.
+The full 60-test browser suite passed, followed by all eight focused presentation
+tests (including two additional cases), type/API checks and 18 desktop host tests.
+Screenshots were inspected for light-mode knowledge/catalog and mobile navigation.
+Fourteen Edge checks passed against the isolated rebuilt image (real-service
+navigation plus fixture-driven interaction/layout tests). The application/UI image
+is `0.4.8-ui-workflows-20260919`; the unchanged native GPU runtime was reused and
+its binary hash checked. After a stopped-workspace backup and checksum verification
+(59 files, 213857 bytes), the authorized local replacement retained model/data
+volumes and configuration. Live health, build identity and all-route navigation
+passed. The stopped previous container is retained for recovery. No new native
+installer, release qualification, push or publication is implied by these checks.
+
+UI interaction recovery checkpoint (2026-09-19): history toolbars/search have
+explicit spacing; command palette/mobile history contain keyboard focus and
+respect IME. Initial history loading cannot change the conversation under an
+editable draft. Account-scoped navigation state retains filters, connector drafts,
+model discovery selection and Activity selection without writing connector URLs
+to disk. Permission-aware controls avoid administrator-only requests for members;
+`/v1/users/me` now reports authentication enforcement explicitly. Chat knowledge
+readiness and unknown document index states are truthful. History/event/statistics
+failures are distinct, bulk deletion exposes progress and a stop-after-current
+boundary, and stale integration setup responses are ignored after model changes.
+Desktop startup/custom menus share nine-locale resources and validated saved
+appearance preferences. Native OS menu roles retain platform localization.
+
+Evidence: API drift/type checks and renderer build passed; all 73 browser tests
+passed in Edge against the isolated rebuilt application, including real-service
+navigation/session persistence and fixture-driven interaction/fault cases. Desktop
+host tests passed (28); the Go authentication-enforcement contract test passed.
+Desktop/mobile history and narrow-screen Settings screenshots were inspected.
+The local image `offgrid-llm:ui-recovery-gpu-20260919` reuses the unchanged native
+GPU runtime (hash verified). After a stopped-workspace backup and archive checksum
+verification (59 files, 213857 bytes), the authorized replacement retained volumes
+and environment configuration. Live health/build identity and all-route navigation
+passed. UI build: `977f3464f042bb7db1b4c4ea68beb3d1c1ccb9a9fa6c8f87ba112ce9e0a3f05c`.
+Backup: `/home/phil/.local/state/offgrid/backups/20260919-ui-recovery/workspace-before-ui-recovery.zip`.
+Recovery container: `offgrid-rollback-20260919-ui-recovery` (stopped). The disposable
+test container was removed. No installed desktop upgrade, full native-runtime
+requalification, translation speaker review, commit, push, or release is implied.
+
+Legacy agent-history repair checkpoint (2026-09-19): interrupted records without
+any checkpoint or pending approval can now be removed by their authorized owner
+(local administrator for unowned legacy records). Active workers, resumable
+checkpoints and uncertain outcomes remain protected. Deletion persists a minimal
+tombstone so Activity cannot resurrect the record. The bulk action is now
+"Clear removable tasks", with matching explanations across all nine locales.
+
+Evidence: agent-package race tests, server history deletion/restart race tests,
+API contract drift checks and renderer build passed. All 17 targeted packaged
+Edge history/interaction/navigation tests passed; live all-route navigation passed
+after deployment. This does not qualify installed desktop packages or translations.
+The approved deployment uses `offgrid-llm:history-repair-gpu-20260919`, retaining
+the unchanged hash-verified GPU runtime, environment and data/model mounts.
+UI build: `e9aab400c59ccf7c5c83f4c2cc0fb0652500f939ea92e25be84307794b5b4a05`.
+The stopped-workspace backup verified 59 files / 152104 uncompressed bytes at
+`/home/phil/.local/state/offgrid/backups/20260919-history-repair/workspace-before-history-repair.zip`
+(archive mode 0600). The old container is retained stopped as
+`offgrid-rollback-20260919-history-repair`; the isolated test container was removed.
+Only the three explicitly approved legacy D-drive task records were deleted via
+the authorized API; their absence from task history and Activity was verified.
+Tool-created files, audit records and the recovery backup were not deleted.
+No commit, push or publication was performed.
+
+Palette and agent-layout checkpoint (2026-09-19): replaced the square search focus
+frame with an inset focus line; palette height now accounts for its header and
+viewport offset. Keyboard selection scrolls only the list; search has combobox
+semantics and Esc is also a clickable dismissal control. Agent status cards became
+a compact strip, task entry precedes model/style settings, desktop results receive
+more width, and selected history is marked. Finished execution steps are expandable.
+Large/live output and approvals preserve Run/cancel positioning.
+
+Evidence: renderer build, API/type checks, 78 Edge tests against the isolated
+packaged container, and 28 desktop host tests passed. Screenshots were inspected
+for agent desktop layout and palette compact-height/RTL presentation. This does
+not qualify installed desktop packages or replace screen-reader/user review.
+Authorized local deployment uses `offgrid-llm:agent-layout-gpu-20260919`, preserving
+the unchanged native GPU runtime (hash checked), model/data mounts and service
+environment. Live health, build identity and all-route navigation passed.
+UI build: `9b5ee03849af2dacd14174e3d8245c6976f8262fc78a727641bf04c62b6f62de`.
+Stopped-workspace backup verified: 59 files, 197302 bytes, stored with mode 0600 at
+`/home/phil/.local/state/offgrid/backups/20260919-agent-layout/workspace-before-agent-layout.zip`.
+The old container `offgrid-rollback-20260919-agent-layout` is retained stopped;
+the disposable test container was removed. No commit, push or publication.
 
 - Durable chat turns are admitted before inference, survive navigation and stream
   disconnects, and replay their persisted snapshot without resubmitting model

@@ -4,6 +4,39 @@ Status: approved direction, implementation in progress. No milestone is certifie
 complete. "9/10" describes the ambition, not a rating earned by passing unit tests.
 See the [reliability evidence log](product-reliability-plan.md) for tested changes.
 
+## September 2026 improvement roadmap
+
+The next delivery sequence serves individuals, researchers/students, and small
+teams through one product: evidence-backed document answers, verified task
+artifacts, and reproducible model comparisons. Deliver staged releases, retain
+the current stack and supervised llama.cpp, and qualify 8 GB/16 GB CPU profiles
+before promising larger workloads. Evaluation comes before training.
+
+1. **Correctness/runtime repair — in progress.** Replace placeholder embeddings,
+   quarantine unverifiable indexes, provide safe staged recovery, validate runtime
+   contracts, correct metrics, and report capabilities honestly. The first slice
+   implements real HTTP embeddings and offline recovery; this is not a completed
+   runtime qualification or a release authorization.
+2. **Durable workspace — pending.** Finish transactional migration and shared v2
+   projects/conversations/jobs, preserving the existing durable-run behavior.
+3. **Evidence and useful tasks — pending.** Private-by-default projects with explicit
+   reader/editor membership, inherited collection access, versioned citations,
+   strict evidence mode, and bounded member tools producing verified artifacts.
+4. **Coherent clients — ongoing.** Project-centred document/task/result workflows,
+   consistent recovery and accessibility, and service-authoritative state across
+   CLI, web, and Electron. Research controls must not complicate ordinary chat.
+5. **Research workspace — pending.** Versioned JSONL/CSV datasets, frozen run
+   specifications, per-sample results, raw-versus-assisted comparisons, human
+   review, Python access, and inspectable exports, using the same jobs/permissions.
+6. **Qualification/distribution — pending.** Verified offline packs, immutable
+   release manifests, installed-edition tests, independent review and pilot evidence.
+
+No projects/datasets/experiments v2 API is advertised as implemented. Shell,
+arbitrary network/filesystem access, external installation and MCP configuration
+remain administrator-controlled. General-model fallback from document mode must
+be explicit. Unrestricted computer use, training, distributed inference and
+expanded P2P remain outside the production guarantee.
+
 ## Product boundary
 
 Dependable local chat, document-grounded answers, and governed agent tasks for
