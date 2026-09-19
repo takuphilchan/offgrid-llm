@@ -118,8 +118,19 @@ try {
   app = await launch(join(evidence, 'timeout-profile'));
   const timeout = await app.firstWindow();
   await timeout.locator('#recovery:not([hidden])').waitFor();
-  assert.match(await timeout.locator('#status-text').innerText(), /timed out/);
-  assert.equal((await timeout.evaluate(() => window.electron.getBackendInfo())).managedByDesktop, false);
+  const timeoutState = await timeout.evaluate(() => window.electron.getBackendInfo());
+  assert.equal(timeoutState.state, 'unavailable');
+  assert.match(timeoutState.reason, /timed out/);
+  assert.equal(timeoutState.managedByDesktop, false);
+  const presentation = await timeout.evaluate(() => window.electron.getPresentation());
+  assert.equal(await timeout.locator('#status-text').innerText(), presentation.copy.guidance);
+  // Recovery guidance stays readable; the underlying failure remains available
+  // in the expandable details rather than replacing the localized guidance.
+  assert.equal(await timeout.locator('#technical').getAttribute('open'), null);
+  await timeout.locator('#technical > summary').focus();
+  await timeout.keyboard.press('Enter');
+  assert.equal(await timeout.locator('#technical').getAttribute('open'), '');
+  assert.match(await timeout.locator('#technical-reason').innerText(), /timed out/);
   // Reduced motion, dark mode, keyboard recovery, and minimum window size.
   await timeout.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(760, 560));

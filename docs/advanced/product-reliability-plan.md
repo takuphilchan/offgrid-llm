@@ -935,3 +935,13 @@ real-service browser tests, contract generation, renderer builds, and desktop
 host tests. It does not replace the remaining multi-user SQLite migration,
 installed-package qualification, signing/notarization, representative-hardware
 benchmarks, security review, soak test, or user pilot gates above.
+
+Release preflight (2026-09-19, v0.4.9): the packaged startup check still expected
+raw timeout text in the primary status message after recovery details moved to
+the expandable technical section. Reproduced that assertion failure with the
+Windows package. The check now verifies the unavailable state, localized recovery
+guidance, keyboard expansion and underlying timeout details; no recovery check
+was removed. The real Windows package passed mismatch recovery, isolated service
+startup/restart, external-service attachment, timeout/retry and IPC checks.
+Evidence: `%TEMP%/offgrid-desktop-startup-3TLa8o`. This is local Windows startup
+evidence, not macOS/Linux or installed-upgrade qualification.
