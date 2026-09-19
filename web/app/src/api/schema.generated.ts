@@ -1083,7 +1083,7 @@ export interface components {
             steps: components["schemas"]["AgentStep"][];
         };
         AgentTask: {
-            /** @description Whether this actor may remove this terminal run; the server rechecks state at deletion time. */
+            /** @description Whether this actor may remove this terminal run or interrupted record without recovery state; the server rechecks ownership and execution state at deletion time. */
             deletable?: boolean;
             id: string;
             prompt: string;

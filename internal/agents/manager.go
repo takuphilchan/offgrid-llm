@@ -329,13 +329,15 @@ func (m *Manager) DeleteTask(id string) error {
 	return m.deleteTaskLocked(id)
 }
 
-// Only terminal, reconciled runs can be removed. A persisted tombstone prevents
+// Only terminal, reconciled runs or interrupted records with no recovery state
+// can be removed. A persisted tombstone prevents
 // the event projection resurrecting history after restart; it retains no prompt,
 // response, arguments, progress or checkpoint. Audit logs/backups are separate.
 func CanDeleteTask(task *Task) bool {
 	return task != nil && task.DeletedAt == nil && task.PendingApproval == nil &&
 		(task.Checkpoint == nil || task.Checkpoint.ExecutingCall == "") &&
-		(task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled)
+		(task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled ||
+			(task.Status == TaskInterrupted && task.Checkpoint == nil))
 }
 
 func (m *Manager) IsDeleted(id string) bool {

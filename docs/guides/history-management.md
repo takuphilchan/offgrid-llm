@@ -21,10 +21,13 @@ created in another tab afterwards. Nothing is deleted just by opening the dialog
 - Search all loaded task history by prompt or run ID; **Show more** reveals older
   tasks beyond the initial twenty. This is client-side browsing, not a claim of
   server-side paginated storage.
-- **Delete task** removes a finished run. **Clear finished tasks** removes the
+- **Delete task** removes an eligible run. **Clear removable tasks** removes the
   deletable runs matching the current search, including those beyond Show more.
-- Only completed, failed or cancelled runs owned by the current actor are eligible.
-  Pending, running, approval-waiting, interrupted and uncertain runs are protected.
+- Completed, failed or cancelled runs owned by the current actor are eligible.
+  Interrupted records with **no checkpoint and no pending approval** can also be
+  deleted: they have no recovery path. Unowned legacy records remain removable
+  only by the local administrator, not the first signed-in user.
+  Pending, running, approval-waiting, resumable interrupted and uncertain runs are protected.
   Stop active work explicitly; inspect/reconcile unknown tool outcomes first.
   A worker still settling cancellation can briefly return 409: refresh and retry.
 - **Reuse task** copies a prompt into an empty draft; it never executes it or

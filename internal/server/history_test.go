@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +13,58 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/runs"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 )
+
+func TestDeletedLegacyInterruptedAgentStaysAbsent(t *testing.T) {
+	dir := t.TempDir()
+	taskDir := filepath.Join(dir, "agent_tasks")
+	if err := os.MkdirAll(taskDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(agents.Task{ID: "run-legacy", Prompt: "legacy history", Status: agents.TaskWaiting})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(taskDir, "run-legacy.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	m := agents.NewManagerWithPersistence(nil, nil, nil, dir)
+	log, err := runs.NewLog(filepath.Join(dir, "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{agentManager: m, agentRunner: agents.NewRunner(m, nil, nil), runLog: log}
+	s.publishRunEvent(context.Background(), "run-legacy", runs.RunStateChanged, map[string]any{"status": "interrupted", "prompt": "legacy history"})
+	w := httptest.NewRecorder()
+	s.handleAgentTasks(w, httptest.NewRequest("GET", "/v1/agents/tasks", nil))
+	var rows []struct {
+		ID        string `json:"id"`
+		Deletable bool   `json:"deletable"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || !rows[0].Deletable {
+		t.Fatalf("legacy deletion not offered: %s", w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	s.handleAgentTaskAction(w, httptest.NewRequest("DELETE", "/v1/agents/tasks/run-legacy", nil))
+	if w.Code != 200 {
+		t.Fatalf("delete failed: %d %s", w.Code, w.Body.String())
+	}
+	s.agentManager = agents.NewManagerWithPersistence(nil, nil, nil, dir)
+	s.agentRunner = agents.NewRunner(s.agentManager, nil, nil)
+	for _, path := range []string{"/v1/runs", "/v1/agents/tasks"} {
+		w = httptest.NewRecorder()
+		if path == "/v1/runs" {
+			s.handleRuns(w, httptest.NewRequest("GET", path, nil))
+		} else {
+			s.handleAgentTasks(w, httptest.NewRequest("GET", path, nil))
+		}
+		if w.Code != 200 || strings.Contains(w.Body.String(), "run-legacy") {
+			t.Fatalf("resurrected history: %s", w.Body.String())
+		}
+	}
+}
 
 func TestDeleteSessionRejectsBusyWithoutWaiting(t *testing.T) {
 	h := NewSessionHandlers(t.TempDir())

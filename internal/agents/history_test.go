@@ -97,3 +97,62 @@ func TestHistoryDeletionRejectsWorkersUnresolvedCallsAndStorageFailure(t *testin
 		t.Fatal("lost task after failed deletion")
 	}
 }
+
+func TestLegacyInterruptedHistoryDeletion(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManagerWithPersistence(nil, nil, nil, dir)
+	r := NewRunner(m, nil, nil)
+	task, err := r.Create("legacy task", "model", "alice", DefaultAgentConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.updateTask(task.ID, func(task *Task) error {
+		task.Actor = ""
+		task.Status = TaskWaiting
+		task.Checkpoint = nil
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exercise the real legacy loader, not a synthetic terminal record.
+	m = NewManagerWithPersistence(nil, nil, nil, dir)
+	r = NewRunner(m, nil, nil)
+	loaded, ok := m.GetTask(task.ID)
+	if !ok || loaded.Status != TaskInterrupted || !CanDeleteTask(loaded) {
+		t.Fatalf("unrecoverable legacy record should be removable: %#v", loaded)
+	}
+	if err := r.Delete(task.ID, "alice"); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("legacy history must remain local-admin controlled: %v", err)
+	}
+	r.active[task.ID] = func() {}
+	if err := r.Delete(task.ID, "local-admin"); !errors.Is(err, ErrRunConflict) {
+		t.Fatalf("settling worker must remain protected: %v", err)
+	}
+	delete(r.active, task.ID)
+	if err := r.Delete(task.ID, "local-admin"); err != nil {
+		t.Fatal(err)
+	}
+	m = NewManagerWithPersistence(nil, nil, nil, dir)
+	if !m.IsDeleted(task.ID) || len(m.ListTasks()) != 0 {
+		t.Fatal("legacy history resurrected")
+	}
+}
+
+func TestInterruptedDeletionRequiresNoRecoveryState(t *testing.T) {
+	for _, task := range []*Task{
+		{Status: TaskInterrupted, Checkpoint: &Checkpoint{}},
+		{Status: TaskInterrupted, Checkpoint: &Checkpoint{ExecutingCall: "unknown-call"}},
+		{Status: TaskInterrupted, PendingApproval: &Approval{ID: "approval"}},
+		{Status: TaskUncertain},
+		{Status: TaskRunning},
+		{Status: TaskPending},
+	} {
+		if CanDeleteTask(task) {
+			t.Fatalf("unsafe deletion permitted: %#v", task)
+		}
+	}
+	if !CanDeleteTask(&Task{Status: TaskInterrupted, Actor: "alice"}) {
+		t.Fatal("interrupted history without recovery state cannot be removed")
+	}
+}

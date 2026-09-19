@@ -96,7 +96,7 @@ test('agent history browses older tasks, reuses safely, deletes selected output 
   await expect(page.locator('.result-card')).not.toContainText('Result for task-24');
   await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveValue('Task 24');
   await expect(history.locator('article',{hasText:'Task 00'}).getByRole('button',{name:'Delete task',exact:true})).toBeDisabled();
-  await history.getByRole('button',{name:'Clear finished tasks',exact:true}).click();
+  await history.getByRole('button',{name:'Clear removable tasks',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
   await expect(history.locator('.task-history article')).toHaveCount(2);
   expect(state.tasks().map(item=>item.id)).toEqual(['task-0','task-1']);
@@ -120,4 +120,33 @@ test('mobile history confirmation fits and search does not erase the composer dr
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.locator('#conversation-history').getByRole('button',{name:'Close conversations',exact:true}).click();
   await expect(page.locator('.composer textarea')).toHaveValue('Keep my unsent text');
+});
+
+test('unrecoverable interrupted history can be deleted while active and uncertain tasks remain protected', async ({ page }) => {
+  await fixture(page);
+  let legacy = true;
+  const deleted: string[] = [];
+  await page.route('**/v1/agents/tasks', r => r.fulfill({ json: [
+    ...(legacy ? [{ id: 'legacy', prompt: 'Legacy task without checkpoint', status: 'interrupted', deletable: true, created_at: new Date().toISOString() }] : []),
+    { id: 'active', prompt: 'Active task', status: 'running', deletable: false, created_at: new Date().toISOString() },
+    { id: 'uncertain', prompt: 'Outcome unknown', status: 'uncertain', deletable: false, created_at: new Date().toISOString() }
+  ] }));
+  await page.route('**/v1/agents/tasks/*', r => {
+    if (r.request().method() !== 'DELETE') return r.fulfill({ json: {} });
+    deleted.push(new URL(r.request().url()).pathname.split('/').at(-1)!);
+    legacy = false; return r.fulfill({ json: { success: true } });
+  });
+  await page.goto('/ui/#/agents');
+  const history = page.locator('.agent-history-panel');
+  await expect(history.locator('article', { hasText: 'Legacy task without checkpoint' }).getByRole('button', { name: 'Delete task', exact: true })).toBeEnabled();
+  await expect(history.locator('article', { hasText: 'Active task' }).getByRole('button', { name: 'Delete task', exact: true })).toBeDisabled();
+  await expect(history.locator('article', { hasText: 'Outcome unknown' }).getByRole('button', { name: 'Delete task', exact: true })).toBeDisabled();
+  await history.getByRole('button', { name: 'Clear removable tasks' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Remove 1 selected tasks');
+  await dialog.getByRole('button', { name: 'Confirm delete' }).click();
+  expect(deleted).toEqual(['legacy']);
+  await page.reload();
+  await expect(history.locator('article')).toHaveCount(2);
+  await expect(history).not.toContainText('Legacy task without checkpoint');
 });

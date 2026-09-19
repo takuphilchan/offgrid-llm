@@ -1244,7 +1244,7 @@ components:
       type: object
       required: [id, prompt, status, created_at]
       properties:
-        deletable: { type: boolean, description: Whether this actor may remove this terminal run; the server rechecks state at deletion time. }
+        deletable: { type: boolean, description: Whether this actor may remove this terminal run or interrupted record without recovery state; the server rechecks ownership and execution state at deletion time. }
         id: { type: string }
         prompt: { type: string }
         status: { type: string }
