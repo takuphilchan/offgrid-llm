@@ -282,7 +282,7 @@ func (d *Discovery) broadcast() {
 		NodeID:    d.nodeID,
 		Port:      d.localPort,
 		Models:    d.localModels,
-		Version:   "0.4.8",
+		Version:   "0.4.9",
 		Timestamp: time.Now().UTC().Unix(),
 	}
 	d.signAnnouncementLocked(&announcement)
@@ -320,7 +320,7 @@ func (d *Discovery) broadcastFallback() {
 		NodeID:    d.nodeID,
 		Port:      d.localPort,
 		Models:    d.localModels,
-		Version:   "0.4.8",
+		Version:   "0.4.9",
 		Timestamp: time.Now().UTC().Unix(),
 	}
 	d.signAnnouncementLocked(&announcement)
