@@ -52,6 +52,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 	-o offgrid ./cmd/offgrid/
 
 # =============================================================================
+# Optional target for local application/UI refreshes without rebuilding llama.cpp.
+# docker build --target application-artifacts -f docker/Dockerfile ...
+# This is an artifact carrier, not a runnable service image.
+# =============================================================================
+FROM alpine:3.24 AS application-artifacts
+COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
+COPY --from=ui-builder /build/web/dist/ /var/lib/offgrid/web/ui/
+
+# =============================================================================
 # Stage 3: Build llama.cpp server
 # =============================================================================
 FROM alpine:3.24 AS llama-builder

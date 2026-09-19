@@ -1,6 +1,8 @@
 # Local application/UI refresh only. Not used by release CI.
 # Reuse a locally verified, unchanged runtime while building the application
-# separately with docker/Dockerfile. Supply both image references explicitly.
+# separately with docker/Dockerfile --target application-artifacts. Supply both
+# image references explicitly. This does not qualify a new native runtime or
+# replace the full CPU/GPU build checks required for a release.
 ARG APPLICATION_IMAGE=offgrid-llm:local-application
 ARG RUNTIME_IMAGE=offgrid-llm:local-runtime
 FROM ${APPLICATION_IMAGE} AS application
