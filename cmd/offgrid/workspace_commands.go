@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/takuphilchan/offgrid-llm/internal/output"
+	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"github.com/takuphilchan/offgrid-llm/internal/storage"
 )
 
@@ -16,6 +17,7 @@ const workspaceHelp = `Offline workspace maintenance (stop the service first):
   offgrid workspace backup --data-dir DIR --output backup.zip
   offgrid workspace verify backup.zip
   offgrid workspace restore backup.zip --data-dir NEW_DIR --yes
+  offgrid workspace rebuild-knowledge --data-dir DIR --model-id ID --model-file MODEL.gguf --runtime LLAMA_SERVER --output backup.zip --yes
 
 Backups include all files in the data directory, including credentials.
 Keep the archive private. Models, runtimes, and configuration outside that
@@ -37,6 +39,9 @@ func runWorkspaceCommand(ctx context.Context, args []string) error {
 	dir := flags.String("data-dir", "", "explicit workspace directory")
 	out := flags.String("output", "", "new backup archive path")
 	yes := flags.Bool("yes", false, "confirm restoring into a new directory")
+	modelID := flags.String("model-id", "", "installed embedding model ID")
+	modelFile := flags.String("model-file", "", "local embedding GGUF file")
+	runtimePath := flags.String("runtime", "", "installed llama-server binary")
 	rest := args[1:]
 	var archive string
 	if command == "verify" || command == "restore" {
@@ -53,7 +58,21 @@ func runWorkspaceCommand(ctx context.Context, args []string) error {
 	}
 	var manifest *storage.BackupManifest
 	var err error
+	if command != "rebuild-knowledge" && (*modelID != "" || *modelFile != "" || *runtimePath != "") {
+		return usage("model/runtime flags are only valid for rebuild-knowledge")
+	}
 	switch command {
+	case "rebuild-knowledge":
+		if *dir == "" || *modelID == "" || *modelFile == "" || *runtimePath == "" || *out == "" || !*yes {
+			return usage("workspace rebuild-knowledge requires --data-dir DIR --model-id ID --model-file FILE --runtime FILE --output BACKUP.zip --yes")
+		}
+		manifest, err = storage.BackupWorkspace(ctx, *dir, *out, getVersion())
+		if err != nil {
+			return err
+		}
+		err = rag.RebuildKnowledgeOffline(ctx, *dir, *modelID, *modelFile, *runtimePath, func(done, total int) {
+			fmt.Fprintf(os.Stderr, "Rebuilding knowledge: %d/%d documents staged\n", done, total)
+		})
 	case "backup":
 		if *dir == "" || *out == "" || *yes {
 			return usage("workspace backup requires --data-dir DIR --output FILE")
@@ -87,6 +106,9 @@ func runWorkspaceCommand(ctx context.Context, args []string) error {
 	}
 	if command == "restore" {
 		fmt.Fprintln(os.Stdout, "Original workspace unchanged. Start the matching OffGrid version with OFFGRID_DATA_DIR pointing at the restored directory.")
+	}
+	if command == "rebuild-knowledge" {
+		fmt.Fprintln(os.Stdout, "Verified replacement index published. Source documents and backup are preserved. Restart the service to use knowledge.")
 	}
 	return nil
 }

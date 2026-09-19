@@ -3,27 +3,30 @@ package inference
 import (
 	"context"
 	"fmt"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 // EmbeddingEngine handles text embedding generation
 type EmbeddingEngine struct {
-	mu             sync.RWMutex
-	modelPath      string
-	loaded         bool
-	dimensions     int
-	maxBatchSize   int
-	implementation EmbeddingImpl // Platform-specific implementation
+	mu                sync.RWMutex
+	modelPath         string
+	loaded            bool
+	dimensions        int
+	maxBatchSize      int
+	implementation    EmbeddingImpl // Platform-specific implementation
+	newImplementation func() (EmbeddingImpl, error)
 }
 
 // EmbeddingImpl is the interface for platform-specific embedding implementations
 type EmbeddingImpl interface {
-	Load(modelPath string, opts EmbeddingOptions) error
-	Embed(texts []string) ([][]float32, error)
+	Load(ctx context.Context, modelPath string, opts EmbeddingOptions) error
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
 	Unload() error
 	GetDimensions() int
 }
@@ -37,6 +40,8 @@ type EmbeddingOptions struct {
 	ContextSize   int    // Context size (for longer inputs)
 	NormalizeL2   bool   // Normalize embeddings to unit length
 	PoolingMethod string // "mean", "cls", or "last" token pooling
+	BinDir        string // Managed runtime directory; OFFGRID_BIN_DIR overrides this.
+	RuntimePath   string // Explicit preinstalled runtime, used by offline maintenance.
 }
 
 // DefaultEmbeddingOptions returns sensible defaults optimized for low-end hardware
@@ -48,27 +53,38 @@ func DefaultEmbeddingOptions() EmbeddingOptions {
 
 	return EmbeddingOptions{
 		NumThreads:    threads,
-		NumGPULayers:  0,      // CPU by default
-		UseMmap:       true,   // Memory-map for lower RAM usage
-		UseMlock:      false,  // Don't lock RAM (safer for low-end systems)
-		ContextSize:   512,    // Embeddings don't need large context
-		NormalizeL2:   true,   // Standard for embeddings
-		PoolingMethod: "mean", // Mean pooling is most common
+		NumGPULayers:  0,     // CPU by default
+		UseMmap:       true,  // Memory-map for lower RAM usage
+		UseMlock:      false, // Don't lock RAM (safer for low-end systems)
+		ContextSize:   512,   // Embeddings don't need large context
+		NormalizeL2:   true,  // Standard for embeddings
+		PoolingMethod: "",    // Use the model's pooling metadata unless explicitly overridden.
 	}
 }
 
 // NewEmbeddingEngine creates a new embedding engine
-func NewEmbeddingEngine() *EmbeddingEngine {
+func NewEmbeddingEngine(binDir ...string) *EmbeddingEngine {
+	directory := ""
+	if len(binDir) > 0 {
+		directory = binDir[0]
+	}
 	return &EmbeddingEngine{
-		loaded:       false,
-		maxBatchSize: 32, // Process up to 32 texts at once
+		loaded:            false,
+		maxBatchSize:      32, // Process up to 32 texts at once
+		newImplementation: func() (EmbeddingImpl, error) { return newEmbeddingImpl(directory) },
 	}
 }
 
 // Load loads an embedding model
 func (e *EmbeddingEngine) Load(ctx context.Context, modelPath string, opts EmbeddingOptions) error {
-	e.mu.Lock()
+	if err := e.lockContext(ctx); err != nil {
+		return err
+	}
 	defer e.mu.Unlock()
+	return e.loadLocked(ctx, modelPath, opts)
+}
+
+func (e *EmbeddingEngine) loadLocked(ctx context.Context, modelPath string, opts EmbeddingOptions) error {
 
 	if e.loaded {
 		if err := e.unloadUnsafe(); err != nil {
@@ -77,14 +93,19 @@ func (e *EmbeddingEngine) Load(ctx context.Context, modelPath string, opts Embed
 	}
 
 	// Create platform-specific implementation
-	impl, err := newEmbeddingImpl()
+	impl, err := e.newImplementation()
 	if err != nil {
 		return fmt.Errorf("failed to create embedding implementation: %w", err)
 	}
 
 	// Load the model
-	if err := impl.Load(modelPath, opts); err != nil {
+	if err := impl.Load(ctx, modelPath, opts); err != nil {
+		_ = impl.Unload()
 		return fmt.Errorf("failed to load embedding model: %w", err)
+	}
+	if impl.GetDimensions() <= 0 {
+		_ = impl.Unload()
+		return fmt.Errorf("embedding runtime returned no dimensions")
 	}
 
 	e.implementation = impl
@@ -137,13 +158,48 @@ func (e *EmbeddingEngine) GetDimensions() int {
 
 // GenerateEmbeddings generates embeddings for the given request
 func (e *EmbeddingEngine) GenerateEmbeddings(ctx context.Context, req *api.EmbeddingRequest) (*api.EmbeddingResponse, error) {
-	e.mu.RLock()
+	return e.GenerateEmbeddingsForIdentity(ctx, req, "")
+}
+
+// GenerateEmbeddingsForIdentity prevents a concurrent API model switch from
+// silently contaminating a knowledge index built with a different model.
+func (e *EmbeddingEngine) GenerateEmbeddingsForIdentity(ctx context.Context, req *api.EmbeddingRequest, identity string) (*api.EmbeddingResponse, error) {
+	if err := e.lockContext(ctx); err != nil {
+		return nil, err
+	}
+	defer e.mu.Unlock()
+	return e.generateLocked(ctx, req, identity)
+}
+
+// GenerateEmbeddingsForModel binds loading and execution to the same lock so
+// concurrent callers cannot return vectors produced by another caller's model.
+func (e *EmbeddingEngine) GenerateEmbeddingsForModel(ctx context.Context, path string, opts EmbeddingOptions, req *api.EmbeddingRequest) (*api.EmbeddingResponse, error) {
+	if err := e.lockContext(ctx); err != nil {
+		return nil, err
+	}
+	defer e.mu.Unlock()
+	if !e.loaded || e.modelPath != path {
+		if err := e.loadLocked(ctx, path, opts); err != nil {
+			return nil, err
+		}
+	}
+	return e.generateLocked(ctx, req, "")
+}
+
+func (e *EmbeddingEngine) generateLocked(ctx context.Context, req *api.EmbeddingRequest, identity string) (*api.EmbeddingResponse, error) {
 	if !e.loaded {
-		e.mu.RUnlock()
 		return nil, fmt.Errorf("no embedding model loaded")
 	}
 	impl := e.implementation
-	e.mu.RUnlock()
+	if identity != "" && embeddingIdentity(impl) != identity {
+		return nil, fmt.Errorf("embedding runtime changed; reload the knowledge model before retrying")
+	}
+	if req == nil {
+		return nil, fmt.Errorf("embedding request is required")
+	}
+	if req.EncodingFormat != "" && req.EncodingFormat != "float" {
+		return nil, fmt.Errorf("only float embedding encoding is supported")
+	}
 
 	// Parse input (can be string or []string)
 	texts, err := e.parseInput(req.Input)
@@ -153,6 +209,9 @@ func (e *EmbeddingEngine) GenerateEmbeddings(ctx context.Context, req *api.Embed
 
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("no input texts provided")
+	}
+	if err := e.ValidateInput(texts); err != nil {
+		return nil, err
 	}
 
 	// Check dimension override
@@ -181,16 +240,34 @@ func (e *EmbeddingEngine) GenerateEmbeddings(ctx context.Context, req *api.Embed
 		batch := texts[i:end]
 
 		// Generate embeddings for this batch
-		embeddings, err := impl.Embed(batch)
+		embeddings, err := impl.Embed(ctx, batch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate embeddings: %w", err)
+		}
+		if len(embeddings) != len(batch) {
+			return nil, fmt.Errorf("embedding runtime returned %d vectors for %d inputs", len(embeddings), len(batch))
+		}
+		for _, vector := range embeddings {
+			if len(vector) != e.dimensions {
+				return nil, fmt.Errorf("embedding dimension changed: got %d, expected %d", len(vector), e.dimensions)
+			}
+			var norm float64
+			for _, value := range vector {
+				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+					return nil, fmt.Errorf("embedding runtime returned non-finite values")
+				}
+				norm += float64(value) * float64(value)
+			}
+			if norm == 0 {
+				return nil, fmt.Errorf("embedding runtime returned a zero vector")
+			}
 		}
 
 		allEmbeddings = append(allEmbeddings, embeddings...)
 
-		// Estimate tokens (rough approximation: ~1 token per 4 chars)
-		for _, text := range batch {
-			totalTokens += len(text) / 4
+		// Never present character estimates as measured tokenizer usage.
+		if measured, ok := impl.(interface{ UsageTokens() int }); ok {
+			totalTokens += measured.UsageTokens()
 		}
 	}
 
@@ -271,5 +348,34 @@ func (e *EmbeddingEngine) GetModelInfo() map[string]interface{} {
 		"model_path": e.modelPath,
 		"dimensions": e.dimensions,
 		"batch_size": e.maxBatchSize,
+		"identity":   embeddingIdentity(e.implementation),
+	}
+}
+
+func embeddingIdentity(impl EmbeddingImpl) string {
+	if verified, ok := impl.(interface{ Identity() string }); ok {
+		return verified.Identity()
+	}
+	return ""
+}
+
+func (e *EmbeddingEngine) lockContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if e.mu.TryLock() {
+		return nil
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if e.mu.TryLock() {
+				return nil
+			}
+		}
 	}
 }

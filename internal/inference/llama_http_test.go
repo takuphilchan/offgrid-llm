@@ -24,6 +24,43 @@ func TestLlamaHTTPPortUsesExplicitIPv4Loopback(t *testing.T) {
 	}
 }
 
+func TestHTTPRequestsPreserveSeedAndOnlyExplicitStops(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		for _, stops := range [][]string{nil, {"CUSTOM_END"}} {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request api.ChatCompletionRequest
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Error(err)
+				}
+				if request.Seed == nil || *request.Seed != 0 || len(request.Stop) != len(stops) {
+					t.Errorf("changed sampling or stops: %+v", request)
+				}
+				if len(stops) > 0 && request.Stop[0] != stops[0] {
+					t.Error("explicit stop changed")
+				}
+				if stream {
+					fmt.Fprint(w, "data: [DONE]\n\n")
+				} else {
+					fmt.Fprint(w, `{"choices":[]}`)
+				}
+			}))
+			seed := int64(0)
+			request := &api.ChatCompletionRequest{Model: "phi-3-renamed", Seed: &seed, Stop: stops}
+			engine := NewLlamaHTTPEngine(backend.URL)
+			var err error
+			if stream {
+				err = engine.ChatCompletionStreamRaw(context.Background(), request, func(json.RawMessage) error { return nil })
+			} else {
+				_, err = engine.ChatCompletion(context.Background(), request)
+			}
+			backend.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 func TestRawStreamRequiresTerminalMarkerAndPropagatesCallbackFailure(t *testing.T) {
 	chunk := "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n"
 	for _, test := range []struct {

@@ -562,7 +562,11 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 	}
 
 	// Ensure port is free before starting
-	mc.killProcessOnPort(port)
+	if conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond); err == nil {
+		conn.Close()
+		mc.mu.Unlock()
+		return nil, fmt.Errorf("inference port %d is already occupied; choose another port or stop its owner explicitly", port)
+	}
 
 	// Mark port as used
 	mc.usedPorts[port] = true
@@ -720,6 +724,7 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 	// requested it. waitForReadyContext still honors cancellation and performs
 	// cleanup if startup is interrupted.
 	cmd := exec.Command(binaryPath, args...)
+	configureBackgroundProcess(cmd)
 
 	// Preserve CUDA visibility and loader paths supplied by the container runtime.
 	cmd.Env = append(os.Environ(), "NO_PROXY=*", "no_proxy=*")
@@ -890,24 +895,6 @@ func (mc *ModelCache) cleanupInstance(modelID string) {
 	delete(mc.instances, modelID)
 	delete(mc.portToModel, port)
 	delete(mc.usedPorts, port)
-}
-
-// killProcessOnPort kills any process using the specified port
-func (mc *ModelCache) killProcessOnPort(port int) {
-	// Check if port is in use
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
-	if err != nil {
-		return // Port is free
-	}
-	conn.Close()
-
-	// Try to kill llama-server on this port using pkill
-	log.Printf("Port %d is in use, attempting to free it", port)
-	exec.Command("pkill", "-9", "-f", fmt.Sprintf("llama-server.*--port.*%d", port)).Run()
-	exec.Command("fuser", "-k", fmt.Sprintf("%d/tcp", port)).Run()
-
-	// Wait for port to be released
-	mc.waitForPortRelease(port, 200*time.Millisecond, 10)
 }
 
 // waitForPortRelease actively checks if a port is available

@@ -193,7 +193,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 	responseCache.StartCleanupRoutine(15 * time.Minute)
 
 	// Initialize embedding engine
-	embeddingEngine := inference.NewEmbeddingEngine()
+	embeddingEngine := inference.NewEmbeddingEngine(filepath.Join(cfg.ModelsDir, "..", "bin"))
 
 	// Scan for available models
 	if err := registry.ScanModels(); err != nil {
@@ -1242,6 +1242,9 @@ func (s *Server) Close() error {
 		if s.ragEngine != nil {
 			s.closeErr = errors.Join(s.closeErr, s.ragEngine.Close())
 		}
+		if s.embeddingEngine != nil {
+			s.closeErr = errors.Join(s.closeErr, s.embeddingEngine.Unload())
+		}
 		s.closeErr = errors.Join(s.closeErr, s.workspaceOwner.Close())
 	})
 	return s.closeErr
@@ -1908,11 +1911,13 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	for index := range models {
 		if models[index].Type == "embedding" {
 			models[index].Capabilities = []string{"embeddings"}
+			models[index].CapabilityStatus = map[string]string{"embeddings": "declared"}
 			continue
 		}
 		models[index].ContextWindow = contextWindow
 		models[index].ContextLength = contextWindow
-		models[index].Capabilities = []string{"chat", "streaming", "tools"}
+		models[index].Capabilities = []string{"chat", "streaming"}
+		models[index].CapabilityStatus = map[string]string{"chat": "declared", "streaming": "declared", "tools": "unknown"}
 	}
 	response := api.ModelListResponse{
 		Object: "list",
@@ -1964,7 +1969,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req api.ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+		writeInferenceRequestError(w, err)
 		return
 	}
 	if err := s.authorizeChat(r.Context(), &req); err != nil {
@@ -2222,7 +2227,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req api.CompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+		writeInferenceRequestError(w, err)
 		return
 	}
 
@@ -2300,36 +2305,19 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load embedding model if not loaded
-	if !s.embeddingEngine.IsLoaded() || s.embeddingEngine.GetModelInfo()["model_path"] != modelMeta.Path {
-		log.Printf("Loading embedding model: %s", req.Model)
-
-		ctx := context.Background()
-		opts := inference.DefaultEmbeddingOptions()
-		opts.NumThreads = s.config.NumThreads
-
-		// Check for GPU availability
-		gpuMonitor := resource.NewGPUMonitor()
-		if gpuMonitor.IsAvailable() {
-			// Offload some layers to GPU if available
-			opts.NumGPULayers = 10 // Conservative for embedding models
-		}
-
-		if err := s.embeddingEngine.Load(ctx, modelMeta.Path, opts); err != nil {
-			writeError(w, fmt.Sprintf("Failed to load embedding model: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Mark model as loaded in registry
-		if err := s.registry.LoadModel(req.Model); err != nil {
-			log.Printf("Warning: Failed to mark model as loaded: %v", err)
-		}
+	if modelMeta.Type != "embedding" {
+		writeError(w, "Selected model is not an embedding model", http.StatusBadRequest)
+		return
 	}
-
-	// Generate embeddings
+	if req.EncodingFormat != "" && req.EncodingFormat != "float" {
+		writeError(w, "Only float embedding encoding is supported", http.StatusBadRequest)
+		return
+	}
 	ctx := r.Context()
+	opts := inference.DefaultEmbeddingOptions()
+	opts.NumThreads = s.config.NumThreads
 	startTime := time.Now()
-	response, err := s.embeddingEngine.GenerateEmbeddings(ctx, &req)
+	response, err := s.embeddingEngine.GenerateEmbeddingsForModel(ctx, modelMeta.Path, opts, &req)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Failed to generate embeddings: %v", err), http.StatusInternalServerError)
 		return

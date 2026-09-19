@@ -36,7 +36,11 @@ func NewBinaryManager(binDir string) *BinaryManager {
 
 func (bm *BinaryManager) detectGPU() {
 	if _, err := exec.LookPath("nvidia-smi"); err == nil {
-		if output, err := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader").Output(); err == nil && len(output) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "nvidia-smi", "--query-gpu=name", "--format=csv,noheader")
+		configureBackgroundProcess(cmd)
+		if output, err := cmd.Output(); err == nil && len(output) > 0 {
 			bm.hasNVIDIA = true
 		}
 	}

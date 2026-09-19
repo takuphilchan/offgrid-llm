@@ -7,22 +7,24 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // IndexSchemaVersion is incremented whenever persisted chunks or embeddings
 // become incompatible with an older index.
-const IndexSchemaVersion = 2
+const IndexSchemaVersion = 3
 
 // IndexMetadata identifies the exact pipeline used to build a RAG index.
 // Persisting this prevents queries from silently mixing embedding models or
 // dimensions after an upgrade.
 type IndexMetadata struct {
-	SchemaVersion  int       `json:"schema_version"`
-	EmbeddingModel string    `json:"embedding_model"`
-	EmbeddingDim   int       `json:"embedding_dimension"`
-	ChunkerVersion string    `json:"chunker_version"`
-	ParserVersion  string    `json:"parser_version"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	SchemaVersion     int       `json:"schema_version"`
+	EmbeddingModel    string    `json:"embedding_model"`
+	EmbeddingIdentity string    `json:"embedding_identity"`
+	EmbeddingDim      int       `json:"embedding_dimension"`
+	ChunkerVersion    string    `json:"chunker_version"`
+	ParserVersion     string    `json:"parser_version"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // Document represents an uploaded document
@@ -414,7 +416,12 @@ func (rc *RAGContext) FormatContext() string {
 
 // TruncateContext truncates the context to fit within maxLen characters while keeping complete chunks
 func (rc *RAGContext) TruncateContext(maxLen int) {
-	if len(rc.Context) <= maxLen || len(rc.Results) == 0 {
+	if maxLen <= 0 {
+		rc.Context = ""
+		rc.Results = nil
+		return
+	}
+	if utf8.RuneCountInString(rc.Context) <= maxLen || len(rc.Results) == 0 {
 		return
 	}
 
@@ -422,18 +429,19 @@ func (rc *RAGContext) TruncateContext(maxLen int) {
 	for len(rc.Results) > 1 {
 		rc.Results = rc.Results[:len(rc.Results)-1]
 		rc.FormatContext()
-		if len(rc.Context) <= maxLen {
+		if utf8.RuneCountInString(rc.Context) <= maxLen {
 			return
 		}
 	}
 
 	// If still too long with just one result, truncate the content
-	if len(rc.Context) > maxLen && len(rc.Results) > 0 {
+	if utf8.RuneCountInString(rc.Context) > maxLen && len(rc.Results) > 0 {
 		// Truncate the chunk content itself
 		original := rc.Results[0].Chunk
 		chunk := *original
-		if len(chunk.Content) > maxLen/2 {
-			chunk.Content = chunk.Content[:maxLen/2] + "... [truncated]"
+		content := []rune(chunk.Content)
+		if len(content) > maxLen/2 {
+			chunk.Content = string(content[:maxLen/2]) + "... [truncated]"
 			chunk.ContentHash = GenerateContentHash(chunk.Content)
 		}
 		rc.Results[0].Chunk = &chunk

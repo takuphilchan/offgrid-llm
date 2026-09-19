@@ -21,6 +21,15 @@ type serviceError struct {
 	cause   error
 }
 
+func writeInferenceRequestError(w http.ResponseWriter, err error) {
+	var unsupported *api.UnsupportedControlError
+	if errors.As(err, &unsupported) {
+		writeErrorWithCode(w, unsupported.Error(), http.StatusBadRequest, "unsupported_parameter")
+		return
+	}
+	writeError(w, "Invalid request body", http.StatusBadRequest)
+}
+
 func (e *serviceError) Error() string {
 	return e.message
 }

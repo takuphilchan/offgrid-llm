@@ -124,6 +124,7 @@ func (s *SQLiteStore) initSchema() error {
 	// does not support ADD COLUMN IF NOT EXISTS on all supported versions, so
 	// duplicate-column errors are intentionally ignored.
 	for _, migration := range []string{
+		`ALTER TABLE index_metadata ADD COLUMN embedding_identity TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE documents ADD COLUMN content_hash TEXT DEFAULT ''`,
 		`ALTER TABLE documents ADD COLUMN index_status TEXT DEFAULT 'ready'`,
 		`ALTER TABLE documents ADD COLUMN last_error TEXT DEFAULT ''`,
@@ -295,10 +296,10 @@ func (s *SQLiteStore) GetIndexMetadata() (IndexMetadata, bool, error) {
 	defer s.mu.RUnlock()
 	var metadata IndexMetadata
 	err := s.db.QueryRow(`
-		SELECT schema_version, embedding_model, embedding_dimension, chunker_version, parser_version, updated_at
+		SELECT schema_version, embedding_model, embedding_dimension, chunker_version, parser_version, updated_at, embedding_identity
 		FROM index_metadata WHERE id = 1
 	`).Scan(&metadata.SchemaVersion, &metadata.EmbeddingModel, &metadata.EmbeddingDim,
-		&metadata.ChunkerVersion, &metadata.ParserVersion, &metadata.UpdatedAt)
+		&metadata.ChunkerVersion, &metadata.ParserVersion, &metadata.UpdatedAt, &metadata.EmbeddingIdentity)
 	if err == sql.ErrNoRows {
 		return IndexMetadata{}, false, nil
 	}
@@ -316,17 +317,18 @@ func (s *SQLiteStore) SetIndexMetadata(metadata IndexMetadata) error {
 		metadata.UpdatedAt = time.Now().UTC()
 	}
 	_, err := s.db.Exec(`
-		INSERT INTO index_metadata (id, schema_version, embedding_model, embedding_dimension, chunker_version, parser_version, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?)
+		INSERT INTO index_metadata (id, schema_version, embedding_model, embedding_dimension, chunker_version, parser_version, updated_at, embedding_identity)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			schema_version=excluded.schema_version,
 			embedding_model=excluded.embedding_model,
+			embedding_identity=excluded.embedding_identity,
 			embedding_dimension=excluded.embedding_dimension,
 			chunker_version=excluded.chunker_version,
 			parser_version=excluded.parser_version,
 			updated_at=excluded.updated_at
 	`, metadata.SchemaVersion, metadata.EmbeddingModel, metadata.EmbeddingDim,
-		metadata.ChunkerVersion, metadata.ParserVersion, metadata.UpdatedAt)
+		metadata.ChunkerVersion, metadata.ParserVersion, metadata.UpdatedAt, metadata.EmbeddingIdentity)
 	return err
 }
 

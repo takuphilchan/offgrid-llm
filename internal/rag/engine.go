@@ -17,20 +17,22 @@ import (
 
 // Engine is the main RAG engine that coordinates document ingestion and search
 type Engine struct {
-	mu              sync.RWMutex
-	ingestMu        sync.Mutex
-	store           Store // Interface for vector store
-	storageErr      error // Startup failure; never substitute volatile storage.
-	chunker         *Chunker
-	embeddingEngine *inference.EmbeddingEngine
-	embeddingModel  string
-	resolveModel    func(string) (string, error)
-	dataDir         string
-	enabled         bool
-	hybridAlpha     float32 // Weight for semantic vs keyword search (0=keyword only, 1=semantic only)
-	maxContextLen   int     // Maximum context length in characters
-	reranking       bool    // Enable MMR-based reranking for diversity
-	autoTuneChunks  bool    // Enable automatic chunking parameter tuning
+	mu                sync.RWMutex
+	ingestMu          sync.Mutex
+	store             Store // Interface for vector store
+	storageErr        error // Startup failure; never substitute volatile storage.
+	chunker           *Chunker
+	embeddingEngine   *inference.EmbeddingEngine
+	embeddingModel    string
+	embeddingIdentity string
+	indexErr          error
+	resolveModel      func(string) (string, error)
+	dataDir           string
+	enabled           bool
+	hybridAlpha       float32 // Weight for semantic vs keyword search (0=keyword only, 1=semantic only)
+	maxContextLen     int     // Maximum context length in characters
+	reranking         bool    // Enable MMR-based reranking for diversity
+	autoTuneChunks    bool    // Enable automatic chunking parameter tuning
 }
 
 // SetModelResolver configures how a stable model ID is resolved to the local
@@ -185,9 +187,10 @@ func (e *Engine) AutoEnableWithModel(ctx context.Context, availableModels []stri
 }
 
 // Enable enables RAG with the specified embedding model
-func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
+func (e *Engine) Enable(ctx context.Context, embeddingModel string) (enableErr error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	defer func() { e.indexErr = enableErr }()
 	if e.storageErr != nil {
 		return fmt.Errorf("knowledge storage unavailable: %w", e.storageErr)
 	}
@@ -196,15 +199,22 @@ func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
 		return fmt.Errorf("embedding model is required")
 	}
 
-	if e.enabled && e.embeddingModel == embeddingModel {
-		return nil // Already enabled with this model
+	documents, err := e.store.ListDocuments()
+	if err != nil {
+		return fmt.Errorf("inspect knowledge documents: %w", err)
 	}
+	var previous IndexMetadata
 	if metadataStore, ok := e.store.(indexMetadataStore); ok {
 		metadata, found, err := metadataStore.GetIndexMetadata()
 		if err != nil {
 			return fmt.Errorf("read RAG index metadata: %w", err)
 		}
-		if found {
+		previous = metadata
+		if len(documents) > 0 && (!found || metadata.SchemaVersion != IndexSchemaVersion || metadata.EmbeddingIdentity == "") {
+			e.enabled = false
+			return fmt.Errorf("knowledge index requires rebuilding with real embeddings; retained documents are preserved, but unverified vectors cannot be searched")
+		}
+		if found && len(documents) > 0 {
 			if metadata.SchemaVersion != IndexSchemaVersion {
 				return fmt.Errorf("RAG index schema %d is incompatible with schema %d; rebuild the index", metadata.SchemaVersion, IndexSchemaVersion)
 			}
@@ -238,13 +248,24 @@ func (e *Engine) Enable(ctx context.Context, embeddingModel string) error {
 			return fmt.Errorf("failed to load embedding model: %w", err)
 		}
 	}
+	identity, _ := e.embeddingEngine.GetModelInfo()["identity"].(string)
+	if identity == "" {
+		e.enabled = false
+		return fmt.Errorf("embedding runtime has no verified identity; knowledge activation refused")
+	}
+	if len(documents) > 0 && previous.EmbeddingIdentity != identity {
+		e.enabled = false
+		return fmt.Errorf("embedding model or runtime differs from the saved index; rebuild knowledge before searching")
+	}
 
 	e.embeddingModel = embeddingModel
+	e.embeddingIdentity = identity
 	e.enabled = true
 	if metadataStore, ok := e.store.(indexMetadataStore); ok {
 		if err := metadataStore.SetIndexMetadata(IndexMetadata{
 			SchemaVersion: IndexSchemaVersion, EmbeddingModel: embeddingModel,
-			EmbeddingDim: e.embeddingEngine.GetDimensions(), ChunkerVersion: chunkerVersion,
+			EmbeddingIdentity: identity,
+			EmbeddingDim:      e.embeddingEngine.GetDimensions(), ChunkerVersion: chunkerVersion,
 			ParserVersion: parserVersion, UpdatedAt: time.Now().UTC(),
 		}); err != nil {
 			e.enabled = false
@@ -424,12 +445,13 @@ func (e *Engine) IngestText(ctx context.Context, name, content string, metadata 
 	doc.IndexedAt = time.Now().UTC()
 
 	indexMetadata := IndexMetadata{
-		SchemaVersion:  IndexSchemaVersion,
-		EmbeddingModel: e.embeddingModel,
-		EmbeddingDim:   embeddingDim,
-		ChunkerVersion: chunkerVersion,
-		ParserVersion:  parserVersion,
-		UpdatedAt:      time.Now().UTC(),
+		EmbeddingIdentity: e.embeddingIdentity,
+		SchemaVersion:     IndexSchemaVersion,
+		EmbeddingModel:    e.embeddingModel,
+		EmbeddingDim:      embeddingDim,
+		ChunkerVersion:    chunkerVersion,
+		ParserVersion:     parserVersion,
+		UpdatedAt:         time.Now().UTC(),
 	}
 	if metadataStore, ok := e.store.(indexMetadataStore); ok {
 		existing, found, err := metadataStore.GetIndexMetadata()
@@ -558,7 +580,8 @@ func (e *Engine) ReindexDocument(ctx context.Context, documentID string) (*Docum
 	}
 	if metadataStore, ok := e.store.(indexMetadataStore); ok {
 		if err := metadataStore.SetIndexMetadata(IndexMetadata{
-			SchemaVersion: IndexSchemaVersion, EmbeddingModel: e.embeddingModel, EmbeddingDim: embeddingDim,
+			EmbeddingIdentity: e.embeddingIdentity,
+			SchemaVersion:     IndexSchemaVersion, EmbeddingModel: e.embeddingModel, EmbeddingDim: embeddingDim,
 			ChunkerVersion: chunkerVersion, ParserVersion: parserVersion, UpdatedAt: doc.IndexedAt,
 		}); err != nil {
 			return nil, fmt.Errorf("persist index metadata: %w", err)
@@ -653,14 +676,14 @@ func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (
 	if store, ok := e.store.(filteredHybridStore); ok {
 		results, err = store.HybridSearchWithOptions(embeddings[0], query, searchOpts, e.hybridAlpha)
 	} else {
+		if len(searchOpts.DocumentFilter) > 0 {
+			return nil, fmt.Errorf("knowledge store cannot enforce document filters")
+		}
 		results, err = e.store.HybridSearch(embeddings[0], query, searchOpts.TopK, searchOpts.MinScore, e.hybridAlpha)
 	}
 	if err != nil {
-		// Fall back to pure semantic search if hybrid fails
-		results, err = e.store.Search(embeddings[0], searchOpts.TopK, searchOpts.MinScore)
-		if err != nil {
-			return nil, fmt.Errorf("search failed: %w", err)
-		}
+		// Never drop document filters to disguise a retrieval failure.
+		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
 	// Apply MMR (Maximal Marginal Relevance) reranking for diversity
@@ -847,6 +870,10 @@ func (e *Engine) Stats() map[string]interface{} {
 	stats["storage_available"] = true
 	stats["enabled"] = e.enabled
 	stats["embedding_model"] = e.embeddingModel
+	if e.indexErr != nil {
+		stats["index_error"] = e.indexErr.Error()
+		stats["rebuild_required"] = true
+	}
 	return stats
 }
 
@@ -857,7 +884,7 @@ func (e *Engine) generateEmbeddings(ctx context.Context, texts []string) ([][]fl
 		Input: texts,
 	}
 
-	resp, err := e.embeddingEngine.GenerateEmbeddings(ctx, req)
+	resp, err := e.embeddingEngine.GenerateEmbeddingsForIdentity(ctx, req, e.embeddingIdentity)
 	if err != nil {
 		return nil, err
 	}

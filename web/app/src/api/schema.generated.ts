@@ -788,6 +788,9 @@ export interface components {
             /** @description OpenAI-compatible alias for context_window. */
             context_length?: number;
             capabilities?: string[];
+            capability_status?: {
+                [key: string]: "declared" | "tested" | "unsupported" | "unknown";
+            };
         };
         IntegrationStatus: {
             id: string;
@@ -943,6 +946,8 @@ export interface components {
         };
         ChatCompletionRequest: {
             model: string;
+            /** Format: int64 */
+            seed?: number;
             messages: components["schemas"]["ChatMessage"][];
             /** @default false */
             stream: boolean;

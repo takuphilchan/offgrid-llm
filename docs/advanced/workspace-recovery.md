@@ -1,8 +1,45 @@
 # Workspace ownership and offline recovery
 
+## Recovering indexes created with placeholder embeddings
+
+Older default builds used hash-derived placeholder vectors. They are not semantic
+embeddings. Current builds refuse to search indexes without verified embedding
+pipeline identity. Documents and retained source text remain available; do not
+delete the workspace to clear this warning.
+
+Stop the service and use the updated binary with an installed embedding GGUF and
+llama-server. Specify the **same data directory and model ID used by the service**:
+
+```sh
+offgrid workspace rebuild-knowledge --data-dir /path/to/data \
+  --model-id bge-m3 --model-file /path/to/models/bge-m3.gguf \
+  --runtime /path/to/bin/llama-server --output /path/to/new-backup.zip --yes
+```
+
+The command first makes a private workspace backup, acquires exclusive ownership,
+and builds replacement vectors under `rag/rebuild/`. It never downloads a runtime
+or model. Only a complete validated replacement is published, in one transaction.
+Source files are not deleted or rewritten. Cancelled/failed staging is retained;
+retry the same command with a **new backup filename** to reuse completed documents.
+If a legacy document lacks retained source, the rebuild stops without replacing
+the index. Recover its original source rather than silently dropping the record.
+
+Restart the matching updated service after success. Model/runtime digest changes
+require a new rebuild; identical filenames do not establish index compatibility.
+The backup includes credentials: keep it private. Staging consumes additional
+disk space and is retained for recovery; automatic cleanup and in-app durable
+rebuild controls are not implemented in this slice.
+
+For Docker, stop the service container and run maintenance using the updated image
+with its data/model volumes and a writable backup mount. Never attach a second
+service to the same writable workspace. Native Windows uses the same arguments
+with Windows paths and `llama-server.exe`.
+
 Status: tested maintenance primitives; not a completed migration/update system.
 The transactional workspace migration and administrator UI controls are still
-pending. These commands do not upgrade schemas or change your active installation.
+pending. Backup/restore do not upgrade schemas or change your active installation.
+The explicit rebuild command replaces only derived knowledge-index data and its
+schema metadata; it is not the transactional workspace migration.
 
 ## Single writer
 

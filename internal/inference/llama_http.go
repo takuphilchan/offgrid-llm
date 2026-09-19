@@ -81,18 +81,7 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 	reqCopy := *req
 	reqCopy.Model = "" // Clear model name for the backend request
 
-	// Add default stop tokens if not provided
-	if len(reqCopy.Stop) == 0 {
-		modelName := strings.ToLower(req.Model)
-		if strings.Contains(modelName, "llama-3") || strings.Contains(modelName, "llama3") {
-			reqCopy.Stop = []string{"<|eot_id|>", "<|end_of_text|>"}
-		} else if strings.Contains(modelName, "phi-3") {
-			reqCopy.Stop = []string{"<|end|>", "<|endoftext|>"}
-		} else {
-			// Default ChatML stop tokens
-			reqCopy.Stop = []string{"<|im_end|>"}
-		}
-	}
+	// Let the model's verified chat template define termination. Preserve explicit caller stops.
 
 	// Log the backend URL for debugging model switching
 	fmt.Printf("Sending request to backend: %s (Model: %s)\n", e.baseURL, req.Model)
@@ -196,18 +185,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 	reqCopy.Stream = true
 	reqCopy.Model = "" // Clear model name for the backend request
 
-	// Add default stop tokens if not provided
-	if len(reqCopy.Stop) == 0 {
-		modelName := strings.ToLower(req.Model)
-		if strings.Contains(modelName, "llama-3") || strings.Contains(modelName, "llama3") {
-			reqCopy.Stop = []string{"<|eot_id|>", "<|end_of_text|>"}
-		} else if strings.Contains(modelName, "phi-3") {
-			reqCopy.Stop = []string{"<|end|>", "<|endoftext|>"}
-		} else {
-			// Default ChatML stop tokens
-			reqCopy.Stop = []string{"<|im_end|>"}
-		}
-	}
+	// Let the model's verified chat template define termination. Preserve explicit caller stops.
 
 	// Log the backend URL for debugging model switching
 	fmt.Printf("Sending stream request to backend: %s (Model: %s)\n", e.baseURL, req.Model)

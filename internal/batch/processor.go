@@ -24,13 +24,16 @@ type Request struct {
 
 // Result represents the result of a batch request
 type Result struct {
-	ID           string        `json:"id"`
-	Model        string        `json:"model"`
-	Prompt       string        `json:"prompt"`
-	Response     string        `json:"response"`
-	Error        string        `json:"error,omitempty"`
-	Duration     time.Duration `json:"duration_ms"`
-	TokensPerSec float64       `json:"tokens_per_sec,omitempty"`
+	ID               string  `json:"id"`
+	Model            string  `json:"model"`
+	Prompt           string  `json:"prompt"`
+	Response         string  `json:"response"`
+	Error            string  `json:"error,omitempty"`
+	Duration         int64   `json:"duration_ms"`
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	ThroughputBasis  string  `json:"throughput_basis"`
+	TokensPerSec     float64 `json:"tokens_per_sec,omitempty"`
 }
 
 // Processor handles batch processing of prompts
@@ -191,7 +194,7 @@ func (p *Processor) processRequest(ctx context.Context, req *Request) *Result {
 	response, err := p.engine.Completion(ctx, apiReq)
 	if err != nil {
 		result.Error = err.Error()
-		result.Duration = time.Since(start)
+		result.Duration = time.Since(start).Milliseconds()
 		return result
 	}
 
@@ -199,11 +202,15 @@ func (p *Processor) processRequest(ctx context.Context, req *Request) *Result {
 	if len(response.Choices) > 0 {
 		result.Response = response.Choices[0].Text
 	}
-	result.Duration = time.Since(start)
+	elapsed := time.Since(start)
+	result.Duration = elapsed.Milliseconds()
+	result.PromptTokens = response.Usage.PromptTokens
+	result.CompletionTokens = response.Usage.CompletionTokens
+	result.ThroughputBasis = "completion_tokens_per_end_to_end_second"
 
 	// Calculate tokens per second if available
-	if response.Usage.TotalTokens > 0 {
-		result.TokensPerSec = float64(response.Usage.TotalTokens) / result.Duration.Seconds()
+	if response.Usage.CompletionTokens > 0 && elapsed > 0 {
+		result.TokensPerSec = float64(response.Usage.CompletionTokens) / elapsed.Seconds()
 	}
 
 	return result

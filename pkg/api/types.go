@@ -8,6 +8,7 @@ type ChatCompletionRequest struct {
 	Messages         []ChatMessage  `json:"messages"`
 	Temperature      *float32       `json:"temperature,omitempty"`
 	TopP             *float32       `json:"top_p,omitempty"`
+	Seed             *int64         `json:"seed,omitempty"`
 	N                *int           `json:"n,omitempty"`
 	Stream           bool           `json:"stream,omitempty"`
 	StreamOptions    *StreamOptions `json:"stream_options,omitempty"`
@@ -129,6 +130,7 @@ type CompletionRequest struct {
 	Prompt           string   `json:"prompt"`
 	Temperature      *float32 `json:"temperature,omitempty"`
 	TopP             *float32 `json:"top_p,omitempty"`
+	Seed             *int64   `json:"seed,omitempty"`
 	N                *int     `json:"n,omitempty"`
 	Stream           bool     `json:"stream,omitempty"`
 	Stop             []string `json:"stop,omitempty"`
@@ -164,19 +166,20 @@ type Usage struct {
 
 // Model represents a model in the registry
 type Model struct {
-	ID            string   `json:"id"`
-	Object        string   `json:"object"` // "model"
-	Created       int64    `json:"created"`
-	OwnedBy       string   `json:"owned_by"`
-	Permission    []string `json:"permission,omitempty"`
-	Root          string   `json:"root,omitempty"`
-	Parent        string   `json:"parent,omitempty"`
-	Type          string   `json:"type,omitempty"`           // "llm" or "embedding"
-	Size          int64    `json:"size,omitempty"`           // Size in bytes
-	SizeGB        string   `json:"size_gb,omitempty"`        // Human-readable size
-	ContextWindow int      `json:"context_window,omitempty"` // Allocated runtime context
-	ContextLength int      `json:"context_length,omitempty"` // Compatibility alias used by agent clients
-	Capabilities  []string `json:"capabilities,omitempty"`
+	ID               string            `json:"id"`
+	Object           string            `json:"object"` // "model"
+	Created          int64             `json:"created"`
+	OwnedBy          string            `json:"owned_by"`
+	Permission       []string          `json:"permission,omitempty"`
+	Root             string            `json:"root,omitempty"`
+	Parent           string            `json:"parent,omitempty"`
+	Type             string            `json:"type,omitempty"`           // "llm" or "embedding"
+	Size             int64             `json:"size,omitempty"`           // Size in bytes
+	SizeGB           string            `json:"size_gb,omitempty"`        // Human-readable size
+	ContextWindow    int               `json:"context_window,omitempty"` // Allocated runtime context
+	ContextLength    int               `json:"context_length,omitempty"` // Compatibility alias used by agent clients
+	Capabilities     []string          `json:"capabilities,omitempty"`
+	CapabilityStatus map[string]string `json:"capability_status,omitempty"`
 }
 
 // ModelListResponse represents the response for listing models

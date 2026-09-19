@@ -4,6 +4,7 @@
 package inference
 
 import (
+	"context"
 	"fmt"
 
 	llama "github.com/go-skynet/go-llama.cpp"
@@ -17,12 +18,15 @@ type LlamaEmbeddingImpl struct {
 }
 
 // newEmbeddingImpl creates a new llama.cpp embedding implementation
-func newEmbeddingImpl() (EmbeddingImpl, error) {
+func newEmbeddingImpl(_ string) (EmbeddingImpl, error) {
 	return &LlamaEmbeddingImpl{}, nil
 }
 
 // Load loads the embedding model using llama.cpp
-func (l *LlamaEmbeddingImpl) Load(modelPath string, opts EmbeddingOptions) error {
+func (l *LlamaEmbeddingImpl) Load(ctx context.Context, modelPath string, opts EmbeddingOptions) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// Convert our options to llama.cpp options
 	llamaOpts := []llama.ModelOption{
 		llama.SetContext(opts.ContextSize),
@@ -57,7 +61,7 @@ func (l *LlamaEmbeddingImpl) Load(modelPath string, opts EmbeddingOptions) error
 }
 
 // Embed generates embeddings for multiple texts
-func (l *LlamaEmbeddingImpl) Embed(texts []string) ([][]float32, error) {
+func (l *LlamaEmbeddingImpl) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if l.model == nil {
 		return nil, fmt.Errorf("model not loaded")
 	}
@@ -65,6 +69,9 @@ func (l *LlamaEmbeddingImpl) Embed(texts []string) ([][]float32, error) {
 	embeddings := make([][]float32, len(texts))
 
 	for i, text := range texts {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		// Generate embedding using llama.cpp
 		embedding, err := l.model.Embeddings(text)
 		if err != nil {
