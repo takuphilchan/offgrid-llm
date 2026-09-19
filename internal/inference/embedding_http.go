@@ -150,7 +150,7 @@ func (e *httpEmbedding) Load(ctx context.Context, modelPath string, opts Embeddi
 	configureBackgroundProcess(e.cmd)
 	// Do not copy raw runtime output (which can contain source text) into logs.
 	e.cmd.Stdout, e.cmd.Stderr = io.Discard, io.Discard
-	if err := e.cmd.Start(); err != nil {
+	if err := startOwnedProcess(e.cmd); err != nil {
 		e.cmd = nil
 		return fmt.Errorf("start embedding runtime: %w", err)
 	}

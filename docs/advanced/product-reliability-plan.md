@@ -945,3 +945,23 @@ was removed. The real Windows package passed mismatch recovery, isolated service
 startup/restart, external-service attachment, timeout/retry and IPC checks.
 Evidence: `%TEMP%/offgrid-desktop-startup-3TLa8o`. This is local Windows startup
 evidence, not macOS/Linux or installed-upgrade qualification.
+
+Windows inference ownership repair (2026-09-19): the installed v0.4.9 service
+returned HTTP 503 for both chat models because orphaned llama-server processes
+occupied the fixed inference port. Removing only the verified orphan PIDs restored
+streaming without deleting models or history. The source fix reserves OS-selected
+loopback ports, avoids leaking port tracking on failed starts, uses Windows-native
+process liveness checks and attaches chat/embedding children to a non-inheritable
+kill-on-close job. Normal unload waits for each process only once.
+
+Windows inference/server/CLI tests and Linux inference/server race tests passed.
+An isolated patched Windows service loaded the installed TinyLlama and Morena
+files while the desktop's existing inference listener remained running. Both
+returned HTTP 200, streamed text, normal stop and `[DONE]` for a short arithmetic
+prompt (about 1.8 and 2.4 seconds respectively). Repeated calls reused live runtime
+PIDs; forcibly stopping the test service terminated all its inference children
+without stopping the installed service. Evidence is under
+`%TEMP%/offgrid-runtime-repair-6f0542319cab43e4a79c942f26643e06`.
+These are runtime/transport checks, not model answer-quality qualification or a
+visual desktop UI pass. No release publication or installed-binary replacement
+is implied by this source checkpoint.

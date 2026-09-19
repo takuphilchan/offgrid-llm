@@ -59,7 +59,6 @@ type ModelCache struct {
 	draftMin       int    // Minimum draft tokens for acceptance (default: 5)
 	mu             sync.RWMutex
 	pendingLoads   map[string]*pendingLoad // Deduplicate concurrent load requests
-	basePort       int
 	binManager     *BinaryManager
 	mmapWarmer     *MmapWarmer     // Pre-warms models into page cache
 	loadingTracker *LoadingTracker // Tracks loading progress for UI feedback
@@ -96,7 +95,6 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		flashAttention: false, // Disabled by default - can cause crashes on some systems
 		cacheReuse:     0,     // Disabled by default - can cause EOF issues
 		contBatching:   true,  // Enabled by default for multi-request throughput
-		basePort:       42382,
 		binManager:     NewBinaryManager(binDir),
 		useMlock:       false, // Disabled by default, enabled for small models
 		totalRAMMB:     0,     // Will be set by SetSystemRAM
@@ -344,7 +342,7 @@ func (mc *ModelCache) instanceHealthy(instance *ModelInstance) bool {
 	}
 	// Signal 0 alone reports zombie processes as alive on Linux. Require the
 	// model server's health endpoint as well before reusing a cached instance.
-	if err := instance.Cmd.Process.Signal(syscall.Signal(0)); err != nil {
+	if !ownedProcessAlive(instance.Cmd.Process) {
 		return false
 	}
 	return mc.checkHealth(instance.Port) == nil
@@ -555,22 +553,15 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 		}
 	}
 
-	// Use a consistent port for single-instance mode
-	port := mc.basePort
-	if mc.maxInstances > 1 {
-		port = mc.getNextAvailablePort()
-	}
-
-	// Ensure port is free before starting
-	if conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond); err == nil {
-		conn.Close()
+	// Let the OS reserve a free loopback port, including in single-model mode.
+	// Hold it while preparing the runtime. Never evict an existing listener.
+	reservation, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
 		mc.mu.Unlock()
-		return nil, fmt.Errorf("inference port %d is already occupied; choose another port or stop its owner explicitly", port)
+		return nil, fmt.Errorf("reserve inference port: %w", err)
 	}
-
-	// Mark port as used
-	mc.usedPorts[port] = true
-	mc.portToModel[port] = modelID
+	defer reservation.Close()
+	port := reservation.Addr().(*net.TCPAddr).Port
 
 	// Start llama-server with this model
 	log.Printf("Loading model %s on port %d", modelID, port)
@@ -738,13 +729,17 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 		mc.loadingTracker.UpdatePhase(PhaseStarting, 15, "Starting inference server...")
 	}
 
-	if err := cmd.Start(); err != nil {
+	// llama.cpp binds its own socket; a bind race must fail, never kill its owner.
+	_ = reservation.Close()
+	if err := startOwnedProcess(cmd); err != nil {
 		mc.mu.Unlock()
 		if mc.loadingTracker != nil {
 			mc.loadingTracker.Complete(modelID, false, err.Error())
 		}
 		return nil, fmt.Errorf("failed to start llama-server: %w", err)
 	}
+	mc.usedPorts[port] = true
+	mc.portToModel[port] = modelID
 
 	instance := &ModelInstance{
 		ModelID:       modelID,
@@ -846,8 +841,7 @@ func (mc *ModelCache) unloadInternal(modelID string) error {
 		// Wait briefly for graceful shutdown
 		done := make(chan error, 1)
 		go func() {
-			_, err := instance.Cmd.Process.Wait()
-			done <- err
+			done <- instance.Cmd.Wait()
 		}()
 
 		select {
@@ -859,7 +853,7 @@ func (mc *ModelCache) unloadInternal(modelID string) error {
 			if err := instance.Cmd.Process.Kill(); err != nil {
 				log.Printf("Warning: error killing llama-server for %s: %v", modelID, err)
 			}
-			instance.Cmd.Wait()
+			<-done
 		}
 	}
 
@@ -927,18 +921,6 @@ func (mc *ModelCache) UnloadAll() {
 	}
 }
 
-// getNextAvailablePort finds an available port that's not currently in use
-func (mc *ModelCache) getNextAvailablePort() int {
-	for i := 0; i < mc.maxInstances; i++ {
-		port := mc.basePort + i
-		if !mc.usedPorts[port] {
-			return port
-		}
-	}
-	// Fallback - reuse first port (shouldn't happen if eviction works)
-	return mc.basePort
-}
-
 // waitForReady waits for llama-server to start AND for the model to fully load
 // Uses adaptive polling: fast at start, slower as time passes
 // With mmap pre-warming, models load much faster (5-15s vs 60-120s)
@@ -965,6 +947,9 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 	for time.Now().Before(startupDeadline) {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if !mc.startingProcessAlive(modelID) {
+			return fmt.Errorf("llama-server exited before becoming ready")
 		}
 		// Update progress: 15-40% during server startup
 		if mc.loadingTracker != nil {
@@ -1029,8 +1014,7 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 		}
 
 		// Check if process is still running
-		instance, exists := mc.instances[mc.portToModel[port]]
-		if exists && instance.Cmd.ProcessState != nil && instance.Cmd.ProcessState.Exited() {
+		if !mc.startingProcessAlive(modelID) {
 			return fmt.Errorf("llama-server on port %d exited unexpectedly", port)
 		}
 
@@ -1054,6 +1038,13 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 
 	// If we get here, model didn't load in time
 	return fmt.Errorf("model on port %d did not load within 5 minutes", port)
+}
+
+func (mc *ModelCache) startingProcessAlive(modelID string) bool {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+	instance := mc.instances[modelID]
+	return instance != nil && instance.Cmd != nil && ownedProcessAlive(instance.Cmd.Process)
 }
 
 func waitContext(ctx context.Context, duration time.Duration) error {
