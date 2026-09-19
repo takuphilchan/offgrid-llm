@@ -32,6 +32,26 @@ current tokens, shell, typography, component treatment, and responsive
 overrides. New visual work must use the semantic custom properties in the
 workspace layer instead of introducing literal feature colors.
 
+`controls.css` is the shared, final control layer for both renderer editions.
+It owns button/field geometry and interaction states; feature rules must not
+redefine those values. Default actions and fields use a 40px minimum height,
+8px radius, 13px text and 8px action spacing. Text can wrap and controls can
+grow; do not set fixed heights that clip translated labels.
+
+- Use `primary-button` for the main action, `secondary-button` for alternatives,
+  `text-button` for low-priority actions, and `danger-button` for destructive
+  operations. Destructive actions still require their existing confirmations.
+- Use `action-group` to keep related actions together. Toolbars and per-document
+  controls wrap rather than overflowing at narrow widths.
+- Associate fields with visible labels (`field` provides the stacked layout).
+  Do not rely on placeholders as the only explanation of a form field.
+- Keep native disabled semantics and keyboard focus rings. Compound search
+  controls have one focus surface, not nested borders. The chat editor, command
+  palette and compact segmented navigation have explicit layout exceptions.
+- Test long labels/model names, dark/light appearances and RTL. The control
+  regression suite includes 320px/390px and desktop layouts; Electron packages
+  consume the same compiled renderer, not a separate styling implementation.
+
 The palette is deliberately monochrome. Statuses may use restrained semantic
 contrast where losing the distinction would be unsafe. IBM Plex Sans, IBM Plex
 Sans Arabic, and IBM Plex Mono are bundled with the application, so typography
@@ -82,6 +102,22 @@ must never be selected as chat fallbacks.
 
 ## Quality gates
 
+### Status and interaction conventions
+
+- A transfer bar exists only while downloading or preparing a model. Installed
+  models use a compact status, not a disabled action. Installation and active
+  knowledge retrieval are separate states; setup observes only the selected
+  embedding model's activation work.
+- The toolbar Refresh updates the mounted page through `useWorkspaceRefresh`.
+  It must not remount the workspace, erase drafts, or resubmit running work.
+  Failed optional status requests remain unknown, not disabled or healthy.
+- Model discovery comes before the suggested catalog, which has its own filter.
+  Setup panels use bounded controls and one primary action.
+- Agent tabs implement arrow/Home/End navigation, tool switches have accessible
+  names, and narrow-screen navigation exposes every destination without sideways
+  scrolling. Results use the same safe Markdown renderer as chat; Activity keeps
+  raw event payloads behind explicit technical-details disclosure.
+
 For shell or workflow changes run:
 
 ```bash
@@ -107,6 +143,51 @@ handling, command navigation, and conversation access at narrow widths. Extend
 it when changing those contracts. Feature-specific tests
 should mock only the API boundary they exercise or run against the repository's
 integration server in CI.
+
+## Interaction and recovery contracts
+
+- Command palette height includes its top offset and header; only the result list
+  scrolls. Search focus is an inset underline inside rounded chrome, not a square
+  border across the shell. Arrow-key selection scrolls only the results viewport;
+  pointer hover does not pull the scroll position. Search exposes combobox semantics
+  and the Esc control is clickable. Small-height, narrow, RTL and dark/light layouts
+  are covered in `tests/palette-layout.spec.ts`.
+- Agent work is task-first: compact runtime facts, a prompt-led composer, secondary
+  model/style settings, and more width for results. At roomy desktop sizes composer
+  and result panels align; narrow layouts stack without shifting controls as output
+  grows. Selected history has a visible state. Execution steps are expandable after
+  completion, while live output and approvals retain their existing recovery rules.
+
+- History panels separate the heading/actions, search, guidance, and results with
+  a shared vertical rhythm. Loading and failed reads are not empty histories.
+- The command palette and mobile conversation drawer contain keyboard focus,
+  respect composition input, support Escape, and restore focus on close.
+- Workspace controls follow the service's authentication mode and current role.
+  Restricted screens explain access requirements without querying administrator
+  endpoints. This is presentation, not an authorization boundary: the service
+  still validates every request. Current agent/MCP management remains admin-only.
+- Model searches, connector drafts, history filters, and Activity selection persist
+  across page navigation in account-scoped memory. They are cleared on sign-out
+  or expired authentication; they are not persisted across reloads. Existing chat
+  and task draft persistence is unchanged. Connector URLs are not saved to disk.
+- Changing models invalidates pending integration setup responses. Statistics and
+  Activity history load independently; event failures retain their own error state.
+- Chat recovery controls name their action: refresh history, check request status,
+  or retry cancellation. Checking status never resubmits inference. Knowledge is
+  enabled in chat only after a successful readiness check; unknown index status is
+  never reported as ready.
+- Bulk deletion operates on the confirmed snapshot and shows processed counts.
+  Stop finishes the current request, then leaves remaining entries untouched.
+- Desktop startup and custom menu labels share the nine-locale presentation
+  resource in `web/app/public/desktop-presentation.json`. Validated locale/theme
+  preferences are saved by trusted host IPC, independently of backend availability.
+  Technical startup failures remain available under details. Native OS menu roles
+  follow the platform. Translation key coverage is not speaker qualification.
+
+`tests/interaction-contracts.spec.ts` covers these renderer contracts alongside
+the existing history, recovery, download, and layout suites. Desktop presentation
+tests exercise startup state/locale/theme handling; they do not replace installed
+application tests on Windows, macOS, and Linux.
 
 ## Migration rule
 

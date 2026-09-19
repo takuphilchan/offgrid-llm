@@ -1,3 +1,7 @@
+import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
+import { useFocusScope } from '../../lib/focus-scope';
+import { interaction } from '../../i18n/interaction';
+import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { api, type ChatMessage, type ChatSession, type Model, type SessionTurn } from '../../api/client';
 import { Icon } from '../../components/Icon';
@@ -61,8 +65,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     writePreference(preferencesKey, JSON.stringify(next));
   };
   const [error, setError] = useState('');
+  const [errorAction, setErrorAction] = useState<'history' | 'request' | 'cancel' | null>('history');
   const [deleteItems, setDeleteItems] = useState<HistoryItem[] | null>(null);
-  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyQuery, setHistoryQuery] = useWorkspaceState('chat.historyQuery', '');
   const [historyNotice, setHistoryNotice] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState('');
@@ -73,6 +78,16 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const activeTurn = useRef<{ name: string; id: string } | null>(null);
   const mounted = useRef(true);
   const selectionRevision = useRef(0);
+  const historyPanel = useRef<HTMLElement>(null);
+  useFocusScope(historyPanel, historyOpen && !deleteItems, () => setHistoryOpen(false));
+  const permissions = useWorkspace();
+  const [knowledgeReady, setKnowledgeReady] = useState<boolean | null>(null);
+  const refreshKnowledge = async () => {
+    if (!permissions.knowledge) { setKnowledgeReady(false); return; }
+    try { setKnowledgeReady((await api.ragStatus()).enabled); } catch { setKnowledgeReady(null); }
+  };
+  useEffect(() => { void refreshKnowledge(); }, [permissions.knowledge]);
+  useWorkspaceRefresh(refreshKnowledge);
 
   const recoverTurn = async (session: ChatSession, turn: SessionTurn, revision: number) => {
     if (!mounted.current || revision !== selectionRevision.current) return;
@@ -100,7 +115,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       if (savedDraft.trim() === turn.prompt) clearSubmittedDraft(key, savedDraft);
       setSessions(current => [result.session, ...current.filter(item => item.name !== session.name)]);
     } catch (reason) {
-      if (mounted.current && revision === selectionRevision.current) { setStreamed(partial || turn.output); setInterrupted(true); setError(reason instanceof Error ? reason.message : text.common.error); }
+      if (mounted.current && revision === selectionRevision.current) { setStreamed(partial || turn.output); setInterrupted(true); setErrorAction('request'); setError(reason instanceof Error ? reason.message : text.common.error); }
     } finally { if (controller.current === watch) { controller.current = null; if (mounted.current) setBusy(false); } }
   };
 
@@ -118,6 +133,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const loadSessions = async (preferred = activeName) => {
+    setErrorAction('history');
     setLoading(true);
     setError('');
     try {
@@ -133,6 +149,11 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   useEffect(() => { void loadSessions(); }, []);
+  useWorkspaceRefresh(async () => {
+    // Refresh history without resetting the selected conversation or stream.
+    try { setSessions(await api.sessions()); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
+  });
   useEffect(() => { if (followOutput.current) end.current?.scrollIntoView({ behavior: 'instant' }); }, [conversation, busy, streamed, phase]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; selectionRevision.current++; controller.current?.abort(); }; }, []);
   useEffect(() => {
@@ -162,6 +183,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const send = async () => {
+    setErrorAction('request');
     const prompt = draft.trim();
     if (!prompt || !model || busy || checkingTurn || controller.current || deleteItems) return;
     const requestController = new AbortController();
@@ -220,6 +242,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const stop = async () => {
+    setErrorAction('cancel');
     if (!activeTurn.current) { controller.current?.abort(); return; }
     try { await api.cancelTurn(activeTurn.current.name, activeTurn.current.id); controller.current?.abort(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
@@ -236,6 +259,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const copyMessage = async (key: string, content: string) => {
+    setErrorAction(null);
     try {
       await copyText(content);
       setCopiedMessage(key);
@@ -248,7 +272,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   return <div className="chat-workspace">
     {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="chats" remove={api.deleteSession} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     {historyOpen && <button className="history-scrim" onClick={() => setHistoryOpen(false)} aria-label={text.chat.closeHistory} />}
-    <aside id="conversation-history" className={historyOpen ? 'conversation-history open' : 'conversation-history'} aria-label={text.chat.conversations}>
+    <aside ref={historyPanel} role={historyOpen && !deleteItems ? 'dialog' : undefined} aria-modal={(historyOpen && !deleteItems) || undefined} id="conversation-history" className={historyOpen ? 'conversation-history open' : 'conversation-history'} aria-label={text.chat.conversations}>
       <button className="history-close icon-button" onClick={() => setHistoryOpen(false)} aria-label={text.chat.closeHistory}><Icon name="close" size={18} /></button>
       <button className="new-chat-button" disabled={busy} onClick={startNew}><Icon name="plus" size={16} />{text.chat.newChat}</button>
       <div className="history-label">{text.chat.conversations}</div>
@@ -264,7 +288,8 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       </div>}
     </aside>
     <div className="chat-layout">
-      <div className="chat-toolbar"><div className="chat-toolbar-leading"><button className="history-toggle icon-button" onClick={() => setHistoryOpen(true)} aria-label={text.chat.showHistory} aria-expanded={historyOpen} aria-controls="conversation-history"><Icon name="menu" size={19} /></button><ModelSelect models={models} value={model} onChange={setModel} /></div><label className="switch"><input type="checkbox" checked={knowledge} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label></div>
+      <div className="chat-toolbar"><div className="chat-toolbar-leading"><button className="history-toggle icon-button" onClick={() => setHistoryOpen(true)} aria-label={text.chat.showHistory} aria-expanded={historyOpen} aria-controls="conversation-history"><Icon name="menu" size={19} /></button><ModelSelect models={models} value={model} onChange={setModel} /></div><label className="switch"><input type="checkbox" checked={knowledge} disabled={busy || knowledgeReady !== true} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label></div>
+      {knowledgeReady !== true && <p className="history-notice" role="status">{interaction[locale].knowledgeUnavailable} <a href="#/knowledge">{text.nav.knowledge}</a></p>}
       {(!model || onboardingPending) && <div className="setup-inline" role="status"><span>{model ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</span>{!model && <button className="secondary-button" onClick={onOpenModels}>{text.onboarding.chooseModel}</button>}</div>}
       <details className="chat-performance"><summary>{text.chatStreaming.options}</summary><div>
         <label>{text.chatStreaming.profile}<select value={profile} disabled={busy} onChange={event => updatePreferences({ ...preferences, profile: event.target.value })}><option value="interactive">{text.chatStreaming.interactive}</option><option value="extended">{text.chatStreaming.extended}</option></select></label>
@@ -286,10 +311,10 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         </article>}
         {metrics && <div className="generation-status">{text.chatStreaming.firstText}: {(metrics.first_text_ms / 1000).toLocaleString(locale, { maximumFractionDigits: 2 })} s{metrics.tokens_per_second ? ` · ${metrics.tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 })} ${text.chatStreaming.tokensPerSecond}` : ''} · {metrics.context_window.toLocaleString(locale)} {text.chatStreaming.contextTokens}</div>}
         {limited && <div className="generation-status" role="status">{text.chatStreaming.limitReached}</div>}
-        {error && <div className="inline-error" role="alert">{error}<button className="secondary-button" onClick={() => void loadSessions()}>{text.common.retry}</button></div>}<div ref={end} />
+        {error && <div className="inline-error" role="alert">{error}{errorAction && <button className="secondary-button" onClick={() => void (errorAction === 'cancel' ? stop() : loadSessions())}>{errorAction === 'cancel' ? text.chat.stop : errorAction === 'history' ? interaction[locale].refreshHistory : interaction[locale].checkRequest}</button>}</div>}<div ref={end} />
         {unsaved && <div className="inline-error" role="alert">{text.recovery.draftWarning}</div>}
       </div>
-      <div className="composer"><div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={checkingTurn} /><small>{text.chat.enterHint}</small></div><button disabled={busy ? false : checkingTurn || !draft.trim() || !model} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
+      <div className="composer"><div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small>{text.chat.enterHint}</small></div><button disabled={busy ? false : loading || checkingTurn || !draft.trim() || !model} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
     </div>
   </div>;
 }

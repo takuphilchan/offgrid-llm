@@ -1,4 +1,4 @@
-@layer reset, base, components;
+@layer reset, base, components, workspace, controls;
 
 @layer reset {
   *, *::before, *::after { box-sizing: border-box; }

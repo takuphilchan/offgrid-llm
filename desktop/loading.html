@@ -12,23 +12,24 @@
   <main>
     <header><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2 2 7l10 5 10-5-10-5ZM2 12l10 5 10-5M2 17l10 5 10-5"/></svg><span>OffGrid</span><span class="edition">DESKTOP</span></header>
     <section class="welcome">
-      <p class="eyebrow">LOCAL. PRIVATE. YOURS.</p>
+      <p class="eyebrow">OFFGRID</p>
       <h1 id="title">Opening your workspace</h1>
-      <p id="intro">Your conversations, knowledge, and agents. On your computer.</p>
+      <p id="intro" data-copy="intro">Your conversations, knowledge, and agents. On your computer.</p>
     </section>
     <section class="connection" aria-labelledby="status-title">
       <div class="status-row"><span id="indicator" class="indicator" aria-hidden="true"></span><div><h2 id="status-title">Checking your service</h2><p id="status-text" role="status" aria-live="polite">Connecting to OffGrid…</p></div></div>
-      <dl><div><dt>Desktop</dt><dd id="desktop-version">—</dd></div><div><dt>Service</dt><dd id="service-version">Checking…</dd></div><div class="address"><dt>Address</dt><dd id="address">—</dd></div></dl>
+      <dl><div><dt>Desktop</dt><dd id="desktop-version">—</dd></div><div><dt data-copy="service">Service</dt><dd id="service-version">Checking…</dd></div><div class="address"><dt data-copy="address">Address</dt><dd id="address">—</dd></div></dl>
       <p id="timing" class="muted"></p>
       <div id="recovery" hidden>
         <p id="guidance">Your existing service and saved work are untouched. Update that service to match this desktop, or choose a separate desktop workspace.</p>
-        <div class="actions"><button id="retry" type="button">Retry connection</button><button id="browser" type="button" class="secondary" hidden>Open existing web workspace</button></div>
-        <details id="separate"><summary>Use a separate desktop workspace</summary><p>This starts the bundled, matching service on another local port with separate models and history. It does not copy, upgrade, or stop your existing workspace. Models need to be installed separately. This choice is remembered; change it later under File → Connection on next launch.</p><button id="local" type="button" class="secondary">Start desktop workspace</button></details>
-        <button id="help" type="button" class="text-button">Setup and recovery guide ↗</button>
+        <div class="actions"><button id="retry" data-copy="retry" type="button">Retry connection</button><button id="browser" data-copy="browser" type="button" class="secondary" hidden>Open existing web workspace</button></div>
+        <details id="separate"><summary data-copy="separate">Use a separate desktop workspace</summary><p data-copy="separateBody">This starts the bundled, matching service on another local port with separate models and history. It does not copy, upgrade, or stop your existing workspace. Models need to be installed separately. This choice is remembered; change it later under File → Connection on next launch.</p><button id="local" data-copy="local" type="button" class="secondary">Start desktop workspace</button></details>
+        <button id="help" data-copy="guide" type="button" class="text-button">Setup and recovery guide ↗</button>
       </div>
+      <details id="technical" hidden><summary data-copy="details">Technical details</summary><p id="technical-reason"></p></details>
       <p id="action-error" role="alert" hidden></p>
     </section>
-    <footer><span>One workspace. Your control.</span><span id="footer-state">Starting locally</span></footer>
+    <footer><span>OffGrid</span><span id="footer-state">Starting locally</span></footer>
   </main>
 </body>
 </html>

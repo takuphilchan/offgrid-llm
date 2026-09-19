@@ -28,7 +28,7 @@ type I18nValue = { locale: LocaleCode; setLocale: (locale: LocaleCode) => void; 
 const I18nContext = createContext<I18nValue | null>(null);
 
 function initialLocale(): LocaleCode {
-  const saved = readPreference('offgrid.locale');
+  const saved = readPreference('offgrid.locale') ?? window.electron?.presentation?.locale;
   if (saved && saved in locales) return saved as LocaleCode;
   const language = navigator.language.toLowerCase().split('-')[0];
   return language in locales ? language as LocaleCode : 'en';

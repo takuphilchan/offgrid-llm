@@ -1,5 +1,9 @@
 :root { color-scheme: light dark; --bg: #f7f7f6; --panel: #fff; --text: #191919; --muted: #616160; --line: #d9d9d5; --button: #191919; --on-button: #fff; }
 @media (prefers-color-scheme: dark) { :root { --bg: #101011; --panel: #19191a; --text: #efefed; --muted: #a3a3a0; --line: #363637; --button: #efefed; --on-button: #171717; } }
+:root[data-theme='light'] { color-scheme: light; --bg: #f7f7f6; --panel: #fff; --text: #191919; --muted: #616160; --line: #d9d9d5; --button: #191919; --on-button: #fff; }
+:root[data-theme='dark'] { color-scheme: dark; --bg: #101011; --panel: #19191a; --text: #efefed; --muted: #a3a3a0; --line: #363637; --button: #efefed; --on-button: #171717; }
+[dir='rtl'] .edition { margin-left: 0; margin-inline-start: auto; }
+#technical-reason { overflow-wrap: anywhere; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
 main { width: min(840px, 100%); padding: clamp(24px, 5vh, 64px) 40px 24px; margin: auto; }

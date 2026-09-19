@@ -3,6 +3,9 @@ export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offli
 
 export type DesktopBridge = {
   isDesktop: true;
+  presentation?: { locale: string; theme: 'system' | 'dark' | 'light' };
+  getPresentation?: () => Promise<{ locale: string; theme: 'system' | 'dark' | 'light' }>;
+  setPresentation?: (preferences: { locale: string; theme: 'system' | 'dark' | 'light' }) => Promise<void>;
   platform: string;
   getApiUrl: () => Promise<string>;
   getServerStatus: () => Promise<boolean>;

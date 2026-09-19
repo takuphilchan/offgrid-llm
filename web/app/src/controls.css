@@ -1,0 +1,162 @@
+/* Shared web/Electron control contract. Feature styles own layout; this layer
+   owns control geometry and states. Composite editors have explicit exceptions. */
+@layer controls {
+  :root {
+    --control-height: 40px;
+    --control-radius: 8px;
+    --control-font-size: 13px;
+    --control-gap: 8px;
+  }
+
+  :where(.primary-button, .secondary-button, .text-button, .danger-button,
+    .new-chat-button, .resource-actions button, .model-actions button,
+    .composer button, .inline-error button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--control-gap);
+    min-height: var(--control-height);
+    max-width: 100%;
+    padding: 8px 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--control-radius);
+    font-size: var(--control-font-size);
+    font-weight: 500;
+    line-height: 22px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    background: var(--surface-1);
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
+    transform: none;
+  }
+  :where(.primary-button, .composer button) {
+    color: var(--on-accent);
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    font-weight: 600;
+  }
+  .text-button { background: transparent; border-color: transparent; }
+  .danger-button { color: var(--red); }
+  :where(.secondary-button, .text-button, .danger-button, .new-chat-button,
+    .resource-actions button, .model-actions button, .inline-error button):hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: var(--line-strong);
+  }
+  :where(.primary-button, .composer button):hover:not(:disabled) { opacity: .87; transform: none; }
+  button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  button > svg { flex-shrink: 0; }
+  .icon-button { width: var(--control-height); height: var(--control-height); flex-shrink: 0; border-radius: var(--control-radius); }
+
+  :where(input:not([type]), input[type='text'], input[type='search'], input[type='url'],
+    input[type='email'], input[type='password'], input[type='number'], select, textarea) {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    min-height: var(--control-height);
+    padding: 8px 12px;
+    color: var(--text);
+    background: var(--surface-0);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--control-radius);
+    font: inherit;
+    font-size: var(--control-font-size);
+    line-height: 22px;
+  }
+  select { padding-inline-end: 28px; text-overflow: ellipsis; }
+  textarea { resize: vertical; }
+  :where(input, textarea)::placeholder { color: var(--faint); opacity: 1; }
+  :where(input, textarea, select):disabled { opacity: .6; cursor: not-allowed; }
+  :where(input, textarea, select)[aria-invalid='true'] { border-color: var(--red); }
+  :where(button, input, textarea, select, a):focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+  .field, .task-card > label, .task-card .model-select, .connector-panel form label {
+    display: grid; gap: 8px; min-width: 0; color: var(--muted); font-size: 13px;
+  }
+  .field > span { line-height: 20px; }
+  .task-card > .agent-task-editor { display: flex; flex-direction: column; }
+
+  /* One border/focus surface for compound fields, not two stacked inputs. */
+  .history-search { min-height: var(--control-height); padding: 0 12px; }
+  .history-search input { min-height: 38px; padding: 8px 0; border: 0; border-radius: 0; background: transparent; }
+  .history-search:focus-within { outline: 2px solid var(--text); outline-offset: -2px; }
+  .history-search input:focus-visible, .command-search input:focus-visible { outline: none; }
+  .agent-history-panel { display: grid; gap: 16px; }
+  .agent-history-panel .history-notice, .agent-history-panel .task-history { margin-block: 0; }
+  dialog.command-palette {
+    --palette-top: min(72px, 8dvh);
+    width: min(620px, calc(100vw - 32px)); margin: var(--palette-top) auto auto;
+    padding: 0; color: var(--text); max-height: min(600px, calc(100dvh - var(--palette-top) - 16px));
+  }
+  dialog.command-palette[open] { display: flex; flex-direction: column; }
+  .command-search { flex: 0 0 auto; border-start-start-radius: 11px; border-start-end-radius: 11px; }
+  .command-search:focus-within { outline: none; box-shadow: inset 0 -2px var(--text); }
+  .command-dismiss { display: grid; place-items: center; min-width: 36px; min-height: 32px; padding: 4px; color: var(--muted); background: transparent; border-radius: 6px; cursor: pointer; }
+  .command-dismiss:hover { background: var(--surface-2); color: var(--text); }
+  .command-dismiss kbd { pointer-events: none; }
+  .command-results { min-height: 0; max-height: none; overscroll-behavior: contain; scroll-padding-block: 8px; }
+  .command-group button { padding-block: 10px; line-height: 1.4; }
+  .command-group button > svg { flex-shrink: 0; }
+  .command-group button strong { overflow-wrap: anywhere; }
+  dialog.command-palette::backdrop { background: var(--scrim); }
+  .permission-notice { padding: 12px 16px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .diagnostic-details summary { cursor: pointer; padding-block: 12px; }
+  .command-search input { min-height: 56px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 15px; }
+  .composer textarea { border: 0; background: transparent; padding: 10px; resize: none; }
+  .composer textarea:focus-visible { outline-offset: -2px; }
+  .locale-picker { padding: 0 0 0 10px; gap: 6px; }
+  [dir='rtl'] .locale-picker { padding: 0 10px 0 0; }
+  .locale-picker select { width: auto; max-width: 160px; border: 0; background: transparent; }
+  .model-select { min-width: 0; }
+  .model-select > span { flex-shrink: 0; }
+  .chat-toolbar .model-select select { width: min(280px, 100%); }
+
+  .action-group, .settings-actions, .resource-actions, .model-actions, .catalog-actions,
+  .connector-panel form > div {
+    display: flex; align-items: center; flex-wrap: wrap; gap: var(--control-gap);
+  }
+  .section-actions, .section-heading { flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .section-actions > *, .section-heading > *, .settings-panel > * { min-width: 0; max-width: 100%; }
+  .section-actions .action-group { margin-inline-start: auto; justify-content: flex-end; }
+  .section-actions .notice { flex-wrap: wrap; line-height: 1.6; }
+  .stack > *, .card-grid, .resource-card { min-width: 0; }
+  .knowledge-model { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .resource-actions .source-state { margin-inline-end: auto; }
+  .resource-actions { justify-content: flex-start; }
+  .resource-actions button { flex-shrink: 0; }
+  .knowledge-workspace > .error-banner { margin: 0; }
+  .model-search-form { align-items: flex-end; }
+  .model-search-form .field { flex: 1 1 240px; }
+  .model-search-form button { flex: 0 0 auto; }
+  .model-search-files { gap: 8px; }
+  .model-search-files > label { font-size: 13px; color: var(--muted); }
+  .model-section + .model-section { padding-block-start: 24px; border-block-start: 1px solid var(--line); }
+  .inline-error button { margin-inline-start: 12px; }
+  .connector-panel { grid-template-columns: minmax(0, 1fr); }
+  @container (min-width: 760px) {
+    .connector-panel { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+  }
+  @media (max-width: 700px) {
+    .topbar { flex-wrap: wrap; gap: 12px; }
+    .topbar > * { min-width: 0; max-width: 100%; }
+    .topbar h1 { overflow-wrap: anywhere; }
+    .topbar-actions { margin-inline-start: auto; }
+    .section-actions .action-group { margin-inline-start: 0; justify-content: flex-start; width: 100%; }
+    .chat-toolbar { flex-wrap: wrap; }
+    .chat-toolbar-leading { max-width: 100%; flex: 1 1 220px; }
+    .chat-toolbar .model-select { flex: 1; }
+    .resource-actions .source-state { flex-basis: 100%; }
+    .settings-actions { flex-direction: row; }
+    .provider-grid { grid-template-columns: minmax(0, 1fr); }
+    .model-search-form { flex-wrap: wrap; }
+    .model-search-form .field { flex-basis: 100%; }
+    .model-search-form button { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    button { transition: none; }
+  }
+}

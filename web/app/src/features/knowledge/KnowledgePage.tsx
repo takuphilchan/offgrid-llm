@@ -1,7 +1,11 @@
+import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
+import { presentation } from '../../i18n/presentation';
+import { interaction } from '../../i18n/interaction';
+import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, type CatalogModel, type Document, type DownloadProgress, type Model, type RAGStatus } from '../../api/client';
 import { Icon } from '../../components/Icon';
-import { ModelDownloadProgress } from '../../components/ModelDownloadProgress';
+import { isActiveDownload, ModelDownloadProgress } from '../../components/ModelDownloadProgress';
 import { useI18n } from '../../i18n';
 import { workflow } from '../../i18n/workflow';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -13,12 +17,19 @@ type Props = {
   onOpenModels: () => void;
 };
 
-export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) {
+export function KnowledgePage(props: Props) {
+  const { knowledge } = useWorkspace();
+  const { locale } = useI18n();
+  return knowledge ? <KnowledgeWorkspace {...props} /> : <p className="permission-notice" role="status">{interaction[locale].adminOnly}</p>;
+}
+
+function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
   const { messages: text, locale } = useI18n();
   const copy = workflow[locale];
+  const permissions = useWorkspace();
   const [deleting, setDeleting] = useState<Document | null>(null);
   const [sourceID, setSourceID] = useState('');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useWorkspaceState('knowledge.query', '');
   const [documents, setDocuments] = useState<Document[]>([]);
   const [status, setStatus] = useState<RAGStatus | null>(null);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
@@ -30,40 +41,59 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
   const [downloadKey, setDownloadKey] = useState('');
   const [download, setDownload] = useState<DownloadProgress | null>(null);
   const input = useRef<HTMLInputElement | null>(null);
+  const refreshRevision = useRef(0);
+  const preparing = useRef(false);
 
   const installedEmbeddings = useMemo(() => models.filter(model => model.type === 'embedding'), [models]);
   const embeddingCatalog = useMemo(() => catalog.filter(model => model.type === 'embedding'), [catalog]);
   const selectedInstalled = installedEmbeddings.some(model => model.id === embeddingModel);
 
   const refresh = async () => {
+    const revision = ++refreshRevision.current;
     setBusy(true);
     setError('');
     try {
-      const [list, nextStatus, nextCatalog, downloads] = await Promise.all([api.documents(), api.ragStatus(), api.catalog(), api.downloadProgress()]);
-      setDocuments(list.documents);
+      const [list, state, catalogResult, transfers] = await Promise.allSettled([api.documents(), api.ragStatus(), api.catalog(), permissions.admin ? api.downloadProgress() : Promise.resolve({} as Record<string, DownloadProgress>)]);
+      if (revision !== refreshRevision.current) return;
+      if (list.status === 'fulfilled') setDocuments(list.value.documents);
+      const nextStatus = state.status === 'fulfilled' ? state.value : null;
       setStatus(nextStatus);
+      const nextCatalog = catalogResult.status === 'fulfilled' ? catalogResult.value : catalog;
       setCatalog(nextCatalog);
-      const setup = Object.values(downloads).filter(item => item.enable_knowledge).sort((a,b) => b.started_at - a.started_at)[0];
-      if (setup) {
-        setDownload(setup);
-        if (setup.status === 'downloading' || setup.status === 'finalizing') { setDownloadKey(setup.file_name); setSetupBusy(true); }
+      const selected = embeddingModel || nextStatus?.embedding_model || installedEmbeddings[0]?.id || nextCatalog.find(model => model.id === 'bge-m3')?.id || nextCatalog.find(model => model.type === 'embedding')?.id || '';
+      setEmbeddingModel(selected);
+      if (transfers.status === 'fulfilled' && !preparing.current) {
+        const setup = Object.values(transfers.value).filter(item => item.enable_knowledge && item.status !== 'complete' && (item.model_id === selected || item.file_name === `${selected}.gguf`)).sort((a,b) => b.started_at - a.started_at)[0];
+        setDownload(setup ?? null);
+        setDownloadKey(setup && isActiveDownload(setup) ? setup.file_name : '');
+        setSetupBusy(isActiveDownload(setup));
       }
-      setEmbeddingModel(current => current || nextStatus.embedding_model || installedEmbeddings[0]?.id || nextCatalog.find(model => model.id === 'bge-m3')?.id || nextCatalog.find(model => model.type === 'embedding')?.id || '');
+      const failed = [list, state, catalogResult, transfers].find(item => item.status === 'rejected');
+      if (failed?.status === 'rejected') setError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : text.common.error);
     } finally {
-      setBusy(false);
+      if (revision === refreshRevision.current) setBusy(false);
     }
   };
 
   useEffect(() => { void refresh(); }, []);
+  useWorkspaceRefresh(refresh);
   useEffect(() => {
     if (!downloadKey) return;
     let stopped = false;
+    let polling = false;
     const poll = async () => {
+      if (polling) return;
+      polling = true;
       try {
         const progress = (await api.downloadProgress())[downloadKey];
-        if (stopped || !progress) return;
+        if (stopped) return;
+        if (!progress) {
+          setDownloadKey(''); setSetupBusy(false); setDownload(null);
+          setError(text.knowledgeSetup.failed);
+          return;
+        }
         setDownload(progress);
         if (progress.status === 'complete') {
           setDownloadKey('');
@@ -81,7 +111,7 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
           setSetupBusy(false);
           setDownloadKey('');
         }
-      }
+      } finally { polling = false; }
     };
     void poll();
     const timer = window.setInterval(() => void poll(), 1200);
@@ -89,13 +119,15 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
   }, [downloadKey, onModelsChanged]);
 
   const prepare = async () => {
-    if (!embeddingModel || setupBusy) return;
+    if (!embeddingModel || setupBusy || preparing.current) return;
+    preparing.current = true;
     setSetupBusy(true);
     setError('');
     try {
       const model = embeddingCatalog.find(item => item.id === embeddingModel) ?? (selectedInstalled ? { id: embeddingModel, repo: '', file: `${embeddingModel}.gguf`, quant: '', size_bytes: 0 } : undefined);
       if (!model) throw new Error('Selected embedding model is not available in the catalog.');
       const accepted = await api.downloadModel(model, true);
+      preparing.current = false;
       if (accepted.exists) {
         await onModelsChanged();
         await refresh();
@@ -107,7 +139,7 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : text.knowledgeSetup.failed);
       setSetupBusy(false);
-    }
+    } finally { preparing.current = false; }
   };
 
   const upload = async (file?: File) => {
@@ -131,27 +163,36 @@ export function KnowledgePage({ models, onModelsChanged, onOpenModels }: Props) 
   const enabled = status?.enabled === true;
   const shownDocuments = documents.filter(document => document.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   return <div className="stack knowledge-workspace">
-    {enabled && <button className="secondary-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
+    {!permissions.admin && <p className="permission-notice">{interaction[locale].adminOnly}</p>}
+	{typeof status?.stats?.index_error === 'string' && <div className="error-banner" role="alert">{status.stats.index_error}</div>}
     {sourceID && <DocumentSourceDialog id={sourceID} close={() => setSourceID('')} />}
     {deleting && <ConfirmDialog title={deleting.name} body={copy.deleteDocument} close={() => setDeleting(null)} confirm={async () => { await api.deleteDocument(deleting.id); await refresh(); }} />}
-    {!enabled && !busy && <section className="knowledge-setup">
+    {permissions.admin && !enabled && !busy && status !== null && <section className="knowledge-setup">
       <div className="knowledge-setup-copy"><div className="model-glyph"><Icon name="knowledge" /></div><div><span className="eyebrow">{text.knowledgeSetup.title}</span><h2>{text.knowledge.disabled}</h2><p>{text.knowledgeSetup.body}</p></div></div>
       <div className="knowledge-setup-controls">
-        <label><span>{text.knowledgeSetup.model}</span><select value={embeddingModel} onChange={event => setEmbeddingModel(event.target.value)} disabled={setupBusy}>
+        <label><span>{text.knowledgeSetup.model}</span><select value={embeddingModel} onChange={event => { setEmbeddingModel(event.target.value); setDownload(null); setError(''); }} disabled={setupBusy}>
           {installedEmbeddings.map(model => <option key={model.id} value={model.id}>{model.id} · {text.models.installed}</option>)}
           {embeddingCatalog.filter(model => !installedEmbeddings.some(local => local.id === model.id)).map(model => <option key={model.id} value={model.id}>{model.name} · {formatBytes(model.size_bytes)}</option>)}
         </select></label>
         <button className="primary-button" onClick={() => void prepare()} disabled={!embeddingModel || setupBusy}>{setupBusy ? text.knowledgeSetup.preparing : selectedInstalled ? text.knowledgeSetup.enable : text.knowledgeSetup.installEnable}</button>
-        <button className="secondary-button" onClick={onOpenModels}>{text.knowledgeSetup.openModels}</button>
+        <button className="text-button" onClick={onOpenModels}>{text.knowledgeSetup.openModels}</button>
+        {download && download.status !== 'complete' && <ModelDownloadProgress download={download} />}
       </div>
-      {download && <ModelDownloadProgress download={download} />}
     </section>}
 
-    <div className="section-actions"><div className="notice"><span>{documents.length} · {text.knowledge.title}</span>{enabled && <span className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model}</span>}</div><input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} /><button className="primary-button" onClick={() => input.current?.click()} disabled={busy || !enabled}><Icon name="upload" size={17} />{busy ? text.common.loading : text.knowledge.add}</button><button className="secondary-button" disabled={busy} onClick={() => void refresh()}>{text.common.refresh}</button></div>
+    <div className="section-actions">
+      <div className="notice"><span>{documents.length} · {text.knowledge.title}</span>{enabled && <span className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model}</span>}</div>
+      <input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} />
+      <div className="action-group">
+        {permissions.admin && enabled && <button className="text-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
+        <button className="secondary-button" disabled={busy} onClick={() => void refresh()}>{text.common.refresh}</button>
+        <button className="primary-button" onClick={() => input.current?.click()} disabled={busy || !enabled || !permissions.admin}><Icon name="upload" size={17} />{busy ? text.common.loading : text.knowledge.add}</button>
+      </div>
+    </div>
     {!enabled && documents.length > 0 && <p>{copy.offlineLibrary}</p>}
     {error && <div className="inline-error" role="alert">{error}<button onClick={() => void refresh()}>{text.common.retry}</button></div>}
     {documents.length > 0 && <input type="search" aria-label={text.knowledge.title} placeholder={text.knowledge.title} value={query} onChange={event => setQuery(event.target.value)} />}
-    {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? <EmptyPanel text={query ? text.history.noMatches : text.knowledge.empty} /> : <div className="card-grid">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><small>{document.chunk_count} {text.knowledge.chunks} · {document.index_status ?? 'ready'}</small><div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button disabled={!document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><button className="danger-button" disabled={busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></div></div></article>)}</div>}
+    {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? <EmptyPanel text={query ? text.history.noMatches : text.knowledge.empty} /> : <div className="card-grid">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><small>{document.chunk_count} {text.knowledge.chunks} · {document.index_status ?? presentation[locale].unknown}</small><div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button disabled={!permissions.admin || !document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><button className="danger-button" disabled={!permissions.admin || busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></div></div></article>)}</div>}
   </div>;
 }
 

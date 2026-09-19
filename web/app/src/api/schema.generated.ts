@@ -758,6 +758,8 @@ export interface components {
         };
         CurrentUser: {
             authenticated: boolean;
+            /** @description Whether workspace role permissions are enforced. */
+            auth_required?: boolean;
             guest?: boolean;
             user: components["schemas"]["PublicUser"] | null;
         };

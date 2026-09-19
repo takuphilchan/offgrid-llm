@@ -80,7 +80,8 @@ SmartScreen, Gatekeeper and verification limitations.
   cancellable controller owns startup; renderer reads use cached state rather than
   launching another probe loop. Window-state writes are asynchronous and debounced.
 - Startup/recovery uses the monochrome system, dark/reduced-motion support,
-  keyboard controls and safe errors. The native shell text is currently English.
+  keyboard controls and safe errors. Startup and custom menus share the nine
+  interface locales; native OS menu roles follow platform localization.
 
 ## Security boundary
 

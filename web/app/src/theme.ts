@@ -6,7 +6,7 @@ export type ThemeChoice = 'system' | 'dark' | 'light';
 const themeKey = 'offgrid.theme';
 
 function readThemeChoice(): ThemeChoice {
-  const saved = readPreference(themeKey);
+  const saved = readPreference(themeKey) ?? window.electron?.presentation?.theme;
   return saved === 'dark' || saved === 'light' ? saved : 'system';
 }
 

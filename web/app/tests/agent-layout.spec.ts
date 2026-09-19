@@ -66,6 +66,24 @@ async function geometry(page: Page) {
   });
 }
 
+test('task-first agent workspace leaves desktop room for output and visible Run controls', async ({ page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await fixture(page); await page.goto('/ui/#/agents');
+  await expect(page.getByRole('button', { name: 'Run task', exact: true })).toBeVisible();
+  const task = await page.locator('.agent-task-editor').boundingBox();
+  const options = await page.locator('.agent-task-options').boundingBox();
+  const form = await page.locator('.task-card').boundingBox();
+  const result = await page.locator('.result-card').boundingBox();
+  const metrics = await page.locator('.agent-metrics').boundingBox();
+  const run = await page.locator('.agent-task-actions button').boundingBox();
+  expect(task!.y + task!.height).toBeLessThanOrEqual(options!.y);
+  expect(result!.width).toBeGreaterThan(form!.width * 1.4);
+  expect(Math.abs(result!.height - form!.height)).toBeLessThan(2);
+  expect(metrics!.height).toBeLessThan(100);
+  expect(run!.y + run!.height).toBeLessThan(900);
+  await page.screenshot({ path: info.outputPath('agent-workspace.png') });
+});
+
 for (const width of [390, 768, 1024, 1440]) {
   test(`agent panels contain large results without moving the Run task button at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -75,6 +93,7 @@ for (const width of [390, 768, 1024, 1440]) {
     state.complete();
     await expect(page.locator('.agent-result-body')).toContainText('Completed report');
     await expect(page.locator('.agent-steps article')).toHaveCount(100);
+    await expect(page.locator('.agent-steps')).not.toHaveAttribute('open', '');
     const final = await geometry(page);
     expect(final.form).toEqual(initial.form);
     expect(final.button).toEqual(initial.button);
@@ -88,6 +107,8 @@ for (const width of [390, 768, 1024, 1440]) {
     await pane.focus();
     await page.keyboard.press('End');
     await expect.poll(() => pane.evaluate(e => e.scrollTop)).toBeGreaterThan(0);
+    await page.locator('.agent-steps summary').click();
+    await expect(page.locator('.agent-steps')).toHaveAttribute('open', '');
     await page.screenshot({ path: test.info().outputPath(`agents-${width}.png`), fullPage: true });
   });
 }

@@ -1,15 +1,20 @@
+import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { APIError, api, type AgentRun, type AgentTask, type AgentTool, type ComputerStatus, type ExternalIntegration, type IntegrationSetup, type MCPServer, type Model } from '../../api/client';
 import { Icon } from '../../components/Icon';
+import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ModelSelect } from '../../components/ModelSelect';
 import { HistoryDeleteDialog, type HistoryItem } from '../../components/HistoryDeleteDialog';
 import { copyText } from '../../lib/clipboard';
 import { useI18n } from '../../i18n';
+import { presentation } from '../../i18n/presentation';
 import { clearSubmittedDraft, useDraft } from '../../lib/drafts';
 import { agentActive } from '../../api/agent-stream';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { AgentPreview, AgentProgress } from './AgentProgress';
 import { useAgentOutputScroll } from './useAgentOutputScroll';
+import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
+import { interaction } from '../../i18n/interaction';
 
 type AgentView = 'workspace' | 'tools' | 'connections';
 
@@ -19,10 +24,16 @@ function viewFromLocation(): AgentView {
 }
 
 export function AgentPage({ scope, models, model, setModel }: { scope: string; models: Model[]; model: string; setModel: (model: string) => void }) {
-  const { messages: text } = useI18n();
+  const { admin } = useWorkspace();
+  const { locale } = useI18n();
+  return admin ? <AgentWorkspace scope={scope} models={models} model={model} setModel={setModel} /> : <p className="permission-notice" role="status">{interaction[locale].adminOnly}</p>;
+}
+
+function AgentWorkspace({ scope, models, model, setModel }: { scope: string; models: Model[]; model: string; setModel: (model: string) => void }) {
+  const { messages: text, locale } = useI18n();
   const { value: task, setValue: setTask, key: taskDraftKey, unsaved } = useDraft(scope, 'agent-task');
   const { value: selectedRun, setValue: selectRun } = useDraft(scope, 'agent-run');
-  const [style, setStyle] = useState('react');
+  const [style, setStyle] = useWorkspaceState('agent.style', 'react');
   const [busy, setBusy] = useState(false);
   const [execution, setExecution] = useState<AgentRun | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
@@ -41,8 +52,8 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [loadingRuntime, setLoadingRuntime] = useState(true);
   const [toolBusy, setToolBusy] = useState('');
-  const [connectionName, setConnectionName] = useState('');
-  const [connectionURL, setConnectionURL] = useState('');
+  const [connectionName, setConnectionName] = useWorkspaceState('agent.connectorName', '');
+  const [connectionURL, setConnectionURL] = useWorkspaceState('agent.connectorURL', '');
   const [connectionBusy, setConnectionBusy] = useState<'test' | 'connect' | ''>('');
   const [connectionMessage, setConnectionMessage] = useState('');
   const [integrations, setIntegrations] = useState<ExternalIntegration[]>([]);
@@ -50,17 +61,21 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
   const [integrationBusy, setIntegrationBusy] = useState('');
   const [copied, setCopied] = useState(false);
   const [view, setView] = useState<AgentView>(viewFromLocation);
-  const [historyQuery, setHistoryQuery] = useState('');
-  const [historyLimit, setHistoryLimit] = useState(20);
+  const [historyQuery, setHistoryQuery] = useWorkspaceState('agent.historyQuery', '');
+  const [historyLimit, setHistoryLimit] = useWorkspaceState('agent.historyLimit', 20);
   const [deleteItems, setDeleteItems] = useState<HistoryItem[] | null>(null);
   const [historyNotice, setHistoryNotice] = useState('');
   const [resultCopied, setResultCopied] = useState(false);
   const outputScroll = useAgentOutputScroll(execution, livePreview, view);
   const runtimeRequest = useRef(0);
+  const integrationRequest = useRef(0);
+  const [runtimeError, setRuntimeError] = useState('');
+  const [historyError, setHistoryError] = useState('');
 
   const refreshRuntime = async () => {
     const request = ++runtimeRequest.current;
     setLoadingRuntime(true);
+    setRuntimeError(''); setHistoryError('');
     const [toolResult, taskResult, serverResult, computerResult, integrationResult] = await Promise.allSettled([api.agentTools(), api.agentTasks(), api.mcpServers(), api.computerStatus(), api.integrations(model)]);
     if (request !== runtimeRequest.current) return;
     if (toolResult.status === 'fulfilled') { setTools(toolResult.value.tools); setEnabledTools(toolResult.value.enabled_count); }
@@ -69,14 +84,19 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
     if (computerResult.status === 'fulfilled') setComputer(computerResult.value);
     if (integrationResult.status === 'fulfilled') setIntegrations(integrationResult.value.integrations);
     const failed = [toolResult, taskResult, serverResult, computerResult, integrationResult].find(item => item.status === 'rejected');
-    if (failed?.status === 'rejected') setError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
+    if (failed?.status === 'rejected') setRuntimeError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
+    if (taskResult.status === 'rejected') setHistoryError(interaction[locale].historyFailed);
     setLoadingRuntime(false);
   };
 
   useEffect(() => {
+    integrationRequest.current++;
+    setIntegrationBusy('');
     setIntegrationSetup(null);
     void refreshRuntime();
+    return () => { integrationRequest.current++; runtimeRequest.current++; };
   }, [model]);
+  useWorkspaceRefresh(refreshRuntime);
   useEffect(() => {
     const syncView = () => setView(viewFromLocation());
     window.addEventListener('hashchange', syncView);
@@ -195,10 +215,11 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
   };
 
   const showIntegrationSetup = async (item: ExternalIntegration) => {
+    const revision = ++integrationRequest.current;
     setIntegrationBusy(item.id); setError(''); setCopied(false);
-    try { const response = await api.integrationSetup(item.id, model || item.model_id); setIntegrationSetup({ id: item.id, name: item.name, setup: response.setup }); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
-    finally { setIntegrationBusy(''); }
+    try { const response = await api.integrationSetup(item.id, model || item.model_id); if (revision === integrationRequest.current) setIntegrationSetup({ id: item.id, name: item.name, setup: response.setup }); }
+    catch (reason) { if (revision === integrationRequest.current) setError(reason instanceof Error ? reason.message : text.common.error); }
+    finally { if (revision === integrationRequest.current) setIntegrationBusy(''); }
   };
 
   const copyIntegrationSetup = async () => {
@@ -229,27 +250,37 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
   };
   return <div className="stack agents-page">
+    {runtimeError && <div className="inline-error" role="alert">{runtimeError}<button disabled={loadingRuntime} onClick={() => void refreshRuntime()}>{text.common.retry}</button></div>}
     {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="tasks" remove={api.deleteAgentRun} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     {error && <div className="inline-error" role="alert">{error}</div>}
     <div className="metric-grid agent-metrics">
       <Metric label={text.agentRuntime.tools} value={loadingRuntime ? '…' : `${enabledTools}/${tools.length} ${text.agentRuntime.enabled}`} />
       <Metric label={text.agentRuntime.history} value={loadingRuntime ? '…' : String(tasks.length)} />
       <Metric label={text.agentRuntime.connectors} value={loadingRuntime ? '…' : String(servers.length)} />
-      <Metric label={text.agentRuntime.computer} value={computer?.available ? text.agentRuntime.available : text.agentRuntime.unavailable} danger={computer?.available === false} />
+      <Metric label={text.agentRuntime.computer} value={!computer ? loadingRuntime ? text.common.loading : presentation[locale].unknown : computer.available ? text.agentRuntime.available : text.agentRuntime.unavailable} danger={computer?.available === false} />
     </div>
 
-    <div className="section-tabs" role="tablist" aria-label={text.nav.agents}>
-      <button id="agent-workspace-tab" role="tab" aria-controls="agent-workspace-panel" aria-selected={view === 'workspace'} onClick={() => selectView('workspace')}>{text.shell.work}</button>
-      <button id="agent-tools-tab" role="tab" aria-controls="agent-tools-panel" aria-selected={view === 'tools'} onClick={() => selectView('tools')}>{text.agentRuntime.tools}</button>
-      <button id="agent-connections-tab" role="tab" aria-controls="agent-connections-panel" aria-selected={view === 'connections'} onClick={() => selectView('connections')}>{text.agentRuntime.connectors}</button>
+    <div className="section-tabs" role="tablist" aria-label={text.nav.agents} onKeyDown={event => {
+        const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+        const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+        const rtl = document.documentElement.dir === 'rtl';
+        const delta = event.key === 'ArrowRight' ? (rtl ? -1 : 1) : event.key === 'ArrowLeft' ? (rtl ? 1 : -1) : 0;
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : delta ? (index + delta + tabs.length) % tabs.length : -1;
+        if (next >= 0) { event.preventDefault(); tabs[next].focus(); tabs[next].click(); }
+      }}>
+      <button id="agent-workspace-tab" role="tab" tabIndex={view === 'workspace' ? 0 : -1} aria-controls="agent-workspace-panel" aria-selected={view === 'workspace'} onClick={() => selectView('workspace')}>{text.shell.work}</button>
+      <button id="agent-tools-tab" role="tab" tabIndex={view === 'tools' ? 0 : -1} aria-controls="agent-tools-panel" aria-selected={view === 'tools'} onClick={() => selectView('tools')}>{text.agentRuntime.tools}</button>
+      <button id="agent-connections-tab" role="tab" tabIndex={view === 'connections' ? 0 : -1} aria-controls="agent-connections-panel" aria-selected={view === 'connections'} onClick={() => selectView('connections')}>{text.agentRuntime.connectors}</button>
     </div>
 
     {view === 'workspace' && <div id="agent-workspace-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-workspace-tab">
       <div className="agent-workspace">
         <form className="task-card" onSubmit={run}>
-          <div className="form-row"><ModelSelect models={models} value={model} onChange={setModel} /></div>
-          <label><span>{text.agentRuntime.style}</span><select value={style} onChange={event => setStyle(event.target.value)}><option value="react">{text.agentRuntime.react}</option><option value="plan-execute">{text.agentRuntime.plan}</option><option value="cot">{text.agentRuntime.reasoning}</option></select></label>
-          <label><span>{text.agents.task}</span><textarea id="agent-task-input" rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label>
+          <label className="agent-task-editor" htmlFor="agent-task-input"><span id="agent-task-label">{text.agents.task}</span><textarea id="agent-task-input" aria-labelledby="agent-task-label" rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label>
+          <div className="agent-task-options">
+            <ModelSelect models={models} value={model} onChange={setModel} />
+            <label><span>{text.agentRuntime.style}</span><select value={style} onChange={event => setStyle(event.target.value)}><option value="react">{text.agentRuntime.react}</option><option value="plan-execute">{text.agentRuntime.plan}</option><option value="cot">{text.agentRuntime.reasoning}</option></select></label>
+          </div>
           {unsaved && <p role="alert">{text.recovery.draftWarning}</p>}
           <div className="agent-task-actions"><button className="primary-button" disabled={working || !!approval || !task.trim() || !model}>{working ? text.agents.running : text.agents.run}</button></div>
         </form>
@@ -275,12 +306,12 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
             </div> : execution?.status === 'uncertain' ? <div className="approval-card">
               <h2>{text.recovery.uncertain}</h2><p>{text.recovery.verifyOutcome}</p>
               <pre>{JSON.stringify(execution.uncertain_call, null, 2)}</pre>
-              <textarea aria-label={text.recovery.reconcile} value={verifiedResult} onChange={event => setVerifiedResult(event.target.value)} />
+              <label className="field"><span>{text.recovery.reconcile}</span><textarea value={verifiedResult} onChange={event => setVerifiedResult(event.target.value)} /></label>
               <button className="primary-button" disabled={busy || !verifiedResult.trim()} onClick={() => void act('reconcile')}>{text.recovery.reconcile}</button>
-            </div> : result ? <pre>{result}</pre> : !execution && <div className="quiet-state"><Icon name="agents" size={30} /><p>{text.agents.subtitle}</p></div>}
+            </div> : result ? <div className="message-body markdown-body agent-answer"><MarkdownMessage content={result} /></div> : !execution && <div className="quiet-state"><Icon name="agents" size={30} /><p>{text.agents.subtitle}</p></div>}
             {(execution?.status === 'interrupted' || execution?.status === 'pending') && execution.resumable && <button className="primary-button" disabled={busy} onClick={() => void act('resume')}>{text.models.resume}</button>}
             {execution?.error && <p role="alert">{execution.error}</p>}
-            {steps.length > 0 && <div className="agent-steps"><span className="eyebrow">{text.agentRuntime.steps}</span>{steps.map((step, index) => <article key={step.id ?? index}><strong>{step.type}{step.tool_name ? ` · ${step.tool_name}` : ''}</strong><p>{step.content || step.tool_result}</p></article>)}</div>}
+            {steps.length > 0 && <details className="agent-steps" open={working}><summary>{text.agentRuntime.steps} · {steps.length}</summary>{steps.map((step, index) => <article key={step.id ?? index}><strong>{step.type}{step.tool_name ? ` · ${step.tool_name}` : ''}</strong><p>{step.content || step.tool_result}</p></article>)}</details>}
             {execution && <AgentPreview run={execution} showPreview={livePreview} />}
             </div>
           </div>
@@ -291,18 +322,18 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
         <label className="history-search"><Icon name="search" size={15} /><input type="search" value={historyQuery} onChange={event => { setHistoryQuery(event.target.value); setHistoryLimit(20); }} placeholder={text.history.searchTasks} aria-label={text.history.searchTasks} /></label>
         <p className="history-notice">{text.history.protectedTasks}</p>
         {historyNotice && <p className="history-notice" role="status">{historyNotice}</p>}
-        {matchingTasks.length === 0 ? <p className="compact-empty">{tasks.length ? text.history.noMatches : text.agentRuntime.noTasks}</p> : <div className="task-history">{matchingTasks.slice(0, historyLimit).map(item => <article key={item.id}>
-          <i className={item.status} /><div><button className="text-button" disabled={busy} onClick={() => { selectRun(item.id); setExecution(null); setError(''); setResultCopied(false); }}>{item.prompt}</button><small>{text.recovery[item.status as keyof typeof text.recovery] ?? item.status} · {new Date(item.created_at).toLocaleString()}</small>{item.error && <p>{item.error}</p>}
+        {loadingRuntime && tasks.length === 0 ? <p role="status">{interaction[locale].loadingHistory}</p> : historyError && tasks.length === 0 ? <p role="alert">{historyError}</p> : matchingTasks.length === 0 ? <p className="compact-empty">{tasks.length ? text.history.noMatches : text.agentRuntime.noTasks}</p> : <div className="task-history">{matchingTasks.slice(0, historyLimit).map(item => <article key={item.id} className={selectedRun === item.id ? 'selected' : undefined}>
+          <i className={item.status} /><div><button className="text-button" aria-current={selectedRun === item.id ? 'true' : undefined} disabled={busy} onClick={() => { selectRun(item.id); setExecution(null); setError(''); setResultCopied(false); }}>{item.prompt}</button><small>{text.recovery[item.status as keyof typeof text.recovery] ?? item.status} · {new Date(item.created_at).toLocaleString(locale)}</small>{item.error && <p>{item.error}</p>}
             <div className="history-row-actions"><button className="text-button" disabled={working || !!approval || !!task.trim()} title={task.trim() ? text.history.draftProtected : text.history.reuseTask} onClick={() => { setTask(item.prompt); document.getElementById('agent-task-input')?.focus(); }}>{text.history.reuseTask}</button><button className="text-button" disabled={busy || !item.deletable} title={item.deletable ? text.history.deleteTask : text.history.protectedTasks} onClick={() => setDeleteItems([{ id: item.id, label: item.prompt }])}><Icon name="trash" size={14} />{text.history.deleteTask}</button></div>
           </div></article>)}</div>}
         {matchingTasks.length > historyLimit && <button className="secondary-button history-more" onClick={() => setHistoryLimit(limit => limit + 20)}>{text.history.showMore} ({matchingTasks.length - historyLimit})</button>}
       </section>
     </div>}
 
-    {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-tools-tab"><section className="runtime-panel"><div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.tools}</span><h2>{enabledTools}/{tools.length} {text.agentRuntime.enabled}</h2></div><button className="secondary-button" onClick={() => void refreshRuntime()}>{text.common.refresh}</button></div>{tools.length === 0 ? <p className="compact-empty">{text.agentRuntime.noTools}</p> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><strong>{tool.name}</strong><p>{tool.description}</p><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></div><label className="switch"><input type="checkbox" checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}</section></div>}
+    {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-tools-tab"><section className="runtime-panel"><div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.tools}</span><h2>{enabledTools}/{tools.length} {text.agentRuntime.enabled}</h2></div><button className="secondary-button" onClick={() => void refreshRuntime()}>{text.common.refresh}</button></div>{tools.length === 0 ? <p className="compact-empty">{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noTools}</p> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><strong>{tool.name}</strong><p>{tool.description}</p><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}</section></div>}
 
     {view === 'connections' && <div id="agent-connections-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-connections-tab">
-      <section className="runtime-panel connector-panel"><div><span className="eyebrow">{text.agentRuntime.connectors}</span><div className="connector-list">{servers.length === 0 ? <p>{text.agentRuntime.noConnectors}</p> : servers.map(server => <article key={server.name}><i /><div><strong>{server.name}</strong><small>{server.transport} · {server.tools} {text.agentRuntime.tools.toLowerCase()} · {server.status}</small></div></article>)}</div></div><form onSubmit={connect}><label><span>{text.agentRuntime.connectorName}</span><input value={connectionName} onChange={event => setConnectionName(event.target.value)} /></label><label><span>{text.agentRuntime.connectorURL}</span><input type="url" placeholder="http://127.0.0.1:3000/mcp" value={connectionURL} onChange={event => setConnectionURL(event.target.value)} /></label>{connectionMessage && <small className="connection-success">{connectionMessage}</small>}<div><button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button><button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button></div></form></section>
+      <section className="runtime-panel connector-panel"><div><span className="eyebrow">{text.agentRuntime.connectors}</span><div className="connector-list">{servers.length === 0 ? <p>{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noConnectors}</p> : servers.map(server => <article key={server.name}><i /><div><strong>{server.name}</strong><small>{server.transport} · {server.tools} {text.agentRuntime.tools.toLowerCase()} · {server.status}</small></div></article>)}</div></div><form onSubmit={connect}><label><span>{text.agentRuntime.connectorName}</span><input value={connectionName} onChange={event => setConnectionName(event.target.value)} /></label><label><span>{text.agentRuntime.connectorURL}</span><input type="url" placeholder="http://127.0.0.1:3000/mcp" value={connectionURL} onChange={event => setConnectionURL(event.target.value)} /></label>{connectionMessage && <small className="connection-success">{connectionMessage}</small>}<div><button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button><button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button></div></form></section>
       <ExternalProvidersPanel integrations={integrations} loading={loadingRuntime} busy={integrationBusy} setup={integrationSetup} copied={copied} onSetup={showIntegrationSetup} onCopy={copyIntegrationSetup} />
     </div>}
   </div>;

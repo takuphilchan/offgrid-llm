@@ -2,25 +2,40 @@
 const byId = id => document.getElementById(id);
 const bridge = window.electron;
 let actionPending = false;
+let preferences = bridge?.presentation;
+let lastState;
+const t = key => preferences?.copy?.[key] ?? key;
+function applyPresentation(value) {
+  preferences = value;
+  document.documentElement.lang = value.locale;
+  document.documentElement.dir = value.locale === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.dataset.theme = value.effectiveTheme;
+  for (const node of document.querySelectorAll('[data-copy]')) node.textContent = t(node.dataset.copy);
+  document.title = 'OffGrid — ' + t('opening');
+  if (lastState) render(lastState);
+}
+if (preferences) applyPresentation(preferences);
+if (bridge?.getPresentation) void bridge.getPresentation().then(applyPresentation).catch(() => {});
 
 function render(state) {
+  lastState = state;
   const busy = ['checking', 'starting'].includes(state.state);
   const ready = state.state === 'ready';
-  byId('title').textContent = busy ? 'Opening your workspace' : ready ? 'Your workspace is ready' : 'Choose how to continue';
-  byId('status-title').textContent = ({ checking: 'Checking your service', starting: 'Starting the desktop service', ready: 'Connected', incompatible: 'A different service is already running', unavailable: 'The service is not ready', error: 'Startup needs attention', offline: 'Service is offline' })[state.state] || 'Checking your service';
-  byId('status-text').textContent = state.reason || (ready ? 'Opening the verified workspace…' : state.state === 'starting' ? 'Preparing local storage and the bundled runtime. You can still move or close this window.' : 'Verifying the service version and interface.');
+  byId('title').textContent = t(busy ? 'opening' : ready ? 'ready' : 'attention');
+  byId('status-title').textContent = t(({ checking: 'checking', starting: 'starting', ready: 'ready', incompatible: 'incompatible', unavailable: 'unavailable', error: 'attention', offline: 'unavailable' })[state.state] || 'checking');
+  byId('status-text').textContent = t(busy ? 'intro' : ready ? 'ready' : 'guidance');
+  byId('technical').hidden = !state.reason;
+  byId('technical-reason').textContent = state.reason || '';
   byId('indicator').classList.toggle('idle', !busy);
   byId('desktop-version').textContent = state.desktopVersion || '—';
-  byId('service-version').textContent = state.version || (busy ? 'Checking…' : 'Not available');
+  byId('service-version').textContent = state.version || t(busy ? 'checking' : 'unknown');
   byId('address').textContent = state.url || '—';
-  byId('timing').textContent = state.elapsedMs ? `${(state.elapsedMs / 1000).toFixed(1)}s · ${busy ? 'Connecting' : 'Connection check'}` : '';
+  byId('timing').textContent = state.elapsedMs ? `${(state.elapsedMs / 1000).toFixed(1)}s` : '';
   byId('recovery').hidden = busy || ready;
   byId('browser').hidden = !state.canOpenBrowser;
   byId('separate').hidden = Boolean(state.managedByDesktop);
-  byId('guidance').textContent = state.managedByDesktop
-    ? 'Retry reconnects to the desktop service without starting another process. Your saved workspace is preserved.'
-    : 'Your existing service and saved work are untouched. Update that service to match this desktop, or choose a separate desktop workspace.';
-  byId('footer-state').textContent = state.workspaceMode === 'isolated' ? 'Separate desktop workspace' : state.managedByDesktop ? 'Desktop-managed service' : 'Local service connection';
+  byId('guidance').textContent = t('guidance');
+  byId('footer-state').textContent = t(state.workspaceMode === 'isolated' ? 'separate' : 'configured');
 }
 
 async function perform(action) {
@@ -32,7 +47,7 @@ async function perform(action) {
     const state = await action();
     if (state) render(state);
   } catch {
-    byId('action-error').textContent = 'This action could not complete. Retry, or close and reopen OffGrid.';
+    byId('action-error').textContent = t('actionError');
     byId('action-error').hidden = false;
   } finally {
     actionPending = false;

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const { isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
 const { DesktopRuntime } = require('./runtime');
+const { normalize: normalizePresentation, readCopy } = require('./presentation');
 
 const APP_NAME = 'OffGrid LLM Desktop';
 // Test packages must remain isolated even when an elevated installer launches
@@ -45,6 +46,13 @@ let windowCreation;
 let nextWorkspace = 'default';
 const statePath = path.join(configRoot, 'window-state.json');
 const connectionPath = path.join(configRoot, 'desktop-connection.json');
+const presentationPath = path.join(configRoot, 'desktop-presentation.json');
+let presentation = normalizePresentation({});
+let presentationCopy;
+let presentationQueue = Promise.resolve();
+const copy = key => presentationCopy?.[presentation.locale]?.[key] ?? presentationCopy?.en?.[key] ?? key;
+const effectiveTheme = () => presentation.theme === 'system' ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light') : presentation.theme;
+const presentationSnapshot = () => ({ ...presentation, effectiveTheme: effectiveTheme(), copy: presentationCopy?.[presentation.locale] });
 
 async function loadWindowState() {
   const defaults = { width: 1400, height: 900 };
@@ -112,8 +120,8 @@ async function createMainWindow() {
   mainWindow = new BrowserWindow({
     ...state, minWidth: 760, minHeight: 560, title: APP_NAME, show: showOnCreate, autoHideMenuBar: true,
     icon: path.join(__dirname, 'assets/icon.png'),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#101011' : '#f7f7f6',
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true }
+    backgroundColor: effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6',
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true, additionalArguments: ['--offgrid-presentation=' + Buffer.from(JSON.stringify(presentationSnapshot())).toString('base64')] }
   });
   if (state.isMaximized) mainWindow.maximize();
   // A first launch can spend several seconds in Windows reputation scanning
@@ -171,32 +179,32 @@ function rememberConnection(mode) {
 
 function connectionMenu() {
   const select = mode => void rememberConnection(mode).catch(() => {
-    void dialog.showMessageBox(mainWindow, { type: 'warning', message: 'The next-launch preference could not be saved.', detail: 'The current workspace has not changed. Check that your desktop settings folder is writable.' });
+    void dialog.showMessageBox(mainWindow, { type: 'warning', message: copy('actionError'), detail: copy('guidance') });
   });
   return [
-    { label: 'Applies after you quit and reopen OffGrid', enabled: false },
+    { label: copy('reopen'), enabled: false },
     { type: 'separator' },
-    { id: 'connection-default', label: 'Configured local service', type: 'radio', checked: nextWorkspace === 'default', click: () => select('default') },
-    { id: 'connection-isolated', label: 'Separate desktop workspace', type: 'radio', checked: nextWorkspace === 'isolated', click: () => select('isolated') }
+    { id: 'connection-default', label: copy('configured'), type: 'radio', checked: nextWorkspace === 'default', click: () => select('default') },
+    { id: 'connection-isolated', label: copy('separate'), type: 'radio', checked: nextWorkspace === 'isolated', click: () => select('isolated') }
   ];
 }
 
 function updateMenus() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
-    { label: 'File', submenu: [
-      { label: 'Connection on next launch', submenu: connectionMenu() },
+    { label: copy('file'), submenu: [
+      { label: copy('nextLaunch'), submenu: connectionMenu() },
       { type: 'separator' },
       { role: process.platform === 'darwin' ? 'close' : 'quit' }
     ] },
     { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Setup and recovery guide', click: () => void shell.openExternal('https://github.com/takuphilchan/offgrid-llm/blob/main/docs/setup/desktop-startup.md') }] }
+    { role: 'help', submenu: [{ label: copy('guide'), click: () => void shell.openExternal('https://github.com/takuphilchan/offgrid-llm/blob/main/docs/setup/desktop-startup.md') }] }
   ]));
   tray?.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open OffGrid', click: showWindow },
-    { label: 'Connection on next launch', submenu: connectionMenu() },
+    { label: copy('open'), click: showWindow },
+    { label: copy('nextLaunch'), submenu: connectionMenu() },
     { type: 'separator' },
-    { label: 'Quit OffGrid', click: () => app.quit() }
+    { label: copy('quit'), click: () => app.quit() }
   ]));
 }
 
@@ -221,6 +229,21 @@ handleTrustedIPC('get-api-url', () => runtime.url);
 handleTrustedIPC('get-app-version', () => app.getVersion());
 handleTrustedIPC('get-server-status', () => runtime.state.state === 'ready');
 handleTrustedIPC('get-backend-info', () => runtime.snapshot());
+handleTrustedIPC('get-presentation', () => presentationSnapshot());
+handleTrustedIPC('set-presentation', value => {
+  // Only appearance/language preferences: no caller-provided file paths or commands.
+  if (!value || !['light', 'dark', 'system'].includes(value.theme) || typeof value.locale !== 'string' || !Object.hasOwn(presentationCopy, value.locale)) throw new Error('Invalid presentation preferences');
+  const next = normalizePresentation(value);
+  presentationQueue = presentationQueue.catch(() => {}).then(async () => {
+    await fs.promises.mkdir(configRoot, { recursive: true });
+    await fs.promises.writeFile(presentationPath + '.tmp', JSON.stringify(next), { mode: 0o600 });
+    await fs.promises.rename(presentationPath + '.tmp', presentationPath);
+    presentation = next;
+    mainWindow?.setBackgroundColor(effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6');
+    updateMenus();
+  });
+  return presentationQueue;
+});
 handleTrustedIPC('startup-retry', () => runtime.connect(), true);
 handleTrustedIPC('startup-local', async () => {
   const status = await runtime.connect(true);
@@ -239,14 +262,14 @@ handleTrustedIPC('get-paths', () => {
   return { ...runtime.workspace };
 });
 handleTrustedIPC('select-directory', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], title: 'Select Directory' });
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], title: copy('directory') });
   return result.canceled ? null : result.filePaths[0] || null;
 });
 handleTrustedIPC('get-system-theme', () => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
 nativeTheme.on('updated', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-  mainWindow.setBackgroundColor(theme === 'dark' ? '#101011' : '#f7f7f6');
+  mainWindow.setBackgroundColor(effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6');
   mainWindow.webContents.send('system-theme-changed', theme);
 });
 app.on('second-instance', (_event, _argv, _directory, request) => {
@@ -255,6 +278,9 @@ app.on('second-instance', (_event, _argv, _directory, request) => {
 });
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.offgrid.llm.desktop');
+  presentationCopy = readCopy(uiDir);
+  try { presentation = normalizePresentation(JSON.parse(await fs.promises.readFile(presentationPath, 'utf8')), app.getLocale().split('-')[0]); }
+  catch { presentation = normalizePresentation({}, app.getLocale().split('-')[0]); }
   await createWindow();
   createTray();
   try { nextWorkspace = JSON.parse(await fs.promises.readFile(connectionPath, 'utf8')).mode === 'isolated' ? 'isolated' : 'default'; } catch {}
@@ -274,6 +300,7 @@ app.on('before-quit', event => {
   void (async () => {
     await saveWindowState();
     await connectionQueue.catch(() => {});
+    await presentationQueue.catch(() => {});
     await runtime.stop(); // Only our child, never a Docker/external service.
     tray?.destroy();
     shutdownComplete = true;

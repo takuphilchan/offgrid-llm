@@ -892,6 +892,7 @@ components:
       required: [authenticated, user]
       properties:
         authenticated: { type: boolean }
+        auth_required: { type: boolean, description: Whether workspace role permissions are enforced. }
         guest: { type: boolean }
         user:
           oneOf:

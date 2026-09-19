@@ -1,3 +1,6 @@
+import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
+import { interaction } from '../../i18n/interaction';
+import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useEffect, useRef, useState } from 'react';
 import { api, type CatalogModel, type DownloadProgress, type Model, type Verification } from '../../api/client';
 import { Icon } from '../../components/Icon';
@@ -7,6 +10,7 @@ import { ModelSearch } from './ModelSearch';
 import { formatBytes } from './model-format';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { workflow } from '../../i18n/workflow';
+import { presentation } from '../../i18n/presentation';
 
 function fileName(path: string): string {
   return path.split('/').pop() ?? path;
@@ -23,9 +27,11 @@ function downloadFor(model: CatalogModel, progress: Record<string, DownloadProgr
 
 export function ModelsPage({ models, selected, setSelected, onRefresh, onboardingPending }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void>; onboardingPending: boolean }) {
   const { messages: text, locale } = useI18n();
+  const { admin } = useWorkspace();
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const [progress, setProgress] = useState<Record<string, DownloadProgress>>({});
   const [loading, setLoading] = useState(true);
+  const [catalogQuery, setCatalogQuery] = useWorkspaceState('models.filter', '');
   const [error, setError] = useState('');
   const [progressError, setProgressError] = useState('');
   const [operation, setOperation] = useState('');
@@ -34,7 +40,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   const completed = useRef(new Set<string>());
   const activeOperations = useRef(new Set<string>());
   const needsChatModel = onboardingPending && !models.some(item => item.type !== 'embedding');
-  const sortedCatalog = [...catalog].sort((a, b) => {
+  const sortedCatalog = catalog.filter(item => `${item.name} ${item.description} ${item.parameters} ${item.quant}`.toLocaleLowerCase(locale).includes(catalogQuery.trim().toLocaleLowerCase(locale))).sort((a, b) => {
     const rank = (item: CatalogModel) => (item.type !== 'embedding' ? 2 : 0) + (item.recommended ? 1 : 0);
     return rank(b) - rank(a);
   });
@@ -42,15 +48,18 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   const load = async () => {
     setLoading(true);
     setError('');
-    const [catalogResult, progressResult] = await Promise.allSettled([api.catalog(), api.downloadProgress()]);
+    const [catalogResult, progressResult] = await Promise.allSettled([api.catalog(), admin ? api.downloadProgress() : Promise.resolve({})]);
     if (catalogResult.status === 'fulfilled') setCatalog(catalogResult.value);
     else setError(catalogResult.reason instanceof Error ? catalogResult.reason.message : text.common.error);
-    if (progressResult.status === 'fulfilled') setProgress(progressResult.value);
+    if (progressResult.status === 'fulfilled') { setProgress(progressResult.value); setProgressError(''); }
+    else setProgressError(progressResult.reason instanceof Error ? progressResult.reason.message : text.common.error);
     setLoading(false);
   };
 
   useEffect(() => { void load(); }, []);
+  useWorkspaceRefresh(load);
   useEffect(() => {
+    if (!admin) return;
     const timer = window.setInterval(async () => {
       try {
         const next = await api.downloadProgress();
@@ -64,7 +73,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
       } catch (reason) { setProgressError(reason instanceof Error ? reason.message : text.common.error); }
     }, 1500);
     return () => clearInterval(timer);
-  }, [onRefresh]);
+  }, [onRefresh, admin]);
 
   const download = async (model: Pick<CatalogModel, 'id' | 'repo' | 'file' | 'quant'>, enableKnowledge = false) => {
     const operationID = `download:${model.id}`;
@@ -122,19 +131,22 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   return <div className="stack models-workspace">
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
     {needsChatModel && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
+    {admin ? <ModelSearch models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>}
     {error && <div className="inline-error" role="alert">{error}</div>}
     {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
     {verification && <div className={verification.verified ? 'verification success' : 'verification'}><Icon name={verification.verified ? 'check' : 'models'} size={17} /><div><strong>{verification.file_name}</strong><span>{verification.message} {verification.sha256 && `· SHA-256 ${verification.sha256}`}</span></div></div>}
-    {Object.values(progress).filter(item => item.status !== 'complete' && !catalog.some(model => `${model.id}.gguf` === item.file_name)).map(item => <article className="catalog-card" key={item.file_name}><strong>{item.file_name}</strong><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={operation !== '' || !item.repository || !item.source_file || !item.model_id} onClick={() => void download({ id: item.model_id!, repo: item.repository!, file: item.source_file!, quant: item.quantization ?? '' }, item.enable_knowledge === true)}>{text.models.resume}</button>}</div></article>)}
+    {Object.values(progress).filter(item => item.status !== 'complete' && !catalog.some(model => `${model.id}.gguf` === item.file_name)).map(item => <article className="catalog-card" key={item.file_name}><strong>{item.file_name}</strong><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={operation !== '' || !item.repository || !item.source_file || !item.model_id} onClick={() => void download({ id: item.model_id!, repo: item.repository!, file: item.source_file!, quant: item.quantization ?? '' }, item.enable_knowledge === true)}>{text.models.resume}</button>}</div></article>)}
     <section className="model-section">
       <div className="section-heading"><div><span className="eyebrow">{text.models.installed}</span><h2>{models.length} {text.models.available}</h2></div></div>
-      {models.length === 0 ? <div className="compact-empty">{text.models.empty}</div> : <div className="installed-models">{models.map(model => <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
-        <button className="installed-model-main" disabled={model.type === 'embedding'} onClick={() => setSelected(model.id)}><div className="model-glyph"><Icon name="models" /></div><div><strong>{model.id}</strong><span>{model.type === 'embedding' ? text.models.embedding : text.models.local}</span></div><small>{model.size_gb || formatBytes(model.size ?? 0)}</small></button>
-        <div className="model-actions"><button disabled={operation !== ''} onClick={() => void verify(model)}>{operation === `verify:${model.id}` ? text.common.loading : text.models.verify}</button><button className="danger-button" disabled={operation !== ''} onClick={() => setConfirmDelete(model.id)}>{text.models.delete}</button></div>
-      </article>)}</div>}
+      {models.length === 0 ? <div className="compact-empty">{text.models.empty}</div> : <div className="installed-models">{models.map(model => { const Identity = model.type === 'embedding' ? 'div' : 'button'; return <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
+        <Identity className="installed-model-main" onClick={model.type === 'embedding' ? undefined : () => setSelected(model.id)} aria-pressed={model.type === 'embedding' ? undefined : selected === model.id}><div className="model-glyph"><Icon name="models" /></div><div><strong>{model.id}</strong><span>{model.type === 'embedding' ? text.models.embedding : text.models.local}</span></div><small>{model.size_gb || formatBytes(model.size ?? 0)}</small></Identity>
+        <div className="model-actions"><button disabled={!admin || operation !== ''} onClick={() => void verify(model)}>{operation === `verify:${model.id}` ? text.common.loading : text.models.verify}</button><button className="danger-button" disabled={!admin || operation !== ''} onClick={() => setConfirmDelete(model.id)}>{text.models.delete}</button></div>
+      </article>; })}</div>}
     </section>
     <section className="model-section">
-      <div className="section-heading"><div><span className="eyebrow">{text.models.catalog}</span><h2>{text.models.discover}</h2></div><button className="secondary-button" onClick={() => void load()}>{text.common.refresh}</button></div>
+      <div className="section-heading"><div><span className="eyebrow">{text.models.catalog}</span><h2>{text.models.discover}</h2></div><button className="secondary-button" disabled={loading} onClick={() => void load()}>{text.common.refresh}</button></div>
+      <label className="field"><span>{presentation[locale].filterModels}</span><input type="search" value={catalogQuery} onChange={event => setCatalogQuery(event.target.value)} /></label>
+      {!loading && sortedCatalog.length === 0 && <p role="status">{catalogQuery ? text.history.noMatches : text.models.empty}</p>}
       {loading && catalog.length === 0 ? <div className="catalog-grid"><div className="catalog-card skeleton-card" /><div className="catalog-card skeleton-card" /></div> : <div className="catalog-grid">{sortedCatalog.map(model => {
         const current = downloadFor(model, progress);
         const installed = installedCatalogModel(model, models);
@@ -142,11 +154,10 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
           <div className="catalog-card-top"><div className="model-glyph"><Icon name="models" /></div>{model.recommended && <span className="status-pill">{text.models.recommended}</span>}</div>
           <h3>{model.name}</h3><p>{model.description}</p>
           <div className="model-meta"><span>{model.parameters}</span><span>{model.quant}</span><span>{formatBytes(model.size_bytes)}</span><span>{model.min_ram_gb} GB RAM</span></div>
-          {current && <ModelDownloadProgress download={current} />}
-          <div className="catalog-actions">{current && isActiveDownload(current) ? <button className="danger-button" disabled={operation !== ''} onClick={() => void cancel(current)}>{text.models.cancel}</button> : <button className="primary-button" disabled={installed || !model.repo || operation !== ''} onClick={() => void download(model)}>{installed ? text.models.installed : operation === `download:${model.id}` ? text.common.loading : current && ['cancelled', 'failed'].includes(current.status) && current.bytes_done > 0 ? text.models.resume : text.models.download}</button>}</div>
+          {current && current.status !== 'complete' && <ModelDownloadProgress download={current} />}
+          <div className="catalog-actions">{installed ? <span className="installed-status" role="status"><Icon name="check" size={15} />{text.models.installed}</span> : current && isActiveDownload(current) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(current)}>{text.models.cancel}</button> : <button className="primary-button" disabled={!admin || installed || !model.repo || operation !== ''} onClick={() => void download(model)}>{installed ? text.models.installed : operation === `download:${model.id}` ? text.common.loading : current && ['cancelled', 'failed'].includes(current.status) && current.bytes_done > 0 ? text.models.resume : text.models.download}</button>}</div>
         </article>;
       })}</div>}
     </section>
-    <ModelSearch models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} />
   </div>;
 }

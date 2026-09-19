@@ -1,3 +1,4 @@
+import { refreshWorkspace } from './lib/workspace-refresh';
 import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
 import { APIError, api, type Model, type PublicUser } from './api/client';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
@@ -12,6 +13,7 @@ import { SettingsPage } from './features/settings/SettingsPage';
 import { useI18n, type LocaleCode } from './i18n';
 import { useTheme } from './theme';
 import { readPreference, writePreference } from './lib/preferences';
+import { WorkspaceContext, clearWorkspaceState } from './lib/workspace-context';
 
 type Page = 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings';
 type Health = 'checking' | 'ready' | 'offline';
@@ -41,19 +43,26 @@ class PageBoundary extends Component<{ children: ReactNode; message: string; ret
 export function App() {
   const { messages: text, locale, setLocale, available } = useI18n();
   const theme = useTheme();
+  useEffect(() => {
+    if (window.electron?.setPresentation) void window.electron.setPresentation({ locale, theme: theme.choice }).catch(() => console.warn('Desktop appearance preferences could not be saved.'));
+  }, [locale, theme.choice]);
   const [page, setPage] = useState<Page>(pageFromLocation);
   const [health, setHealth] = useState<Health>('checking');
   const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState(() => readPreference('offgrid.model') ?? '');
   const [access, setAccess] = useState<'checking' | 'ready' | 'login'>('checking');
   const [authUser, setAuthUser] = useState<PublicUser | null>(null);
+  const [guest, setGuest] = useState(false);
+  const [authRequired, setAuthRequired] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [onboardingPending, setOnboardingPending] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true');
   const [showOnboarding, setShowOnboarding] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true' && readPreference('offgrid.onboarding.stage') !== 'working');
   const [showCommands, setShowCommands] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshLock = useRef(false);
   const accessRevision = useRef(0);
   useEffect(() => {
-    const expired = () => { accessRevision.current++; setAccess('login'); setAuthUser(null); };
+    const expired = () => { accessRevision.current++; clearWorkspaceState(); setAccess('login'); setAuthUser(null); };
     window.addEventListener('offgrid:unauthenticated', expired);
     return () => window.removeEventListener('offgrid:unauthenticated', expired);
   }, []);
@@ -69,7 +78,17 @@ export function App() {
       else { setLoadError(userResult.reason instanceof Error ? userResult.reason.message : text.common.error); setAccess('checking'); }
       return;
     }
+    // Older services identify anonymous local access as a guest too. Resolve
+    // enforcement explicitly; never infer management rights from guest alone.
+    let enforced = userResult.value.auth_required;
+    if (enforced === undefined) {
+      if (userResult.value.guest) { try { enforced = (await api.systemConfig()).require_auth !== false; } catch { enforced = true; } }
+      else enforced = userResult.value.authenticated;
+    }
+    if (revision !== accessRevision.current) return;
+    setAuthRequired(enforced);
     setAuthUser(userResult.value.authenticated ? userResult.value.user : null);
+    setGuest(userResult.value.guest === true);
     if (modelResult.status === 'fulfilled') {
       setAccess('ready');
       setModels(modelResult.value);
@@ -113,6 +132,15 @@ export function App() {
     setShowOnboarding(false);
   }, []);
 
+  const refreshCurrentWorkspace = async () => {
+    if (refreshLock.current) return;
+    refreshLock.current = true;
+    setRefreshing(true);
+    try { await Promise.all([refreshBase(), refreshWorkspace()]); }
+    catch (reason) { setLoadError(reason instanceof Error ? reason.message : text.common.error); }
+    finally { refreshLock.current = false; setRefreshing(false); }
+  };
+
   const continueSetup = (target: 'chat' | 'models') => {
     if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working');
     setShowOnboarding(false);
@@ -140,11 +168,12 @@ export function App() {
   const logout = async () => {
     accessRevision.current++;
     try {
-      await api.logout(); accessRevision.current++; setAccess('login'); setAuthUser(null);
+      await api.logout(); clearWorkspaceState(); accessRevision.current++; setAccess('login'); setAuthUser(null);
     } catch (reason) { setLoadError(reason instanceof Error ? reason.message : text.common.error); }
   };
 
-  return <div className="app-shell">
+  const admin = !authRequired || authUser?.role === 'admin';
+  return <WorkspaceContext.Provider value={{ scope: authUser?.id ?? (guest ? 'guest' : 'local'), admin, knowledge: admin || authUser?.role === 'user' }}><div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><span /></div><div><strong>{text.product}</strong><small>{text.privateWorkspace}</small></div></div>
       <nav className="primary-nav" aria-label="Primary">
@@ -167,13 +196,13 @@ export function App() {
         <div className="topbar-actions">
           <button className="command-trigger" onClick={() => setShowCommands(true)} aria-label={`${text.shell.quickActions} (${commandShortcut})`}><Icon name="search" size={16} /><span>{text.shell.quickActions}</span><kbd>{commandShortcut}</kbd></button>
           <label className="locale-picker"><span>{text.common.language}</span><select value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
-          <button className="icon-button" onClick={() => void refreshBase()} aria-label={text.common.refresh}><Icon name="refresh" size={18} /></button>
+          <button className="icon-button" disabled={refreshing} aria-busy={refreshing} onClick={() => void refreshCurrentWorkspace()} aria-label={text.common.refresh}><Icon name="refresh" size={18} /></button>
           {authUser && <button className="text-button" onClick={() => void logout()}>{text.auth.signOut}</button>}
         </div>
       </header>
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
       <section className="page-content">
-        <PageBoundary key={`${page}:${authUser?.id ?? 'local'}`} message={text.common.error} retry={text.common.retry}>
+        <PageBoundary key={`${page}:${authUser?.id ?? (guest ? 'guest' : 'local')}:${admin}`} message={text.common.error} retry={text.common.retry}>
           {page === 'chat' && <ChatPage scope={authUser?.id ?? 'local'} models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'knowledge' && <KnowledgePage models={models} onModelsChanged={refreshBase} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'agents' && <AgentPage scope={authUser?.id ?? 'local'} models={models} model={model} setModel={setModel} />}
@@ -184,9 +213,9 @@ export function App() {
       </section>
     </main>
     <nav className="mobile-nav" aria-label="Primary">{pages.map(item => <a key={item} href={`#/${item}`} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined}><Icon name={item} size={19} /><span>{text.nav[item]}</span></a>)}</nav>
-    {showCommands && !showOnboarding && <CommandPalette actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} onClose={() => setShowCommands(false)} />}
+    {showCommands && !showOnboarding && <CommandPalette actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
     {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} pending={onboardingPending} onAction={() => continueSetup(chatModels.length > 0 ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
-  </div>;
+  </div></WorkspaceContext.Provider>;
 }
 
 function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClose }: {

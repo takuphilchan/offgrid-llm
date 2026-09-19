@@ -1,7 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
+let presentation;
+try { const value = process.argv.find(item => item.startsWith('--offgrid-presentation=')); if (value) presentation = JSON.parse(Buffer.from(value.split('=')[1], 'base64').toString('utf8')); } catch { /* Main provides validated display preferences. */ }
 
 // Expose safe APIs to renderer process
 contextBridge.exposeInMainWorld('electron', {
+  presentation,
+  getPresentation: () => ipcRenderer.invoke('get-presentation'),
+  setPresentation: preferences => ipcRenderer.invoke('set-presentation', preferences),
   // Directory selection for USB transfers and file operations
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
   

@@ -236,7 +236,12 @@
   .source-state, .source-state.retained { color: var(--muted); font-size: 11px; }
   .empty-panel, .compact-empty { color: var(--muted); border-color: var(--line-strong); border-radius: 10px; font-size: 13px; }
   .empty-lines i { background: var(--line-strong); }
-  .knowledge-setup { background: var(--surface-1); border-color: var(--line); border-radius: 11px; box-shadow: none; }
+  .knowledge-workspace { container-type: inline-size; }
+  .knowledge-setup { grid-template-columns: minmax(0, 1fr); padding: 24px; gap: 20px; background: var(--surface-1); border-color: var(--line); border-radius: 11px; box-shadow: none; }
+  .knowledge-setup-controls { align-content: start; min-width: 0; }
+  .knowledge-setup-controls button { justify-self: start; }
+  .knowledge-setup-copy > div { min-width: 0; }
+  @container (min-width: 850px) { .knowledge-setup { grid-template-columns: minmax(0, 1fr) 320px; } }
   .knowledge-setup h2 { font-size: 22px; }
   .knowledge-setup p, .knowledge-setup-controls label { color: var(--muted); font-size: 13px; }
   .knowledge-setup-controls select, .task-card select, .connector-panel input, .task-card textarea { color: var(--text); background: var(--surface-0); border-color: var(--line-strong); font-size: 13px; border-radius: 8px; }
@@ -250,27 +255,51 @@
   .section-tabs button:hover { color: var(--text); }
   .section-tabs button[aria-selected='true'] { color: var(--text); background: var(--surface-2); font-weight: 600; }
   .agents-page { container-type: inline-size; }
+  /* Runtime facts support the work; they should not dominate like dashboard cards. */
+  .agents-page .agent-metrics { gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-1); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-metrics .metric { min-height: 0; padding: 12px 16px; border: 0; border-radius: 0; background: transparent; }
+  .agent-metrics .metric strong { font-size: 13px; line-height: 1.5; margin-block-start: 4px; }
+  .agent-metrics .metric > span { font-size: 11px; }
+  .agent-metrics .metric:nth-child(even) { border-inline-start: 1px solid var(--line); }
+  .agent-metrics .metric:nth-child(n+3) { border-block-start: 1px solid var(--line); }
+  @container (min-width: 760px) {
+    .agents-page .agent-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .agent-metrics .metric + .metric { border-inline-start: 1px solid var(--line); }
+    .agent-metrics .metric:nth-child(n+3) { border-block-start: 0; }
+  }
   .agent-view { display: grid; gap: 20px; min-width: 0; }
   /* Size against the workspace, not the window (the sidebar takes space too). */
   .agent-workspace { grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; }
   @container (min-width: 760px) {
-    .agent-workspace { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+    .agent-workspace { grid-template-columns: minmax(280px, .7fr) minmax(0, 1.3fr); }
+    .agent-workspace .task-card { min-height: clamp(420px, calc(100dvh - 330px), 720px); }
   }
   .task-card, .result-card { min-width: 0; min-height: 0; overflow-wrap: anywhere; }
   .task-card { gap: 20px; }
+  .task-card .agent-task-editor { flex: 1; display: flex; flex-direction: column; }
+  .agent-task-editor > span { color: var(--text); font-weight: 600; font-size: 15px; }
+  .task-card .agent-task-editor textarea { flex: 1; resize: vertical; }
+  .agent-task-options { display: grid; gap: 14px; }
+  .agent-task-options label { display: grid; gap: 8px; min-width: 0; color: var(--muted); font-size: 13px; }
+  .agent-task-options .model-select { display: grid; }
+  .agent-task-options .model-select select { width: 100%; }
   .task-card > *, .task-card .model-select { min-width: 0; }
   .task-card select { min-width: 0; max-width: 100%; }
   .task-card .model-select select { flex: 1; }
   .task-card textarea { min-height: 160px; max-height: 50dvh; }
   .agent-task-actions { padding-block-start: 16px; border-block-start: 1px solid var(--line); }
   .agent-task-actions .primary-button { width: 100%; min-height: 44px; margin: 0; white-space: normal; }
-  .result-card { display: grid; grid-template-rows: auto minmax(0, 1fr); height: clamp(420px, 72dvh, 800px); padding: 0; overflow: hidden; }
+  .result-card { display: grid; grid-template-rows: auto minmax(0, 1fr); height: clamp(420px, calc(100dvh - 330px), 720px); padding: 0; overflow: hidden; }
   .agent-result-header { min-width: 0; padding: 18px 20px; border-block-end: 1px solid var(--line); }
   .agent-result-header .section-heading { margin: 10px 0 0; gap: 12px; flex-wrap: wrap; }
   .agent-result-header .section-heading button { flex-shrink: 0; }
   .agent-result-body { min-width: 0; min-height: 0; padding: 20px; overflow: auto; scrollbar-gutter: stable; overscroll-behavior-y: contain; overflow-anchor: none; }
   .agent-result-body:focus-visible { outline-offset: -3px; }
   .agent-result-content { display: flow-root; min-width: 0; min-height: 100%; }
+  .agent-result-content:has(> .quiet-state:only-child) { display: grid; align-items: center; }
+  details.agent-steps { display: block; }
+  .agent-steps summary { cursor: pointer; color: var(--muted); font-size: 12px; padding-block: 8px; }
+  .agent-steps summary:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
   .agent-result-body pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
   .agent-result-content > pre:first-child { margin-block-start: 0; }
   .agent-result-body .quiet-state { min-height: 100%; }
@@ -279,6 +308,11 @@
   .agent-result-body .approval-card > div:last-child { flex-wrap: wrap; }
   .agent-result-body .approval-card textarea { max-width: 100%; }
   .task-history .text-button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+  .task-history article { border-radius: 7px; padding: 12px 8px; }
+  .task-history article.selected { background: var(--surface-2); }
+  .task-history article > div { min-width: 0; }
+  .task-history article > div > .text-button { justify-content: flex-start; padding: 0; min-height: 28px; }
+  .task-history small { white-space: normal; line-height: 1.5; }
   /* Live agent progress uses real phases, not synthetic completion percentages. */
   .agent-progress { display: grid; gap: 12px; margin-block-start: 16px; }
   .agent-progress-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -314,12 +348,22 @@
   .installed-model.selected, .model-row.selected, .run-row.selected { background: var(--accent-soft); }
   .installed-model-main strong, .model-row strong { font-size: 14px; }
   .installed-model-main span, .installed-model-main small, .model-row span, .model-row small { color: var(--muted); font-size: 12px; }
-  .model-meta span, .download-state small, .download-state p { color: var(--muted); background: var(--surface-2); font-size: 11px; }
+  .model-meta span { color: var(--muted); background: var(--surface-2); font-size: 11px; }
+  .download-state small, .download-state p { color: var(--muted); background: transparent; font-size: 12px; }
   .download-state p { background: transparent; color: var(--red); }
   .download-state > div { background: var(--surface-3); }
   .download-state > div span, .download-state.complete > div span, .download-state.failed > div span, .download-state.cancelled > div span { background: var(--text); }
   .download-state.failed > div span, .download-state.cancelled > div span { background: var(--faint); }
-  .catalog-card { min-height: 250px; }
+  .catalog-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+  .catalog-card { min-height: 0; padding: 18px; }
+  .catalog-card > p { min-height: 0; }
+  .installed-status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; color: var(--muted); font-size: 13px; }
+  div.installed-model-main { cursor: default; }
+  .agent-answer { white-space: normal; }
+  .event-list details { margin-block-start: 10px; }
+  .event-list summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  .event-list summary:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .event-list .event-label { text-transform: capitalize; }
   .catalog-card h3 { font-size: 17px; }
   .catalog-card > p { color: var(--muted); font-size: 13px; }
   .verification, .verification.success { color: var(--text); background: var(--surface-1); border-color: var(--line); }
@@ -409,7 +453,7 @@
     .conversation-history.open { display: flex; }
   }
   @media (max-width: 700px) {
-    .app-shell { display: block; padding-block-end: 68px; }
+    .app-shell { display: block; padding-block-end: 112px; }
     .sidebar { display: none; }
     .topbar { min-height: 82px; padding: 13px 16px; }
     .topbar p, .locale-picker span { display: none; }
@@ -417,7 +461,7 @@
     .command-trigger { width: 40px; justify-content: center; padding: 0; }
     .command-trigger kbd { display: none; }
     .page-content { min-height: calc(100dvh - 150px); padding: 16px; }
-    .chat-workspace { height: calc(100dvh - 150px); min-height: 440px; }
+    .chat-workspace { height: calc(100dvh - 194px); min-height: 440px; }
     .conversation-history { inset-inline-start: 0; width: min(320px, 90vw); }
     .chat-toolbar { gap: 8px; }
     .chat-toolbar-leading { gap: 5px; }
@@ -426,8 +470,9 @@
     .message-copy { opacity: 1; }
     .composer-input small { display: none; }
     .card-grid, .agent-workspace, .metric-grid, .run-layout, .catalog-grid { grid-template-columns: 1fr; }
-    .mobile-nav { height: 68px; display: flex; overflow-x: auto; background: var(--surface-1); border-color: var(--line); backdrop-filter: none; scrollbar-width: none; }
-    .mobile-nav a { min-width: 86px; flex: 1; color: var(--muted); }
+    .mobile-nav { height: 112px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; background: var(--surface-1); border-color: var(--line); backdrop-filter: none; }
+    .mobile-nav a { min-width: 0; min-height: 44px; padding: 4px; color: var(--muted); }
+    .mobile-nav span { max-width: 100%; overflow-wrap: anywhere; text-align: center; }
     .mobile-nav a.active { color: var(--text); background: var(--accent-soft); }
     .mobile-nav span { font-size: 11px; }
     .settings-panel { flex-direction: column; align-items: flex-start; }

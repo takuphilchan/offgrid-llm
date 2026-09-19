@@ -36,6 +36,7 @@
       "main.js",
       "backend.js",
       "runtime.js",
+      "presentation.js",
       "preload.js",
       "loading.html",
       "startup.css",

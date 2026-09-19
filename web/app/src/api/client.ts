@@ -69,7 +69,7 @@ export const api = {
   modelFiles: (repo: string, signal: AbortSignal) => request<{ repo: string; files: DiscoveredFile[] }>(`/v1/search/files?${new URLSearchParams({ repo })}`, { signal }),
   systemIdentity: () => request<components['schemas']['SystemIdentity']>('/api/v2/system'),
   health: () => request<{ status: string; version?: string }>('/health'),
-  currentUser: () => request<{ user: PublicUser | null; authenticated: boolean; guest?: boolean }>('/v1/users/me'),
+  currentUser: () => request<components['schemas']['CurrentUser']>('/v1/users/me'),
   login: (username: string, password: string) => request<{ user: PublicUser; expires_at: string; auth_method: string }>('/v1/auth/login', {
     method: 'POST', body: JSON.stringify({ username, password })
   }),

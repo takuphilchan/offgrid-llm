@@ -1,3 +1,4 @@
+import { useWorkspaceState } from '../../lib/workspace-context';
 import { useEffect, useRef, useState } from 'react';
 import { api, type CatalogModel, type DiscoveredModel, type DiscoveredFile, type DownloadProgress, type Model } from '../../api/client';
 import { useI18n } from '../../i18n';
@@ -15,11 +16,11 @@ type Props = {
 export function ModelSearch({ models, progress, busy, download, cancel }: Props) {
   const { messages: text } = useI18n();
   const copy = text.modelSearch;
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<DiscoveredModel[] | null>(null);
-  const [repo, setRepo] = useState('');
-  const [files, setFiles] = useState<DiscoveredFile[]>([]);
-  const [selected, setSelected] = useState('');
+  const [query, setQuery] = useWorkspaceState('models.query', '');
+  const [results, setResults] = useWorkspaceState<DiscoveredModel[] | null>('models.results', null);
+  const [repo, setRepo] = useWorkspaceState('models.repo', '');
+  const [files, setFiles] = useWorkspaceState<DiscoveredFile[]>('models.files', []);
+  const [selected, setSelected] = useWorkspaceState('models.file', '');
   const [loading, setLoading] = useState(false);
   const [filesLoading, setFilesLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,8 +61,9 @@ export function ModelSearch({ models, progress, busy, download, cancel }: Props)
     <div className="section-heading"><div><span className="eyebrow">Hugging Face</span><h2 id="model-search-title">{copy.title}</h2></div></div>
     <p className="model-search-hint">{copy.hint}</p>
     <form className="model-search-form" onSubmit={event => { event.preventDefault(); void search(); }}>
-      <label className="sr-only" htmlFor="model-search-query">{copy.query}</label>
-      <input id="model-search-query" type="search" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.query} />
+      <label className="field" htmlFor="model-search-query"><span>{copy.query}</span>
+        <input id="model-search-query" type="search" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.query} />
+      </label>
       <button className="primary-button" disabled={loading || !query.trim()}>{loading ? text.common.loading : copy.search}</button>
     </form>
     {error && <div role="alert" className="inline-error">{error}</div>}
@@ -78,8 +80,8 @@ export function ModelSearch({ models, progress, busy, download, cancel }: Props)
               {files.map(file => <option key={file.id} value={file.id} disabled={!file.supported}>{file.file} · {file.size_bytes > 0 ? formatBytes(file.size_bytes) : copy.unknownSize}{!file.supported ? ` · ${copy.unsupported}` : ''}</option>)}
             </select>
             <p className="model-search-hint">{copy.compatibility}</p>
-            {current && <ModelDownloadProgress download={current} />}
-            <div className="catalog-actions">{current && isActiveDownload(current)
+            {current && current.status !== 'complete' && <ModelDownloadProgress download={current} />}
+            <div className="catalog-actions">{installed ? <span className="installed-status" role="status">{text.models.installed}</span> : current && isActiveDownload(current)
               ? <button className="danger-button" disabled={busy} onClick={() => void cancel(current)}>{text.models.cancel}</button>
               : <button className="primary-button" disabled={busy || !choice?.supported || installed} onClick={() => { if (choice) void download({ id: choice.id, repo, file: choice.file, quant: choice.quant }); }}>{installed ? text.models.installed : current && current.bytes_done > 0 && ['failed', 'cancelled'].includes(current.status) ? text.models.resume : text.models.download}</button>}
             </div>

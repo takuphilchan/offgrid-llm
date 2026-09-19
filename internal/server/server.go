@@ -4245,6 +4245,7 @@ func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 	user := users.GetUser(r)
 	if user == nil || user.ID == "guest" {
 		json.NewEncoder(w).Encode(map[string]interface{}{
+			"auth_required": s.config.RequireAuth,
 			"user":          nil,
 			"authenticated": false,
 			"guest":         user != nil && user.ID == "guest",
@@ -4255,6 +4256,7 @@ func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"user":          user.ToPublic(),
 		"authenticated": true,
+		"auth_required": s.config.RequireAuth,
 	})
 }
 
