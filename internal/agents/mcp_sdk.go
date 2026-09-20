@@ -51,7 +51,7 @@ func ConnectMCPHTTP(ctx context.Context, name, endpoint, apiKey string) (*Offici
 }
 
 func connectOfficialMCP(ctx context.Context, name string, transport mcpsdk.Transport) (*OfficialMCPClient, error) {
-	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "offgrid-llm", Version: "0.4.10"}, nil)
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "offgrid-llm", Version: "0.4.11"}, nil)
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return nil, err
