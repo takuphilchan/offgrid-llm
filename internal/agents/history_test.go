@@ -3,8 +3,6 @@ package agents
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -39,7 +37,13 @@ func TestHistoryDeletionOwnershipStatesAndRestart(t *testing.T) {
 			if _, ok := m.GetTask(task.ID); ok {
 				t.Fatal("deleted task still visible")
 			}
-			data, err := os.ReadFile(filepath.Join(dir, "agent_tasks", task.ID+".json"))
+			db, err := openTaskDatabase(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var data []byte
+			err = db.QueryRow(`SELECT snapshot FROM agent_tasks WHERE id=?`, task.ID).Scan(&data)
+			db.Close()
 			if err != nil || strings.Contains(string(data), "private") || strings.Contains(string(data), "checkpoint") {
 				t.Fatalf("history was not scrubbed: %s %v", data, err)
 			}

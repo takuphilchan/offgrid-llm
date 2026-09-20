@@ -4,9 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -58,29 +55,7 @@ func (m *Manager) saveTask(task *Task) (saveErr error) {
 			m.storageErr = saveErr
 		}
 	}()
-	dir := filepath.Join(m.dataDir, "agent_tasks")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("%w: %v", ErrRunStorage, err)
-	}
-	data, err := json.MarshalIndent(task, "", "  ")
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrRunStorage, err)
-	}
-	file, err := os.CreateTemp(dir, ".task-*")
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrRunStorage, err)
-	}
-	defer os.Remove(file.Name())
-	if _, err = file.Write(data); err == nil {
-		err = file.Sync()
-	}
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		err = os.Rename(file.Name(), filepath.Join(dir, task.ID+".json"))
-	}
-	if err != nil {
+	if err := persistTask(m.dataDir, task); err != nil {
 		return fmt.Errorf("%w: %v", ErrRunStorage, err)
 	}
 	return nil
@@ -91,33 +66,13 @@ func (m *Manager) loadTasks() {
 	if m.dataDir == "" {
 		return
 	}
-	dir := filepath.Join(m.dataDir, "agent_tasks")
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return
-	}
+	tasks, err := loadTaskDatabase(m.dataDir)
 	if err != nil {
 		m.storageErr = err
 		return
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
-		if err != nil {
-			m.storageErr = err
-			return
-		}
-		var task Task
-		if err = json.Unmarshal(data, &task); err != nil {
-			m.storageErr = fmt.Errorf("invalid task snapshot %s: %w", entry.Name(), err)
-			return
-		}
-		if !validTaskID(task.ID) || entry.Name() != task.ID+".json" {
-			m.storageErr = fmt.Errorf("invalid task snapshot identity")
-			return
-		}
+	loaded := make(map[string]*Task, len(tasks))
+	for _, task := range tasks {
 		changed := false
 		if task.Status == TaskRunning || task.Status == TaskPending {
 			task.Status = TaskInterrupted
@@ -134,13 +89,14 @@ func (m *Manager) loadTasks() {
 			changed = true
 		}
 		if changed {
-			if err := m.saveTask(&task); err != nil {
+			if err := m.saveTask(task); err != nil {
 				m.storageErr = err
 				return
 			}
 		}
-		m.tasks[task.ID] = &task
+		loaded[task.ID] = task
 	}
+	m.tasks = loaded
 }
 
 func (m *Manager) StorageError() error {
