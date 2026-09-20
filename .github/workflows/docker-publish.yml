@@ -16,6 +16,10 @@ on:
         required: false
         type: boolean
         default: true
+      force_rebuild:
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       version:
@@ -112,6 +116,10 @@ jobs:
           set -euo pipefail
           echo "cpu=false" >> "${GITHUB_OUTPUT}"
           echo "gpu=false" >> "${GITHUB_OUTPUT}"
+          if [[ "${{ inputs.force_rebuild || false }}" == true ]]; then
+            echo "Explicit draft rebuild: do not reuse images from the previous source"
+            exit 0
+          fi
           for flavor in cpu gpu; do
             tag="${{ steps.version.outputs.value }}"
             if [[ "${flavor}" == gpu ]]; then tag="${tag}-gpu"; fi

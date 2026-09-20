@@ -11,6 +11,10 @@ on:
         description: 'Version to release (e.g., v1.0.0)'
         required: true
         type: string
+      rebuild_draft:
+        description: 'Discard an unpublished draft from another source revision and rebuild'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -37,6 +41,7 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
       source_ref: ${{ steps.release.outputs.source_ref }}
+      source_sha: ${{ steps.qualified.outputs.source_sha }}
     steps:
       - name: Check out release automation
         uses: actions/checkout@v6
@@ -51,6 +56,7 @@ jobs:
           git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null
 
       - name: Require passing CI for the exact release revision
+        id: qualified
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,15 +65,17 @@ jobs:
           git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_VERSION}"
           source_sha="$(git rev-parse 'FETCH_HEAD^{commit}')"
           node .github/scripts/verify-release-ci.mjs "${GITHUB_REPOSITORY}" "$source_sha"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
   publish-containers:
     name: Publish and verify containers
-    needs: release-context
+    needs: [release-context, create-release]
     uses: ./.github/workflows/docker-publish.yml
     with:
       version: ${{ needs.release-context.outputs.version }}
       source_ref: ${{ needs.release-context.outputs.source_ref }}
       publish_gpu: true
+      force_rebuild: ${{ inputs.rebuild_draft || github.event.forced || false }}
     secrets: inherit
 
   # Create release first
@@ -83,17 +91,34 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REBUILD_DRAFT: ${{ inputs.rebuild_draft || github.event.forced || false }}
+          SOURCE_SHA: ${{ needs.release-context.outputs.source_sha }}
         run: |
           set -euo pipefail
           version="${{ needs.release-context.outputs.version }}"
-          if gh release view "${version}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release ${version} already exists; preserving its assets for this rerun."
+          marker="<!-- offgrid-source: ${SOURCE_SHA} -->"
+          exists=false
+          if gh release view "${version}" --repo "${{ github.repository }}" --json isDraft,body > "$RUNNER_TEMP/release-state.json"; then
+            exists=true
+            if [[ "$REBUILD_DRAFT" == true ]] && ! jq -e '.isDraft' "$RUNNER_TEMP/release-state.json" >/dev/null; then
+              echo "::error::Refusing to rebuild a published release"; exit 1
+            fi
+            if jq -e '.isDraft' "$RUNNER_TEMP/release-state.json" >/dev/null && ! jq -e --arg marker "$marker" '(.body // "") | contains($marker)' "$RUNNER_TEMP/release-state.json" >/dev/null; then
+              if [[ "$REBUILD_DRAFT" != true ]]; then
+                echo "::error::Draft source is unverified or changed; explicit unpublished-draft rebuild required"; exit 1
+              fi
+              gh release delete "${version}" --repo "${{ github.repository }}" --yes
+              exists=false
+            fi
+          fi
+          if "$exists"; then
+            echo "Release ${version} already exists at the verified source; preserving its assets."
           else
             gh release create "${version}" \
               --repo "${{ github.repository }}" \
               --verify-tag \
               --title "OffGrid LLM ${version}" \
-              --notes "Release is being built. Artifacts will appear after verification." \
+              --notes "Release is being built. Artifacts will appear after verification. ${marker}" \
               --draft
           fi
 

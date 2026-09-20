@@ -17,6 +17,7 @@ function step(name) {
     const values = {
       'steps.version.outputs.version': 'v0.4.2',
       'needs.create-release.outputs.release_id': '123',
+      'needs.release-context.outputs.version': 'v0.4.2',
       'github.repository': 'example/offgrid-llm',
       'matrix.platform': 'linux',
       'matrix.os': 'linux',
@@ -91,3 +92,30 @@ for (const [name, assets] of [
   }
 }
 console.log('Workflow draft preflight and reuse queries pass with empty, complete, unindexed, and inaccessible JSON responses');
+
+const source = 'a'.repeat(40);
+for (const [draft, rebuild, succeeds, operations] of [
+  [{isDraft:true,body:`<!-- offgrid-source: ${source} -->`},'false',true,''],
+  [{isDraft:true,body:'old source'},'false',false,''],
+  [{isDraft:true,body:'old source'},'true',true,'delete\ncreate\n'],
+  [{isDraft:false,body:'published'},'true',false,''],
+  [{isDraft:false,body:'published'},'false',true,''],
+]) {
+  const root=mkdtempSync(join(tmpdir(),'offgrid-draft-rebuild-'));
+  try {
+    writeFileSync(join(root,'draft.json'),JSON.stringify(draft));
+    const result=spawnSync('bash',['-euo','pipefail','-s'],{cwd:root,encoding:'utf8',
+      env:{...process.env,RUNNER_TEMP:root,REBUILD_DRAFT:rebuild,SOURCE_SHA:source},
+      input:`gh() {
+        case "$1 $2" in
+          'release view') cat draft.json ;;
+          'release delete') echo delete >> operations ;;
+          'release create') echo create >> operations ;;
+          *) return 1 ;;
+        esac
+      }\n`+step('Create draft release if missing')});
+    assert.equal(result.status===0,succeeds,result.stdout+result.stderr);
+    assert.equal(existsSync(join(root,'operations'))?readFileSync(join(root,'operations'),'utf8'):'',operations);
+  } finally {rmSync(root,{recursive:true,force:true});}
+}
+console.log('Draft rebuild requires explicit approval, rejects published releases, and preserves matching-source retries');
