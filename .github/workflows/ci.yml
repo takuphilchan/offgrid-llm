@@ -32,6 +32,7 @@ jobs:
           cache-dependency-path: |
             web/app/package-lock.json
             desktop/package-lock.json
+            computer/package-lock.json
 
       - name: Validate release automation
         run: |
@@ -106,11 +107,18 @@ jobs:
       - name: Validate Electron package
         working-directory: desktop
         run: |
+          npm ci --prefix ../computer --ignore-scripts
           npm ci
           node --check main.js
           node --check preload.js
           npm test
           npx electron-builder --dir --linux
+
+      - name: Test browser companion contracts
+        working-directory: computer
+        run: |
+          npx playwright install --with-deps chromium
+          npm test
 
       - name: Exercise packaged Linux desktop startup and recovery
         run: |
@@ -119,13 +127,16 @@ jobs:
           sudo chown root:root desktop/dist/linux-unpacked/chrome-sandbox
           sudo chmod 4755 desktop/dist/linux-unpacked/chrome-sandbox
           xvfb-run -a node dev/scripts/test-desktop-startup.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
+          xvfb-run -a node dev/scripts/test-packaged-browser.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
 
       - name: Preserve desktop startup diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: desktop-startup-linux
-          path: /tmp/offgrid-desktop-startup-*/
+          path: |
+            /tmp/offgrid-desktop-startup-*/
+            /tmp/offgrid-packaged-browser-*/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -182,16 +193,19 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           cd desktop
+          npm ci --prefix ../computer --ignore-scripts
           npm ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             npx electron-builder --dir --win --x64 --publish never
             node ../dev/scripts/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+            node ../dev/scripts/test-packaged-browser.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
           else
             arch=$(node -p process.arch)
             npx electron-builder --dir --mac "--$arch" --publish never
             package_dir=mac
             if [[ "$arch" == arm64 ]]; then package_dir=mac-arm64; fi
             node ../dev/scripts/test-desktop-startup.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
+            node ../dev/scripts/test-packaged-browser.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
           fi
 
       - name: Build isolated Windows installer test package

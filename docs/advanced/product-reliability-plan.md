@@ -965,3 +965,529 @@ without stopping the installed service. Evidence is under
 These are runtime/transport checks, not model answer-quality qualification or a
 visual desktop UI pass. No release publication or installed-binary replacement
 is implied by this source checkpoint.
+
+### Computer Tasks foundation — 2026-09-20 (in progress, not operational)
+
+The approved program is supervised, local-only browser and native automation on
+Windows, macOS and Linux. Structured browser/accessibility observations come
+first; separately qualified local vision is a fallback. No platform driver,
+companion, automation pack or model/hardware profile is qualified at this checkpoint.
+
+Implemented foundation:
+
+- Agent snapshots (including checkpoints, approvals and completed output) now
+  use `agent-state.sqlite` through the existing durable SQLite connection policy.
+  Snapshot updates and status-transition records commit together. This is the
+  agent persistence adapter, not completion of the broader workspace migration.
+- Initial legacy import is staged in one transaction. Every JSON record is
+  checked for identity, status and approval ownership/arguments before activation;
+  counts and database integrity are verified. The `agent_schema.recovery_manifest`
+  records source hashes, IDs and owners. Original `agent_tasks/*.json` files remain
+  unchanged and are never dual-written or reimported after activation. Unowned
+  records remain local-admin controlled. Errors block agent admission with an
+  actionable storage error; no partial task list is published.
+- Running work recovers as interrupted, or uncertain if a tool call was dispatched.
+  Existing exact-call approval, cancellation and explicit reconciliation tests
+  continue to run against the new adapter. No restart automatically executes work.
+- Legacy `/v1/computer/{session,action,reset,stop}` execution requests now return
+  HTTP 426 with `computer_api_upgrade_required`; caller-supplied approval booleans
+  cannot activate the controller through HTTP. Read-only legacy status remains.
+  The first-party UI uses `/api/v2/computer/status` and `/api/v2/computer/stop`.
+- Administrator-only `/api/v2/computer/capabilities` explicitly reports preview,
+  local-only, supervised and `companion_unavailable`. Every driver is unavailable
+  and unqualified. Generated TypeScript contracts include these endpoints.
+
+Recovery/operator notes:
+
+- Back up the stopped workspace with the existing exclusive backup command before
+  upgrading. It includes the database, WALs, originals and blobs together.
+- On a first-import error, stop the service and repair the named original using a
+  trusted backup, then retry. Do not delete records merely to bypass validation.
+- After activation SQLite is authoritative; editing old JSON cannot repair or
+  modify live history. Retained migration originals and backups may contain history
+  deleted from the active store. Deletion is not a secure erase of backups/WALs.
+- This adapter refuses unknown schema versions. Older released binaries do not
+  understand this migration and must not be used on the upgraded workspace: restore
+  a matched application/workspace backup for rollback. Enforcement in old binaries
+  cannot be added retroactively.
+
+Remaining implementation gates, in order:
+
+1. Companion enrollment, OS credential storage, protocol negotiation, local consent
+   and an independently usable emergency stop.
+2. Immutable action IDs and companion dispatch/result journal; exact-call grants
+   bound to the observed target and expiry, with uncertain-outcome reconciliation.
+3. Managed Chromium pack, bounded domains/download destinations and local fixtures.
+4. Windows UIA, macOS Accessibility/ScreenCaptureKit, Linux AT-SPI/portal drivers
+   with real OS-session and window-scope enforcement.
+5. End-to-end typed image observations, sensitive-data redaction and verified
+   model/projector/runtime profiles; no cloud fallback.
+6. Integrated Computer Tasks UI/CLI, job-event replay, pairing/permissions recovery,
+   nine locales, offline packs and installed-application qualification.
+
+Do not expose a runnable Computer Tasks mode, advertise vision readiness, or mark
+the overall plan complete based on these foundation changes. No running user
+instance, release artifact, tag or container is replaced by this checkpoint.
+
+Foundation validation: Windows Go tests passed for agents, computer, server,
+storage, CLI, RAG and sessions. Linux/WSL agent and computer race tests passed.
+OpenAPI TypeScript generation/check and renderer type-check passed. All 31
+selected Playwright functional-page, interaction-contract, workflow-presentation
+and workspace-experience tests passed. Those browser tests use API fixtures;
+they are regression evidence, not real-companion or installed-driver qualification.
+
+### Browser preview checkpoint — 2026-09-20
+
+This supersedes the foundation-only availability description above, not the
+remaining platform qualification gates. A source-installed managed Chromium
+companion is now available for supervised testing; see
+[companion setup and limitations](../../computer/README.md). It is not a signed
+automation pack or generally qualified computer-use capability.
+
+- Administrator pairing uses short-lived, single-use codes and visible terminal
+  consent. Session credentials remain in memory, expire after ten minutes, and
+  cannot survive service restart. Persistent OS-keystore enrollment is pending.
+- Browser tasks reuse the durable agent runner, exact-call approvals and task
+  history. Typing, clicks and navigation require approval. Stale observations
+  fail closed. Dispatch IDs are journaled before execution; lost acknowledgements
+  do not cause automatic action replay. Completion requires an explicit final
+  page-text verification, not merely a model assertion.
+- The dedicated browser permits one selected public HTTPS origin. Reserved and
+  private destinations, cross-origin resources and downloads are blocked. No
+  personal browser profile, screenshot capture or native application driver is
+  exposed. This narrow policy intentionally makes some sites unsupported.
+- Agents has a preview setup/target panel; authenticated CLI commands provide
+  pairing, status, targets, run and stop. These are not the completed pack setup,
+  pause/takeover, vision or cross-platform native workflows.
+
+Validation: focused Go suites and Linux race checks for computer, agents and
+server passed; renderer type-check and 14 browser regression checks passed.
+Two companion tests passed, including real Chromium interaction with an isolated
+local fixture. Runner approval tests use a deterministic model callback. No
+installed local model has passed a complete real-browser task qualification.
+
+Deployment: the application and GPU-runtime-reuse images were built locally from
+the working tree. The existing stopped workspace was backed up and its archive
+checksum verified. The replacement first passed health, agent-history and UI
+checks against a separate data clone, then replaced the authorized `offgrid`
+container using the existing model/data volumes. The prior container remains
+stopped; rollback requires restoring its matched data backup, not starting it
+against the migrated workspace. No release or Git publication was performed.
+
+The replacement reports `0.4.10-computer-preview`, healthy with zero automatic
+restarts at verification. WSL loopback HTTP checks passed after replacement.
+Windows loopback returned HTTP 200 once but a subsequent check failed to connect;
+forwarding remains intermittent and is not qualified as working. WSL was not
+restarted, as requested. Public HTTPS companion testing remains
+blocked by VPN fake-DNS reserved addresses; the VPN was left enabled and the
+network guard was not weakened. Native drivers, vision, offline packs, OS
+credential storage and model/platform acceptance evidence remain outstanding.
+
+### Browser setup and workspace recovery repair — 2026-09-20
+
+Confirmed incident: Agents fetched a saved task ID that returned 404 while tools,
+history, integrations and computer status returned 200. The UI incorrectly turned
+the missing selection into a persistent generic error. It now clears that
+selection, preserves the task draft, and explains the missing task. Authorization
+errors remain distinct and are not silently treated as deletion.
+
+The service creates an opaque persistent `workspace-id` while holding exclusive
+workspace ownership and includes it in `/api/v2/system`. Agent selections are
+namespaced by workspace and actor, not just browser origin/user. Unscoped legacy
+selections are not silently adopted by a different workspace. Identity corruption
+blocks startup instead of silently changing the namespace. Backups retain the ID.
+
+Companion preflight checks local service health and opens the permitted browser
+before asking for a short-lived pairing code. Reserved-address failures explain
+fake DNS and the available local-demo alternative. Public browsing through VPN
+fake DNS remains unsupported; there is no blanket reserved-address exception or
+implemented explicit proxy transport.
+
+The `demo` target owns an ephemeral loopback HTTP server serving only a fixed
+research-notes page. It permits no arbitrary loopback target, file access, upload,
+proxy or external submission. Pairing uses the exact logical target
+`offgrid-demo://research`; other custom/local origins remain rejected. The browser
+uses the same tool/approval path, and closing the companion closes the fixture.
+Saving a demo draft is deliberately a page-only effect, not a verified artifact.
+
+UI setup instructions cover the new target; unpaired status no longer claims a
+missing installed driver. Pairing errors are no longer erased by successful
+background polling, and expired selected sessions are cleared.
+
+Evidence: Windows Go storage/computer/server suites, Linux race checks for those
+packages, generated TypeScript and renderer type-check passed. All 16 focused UI
+tests passed, including stale-selection reload/draft preservation and different
+workspace selection isolation. Three real Chromium/network-policy checks passed,
+including owned-demo edit/verification and rejection of other loopback services.
+The authorized local replacement reports `0.4.10-computer-recovery`; a live
+headless-browser check confirmed the new setup text and absence of the generic
+banner. The stopped-workspace archive checksum passed before replacement; the
+prior container and backup remain available. No model-driven full task outcome,
+native driver, vision profile or public VPN browsing is qualified by these checks.
+
+### Computer model compatibility gate — 2026-09-20
+
+The first real demo task on `phi-3.5-mini-instruct.Q4_K_M` returned prose describing
+simulated actions, no tool calls and no approval request. The browser companion
+remained connected. Runtime `/props` reported a content-only template with
+`supports_tools: false` and `supports_tool_calls: false`. A separate harmless
+inference request asking for a named tool call also returned prose. This is
+evidence for this installed model/template/runtime combination, not a universal
+claim about the Phi model family.
+
+Added administrator-only `POST /api/v2/computer/model-check` and
+`offgrid computer check <model>`. The bounded 90-second check uses the shared
+inference admission gate and the agent's structured streaming parser where
+available. It requests an observation call followed by a verification call whose
+argument must match a randomly generated fixture heading. Neither call is
+executed. Plain text, wrong tools/arguments, null arguments, truncated output and
+missing terminal tool calls fail the check. Transport failures/cancellation do
+not claim model incompatibility. Runtime build, template hash and allocated
+context are reported when obtainable; template contents and model paths are not.
+
+The UI requires an explicit model check and clears its result on model changes.
+Submission independently repeats the probe before creating a task, returns 422
+with `computer_tool_calling_unavailable` for a negative result, and rechecks the
+browser session after inference. Runtime failures return retryable 503 instead.
+No cached pass, caller-supplied approval or UI flag bypasses admission. Ordinary
+chat/agent workflows without a computer session are unchanged. Passed probes
+remain smoke evidence, not a guarantee of complete tasks or safe model behavior.
+
+The no-browser-actions failure now explains that the model returned text without
+using tools; final result verification and exact-action approval are still
+mandatory. No prose is parsed into executable actions. Empty-argument tool
+schemas no longer emit invalid `required: null` declarations.
+
+Validation: focused Windows Go server/inference/CLI suites, Linux server/inference
+race tests, TypeScript/contract drift checks and all 17 focused UI tests passed.
+Tests cover rejected admission without task creation or browser dispatch, wrong
+tool/arguments, cancellation, runtime failure distinction, and changing models
+after a successful UI check. Local application and GPU-runtime-reuse images were
+built as `0.4.10-computer-preflight`. With separate operator approval, the stopped
+workspace was backed up and checksum-verified, the image was checked against an
+isolated data clone, and the running container was replaced. Windows localhost
+health, product identity and the new model-check UI asset were verified. The
+previous container remains stopped; no models were removed. The live probe
+correctly rejects the installed Phi template with no browser dispatch. See
+[upstream tool-calling/template guidance](https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md)
+before qualifying a replacement model/runtime/template combination.
+
+The operator also approved downloading Qwen2.5 3B Instruct Q4_K_M from the official
+Qwen repository for testing, not as an automatically qualified replacement.
+Upstream file size is 2,104,932,768 bytes; expected SHA-256 is
+`626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d`.
+The completed download matched that SHA-256. Initial live checks with the
+existing `q4_0` K/V cache setting failed, including direct llama.cpp requests
+which returned malformed/prose responses. An isolated same-model/runtime test
+with `q8_0` K/V cache and 32,768 context returned the expected observation and
+verification calls. The local service was backed up/recreated with `q8_0`, and
+its two-step streaming checks then passed repeatedly. The actual runtime reports
+32,768 allocated context; the configured 65,536 request is not an effective
+64K capability for this model. This is profile-specific evidence, not a blanket
+quality claim for either cache type.
+
+The opt-in `computer/test/live-demo.mjs` harness tests the real service/model
+against its own temporary Chromium page. It permits exactly the known field edit
+and save-button approval, independently checks the resulting DOM, refuses other
+mutations and retains the diagnostic run in history. It is not a replacement for
+interactive companion journal/recovery tests or the workflow qualification suite.
+Browser observations now include associated HTML labels; real-browser regression
+coverage confirms `Report title` identifies the correct input without collecting
+its value. All three browser-driver tests passed.
+
+Full model-driven task qualification **failed** for this 3B profile. The first
+attempt invented an initial observation ID before inspecting the page. Computer
+tasks now use temperature zero (matching the probe) and explicit sequential
+observation instructions; ordinary agent sampling is unchanged. With that build,
+the model observed the real page but proposed saving before filling. A further
+explicitly sequenced prompt observed the page but supplied a placeholder rather
+than the actual observation ID. The fixture allowlist refused each change before
+execution and cancelled the diagnostic runs; no draft was saved. These attempts
+remain in history as cancelled tests, not successful tasks:
+
+- `run-4f35eab89aaffd90035ea41d92ae39ec`: invented initial observation ID.
+- `run-7a259e3eb503e75ad75bd7a7fd3cbabd`: save requested before filling.
+- `run-959057adb4278da61e3f7a0a60403bb7`: placeholder observation ID.
+
+Do not describe Qwen2.5 3B as a qualified browser-task model based on the synthetic
+probe. The operator subsequently approved a larger-model trial. The official
+7B Q4_K_M artifact is split, which the current standalone installer rejects;
+the trial uses the single-file
+[Bartowski Qwen2.5 7B Instruct Q4_K_M build](https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF)
+(4,683,074,240 bytes; publisher SHA-256
+`65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423`).
+This is a community quantization, not an official Qwen artifact. The transfer
+reached 1,833,587,687 bytes (39.15%) before repeated network EOF and HTTP/2 stream
+CANCEL failures. A resume preserved the existing bytes but failed again; Windows
+curl also failed its TLS handshake. A small HTTP/1.1 range diagnostic succeeded
+slowly. The partial file was preserved at that checkpoint; the operator later
+completed the download. Its full installed file now matches the publisher SHA-256
+above. The required VPN and TLS/network safety checks were not disabled.
+Focused Windows Go suites and Linux
+server/agent race tests passed after the sequential-protocol change. The final
+local image is `offgrid-llm:computer-verified-gpu-20260920` (the tag is not a
+qualification claim), service version `0.4.10-computer-preflight`. Health and
+Windows localhost access passed; diagnostic browser sessions were closed. No
+commit, push or release was performed.
+
+### 7B sequential browser protocol repair — 2026-09-20
+
+The installed 7B model's template digest is
+`55b2f4a26ac9ee719330a61a0c39d9e538b0e9322212f048326318cff4f8674a`,
+runtime `b1-e9fa078`, actual context 32,768 and K/V cache `q8_0`. Its old preflight
+response bundled `browser_observe` and `browser_verify` with invented text before
+receiving an observation. Direct runtime testing reproduced this; template
+support declarations were not proof of correct sequential behavior.
+
+The preflight and task planner now share explicit one-call-and-wait instructions.
+Computer requests also send `parallel_tool_calls: false` through streaming and
+non-streaming transports. Ordinary requests preserve the runtime default unless
+the caller explicitly selects a value. The flag alone did **not** prevent the
+observed response on this pinned runtime; strict call validation, observation
+identity and exact approvals remain necessary. See the pinned
+[runtime parameter documentation](https://github.com/ggml-org/llama.cpp/blob/e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0/tools/server/README.md).
+Failure messages now identify missing/invalid calls, multiple calls or incorrect
+verification text without exposing raw model output.
+
+After rebuilding, clone validation and a checksum-verified workspace backup,
+the local container runs `0.4.10-computer-sequential` from
+`offgrid-llm:computer-sequential-gpu-20260920`. Windows Go suites, Linux
+server/inference race tests, TypeScript and contract checks passed. The real 7B
+model passed the streaming probe and completed an explicitly sequenced fixture
+task (`run-d1909df84729762ba481f23b927c4e1a`): observe, approved fill, observe,
+approved click, observe, verify. Independent DOM inspection confirmed the exact
+temporary draft text. No file or external submission was created.
+
+A shorter task prompt then reused a stale observation after filling
+(`run-6cca11c18725e1063cc6f02c084a3944`); the test refused the click and cancelled
+the run. Browser mutation results now include a freshly observed, scope-checked
+page and element IDs. Old IDs still fail; a click still reports `verified: false`
+until the separate final check. Real-browser tests cover those invariants.
+Further short-prompt validation is pending operator consent to stop an already
+paired browser session. One successful fixture is not general browser-task,
+native desktop, vision or model/platform qualification. No release was made.
+
+### Browser preview safety and recovery repairs — 2026-09-20
+
+The defect review reproduced a stale-form click after manual input and automated
+typing into an associated-label-only password field. Browser observations now
+track input/change events and compare a local-only form-state digest before
+mutations, including silent JavaScript value changes. One shared accessible-name
+classifier checks associated labels, aria-labelledby, aria-label and placeholders
+at observation and input execution. The digest/field values are not sent to the
+service. These checks are defense in depth, not a claim that hostile websites or
+all credential-field naming conventions can be perfectly classified.
+
+Computer runs now require an immutable user-authored `computer_expected_text`.
+The API, CLI (`--expect`) and UI carry it through persisted agent configuration;
+tool authorization rejects a model-substituted criterion, and completion requires
+a matching positive `page_contains_text` result as the last step. This is explicitly
+page-text verification only, not proof of file creation, a transaction or all
+semantic aspects of an arbitrary task. Old runs with no criterion cannot be
+silently promoted to verified completion. Ordinary agents are unchanged.
+
+The durable runner enforces one computer tool call per response and observation
+before the first tool action. Old batched checkpoints are refused too. Browser
+sessions are reserved before launching a task, and list responses expose ready,
+assigned, finished and exhausted states so consumed sessions are not selectable
+for another run. The user must still stop/re-pair for a fresh task consent.
+
+The workspace shell provides a browser-stop strip across page navigation. Active
+computer mode and the recorded success criterion are reconstructed from run
+snapshots after reload; the Agents page waits for workspace identity before
+mounting its interactive form to avoid focus loss. Optional model diagnostics
+move under Advanced settings; admission automatically performs the compatibility
+check instead of making users run it manually first. Pairing has a copy control,
+consumed-state guidance and a session countdown. Nine locales have draft copy;
+speaker review remains pending.
+
+The source companion is still terminal-launched. Packaged installation/repair,
+OS-keystore enrollment, native desktop drivers, vision, complete pause/takeover,
+proxy qualification and broad real-model workflow qualification are not delivered
+by these repairs. No live container replacement, release, push or commit is
+implied. The previous successful 7B fixture is not evidence for this changed
+build; a fresh real-model end-to-end qualification remains required.
+
+Validation for this repair batch: Windows Go tests passed for agents, computer,
+server, inference and CLI; Linux race tests passed for agents, computer and
+server. Five real Chromium driver tests passed (including manual/silent field
+changes and credential-label exclusions). All 36 selected renderer interaction,
+workflow, functional-page and workspace tests passed, including navigation/reload
+stop controls and used-session rejection. TypeScript, generated API contract
+drift checks and the production renderer build passed. The renderer still emits
+the existing >500 kB chunk-size warning. These are scoped regression results,
+not installed-package, real-model task or cross-platform qualification.
+
+### Optional browser verification and intermediate checks — 2026-09-20
+
+Follow-up to the failed two-stage title task: verification authorization had
+incorrectly required every read-only check to equal the final criterion. The
+recorded run also contained `done` as its final criterion, which was not the
+requested page result. Intermediate checks now remain read-only and allowed;
+strict final comparison is enforced only at completion.
+
+Normal UI/API/CLI submissions no longer require expected page text. The UI moves
+it into optional verification settings, and CLI `--expect` is optional. Newly
+accepted runs record the `page-evidence-v1` policy. Completion still requires an
+affirmative companion check matching its recorded arguments after any mutation;
+an unchanged initial heading does not establish a mutation's success. Legacy
+criterion-less runs are not silently reclassified. The model interprets which
+evidence is relevant: these checks are not independent semantic proof of the
+whole task or external effects. Idempotent changes may remain unverified.
+
+Validation: Windows Go server/agent/CLI tests, Linux server/agent/computer race
+tests, 36 renderer regression tests, five real Chromium driver tests, TypeScript,
+API drift and renderer build passed. The existing bundle-size warning remains.
+Two real Qwen2.5 7B runs passed without `computer_expected_text`: the plain request
+"Set Report title to OffGrid test and save the draft" (two approvals,
+`run-fb0603e2be287bb24bdb6e0e3f38acd5`) and preliminary-to-final Unicode revisions
+(four approvals, including an intermediate verification,
+`run-9981929ec3400362f85f77b9c1a0c874`). The harness independently inspected the
+final input and status. These are two owned-fixture runs, not general browser
+qualification; runtime `b1-e9fa078`, effective context 32768, template prefix
+`55b2f4a26ac9`, Qwen2.5-7B-Instruct-Q4_K_M with q8_0 cache.
+
+The user authorized backup and live replacement. Clone checks passed, then
+`offgrid-llm:computer-evidence-gpu-20260920` was activated with the existing GPU
+runtime. Windows localhost health and new renderer assets were verified. Backup:
+`/home/phil/offgrid-computer-backup-AU4HfpZP`; stopped prior container:
+`offgrid-before-computer-1789905577`. Models and original data volumes were
+preserved. No release, push, or commit was performed.
+
+### Remove developer verification controls from the task UI — 2026-09-20
+
+The expected-page-text field and its explanatory result block are removed from
+the shared web/Electron renderer, not merely collapsed. The first-party run
+client no longer accepts or sends a criterion. The scoped obsolete draft is
+cleared on workspace mount; another old tab rewriting it cannot influence new
+requests. Task drafts, other accounts/workspaces, and historical runs are
+preserved. Existing in-flight strict checks retain their saved semantics; this
+change does not rewrite history or weaken backend approval/completion checks.
+Strict criteria remain available to developer API/CLI tests only. Unused UI
+translations and styles were removed along with the field.
+
+TypeScript, API drift, production Docker renderer build and all 36 selected UI
+regressions passed. Regression coverage includes a saved `done`, an oversized
+value recreated by an older tab, reload, preservation of another workspace and
+task drafts, and restoration of an existing approval without restoring the old
+input. A real Chromium smoke against the deployed service confirmed absence of
+the field and cleanup of an isolated browser's stale setting; it submitted no
+task. This renderer cleanup does not qualify the broader Computer Tasks program
+as production-ready or constitute installed Electron qualification.
+
+After explicit user approval, clone validation and backup preceded deployment of
+`offgrid-llm:computer-clean-ui-gpu-20260920`, version
+`0.4.10-computer-clean-ui`. Live health and renderer assets were verified from
+Windows. Backup: `/home/phil/offgrid-computer-backup-vngEEkdC`; previous stopped
+container: `offgrid-before-computer-1789906663`. Models remain in their existing
+volume. No commit, push or release was made.
+
+### Desktop-owned browser setup and task-first workspace — 2026-09-20
+
+The updated desktop owns the browser companion as an Electron utility process.
+Users describe a task, enable **Use a browser**, choose an HTTPS origin or the
+practice page, and approve native local consent. Node/npm installation and manual
+pairing are not part of the installed desktop flow. Enrollment occurs **after**
+consent and integrity verification using the desktop's authenticated session;
+the renderer supplies only origin/workspace, not a pairing code or credential.
+The service still enforces administrator authorization. The worker receives its
+short-lived enrollment over private IPC and keeps its session token in memory.
+
+The shared CLI/desktop session core retains journaled immutable action IDs,
+duplicate refusal and uncertain-outcome behavior. Stop during startup cleans up
+late resources; local Stop, lock, suspend and quit close only the owned worker.
+The UI shows readable action/approval summaries with expandable exact arguments,
+a browser activity timeline, visible verification outcomes, and no model reasoning
+preview for browser tasks. Work leads with the task instead of runtime metrics;
+Permissions and Connections remain supporting views. Copy is shared in all nine
+locales, without claiming independent translation review.
+
+Desktop packages assemble pinned Playwright 1.62.1 and its Chromium 1234 build for
+each advertised desktop architecture. An after-pack integrity check validates
+the actual copied payload. Tests caught and fixed electron-builder's exclusion
+of root `node_modules`; the dependency directory now has an explicit resource
+mapping. Vendor browser binaries are preserved rather than re-signed as OffGrid.
+Hashes detect corruption, not authenticity independently of a trusted package.
+This bundled approach adds browser download/disk size; independently signed
+optional automation-pack install/repair remains pending.
+
+Web provides an `offgrid://computer` handoff without a service URL, token or action
+payload. The desktop must attach to the same compatible local workspace. A web
+page alone cannot control the host. Developer pairing remains collapsed. Alternate
+desktop/test profiles do not register a protocol handler. The local preview's
+handler points to `build/desktop-browser-preview/win-unpacked/OffGrid LLM Desktop.exe`;
+the installed production application has not been overwritten.
+
+Recorded local evidence:
+
+- 86 web tests passed; 18 interaction tests re-passed after enrollment moved out
+  of the renderer. Type checking, UI build and generated API drift check passed.
+- 34 desktop tests and 9 companion tests passed, including consent refusal,
+  workspace mismatch, stop during startup, duplicate/lost acknowledgement,
+  manifest tampering and all-nine-locale key parity.
+- Packaged Windows x64 startup/recovery passed with an isolated real Go backend:
+  `C:\Users\phil\AppData\Local\Temp\offgrid-desktop-startup-FdTUyg`.
+- Final packaged Windows renderer/preload/main/utility/Chromium test passed:
+  `C:\Users\phil\AppData\Local\Temp\offgrid-packaged-browser-dWFLFs`.
+  The test checks authenticated cookie forwarding for enrollment, observe/fill/
+  save/verify, local Stop and a second session after runtime use. Native consent
+  is intercepted **only in the test process** and checked against its owned demo;
+  this does not constitute manual OS-dialog or model-planning qualification.
+- Windows Go tests passed for computer, agents, server and CLI. Workflow actionlint
+  passed. CI now exercises the packaged browser path on its desktop matrix;
+  macOS/Linux results for this change are not yet recorded locally or remotely.
+
+After user authorization, backup and clone verification preceded activation of
+`offgrid-llm:desktop-browser-gpu-20260920` (local version 0.4.10, existing GPU runtime
+reused). Final backup: `/home/phil/offgrid-computer-backup-ZCrXgdwQ`; prior stopped
+container: `offgrid-before-computer-1789912480`. The earlier checkpoint backup
+`/home/phil/offgrid-computer-backup-DOvvVYBP` is also retained. Models/data volumes
+were preserved; no WSL restart, commit, push, release or live desktop install was
+performed. Desktop and service UI identities are checked for equality.
+
+Remaining qualification is explicit: general native desktop control, vision,
+arbitrary public-site workflows, VPN fake-DNS support, OS-store persistent pairing,
+signed optional packs, macOS signing/notarization and the full task/model/platform
+matrix are not delivered or qualified by this browser-setup work. The feature
+remains preview; these checks are not a 9/10 or production-readiness certification.
+
+### Browser form and deployment checkpoint (2026-09-21)
+
+The supervised browser now exposes typed single-select and checkbox actions in
+addition to observation, navigation, clicking, filling and verification. Fresh
+observations supply option identifiers and state; arbitrary fields, invalid types,
+oversized arguments, disabled controls and stale observations are rejected.
+Mutations still require exact-call approval. The practice page includes a report
+format and source-inclusion checkbox so repeated multi-control tasks can be tested.
+Custom widgets, multi-select and native/vision automation remain unsupported.
+
+Local Stop and service revocation are attempted independently. An unacknowledged
+worker shutdown retains ownership, reports `stop_unconfirmed` and prevents a new
+session. The packaged application owns the integrity verifier rather than loading
+verification code from the unchecked runtime payload. Chat history responses also
+carry selection/request revisions so stale replies cannot replace a newer draft.
+
+Recorded local validation:
+
+- Full Windows `go test ./...` passed; WSL race tests passed for computer, agents
+  and server. API drift, TypeScript, UI build and workflow actionlint passed.
+- 90 browser UI tests, 35 desktop unit tests and 11 companion tests passed.
+  The six history tests additionally passed three repeated runs.
+- Final packaged Windows browser form workflow, local Stop and second session
+  passed: `C:\Users\phil\AppData\Local\Temp\offgrid-packaged-browser-ZNdlWy`.
+- Final packaged startup/recovery passed, first window 1062 ms, recovery 1264 ms:
+  `C:\Users\phil\AppData\Local\Temp\offgrid-desktop-startup-wgDZFP`.
+  These isolated fixtures are not real-model or all-platform qualification.
+
+With explicit user approval, the idle service was stopped and its workspace
+archived with a verified checksum before clone validation and live replacement.
+Backup: `/home/phil/offgrid-computer-backup-6KENbl7p`; retained previous container:
+`offgrid-before-computer-1789919962`. Live local image:
+`offgrid-llm:browser-forms-gpu-20260920`, using the existing GPU runtime.
+All four models and 13 task records remain available. Windows localhost health
+passed and the service UI matches both `web/dist` and the matching unpacked desktop
+at `build/desktop-browser-forms-preview/win-unpacked/OffGrid LLM Desktop.exe`.
+The installed desktop and its existing protocol-handler registration were not
+replaced; use that matching unpacked build for this preview. No WSL restart or
+release publication was performed. macOS/Linux packaged results, native control,
+vision, signed optional packs and the full model/task qualification remain pending.

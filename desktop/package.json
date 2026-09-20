@@ -28,6 +28,9 @@
     "appId": "com.offgrid.llm.desktop",
     "productName": "OffGrid LLM Desktop",
     "copyright": "Copyright © 2024-2026 OffGrid LLM Team",
+    "beforePack": "./prepare-computer.cjs",
+    "afterPack": "./verify-computer.cjs",
+    "protocols": [{ "name": "Open OffGrid tasks", "schemes": ["offgrid"] }],
     "directories": {
       "buildResources": "assets",
       "output": "dist"
@@ -36,6 +39,8 @@
       "main.js",
       "backend.js",
       "runtime.js",
+      "computer-runtime.js",
+      { "from": "../computer", "to": "computer-pack", "filter": ["pack.cjs"] },
       "presentation.js",
       "preload.js",
       "loading.html",
@@ -45,6 +50,14 @@
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "../build/computer-runtime/${os}-${arch}",
+        "to": "computer"
+      },
+      {
+        "from": "../build/computer-runtime/${os}-${arch}/node_modules",
+        "to": "computer/node_modules"
+      },
       {
         "from": "../web/dist",
         "to": "ui",
@@ -100,6 +113,7 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
+      "signIgnore": ["/Contents/Resources/computer/browsers/"],
       "extraResources": [
         {
           "from": "../build/macos/offgrid-amd64",
@@ -154,6 +168,7 @@
       ]
     },
     "win": {
+      "signExts": ["!chrome.exe", "!chrome_proxy.exe", "!chrome_pwa_launcher.exe", "!elevated_tracing_service.exe", "!elevation_service.exe", "!notification_helper.exe", "!setup.exe", "!ffmpeg-win64.exe", "!PrintDeps.exe"],
       "extraResources": [
         {
           "from": "../build/windows/offgrid.exe",

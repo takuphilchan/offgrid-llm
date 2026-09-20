@@ -1,10 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen, utilityProcess, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const { isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
 const { DesktopRuntime } = require('./runtime');
 const { normalize: normalizePresentation, readCopy } = require('./presentation');
+const { ComputerRuntime, isComputerLink } = require('./computer-runtime');
+// Verification code belongs to the application, not the unverified payload.
+const { verifyPack: verifyComputerPack } = require(app.isPackaged ? './computer-pack/pack.cjs' : '../computer/pack.cjs');
 
 const APP_NAME = 'OffGrid LLM Desktop';
 // Test packages must remain isolated even when an elevated installer launches
@@ -44,6 +47,35 @@ let saveQueue = Promise.resolve();
 let connectionQueue = Promise.resolve();
 let windowCreation;
 let nextWorkspace = 'default';
+let computerRequested = process.argv.some(isComputerLink);
+const computerRoot = app.isPackaged ? path.join(process.resourcesPath,'computer') : path.join(__dirname,'../build/computer-runtime',`${{win32:'win',darwin:'mac',linux:'linux'}[process.platform]}-${process.arch}`);
+let computerCopy;
+const computerText = () => computerCopy?.[presentation.locale] ?? computerCopy?.en;
+const computer = new ComputerRuntime({
+  root: computerRoot, directory:path.join(configRoot,'computer'), fork:(...args)=>utilityProcess.fork(...args),
+  service:()=> { if(runtime.state.state!=='ready') throw Error('service_unavailable'); return runtime.url; },
+  identity: async url => {
+    const response=await fetch(url+'/api/v2/system',{redirect:'error',signal:AbortSignal.timeout(5000)});
+    if(!response.ok) throw Error('service_unavailable'); return response.json();
+  },
+  verify: async root => { try { await verifyComputerPack(root); } catch { throw Error('pack_invalid'); } },
+  pairing: async service => {
+    if (!mainWindow || mainWindow.isDestroyed() || !isTrustedPage(mainWindow.webContents.getURL(),service,LOADING_URL)) throw Error('pairing_failed');
+    // Use the authenticated desktop session without extracting cookies or
+    // disclosing enrollment credentials to renderer storage/IPC arguments.
+    const response=await mainWindow.webContents.session.fetch(service+'/api/v2/computer/pairing',{
+      method:'POST',credentials:'include',redirect:'error',headers:{'Content-Type':'application/json',Origin:service},body:'{}',signal:AbortSignal.timeout(10000)});
+    if(!response.ok) throw Error('pairing_failed');return response.json();
+  },
+  confirm: async (origin, service) => {
+    const text=computerText();
+    const result=await dialog.showMessageBox(mainWindow,{type:'question',title:text.consentTitle,message:text.consentTitle,
+      detail:`${origin}\n${service}\n\n${text.consentBody}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
+    return result.response===1;
+  }
+});
+computer.on('status',()=>{ if (app.isReady() && presentationCopy) updateMenus(); });
+app.on('open-url',(event,url)=>{ event.preventDefault(); if(isComputerLink(url)){computerRequested=true;if(app.isReady()){showWindow();showWorkspace();}} });
 const statePath = path.join(configRoot, 'window-state.json');
 const connectionPath = path.join(configRoot, 'desktop-connection.json');
 const presentationPath = path.join(configRoot, 'desktop-presentation.json');
@@ -94,7 +126,10 @@ function safeExternal(value) {
 function showWorkspace() {
   if (!mainWindow || mainWindow.isDestroyed() || runtime.state.state !== 'ready' || quitting) return;
   const current = mainWindow.webContents.getURL();
-  if (current.startsWith(LOADING_URL)) void mainWindow.loadURL(runtime.url + '/ui/').catch(() => {});
+  if (current.startsWith(LOADING_URL) || computerRequested) {
+    const suffix=computerRequested ? '#/agents' : ''; computerRequested=false;
+    void mainWindow.loadURL(runtime.url + '/ui/'+suffix).catch(() => {});
+  }
 }
 
 runtime.on('status', status => {
@@ -193,6 +228,7 @@ function updateMenus() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { label: copy('file'), submenu: [
+      { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
       { label: copy('nextLaunch'), submenu: connectionMenu() },
       { type: 'separator' },
       { role: process.platform === 'darwin' ? 'close' : 'quit' }
@@ -202,6 +238,7 @@ function updateMenus() {
   ]));
   tray?.setContextMenu(Menu.buildFromTemplate([
     { label: copy('open'), click: showWindow },
+    { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
     { label: copy('nextLaunch'), submenu: connectionMenu() },
     { type: 'separator' },
     { label: copy('quit'), click: () => app.quit() }
@@ -229,6 +266,9 @@ handleTrustedIPC('get-api-url', () => runtime.url);
 handleTrustedIPC('get-app-version', () => app.getVersion());
 handleTrustedIPC('get-server-status', () => runtime.state.state === 'ready');
 handleTrustedIPC('get-backend-info', () => runtime.snapshot());
+handleTrustedIPC('computer-status', () => ({...computer.state, installed:fs.existsSync(path.join(computerRoot,'manifest.json'))}));
+handleTrustedIPC('computer-start', request => computer.start(request));
+handleTrustedIPC('computer-stop', () => computer.stop());
 handleTrustedIPC('get-presentation', () => presentationSnapshot());
 handleTrustedIPC('set-presentation', value => {
   // Only appearance/language preferences: no caller-provided file paths or commands.
@@ -274,14 +314,19 @@ nativeTheme.on('updated', () => {
 });
 app.on('second-instance', (_event, _argv, _directory, request) => {
   if (request?.quitForInstall === true) app.quit();
-  else showWindow();
+  else { if(_argv.some(isComputerLink)) computerRequested=true; showWindow(); showWorkspace(); }
 });
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.offgrid.llm.desktop');
   presentationCopy = readCopy(uiDir);
+  computerCopy = JSON.parse(await fs.promises.readFile(path.join(uiDir,'computer-experience.json'),'utf8'));
   try { presentation = normalizePresentation(JSON.parse(await fs.promises.readFile(presentationPath, 'utf8')), app.getLocale().split('-')[0]); }
   catch { presentation = normalizePresentation({}, app.getLocale().split('-')[0]); }
   await createWindow();
+  // Qualification/alternate profiles must not change the user's default handler.
+  if(app.isPackaged && !installerTest && !customHome) app.setAsDefaultProtocolClient('offgrid');
+  powerMonitor.on('lock-screen',()=>void computer.stop());
+  powerMonitor.on('suspend',()=>void computer.stop());
   createTray();
   try { nextWorkspace = JSON.parse(await fs.promises.readFile(connectionPath, 'utf8')).mode === 'isolated' ? 'isolated' : 'default'; } catch {}
   updateMenus();
@@ -301,6 +346,7 @@ app.on('before-quit', event => {
     await saveWindowState();
     await connectionQueue.catch(() => {});
     await presentationQueue.catch(() => {});
+    await computer.stop();
     await runtime.stop(); // Only our child, never a Docker/external service.
     tray?.destroy();
     shutdownComplete = true;

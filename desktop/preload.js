@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Get server status
   getServerStatus: () => ipcRenderer.invoke('get-server-status'),
   getBackendInfo: () => ipcRenderer.invoke('get-backend-info'),
+  getComputerStatus: () => ipcRenderer.invoke('computer-status'),
+  startComputerBrowser: request => ipcRenderer.invoke('computer-start', request),
+  stopComputerBrowser: () => ipcRenderer.invoke('computer-stop'),
   retryStartup: () => ipcRenderer.invoke('startup-retry'),
   startDesktopWorkspace: () => ipcRenderer.invoke('startup-local'),
   openExistingWorkspace: () => ipcRenderer.invoke('startup-browser'),

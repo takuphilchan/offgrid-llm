@@ -41,6 +41,7 @@ untouched. See [desktop startup and recovery](../docs/setup/desktop-startup.md).
 
 ```bash
 cd desktop
+npm ci --prefix ../computer --ignore-scripts
 npm run build:win
 npm run build:mac
 npm run build:linux
@@ -52,6 +53,19 @@ runtime and the prebuilt `web/dist` bundle, then creates:
 - Windows x64 NSIS and portable packages;
 - macOS x64 and ARM64 zip packages;
 - Linux x64 AppImage and Debian packages.
+
+Packaging bundles pinned Playwright and its matching Chromium build. The first
+build downloads that browser; end users do not need Node, npm, or terminal
+pairing in the matching desktop application. In Agents, select browser assistance,
+choose the practice page or one permitted HTTPS origin, and approve the local
+consent prompt. Web users hand off to the matching installed desktop application;
+a container alone cannot supply a host browser runtime.
+
+This remains a supervised browser preview, not native desktop or vision control.
+The browser uses a separate profile, verifies its runtime manifest before starting,
+and requires exact-action approval for changes. Stop is available in the workspace,
+File menu, and tray. If local shutdown cannot be confirmed, the app reports that
+instead of claiming success. See [browser setup and limitations](../computer/README.md).
 
 Windows uses a per-user install by default so administrator access is not
 required. `npm run installer:branding` regenerates the checked-in monochrome NSIS
@@ -101,6 +115,7 @@ node --check preload.js
 npm test
 npx electron-builder --dir --linux
 xvfb-run -a node ../dev/scripts/test-desktop-startup.mjs dist/linux-unpacked/offgrid-llm-desktop
+xvfb-run -a node ../dev/scripts/test-packaged-browser.mjs dist/linux-unpacked/offgrid-llm-desktop
 ```
 
 CI also builds the React application and its generated API types before the

@@ -3,6 +3,7 @@
 const { build } = require('./package.json');
 module.exports = {
   ...build,
+  protocols: [],
   appId: 'com.offgrid.llm.desktop.installtest',
   productName: 'OffGrid Desktop Install Test',
   extraMetadata: { name: 'offgrid-desktop-install-test' },

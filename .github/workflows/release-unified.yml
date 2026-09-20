@@ -883,7 +883,9 @@ jobs:
       - name: Install desktop dependencies
         if: steps.existing.outputs.skip != 'true'
         working-directory: desktop
-        run: npm ci
+        run: |
+          npm ci --prefix ../computer --ignore-scripts
+          npm ci
 
       - name: Clean electron-builder cache
         if: matrix.os == 'macos' && steps.existing.outputs.skip != 'true'
