@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Go, contract, UI, and desktop
@@ -43,6 +47,7 @@ jobs:
           node dev/scripts/test-finalize-release.mjs
           node dev/scripts/test-release-asset-access.mjs
           node dev/scripts/test-release-context.mjs
+          node dev/scripts/test-release-ci.mjs
           node dev/scripts/test-release-containers.mjs
 
       - name: Test Go packages

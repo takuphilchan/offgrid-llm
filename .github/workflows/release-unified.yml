@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
   id-token: write
   attestations: write
 
@@ -48,6 +49,16 @@ jobs:
             "${GITHUB_EVENT_NAME}" "${GITHUB_REF}" "${{ inputs.version || '' }}"
           version="$(sed -n 's/^version=//p' "${GITHUB_OUTPUT}")"
           git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null
+
+      - name: Require passing CI for the exact release revision
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_VERSION}"
+          source_sha="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          node .github/scripts/verify-release-ci.mjs "${GITHUB_REPOSITORY}" "$source_sha"
 
   publish-containers:
     name: Publish and verify containers
