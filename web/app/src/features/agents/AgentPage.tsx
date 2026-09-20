@@ -8,13 +8,17 @@ import { HistoryDeleteDialog, type HistoryItem } from '../../components/HistoryD
 import { copyText } from '../../lib/clipboard';
 import { useI18n } from '../../i18n';
 import { presentation } from '../../i18n/presentation';
-import { clearSubmittedDraft, useDraft } from '../../lib/drafts';
+import { clearSubmittedDraft, draftKey, useDraft, writeDraft } from '../../lib/drafts';
 import { agentActive } from '../../api/agent-stream';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { AgentPreview, AgentProgress } from './AgentProgress';
 import { useAgentOutputScroll } from './useAgentOutputScroll';
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { interaction } from '../../i18n/interaction';
+import { ComputerSetup } from './ComputerSetup';
+import { computerRecovery, computerModelCopy } from '../../i18n/computer-recovery';
+import { computerExperience } from '../../i18n/computer-experience';
+import { BrowserActionSummary, BrowserActivity } from './BrowserActionSummary';
 
 type AgentView = 'workspace' | 'tools' | 'connections';
 
@@ -25,16 +29,41 @@ function viewFromLocation(): AgentView {
 
 export function AgentPage({ scope, models, model, setModel }: { scope: string; models: Model[]; model: string; setModel: (model: string) => void }) {
   const { admin } = useWorkspace();
-  const { locale } = useI18n();
-  return admin ? <AgentWorkspace scope={scope} models={models} model={model} setModel={setModel} /> : <p className="permission-notice" role="status">{interaction[locale].adminOnly}</p>;
+  const { locale, messages } = useI18n();
+  const [workspace, setWorkspace] = useState<string | null>(null);
+  const [identityError, setIdentityError] = useState(false);
+  useEffect(() => {
+    if (!admin) return;
+    let disposed = false;
+    const refresh = () => api.systemIdentity().then(identity => { if (!disposed) { setWorkspace(identity.workspace_id ?? 'legacy'); setIdentityError(false); } }).catch(() => { if (!disposed) setIdentityError(true); });
+    void refresh(); const timer = setInterval(() => void refresh(), 5000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [admin]);
+  if (!admin) return <p className="permission-notice" role="status">{interaction[locale].adminOnly}</p>;
+  // Do not mount an interactive form that will immediately be replaced when
+  // identity arrives: that loses focus and can discard a just-selected mode.
+  if (!workspace) return <p role={identityError ? 'alert' : 'status'}>{identityError ? messages.common.error : messages.common.loading}</p>;
+  return <AgentWorkspace key={workspace} scope={scope} selectionScope={`${scope}:workspace:${workspace}`} models={models} model={model} setModel={setModel} />;
 }
 
-function AgentWorkspace({ scope, models, model, setModel }: { scope: string; models: Model[]; model: string; setModel: (model: string) => void }) {
+function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { scope: string; selectionScope: string; models: Model[]; model: string; setModel: (model: string) => void }) {
   const { messages: text, locale } = useI18n();
+  const experience = computerExperience(locale);
   const { value: task, setValue: setTask, key: taskDraftKey, unsaved } = useDraft(scope, 'agent-task');
-  const { value: selectedRun, setValue: selectRun } = useDraft(scope, 'agent-run');
+  const { value: selectedRun, setValue: selectRun } = useDraft(selectionScope, 'agent-run');
+  const [selectionNotice, setSelectionNotice] = useState(false);
   const [style, setStyle] = useWorkspaceState('agent.style', 'react');
   const [busy, setBusy] = useState(false);
+  const [computerMode, setComputerMode] = useWorkspaceState(`${selectionScope}:computer.mode`, false);
+  const [computerSession, setComputerSession] = useState('');
+  const [computerReady, setComputerReady] = useState(false);
+  const [submittingComputer, setSubmittingComputer] = useState(false);
+  // Retire only this obsolete UI setting; preserve task drafts and saved runs.
+  // Requests never read it, even when storage is unavailable or another tab
+  // running an older renderer writes it again.
+  useEffect(() => {
+    writeDraft(draftKey(selectionScope, 'computer-expected-text'), '');
+  }, [selectionScope]);
   const [execution, setExecution] = useState<AgentRun | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
   const [livePreview, setLivePreview] = useState(() => readPreference('offgrid.agent.livePreview') !== 'false');
@@ -45,6 +74,12 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
   const [verifiedResult, setVerifiedResult] = useState('');
   const actionLock = useRef(false);
   const working = busy || execution?.status === 'running' || execution?.status === 'pending';
+  const computerBlocked = computerMode && (!computerSession || !computerReady);
+  useEffect(() => {
+    if (execution?.computer_session && ['running', 'pending', 'waiting_for_approval', 'interrupted', 'uncertain'].includes(execution.status)) {
+      setComputerMode(true); setComputerSession(execution.computer_session);
+    }
+  }, [execution?.run_id, execution?.computer_session]);
   const [tools, setTools] = useState<AgentTool[]>([]);
   const [enabledTools, setEnabledTools] = useState(0);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
@@ -143,7 +178,11 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
       } catch (reason) {
         if (!disposed) {
           if (reason instanceof APIError && ([401,403].includes(reason.status) || (fetchingSnapshot && reason.status === 404))) {
-            setExecution(null); setError(text.common.error); return;
+            setExecution(null);
+            if (fetchingSnapshot && reason.status === 404) {
+              selectRun(''); setError(''); setSelectionNotice(true);
+            } else { setError(reason.message); }
+            return;
           }
           setConnection('reconnecting');
           // Snapshot polling is also the compatibility fallback for old servers;
@@ -158,11 +197,12 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
 
   const run = async (event: FormEvent) => {
     event.preventDefault();
-    if (actionLock.current || working || approval || deleteItems || !task.trim() || !model) return;
+    if (actionLock.current || working || approval || deleteItems || !task.trim() || !model || computerBlocked) return;
     actionLock.current = true; setBusy(true); setError('');
+    setSubmittingComputer(computerMode);
     const submitted = task;
     try {
-      const next = await api.runAgent(model, task.trim(), style);
+      const next = await api.runAgent(model, task.trim(), computerMode ? 'react' : style, computerMode ? computerSession : undefined);
       selectRun(next.run_id); setExecution(next); setResultCopied(false);
       clearSubmittedDraft(taskDraftKey, submitted);
       await refreshRuntime();
@@ -170,7 +210,7 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
       if (reason instanceof APIError && typeof reason.data?.run_id === 'string') selectRun(reason.data.run_id);
       setError(reason instanceof Error ? reason.message : text.common.error);
     }
-    finally { actionLock.current = false; setBusy(false); }
+    finally { actionLock.current = false; setBusy(false); setSubmittingComputer(false); }
   };
 
   const act = async (action: 'approve' | 'deny' | 'cancel' | 'resume' | 'reconcile') => {
@@ -250,15 +290,16 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
   };
   return <div className="stack agents-page">
+    {selectionNotice && <p role="status" className="permission-notice">{computerRecovery[locale].missing}</p>}
     {runtimeError && <div className="inline-error" role="alert">{runtimeError}<button disabled={loadingRuntime} onClick={() => void refreshRuntime()}>{text.common.retry}</button></div>}
     {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="tasks" remove={api.deleteAgentRun} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     {error && <div className="inline-error" role="alert">{error}</div>}
-    <div className="metric-grid agent-metrics">
+    {view !== 'workspace' && <div className="metric-grid agent-metrics">
       <Metric label={text.agentRuntime.tools} value={loadingRuntime ? '…' : `${enabledTools}/${tools.length} ${text.agentRuntime.enabled}`} />
       <Metric label={text.agentRuntime.history} value={loadingRuntime ? '…' : String(tasks.length)} />
       <Metric label={text.agentRuntime.connectors} value={loadingRuntime ? '…' : String(servers.length)} />
-      <Metric label={text.agentRuntime.computer} value={!computer ? loadingRuntime ? text.common.loading : presentation[locale].unknown : computer.available ? text.agentRuntime.available : text.agentRuntime.unavailable} danger={computer?.available === false} />
-    </div>
+      <Metric label={text.agentRuntime.computer} value={!computer ? loadingRuntime ? text.common.loading : presentation[locale].unknown : computer.available ? text.agentRuntime.available : computerRecovery[locale].unpaired} />
+    </div>}
 
     <div className="section-tabs" role="tablist" aria-label={text.nav.agents} onKeyDown={event => {
         const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
@@ -269,20 +310,23 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
         if (next >= 0) { event.preventDefault(); tabs[next].focus(); tabs[next].click(); }
       }}>
       <button id="agent-workspace-tab" role="tab" tabIndex={view === 'workspace' ? 0 : -1} aria-controls="agent-workspace-panel" aria-selected={view === 'workspace'} onClick={() => selectView('workspace')}>{text.shell.work}</button>
-      <button id="agent-tools-tab" role="tab" tabIndex={view === 'tools' ? 0 : -1} aria-controls="agent-tools-panel" aria-selected={view === 'tools'} onClick={() => selectView('tools')}>{text.agentRuntime.tools}</button>
-      <button id="agent-connections-tab" role="tab" tabIndex={view === 'connections' ? 0 : -1} aria-controls="agent-connections-panel" aria-selected={view === 'connections'} onClick={() => selectView('connections')}>{text.agentRuntime.connectors}</button>
+      <button id="agent-tools-tab" role="tab" tabIndex={view === 'tools' ? 0 : -1} aria-controls="agent-tools-panel" aria-selected={view === 'tools'} onClick={() => selectView('tools')}>{experience.tools}</button>
+      <button id="agent-connections-tab" role="tab" tabIndex={view === 'connections' ? 0 : -1} aria-controls="agent-connections-panel" aria-selected={view === 'connections'} onClick={() => selectView('connections')}>{experience.connections}</button>
     </div>
 
     {view === 'workspace' && <div id="agent-workspace-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-workspace-tab">
       <div className="agent-workspace">
         <form className="task-card" onSubmit={run}>
-          <label className="agent-task-editor" htmlFor="agent-task-input"><span id="agent-task-label">{text.agents.task}</span><textarea id="agent-task-input" aria-labelledby="agent-task-label" rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label>
+          <label className="agent-task-editor" htmlFor="agent-task-input"><span id="agent-task-label">{text.agents.task}</span><textarea id="agent-task-input" aria-labelledby="agent-task-label" aria-describedby="task-guidance" rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label>
+          <p id="task-guidance" className="task-guidance">{experience.taskHint}</p>
+          <label className="computer-mode"><input type="checkbox" checked={computerMode} disabled={working || !!approval} onChange={event => setComputerMode(event.target.checked)} /><span>{experience.browser} · Preview</span></label>
+          {computerMode && <ComputerSetup model={model} onReady={setComputerReady} value={computerSession} onChange={setComputerSession} disabled={working || !!approval} onAvailability={available => setComputer(current => ({ emergency_stop: false, active_sessions: available ? 1 : 0, ...current, available }))} />}
           <div className="agent-task-options">
             <ModelSelect models={models} value={model} onChange={setModel} />
-            <label><span>{text.agentRuntime.style}</span><select value={style} onChange={event => setStyle(event.target.value)}><option value="react">{text.agentRuntime.react}</option><option value="plan-execute">{text.agentRuntime.plan}</option><option value="cot">{text.agentRuntime.reasoning}</option></select></label>
+            {!computerMode && <label><span>{text.agentRuntime.style}</span><select value={style} onChange={event => setStyle(event.target.value)}><option value="react">{text.agentRuntime.react}</option><option value="plan-execute">{text.agentRuntime.plan}</option><option value="cot">{text.agentRuntime.reasoning}</option></select></label>}
           </div>
           {unsaved && <p role="alert">{text.recovery.draftWarning}</p>}
-          <div className="agent-task-actions"><button className="primary-button" disabled={working || !!approval || !task.trim() || !model}>{working ? text.agents.running : text.agents.run}</button></div>
+          <div className="agent-task-actions"><button className="primary-button" disabled={working || !!approval || !task.trim() || !model || computerBlocked}>{submittingComputer ? computerModelCopy[locale].checking : working ? text.agents.running : text.agents.run}</button></div>
         </form>
         <section className="result-card">
           <header className="agent-result-header">
@@ -296,8 +340,8 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
           <div className="agent-result-body" role="region" aria-labelledby="agent-result-title" tabIndex={0} ref={outputScroll.ref} onScroll={outputScroll.onScroll}>
             <div className="agent-result-content" ref={outputScroll.contentRef}>
             {approval ? <div className="approval-card" role="alertdialog" aria-labelledby="approval-title">
-              <span className="status-pill danger">{text.agents.approvalTitle}</span><h2 id="approval-title">{approval.tool}</h2><p>{text.agents.approvalBody}</p>
-              <pre>{approval.canonical_arguments ?? JSON.stringify(approval.arguments, null, 2)}</pre>
+              <span className="status-pill danger">{text.agents.approvalTitle}</span><h2 id="approval-title">{experience.change}</h2><p>{text.agents.approvalBody}</p>
+              {execution?.computer_session ? <><BrowserActionSummary tool={approval.tool} args={approval.arguments as Record<string,unknown>} steps={steps} /><details><summary>{experience.details}</summary><pre>{approval.canonical_arguments ?? JSON.stringify(approval.arguments, null, 2)}</pre></details></> : <pre>{approval.canonical_arguments ?? JSON.stringify(approval.arguments, null, 2)}</pre>}
               <div><button className="danger-button" disabled={busy} onClick={deny}>{text.agents.deny}</button>
                 {Date.parse(approval.expires_at) <= Date.now()
                   ? <button className="primary-button" disabled={busy} onClick={() => void act('resume')}>{text.common.refresh}</button>
@@ -311,7 +355,7 @@ function AgentWorkspace({ scope, models, model, setModel }: { scope: string; mod
             </div> : result ? <div className="message-body markdown-body agent-answer"><MarkdownMessage content={result} /></div> : !execution && <div className="quiet-state"><Icon name="agents" size={30} /><p>{text.agents.subtitle}</p></div>}
             {(execution?.status === 'interrupted' || execution?.status === 'pending') && execution.resumable && <button className="primary-button" disabled={busy} onClick={() => void act('resume')}>{text.models.resume}</button>}
             {execution?.error && <p role="alert">{execution.error}</p>}
-            {steps.length > 0 && <details className="agent-steps" open={working}><summary>{text.agentRuntime.steps} · {steps.length}</summary>{steps.map((step, index) => <article key={step.id ?? index}><strong>{step.type}{step.tool_name ? ` · ${step.tool_name}` : ''}</strong><p>{step.content || step.tool_result}</p></article>)}</details>}
+            {steps.length > 0 && (execution?.computer_session ? <BrowserActivity steps={steps} /> : <details className="agent-steps" open={working}><summary>{text.agentRuntime.steps} · {steps.length}</summary>{steps.map((step, index) => <article key={step.id ?? index}><strong>{step.type}{step.tool_name ? ` · ${step.tool_name}` : ''}</strong><p>{step.content || step.tool_result}</p></article>)}</details>)}
             {execution && <AgentPreview run={execution} showPreview={livePreview} />}
             </div>
           </div>

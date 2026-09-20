@@ -18,8 +18,9 @@ type ChatCompletionRequest struct {
 	FrequencyPenalty *float32       `json:"frequency_penalty,omitempty"`
 	User             string         `json:"user,omitempty"`
 	// Function calling
-	Tools      []Tool      `json:"tools,omitempty"`
-	ToolChoice interface{} `json:"tool_choice,omitempty"` // "none", "auto", or {"type": "function", "function": {"name": "..."}}
+	Tools             []Tool      `json:"tools,omitempty"`
+	ToolChoice        interface{} `json:"tool_choice,omitempty"`         // "none", "auto", or {"type": "function", "function": {"name": "..."}}
+	ParallelToolCalls *bool       `json:"parallel_tool_calls,omitempty"` // nil preserves the runtime default; false requests sequential calls
 	// RAG / Knowledge Base
 	UseKnowledgeBase *bool `json:"use_knowledge_base,omitempty"` // Enable RAG context injection
 }

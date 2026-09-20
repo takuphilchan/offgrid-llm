@@ -41,13 +41,16 @@ type Step struct {
 
 // AgentConfig configures agent behavior
 type AgentConfig struct {
-	MaxIterations  int           `json:"max_iterations"`   // Maximum reasoning steps
-	MaxTokens      int           `json:"max_tokens"`       // Max tokens per LLM call
-	Temperature    float64       `json:"temperature"`      // LLM temperature
-	TimeoutPerStep time.Duration `json:"timeout_per_step"` // Timeout for each step
-	EnableMemory   bool          `json:"enable_memory"`    // Use conversation memory
-	SystemPrompt   string        `json:"system_prompt"`    // Custom system prompt
-	ReasoningStyle string        `json:"reasoning_style"`  // "react", "cot", "plan-execute"
+	ComputerSession      string        `json:"computer_session,omitempty"`
+	ComputerExpectedText string        `json:"computer_expected_text,omitempty"`
+	ComputerVerification string        `json:"computer_verification,omitempty"`
+	MaxIterations        int           `json:"max_iterations"`   // Maximum reasoning steps
+	MaxTokens            int           `json:"max_tokens"`       // Max tokens per LLM call
+	Temperature          float64       `json:"temperature"`      // LLM temperature
+	TimeoutPerStep       time.Duration `json:"timeout_per_step"` // Timeout for each step
+	EnableMemory         bool          `json:"enable_memory"`    // Use conversation memory
+	SystemPrompt         string        `json:"system_prompt"`    // Custom system prompt
+	ReasoningStyle       string        `json:"reasoning_style"`  // "react", "cot", "plan-execute"
 }
 
 // DefaultAgentConfig returns sensible defaults

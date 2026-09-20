@@ -653,9 +653,107 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @deprecated */
         get: operations["getComputerStatus"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/computer/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getComputerStatusV2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/computer/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getComputerCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/computer/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stopComputer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/computer/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createComputerPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/computer/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listComputerSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/computer/model-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Administrator-only, bounded two-step tool-call smoke check. Executes no browser actions. Not a qualification certificate. Computer-task submission repeats the check against the current runtime. */
+        post: operations["checkComputerModel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -666,6 +764,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ComputerModelCheck: {
+            model: string;
+            passed: boolean;
+            code: string;
+            message: string;
+            retryable: boolean;
+            runtime?: {
+                build?: string;
+                template_sha256?: string;
+                context?: number;
+                supports_tools?: boolean;
+                supports_tool_calls?: boolean;
+            };
+        };
         DiscoveredModel: {
             id: string;
             author: string;
@@ -690,6 +802,8 @@ export interface components {
             api_version: 2;
             /** @description SHA-256 of the served UI index; empty when not installed. */
             ui_build_id: string;
+            /** @description Opaque persistent workspace namespace; not an authorization credential. */
+            workspace_id?: string;
             capabilities: string[];
         };
         /** @enum {string} */
@@ -969,6 +1083,8 @@ export interface components {
                 };
             }[];
             tool_choice?: unknown;
+            /** @description Whether the runtime may produce multiple tool calls in one response. Omission preserves its default. */
+            parallel_tool_calls?: boolean;
             /** @default false */
             use_knowledge_base: boolean;
         };
@@ -1026,6 +1142,10 @@ export interface components {
         };
         AgentRunRequest: {
             model: string;
+            /** @description Optional paired local browser session. Restricts the run to browser tools and requires final verification. */
+            computer_session?: string;
+            /** @description Optional strict final page-text check (at most 1000 UTF-8 bytes). Omit or send empty for automatic page evidence. Intermediate checks are allowed; page evidence is not proof of file creation or an external transaction. */
+            computer_expected_text?: string;
             prompt: string;
             /** @enum {string} */
             style?: "react" | "cot" | "plan-execute";
@@ -1063,6 +1183,8 @@ export interface components {
             updated_at: string;
         };
         AgentRunResponse: {
+            computer_session?: string;
+            computer_expected_text?: string;
             output: string;
             task_id: string;
             run_id: string;
@@ -1107,6 +1229,20 @@ export interface components {
             available: boolean;
             emergency_stop: boolean;
             active_sessions: number;
+        };
+        ComputerCapabilities: {
+            protocol_version: number;
+            preview: boolean;
+            available: boolean;
+            reason_code: string;
+            local_only: boolean;
+            /** @enum {string} */
+            approval_mode: "supervised";
+            drivers: {
+                id: string;
+                available: boolean;
+                qualified: boolean;
+            }[];
         };
     };
     responses: {
@@ -2343,6 +2479,164 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ComputerStatus"];
                 };
+            };
+        };
+    };
+    getComputerStatusV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Computer safety-controller status; requires administrator access. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputerStatus"];
+                };
+            };
+        };
+    };
+    getComputerCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Actual availability and qualification, not a promise of installed drivers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputerCapabilities"];
+                };
+            };
+        };
+    };
+    stopComputer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Emergency stop has been set; previously dispatched effects are not rolled back. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "stopped";
+                    };
+                };
+            };
+            /** @description Revocation requested; the companion must close its browser. Already dispatched effects may require reconciliation. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createComputerPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator-only single-use enrollment code, valid for two minutes. Never cache or log. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        expires_seconds: number;
+                        protocol_version: number;
+                    };
+                };
+            };
+        };
+    };
+    listComputerSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live local browser sessions owned by the requesting administrator. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sessions: {
+                            id: string;
+                            origin: string;
+                            /** Format: date-time */
+                            expires_at: string;
+                            remaining_actions: number;
+                            /** @enum {string} */
+                            state?: "ready" | "in_use" | "finished" | "exhausted";
+                            run_id?: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    checkComputerModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    model: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Completed compatibility check, including a negative result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputerModelCheck"];
+                };
+            };
+            /** @description Runtime unavailable or check timed out; retryable, not proof of incompatibility. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

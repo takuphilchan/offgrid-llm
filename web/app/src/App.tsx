@@ -5,6 +5,7 @@ import { CommandPalette, type CommandAction } from './components/CommandPalette'
 import { Icon } from './components/Icon';
 import { ActivityPage } from './features/activity/ActivityPage';
 import { AgentPage } from './features/agents/AgentPage';
+import { ComputerActivity } from './features/agents/ComputerActivity';
 import { ChatPage } from './features/chat/ChatPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { KnowledgePage } from './features/knowledge/KnowledgePage';
@@ -200,6 +201,7 @@ export function App() {
           {authUser && <button className="text-button" onClick={() => void logout()}>{text.auth.signOut}</button>}
         </div>
       </header>
+      {admin && <ComputerActivity key={authUser?.id ?? 'local'} />}
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
       <section className="page-content">
         <PageBoundary key={`${page}:${authUser?.id ?? (guest ? 'guest' : 'local')}:${admin}`} message={text.common.error} retry={text.common.retry}>

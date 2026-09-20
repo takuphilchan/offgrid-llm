@@ -74,12 +74,11 @@ test('task-first agent workspace leaves desktop room for output and visible Run 
   const options = await page.locator('.agent-task-options').boundingBox();
   const form = await page.locator('.task-card').boundingBox();
   const result = await page.locator('.result-card').boundingBox();
-  const metrics = await page.locator('.agent-metrics').boundingBox();
+  await expect(page.locator('.agent-metrics')).toHaveCount(0);
   const run = await page.locator('.agent-task-actions button').boundingBox();
   expect(task!.y + task!.height).toBeLessThanOrEqual(options!.y);
   expect(result!.width).toBeGreaterThan(form!.width * 1.4);
   expect(Math.abs(result!.height - form!.height)).toBeLessThan(2);
-  expect(metrics!.height).toBeLessThan(100);
   expect(run!.y + run!.height).toBeLessThan(900);
   await page.screenshot({ path: info.outputPath('agent-workspace.png') });
 });

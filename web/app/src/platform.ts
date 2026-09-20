@@ -2,6 +2,9 @@ export type DesktopPaths = { config: string; models: string; data: string };
 export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offline' | 'incompatible' | 'unavailable' | 'error'; url: string; managedByDesktop: boolean; desktopVersion: string; version?: string; revision?: string; uiBuildID?: string; apiVersion?: number; reason?: string };
 
 export type DesktopBridge = {
+  getComputerStatus?: () => Promise<{state:string; code?:string; installed:boolean; target?:{id:string;origin:string}}>;
+  startComputerBrowser?: (request:{origin:string;workspace:string}) => Promise<{state:string;code?:string;target?:{id:string;origin:string}}>;
+  stopComputerBrowser?: () => Promise<{state:string;code?:string}>;
   isDesktop: true;
   presentation?: { locale: string; theme: 'system' | 'dark' | 'light' };
   getPresentation?: () => Promise<{ locale: string; theme: 'system' | 'dark' | 'light' }>;

@@ -27,6 +27,7 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	temperature := float32(task.Config.Temperature)
 	maxTokens := task.Config.MaxTokens
 	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens, Stream: true}
+	configureComputerRequest(request, task)
 	raw, ok := s.engine.(inference.RawStreamingEngine)
 	if !ok {
 		// A text-only stream discards structured tool calls and finish reasons.

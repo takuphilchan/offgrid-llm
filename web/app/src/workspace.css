@@ -275,7 +275,7 @@
     .agent-workspace .task-card { min-height: clamp(420px, calc(100dvh - 330px), 720px); }
   }
   .task-card, .result-card { min-width: 0; min-height: 0; overflow-wrap: anywhere; }
-  .task-card { gap: 20px; }
+  .task-card { gap: 14px; }
   .task-card .agent-task-editor { flex: 1; display: flex; flex-direction: column; }
   .agent-task-editor > span { color: var(--text); font-weight: 600; font-size: 15px; }
   .task-card .agent-task-editor textarea { flex: 1; resize: vertical; }
@@ -290,6 +290,11 @@
   .agent-task-actions { padding-block-start: 16px; border-block-start: 1px solid var(--line); }
   .agent-task-actions .primary-button { width: 100%; min-height: 44px; margin: 0; white-space: normal; }
   .result-card { display: grid; grid-template-rows: auto minmax(0, 1fr); height: clamp(420px, calc(100dvh - 330px), 720px); padding: 0; overflow: hidden; }
+  @container (min-width: 760px) {
+    .agent-workspace { align-items: stretch; }
+    .agent-workspace .result-card { height: auto; min-height: clamp(420px, calc(100dvh - 330px), 720px); max-height: 900px; }
+    .agent-result-body { contain: size; }
+  }
   .agent-result-header { min-width: 0; padding: 18px 20px; border-block-end: 1px solid var(--line); }
   .agent-result-header .section-heading { margin: 10px 0 0; gap: 12px; flex-wrap: wrap; }
   .agent-result-header .section-heading button { flex-shrink: 0; }
@@ -513,3 +518,32 @@
     .model-search-form { flex-wrap: wrap; }
   }
 }
+/* Computer setup is bounded by the task column, including long pairing codes. */
+.computer-mode { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+.computer-mode input { width: auto; }
+.computer-setup { min-width: 0; padding: 1rem; margin: 0 0 1rem; border: 1px solid var(--line); border-radius: .75rem; }
+.computer-setup p { font-size: .875rem; line-height: 1.5; }
+.computer-setup .browser-expiry { display: block; color: var(--muted); }
+.computer-setup .button-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.computer-setup select { width: 100%; min-width: 0; }
+.computer-pair-code { display: block; overflow-wrap: anywhere; user-select: all; padding: .75rem; }
+.computer-activity { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; background: var(--surface-1); border: 1px solid var(--line); border-radius: .75rem; }
+.computer-activity div { min-width: 0; overflow-wrap: anywhere; }
+.computer-activity p { margin: .25rem 0; font-size: .875rem; }
+.computer-activity button { flex-shrink: 0; }
+.computer-setup details { margin-block: .75rem; }
+.task-guidance { margin: -.25rem 0 1rem; color: var(--muted); font-size: .875rem; line-height: 1.5; }
+.browser-onboarding { display: grid; gap: .75rem; min-width: 0; }
+.browser-onboarding .field { margin: 0; }
+.browser-onboarding .button-row { margin: 0; }
+.browser-onboarding > .secondary-button { justify-self: start; }
+.browser-action-summary h2 { font-size: 1rem; }
+.browser-action-summary dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }
+.browser-action-summary dt { color: var(--muted); }
+.browser-action-summary dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.browser-task-timeline { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: .75rem; }
+.browser-task-timeline li { min-width: 0; padding: .75rem 1rem; border-inline-start: 2px solid var(--line); }
+.browser-task-timeline p { overflow-wrap: anywhere; }
+.browser-task-timeline details { margin-top: .5rem; font-size: .875rem; color: var(--muted); }
+.browser-task-timeline pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 15rem; overflow: auto; }
+@media (max-width: 600px) { .computer-activity { align-items: stretch; flex-direction: column; } }

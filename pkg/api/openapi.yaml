@@ -750,6 +750,7 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
   /v1/computer/status:
     get:
+      deprecated: true
       operationId: getComputerStatus
       responses:
         '200':
@@ -757,6 +758,99 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ComputerStatus' }
+  /api/v2/computer/status:
+    get:
+      operationId: getComputerStatusV2
+      responses:
+        '200':
+          description: Computer safety-controller status; requires administrator access.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComputerStatus' }
+  /api/v2/computer/capabilities:
+    get:
+      operationId: getComputerCapabilities
+      responses:
+        '200':
+          description: Actual availability and qualification, not a promise of installed drivers.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComputerCapabilities' }
+  /api/v2/computer/stop:
+    post:
+      operationId: stopComputer
+      responses:
+        '200':
+          description: Emergency stop has been set; previously dispatched effects are not rolled back.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [stopped] }
+        '202':
+          description: Revocation requested; the companion must close its browser. Already dispatched effects may require reconciliation.
+  /api/v2/computer/pairing:
+    post:
+      operationId: createComputerPairing
+      responses:
+        '200':
+          description: Administrator-only single-use enrollment code, valid for two minutes. Never cache or log.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, expires_seconds, protocol_version]
+                properties:
+                  code: { type: string }
+                  expires_seconds: { type: integer }
+                  protocol_version: { type: integer }
+  /api/v2/computer/sessions:
+    get:
+      operationId: listComputerSessions
+      responses:
+        '200':
+          description: Live local browser sessions owned by the requesting administrator.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, origin, expires_at, remaining_actions]
+                      properties:
+                        id: { type: string }
+                        origin: { type: string }
+                        expires_at: { type: string, format: date-time }
+                        remaining_actions: { type: integer }
+                        state: { type: string, enum: [ready, in_use, finished, exhausted] }
+                        run_id: { type: string }
+  /api/v2/computer/model-check:
+    post:
+      operationId: checkComputerModel
+      description: Administrator-only, bounded two-step tool-call smoke check. Executes no browser actions. Not a qualification certificate. Computer-task submission repeats the check against the current runtime.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model]
+              properties:
+                model: { type: string }
+      responses:
+        '200':
+          description: Completed compatibility check, including a negative result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComputerModelCheck' }
+        '503':
+          description: Runtime unavailable or check timed out; retryable, not proof of incompatibility.
 components:
   securitySchemes:
     sessionCookie:
@@ -784,6 +878,23 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    ComputerModelCheck:
+      type: object
+      required: [model, passed, code, message, retryable]
+      properties:
+        model: { type: string }
+        passed: { type: boolean }
+        code: { type: string }
+        message: { type: string }
+        retryable: { type: boolean }
+        runtime:
+          type: object
+          properties:
+            build: { type: string }
+            template_sha256: { type: string }
+            context: { type: integer }
+            supports_tools: { type: boolean }
+            supports_tool_calls: { type: boolean }
     DiscoveredModel:
       type: object
       required: [id, author, name, downloads, likes]
@@ -812,6 +923,7 @@ components:
         revision: { type: string }
         api_version: { type: integer, const: 2 }
         ui_build_id: { type: string, description: SHA-256 of the served UI index; empty when not installed. }
+        workspace_id: { type: string, description: Opaque persistent workspace namespace; not an authorization credential. }
         capabilities: { type: array, items: { type: string } }
     ChatStreamPhase:
       type: string
@@ -1129,6 +1241,9 @@ components:
                   description: { type: string }
                   parameters: { type: object, additionalProperties: true }
         tool_choice: {}
+        parallel_tool_calls:
+          type: boolean
+          description: Whether the runtime may produce multiple tool calls in one response. Omission preserves its default.
         use_knowledge_base: { type: boolean, default: false }
     ChatCompletionResponse:
       type: object
@@ -1187,6 +1302,8 @@ components:
       required: [model, prompt]
       properties:
         model: { type: string }
+        computer_session: { type: string, description: Optional paired local browser session. Restricts the run to browser tools and requires final verification. }
+        computer_expected_text: { type: string, maxLength: 1000, description: Optional strict final page-text check (at most 1000 UTF-8 bytes). Omit or send empty for automatic page evidence. Intermediate checks are allowed; page evidence is not proof of file creation or an external transaction. }
         prompt: { type: string, minLength: 1 }
         style: { type: string, enum: [react, cot, plan-execute] }
         max_iterations: { type: integer, minimum: 1, maximum: 50 }
@@ -1218,6 +1335,8 @@ components:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        computer_session: { type: string }
+        computer_expected_text: { type: string }
         output: { type: string }
         task_id: { type: string }
         run_id: { type: string }
@@ -1265,3 +1384,22 @@ components:
         available: { type: boolean }
         emergency_stop: { type: boolean }
         active_sessions: { type: integer, minimum: 0 }
+    ComputerCapabilities:
+      type: object
+      required: [protocol_version, preview, available, reason_code, local_only, approval_mode, drivers]
+      properties:
+        protocol_version: { type: integer, minimum: 1 }
+        preview: { type: boolean }
+        available: { type: boolean }
+        reason_code: { type: string }
+        local_only: { type: boolean }
+        approval_mode: { type: string, enum: [supervised] }
+        drivers:
+          type: array
+          items:
+            type: object
+            required: [id, available, qualified]
+            properties:
+              id: { type: string }
+              available: { type: boolean }
+              qualified: { type: boolean }

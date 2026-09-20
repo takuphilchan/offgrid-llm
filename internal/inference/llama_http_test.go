@@ -24,6 +24,51 @@ func TestLlamaHTTPPortUsesExplicitIPv4Loopback(t *testing.T) {
 	}
 }
 
+func TestHTTPRequestsPreserveParallelToolPolicy(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		for _, mode := range []string{"unset", "enabled", "disabled"} {
+			t.Run(fmt.Sprintf("stream=%v/%s", stream, mode), func(t *testing.T) {
+				var parallel *bool
+				if mode != "unset" {
+					value := mode == "enabled"
+					parallel = &value
+				}
+				backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					var body map[string]json.RawMessage
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Fatal(err)
+					}
+					value, exists := body["parallel_tool_calls"]
+					if parallel == nil {
+						if exists {
+							t.Error("unset policy was sent")
+						}
+					} else if !exists || string(value) != fmt.Sprint(*parallel) {
+						t.Errorf("policy lost: %s", value)
+					}
+					if stream {
+						fmt.Fprint(w, "data: [DONE]\n\n")
+					} else {
+						fmt.Fprint(w, `{"choices":[]}`)
+					}
+				}))
+				defer backend.Close()
+				engine := NewLlamaHTTPEngine(backend.URL)
+				request := &api.ChatCompletionRequest{ParallelToolCalls: parallel}
+				var err error
+				if stream {
+					err = engine.ChatCompletionStreamRaw(context.Background(), request, func(json.RawMessage) error { return nil })
+				} else {
+					_, err = engine.ChatCompletion(context.Background(), request)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+}
+
 func TestHTTPRequestsPreserveSeedAndOnlyExplicitStops(t *testing.T) {
 	for _, stream := range []bool{false, true} {
 		for _, stops := range [][]string{nil, {"CUSTOM_END"}} {

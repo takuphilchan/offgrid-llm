@@ -25,6 +25,8 @@ export type RunSummary = { id: string; status: string; started_at: string; updat
 export type RunEvent = { id: string; run_id: string; sequence: number; type: string; time: string; data?: Record<string, any> };
 export type RAGStatus = components['schemas']['RAGStatus'];
 export type ComputerStatus = { available: boolean; emergency_stop: boolean; active_sessions: number };
+export type ComputerModelCheck = components['schemas']['ComputerModelCheck'];
+export type ComputerSession = { id: string; origin: string; remaining_actions: number; expires_at?: string; state?: 'ready' | 'in_use' | 'finished' | 'exhausted'; run_id?: string };
 export type ExternalIntegration = components['schemas']['IntegrationStatus'];
 export type IntegrationSetup = components['schemas']['IntegrationSetup'];
 export type SystemConfig = { version: string; inference_slots: number; multi_user_mode: boolean; require_auth: boolean; guest_access: boolean; features: Record<string, boolean> };
@@ -137,7 +139,7 @@ export const api = {
   disableRAG: () => request<{ success: boolean }>('/v1/rag/disable', { method:'POST',body:'{}' }),
   stats: async () => (await request<Record<string, any> | null>('/v1/stats')) ?? {},
   systemConfig: () => request<SystemConfig>('/v1/system/config'),
-  computerStatus: () => request<ComputerStatus>('/v1/computer/status'),
+  computerStatus: () => request<ComputerStatus>('/api/v2/computer/status'),
   integrations: async (modelID?: string) => {
     const query = modelID ? `?model=${encodeURIComponent(modelID)}` : '';
     const result = await request<{ provider: string; base_url: string; integrations: ExternalIntegration[] | null }>(`/v1/integrations${query}`);
@@ -148,7 +150,7 @@ export const api = {
     if (modelID) query.set('model', modelID);
     return request<{ integration: ExternalIntegration; setup: IntegrationSetup }>(`/v1/integrations/${encodeURIComponent(id)}/setup?${query}`);
   },
-  emergencyStop: () => request<{ status: string }>('/v1/computer/stop', { method: 'POST', body: '{}' }),
+  emergencyStop: () => request<{ status: string }>('/api/v2/computer/stop', { method: 'POST', body: '{}' }),
   runs: async () => {
     const result = await request<{ runs: RunSummary[] | null }>('/v1/runs');
     return Array.isArray(result.runs) ? result.runs : [];
@@ -163,9 +165,16 @@ export const api = {
     });
     return result.choices[0]?.message.content ?? '';
   },
-  runAgent: (model: string, prompt: string, style: string) => request<AgentRun>('/v1/agents/run', {
-    method: 'POST', body: JSON.stringify({ model, prompt, style, max_iterations: 12, async: true })
-  }),
+  computerSessions: async () => {
+    const data = await request<{ sessions: ComputerSession[] }>('/api/v2/computer/sessions');
+    if (!Array.isArray(data.sessions) || data.sessions.some(s => !s || typeof s.id !== 'string' || typeof s.origin !== 'string' || !Number.isFinite(s.remaining_actions))) throw new APIError('Invalid browser session response. Check the service version.', 502);
+    return data;
+  },
+  checkComputerModel: (model: string, signal: AbortSignal) => request<ComputerModelCheck>('/api/v2/computer/model-check', { method: 'POST', body: JSON.stringify({model}), signal }, 120_000),
+  computerPairing: () => request<{ code: string; expires_seconds: number }>('/api/v2/computer/pairing', { method: 'POST', body: '{}' }),
+  runAgent: (model: string, prompt: string, style: string, computerSession?: string) => request<AgentRun>('/v1/agents/run', {
+    method: 'POST', body: JSON.stringify({ model, prompt, style, computer_session: computerSession || undefined, max_iterations: 12, async: true })
+  }, computerSession ? 120_000 : 30_000),
   agentRun: (id: string) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}`),
   deleteAgentRun: (id: string) => request<{ success: boolean }>(`/v1/agents/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void, onHeartbeat: () => void, signal: AbortSignal) => {

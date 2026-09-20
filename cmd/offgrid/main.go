@@ -1129,6 +1129,9 @@ func main() {
 		case "integration", "integrations":
 			handleIntegrations(os.Args[2:])
 			return
+		case "computer":
+			executeCommand(func(ctx context.Context) error { return runComputerCommand(ctx, os.Args[2:]) })
+			return
 		case "hermes":
 			if err := handleHermes(os.Args[2:]); err != nil {
 				printError(err.Error())

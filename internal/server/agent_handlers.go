@@ -30,7 +30,9 @@ func (s *Server) callAgentModel(ctx context.Context, task *agents.Task, messages
 	defer release()
 	temperature := float32(task.Config.Temperature)
 	maxTokens := task.Config.MaxTokens
-	return s.engine.ChatCompletion(ctx, &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens})
+	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens}
+	configureComputerRequest(request, task)
+	return s.engine.ChatCompletion(ctx, request)
 }
 
 func writeAgentError(w http.ResponseWriter, err error) {
@@ -73,6 +75,10 @@ func taskResponse(task *agents.Task) map[string]any {
 	}
 	response := map[string]any{"task_id": task.ID, "run_id": task.ID, "status": task.Status, "output": task.Result, "steps": steps, "pending_approval": task.PendingApproval}
 	response["progress"] = task.Progress
+	if task.Config.ComputerSession != "" {
+		response["computer_session"] = task.Config.ComputerSession
+		response["computer_expected_text"] = task.Config.ComputerExpectedText
+	}
 	response["started_at"] = task.StartedAt
 	response["resumable"] = task.Checkpoint != nil && task.Checkpoint.ExecutingCall == "" && (task.Status == agents.TaskInterrupted || task.Status == agents.TaskPending || task.Status == agents.TaskWaiting)
 	if task.Error != "" {
@@ -104,17 +110,19 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Prompt            string          `json:"prompt"`
-		Task              string          `json:"task"`
-		Model             string          `json:"model"`
-		Style             string          `json:"style"`
-		Stream            bool            `json:"stream"`
-		Async             bool            `json:"async"`
-		MaxIterations     int             `json:"max_iterations"`
-		MaxSteps          int             `json:"max_steps"`
-		SystemPrompt      string          `json:"system_prompt"`
-		ApprovedTools     json.RawMessage `json:"approved_tools"`
-		ApprovedToolCalls json.RawMessage `json:"approved_tool_calls"`
+		Prompt               string          `json:"prompt"`
+		ComputerSession      string          `json:"computer_session"`
+		ComputerExpectedText string          `json:"computer_expected_text"`
+		Task                 string          `json:"task"`
+		Model                string          `json:"model"`
+		Style                string          `json:"style"`
+		Stream               bool            `json:"stream"`
+		Async                bool            `json:"async"`
+		MaxIterations        int             `json:"max_iterations"`
+		MaxSteps             int             `json:"max_steps"`
+		SystemPrompt         string          `json:"system_prompt"`
+		ApprovedTools        json.RawMessage `json:"approved_tools"`
+		ApprovedToolCalls    json.RawMessage `json:"approved_tool_calls"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request", 400)
@@ -140,7 +148,23 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config := agents.DefaultAgentConfig()
+	if req.ComputerSession != "" {
+		if len(req.ComputerExpectedText) > 1000 || (req.ComputerExpectedText != "" && strings.TrimSpace(req.ComputerExpectedText) == "") {
+			writeError(w, "Optional expected page text must contain 1–1000 UTF-8 bytes, or be omitted for automatic page verification.", 400)
+			return
+		}
+		if s.browserHub == nil || s.browserHub.Check(s.agentActor(r), req.ComputerSession, "") != nil {
+			writeError(w, "Select an active, unused local browser session", 409)
+			return
+		}
+		config.ComputerSession = req.ComputerSession
+		config.ComputerExpectedText = req.ComputerExpectedText
+		config.ComputerVerification = "page-evidence-v1"
+	}
 	config.SystemPrompt, config.ReasoningStyle = req.SystemPrompt, req.Style
+	if config.ComputerSession != "" {
+		configureComputerTask(&config)
+	}
 	if req.Style != "" && req.Style != "react" && req.Style != "plan-execute" && req.Style != "cot" {
 		writeError(w, "Unsupported agent style", http.StatusBadRequest)
 		return
@@ -155,10 +179,36 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "max_iterations must be between 1 and 50", 400)
 		return
 	}
+	if config.ComputerSession != "" {
+		check := s.checkComputerModel(r.Context(), req.Model)
+		if !check.Passed {
+			status := http.StatusUnprocessableEntity
+			if check.Retryable {
+				status = http.StatusServiceUnavailable
+			}
+			writeJSON(w, status, computerCheckError(check))
+			return
+		}
+		if s.browserHub.Check(s.agentActor(r), config.ComputerSession, "") != nil {
+			writeError(w, "Browser session expired during the model check; pair again", 409)
+			return
+		}
+	}
 	task, err := s.agentRunner.Create(strings.TrimSpace(req.Prompt), req.Model, s.agentActor(r), config)
 	if err != nil {
 		writeAgentError(w, err)
 		return
+	}
+	if config.ComputerSession != "" {
+		if err := s.browserHub.Reserve(s.agentActor(r), config.ComputerSession, task.ID); err != nil {
+			stopped, stopErr := s.agentRunner.Stop(task.ID, s.agentActor(r), "cancel", "")
+			if stopErr != nil {
+				writeAgentRunError(w, task, stopErr)
+				return
+			}
+			writeAgentRunError(w, stopped, agents.ErrRunConflict)
+			return
+		}
 	}
 	async := req.Async || req.Stream
 	createdID := task.ID

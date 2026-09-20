@@ -21,6 +21,7 @@ type SystemIdentity struct {
 	APIVersion   int      `json:"api_version"`
 	UIBuildID    string   `json:"ui_build_id"`
 	Capabilities []string `json:"capabilities"`
+	WorkspaceID  string   `json:"workspace_id,omitempty"`
 }
 
 // BuildRevision is injected when the build context excludes .git (containers).
@@ -35,6 +36,7 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	identity := SystemIdentity{Product: "offgrid", Version: s.version, APIVersion: 2, Revision: BuildRevision, Capabilities: []string{"sessions-v1", "chat-streaming-v1", "durable-agent-runs-v1", "exclusive-workspace-v1", "offline-backup-v1"}}
+	identity.WorkspaceID = s.workspaceID
 	if info, ok := debug.ReadBuildInfo(); ok && identity.Revision == "unknown" {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" {

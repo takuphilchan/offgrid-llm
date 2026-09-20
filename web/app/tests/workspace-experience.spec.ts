@@ -8,7 +8,7 @@ async function mockWorkspace(page: Page, hasChatModel: boolean) {
   });
   await page.route('**/health', route => route.fulfill({ contentType: 'application/json', body: '{"status":"healthy"}' }));
   await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', revision: 'test-revision', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'] } }));
-  await page.route('**/v1/**', route => {
+  await page.route(/\/(?:v1|api\/v2\/computer)\//, route => {
     const path = new URL(route.request().url()).pathname;
     const model = { id: 'workspace-test-model', type: 'chat', context_window: 8192 };
     const user = { role: 'user', content: 'Say hello', timestamp: now };
@@ -30,7 +30,7 @@ async function mockWorkspace(page: Page, hasChatModel: boolean) {
     else if (path === '/v1/models/download/progress') body = {};
     else if (path === '/v1/system/config') body = { version: 'test', inference_slots: 1 };
     else if (path === '/v1/rag/status') body = { enabled: false };
-    else if (path === '/v1/computer/status') body = { available: false, emergency_stop: false, active_sessions: 0 };
+    else if (path === '/api/v2/computer/status') body = { available: false, emergency_stop: false, active_sessions: 0 };
     return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   });
 }

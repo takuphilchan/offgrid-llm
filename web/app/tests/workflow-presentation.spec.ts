@@ -9,10 +9,10 @@ async function fixture(page: Page) {
   });
   await page.route('**/health', r => r.fulfill({ json: { status: 'healthy' } }));
   await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', version: 'test', api_version: 2 } }));
-  await page.route('**/v1/**', async r => {
+  await page.route(/\/(?:v1|api\/v2\/computer)\//, async r => {
     const path = new URL(r.request().url()).pathname;
-    if (state.slowSettings && ['/v1/rag/status', '/v1/computer/status'].includes(path)) await new Promise(resolve => setTimeout(resolve, 700));
-    if (state.failSettings && ['/v1/rag/status', '/v1/computer/status'].includes(path)) return r.fulfill({ status: 503, body: 'Service unavailable' });
+    if (state.slowSettings && ['/v1/rag/status', '/api/v2/computer/status'].includes(path)) await new Promise(resolve => setTimeout(resolve, 700));
+    if (state.failSettings && ['/v1/rag/status', '/api/v2/computer/status'].includes(path)) return r.fulfill({ status: 503, body: 'Service unavailable' });
     const bge = { id: 'bge-m3', name: 'BGE M3', type: 'embedding', repo: 'fixture/bge', file: 'bge.gguf', quant: 'Q4_K_M', description: 'Multilingual embedding model', parameters: '567M', size_bytes: 437778496, min_ram_gb: 2 };
     const data: Record<string, unknown> = {
       '/v1/users/me': { authenticated: false, user: null },
@@ -24,7 +24,7 @@ async function fixture(page: Page) {
       '/v1/agents/tasks': [],
       '/v1/agents/tools': { tools: [{ name: 'calculator', description: 'Calculate', enabled: true, source: 'builtin' }], enabled_count: 1 },
       '/v1/agents/mcp': { servers: [] }, '/v1/integrations': { integrations: [] },
-      '/v1/computer/status': { available: false }, '/v1/system/config': { version: 'test', inference_slots: 1 },
+      '/api/v2/computer/status': { available: false }, '/v1/system/config': { version: 'test', inference_slots: 1 },
       '/v1/sessions': { sessions: [] }
     };
     if (path === '/v1/models/download/progress') state.polls++;

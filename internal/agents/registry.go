@@ -34,6 +34,7 @@ type ToolRegistry struct {
 // Approval is deliberately scoped to one tool invocation rather than a whole
 // agent run.
 type ToolExecution struct {
+	CallID             string
 	RunID              string
 	Actor              string
 	Approved           bool

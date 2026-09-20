@@ -1,0 +1,9 @@
+{
+  "name": "@offgrid/computer-preview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": { "start": "node companion.mjs", "test": "node --test test/*.test.mjs", "browser:install": "playwright install chromium" },
+  "dependencies": { "playwright": "1.62.1" }
+}

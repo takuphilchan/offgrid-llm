@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import computerCopy from './src/i18n/computer-experience.json' with { type: 'json' };
 
 export default defineConfig({
   base: '/ui/',
-  plugins: [react()],
+  plugins: [react(), {name:'shared-computer-copy', generateBundle() {
+    this.emitFile({type:'asset',fileName:'computer-experience.json',source:JSON.stringify(computerCopy)});
+  }}],
   build: {
     outDir: '../dist',
     emptyOutDir: true,

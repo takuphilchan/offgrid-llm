@@ -297,6 +297,11 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			return nil, err
 		}
 		if len(cp.Calls) > 0 {
+			// Older checkpoints also pass the execution boundary. Never trust a
+			// previously persisted batch merely because admission now rejects it.
+			if task.Config.ComputerSession != "" && len(cp.Calls) != 1 {
+				return r.fail(task, "Computer tasks require one tool call at a time. Review this old checkpoint before starting a new task.")
+			}
 			call := cp.Calls[0]
 			args := json.RawMessage(call.Function.Arguments)
 			descriptor, ok := r.tools.Capability(call.Function.Name)
@@ -304,7 +309,7 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 				return r.fail(task, "The model requested an unavailable tool.")
 			}
 			approved := grant != nil && grant.RunID == task.ID && grant.Actor == task.Actor && grant.CallID == call.ID && grant.Tool == call.Function.Name && bytes.Equal(grant.Arguments, args) && grant.Capability == descriptor && time.Now().Before(grant.ExpiresAt)
-			execution := ToolExecution{RunID: task.ID, Actor: task.Actor, Approved: approved, ExpectedCapability: &descriptor}
+			execution := ToolExecution{RunID: task.ID, CallID: call.ID, Actor: task.Actor, Approved: approved, ExpectedCapability: &descriptor}
 			if err := r.tools.Authorize(ctx, call.Function.Name, args, execution); err != nil {
 				if !errors.Is(err, capabilities.ErrApprovalRequired) {
 					return r.fail(task, "Tool authorization denied. Review available tools and policy.")
@@ -347,7 +352,11 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			return r.fail(task, "Model runtime is unavailable.")
 		}
 		stepCtx, cancel := context.WithTimeout(ctx, task.Config.TimeoutPerStep)
-		response, err := r.callWithProgress(stepCtx, task, cp.Messages, r.tools.GetTools())
+		tools := r.tools.GetTools()
+		if scoped, ok := r.tools.(interface{ ToolsForTask(*Task) []api.Tool }); ok {
+			tools = scoped.ToolsForTask(task)
+		}
+		response, err := r.callWithProgress(stepCtx, task, cp.Messages, tools)
 		cancel()
 		if err != nil {
 			return nil, err
@@ -365,6 +374,14 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 		}
 		message := response.Choices[0].Message
 		message.Role = "assistant"
+		if task.Config.ComputerSession != "" && len(message.ToolCalls) > 0 {
+			if len(message.ToolCalls) != 1 {
+				return r.fail(task, "Computer tasks require exactly one tool call per turn. No calls from this response were executed.")
+			}
+			if len(task.Steps) == 0 && message.ToolCalls[0].Function.Name != "browser_observe" {
+				return r.fail(task, "Computer tasks must inspect the page before acting. No action was executed.")
+			}
+		}
 		if len(message.ToolCalls) > 16 {
 			return r.fail(task, "Model requested too many tools in one turn.")
 		}
@@ -384,6 +401,11 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 		if len(cp.Calls) == 0 {
 			if message.StringContent() == "" {
 				return r.fail(task, "Model returned an empty answer.")
+			}
+			if validator, ok := r.tools.(interface{ ValidateCompletion(*Task) error }); ok {
+				if err := validator.ValidateCompletion(task); err != nil {
+					return r.fail(task, err.Error())
+				}
 			}
 			task.Result = message.StringContent()
 			finishTask(task, TaskCompleted, "")

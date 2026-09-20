@@ -296,7 +296,7 @@ func redactCapture(content []byte, mediaType string, redactions []Rect) ([]byte,
 func randomID() string {
 	value := make([]byte, 16)
 	if _, err := rand.Read(value); err != nil {
-		return fmt.Sprintf("computer-%d", time.Now().UnixNano())
+		panic("OS random source unavailable")
 	}
 	return hex.EncodeToString(value)
 }

@@ -108,14 +108,16 @@ type Server struct {
 	runLog              *runs.Log                // Durable event stream for agent runs
 	artifactStore       *artifacts.Store         // Content-addressed agent outputs and captures
 	computerController  *computer.Controller     // Governed computer-use control plane
-	integrationRegistry *integrations.Registry   // External agent adapters (Hermes, OpenClaw, ...)
-	sandbox             agents.Sandbox           // Long-lived agent sandbox owned by this server
+	browserHub          *computer.BrowserHub
+	integrationRegistry *integrations.Registry // External agent adapters (Hermes, OpenClaw, ...)
+	sandbox             agents.Sandbox         // Long-lived agent sandbox owned by this server
 	closeOnce           sync.Once
 	closeErr            error
 	runtimeCtx          context.Context
 	runtimeCancel       context.CancelFunc
 	startupErr          error
 	workspaceOwner      *storage.Ownership
+	workspaceID         string
 	startupWorkers      sync.WaitGroup
 	// Runtime tracking
 	requestCount       int64
@@ -173,6 +175,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 	}
 
 	// Initialize components
+	workspaceID, err := owner.WorkspaceID()
+	if err != nil {
+		owner.Close()
+		return &Server{config: cfg, startupErr: fmt.Errorf("workspace identity: %w", err)}
+	}
 	registry := models.NewRegistry(cfg.ModelsDir)
 
 	// Choose engine based on configuration
@@ -516,6 +523,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 		runtimeCtx:           runtimeCtx,
 		runtimeCancel:        runtimeCancel,
 		workspaceOwner:       owner,
+		workspaceID:          workspaceID,
 	}
 	sessionHandlers.requireAuth = cfg.RequireAuth
 	if err := server.loadDownloads(); err != nil {
@@ -523,7 +531,8 @@ func NewWithConfig(cfg *config.Config) *Server {
 	}
 	sessionHandlers.streamer = server.streamSessionChat
 	sessionHandlers.runtimeContext = server.runtimeCtx
-	server.agentRunner = agents.NewRunner(agentManager, toolRegistry, server.callAgentModel)
+	server.browserHub = computer.NewBrowserHub()
+	server.agentRunner = agents.NewRunner(agentManager, &browserRunTools{RunTools: toolRegistry, server: server}, server.callAgentModel)
 	server.agentRunner.StreamCaller = server.streamAgentModel
 	server.agentRunner.Observer = func(task *agents.Task) {
 		server.publishRunEvent(context.Background(), task.ID, runs.RunStateChanged, map[string]any{"status": task.Status, "prompt": task.Prompt, "model": task.Model, "actor": task.Actor, "pending_approval": task.PendingApproval})
@@ -1032,10 +1041,16 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/runs/", adminOnly(s.handleRuns))
 	mux.HandleFunc("/v1/artifacts/", adminOnly(s.handleArtifacts))
 	mux.HandleFunc("/v1/computer/status", adminOnly(s.handleComputerStatus))
-	mux.HandleFunc("/v1/computer/session", adminOnly(s.handleComputerSession))
-	mux.HandleFunc("/v1/computer/action", adminOnly(s.handleComputerAction))
-	mux.HandleFunc("/v1/computer/stop", adminOnly(s.handleComputerStop))
-	mux.HandleFunc("/v1/computer/reset", adminOnly(s.handleComputerReset))
+	mux.HandleFunc("/v1/computer/session", adminOnly(s.handleComputerUpgradeRequired))
+	mux.HandleFunc("/v1/computer/action", adminOnly(s.handleComputerUpgradeRequired))
+	mux.HandleFunc("/v1/computer/stop", adminOnly(s.handleComputerUpgradeRequired))
+	mux.HandleFunc("/v1/computer/reset", adminOnly(s.handleComputerUpgradeRequired))
+	mux.HandleFunc("/api/v2/computer/capabilities", adminOnly(s.handleComputerCapabilities))
+	mux.HandleFunc("/api/v2/computer/status", adminOnly(s.handleComputerStatus))
+	mux.HandleFunc("/api/v2/computer/stop", adminOnly(s.handleComputerStop))
+	mux.HandleFunc("/api/v2/computer/pairing", adminOnly(s.handleBrowserPairing))
+	mux.HandleFunc("/api/v2/computer/sessions", adminOnly(s.handleBrowserSessions))
+	mux.HandleFunc("/api/v2/computer/model-check", adminOnly(s.handleComputerModelCheck))
 	mux.HandleFunc("/v1/agents/tools", adminOnly(s.handleAgentTools))
 	mux.HandleFunc("/v1/capabilities", adminOnly(s.handleCapabilities))
 	mux.HandleFunc("/v1/agents/mcp", adminOnly(s.handleAgentMCP))
@@ -1075,6 +1090,7 @@ func (s *Server) Start() error {
 	// Build handler chain: logging -> auth -> routes
 	var handler http.Handler = mux
 	handler = s.authMiddleware.Wrap(handler) // Auth middleware
+	handler = s.browserTransport(handler)    // Narrow token-authenticated companion channel, never agent administration.
 	handler = requestBodyLimitMiddleware(handler)
 	handler = s.loggingMiddleware(handler) // Logging middleware (outermost)
 
@@ -1190,6 +1206,9 @@ func (s *Server) Start() error {
 // without starting its HTTP listener.
 func (s *Server) Close() error {
 	s.closeOnce.Do(func() {
+		if s.browserHub != nil {
+			s.browserHub.Stop("")
+		}
 		if s.runtimeCancel != nil {
 			s.runtimeCancel()
 		}
