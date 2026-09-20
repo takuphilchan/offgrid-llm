@@ -105,6 +105,22 @@ test('agent history browses older tasks, reuses safely, deletes selected output 
   await expect(history.locator('.task-history article')).toHaveCount(2);
 });
 
+test('late initial history response cannot replace a newer conversation or draft', async ({page}) => {
+ const state=await fixture(page);let requests=0,returned=false;let release!:()=>void;
+ const delayed=new Promise<void>(resolve=>{release=resolve;});
+ await page.route('**/v1/sessions',async r=>{
+  const first=++requests===1;if(first)await delayed;
+  await r.fulfill({json:{sessions:first?[{...state.chats()[0],name:'Stale response'}]:state.chats()}});
+  if(first)returned=true;
+ });
+ await page.goto('/ui/#/chat');
+ await page.locator('.composer textarea').fill('Keep my current draft');
+ release();await expect.poll(()=>returned).toBe(true);
+ await expect(page.locator('.composer textarea')).toHaveValue('Keep my current draft');
+ await expect(page.locator('.history-row.active')).toContainText('Keep this');
+ await expect(page.locator('.history-row',{hasText:'Stale response'})).toHaveCount(0);
+});
+
 test('mobile history confirmation fits and search does not erase the composer draft', async ({page}, testInfo) => {
   await page.setViewportSize({width:390,height:844});
   await fixture(page);

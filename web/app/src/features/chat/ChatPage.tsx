@@ -78,6 +78,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const activeTurn = useRef<{ name: string; id: string } | null>(null);
   const mounted = useRef(true);
   const selectionRevision = useRef(0);
+  const historyRevision = useRef(0);
   const historyPanel = useRef<HTMLElement>(null);
   useFocusScope(historyPanel, historyOpen && !deleteItems, () => setHistoryOpen(false));
   const permissions = useWorkspace();
@@ -133,18 +134,22 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const loadSessions = async (preferred = activeName) => {
+    const request = ++historyRevision.current;
+    const selection = selectionRevision.current;
     setErrorAction('history');
     setLoading(true);
     setError('');
     try {
       const next = await api.sessions();
+      if (!mounted.current || request !== historyRevision.current) return;
       setSessions(next);
-      activate(!preferred && readDraft(draftKey(scope, 'chat')) ? undefined : next.find(item => item.name === preferred) ?? next[0]);
+      // A late startup/retry must never replace a newer selection or its draft.
+      if (selection === selectionRevision.current) activate(!preferred && readDraft(draftKey(scope, 'chat')) ? undefined : next.find(item => item.name === preferred) ?? next[0]);
       if (onboardingPending && next.some(item => item.messages.some(message => message.role === 'assistant' && message.content.trim()))) onFirstResponse();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : text.common.error);
+      if (mounted.current && request === historyRevision.current) setError(reason instanceof Error ? reason.message : text.common.error);
     } finally {
-      setLoading(false);
+      if (mounted.current && request === historyRevision.current) setLoading(false);
     }
   };
 
