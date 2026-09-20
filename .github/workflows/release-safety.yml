@@ -42,10 +42,12 @@ jobs:
           if [[ "$EVENT" == workflow_run ]]; then
             candidates="$(gh api "repos/$REPO/actions/runs/$CI_RUN_ID" --jq '[.]')"
           else
-            candidates="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=main&per_page=20" --jq '.workflow_runs | group_by(.head_sha) | map(max_by(.run_number, .run_attempt))')"
+            candidates="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?per_page=20" --jq '.workflow_runs | group_by(.head_sha) | map(max_by(.run_number, .run_attempt))')"
           fi
           while IFS=$'\t' read -r ci_id sha; do
             [[ -n "$ci_id" ]] || continue
+            failed_jobs="$(gh api "repos/$REPO/actions/runs/$ci_id/jobs?per_page=100" --jq '[.jobs[] | select(.conclusion == "failure") | .id]')"
+            [[ "$failed_jobs" != '[]' ]] || continue
             releases="$(gh api "repos/$REPO/actions/workflows/release-unified.yml/runs?head_sha=$sha&per_page=100")"
             while read -r release_id; do
               [[ -n "$release_id" ]] || continue
@@ -55,11 +57,13 @@ jobs:
             # Failed CI already has publicly accessible logs for signed-in users.
             # Surface bounded error lines as annotations for unauthenticated
             # diagnostics too; never emit tokens or download private workspaces.
-            detail="$(gh run view "$ci_id" --repo "$REPO" --log-failed | grep -Ei 'Error:|AssertionError|TimeoutError|pack_invalid|timed out|FAIL|not found' | tail -n 15 | cut -c 1-700 || true)"
+            detail="$(while read -r job_id; do
+              gh api "repos/$REPO/actions/jobs/$job_id/logs" | grep -Ei 'Error:|AssertionError|TimeoutError|pack_invalid|timed out|FAIL|not found' | tail -n 15 | cut -c 1-700 || true
+            done < <(jq -r '.[]' <<< "$failed_jobs"))"
             if [[ -n "$detail" ]]; then
               detail="${detail//'%'/'%25'}"
               detail="${detail//$'\r'/'%0D'}"
               detail="${detail//$'\n'/'%0A'}"
               echo "::warning title=Failed CI $ci_id::$detail"
             fi
-          done < <(jq -r '.[] | select((.head_branch == "main" or (.head_branch | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))) and .status == "completed" and .conclusion == "failure") | [.id,.head_sha] | @tsv' <<< "$candidates")
+          done < <(jq -r '.[] | select((.head_branch == "main" or (.head_branch | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))) and (.status == "in_progress" or .conclusion == "failure")) | [.id,.head_sha] | @tsv' <<< "$candidates")
