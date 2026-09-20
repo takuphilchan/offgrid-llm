@@ -68,8 +68,11 @@ try{
  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.waitForURL(/\/ui\//,{timeout:15000});
  console.log('Packaged workspace connected');
  await page.evaluate(()=>{localStorage.setItem('offgrid.locale','en');localStorage.setItem('offgrid.onboarding.complete','true');});
- await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/agents`);
  await page.reload();
+ // Navigate through the hydrated application. A same-document goto/reload
+ // during initial React mounting can race its initial hash selection.
+ await page.getByRole('navigation',{name:'Primary'}).getByRole('link',{name:'Agents',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Agents',exact:true})).toBeVisible();
  // Test-only native-dialog interception validates the scope before granting it.
  await app.evaluate(({dialog})=>{
    dialog.showMessageBox=async(...args)=>{
@@ -87,14 +90,17 @@ try{
  await page.getByRole('combobox',{name:'Select a paired browser'}).waitFor();
  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:join(directory,'desktop-browser-ready.png'),fullPage:true});
  await page.locator('.computer-setup').getByRole('button',{name:'Stop browser',exact:true}).click();
- await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled();
+ // The owned runtime allows 35 seconds of graceful shutdown plus 5 seconds
+ // for its kill acknowledgement. A default 5-second matcher is not that
+ // contract; still require confirmed Stop, never accept an error as success.
+ await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled({timeout:45000});
  assert.equal((await page.evaluate(()=>window.electron.getComputerStatus())).state,'stopped');
  assert.deepEqual(replies,['read','write','select','check','save','verify','verify-options']);
  // Starting a second session rechecks the installed manifest after actual use.
  await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
  await page.getByRole('combobox',{name:'Select a paired browser'}).waitFor();
  await page.locator('.computer-setup').getByRole('button',{name:'Stop browser',exact:true}).click();
- await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled({timeout:45000});
  assert.equal((await page.evaluate(()=>window.electron.getComputerStatus())).state,'stopped');
  console.log(`PASS: packaged UI → native consent → private IPC → bundled Chromium → verified result → local Stop. Evidence: ${directory}`);
 }catch(error){
