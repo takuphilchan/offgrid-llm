@@ -223,6 +223,7 @@ jobs:
         # Native wizard capture uses Windows PowerShell's System.Drawing bridge.
         shell: powershell
         run: |
+          ./dev/scripts/test-windows-installer-probe.ps1
           $version = (Get-Content desktop/package.json | ConvertFrom-Json).version
           ./dev/scripts/test-windows-installer.ps1 -InstallerPath "build/windows-installer-smoke/OffGrid Desktop Install Test-Setup-$version.exe"
 

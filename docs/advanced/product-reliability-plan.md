@@ -1491,3 +1491,27 @@ The installed desktop and its existing protocol-handler registration were not
 replaced; use that matching unpacked build for this preview. No WSL restart or
 release publication was performed. macOS/Linux packaged results, native control,
 vision, signed optional packs and the full model/task qualification remain pending.
+
+### Release-gate repair checkpoint (2026-09-21)
+
+The release now requires successful CI for its exact immutable source revision.
+An explicitly authorized replacement of an unpublished draft discards artifacts
+from a different source and forces container rebuilds; published releases cannot
+be replaced through that path. Release-gate and draft-retry fixtures passed.
+
+Packaged browser tests use hydrated navigation and the runtime's bounded Stop
+deadline, while still requiring confirmed shutdown and independently verified
+form results. Three consecutive packaged Windows browser runs passed locally.
+The installer driver now excludes hidden maintenance windows from visible-UI
+responsiveness checks; its process and Finish deadlines remain enforced. A real
+Windows fixture verifies that a visible frozen window is still rejected.
+
+The final isolated installer run passed clean installation, installed startup,
+repair, Finish with/without launch, silent running-app refusal, interactive
+running-app consent, uninstall and workspace-fixture preservation. Finish closed
+in 70 ms and 69 ms respectively. Evidence:
+`C:\Users\phil\AppData\Local\Temp\offgrid-install-6b21ca173f1a494792c0e4b550824b07`.
+Earlier local attempts exposed a startup timeout and a missed Finish transition;
+these are not counted as passes. Fresh hosted CI is still required before
+publication. This evidence does not qualify signing, native computer control,
+vision or general model-driven browser task reliability.

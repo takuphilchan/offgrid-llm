@@ -50,7 +50,10 @@ public static class OffGridWizard {
 
 function Assert-WizardResponsive([IntPtr]$Window, [hashtable]$Failures, [Diagnostics.Stopwatch]$Clock, [string]$Message) {
     $key = $Window.ToInt64().ToString()
-    if (-not [OffGridWizard]::IsWindow($Window) -or [OffGridWizard]::Responsive($Window, 750)) {
+    # Silent replacement/uninstall helpers can own hidden windows without a
+    # wizard message loop. They remain subject to the overall process deadline,
+    # not the visible UI responsiveness deadline.
+    if (-not [OffGridWizard]::IsWindow($Window) -or -not [OffGridWizard]::IsWindowVisible($Window) -or [OffGridWizard]::Responsive($Window, 750)) {
         [void]$Failures.Remove($key)
         return
     }
@@ -60,7 +63,9 @@ function Assert-WizardResponsive([IntPtr]$Window, [hashtable]$Failures, [Diagnos
     }
     # A busy CI runner can miss a short WM_NULL deadline while NSIS is
     # extracting files. Only a sustained failure is a genuine frozen wizard.
-    if ($Clock.ElapsedMilliseconds - [long]$Failures[$key] -ge 5000) { throw $Message }
+    if ($Clock.ElapsedMilliseconds - [long]$Failures[$key] -ge 5000) {
+        throw "$Message Window=$key; title=$([OffGridWizard]::Text($Window)); class=$([OffGridWizard]::Class($Window)); visible=$([OffGridWizard]::IsWindowVisible($Window))"
+    }
 }
 
 function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool]$Launch, [bool]$ExpectRunningPrompt) {
@@ -85,6 +90,7 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
         if ($process.HasExited) { break }
         foreach ($window in [OffGridWizard]::Windows('OffGrid Desktop Install Test')) {
             Assert-WizardResponsive $window $unresponsive $clock 'Installer UI stopped responding for at least 5 seconds.'
+            if (-not [OffGridWizard]::IsWindowVisible($window)) { continue }
             $allChildren = [OffGridWizard]::Children($window)
             $detailControls = @($allChildren | Where-Object { [OffGridWizard]::Text($_) -match 'detail' -or [OffGridWizard]::Class($_) -match 'List' })
             if ($detailControls.Count -gt 0) { $detailsObserved = ($detailControls | ForEach-Object { "$( [OffGridWizard]::Class($_) ):$( [OffGridWizard]::Text($_) ):visible=$( [OffGridWizard]::IsWindowVisible($_) ):enabled=$( [OffGridWizard]::IsWindowEnabled($_) )" }) -join '; ' }
@@ -132,13 +138,14 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                 throw "Unexpected wizard page ($label): $text"
             }
             $clicked[$key] = $true
+            Write-Host "Installer control: $label (window=$window, elapsed=$($clock.ElapsedMilliseconds)ms)"
             [OffGridWizard]::Click($button)
         }
         Start-Sleep -Milliseconds 50
     }
     if (-not $process.HasExited) { throw "Installer timed out (PID $($process.Id)); retained for diagnosis." }
     if ($process.ExitCode -ne 0) { throw "Wizard exited with $($process.ExitCode)." }
-    if ($finishAt -lt 0) { throw 'Wizard never reached Finish.' }
+    if ($finishAt -lt 0) { throw "Wizard never reached Finish (elapsed=$($clock.ElapsedMilliseconds)ms, controls=$($clicked.Keys -join ','), details=$detailsObserved)." }
     if ($finishClosedMs -lt 0) { $finishClosedMs = $clock.ElapsedMilliseconds - $finishAt }
     if ($finishClosedMs -gt 2000) { throw "Finish blocked for ${finishClosedMs}ms." }
     if ($consented -ne $ExpectRunningPrompt) { throw 'Running-app consent was not exercised as expected.' }
