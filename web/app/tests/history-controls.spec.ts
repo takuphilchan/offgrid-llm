@@ -105,20 +105,29 @@ test('agent history browses older tasks, reuses safely, deletes selected output 
   await expect(history.locator('.task-history article')).toHaveCount(2);
 });
 
-test('late initial history response cannot replace a newer conversation or draft', async ({page}) => {
- const state=await fixture(page);let requests=0,returned=false;let release!:()=>void;
+test('late history refresh cannot replace a newer conversation or draft', async ({page}) => {
+ const state=await fixture(page);let requested=false,returned=false;let release!:()=>void;
  const delayed=new Promise<void>(resolve=>{release=resolve;});
- await page.route('**/v1/sessions',async r=>{
-  const first=++requests===1;if(first)await delayed;
-  await r.fulfill({json:{sessions:first?[{...state.chats()[0],name:'Stale response'}]:state.chats()}});
-  if(first)returned=true;
- });
  await page.goto('/ui/#/chat');
+ await expect(page.locator('.composer textarea')).toBeEnabled();
+ await page.getByRole('button',{name:'New chat',exact:true}).click();
  await page.locator('.composer textarea').fill('Keep my current draft');
- release();await expect.poll(()=>returned).toBe(true);
+ await page.locator('.history-row',{hasText:'Delete second'}).locator('.history-open').click();
+ await expect(page.locator('.composer textarea')).toBeEnabled();
+ // Trigger the second request explicitly. StrictMode mounts twice only in the
+ // development server; CI serves the production build with one initial request.
+ await page.route('**/v1/sessions',async r=>{
+  requested=true;await delayed;
+  await r.fulfill({json:{sessions:state.chats()}});returned=true;
+ });
+ await page.locator('#conversation-history').getByRole('button',{name:'Refresh',exact:true}).click();
+ await expect.poll(()=>requested).toBe(true);
+ await page.getByRole('button',{name:'New chat',exact:true}).click();
  await expect(page.locator('.composer textarea')).toHaveValue('Keep my current draft');
- await expect(page.locator('.history-row.active')).toContainText('Keep this');
- await expect(page.locator('.history-row',{hasText:'Stale response'})).toHaveCount(0);
+ release();await expect.poll(()=>returned).toBe(true);
+ await expect(page.locator('.composer textarea')).toBeEnabled();
+ await expect(page.locator('.composer textarea')).toHaveValue('Keep my current draft');
+ await expect(page.locator('.history-row.active')).toHaveCount(0);
 });
 
 test('mobile history confirmation fits and search does not erase the composer draft', async ({page}, testInfo) => {
