@@ -58,7 +58,7 @@ jobs:
             # Surface bounded error lines as annotations for unauthenticated
             # diagnostics too; never emit tokens or download private workspaces.
             detail="$(while read -r job_id; do
-              gh api "repos/$REPO/actions/jobs/$job_id/logs" | grep -Ei 'Error:|AssertionError|TimeoutError|pack_invalid|timed out|FAIL|not found' | tail -n 15 | cut -c 1-700 || true
+              gh run view "$ci_id" --repo "$REPO" --job "$job_id" --log 2>/dev/null | tail -n 50 | cut -c 1-800 || true
             done < <(jq -r '.[]' <<< "$failed_jobs"))"
             if [[ -n "$detail" ]]; then
               detail="${detail//'%'/'%25'}"
