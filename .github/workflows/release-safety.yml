@@ -1,0 +1,54 @@
+name: Release safety
+
+on:
+  workflow_run:
+    workflows: ['Continuous integration']
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-safety.yml']
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  stop-failed-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Do not check out or execute code/artifacts from the triggering run.
+      - name: Stop releases whose exact source failed CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT" == workflow_run ]]; then
+            candidates="$(gh api "repos/$REPO/actions/runs/$CI_RUN_ID" --jq '[.]')"
+          else
+            candidates="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=main&per_page=20" --jq '.workflow_runs | group_by(.head_sha) | map(max_by(.run_number, .run_attempt))')"
+          fi
+          while IFS=$'\t' read -r ci_id sha; do
+            [[ -n "$ci_id" ]] || continue
+            releases="$(gh api "repos/$REPO/actions/workflows/release-unified.yml/runs?head_sha=$sha&per_page=100")"
+            while read -r release_id; do
+              [[ -n "$release_id" ]] || continue
+              gh api --method POST "repos/$REPO/actions/runs/$release_id/cancel"
+              echo "Stopped release run $release_id: CI $ci_id failed for $sha"
+            done < <(jq -r '.workflow_runs[] | select(.status != "completed") | .id' <<< "$releases")
+            # Failed CI already has publicly accessible logs for signed-in users.
+            # Surface bounded error lines as annotations for unauthenticated
+            # diagnostics too; never emit tokens or download private workspaces.
+            detail="$(gh run view "$ci_id" --repo "$REPO" --log-failed | grep -Ei 'Error:|AssertionError|TimeoutError|pack_invalid|timed out|FAIL|not found' | tail -n 15 | cut -c 1-700 || true)"
+            if [[ -n "$detail" ]]; then
+              detail="${detail//'%'/'%25'}"
+              detail="${detail//$'\r'/'%0D'}"
+              detail="${detail//$'\n'/'%0A'}"
+              echo "::warning title=Failed CI $ci_id::$detail"
+            fi
+          done < <(jq -r '.[] | select(.head_branch == "main" and .status == "completed" and .conclusion == "failure") | [.id,.head_sha] | @tsv' <<< "$candidates")
