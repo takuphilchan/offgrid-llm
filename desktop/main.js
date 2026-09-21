@@ -67,10 +67,10 @@ const computer = new ComputerRuntime({
       method:'POST',credentials:'include',redirect:'error',headers:{'Content-Type':'application/json',Origin:service},body:'{}',signal:AbortSignal.timeout(10000)});
     if(!response.ok) throw Error('pairing_failed');return response.json();
   },
-  confirm: async (origin, service) => {
+  confirm: async (origin, service, networkMode) => {
     const text=computerText();
     const result=await dialog.showMessageBox(mainWindow,{type:'question',title:text.consentTitle,message:text.consentTitle,
-      detail:`${origin}\n${service}\n\n${text.consentBody}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
+      detail:`${origin}\n${service}\n\n${text.consentBody}${networkMode==='trusted-vpn'?'\n\n'+text.networkWarning:''}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
     return result.response===1;
   }
 });

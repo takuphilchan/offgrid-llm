@@ -16,7 +16,7 @@ module.exports=async function prepareComputer(context) {
   const target=path.join(root,`${{win32:'win',darwin:'mac',linux:'linux'}[platform]}-${arch}`);
   if (!target.startsWith(root+path.sep) || target===root) throw Error('Invalid build target');
   await fs.mkdir(target,{recursive:true});
-  for (const file of ['managed.cjs','session.mjs','browser.mjs','demo.mjs','pack.cjs','package.json']) await fs.copyFile(path.join(source,file),path.join(target,file));
+  for (const file of ['managed.cjs','session.mjs','journal.mjs','network.mjs','browser.mjs','demo.mjs','pack.cjs','package.json']) await fs.copyFile(path.join(source,file),path.join(target,file));
   for (const module of ['playwright','playwright-core']) await fs.cp(path.join(source,'node_modules',module),path.join(target,'node_modules',module),{recursive:true});
   await new Promise((resolve,reject)=>{
     const env={...process.env,PLAYWRIGHT_BROWSERS_PATH:path.join(target,'browsers')};

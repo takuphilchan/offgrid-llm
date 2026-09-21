@@ -2,9 +2,9 @@
 // No renderer receives the session credential or arbitrary execution APIs.
 import { mkdir, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
+import { DispatchJournal } from './journal.mjs';
 import { BrowserDriver } from './browser.mjs';
+import { publicPage } from './network.mjs';
 import { startDemo, DEMO_ORIGIN } from './demo.mjs';
 
 export function localService(value) {
@@ -14,9 +14,7 @@ export function localService(value) {
 }
 export function browserOrigin(value) {
   if (value === 'demo' || value === DEMO_ORIGIN) return DEMO_ORIGIN;
-  const url = new URL(value);
-  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw Error('target_invalid');
-  return url.origin;
+  return publicPage(value).href;
 }
 
 export class CompanionSession {
@@ -34,24 +32,26 @@ export class CompanionSession {
     return response.json();
   }
   companion(path, body = {}) { return this.request(`/api/v2/computer/companion/${path}`, body); }
-  async start({origin, code, workspace}) {
+  async start({origin, code, workspace, networkMode = 'direct'}) {
     if (this.state !== 'idle' || this.stopping || !/^[a-f0-9]{64}$/.test(code)) throw Error('invalid_session');
     try {
       this.publish('starting');
       const identity = await this.request('/api/v2/system');
       if (identity.product !== 'offgrid' || identity.api_version !== 2 || (workspace && identity.workspace_id !== workspace)) throw Error('workspace_changed');
       origin = browserOrigin(origin);
+      if (!['direct','trusted-vpn'].includes(networkMode) || (origin === DEMO_ORIGIN && networkMode !== 'direct')) throw Error('network_mode_invalid');
       if (origin === DEMO_ORIGIN && !this.demo) this.demo = await startDemo();
       if (this.stopping) throw Error('stopped');
-      if (!this.driver) this.driver = await this.openBrowser(this.demo?.origin ?? origin, {testLoopback: !!this.demo});
+      if (!this.driver) this.driver = await this.openBrowser(this.demo?.origin ?? origin, {testLoopback: !!this.demo, networkMode});
       if (this.stopping) throw Error('stopped');
       this.driver.page?.once('close', () => { void this.stop(); });
       await mkdir(this.directory, {recursive:true, mode:0o700});
-      this.db = new DatabaseSync(join(this.directory, 'dispatch.sqlite'));
+      this.journal = new DispatchJournal(join(this.directory, 'dispatch.sqlite'));
       await chmod(join(this.directory, 'dispatch.sqlite'), 0o600);
-      this.db.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS dispatch (id TEXT PRIMARY KEY, hash TEXT NOT NULL, status TEXT NOT NULL)');
-      const paired = await this.companion('pair', {code, origin, protocol_version:1});
+      const paired = await this.companion('pair', {code, origin:origin === DEMO_ORIGIN ? origin : new URL(origin).origin, protocol_version:1});
       this.token = paired.token;
+      this.binding = JSON.stringify([this.service.origin, identity.workspace_id ?? '', paired.session.id]);
+      this.journal.discardPreviousSessionResults(this.binding);
       if (this.stopping) throw Error('stopped');
       this.publish('ready');
       this.running = this.loop();
@@ -67,9 +67,12 @@ export class CompanionSession {
         const {action} = await this.companion('poll');
         if (this.stopping) break;
         if (!action) { await new Promise(resolve => setTimeout(resolve, 300)); continue; }
-        if (this.db.prepare('SELECT id FROM dispatch WHERE id=?').get(action.id)) throw Error('duplicate_action');
-        const hash = createHash('sha256').update(JSON.stringify([action.kind,action.arguments])).digest('hex');
-        this.db.prepare('INSERT INTO dispatch VALUES(?,?,?)').run(action.id,hash,'dispatched');
+        const journal = this.journal;
+        const dispatch = journal.prepare(action, this.binding);
+        if (!dispatch.execute) {
+          await this.companion('reply', dispatch.reply);
+          continue;
+        }
         let result;
         try { result = await this.driver.execute(action.kind,action.arguments); }
         catch {
@@ -77,23 +80,27 @@ export class CompanionSession {
           throw Error('action_uncertain');
         }
         if (this.stopping) break;
-        this.db.prepare('UPDATE dispatch SET status=? WHERE id=?').run('completed',action.id);
-        await this.companion('reply',{id:action.id,result:JSON.stringify(result)});
+        const reply = {id:action.id,result:JSON.stringify(result)};
+        journal.complete(action.id, reply);
+        await this.companion('reply', reply);
       }
     } catch (error) {
-      if (!this.stopping) this.publish('error', ['duplicate_action','action_uncertain'].includes(error.message) ? error.message : 'connection_lost');
+      if (!this.stopping) this.publish('error', ['action_conflict','action_uncertain'].includes(error.message) ? error.message : 'connection_lost');
     } finally { await this.stop(); }
   }
   async stop() {
     this.stopping = true; this.abort.abort();
-    const driver = this.driver, demo = this.demo, db = this.db;
-    this.driver = null; this.demo = null; this.db = null; this.token = '';
+    const driver = this.driver, demo = this.demo, journal = this.journal, binding = this.binding;
+    this.driver = null; this.demo = null; this.journal = null; this.token = '';
     const previous = this.closing;
     this.closing = (async () => {
       await previous;
       await driver?.close().catch(() => {});
       await demo?.close().catch(() => {});
-      db?.close();
+      if (journal) {
+        try { if (binding) journal.forgetResults(binding); }
+        finally { journal.close(); }
+      }
       if (this.state !== 'error') this.publish('stopped');
     })();
     return this.closing;

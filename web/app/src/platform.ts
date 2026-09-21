@@ -3,7 +3,7 @@ export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offli
 
 export type DesktopBridge = {
   getComputerStatus?: () => Promise<{state:string; code?:string; installed:boolean; target?:{id:string;origin:string}}>;
-  startComputerBrowser?: (request:{origin:string;workspace:string}) => Promise<{state:string;code?:string;target?:{id:string;origin:string}}>;
+  startComputerBrowser?: (request:{origin:string;workspace:string;networkMode?:'direct'|'trusted-vpn'}) => Promise<{state:string;code?:string;target?:{id:string;origin:string}}>;
   stopComputerBrowser?: () => Promise<{state:string;code?:string}>;
   isDesktop: true;
   presentation?: { locale: string; theme: 'system' | 'dark' | 'light' };

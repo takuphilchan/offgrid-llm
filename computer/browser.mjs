@@ -1,7 +1,8 @@
-import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { randomUUID, createHash } from 'node:crypto';
 import { chromium } from 'playwright';
+import {publicPage, pinnedDestination, startEgress} from './network.mjs';
+export {publicIPv4} from './network.mjs';
 
 // Validate before touching the page. The service repeats this check before
 // approval; the companion must not trust the model or transport to do it.
@@ -26,15 +27,6 @@ export function validateBrowserAction(kind, args) {
   }
 }
 
-export function publicIPv4(address) {
-  const p = address.split('.').map(Number);
-  return isIP(address) === 4 && ![0, 10, 127].includes(p[0]) && p[0] < 224 &&
-    !(p[0] === 169 && p[1] === 254) && !(p[0] === 172 && p[1] >= 16 && p[1] <= 31) &&
-    !(p[0] === 192 && (p[1] === 168 || p[1] === 0 || p[1] === 2)) &&
-    !(p[0] === 100 && p[1] >= 64 && p[1] <= 127) && !(p[0] === 198 && [18,19,51].includes(p[1])) &&
-    !(p[0] === 203 && p[1] === 0);
-}
-
 // Runs in the isolated browser. Use the same accessible-name checks when
 // observing and immediately before input; labels are not security-neutral.
 function describeControl(el) {
@@ -47,23 +39,28 @@ function describeControl(el) {
 }
 
 export class BrowserDriver {
-  static async open(origin, { headless = false, testLoopback = false } = {}) {
+  static async open(origin, { headless = false, testLoopback = false, networkMode = 'direct' } = {}) {
     const url = new URL(origin);
-    if (url.username || url.password || url.search || url.hash || url.pathname !== '/' ||
+    if (url.username || url.password ||
        (!testLoopback && (url.protocol !== 'https:' || isIP(url.hostname)))) throw Error('Select a public HTTPS origin.');
     if (testLoopback && (url.hostname !== '127.0.0.1' || url.protocol !== 'http:')) throw Error('Test fixture must be IPv4 loopback.');
-    const addresses = testLoopback ? [{ address: '127.0.0.1' }] : await lookup(url.hostname, { all: true, family: 4 });
-    if (!addresses.length || (!testLoopback && addresses.some(a => !publicIPv4(a.address)))) throw Error(`Browser network preflight failed: ${url.hostname} resolves to a private or reserved address. VPN fake DNS can cause this. Keep required VPN access enabled; choose "demo" to test locally. No browser was paired and no code is needed. Arbitrary private-network access remains blocked.`);
-    // Pin resolution for the entire session to prevent DNS rebinding into local services.
-    const browser = await chromium.launch({ headless, args: [
-      `--host-resolver-rules=MAP ${url.hostname} ${addresses[0].address},EXCLUDE localhost`,
-      '--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'
-    ] });
+    if (!['direct','trusted-vpn'].includes(networkMode) || (testLoopback && networkMode !== 'direct')) throw Error('network_mode_invalid');
+    if (!testLoopback) publicPage(origin);
+    const egress = testLoopback ? null : await startEgress(await pinnedDestination(origin,networkMode));
+    let browser;
     try {
+      browser = await chromium.launch({ headless, ...(egress ? {proxy:{server:egress.server,bypass:'<-loopback>'}} : {}), args: [
+        '--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'
+      ] });
       const context = await browser.newContext({ acceptDownloads: false, serviceWorkers: 'block' });
+      const blockedOrigins = new Set();
       await context.route('**/*', route => {
         let allowed = false;
-        try { allowed = new URL(route.request().url()).origin === url.origin; } catch { /* deny */ }
+        try {
+          const destination = new URL(route.request().url());
+          allowed = destination.origin === url.origin && !destination.username && !destination.password;
+          if (!allowed && blockedOrigins.size < 20) blockedOrigins.add(destination.origin);
+        } catch { /* deny */ }
         return allowed ? route.continue() : route.abort('blockedbyclient');
       });
       await context.routeWebSocket('**/*', socket => socket.close());
@@ -78,12 +75,15 @@ export class BrowserDriver {
       page.on('download', download => void download.cancel());
       context.on('page', popup => { if (popup !== page) void popup.close(); });
       const driver = new BrowserDriver(browser, page, url.origin);
-      await page.goto(url.origin, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      driver.egress = egress;
+      driver.blockedOrigins = blockedOrigins;
+      try { await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 20000 }); }
+      catch { throw Error('network_unavailable'); }
       return driver;
-    } catch (error) { await browser.close(); throw error; }
+    } catch (error) { try { await browser?.close(); } finally { await egress?.close(); } throw error; }
   }
   constructor(browser, page, origin) { Object.assign(this, { browser, page, origin, elements: new Map(), observation: '', revision: -1 }); }
-  async close() { await this.browser.close(); }
+  async close() { try { await this.browser.close(); } finally { await this.egress?.close(); } }
   async stateDigest() {
     // Property writes need not emit DOM mutations or input events. Keep only a
     // digest locally; field values never enter observations, events or logs.
@@ -91,6 +91,17 @@ export class BrowserDriver {
     return createHash('sha256').update(state).digest('hex');
   }
   async observe() {
+    // Hydration/lazy rendering on real sites can invalidate a read. Retry only
+    // the observation, never a dispatched click/edit or external submission.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { return await this.observeOnce(); }
+      catch (error) {
+        if (error.message !== 'observation_changed' || attempt === 2) throw error;
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+    }
+  }
+  async observeOnce() {
     if (this.page.isClosed() || new URL(this.page.url()).origin !== this.origin) throw Error('Target unavailable or outside scope.');
     this.elements.clear(); this.observation = randomUUID();
     const initialRevision = await this.page.evaluate(() => window.__offgridRevision);
@@ -106,18 +117,25 @@ export class BrowserDriver {
       const state = await handle.evaluate(el => ({disabled:el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true',
         ...(el.tagName === 'SELECT' ? {multiple:el.multiple, options:Array.from(el.options).slice(0,100).map((option,index) => ({id:String(index+1),label:option.label.slice(0,160),disabled:option.disabled || (option.parentElement.tagName === 'OPTGROUP' && option.parentElement.disabled),selected:option.selected}))} : {}),
         ...(el.tagName === 'INPUT' && el.type === 'checkbox' ? {checked:el.checked} : {})}));
-      this.elements.set(id, handle); elements.push({ id, tag: info.tag, type: info.type, label: info.label, ...state });
+      let href;
+      if (info.tag === 'a') {
+        const candidate = await handle.getAttribute('href');
+        try { const link = new URL(candidate, this.page.url()); if (link.origin === this.origin && !link.username && !link.password && link.href.length <= 2048) href = link.href; } catch { /* do not expose unsafe destinations */ }
+      }
+      this.elements.set(id, handle); elements.push({ id, tag: info.tag, type: info.type, label: info.label, ...(href ? {href} : {}), ...state });
     }
+    const title = await this.page.title();
+    const text = (await this.page.locator('body').innerText()).slice(0,10000);
     this.revision = await this.page.evaluate(() => window.__offgridRevision);
     this.observedURL = this.page.url(); this.observedAt = Date.now();
     this.formDigest = await this.stateDigest();
     if (this.revision !== initialRevision || this.formDigest !== initialState) {
       this.observation = '';
-      throw Error('Page changed during observation; inspect it again.');
+      throw Error('observation_changed');
     }
     // No field values, screenshots, cookies or password content are collected.
-    return { observation_id: this.observation, url: this.observedURL, title: await this.page.title(),
-      text: (await this.page.locator('body').innerText()).slice(0, 10000), elements,
+    return { observation_id: this.observation, url: this.observedURL, title,
+      text, elements, blocked_origins: Array.from(this.blockedOrigins ?? []),
       controls_limited: controls.length > 400 || elements.length >= 80 };
   }
   async execute(kind, args) {

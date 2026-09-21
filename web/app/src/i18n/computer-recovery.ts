@@ -1,5 +1,18 @@
 import type { LocaleCode } from './index';
 
+// Draft translations; independent speaker review remains a qualification gate.
+export const computerActionReview: Record<LocaleCode,string> = {
+ en: 'Browser assistance stopped because an action was duplicated, changed, or its outcome could not be confirmed. Inspect the task and the affected page before starting a new session. Do not repeat a submission without checking its result.',
+ fr: 'L’assistance s’est arrêtée : une action a été répétée, modifiée ou son résultat est incertain. Vérifiez la tâche et la page avant une nouvelle session. Ne répétez pas un envoi sans vérifier son résultat.',
+ de: 'Die Browserhilfe wurde gestoppt: Eine Aktion wurde wiederholt, geändert oder ihr Ergebnis ist unklar. Prüfen Sie Aufgabe und Seite vor einer neuen Sitzung. Senden Sie nichts erneut, ohne das Ergebnis zu prüfen.',
+ es: 'La asistencia se detuvo: una acción se repitió, cambió o su resultado es incierto. Revise la tarea y la página antes de iniciar otra sesión. No repita un envío sin comprobar su resultado.',
+ ar: 'توقفت مساعدة المتصفح لأن إجراءً تكرر أو تغيّر أو تعذر تأكيد نتيجته. راجع المهمة والصفحة قبل بدء جلسة جديدة. لا تكرر الإرسال دون التحقق من النتيجة.',
+ sw: 'Usaidizi wa kivinjari umesimama kwa sababu kitendo kilirudiwa, kilibadilishwa au matokeo hayajathibitishwa. Kagua kazi na ukurasa kabla ya kipindi kipya. Usitume tena bila kukagua matokeo.',
+ sn: 'Rubatsiro rwebhurawuza rwamira nekuti chiito chadzokororwa, chachinjwa kana mhedzisiro yacho isina kusimbiswa. Tarisa basa nepeji usati watanga patsva. Usatumira zvakare usina kutarisa mhedzisiro.',
+ nd: 'Usizo lwebhrawuza lumisiwe ngoba isenzo siphindiwe, sitshintshiwe kumbe impumela ayiqinisekiswanga. Hlola umsebenzi lekhasi ungakaqali futhi. Ungathumeli futhi ungakahloli impumela.',
+ zu: 'Usizo lwesiphequluli lumisiwe ngoba isenzo siphindiwe, sishintshiwe noma umphumela awuqinisekisiwe. Hlola umsebenzi nekhasi ngaphambi kokuqala futhi. Ungathumeli futhi ungakahloli umphumela.'
+};
+
 export const computerModelCopy: Record<LocaleCode, { check: string; checking: string; help: string }> = {
  en: {check:'Check selected model', checking:'Checking tool calls…', help:'Check the selected model before running a computer task. This may load the model and uses synthetic data only; it does not control the browser. The service checks again when starting.'},
  fr: {check:'Vérifier le modèle sélectionné', checking:'Vérification des appels d’outils…', help:'Vérifiez le modèle avant la tâche. Le test peut charger le modèle et utilise uniquement des données synthétiques, sans contrôler le navigateur. Le service vérifie à nouveau au démarrage.'},

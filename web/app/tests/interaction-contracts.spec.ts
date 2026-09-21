@@ -52,9 +52,29 @@ test('desktop browser onboarding uses private IPC without terminal commands or p
  expect(task!.y+task!.height).toBeLessThan(setup!.y);
  await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>(window as any).__starts.length)).toBe(1);
- expect(await page.evaluate(()=>(window as any).__starts[0])).toEqual({origin:'demo',workspace:'desktop-workspace'});
+ expect(await page.evaluate(()=>(window as any).__starts[0])).toEqual({origin:'demo',workspace:'desktop-workspace',networkMode:'direct'});
  await expect(page.locator('.computer-pair-code')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled();
+ await page.getByLabel('Website (HTTPS)',{exact:true}).fill('https://playwright.dev/docs/intro');
+ await page.getByText('Network settings',{exact:true}).first().click();
+ await page.getByRole('combobox',{name:'Network settings',exact:true}).selectOption('trusted-vpn');
+ await expect(page.getByText(/Only enable this for a VPN you trust/)).toBeVisible();
+ await page.getByRole('button',{name:'Open browser',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).__starts.length)).toBe(2);
+ expect(await page.evaluate(()=>(window as any).__starts[1])).toEqual({origin:'https://playwright.dev/docs/intro',workspace:'desktop-workspace',networkMode:'trusted-vpn'});
+ await expect(page.getByText('Permission was declined. No browser session started.',{exact:true})).toBeVisible();
+});
+
+test('known browser network errors explain recovery rather than prescribing reinstall',async({page})=>{
+ await fixture(page);
+ await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'desktop-workspace'}}));
+ await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:[]}}));
+ await page.addInitScript(()=>{(window as any).electron={onThemeChange:()=>()=>{},getSystemTheme:async()=>'light',getComputerStatus:async()=>({state:'idle',installed:true}),startComputerBrowser:async()=>{throw Error('network_blocked');}};});
+ await page.goto('/ui/#/agents');await page.getByRole('checkbox',{name:/Use a browser/}).check();
+ await page.getByLabel('Website (HTTPS)',{exact:true}).fill('https://example.com/article');
+ await page.getByRole('button',{name:'Open browser',exact:true}).click();
+ await expect(page.getByRole('alert').filter({hasText:'select Trusted VPN routing'})).toBeVisible();
+ await expect(page.getByText(/Repair the matching desktop package/)).toHaveCount(0);
 });
 
 test('web browser onboarding leads with desktop handoff, not developer setup', async ({ page }) => {

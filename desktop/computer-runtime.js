@@ -5,8 +5,8 @@ function validateTarget(value) {
   if (value === 'demo') return 'demo';
   if (typeof value !== 'string' || value.length > 2048) throw Error('target_invalid');
   const url = new URL(value);
-  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw Error('target_invalid');
-  return url.origin;
+  if (url.protocol !== 'https:' || url.username || url.password || require('node:net').isIP(url.hostname) || url.hostname.startsWith('[') || !url.hostname.includes('.') || /\.(localhost|local|internal|test|invalid)$/.test(url.hostname)) throw Error('target_invalid');
+  return url.pathname==='/' && !url.search && !url.hash ? url.origin : url.href;
 }
 function isComputerLink(value) { return value === 'offgrid://computer' || value === 'offgrid://computer/'; }
 
@@ -19,8 +19,10 @@ class ComputerRuntime extends EventEmitter {
   publish(value) { this.state = value; this.emit('status',value); return value; }
   async start(request) {
     if (this.pending || this.child || this.stopping) throw Error('session_active');
-    if (!request || Object.keys(request).some(k=>!['origin','workspace'].includes(k)) || typeof request.workspace !== 'string' || !request.workspace) throw Error('invalid_session');
+    if (!request || Object.keys(request).some(k=>!['origin','workspace','networkMode'].includes(k)) || typeof request.workspace !== 'string' || !request.workspace) throw Error('invalid_session');
     const origin = validateTarget(request.origin);
+    const networkMode = request.networkMode ?? 'direct';
+    if (!['direct','trusted-vpn'].includes(networkMode) || (origin === 'demo' && networkMode !== 'direct')) throw Error('network_mode_invalid');
     this.pending = true; const generation = ++this.generation;
     try {
       const service = this.service();
@@ -30,7 +32,7 @@ class ComputerRuntime extends EventEmitter {
       if (generation !== this.generation) return this.state;
       if (identity.product !== 'offgrid' || identity.api_version !== 2 || identity.workspace_id !== request.workspace) throw Error('workspace_changed');
       this.publish({state:'consent'});
-      if (!await this.confirm(origin, service)) return this.publish({state:'idle',code:'consent_declined'});
+      if (!await this.confirm(origin, service, networkMode)) return this.publish({state:'idle',code:'consent_declined'});
       if (generation !== this.generation) return this.state;
       this.publish({state:'starting'});
       await this.verify(this.root);
@@ -50,7 +52,7 @@ class ComputerRuntime extends EventEmitter {
         const timer = setTimeout(()=>{ void this.stop(); finish('startup_timeout'); },60000);
         child.on('message', message => {
           if (this.child !== child || generation !== this.generation) return;
-          if (message?.state === 'booted') child.postMessage({type:'start',service,origin,code,workspace:request.workspace,directory:this.directory});
+          if (message?.state === 'booted') child.postMessage({type:'start',service,origin,networkMode,code,workspace:request.workspace,directory:this.directory});
           else if (message?.state === 'ready' && message.target?.id) { this.publish({state:'ready',target:{id:message.target.id,origin:message.target.origin}}); finish(); }
           else if (message?.state === 'error') { this.publish({state:'error',code:message.code}); finish(message.code); }
           else if (message?.state === 'stopped') this.publish({state:'stopped'});

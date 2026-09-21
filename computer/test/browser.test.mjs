@@ -60,6 +60,28 @@ test('private/reserved network addresses are rejected', () => {
  assert.equal(publicIPv4('93.184.215.14'), true);
 });
 
+test('page hydration retries only observations, and links expose exact in-scope destinations',async()=>{
+ const demo=await startDemo();let driver;
+ try {
+  driver=await BrowserDriver.open(demo.origin,{headless:true,testLoopback:true});
+  const original=driver.observeOnce.bind(driver);let reads=0;
+  driver.observeOnce=async()=>{if(++reads===1)throw Error('observation_changed');return original();};
+  const view=await driver.observe();assert.ok(view.observation_id);assert.equal(reads,2);
+  driver.observeOnce=async()=>{reads++;throw Error('observation_changed');};
+  reads=0;await assert.rejects(driver.observe(),/observation_changed/);assert.equal(reads,3);
+  driver.observeOnce=original;
+  await driver.page.evaluate(()=>{
+   for(const href of ['/article?q=1#section','https://other.example/path']) {
+    const a=document.createElement('a');a.href=href;a.textContent=href;document.body.append(a);
+   }
+  });
+  const links=(await driver.observe()).elements.filter(element=>element.tag==='a');
+  assert.equal(links[0].href,demo.origin+'/article?q=1#section');
+  assert.equal(links[1].href,undefined);
+  assert.equal(await driver.page.locator('#status').innerText(),'No draft saved');
+ }finally{await driver?.close();await demo.close();}
+});
+
 test('input events and silent property changes invalidate an observed action', async () => {
  const demo=await startDemo(); let driver;
  try {

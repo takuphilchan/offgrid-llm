@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type ComputerModelCheck, type ComputerSession } from '../../api/client';
 import { useI18n } from '../../i18n';
-import { computerRecovery, computerModelCopy } from '../../i18n/computer-recovery';
+import { computerRecovery, computerModelCopy, computerActionReview } from '../../i18n/computer-recovery';
 import { computerTaskText } from '../../i18n/computer-task';
 import { copyText } from '../../lib/clipboard';
 import { computerExperience } from '../../i18n/computer-experience';
@@ -24,6 +24,7 @@ export function ComputerSetup({ value, onChange, disabled, onAvailability, onRea
  const experience = computerExperience(locale);
  const managed = !!window.electron?.startComputerBrowser;
  const [website, setWebsite] = useState('');
+ const [networkMode, setNetworkMode] = useState<'direct'|'trusted-vpn'>('direct');
  const [host, setHost] = useState<{state:string;installed:boolean;code?:string}>();
  const [sessions, setSessions] = useState<ComputerSession[]>([]);
  const taskText = computerTaskText(locale);
@@ -44,18 +45,18 @@ export function ComputerSetup({ value, onChange, disabled, onAvailability, onRea
  }, [managed]);
  async function openBrowser(origin:string) {
    if(origin!=='demo') {
-     try { const url=new URL(origin); if(url.protocol!=='https:' || url.username || url.password || url.pathname!=='/' || url.search || url.hash) throw Error(); }
+     try { const url=new URL(origin); if(url.protocol!=='https:' || url.username || url.password) throw Error(); }
      catch {setError(experience.invalidWebsite);return;}
    }
    setBusy(true);setError('');
    try {
      const identity=await api.systemIdentity();
      if (!identity.workspace_id) throw Error('workspace_unavailable');
-     const state=await window.electron!.startComputerBrowser!({origin,workspace:identity.workspace_id});
+     const state=await window.electron!.startComputerBrowser!({origin,workspace:identity.workspace_id,networkMode:origin==='demo'?'direct':networkMode});
      if(state.target) onChange(state.target.id);
      else if(state.code==='consent_declined') setError(experience.declined);
      else setError(experience.setupStopped);
-   }catch{setError(experience.repair);}finally{setBusy(false);}
+   }catch(e){const message=e instanceof Error?e.message:'';setError(message.includes('network_blocked')?experience.networkBlocked:message.includes('network_unavailable')?experience.networkUnavailable:experience.repair);}finally{setBusy(false);}
  }
  useEffect(() => {
    checkController.current?.abort(); setCheck(null); setCheckError(''); setChecking(false);
@@ -91,6 +92,7 @@ export function ComputerSetup({ value, onChange, disabled, onAvailability, onRea
  return <fieldset className="computer-setup"><legend>{experience.browser}</legend>
    {!sessions.length && (managed ? <div className="browser-onboarding">
      <label className="field"><span>{experience.website}</span><input type="url" placeholder="https://example.com" value={website} disabled={busy || disabled} onChange={event=>setWebsite(event.target.value)} /></label>
+     <details><summary>{experience.networkSettings}</summary><label className="field"><span>{experience.networkSettings}</span><select value={networkMode} disabled={busy || disabled} onChange={event=>setNetworkMode(event.target.value as 'direct'|'trusted-vpn')}><option value="direct">{experience.directNetwork}</option><option value="trusted-vpn">{experience.trustedNetwork}</option></select></label>{networkMode==='trusted-vpn' && <p>{experience.networkWarning}</p>}</details>
      <div className="button-row"><button type="button" className="primary-button" disabled={busy || disabled || !website.trim() || !host?.installed} onClick={()=>void openBrowser(website.trim())}>{host?.state==='consent'?experience.waiting:busy?experience.starting:experience.open}</button><button type="button" className="secondary-button" disabled={busy || disabled || !host?.installed} onClick={()=>void openBrowser('demo')}>{experience.practice}</button></div>
      {host && !host.installed && <p role="alert">{experience.repair}</p>}
      {busy && <div className="button-row"><p role="status">{host?.state==='consent'?experience.waiting:experience.starting}</p><button type="button" className="secondary-button" onClick={()=>void stop()}>{experience.stop}</button></div>}
@@ -112,7 +114,7 @@ export function ComputerSetup({ value, onChange, disabled, onAvailability, onRea
    {code && <div role="status"><p>{text[5]}</p><code className="computer-pair-code">{code}</code><button type="button" className="secondary-button" onClick={() => void copyText(code).then(() => setCopied(true)).catch(() => setError(messages.common.error))}>{copied ? taskText.copied : taskText.copy}</button></div>}
    </details>}
    {error && <p role="alert">{error}</p>}
-   {!error && host?.state==='error' && <p role="alert">{host.code==='stop_unconfirmed'?experience.stopUnconfirmed:experience.repair}</p>}
+   {!error && host?.state==='error' && <p role="alert">{host.code==='network_blocked'?experience.networkBlocked:host.code==='network_unavailable'?experience.networkUnavailable:host.code==='stop_unconfirmed'?experience.stopUnconfirmed:['action_conflict','action_uncertain','duplicate_action'].includes(host.code ?? '')?computerActionReview[locale]:experience.repair}</p>}
    {pollError && <p role="alert">{pollError}</p>}
  </fieldset>;
 }

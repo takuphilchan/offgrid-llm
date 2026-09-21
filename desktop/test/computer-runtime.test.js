@@ -22,8 +22,9 @@ function fixture(overrides={}) {
 test('computer deep links carry no service, credentials, target or command',()=>{
  assert.equal(isComputerLink('offgrid://computer'),true);
  for(const value of ['offgrid://computer?code=secret','offgrid://computer/run','offgrid://computer#command','https://computer']) assert.equal(isComputerLink(value),false);
- for(const value of ['http://example.com','https://user:password@example.com','https://example.com/path','https://example.com/?x=1']) assert.throws(()=>validateTarget(value));
+ for(const value of ['http://example.com','https://user:password@example.com','https://127.0.0.1','https://[::1]','https://router.local']) assert.throws(()=>validateTarget(value));
  assert.equal(validateTarget('https://example.com'),'https://example.com');
+ assert.equal(validateTarget('https://example.com/path?q=1#section'),'https://example.com/path?q=1#section');
  assert.match(fs.readFileSync(path.join(__dirname,'../main.js'),'utf8'),/!installerTest && !customHome\) app\.setAsDefaultProtocolClient/);
  const main=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
  assert.match(main,/require\(app\.isPackaged \? '\.\/computer-pack\/pack\.cjs'/);
@@ -37,6 +38,21 @@ test('native consent refusal and workspace mismatch cannot spawn a browser',asyn
  await assert.rejects(mismatch.runtime.start({...request,workspace:'other'}),/workspace_changed/);
  assert.equal(mismatch.confirmations(),0);assert.equal(mismatch.forks.length,0);
  await assert.rejects(mismatch.runtime.start({...request,command:'shell'}),/invalid_session/);
+});
+
+test('trusted routing is explicit, locally confirmed, and cannot be selected by arbitrary worker arguments',async()=>{
+ let received;
+ const f=fixture({confirm:async(...args)=>{received=args;return false;}});
+ const requested={origin:'https://example.com/article?q=1',workspace:'owned-workspace',networkMode:'trusted-vpn'};
+ assert.equal((await f.runtime.start(requested)).code,'consent_declined');
+ assert.deepEqual(received,[requested.origin,'http://127.0.0.1:11611','trusted-vpn']);
+ assert.equal(f.forks.length,0);
+ for(const invalid of ['automatic','proxy','',true]) await assert.rejects(f.runtime.start({...requested,networkMode:invalid}),/network_mode_invalid/);
+ await assert.rejects(f.runtime.start({...requested,proxy:'http://127.0.0.1:9999'}),/invalid_session/);
+ await assert.rejects(f.runtime.start({...request,networkMode:'trusted-vpn'}),/network_mode_invalid/);
+ const accepted=fixture();const pending=accepted.runtime.start(requested);await tick();
+ assert.equal(accepted.messages[0].networkMode,'trusted-vpn');assert.equal(accepted.messages[0].origin,requested.origin);
+ accepted.child.emit('message',{state:'ready',target:{id:'session',origin:'https://example.com'}});await pending;await accepted.runtime.stop();
 });
 
 test('unresponsive companion shutdown is bounded without falsely acknowledging stop or losing ownership',async()=>{

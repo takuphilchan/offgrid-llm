@@ -57,9 +57,16 @@ runtime and the prebuilt `web/dist` bundle, then creates:
 Packaging bundles pinned Playwright and its matching Chromium build. The first
 build downloads that browser; end users do not need Node, npm, or terminal
 pairing in the matching desktop application. In Agents, select browser assistance,
-choose the practice page or one permitted HTTPS origin, and approve the local
+choose the practice page or one permitted HTTPS page address, and approve the local
 consent prompt. Web users hand off to the matching installed desktop application;
 a container alone cannot supply a host browser runtime.
+
+Page addresses retain paths, queries and fragments within the selected site.
+For a trusted VPN using fake DNS, Network settings offers explicit trusted-VPN
+routing with a local confirmation. Direct routing remains the default; failures
+never silently broaden network access. TLS checks remain enabled, and redirects
+and resources outside the selected origin stay blocked. Host dispatch results
+are journaled before acknowledgment so a lost reply cannot repeat an input.
 
 This remains a supervised browser preview, not native desktop or vision control.
 The browser uses a separate profile, verifies its runtime manifest before starting,

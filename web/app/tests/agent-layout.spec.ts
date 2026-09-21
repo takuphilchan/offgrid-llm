@@ -156,6 +156,9 @@ for (const locale of ['ar', 'de']) {
     await start(page);
     await page.locator('.locale-picker select').selectOption(locale);
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+    // Locale selection may load a different font. Compare task transitions
+    // after that layout is ready, not a fallback-font frame against Arabic.
+    await page.evaluate(async () => { await document.fonts.ready; });
     const initial = await geometry(page);
     state.complete();
     await expect(page.locator('.agent-result-body')).toContainText('Completed report');

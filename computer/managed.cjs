@@ -14,7 +14,7 @@ process.parentPort.on('message', async ({data}) => {
     const {CompanionSession} = await import('./session.mjs');
     session = new CompanionSession({service:data.service, directory:data.directory, emit:send});
     if (stopping) { finishStarting(); return; }
-    const target = await session.start({origin:data.origin, code:data.code, workspace:data.workspace});
+    const target = await session.start({origin:data.origin, code:data.code, workspace:data.workspace, networkMode:data.networkMode});
     finishStarting();
     send({state:'ready', target});
     await session.running;
@@ -23,7 +23,7 @@ process.parentPort.on('message', async ({data}) => {
     await session?.stop();
     finishStarting();
     if(stopping) return;
-    const code = ['workspace_changed','service_invalid','target_invalid'].includes(error.message) ? error.message : 'browser_unavailable';
+    const code = ['workspace_changed','service_invalid','target_invalid','network_blocked','network_unavailable','network_mode_invalid'].includes(error.message) ? error.message : 'browser_unavailable';
     send({state:'error',code}); process.exit(1);
   }
 });

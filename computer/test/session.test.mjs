@@ -47,3 +47,25 @@ test('runtime manifests reject tampering and wrong architecture',async()=>{
   await writeFile(join(directory,'managed.cjs'),'tampered');await assert.rejects(verifyPack(directory),/pack_invalid/);
  }finally{await rm(directory,{recursive:true});}
 });
+
+test('same-session redelivery returns the persisted reply and never repeats input',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'offgrid-replay-test-'));let effects=0,replies=0;
+ const action={id:'run:call',kind:'browser_click',arguments:{element:'observed'}};
+ let firstReply;
+ const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:async()=>({close:async()=>{},execute:async()=>{effects++;return {changed:true};}})});
+ session.request=async(path,body)=>{
+  if(path.endsWith('/system'))return {product:'offgrid',api_version:2,workspace_id:'workspace'};
+  if(path.endsWith('/pair'))return {token:'test-only',session:{id:'session',origin:'https://example.com'}};
+  if(path.endsWith('/poll'))return {action};
+  if(path.endsWith('/reply')) {
+   replies++;
+   if(replies===1)firstReply=body;
+   else {assert.deepEqual(body,firstReply);await session.stop();}
+   return {};
+  }
+ };
+ try {
+  await session.start({origin:'https://example.com',code:'b'.repeat(64)});await session.running;
+  assert.equal(effects,1);assert.equal(replies,2);assert.equal(session.state,'stopped');
+ }finally{await session.stop();await rm(directory,{recursive:true});}
+});
