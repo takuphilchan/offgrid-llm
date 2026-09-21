@@ -7,12 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
 )
 
 func TestComputerLegacyMutationDoesNotAcceptApprovalBoolean(t *testing.T) {
-	s := &Server{computerController: computer.NewController(computer.UnsupportedDriver{}, capabilities.NewBroker(nil), nil)}
+	s := &Server{}
 	for _, path := range []string{"session", "action", "reset", "stop"} {
 		w := httptest.NewRecorder()
 		s.handleComputerUpgradeRequired(w, httptest.NewRequest(http.MethodPost, "/v1/computer/"+path, strings.NewReader(`{"approved":true,"target":"desktop"}`)))
@@ -49,14 +48,11 @@ func TestComputerCapabilitiesNeverAdvertiseUninstalledDrivers(t *testing.T) {
 }
 
 func TestComputerStopIsSafeBeforeCompanionStartup(t *testing.T) {
-	for _, s := range []*Server{{}, {computerController: computer.NewController(computer.UnsupportedDriver{}, capabilities.NewBroker(nil), nil)}} {
+	for _, s := range []*Server{{}, {browserHub: computer.NewBrowserHub()}} {
 		w := httptest.NewRecorder()
 		s.handleComputerStop(w, httptest.NewRequest(http.MethodPost, "/api/v2/computer/stop", nil))
 		if w.Code != 200 {
 			t.Fatal("stop unavailable")
-		}
-		if s.computerController != nil && s.computerController.Status()["emergency_stop"] != true {
-			t.Fatal("stop not latched")
 		}
 		w = httptest.NewRecorder()
 		s.handleComputerStop(w, httptest.NewRequest(http.MethodGet, "/api/v2/computer/stop", nil))

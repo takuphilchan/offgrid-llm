@@ -107,7 +107,6 @@ type Server struct {
 	capabilityBroker    *capabilities.Broker     // Shared authorization boundary for tools and agents
 	runLog              *runs.Log                // Durable event stream for agent runs
 	artifactStore       *artifacts.Store         // Content-addressed agent outputs and captures
-	computerController  *computer.Controller     // Governed computer-use control plane
 	browserHub          *computer.BrowserHub
 	integrationRegistry *integrations.Registry // External agent adapters (Hermes, OpenClaw, ...)
 	sandbox             agents.Sandbox         // Long-lived agent sandbox owned by this server
@@ -275,27 +274,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 	if artifactErr != nil {
 		log.Printf("Warning: Failed to initialize artifact store: %v", artifactErr)
 	}
-	computerController := computer.NewController(computer.UnsupportedDriver{}, capabilityBroker, artifactStore)
 	integrationRegistry := integrations.NewDefaultRegistry()
-	computerController.SetAudit(func(auditEvent computer.AuditEvent) {
-		if runLog == nil {
-			return
-		}
-		runID := auditEvent.SessionID
-		if runID == "" {
-			runID = "computer-system"
-		}
-		eventType := runs.ComputerAction
-		if strings.Contains(auditEvent.Type, "session") {
-			eventType = runs.ComputerSession
-		} else if strings.Contains(auditEvent.Type, "emergency") {
-			eventType = runs.ComputerEmergency
-		}
-		event, eventErr := runs.NewEvent(runID, eventType, auditEvent)
-		if eventErr == nil {
-			_ = runLog.Publish(context.Background(), event)
-		}
-	})
 	offgridMetrics := metrics.NewOffGridMetrics() // Uses DefaultRegistry
 	wsHub := websocket.NewHub()
 	runtimeCtx, runtimeCancel := context.WithCancel(context.Background())
@@ -516,7 +495,6 @@ func NewWithConfig(cfg *config.Config) *Server {
 		capabilityBroker:     capabilityBroker,
 		runLog:               runLog,
 		artifactStore:        artifactStore,
-		computerController:   computerController,
 		integrationRegistry:  integrationRegistry,
 		sandbox:              sandbox,
 		version:              serverVersion,
@@ -1035,6 +1013,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/agents/run", adminOnly(s.handleAgentRun))
 	mux.HandleFunc("/v1/agents/tasks", adminOnly(s.handleAgentTasks))
 	mux.HandleFunc("/v1/agents/tasks/", adminOnly(s.handleAgentTaskAction))
+	mux.HandleFunc("/api/v2/jobs/", adminOnly(s.handleJobRead))
 	mux.HandleFunc("/v1/agents/workflows", adminOnly(s.handleAgentWorkflows))
 	mux.HandleFunc("/v1/agents/orchestrate", adminOnly(s.handleAgentOrchestrate))
 	mux.HandleFunc("/v1/runs", adminOnly(s.handleRuns))

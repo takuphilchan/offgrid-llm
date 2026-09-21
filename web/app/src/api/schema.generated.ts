@@ -510,6 +510,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Reads the existing owner-scoped agent task, including the latest durable event cursor. No separate task history is created. */
+        get: operations["getDurableJobSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/jobs/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Owner-only ordered activity metadata and current snapshots. Last-Event-ID resumes from a persisted sequence. An expired or ahead cursor receives an explicit snapshot_recovery event with the current snapshot and event_cursor. Snapshot recovery never repeats execution. Disconnect does not cancel a job. Event history retains the last 256 metadata entries; completed snapshots remain. */
+        get: operations["replayDurableJobEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/tasks/{id}/events": {
         parameters: {
             query?: never;
@@ -1182,9 +1216,28 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        TaskActivity: {
+            /** Format: int64 */
+            sequence: number;
+            task_id: string;
+            status: string;
+            phase?: string;
+            tool?: string;
+            iteration?: number;
+            completed_steps: number;
+            approval_id?: string;
+            executing_call?: string;
+            snapshot_sha256: string;
+            /** Format: date-time */
+            recorded_at: string;
+        };
         AgentRunResponse: {
+            /** @description Persisted activity cursor. Only advance it after applying the snapshot. */
+            event_cursor?: string;
             computer_session?: string;
             computer_expected_text?: string;
+            /** @description Restart invalidated local consent. Historical work may be inspected or reconciled */
+            computer_session_expired?: boolean;
             output: string;
             task_id: string;
             run_id: string;
@@ -2189,6 +2242,57 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDurableJobSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current persisted job snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    replayDurableJobEvents: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Last-Event-ID"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE activity events contain TaskActivity; snapshot and snapshot_recovery events contain AgentRunResponse plus type. Event IDs are decimal sequence strings. Terminal snapshots close the stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };
     };

@@ -4,26 +4,16 @@ import (
 	"net/http"
 
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
-	"github.com/takuphilchan/offgrid-llm/internal/users"
 )
-
-func computerActor(r *http.Request) string {
-	if actor := users.GetUserID(r); actor != "" {
-		return actor
-	}
-	return "local-admin"
-}
 
 func (s *Server) handleComputerStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if s.computerController == nil {
-		writeError(w, "Computer use is unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	status := s.computerController.Status()
+	// Compatibility status is a projection of the governed companion, not a
+	// second controller with a blanket session-approved execution path.
+	status := map[string]any{"available": false, "emergency_stop": true, "active_sessions": 0}
 	if s.browserHub != nil {
 		sessions := s.browserHub.List(s.agentActor(r))
 		status["available"] = len(sessions) > 0
@@ -63,9 +53,6 @@ func (s *Server) handleComputerStop(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
-	}
-	if s.computerController != nil {
-		s.computerController.EmergencyStop(computerActor(r))
 	}
 	if s.browserHub != nil {
 		active := len(s.browserHub.List(s.agentActor(r))) > 0

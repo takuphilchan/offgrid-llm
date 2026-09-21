@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -16,7 +17,7 @@ import (
 )
 
 const taskDatabaseName = "agent-state.sqlite"
-const taskSchemaVersion = 1
+const taskSchemaVersion = 2
 
 // The service owns the workspace lock. Connections are operation-scoped so
 // stopped-workspace backup/restore never races an idle connection or leaked WAL.
@@ -134,6 +135,12 @@ func initializeTaskDatabase(db *sql.DB, directory string) error {
 	var version int
 	err = tx.QueryRow(`SELECT version FROM agent_schema WHERE singleton=1`).Scan(&version)
 	if err == nil {
+		if version == 1 {
+			if err := tx.Rollback(); err != nil {
+				return err
+			}
+			return migrateTaskActivity(db, directory)
+		}
 		if version != taskSchemaVersion {
 			return fmt.Errorf("agent schema %d is incompatible; use a matching OffGrid version", version)
 		}
@@ -146,8 +153,10 @@ func initializeTaskDatabase(db *sql.DB, directory string) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`CREATE TABLE agent_tasks (id TEXT PRIMARY KEY, actor TEXT NOT NULL, snapshot BLOB NOT NULL);
-CREATE TABLE agent_task_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL REFERENCES agent_tasks(id), status TEXT NOT NULL, recorded_at TEXT NOT NULL)`)
+	_, err = tx.Exec(`CREATE TABLE agent_tasks (id TEXT PRIMARY KEY, actor TEXT NOT NULL, snapshot BLOB NOT NULL, event_floor INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE agent_task_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL REFERENCES agent_tasks(id), status TEXT NOT NULL, recorded_at TEXT NOT NULL, payload BLOB);
+CREATE INDEX agent_task_event_order ON agent_task_events(task_id,sequence);
+CREATE TABLE agent_migrations(version INTEGER PRIMARY KEY, manifest BLOB NOT NULL)`)
 	if err != nil {
 		return err
 	}
@@ -193,17 +202,16 @@ func putTaskTransaction(tx *sql.Tx, task *Task) error {
 	if err != nil {
 		return err
 	}
-	var previous string
-	err = tx.QueryRow(`SELECT json_extract(snapshot, '$.status') FROM agent_tasks WHERE id=?`, task.ID).Scan(&previous)
+	var previous []byte
+	err = tx.QueryRow(`SELECT snapshot FROM agent_tasks WHERE id=?`, task.ID).Scan(&previous)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 	if _, err = tx.Exec(`INSERT INTO agent_tasks(id,actor,snapshot) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET actor=excluded.actor,snapshot=excluded.snapshot`, task.ID, task.Actor, data); err != nil {
 		return err
 	}
-	// Progress updates do not duplicate content into an unbounded event journal.
-	if previous != string(task.Status) {
-		_, err = tx.Exec(`INSERT INTO agent_task_events(task_id,status,recorded_at) VALUES(?,?,?)`, task.ID, task.Status, time.Now().UTC().Format(time.RFC3339Nano))
+	if !bytes.Equal(previous, data) {
+		return appendTaskActivity(tx, task, data)
 	}
 	return err
 }
@@ -232,6 +240,9 @@ func loadTaskDatabase(directory string) ([]*Task, error) {
 	}
 	defer db.Close()
 	if err = initializeTaskDatabase(db, directory); err != nil {
+		return nil, err
+	}
+	if err = validateTaskActivityDatabase(db); err != nil {
 		return nil, err
 	}
 	rows, err := db.Query(`SELECT id, actor, snapshot FROM agent_tasks ORDER BY id`)

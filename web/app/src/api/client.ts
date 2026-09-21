@@ -35,6 +35,10 @@ export class APIError extends Error {
   constructor(message: string, readonly status: number, readonly data?: Record<string, any>) { super(message); }
 }
 
+let durableAgentEvents = false;
+let agentWorkspace = '';
+const agentCursors = new Map<string, string>();
+
 async function request<T>(path: string, init?: RequestInit, timeout = 30_000): Promise<T> {
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), timeout);
@@ -69,7 +73,13 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000): P
 export const api = {
   searchModels: (query: string, signal: AbortSignal) => request<{ results: DiscoveredModel[]; total: number }>(`/v1/search?${new URLSearchParams({ query })}`, { signal }),
   modelFiles: (repo: string, signal: AbortSignal) => request<{ repo: string; files: DiscoveredFile[] }>(`/v1/search/files?${new URLSearchParams({ repo })}`, { signal }),
-  systemIdentity: () => request<components['schemas']['SystemIdentity']>('/api/v2/system'),
+  systemIdentity: async () => {
+    const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system');
+    if (agentWorkspace !== (identity.workspace_id ?? '')) agentCursors.clear();
+    agentWorkspace = identity.workspace_id ?? '';
+    durableAgentEvents = Array.isArray(identity.capabilities) && identity.capabilities.includes('durable-agent-events-v2');
+    return identity;
+  },
   health: () => request<{ status: string; version?: string }>('/health'),
   currentUser: () => request<components['schemas']['CurrentUser']>('/v1/users/me'),
   login: (username: string, password: string) => request<{ user: PublicUser; expires_at: string; auth_method: string }>('/v1/auth/login', {
@@ -178,9 +188,20 @@ export const api = {
   agentRun: (id: string) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}`),
   deleteAgentRun: (id: string) => request<{ success: boolean }>(`/v1/agents/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void, onHeartbeat: () => void, signal: AbortSignal) => {
-    const response = await fetch(`/v1/agents/tasks/${encodeURIComponent(id)}/events`, { credentials: 'same-origin', headers: { Accept: 'text/event-stream' }, signal });
+    const replay = durableAgentEvents;
+    const headers: Record<string,string> = { Accept: 'text/event-stream' };
+    const cursor = agentCursors.get(id);
+    if (replay && cursor) headers['Last-Event-ID'] = cursor;
+    const response = await fetch(`${replay ? '/api/v2/jobs' : '/v1/agents/tasks'}/${encodeURIComponent(id)}/events`, { credentials: 'same-origin', headers, signal });
     if (!response.ok) throw new APIError('Agent progress unavailable', response.status);
-    return readAgentStream(response, id, onSnapshot, onHeartbeat);
+    return readAgentStream(response, id, run => {
+      onSnapshot(run);
+      if (replay && run.event_cursor) {
+        agentCursors.delete(id);
+        agentCursors.set(id,run.event_cursor);
+        if (agentCursors.size > 100) agentCursors.delete(agentCursors.keys().next().value!);
+      }
+    }, onHeartbeat);
   },
   agentAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'resume' | 'reconcile', data: { approval_id?: string; call_id?: string; result?: string } = {}) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: JSON.stringify({ ...data, async: true }) }),
   agentTasks: async () => {

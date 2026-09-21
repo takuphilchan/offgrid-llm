@@ -116,3 +116,26 @@ restored conversations, knowledge, identities, and agent recovery states.
 This is deliberately a manual recovery flow. Revision-qualified matched snapshots,
 automatic pre-update backup, migration, approved update/rollback, signatures, and
 administrator UI controls still require implementation and qualification.
+
+## Agent schema 2 migration
+
+On first startup with agent schema 1, OffGrid validates task ownership and database
+integrity, makes a consistent SQLite backup with `VACUUM INTO`, verifies integrity
+and record counts, and records its SHA-256 in `agent_migrations`. Recovery copies
+are under `agent-schema-1-backup-*/agent-state.sqlite` inside the data directory.
+This captures committed WAL data rather than copying only the main database.
+See [SQLite's backup semantics](https://www.sqlite.org/lang_vacuum.html#vacuum_with_an_into_clause).
+
+Activation adds bounded transactional activity replay; original task snapshots and
+the legacy import manifest remain. Older status-only event history is retained in
+the schema-1 backup, not misrepresented as complete replay events. A write failure
+rolls back activation. Corrupt snapshots, ownership or activity records block
+startup instead of being discarded. Backups contain private information and must
+remain protected. This database migration backup is **not** a substitute for a
+full workspace backup before deployment.
+
+Do not start a schema-1-only binary against schema 2. Restore a matched application
+and complete workspace backup into a separate directory. Companion dispatch
+journals are host-local and must not be rolled back with the workspace. Restored
+computer tasks require new local consent, and uncertain effects still require
+inspection rather than automatic replay.

@@ -16,7 +16,8 @@ export async function readAgentStream(response: Response, id: string, onSnapshot
     if (size > 16 * 1024 * 1024) throw new Error('Agent progress event too large');
     if (line !== '' || !data.length) return false;
     const event = JSON.parse(data.join('\n')); data = []; size = 0;
-    if (event.type === 'step') return false; // full snapshot carries committed steps
+    if (event.type === 'step' || event.type === 'activity') return false; // full snapshot carries committed steps
+    if (event.event_cursor !== undefined && (typeof event.event_cursor !== 'string' || !/^\d{1,19}$/.test(event.event_cursor))) throw new Error('Invalid agent event cursor');
     if (event.run_id !== id || !['pending','running','waiting_for_approval','interrupted','uncertain','completed','failed','cancelled'].includes(event.status) || !Array.isArray(event.steps) || typeof event.output !== 'string') throw new Error('Invalid agent progress snapshot');
     if (event.progress && (typeof event.progress.preview !== 'string' || typeof event.progress.phase !== 'string' || typeof event.progress.iteration !== 'number')) throw new Error('Invalid agent progress preview');
     onSnapshot(event as AgentRun); onHeartbeat();

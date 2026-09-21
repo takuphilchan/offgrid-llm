@@ -2,11 +2,48 @@ package agents
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestRestartRevokesComputerApprovalWithoutDiscardingCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManagerWithPersistence(nil, nil, nil, dir)
+	config := DefaultAgentConfig()
+	config.ComputerSession = "old-companion-session"
+	task, err := m.CreateTask("computer-restart", "edit a draft", &config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.updateTask(task.ID, func(task *Task) error {
+		task.Actor = "alice"
+		task.Status = TaskWaiting
+		task.Checkpoint = &Checkpoint{Iteration: 3}
+		task.PendingApproval = &Approval{ID: "old-approval", RunID: task.ID, Actor: task.Actor, CallID: "call", Tool: "browser_fill", Arguments: json.RawMessage(`{}`), ArgumentsJSON: `{}`, ExpiresAt: time.Now().Add(time.Hour)}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = NewManagerWithPersistence(nil, nil, nil, dir)
+	if err := m.StorageError(); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := m.GetTask(task.ID)
+	if !ok || got.Status != TaskInterrupted || got.PendingApproval != nil || got.Checkpoint == nil || got.Checkpoint.Iteration != 3 {
+		t.Fatalf("restart retained control authority or lost history: %+v", got)
+	}
+	if _, err := NewRunner(m, nil, nil).Continue(context.Background(), task.ID, "alice", "approve", "old-approval", false); err != ErrRunConflict {
+		t.Fatalf("old approval accepted: %v", err)
+	}
+	if _, err := NewRunner(m, nil, nil).Continue(context.Background(), task.ID, "alice", "resume", "", false); err != ErrRunConflict {
+		t.Fatalf("expired computer session resumed: %v", err)
+	}
+}
 
 func legacyTaskFixture(t *testing.T, directory, name string, data []byte) string {
 	t.Helper()

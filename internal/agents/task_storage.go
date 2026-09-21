@@ -74,6 +74,20 @@ func (m *Manager) loadTasks() {
 	loaded := make(map[string]*Task, len(tasks))
 	for _, task := range tasks {
 		changed := false
+		if task.Config.ComputerSession != "" && !task.ComputerSessionExpired && task.Status != TaskCompleted && task.Status != TaskCancelled && task.Status != TaskFailed {
+			task.ComputerSessionExpired = true
+			changed = true
+		}
+		// A stored computer approval is not fresh local consent. The companion
+		// session expires on service restart even if the grant's TTL has not.
+		if task.Config.ComputerSession != "" && task.PendingApproval != nil {
+			task.PendingApproval = nil
+			if task.Status == TaskWaiting {
+				task.Status = TaskInterrupted
+				task.Error = "Computer session ended when the service stopped. Start a new locally consented session; previous approvals are no longer valid."
+			}
+			changed = true
+		}
 		if task.Status == TaskRunning || task.Status == TaskPending {
 			task.Status = TaskInterrupted
 			task.Error = "Service stopped before this run finished. Review and resume explicitly."

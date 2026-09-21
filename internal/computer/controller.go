@@ -99,6 +99,9 @@ type Controller struct {
 	audit     func(AuditEvent)
 }
 
+// Deprecated: this legacy scaffold uses session-wide approval and is not wired
+// into the service. Native drivers must use the durable protocol-v2 supervisor,
+// never this controller. Retained only for legacy isolation/redaction fixtures.
 func NewController(driver Driver, broker *capabilities.Broker, store *artifacts.Store) *Controller {
 	controller := &Controller{driver: driver, broker: broker, artifacts: store, sessions: make(map[string]*Session), active: make(map[string]context.CancelFunc)}
 	for _, descriptor := range []capabilities.Descriptor{

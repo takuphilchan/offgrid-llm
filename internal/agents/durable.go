@@ -168,6 +168,9 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		if task.Actor != actor {
 			return ErrTaskNotFound
 		}
+		if task.ComputerSessionExpired {
+			return ErrRunConflict
+		}
 		if task.Checkpoint == nil || task.Checkpoint.ExecutingCall != "" {
 			return ErrRunConflict
 		}

@@ -590,6 +590,36 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /api/v2/jobs/{id}:
+    get:
+      operationId: getDurableJobSnapshot
+      description: Reads the existing owner-scoped agent task, including the latest durable event cursor. No separate task history is created.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Current persisted job snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResponse' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/jobs/{id}/events:
+    get:
+      operationId: replayDurableJobEvents
+      description: Owner-only ordered activity metadata and current snapshots. Last-Event-ID resumes from a persisted sequence. An expired or ahead cursor receives an explicit snapshot_recovery event with the current snapshot and event_cursor. Snapshot recovery never repeats execution. Disconnect does not cancel a job. Event history retains the last 256 metadata entries; completed snapshots remain.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Last-Event-ID, in: header, schema: { type: string, pattern: '^[0-9]{1,19}$' } }
+      responses:
+        '200':
+          description: SSE activity events contain TaskActivity; snapshot and snapshot_recovery events contain AgentRunResponse plus type. Event IDs are decimal sequence strings. Terminal snapshots close the stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
   /v1/agents/tasks/{id}/events:
     get:
       operationId: streamAgentProgress
@@ -1331,12 +1361,29 @@ components:
         truncated: { type: boolean }
         started_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    TaskActivity:
+      type: object
+      required: [sequence, task_id, status, completed_steps, snapshot_sha256, recorded_at]
+      properties:
+        sequence: { type: integer, format: int64 }
+        task_id: { type: string }
+        status: { type: string }
+        phase: { type: string }
+        tool: { type: string }
+        iteration: { type: integer }
+        completed_steps: { type: integer }
+        approval_id: { type: string }
+        executing_call: { type: string }
+        snapshot_sha256: { type: string }
+        recorded_at: { type: string, format: date-time }
     AgentRunResponse:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        event_cursor: { type: string, pattern: '^[0-9]{1,19}$', description: Persisted activity cursor. Only advance it after applying the snapshot. }
         computer_session: { type: string }
         computer_expected_text: { type: string }
+        computer_session_expired: { type: boolean, description: Restart invalidated local consent. Historical work may be inspected or reconciled, but cannot resume against the old target. }
         output: { type: string }
         task_id: { type: string }
         run_id: { type: string }

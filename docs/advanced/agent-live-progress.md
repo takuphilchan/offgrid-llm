@@ -38,8 +38,17 @@ below prior output. Completed output and steps use the same scrolling area.
   of the latest snapshot and subsequent changed snapshots, with heartbeat
   comments. Terminal/approval snapshots end the stream. Browser requests use the
   existing same-origin session cookie, never a credential in the URL.
-- Reconnection recovers a snapshot, **not** a complete event-history replay.
-  This does not claim the future `/api/v2/jobs` contract or event compaction.
+- The v1 stream remains snapshot-only for older clients. Services advertising
+  `durable-agent-events-v2` additionally provide `GET /api/v2/jobs/{id}` and
+  `GET /api/v2/jobs/{id}/events`. The UI negotiates this capability and reconnects
+  with `Last-Event-ID` after applying a saved snapshot.
+- V2 replay emits ordered `activity` metadata followed by a current `snapshot`.
+  The last 256 metadata entries per task are retained; prompts, page contents and
+  tool arguments are not duplicated into this journal. Full results remain in
+  the owner-only task snapshot. An expired or ahead cursor yields an explicit
+  `snapshot_recovery` event, not a silent restart. Sequence cursors are decimal
+  strings to avoid JavaScript integer rounding. This implements job reads and
+  replay, **not** the complete v2 job submission/lifecycle API.
 - The preview is capped at 64 KiB, preserving UTF-8. The first text and phase
   changes are saved immediately; later deltas are coalesced to roughly four
   writes per second, with a final flush. A crash may lose the most recent
@@ -52,6 +61,11 @@ below prior output. Completed output and steps use the same scrolling area.
   calls or invent a successful finish reason merely to display streaming.
 - Slow viewers have bounded write deadlines and cannot block execution. A viewer
   disconnect never becomes the worker's cancellation context.
+
+Computer sessions do not survive a service restart. Their pending approvals are
+invalidated, and old targets cannot be resumed. Review the retained steps and
+reconcile uncertain outcomes before starting a newly consented task. Ordinary
+non-computer tasks retain their existing checkpoint/approval behavior.
 
 Interactive CLI agent streams show phase changes and provisional response text on
 stderr; final results remain on stdout. Existing `agent status/approve/deny/cancel`

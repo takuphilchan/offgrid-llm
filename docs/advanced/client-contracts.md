@@ -60,8 +60,10 @@ names. It exposes no local paths, credentials, account data or model inventory.
 Only this exact GET is public; it does not bypass authentication on the v2 prefix.
 
 The initial capabilities describe existing v1 session/stream/agent contracts.
-An API version of 2 here does **not** mean durable v2 conversation/job/collection
-operations are available yet.
+An API version of 2 here does **not** mean every v2 operation is available.
+`durable-agent-events-v2` specifically advertises owner-scoped job snapshots and
+ordered activity replay; it does not advertise v2 submissions, native control or
+vision. See [live agent progress](agent-live-progress.md).
 
 Electron requires the same product version, supported contracts, and matching UI
 build when its local bundle is present. The UI build ID is SHA-256 of `index.html`
@@ -116,5 +118,6 @@ Per-user/workload fairness and coordinated indexing admission remain pending.
 Agent events are persisted before publication. A slow subscriber is disconnected
 instead of blocking execution and must replay from its last persisted event ID.
 Invalid persisted sequences and uncertain write failures fail closed. This is
-hardening of the existing run log, not the pending transactional v2 job/event
-contract, compaction, or browser reconnection store.
+hardening of the existing run log. Agent job replay now separately uses the same
+SQLite transaction as the task snapshot, with bounded metadata compaction and
+explicit snapshot recovery. The old run log is not its authoritative replay store.

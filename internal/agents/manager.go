@@ -27,23 +27,24 @@ const (
 
 // Task represents an agent task
 type Task struct {
-	ID              string       `json:"id"`
-	Prompt          string       `json:"prompt"`
-	Status          TaskStatus   `json:"status"`
-	Result          string       `json:"result,omitempty"`
-	Error           string       `json:"error,omitempty"`
-	Steps           []Step       `json:"steps,omitempty"`
-	Config          AgentConfig  `json:"config"`
-	CreatedAt       time.Time    `json:"created_at"`
-	StartedAt       *time.Time   `json:"started_at,omitempty"`
-	CompletedAt     *time.Time   `json:"completed_at,omitempty"`
-	DeletedAt       *time.Time   `json:"deleted_at,omitempty"`
-	Model           string       `json:"model,omitempty"`
-	Actor           string       `json:"actor,omitempty"`
-	PendingApproval *Approval    `json:"pending_approval,omitempty"`
-	Checkpoint      *Checkpoint  `json:"checkpoint,omitempty"`
-	Progress        *RunProgress `json:"progress,omitempty"`
-	cancel          context.CancelFunc
+	ID                     string       `json:"id"`
+	Prompt                 string       `json:"prompt"`
+	Status                 TaskStatus   `json:"status"`
+	Result                 string       `json:"result,omitempty"`
+	Error                  string       `json:"error,omitempty"`
+	Steps                  []Step       `json:"steps,omitempty"`
+	Config                 AgentConfig  `json:"config"`
+	CreatedAt              time.Time    `json:"created_at"`
+	StartedAt              *time.Time   `json:"started_at,omitempty"`
+	CompletedAt            *time.Time   `json:"completed_at,omitempty"`
+	DeletedAt              *time.Time   `json:"deleted_at,omitempty"`
+	Model                  string       `json:"model,omitempty"`
+	Actor                  string       `json:"actor,omitempty"`
+	ComputerSessionExpired bool         `json:"computer_session_expired,omitempty"`
+	PendingApproval        *Approval    `json:"pending_approval,omitempty"`
+	Checkpoint             *Checkpoint  `json:"checkpoint,omitempty"`
+	Progress               *RunProgress `json:"progress,omitempty"`
+	cancel                 context.CancelFunc
 }
 
 // Manager manages agent tasks and workflows

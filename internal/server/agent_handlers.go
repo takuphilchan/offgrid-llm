@@ -78,9 +78,10 @@ func taskResponse(task *agents.Task) map[string]any {
 	if task.Config.ComputerSession != "" {
 		response["computer_session"] = task.Config.ComputerSession
 		response["computer_expected_text"] = task.Config.ComputerExpectedText
+		response["computer_session_expired"] = task.ComputerSessionExpired
 	}
 	response["started_at"] = task.StartedAt
-	response["resumable"] = task.Checkpoint != nil && task.Checkpoint.ExecutingCall == "" && (task.Status == agents.TaskInterrupted || task.Status == agents.TaskPending || task.Status == agents.TaskWaiting)
+	response["resumable"] = !task.ComputerSessionExpired && task.Checkpoint != nil && task.Checkpoint.ExecutingCall == "" && (task.Status == agents.TaskInterrupted || task.Status == agents.TaskPending || task.Status == agents.TaskWaiting)
 	if task.Error != "" {
 		response["error"] = task.Error
 	}
