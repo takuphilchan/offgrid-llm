@@ -2,6 +2,8 @@
 /offgrid
 /bin/
 offgrid-*
+!cmd/offgrid-computer/
+!cmd/offgrid-computer/*.go
 *.exe
 *.dll
 *.so

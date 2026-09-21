@@ -112,12 +112,19 @@ jobs:
       - name: Validate Electron package
         working-directory: desktop
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libatspi2.0-dev libgtk-3-dev libjson-glib-dev at-spi2-core dbus-x11 xvfb xauth openbox
           npm ci --prefix ../computer --ignore-scripts
           npm ci
           node --check main.js
           node --check preload.js
           npm test
           npx electron-builder --dir --linux
+
+      - name: Test real Linux AT-SPI controls in an isolated desktop
+        env:
+          OFFGRID_NATIVE_ISOLATED_DESKTOP: '1'
+        run: xvfb-run -a dbus-run-session -- bash dev/scripts/test-native-linux.sh
 
       - name: Test browser companion contracts
         working-directory: computer
@@ -168,7 +175,12 @@ jobs:
       - name: Test native CLI, persistence, and agent contracts
         # These tests use subprocesses and real local files, not OS emulation.
         # They do not substitute for installed-app or hardware qualification.
-        run: go test ./cmd/offgrid ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models
+        run: go test ./cmd/offgrid ./cmd/offgrid-computer ./internal/computer ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models
+      - name: Test isolated Windows UI Automation and local stop controls
+        if: runner.os == 'Windows'
+        env:
+          OFFGRID_TEST_NATIVE_WINDOWS: '1'
+        run: go test -p 1 -v -timeout 90s ./internal/computer ./cmd/offgrid-computer -run TestNative -count=1
       - name: Test desktop compatibility and IPC trust policy
         working-directory: desktop
         run: npm test

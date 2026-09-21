@@ -1,5 +1,32 @@
 # Computer Tasks browser preview
 
+## Native-control foundation (not native availability)
+
+The service no longer instantiates the legacy blanket-approved computer
+controller. Browser protocol 1 continues through the durable agent authorization
+path. `internal/computer/protocol_v2.go` defines the next typed driver contract,
+opaque target identities, bounded-step digests, local-consent binding and private
+length-prefixed worker framing. Its tests reject changed values/targets, expired
+grants, mixed consequential actions, oversized frames and executable strings.
+The native worker implementations below use this contract and a host-local
+supervisor. They are development components, not a qualification claim. Native
+control is not exposed through Agents until the shared client/service cutover and
+required platform checks are complete; vision remains unimplemented.
+
+The host dispatch journal now saves a result before acknowledgment. An identical
+redelivery in the same session can return that recorded result; changed arguments
+or session/workspace binding are rejected. A journal entry without a recoverable
+result remains uncertain and cannot execute again. Closing a session clears its
+result payloads but retains duplicate-action tombstones. After an unclean exit,
+starting a new session clears previous-session result payloads. The journal stays
+on the host and must not be restored alongside a service backup.
+
+The journal change is included by desktop runtime packaging; rebuilding only the
+service/container does not update an installed companion. No personal browser
+profiles are imported. Direct mode blocks VPN fake DNS; explicit trusted-VPN
+routing is described below. Configurable HTTP/SOCKS proxies and native/vision
+setup are still pending.
+
 This is a **managed-browser preview**, not the completed cross-platform Computer
 Tasks program. It controls a separate Chromium browser on the local host. It does
 not control native applications, use vision, attach to personal browser profiles,
@@ -10,7 +37,8 @@ the full task/model/platform evaluation gates pass.
 
 Updated desktop packages include the matching Playwright/Chromium runtime. In
 **Agents**, describe your task, enable **Use a browser**, and enter a public HTTPS
-site or choose **Try a practice page**. Approve the native consent prompt. OffGrid
+page URL or choose **Try a practice page**. Paths, query strings and fragments
+are supported; embedded credentials are not. Approve the native consent prompt. OffGrid
 starts and pairs its own companion; no Node installation or copied code is needed.
 Choose a tool-capable model and run the task. Each proposed change still requires
 your approval; removing technical setup does not remove consent.
@@ -49,8 +77,22 @@ The browser is bundled rather than downloaded on first use. This adds its size
 to the desktop package but permits offline practice-page startup. A damaged or
 missing runtime fails closed: reinstall the matching package, not an arbitrary
 download. Separate signed optional-pack installation/repair is still pending.
-Public sites whose DNS resolves into VPN fake-IP/private ranges remain blocked;
-use the practice page without disabling a required VPN.
+For a trusted VPN using fake DNS, expand **Network settings**, select **Trusted
+VPN routing**, then confirm the trust warning locally. Direct mode remains the
+default; a network failure never switches modes automatically. Keep required VPNs
+enabled. This permits only the selected hostname's `198.18.0.0/15` fake-DNS
+mapping through the existing VPN, not arbitrary private-network destinations.
+OffGrid cannot independently verify the routing hidden by that VPN. TLS hostname
+and certificate checks remain enabled. Explicit authenticated HTTP/SOCKS proxy
+configuration, IPv6-only sites, and consented cross-origin resources are not yet
+supported; some sites will remain incomplete or unavailable.
+
+One useful read-only test with the updated host runtime is to open
+`https://playwright.dev/docs/intro` and ask: "Find the Writing tests documentation,
+open it, and explain the basic structure of a test. Include the source URL."
+The companion has been tested opening that real page, discovering its link,
+navigating and checking the resulting text through the local VPN. This is driver
+evidence, not proof that every local model will plan that task successfully.
 
 ## Developers and CLI: try it from this checkout
 
@@ -70,8 +112,9 @@ npm start
 In OffGrid **Agents**, enable **Use a browser**, open **Developer connection**,
 then **Pair browser**.
 The companion asks for the local service URL (press Enter for the default), then
-a browser target. Choose `demo` (the default) for the companion's isolated local
-research-notes page, or enter one public HTTPS origin. After local consent,
+a browser target. Enter a public HTTPS page URL, or `demo` for an isolated practice
+page. For a public site choose `direct` (default) or explicitly `trusted-vpn`.
+After local consent,
 service/network/browser preflight completes **before** asking for a pairing code.
 Only then click **Pair browser** to generate a fresh code. Select the paired browser in OffGrid, choose a
 tool-capable model, and submit a task. Start with a bounded inspection such as
@@ -142,22 +185,25 @@ starting new work; never blindly repeat a click.
 - A pairing permits one task, 100 actions and ten minutes. Pair again for another
   task. Codes expire in two minutes; tokens stay only in host/service memory and
   are invalid after restart. There is no persistent credential enrollment yet.
-- Network requests are restricted to the selected origin. Public IPv4 resolution
-  is checked and pinned for the browser session; private/reserved addresses, file
-  URLs, cross-origin resources, service workers and WebSockets are blocked. Some
-  real sites will not function under this deliberately narrow policy. VPN fake-DNS
-  destinations and IPv6-only sites are unsupported for public browsing; use the
-  owned demo instead. Explicit proxy support is not implemented. Do not disable
-  these checks or add a blanket exception for reserved addresses.
+- Network requests are restricted to the selected origin. A loopback HTTPS
+  CONNECT relay checks the exact hostname and port and pins its destination;
+  this covers redirect escapes that browser route callbacks alone miss. Direct
+  mode rejects private/reserved DNS results. Trusted-VPN mode additionally permits
+  the consented fake-DNS range, with the disclosed routing trust boundary above.
+  Plain HTTP, unapproved origins, file URLs, service workers and WebSockets remain
+  blocked. Blocked resource origins are reported without request paths, cookies
+  or credentials. Closing the browser tears down owned relay sockets.
 - Structured observations are untrusted page data. Password/credential controls
   are excluded, field values are not collected, and screenshots are not captured.
   Page text may still be sensitive: approve only pages intended for OffGrid.
 - Exact action approvals cannot be supplied by the model. Stale observations are
   rejected. GUI effects cannot be sandboxed perfectly; don't use financial,
   administrative, security-sensitive or account-management pages in this preview.
-- Dispatch IDs and hashes are journaled in the local user's
-  `.offgrid-llm/computer/dispatch.sqlite`. No arguments, credentials or screenshots
-  are stored there. Duplicate actions are refused, not automatically replayed.
+- Dispatch IDs and argument hashes are journaled in the local user's
+  `.offgrid-llm/computer/dispatch.sqlite`. Results can contain observed page text
+  and are retained during the session for safe reply replay, then cleared as
+  described above. Identical completed action IDs return saved replies, never
+  repeated input; uncertain actions remain blocked.
 - OffGrid requires an affirmative final `browser_verify` result matching the
   actual check arguments, after any changes. If an optional strict criterion is
   supplied, the final check must match it. In automatic mode, an unchanged initial
@@ -170,8 +216,87 @@ starting new work; never blindly repeat a click.
 
 Tests: `npm test` exercises a real isolated Chromium fixture. It is not evidence
 that any particular local model can plan a complete task. Native Windows/macOS/
-Linux drivers, vision, signed/offline automation packs, persistent OS-keystore
+Linux workflow qualification, vision, signed/offline automation packs, persistent OS-keystore
 pairing, full pause/takeover UX, and the 30-case qualification suite remain pending.
+
+### Native Windows worker development
+
+`cmd/offgrid-computer` now implements a Windows x64 host process with UI
+Automation target discovery, selected-window observation, exact approved text
+replacement and activation. It uses direct Go COM bindings to Windows UIA, not
+shell commands or simulated keystrokes. This replaces the proposed C++ worker
+implementation for this slice while retaining process isolation. It is **not yet
+connected to the Agents task/session APIs or offered as a native UI option**.
+The existing browser experience remains unchanged.
+
+The worker uses private framed pipes, local Yes/No consent, a visible Stop window,
+and Ctrl+Alt+Shift+F12. An independent watchdog terminates a hung owned worker
+after revocation; it never terminates the target application. Structured password
+controls are excluded, but ordinary control labels can still contain sensitive
+data. This is not a guarantee that all secrets are detected. There is no native
+screenshot/vision path or arbitrary keyboard/shell interface.
+
+Dispatch intent/results are recorded in a separate **host-local execution
+journal**, using the existing SQLite connection policy. It is not another task
+history. Never restore that journal from an older workspace backup: unresolved
+dispatches must remain uncertain, and action IDs must never repeat input.
+
+Windows packs include the worker and its file digest. This establishes bundle
+integrity relative to the existing trusted package, not publisher signing or
+native workflow qualification. General target scope qualification, enrollment,
+service integration and end-user native setup remain
+unfinished. Do not expose this internal worker as general-purpose computer use.
+
+Developer validation (opens and edits only disposable test applications):
+
+```powershell
+$env:OFFGRID_TEST_NATIVE_WINDOWS = '1'
+go test -p 1 -v -timeout 90s ./internal/computer ./cmd/offgrid-computer -run TestNative -count=1
+Remove-Item Env:OFFGRID_TEST_NATIVE_WINDOWS
+```
+
+The tests exercise real UIA and actual worker consent dialogs, independently read
+the resulting Win32 edit text, and test the Stop button, registered hotkey message,
+stale controls and replay rejection. Automatic confirmation exists only in the
+test executable and targets its own child/fixture—not the production worker.
+This is deterministic driver evidence, not a model-planning or full app test.
+
+### macOS and Linux native worker development
+
+The same Go host/supervisor now builds macOS Accessibility and Linux AT-SPI
+adapters. The macOS adapter uses an Objective-C framework shim rather than the
+planned Swift worker; the Linux adapter uses libatspi through cgo. Neither invokes
+AppleScript, shell commands or arbitrary keyboard input. Both retain provider
+objects and check process identity, same-user ownership, window ancestry and
+fresh state before the supported text replacement/activation operations.
+
+macOS builds include an AppKit consent/Stop helper with an emergency shortcut.
+Accessibility must be granted to the companion's execution identity. Linux builds
+include a GTK consent/Stop helper; it refuses startup when it cannot monitor the
+desktop screen-lock service. Escape stops only while that Linux window has focus;
+a desktop-wide Linux shortcut and Wayland portal capture/input remain unfinished.
+Permission setup, native UI integration and qualification are still required.
+
+An isolated Ubuntu 24.04 Xvfb/Openbox fixture has passed real AT-SPI discovery,
+approved Unicode editing, an independent GTK text oracle and stale-action
+rejection. This does not qualify GNOME/KDE or Wayland desktop sessions. macOS
+compilation and packaged checks run on the review branch's Intel/Apple Silicon
+CI matrix; results must be recorded before making a platform claim.
+
+Linux build dependencies are `libatspi2.0-dev`, `libgtk-3-dev` and
+`libjson-glib-dev`; the developer fixture also needs `at-spi2-core`, `dbus-x11`,
+`xvfb`, `xauth` and `openbox`. These are build/test requirements, not terminal
+setup instructions for ordinary users. In an unprivileged isolated desktop:
+
+```bash
+OFFGRID_NATIVE_ISOLATED_DESKTOP=1 xvfb-run -a dbus-run-session -- bash dev/scripts/test-native-linux.sh
+```
+
+`dev/containers/native-contracts.Dockerfile` provides an isolated Ubuntu build
+environment. Run it with Docker `--init` and no host display, socket or service
+data mounts. Supply the repository and matching Go toolchain as build inputs.
+No native worker implements screenshots, vision, whole-desktop input or general
+file operations yet; pack manifests explicitly retain `qualified: false`.
 
 ### Building and validating the desktop integration
 

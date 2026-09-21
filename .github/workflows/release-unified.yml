@@ -916,6 +916,12 @@ jobs:
               -o build/windows/offgrid.exe ./cmd/offgrid
           fi
 
+      - name: Install Linux native-companion build dependencies
+        if: matrix.os == 'linux' && steps.existing.outputs.skip != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libatspi2.0-dev libgtk-3-dev libjson-glib-dev
+
       - name: Install desktop dependencies
         if: steps.existing.outputs.skip != 'true'
         working-directory: desktop

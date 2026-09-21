@@ -26,7 +26,14 @@ async function entries(root, folder = root) {
 }
 async function createManifest(root, platform, arch, version) {
   const manifest={protocol:1,platform,arch,playwright:version,files:await entries(root)};
+  const nativeFile=`native/offgrid-computer${platform==='win32'?'.exe':''}`;
+  if(manifest.files.some(file=>file.path===nativeFile)) manifest.native=nativeProfile(platform);
   await fs.writeFile(path.join(root,'manifest.json'),JSON.stringify(manifest));
+}
+function nativeProfile(platform) {
+  const driver={win32:'windows-uia',darwin:'macos-accessibility',linux:'linux-atspi'}[platform];
+  if(!driver) throw Error('pack_invalid');
+  return {protocol:2,driver,scope:'selected-window',operations:['observe','replace_text','activate'],vision:false,qualified:false};
 }
 async function verifyPack(root, platform = process.platform, arch = process.arch) {
   try {
@@ -34,6 +41,14 @@ async function verifyPack(root, platform = process.platform, arch = process.arch
     if (manifest.protocol!==1 || manifest.platform!==platform || manifest.arch!==arch || manifest.playwright!=='1.62.1') throw Error('pack_invalid');
     if (JSON.stringify(manifest.files)!==JSON.stringify(await entries(root))) throw Error('pack_invalid');
     if (!manifest.files.some(f=>f.path==='managed.cjs') || !manifest.files.some(f=>f.path.startsWith('browsers/'))) throw Error('pack_invalid');
+    const hasNative=manifest.files.some(file=>file.path===`native/offgrid-computer${platform==='win32'?'.exe':''}`);
+    if(hasNative && JSON.stringify(manifest.native)!==JSON.stringify(nativeProfile(platform))) throw Error('pack_invalid');
+    if(!hasNative && manifest.native) throw Error('pack_invalid');
   } catch { throw Error('pack_invalid'); }
 }
-module.exports={createManifest,verifyPack};
+async function verifyNativePack(root,platform=process.platform,arch=process.arch) {
+  await verifyPack(root,platform,arch);
+  const manifest=JSON.parse(await fs.readFile(path.join(root,'manifest.json'),'utf8'));
+  if(!manifest.native) throw Error('computer_driver_unavailable');
+}
+module.exports={createManifest,verifyPack,verifyNativePack};

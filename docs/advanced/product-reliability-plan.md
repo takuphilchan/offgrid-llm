@@ -1515,3 +1515,295 @@ Earlier local attempts exposed a startup timeout and a missed Finish transition;
 these are not counted as passes. Fresh hosted CI is still required before
 publication. This evidence does not qualify signing, native computer control,
 vision or general model-driven browser task reliability.
+
+### Native Computer Tasks foundation checkpoint (2026-09-21)
+
+This is a partial implementation of the all-platform program, not a native-control
+release or a completed milestone. The existing browser preview remains the only
+executable computer driver. No native/vision availability flag was enabled.
+
+Implemented in the working tree:
+
+- Removed the legacy session-wide-approved controller from production server
+  wiring. Browser actions still pass through durable agent authorization.
+- Added protocol-v2 typed operations, opaque target/process-generation identity,
+  framed private-worker messages, exact bounded-step digests, consent identity,
+  five-minute/session-capped approval validation, fresh-observation validation,
+  and separate confirmation requirements for consequential/unknown actions.
+  These are executable contract validators, **not an integrated native dispatch
+  supervisor**. Existing browser transport remains explicitly protocol 1.
+- Added schema-2 agent activity metadata in the existing SQLite database. Snapshot
+  updates and ordered events commit atomically; metadata retention is bounded to
+  256 entries per task. Schema-1 activation requires a verified consistent backup,
+  preserves task ownership/results/import metadata, and records backup provenance.
+  Corruption or an injected migration failure blocks activation without publishing
+  partial work. Older status-only history remains in the recovery copy.
+- Added owner-scoped `/api/v2/jobs/{id}` and `/api/v2/jobs/{id}/events` reads with
+  Last-Event-ID replay, explicit snapshot recovery, and bounded subscriber write
+  deadlines. Web/Electron renderer negotiates `durable-agent-events-v2`; it commits
+  a cursor only after applying a snapshot. Existing v1 clients remain supported.
+- Computer approvals and resumability expire on service restart; historical
+  results/checkpoints and uncertain-action reconciliation remain available.
+- The host journal binds immutable actions to workspace/session and normalized
+  arguments, saves results before acknowledgment, and never repeats input on a
+  duplicate. Changed bindings fail; missing results remain uncertain. Session
+  closure clears result payloads while preserving duplicate-prevention records;
+  a new session clears payloads left by an unclean prior session. Packaging now
+  includes the journal module. The host journal is not part of service rollback.
+- Known duplicate/uncertain host outcomes now give review guidance rather than
+  suggesting a reinstall. Added draft copy for all nine locales; speaker review
+  has not been performed.
+
+Threat boundaries retained: model/page content is not authority; local consent
+is independent of service authorization; process/window identity is not a title
+or PID; an unknown click is not read-only; protocol 1 cannot grant native input;
+private framed IPC is not a host network-control endpoint. Driver implementations
+must still prove target-addressed scope enforcement and independent local Stop.
+These contract tests do not prove an OS application sandbox or perfect redaction.
+
+Validation recorded for this checkpoint:
+
+- Windows `go test ./...` passed. Focused tests also cover migration rollback,
+  corrupt activity refusal, slow-subscriber isolation, expired control consent,
+  exact step bindings, malformed worker frames and duplicate dispatch recovery.
+- WSL/Linux race tests passed for computer, agents and server.
+- All 17 companion tests passed, including real managed-Chromium fixtures.
+- All 35 desktop unit tests passed; these are not installed-native-driver tests.
+- All 91 browser UI tests passed after fixing an identity negotiation regression
+  exposed by the first full run (85 passed / 6 failed). Missing capability lists
+  no longer hide Agents; replay is used only when explicitly advertised. Most UI
+  tests use HTTP fixtures and do not constitute real-service/model qualification.
+- TypeScript, generated OpenAPI drift and UI production build passed. Vite still
+  reports the existing large-chunk warning; bundle optimization is not claimed.
+
+No macOS/Linux desktop worker, native model workflow, installed companion update,
+local vision profile, trusted-proxy routing or new package qualification was tested
+because those implementations are not part of this checkpoint.
+
+Program work still outstanding (do not mark the program complete):
+
+1. Integrate protocol 2 with a Go companion/supervisor, durable bounded-step
+   approvals/action lifecycle, actor/request-ID job submission, secure persistent
+   enrollment/revocation, and locally enforced Pause/Take over/Stop.
+2. Implement and test real Windows UIA/WGC, macOS AX/ScreenCaptureKit and Linux
+   AT-SPI/portal/EIS/X11 workers. No native worker has been delivered here.
+3. Add explicit trusted-proxy mode, consented multi-origin browsing, optional
+   remembered profiles, staged transfers, and race-safe folder-scoped trash/files.
+4. Implement typed images end-to-end, protected-region capture controls, qualified
+   local vision profiles, coordinate approval and independent artifact oracles.
+5. Complete no-terminal native setup and CLI lifecycle, generated Python contracts,
+   full v2 job cutover, standalone companion packaging and verified offline repair.
+6. Qualify all advertised platforms/models together, including installed packages,
+   signing/notarization, independent security review, the 30-case repeated workflow
+   matrix, the 72-hour soak and the 30-day everyday-user pilot.
+
+No commit, push, publication, live installation update, container replacement,
+VPN change, or WSL restart was authorized or performed for this checkpoint.
+
+### Authorized local container replacement — 2026-09-21
+
+Following the separate request to replace the container, built the current working
+tree (including new untracked implementation files) through `application-artifacts`
+and reused the unchanged local CUDA/llama runtime. This is a local development
+deployment, not a new release or native-computer qualification.
+
+- Active container: `offgrid`; image
+  `offgrid-llm:computer-foundation-gpu-20260921`, image digest
+  `sha256:d331c882c993d4ae2ea1ad4de737ef6aec78c1acf2f8f2d59a6d023d51a2a095`.
+- Service reports version `0.4.11`, revision
+  `af273c6-worktree-computer-foundation`, and `durable-agent-events-v2`.
+- Stopped-workspace backup:
+  `/home/phil/offgrid-computer-backup-1TfUvFIK/workspace.tar.gz`;
+  SHA-256 `eb307f83ab5fffbcea77a962a9de1fa77885e5269dce68b91e7d94ef7a812dbe`.
+  Container configuration and isolated migration copy are retained beside it.
+- Previous container retained stopped as `offgrid-before-computer-1789963680`.
+  **Rollback requires restoring the matching schema-1 workspace backup before
+  starting that old binary. Do not start it against the migrated live volume.**
+- Isolated schema-1 to schema-2 migration passed integrity and foreign-key checks.
+  All 34 stored task records (13 visible tasks and 21 deletion tombstones) retained
+  their identities, ownership and saved outcomes. Live task API matches the 13
+  visible records; deleted history was not resurrected. All four models remain
+  available and the workspace identity is unchanged.
+- Live job snapshots, SSE reconnect with a current cursor, and explicit snapshot
+  recovery for an expired/ahead cursor passed read-only checks. No browser session
+  was active at cutover. No model generation or host input was performed for these
+  deployment checks.
+- `/health` and `/ui/` are reachable from Windows and WSL at localhost port 11611;
+  Docker reports healthy. Served UI build identity matches its index hash:
+  `06307e339bcf8146bc990a08a8a6510586fdcc3135761da1355b1db1b8fa40c7`.
+  JavaScript bundle is `index-DYK2rckN.js`.
+
+Models, runtime settings, local port binding and GPU device access were preserved.
+No desktop/host-companion installation was changed: container replacement cannot
+deliver host journal updates or native/vision drivers. No commit, push, release,
+VPN change or WSL restart was performed.
+
+### Real-site browser repair checkpoint — 2026-09-21
+
+This checkpoint addresses real browsing blockers, not completion of native
+Computer Tasks. The user explicitly approved a public HTTPS test through the
+existing VPN. No VPN configuration, live container, installed desktop, tags or
+release artifacts were changed.
+
+Implemented:
+
+- Desktop and developer companion accept full public HTTPS page URLs (including
+  paths, query strings and fragments), while service pairing remains origin-scoped.
+  Embedded credentials and literal/local destination names are rejected.
+- Direct networking is still the default. An advanced desktop network selector
+  offers trusted-VPN routing, with an additional native consent disclosure.
+  That mode permits only the selected host's `198.18.0.0/15` fake-DNS mapping;
+  it does not grant arbitrary private IPs or other origins. TLS verification is
+  retained. The operator trusts the VPN's hidden routing, not independently
+  verified public-IP isolation. There is no automatic fallback into this mode.
+- A loopback HTTPS CONNECT relay pins the selected destination and rejects other
+  hostname/port pairs, plaintext HTTP and loopback proxy bypass. This closes the
+  redirect boundary missed by route-callback-only enforcement (see the upstream
+  [Playwright routing behavior](https://playwright.dev/docs/api/class-page#page-route)).
+  Stopping the companion closes its owned relay sockets.
+- Observed links expose exact in-scope destinations. Bounded read-only retries
+  handle hydration during observation; no click, edit or submission is retried.
+  Blocked subresource origins and truncated-control indicators remain visible
+  to the agent so it can report incomplete pages rather than invent missing data.
+- Known network errors give specific recovery guidance instead of reinstall
+  advice. Shared desktop/web strings cover all nine locales; speaker review
+  remains outstanding.
+
+Evidence:
+
+- 21 companion tests passed, including Chromium redirect/private-subresource
+  rejection, DNS policy, stale input, journal recovery and bounded observation
+  retries. The self-signed key/certificate under `computer/test/fixtures` are
+  public test material only; TLS bypass exists only in the owned fixture test.
+- 36 desktop unit tests passed, including local consent refusal for trusted VPN,
+  invalid-mode rejection, no arbitrary proxy arguments and private IPC forwarding.
+- All 92 UI tests passed. The initial 90/92 run exposed two incorrect selectors
+  in the added test cases; those were corrected and the entire suite rerun.
+- Focused Go tests for computer, agents and server passed; OpenAPI drift,
+  TypeScript and production renderer build passed. The existing bundle-size
+  warning remains.
+- Built and verified the Windows bundled companion runtime. Real Electron
+  utility-process integration passed the owned demo and, separately with explicit
+  operator consent, opened `https://playwright.dev/docs/intro`, discovered the
+  Writing tests link, navigated to `/docs/writing-tests`, verified page text and
+  shut down the owned browser. VPN remained enabled and HTTPS checks were not
+  disabled. Evidence: `build/computer-public-check.log`; isolated test profile
+  `C:\Users\phil\AppData\Local\Temp\offgrid-desktop-browser-f9Q7FO`.
+  Repeat with Electron and `dev/scripts/test-computer-desktop.cjs
+  --public-docs-trusted-vpn` only after consciously approving that network trust.
+
+These tests used a deterministic tool dispatcher, not a model planner; they do
+not qualify autonomous task quality. No new installed-app installer was tested.
+Native OS drivers, local vision, bounded-step approvals, multi-origin resource
+consent, remembered login, downloads/uploads and typed filesystem operations
+remain unfinished. Explicit HTTP/SOCKS proxy configuration and IPv6-only public
+sites remain unsupported. Do not claim general computer use or a 9/10 product
+from this checkpoint. The matching host runtime and application must be deployed
+together under separate approval; a container-only update cannot deliver these
+host changes.
+
+### Native Windows implementation checkpoint — 2026-09-21
+
+Implemented actual native control rather than extending the browser demo:
+
+- An unprivileged `cmd/offgrid-computer` Windows x64 worker calls Windows UI
+  Automation through Go COM bindings. This is an implementation adjustment from
+  the proposed C++ worker: it retains the existing Go toolchain and process
+  isolation without introducing a compiler/SDK prerequisite for end users.
+- Discovery binds opaque target/control identities to OS session, process
+  creation time and selected window. Dispatch checks process ownership,
+  non-elevation, unlocked desktop, focus, UIA ancestry and fresh control state.
+  Supported mutations are ValuePattern text replacement and InvokePattern
+  activation. Invocation is reported as dispatched, not proof of task completion.
+- Exact local consent and bounded-step grants cannot be supplied as a model or
+  renderer boolean. Approvals display the locally prepared control and exact
+  proposed value, rather than trusting a model-written action description.
+- The host-local SQLite journal durably claims action IDs before dispatch and
+  records results before reply. Changed arguments, incomplete claims and corrupt
+  or newer stores fail closed. Identical completed IDs replay results only;
+  failed actions cannot become success on replay. The journal uses the existing
+  storage policy and exclusive ownership; it is not a second service task store.
+- A separate Windows message thread provides a visible Stop window and registers
+  Ctrl+Alt+Shift+F12. Revocation is independent of the service/model. A watchdog
+  exits a hung owned worker after two seconds; an in-flight journal claim remains
+  uncertain. No target application is killed. Native IPC retains ownership until
+  process exit and refuses new work after an unconfirmed stop.
+- Windows desktop runtime packaging builds the worker, includes the private
+  `native-worker.cjs` bridge and covers these files with the existing pack digest.
+  Public capability flags remain unchanged. CI now includes isolated Windows
+  UIA/worker tests; tests are serialized to avoid competing desktop controllers.
+
+Recorded evidence:
+
+- A real owned Win32 application accepted an approved Unicode text replacement
+  via UIA. Independent `WM_GETTEXT` checks matched the requested content. Marked
+  password controls were excluded; manual changes invalidated prepared actions.
+  A repeated test encountered a focus change and correctly received a scope
+  rejection rather than a stale-state code. The fixture now explicitly restores
+  its own focus before checking stale-state rejection; the serialized suite passed.
+- A separate real worker process passed framed IPC, both actual local consent
+  dialogs, approved native editing, independent result checks and stop/exit.
+  Test-only automation confirmed dialogs belonging to that owned worker and the
+  exact disposable document. Production contains no automatic-consent switch.
+- The local Stop button, close control and registered hotkey message path passed
+  without service/model connectivity. A physical keyboard/layout qualification
+  and installed-app accessibility review remain separate gates.
+- All Go packages passed on Windows; Linux/WSL race tests passed for computer,
+  agents and server. Companion tests passed (26) and desktop unit tests passed
+  (36). Focused native journal tests cover reopening, uncertain dispatch, failed
+  persistence, duplicate actions, concurrent ownership and stop admission.
+- Built and verified `build/computer-runtime/win-x64`. The real bundled executable
+  launched through the private bridge, discovered targets and exited on Stop.
+  That package smoke test selected and modified no user application.
+
+Not complete: the Agents service/session/tool adapter and end-user native setup,
+cross-platform native drivers, vision, file/download/upload workflows and broader
+origin consent. HWND replacement/scope-edge cases, application-specific effects,
+provider hangs, accessibility and privacy require more adversarial qualification
+before exposing native mutations. A local unit/fixture pass does not satisfy the
+30-workflow, model-planning, signing, soak or pilot gates. No native capability is
+advertised as production-ready, and no existing container/installation, release,
+tag or remote commit was changed at this checkpoint.
+
+### Cross-platform native review checkpoint — 2026-09-21
+
+The private worker core is now shared by Windows x64, macOS Intel/Apple Silicon,
+and Linux x64. macOS uses a small Objective-C Accessibility shim and an AppKit
+consent/Stop process; Linux uses libatspi with a GTK consent/Stop process. This
+adjusts the planned Swift/C++ implementation languages without replacing Go
+or introducing script execution. Native control is still not wired into public
+Agents sessions, and the runtime manifest explicitly reports `qualified: false`.
+
+Local validation:
+
+- Real Windows UIA edit, actual private worker/consent IPC, independent Win32
+  result verification and Stop tests passed from an interactive terminal.
+  Running from noninteractive pipes could not obtain foreground permission and
+  correctly refused mutation. Focus activation now waits briefly for Windows'
+  asynchronous transition; it never bypasses foreground restrictions.
+- In an isolated unprivileged Ubuntu 24.04 container with Xvfb/Openbox and a
+  private D-Bus session, the real AT-SPI fixture passed discovery, an approved
+  Unicode edit, an independent GTK read and stale-state rejection. The Linux
+  worker and GTK consent helper compiled. This is not GNOME/KDE/Wayland or
+  installed-package qualification. The fixture required explicit GObject linkage;
+  the build now declares it rather than relying on transitive linker behavior.
+- All ordinary Go packages passed on Windows. Companion contracts passed (30),
+  desktop contracts passed (36), and four additional platform-specific pack tests
+  rejected tampering and invented native/vision qualification. API drift,
+  TypeScript, renderer build and workflow syntax/release-CI checks passed.
+- The first full UI run passed 91/92: an Arabic locale test measured before its
+  font was ready. Its geometry baseline now awaits `document.fonts.ready` while
+  retaining exact containment/position assertions. The complete 92-test rerun
+  passed with four workers and no retries.
+
+Review-branch CI is explicitly authorized, including macOS Intel/Apple Silicon
+compilation and installed-bundle startup checks. No release, tag movement or
+live installation/container replacement is authorized by this checkpoint.
+macOS permission-boundary tests do not modify TCC or pretend a hosted runner has
+user consent. Native app mutation qualification on macOS remains a separate gate.
+
+Remaining gaps include the shared service/client native-session cutover,
+end-user enrollment/permission setup, Linux global emergency shortcut and portal
+capture/input, all local vision, typed files/downloads/uploads, and multi-origin
+browser workflows. Source and build coverage alone cannot establish model task
+quality, OS permission usability, privacy guarantees, signing, soak or pilot gates.
