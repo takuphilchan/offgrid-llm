@@ -33,7 +33,7 @@ export function ComputerActivity() {
  useEffect(() => { if (sessions.some(s => s.state === 'ready')) setStopping(false); }, [sessions]);
  if (!sessions.length && !stopping && !error) return null;
  return <aside className="computer-activity" aria-label={native?nativeText.connected:text.connected}>
-  <div><strong>{native?nativeText.connected:text.connected}</strong>{sessions.map(s => <p key={s.id}>{s.origin} · {s.approval_mode==='ask_every_time'?approvalText.ask:s.approval_mode==='full_task'?approvalText.full:approvalText.scoped} · {text[s.state ?? 'in_use']}</p>)}
+  <div><strong>{native?nativeText.connected:text.connected}</strong>{sessions.map(s => <p key={s.id}>{s.origin} · {s.approval_mode==='full_task'?approvalText.full:s.approval_mode==='scoped_changes'?approvalText.scoped:approvalText.ask} · {text[s.state ?? 'in_use']}</p>)}
   {stopping && <p role="status">{native?nativeText.stopping:text.stopping}</p>}{(lost || error) && <p role="alert">{error || text.lost}</p>}</div>
   {stopping && !sessions.length && !lost && !error ? <button type="button" className="secondary-button" onClick={() => setStopping(false)}>{text.close}</button> : <button type="button" className="secondary-button" disabled={busy} onClick={() => void stop()}>{native?nativeText.stop:text.stop}</button>}
  </aside>;

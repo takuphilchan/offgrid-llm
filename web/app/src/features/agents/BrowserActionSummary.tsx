@@ -1,6 +1,7 @@
 import type {AgentStep} from '../../api/client';
 import {useI18n} from '../../i18n';
 import {browserActionLabel,computerExperience} from '../../i18n/computer-experience';
+import {approvalAuditText,approvalPolicyText} from '../../i18n/native-app';
 
 export function BrowserActionSummary({tool,args,steps}:{tool:string;args:Record<string,unknown>;steps:AgentStep[]}) {
  const {locale}=useI18n(); const text=computerExperience(locale);
@@ -28,14 +29,14 @@ export function BrowserActionSummary({tool,args,steps}:{tool:string;args:Record<
 }
 
 export function BrowserActivity({steps}:{steps:AgentStep[]}) {
- const {locale}=useI18n(); const text=computerExperience(locale);
+ const {locale}=useI18n(); const text=computerExperience(locale); const policy=approvalPolicyText(locale); const audit=approvalAuditText(locale);
  return <ol className="browser-task-timeline">{steps.filter(step=>step.tool_name?.startsWith('browser_')||step.tool_name?.startsWith('computer_')).map((step,index)=>{
    let result:Record<string,unknown>={};
    try {result=JSON.parse(step.tool_result??'{}');}catch{}
    const artifact=result.artifact as Record<string,unknown>|undefined;
    const file=result.file as Record<string,unknown>|undefined;
    return <li key={step.id??index}><strong>{browserActionLabel(locale,step.tool_name!)}</strong>
-    {step.authorization && <p className="agent-action-authorization">{step.authorization==='exact_approval'?text.change:`${text.verified} · ${step.authorization.replace('automatic:','').replaceAll('_',' ')}`}</p>}
+    {step.authorization && <p className="agent-action-authorization">{step.authorization==='exact_approval'?audit.exact:`${audit.automatic} · ${step.authorization==='automatic:full_task'?policy.full:step.authorization==='automatic:scoped_changes'?policy.scoped:policy.ask}`}</p>}
     {['browser_verify','computer_verify','computer_verify_checked'].includes(step.tool_name??'') && <p>{result.verified===true?text.verified:text.notVerified}{typeof result.text==='string'?`: ${result.text}`:typeof result.checked==='boolean'?`: ${text.checkboxStates[result.checked?0:1]}`:''}</p>}
     {step.tool_name==='browser_download' && result.verified===true && typeof artifact?.name==='string' && <p>{text.verified}: {String(artifact.name)} · {String(artifact.size)} bytes</p>}
     {step.tool_name==='browser_upload' && result.verified===true && typeof file?.name==='string' && <p>{text.verified}: {String(file.name)}</p>}

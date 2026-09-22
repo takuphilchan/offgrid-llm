@@ -286,6 +286,16 @@ test('form approval cards show the observed option label and explicit checkbox s
  await expect(card).toContainText('Set a checkbox');await expect(card).toContainText('Include sources');await expect(card).toContainText('Unchecked');
 });
 
+test('computer task history distinguishes automatic authorization from verification', async ({page})=>{
+ await fixture(page);
+ await page.addInitScript(()=>localStorage.setItem('offgrid.draft.v1:alice%3Aworkspace%3Alegacy:agent-run:','approval-audit'));
+ await page.route('**/v1/agents/tasks/approval-audit',r=>r.fulfill({json:{run_id:'approval-audit',task_id:'approval-audit',status:'completed',output:'Draft saved.',computer_session:'paired',computer_approval_mode:'scoped_changes',steps:[{id:1,tool_name:'browser_fill',tool_result:'{"verified":true}',authorization:'automatic:scoped_changes'}]}}));
+ await page.goto('/ui/#/agents');
+ const timeline=page.locator('.browser-task-timeline');
+ await expect(timeline).toContainText('Automatically approved · Approve scoped changes');
+ await expect(timeline).not.toContainText('Verified · scoped changes');
+});
+
 test('history toolbar and search field have deliberate vertical separation', async ({ page }, testInfo) => {
   await fixture(page); await page.goto('/ui/#/agents');
   await expect(page.locator('.task-history article')).toHaveCount(3);
