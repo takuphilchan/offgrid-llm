@@ -68,7 +68,14 @@ never silently broaden network access. TLS checks remain enabled, and redirects
 and resources outside the selected origin stay blocked. Host dispatch results
 are journaled before acknowledgment so a lost reply cannot repeat an input.
 
-This remains a supervised browser preview, not native desktop or vision control.
+Native selected-window control is wired through the matching host pack for
+structured observation, text replacement, explicit checkbox state, control
+activation and a fixed set of approved application shortcuts. Browser file
+transfers are bounded and verified. Browser viewport vision is exposed only
+after the installed model/projector passes a synthetic image and governed
+tool-call check in the current service session.
+This is not yet qualified general desktop or vision control; package manifests
+remain explicit about that boundary.
 The browser uses a separate profile, verifies its runtime manifest before starting,
 and requires exact-action approval for changes. Stop is available in the workspace,
 File menu, and tray. If local shutdown cannot be confirmed, the app reports that

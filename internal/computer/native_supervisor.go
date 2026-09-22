@@ -156,6 +156,9 @@ type NativeSupervisor struct {
 }
 
 func NewNativeSupervisor(journal *NativeJournal, consent LocalConsent, dispatch func(context.Context, PreparedControlAction) (ControlResult, error)) *NativeSupervisor {
+	if !consent.ApprovalMode.Valid() {
+		consent.ApprovalMode = ApprovalAskEveryTime
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &NativeSupervisor{journal: journal, consent: consent, dispatch: dispatch, grants: map[string]StepGrant{}, ctx: ctx, cancel: cancel, remaining: 100}
 }

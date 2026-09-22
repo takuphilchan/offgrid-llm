@@ -32,10 +32,20 @@ func (s *Server) handleComputerCapabilities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	capability := computer.UnavailableCapabilities()
-	if s.browserHub != nil && len(s.browserHub.List(s.agentActor(r))) > 0 {
-		capability.Available = true
-		capability.ReasonCode = "browser_preview"
-		capability.Drivers[0].Available = true
+	if s.browserHub != nil {
+		for _, session := range s.browserHub.List(s.agentActor(r)) {
+			for i := range capability.Drivers {
+				if capability.Drivers[i].ID == session.Driver {
+					capability.Drivers[i].Available = true
+					capability.Available = true
+					capability.ReasonCode = "browser_preview"
+					if session.Target != nil {
+						capability.ProtocolVersion = computer.ControlProtocolVersion
+						capability.ReasonCode = "native_development"
+					}
+				}
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, capability)
 }

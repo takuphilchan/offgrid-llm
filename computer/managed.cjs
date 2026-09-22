@@ -12,9 +12,9 @@ process.parentPort.on('message', async ({data}) => {
   startingFinished = new Promise(resolve=>{finishStarting=resolve;});
   try {
     const {CompanionSession} = await import('./session.mjs');
-    session = new CompanionSession({service:data.service, directory:data.directory, emit:send});
+    session = new CompanionSession({service:data.service, directory:data.directory, emit:send, upload:data.upload});
     if (stopping) { finishStarting(); return; }
-    const target = await session.start({origin:data.origin, code:data.code, workspace:data.workspace, networkMode:data.networkMode});
+    const target = await session.start({origin:data.origin, code:data.code, workspace:data.workspace, networkMode:data.networkMode, approvalMode:data.approvalMode});
     finishStarting();
     send({state:'ready', target});
     await session.running;

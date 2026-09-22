@@ -841,7 +841,7 @@ paths:
       operationId: listComputerSessions
       responses:
         '200':
-          description: Live local browser sessions owned by the requesting administrator.
+          description: Live local computer sessions owned by the requesting administrator. Driver availability is not workflow qualification. Browser clients must not select native sessions.
           content:
             application/json:
               schema:
@@ -852,10 +852,22 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [id, origin, expires_at, remaining_actions]
+                      required: [id, origin, expires_at, remaining_actions, approval_mode]
                       properties:
                         id: { type: string }
                         origin: { type: string }
+                        driver: { type: string, enum: [browser, windows-uia, macos-accessibility, linux-atspi] }
+                        approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task] }
+                        target:
+                          type: object
+                          description: Companion-issued native identity, present only for protocol-2 sessions.
+                          required: [id, os_session, process_generation, surface, driver]
+                          properties:
+                            id: { type: string }
+                            os_session: { type: string }
+                            process_generation: { type: string }
+                            surface: { type: string }
+                            driver: { type: string, enum: [windows-uia, macos-accessibility, linux-atspi] }
                         expires_at: { type: string, format: date-time }
                         remaining_actions: { type: integer }
                         state: { type: string, enum: [ready, in_use, finished, exhausted] }
@@ -863,7 +875,7 @@ paths:
   /api/v2/computer/model-check:
     post:
       operationId: checkComputerModel
-      description: Administrator-only, bounded two-step tool-call smoke check. Executes no browser actions. Not a qualification certificate. Computer-task submission repeats the check against the current runtime.
+      description: Administrator-only, bounded two-step tool-call smoke check for the selected driver. Executes no computer actions. Not a qualification certificate. Computer-task submission repeats the check against the current runtime.
       requestBody:
         required: true
         content:
@@ -873,6 +885,7 @@ paths:
               required: [model]
               properties:
                 model: { type: string }
+                driver: { type: string, enum: [browser, windows-uia, macos-accessibility, linux-atspi], default: browser }
       responses:
         '200':
           description: Completed compatibility check, including a negative result.
@@ -917,6 +930,15 @@ components:
         code: { type: string }
         message: { type: string }
         retryable: { type: boolean }
+        vision:
+          type: object
+          required: [installed, passed, code, message, retryable]
+          properties:
+            installed: { type: boolean }
+            passed: { type: boolean }
+            code: { type: string }
+            message: { type: string }
+            retryable: { type: boolean }
         runtime:
           type: object
           properties:
@@ -1171,6 +1193,7 @@ components:
         started_at: { type: integer, format: int64 }
         status: { type: string, enum: [downloading, finalizing, complete, failed, cancelled] }
         error: { type: string }
+        error_code: { type: string, description: Stable machine-readable failure code for recovery and automation. }
     Verification:
       type: object
       required: [model_id, file_name, size, size_gb, sha256, verified]
@@ -1187,7 +1210,13 @@ components:
       required: [role, content]
       properties:
         role: { type: string, enum: [system, developer, user, assistant, tool] }
-        content: { type: string }
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              minItems: 1
+              maxItems: 16
+              items: { $ref: '#/components/schemas/ChatContentPart' }
         tool_call_id: { type: string }
         tool_calls:
           type: array
@@ -1203,6 +1232,28 @@ components:
                 properties:
                   name: { type: string }
                   arguments: { type: string }
+    ChatContentPart:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [type, text]
+          properties:
+            type: { type: string, const: text }
+            text: { type: string, maxLength: 1048576 }
+        - type: object
+          additionalProperties: false
+          required: [type, image_url]
+          properties:
+            type: { type: string, const: image_url }
+            image_url:
+              type: object
+              additionalProperties: false
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: Bounded base64 data URL using image/png or image/jpeg. Remote and file URLs are rejected.
+                detail: { type: string, enum: [auto, low, high] }
     SessionMessage:
       allOf:
         - $ref: '#/components/schemas/ChatMessage'
@@ -1349,6 +1400,7 @@ components:
         tool_name: { type: string }
         tool_args: { type: string }
         tool_result: { type: string }
+        authorization: { type: string, description: Durable record of exact approval or the immutable automatic session policy used for this action. }
         timestamp: { type: string, format: date-time }
     AgentProgress:
       type: object
@@ -1382,6 +1434,7 @@ components:
       properties:
         event_cursor: { type: string, pattern: '^[0-9]{1,19}$', description: Persisted activity cursor. Only advance it after applying the snapshot. }
         computer_session: { type: string }
+        computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task] }
         computer_expected_text: { type: string }
         computer_session_expired: { type: boolean, description: Restart invalidated local consent. Historical work may be inspected or reconciled, but cannot resume against the old target. }
         output: { type: string }
@@ -1420,6 +1473,7 @@ components:
         pending_approval: { $ref: '#/components/schemas/ToolApproval' }
         result: { type: string }
         error: { type: string }
+        error_code: { type: string, description: Stable machine-readable failure code for recovery and automation. }
         steps: { type: array, items: { $ref: '#/components/schemas/AgentStep' } }
         created_at: { type: string, format: date-time }
         started_at: { type: string, format: date-time }
@@ -1433,7 +1487,7 @@ components:
         active_sessions: { type: integer, minimum: 0 }
     ComputerCapabilities:
       type: object
-      required: [protocol_version, preview, available, reason_code, local_only, approval_mode, drivers]
+      required: [protocol_version, preview, available, reason_code, local_only, approval_mode, approval_modes, drivers]
       properties:
         protocol_version: { type: integer, minimum: 1 }
         preview: { type: boolean }
@@ -1441,6 +1495,9 @@ components:
         reason_code: { type: string }
         local_only: { type: boolean }
         approval_mode: { type: string, enum: [supervised] }
+        approval_modes:
+          type: array
+          items: { type: string, enum: [ask_every_time, scoped_changes, full_task] }
         drivers:
           type: array
           items:

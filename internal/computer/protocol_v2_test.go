@@ -15,7 +15,7 @@ func controlFixture() (BoundedStep, StepGrant, LocalConsent, time.Time) {
 	now := time.Date(2026, 9, 21, 10, 0, 0, 0, time.UTC)
 	text := "Zimbabwe research — final (2026)"
 	binding := ControlBinding{Actor: "alice", Task: "task", Companion: "host", Session: "session", Target: TargetIdentity{ID: "target", OSSession: "os", ProcessGeneration: "generation", Surface: "window", Driver: "windows-uia"}}
-	step := BoundedStep{ID: "step", Binding: binding, Actions: []PreparedControlAction{{ID: "action", Operation: Operation{Kind: "replace_text", Element: "element", Text: &text}, ControlIdentity: "stable-element", Precondition: strings.Repeat("a", 64), ExpectedChange: strings.Repeat("b", 64)}}}
+	step := BoundedStep{ID: "step", Binding: binding, Actions: []PreparedControlAction{{ID: "action", Operation: Operation{Kind: "replace_text", Element: "element", Text: &text}, ControlIdentity: "stable-element", Precondition: strings.Repeat("a", 64), ExpectedChange: strings.Repeat("b", 64), ApprovalClass: ActionReversible}}}
 	digest, _ := step.Digest()
 	consent := LocalConsent{ID: "consent", Binding: binding, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(10 * time.Minute), Active: true}
 	grant := StepGrant{ID: "approval", ConsentID: consent.ID, Binding: binding, StepDigest: digest, IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute)}
@@ -111,6 +111,16 @@ func TestControlOperationsRejectCodeUnknownFieldsAndTraversal(t *testing.T) {
 	op.Checked = &value
 	if err := op.Validate(); err != nil {
 		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(op)
+	if string(encoded) != `{"kind":"set_checked","element":"el","checked":false}` {
+		t.Fatalf("checked action changed shape: %s", encoded)
+	}
+	if err := (Operation{Kind: "shortcut", Element: "field", Shortcut: "paste"}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (Operation{Kind: "shortcut", Shortcut: "save"}).Validate(); err == nil {
+		t.Fatal("unbound shortcut accepted")
 	}
 }
 

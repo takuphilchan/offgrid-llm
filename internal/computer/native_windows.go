@@ -4,7 +4,7 @@ package computer
 
 // Windows UI Automation is called on one MTA thread in the owned companion,
 // never in the service. These are target-addressed provider operations: there
-// is deliberately no SendInput, shell, arbitrary COM or screenshot-click API.
+// is deliberately no arbitrary key input, shell, arbitrary COM or screenshot-click API.
 // Vtable slots follow Microsoft's generated UIAutomationClient.h.
 import (
 	"context"
@@ -35,6 +35,7 @@ type nativeControl struct {
 	info        NativeElement
 	runtimeID   string
 	fingerprint string
+	value       *string
 }
 type NativeWindows struct {
 	automation *ole.IUnknown
@@ -52,6 +53,7 @@ var isWindowVisible = user32.NewProc("IsWindowVisible")
 var windowPID = user32.NewProc("GetWindowThreadProcessId")
 var windowText = user32.NewProc("GetWindowTextW")
 var foregroundWindow = user32.NewProc("GetForegroundWindow")
+var sendInput = user32.NewProc("SendInput")
 var inputDesktop = user32.NewProc("OpenInputDesktop")
 var closeDesktop = user32.NewProc("CloseDesktop")
 var userObjectInfo = user32.NewProc("GetUserObjectInformationW")
@@ -168,6 +170,15 @@ func processGeneration(pid uint32) (string, string, error) {
 		return "", "", ErrControlScope
 	}
 	return fmt.Sprintf("%d:%d:%d", pid, creation.HighDateTime, creation.LowDateTime), fmt.Sprintf("%d:Default", session), nil
+}
+
+// NativeWindowsTestEnvironment reports whether this process can participate in
+// selected-window automation under the same production policy. Hosted Windows
+// runners commonly execute elevated; that environment must be reported as
+// unavailable rather than weakening the elevated-window refusal for tests.
+func NativeWindowsTestEnvironment() error {
+	_, _, err := processGeneration(windows.GetCurrentProcessId())
+	return err
 }
 func (driver *NativeWindows) Targets() ([]NativeTarget, error) {
 	if !unlockedDesktop() {
@@ -335,6 +346,7 @@ func inspectControl(el *ole.IUnknown, pid uint32) (nativeControl, error) {
 	}
 	info := NativeElement{Name: name, Role: role}
 	value := ""
+	var valuePresent *string
 	if p := pattern(el, 10002); p != nil {
 		readOnly, e := comInt(p, 5)
 		if e == nil && readOnly == 0 {
@@ -345,13 +357,22 @@ func inspectControl(el *ole.IUnknown, pid uint32) (nativeControl, error) {
 		if err != nil {
 			return nativeControl{}, err
 		}
+		valuePresent = &value
+		info.Text, info.TextLimited = nativeText(value)
 	}
 	if p := pattern(el, 10000); p != nil {
 		info.Invokable = true
 		p.Release()
 	}
-	// Values are hashed locally for freshness; they never leave the worker.
-	return nativeControl{pointer: el, info: info, runtimeID: rid, fingerprint: nativeHash([]any{rid, name, role, info.Writable, info.Invokable, value})}, nil
+	if p := pattern(el, 10015); p != nil { // UIA_TogglePatternId
+		state, e := comInt(p, 4) // IUIAutomationTogglePattern::get_CurrentToggleState
+		p.Release()
+		if e == nil && (state == 0 || state == 1) {
+			checked := state == 1
+			info.Checkable, info.Checked = true, &checked
+		}
+	}
+	return nativeControl{pointer: el, info: info, runtimeID: rid, value: valuePresent, fingerprint: nativeHash([]any{rid, name, role, info.Writable, info.Invokable, info.Checkable, info.Checked, value})}, nil
 }
 func (driver *NativeWindows) Observe(ctx context.Context) (NativeView, error) {
 	if err := ctx.Err(); err != nil {
@@ -400,8 +421,45 @@ func (driver *NativeWindows) Observe(ctx context.Context) (NativeView, error) {
 	}
 	driver.sequence++
 	view.Observation = ControlObservation{ID: nativeID(), Target: driver.selected.target.Identity, Sequence: driver.sequence, CapturedAt: time.Now().UTC(), StateDigest: nativeHash(fingerprints)}
+	view = BoundNativeView(view)
 	driver.view = view
 	return view, nil
+}
+
+func (driver *NativeWindows) VerifyText(binding ControlBinding, element, expected string, observation ControlObservation) (bool, error) {
+	if err := driver.checkTarget(false); err != nil {
+		return false, err
+	}
+	if binding.Validate() != nil || binding.Target != driver.selected.target.Identity || observation != driver.view.Observation || observation.Validate(binding.Target, time.Now()) != nil {
+		return false, ErrStaleObservation
+	}
+	control, ok := driver.controls[element]
+	if !ok || !driver.withinTarget(control.pointer) {
+		return false, ErrControlScope
+	}
+	fresh, err := inspectControl(control.pointer, driver.selected.pid)
+	if err != nil || fresh.fingerprint != control.fingerprint || fresh.runtimeID != control.runtimeID {
+		return false, ErrStaleObservation
+	}
+	return fresh.value != nil && *fresh.value == expected, nil
+}
+
+func (driver *NativeWindows) VerifyChecked(binding ControlBinding, element string, expected bool, observation ControlObservation) (bool, error) {
+	if err := driver.checkTarget(false); err != nil {
+		return false, err
+	}
+	if binding.Validate() != nil || binding.Target != driver.selected.target.Identity || observation != driver.view.Observation || observation.Validate(binding.Target, time.Now()) != nil {
+		return false, ErrStaleObservation
+	}
+	control, ok := driver.controls[element]
+	if !ok || !driver.withinTarget(control.pointer) {
+		return false, ErrControlScope
+	}
+	fresh, err := inspectControl(control.pointer, driver.selected.pid)
+	if err != nil || fresh.fingerprint != control.fingerprint || fresh.runtimeID != control.runtimeID {
+		return false, ErrStaleObservation
+	}
+	return fresh.info.Checkable && fresh.info.Checked != nil && *fresh.info.Checked == expected, nil
 }
 func (driver *NativeWindows) Prepare(binding ControlBinding, op Operation, observation ControlObservation) (PreparedControlAction, error) {
 	if err := driver.checkTarget(false); err != nil {
@@ -410,7 +468,7 @@ func (driver *NativeWindows) Prepare(binding ControlBinding, op Operation, obser
 	if !binding.valid() || binding.Target != driver.selected.target.Identity || observation.ID != driver.view.Observation.ID || observation.Validate(binding.Target, time.Now()) != nil || op.Validate() != nil {
 		return PreparedControlAction{}, ErrControlScope
 	}
-	if op.Kind != "replace_text" && op.Kind != "activate" {
+	if op.Kind != "replace_text" && op.Kind != "activate" && op.Kind != "shortcut" && op.Kind != "set_checked" {
 		return PreparedControlAction{}, ErrInvalidControl
 	}
 	control, ok := driver.controls[op.Element]
@@ -424,10 +482,10 @@ func (driver *NativeWindows) Prepare(binding ControlBinding, op Operation, obser
 	if err != nil || fresh.runtimeID != control.runtimeID || fresh.fingerprint != control.fingerprint {
 		return PreparedControlAction{}, ErrStaleObservation
 	}
-	if op.Kind == "replace_text" && !fresh.info.Writable || op.Kind == "activate" && !fresh.info.Invokable {
+	if op.Kind == "replace_text" && !fresh.info.Writable || op.Kind == "activate" && !fresh.info.Invokable || op.Kind == "shortcut" && op.Shortcut == "paste" && !fresh.info.Writable || op.Kind == "set_checked" && (!fresh.info.Checkable || fresh.info.Checked == nil) {
 		return PreparedControlAction{}, ErrInvalidControl
 	}
-	action := PreparedControlAction{ID: nativeID(), Operation: op, ControlIdentity: control.runtimeID, Precondition: control.fingerprint, ExpectedChange: nativeHash(op)}
+	action := PreparedControlAction{ID: nativeID(), Operation: op, ControlIdentity: control.runtimeID, Precondition: control.fingerprint, ExpectedChange: nativeHash(op), ApprovalClass: ClassifyOperation(op, driver.selected.target.Title+" "+fresh.info.Name, fresh.info.Role)}
 	driver.prepared[action.ID] = action
 	return action, nil
 }
@@ -452,19 +510,47 @@ func (driver *NativeWindows) ApprovalSummary(step BoundedStep) (string, error) {
 		if !ok || nativeHash(prepared) != nativeHash(action) {
 			return "", ErrControlApproval
 		}
-		control, ok := driver.controls[action.Operation.Element]
-		if !ok {
-			return "", ErrControlScope
-		}
-		label := control.info.Name
-		if label == "" {
-			label = "unnamed " + control.info.Role
-		}
 		text.WriteString(fmt.Sprintf("%d. ", index+1))
 		switch action.Operation.Kind {
+		case "set_checked":
+			control, ok := driver.controls[action.Operation.Element]
+			if !ok || action.Operation.Checked == nil {
+				return "", ErrControlScope
+			}
+			label := control.info.Name
+			if label == "" {
+				label = "unnamed " + control.info.Role
+			}
+			text.WriteString("Set " + strconv.Quote(label) + " to checked=" + strconv.FormatBool(*action.Operation.Checked) + ".\n\n")
+		case "shortcut":
+			control, ok := driver.controls[action.Operation.Element]
+			if !ok {
+				return "", ErrControlScope
+			}
+			label := control.info.Name
+			if label == "" {
+				label = "unnamed " + control.info.Role
+			}
+			text.WriteString("Focus " + strconv.Quote(label) + " and send the application shortcut " + strconv.Quote(action.Operation.Shortcut) + ". Dispatch alone does not verify a save or other outcome.\n\n")
 		case "replace_text":
+			control, ok := driver.controls[action.Operation.Element]
+			if !ok {
+				return "", ErrControlScope
+			}
+			label := control.info.Name
+			if label == "" {
+				label = "unnamed " + control.info.Role
+			}
 			text.WriteString("Replace all text in " + strconv.Quote(label) + " with:\n" + strconv.Quote(*action.Operation.Text) + "\n\n")
 		case "activate":
+			control, ok := driver.controls[action.Operation.Element]
+			if !ok {
+				return "", ErrControlScope
+			}
+			label := control.info.Name
+			if label == "" {
+				label = "unnamed " + control.info.Role
+			}
 			text.WriteString("Activate " + strconv.Quote(label) + ". This may submit or change information; successful activation alone does not verify the outcome.\n\n")
 		default:
 			return "", ErrInvalidControl
@@ -501,6 +587,54 @@ func (driver *NativeWindows) Dispatch(ctx context.Context, action PreparedContro
 		return result, ErrStaleObservation
 	}
 	driver.view = NativeView{}
+	if action.Operation.Kind == "set_checked" {
+		if action.Operation.Checked == nil || !fresh.info.Checkable || fresh.info.Checked == nil {
+			return result, ErrInvalidControl
+		}
+		if *fresh.info.Checked != *action.Operation.Checked {
+			p := pattern(control.pointer, 10015)
+			if p == nil {
+				return result, ErrControlScope
+			}
+			result.Outcome, result.Uncertain = "uncertain", true
+			err := comCall(p, 3) // IUIAutomationTogglePattern::Toggle
+			p.Release()
+			if err != nil {
+				return result, ErrUncertain
+			}
+		}
+		verified, err := inspectControl(control.pointer, driver.selected.pid)
+		if err != nil || !verified.info.Checkable || verified.info.Checked == nil || *verified.info.Checked != *action.Operation.Checked {
+			return result, ErrUncertain
+		}
+		result.Outcome, result.Uncertain = "verified", false
+		result.EvidenceID = nativeHash(*verified.info.Checked)
+		return result, nil
+	}
+	if action.Operation.Kind == "shortcut" {
+		if action.Operation.Shortcut == "paste" && !fresh.info.Writable {
+			return result, ErrInvalidControl
+		}
+		result.Outcome, result.Uncertain = "uncertain", true
+		if err := comCall(control.pointer, 3); err != nil {
+			return result, ErrUncertain
+		}
+		focused, err := comInt(control.pointer, 26)
+		if err != nil || focused == 0 {
+			return result, ErrUncertain
+		}
+		time.Sleep(20 * time.Millisecond) // UIA focus acknowledgement precedes Win32 queue readiness.
+		if err := sendWindowsShortcut(action.Operation.Shortcut); err != nil {
+			return result, err
+		}
+		time.Sleep(20 * time.Millisecond) // Let the selected process consume its queued key events.
+		focused, err = comInt(control.pointer, 26)
+		if err != nil || focused == 0 || driver.checkTarget(true) != nil {
+			return result, ErrUncertain
+		}
+		result.Outcome, result.Uncertain = "dispatched", false
+		return result, nil
+	}
 	if action.Operation.Kind == "replace_text" {
 		p := pattern(control.pointer, 10002)
 		if p == nil {
@@ -540,6 +674,46 @@ func (driver *NativeWindows) Dispatch(ctx context.Context, action PreparedContro
 	result.Outcome = "dispatched"
 	result.Uncertain = false
 	return result, nil
+}
+
+// sendWindowsShortcut exposes only a fixed application-level vocabulary. The
+// selected foreground window is checked immediately before and after dispatch.
+func sendWindowsShortcut(name string) error {
+	keys := map[string]byte{"copy": 0x43, "paste": 0x56, "undo": 0x5a, "redo": 0x59, "select_all": 0x41, "save": 0x53,
+		"enter": 0x0d, "escape": 0x1b, "tab": 0x09, "reverse_tab": 0x09, "left": 0x25, "up": 0x26, "right": 0x27, "down": 0x28, "page_up": 0x21, "page_down": 0x22, "home": 0x24, "end": 0x23}
+	key := keys[name]
+	if key == 0 {
+		return ErrInvalidControl
+	}
+	type keyboardInputPacket struct {
+		Type, Padding uint32
+		VK, Scan      uint16
+		Flags, Time   uint32
+		Padding2      uint32
+		ExtraInfo     uintptr
+		UnionPadding  [8]byte
+	}
+	const control, shift, keyUp = uint16(0x11), uint16(0x10), uint32(0x0002)
+	modifier := uint16(0)
+	if name == "copy" || name == "paste" || name == "undo" || name == "redo" || name == "select_all" || name == "save" {
+		modifier = control
+	} else if name == "reverse_tab" {
+		modifier = shift
+	}
+	inputs := []keyboardInputPacket{}
+	if modifier != 0 {
+		inputs = append(inputs, keyboardInputPacket{Type: 1, VK: modifier})
+	}
+	inputs = append(inputs, keyboardInputPacket{Type: 1, VK: uint16(key)}, keyboardInputPacket{Type: 1, VK: uint16(key), Flags: keyUp})
+	if modifier != 0 {
+		inputs = append(inputs, keyboardInputPacket{Type: 1, VK: modifier, Flags: keyUp})
+	}
+	written, _, _ := sendInput.Call(uintptr(len(inputs)), uintptr(unsafe.Pointer(&inputs[0])), unsafe.Sizeof(inputs[0]))
+	runtime.KeepAlive(inputs)
+	if written != uintptr(len(inputs)) {
+		return ErrUncertain
+	}
+	return nil
 }
 
 // The prompt is local OS UI and never accepts a service/model-supplied boolean

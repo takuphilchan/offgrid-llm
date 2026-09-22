@@ -22,15 +22,17 @@ import (
 )
 
 type request struct {
-	Protocol    int                          `json:"protocol"`
-	ID          string                       `json:"id"`
-	Kind        string                       `json:"kind"`
-	Target      string                       `json:"target,omitempty"`
-	Binding     *computer.ControlBinding     `json:"binding,omitempty"`
-	Operation   *computer.Operation          `json:"operation,omitempty"`
-	Observation *computer.ControlObservation `json:"observation,omitempty"`
-	Step        *computer.BoundedStep        `json:"step,omitempty"`
-	Grant       string                       `json:"grant,omitempty"`
+	Protocol     int                          `json:"protocol"`
+	ID           string                       `json:"id"`
+	Kind         string                       `json:"kind"`
+	Target       string                       `json:"target,omitempty"`
+	Binding      *computer.ControlBinding     `json:"binding,omitempty"`
+	Operation    *computer.Operation          `json:"operation,omitempty"`
+	Observation  *computer.ControlObservation `json:"observation,omitempty"`
+	Step         *computer.BoundedStep        `json:"step,omitempty"`
+	Grant        string                       `json:"grant,omitempty"`
+	ApprovalMode computer.ApprovalMode        `json:"approval_mode,omitempty"`
+	Automatic    *bool                        `json:"automatic,omitempty"`
 }
 
 func (r request) valid() bool {
@@ -56,15 +58,21 @@ func (r request) valid() bool {
 	if r.Grant != "" {
 		fields++
 	}
+	if r.ApprovalMode != "" {
+		fields++
+	}
+	if r.Automatic != nil {
+		fields++
+	}
 	switch r.Kind {
 	case "targets", "observe", "stop":
 		return fields == 0
 	case "select":
-		return fields == 2 && r.Target != "" && r.Binding != nil
-	case "prepare":
+		return fields == 3 && r.Target != "" && r.Binding != nil && r.ApprovalMode.Valid()
+	case "prepare", "verify":
 		return fields == 2 && r.Operation != nil && r.Observation != nil
 	case "approve":
-		return fields == 1 && r.Step != nil
+		return fields == 2 && r.Step != nil && r.Automatic != nil
 	case "execute":
 		return fields == 2 && r.Step != nil && r.Grant != ""
 	}
@@ -156,6 +164,7 @@ func run() error {
 		}
 	}()
 	var binding computer.ControlBinding
+	var approvalMode computer.ApprovalMode
 	var selected computer.NativeTarget
 	prepared := map[string]computer.PreparedControlAction{}
 	for {
@@ -202,16 +211,18 @@ func run() error {
 					break
 				}
 				binding = *req.Binding
+				approvalMode = req.ApprovalMode
 				binding.Target = selected.Identity
 				if callErr = binding.Validate(); callErr != nil {
 					break
 				}
-				if !nativeConfirm("Allow OffGrid to inspect this selected application for ten minutes?\n\n" + selected.Title + "\n\nChanges require a separate exact-action approval. Other applications, marked password controls, elevated windows and the whole desktop are excluded. Sensitive text in ordinary controls cannot always be recognized. OffGrid may focus this application. Use the local Stop window or emergency shortcut to stop.") {
+				policyText := map[computer.ApprovalMode]string{computer.ApprovalAskEveryTime: "Every change requires approval.", computer.ApprovalScopedChanges: "Reversible changes run automatically; consequential actions require approval.", computer.ApprovalFullTask: "Available typed actions run automatically inside this application."}[approvalMode]
+				if !nativeConfirm("Allow OffGrid to inspect this selected application for ten minutes?\n\n" + selected.Title + "\n\n" + policyText + " Credentials, payments, privilege/security changes, installation, permanent deletion and uncertain retries remain blocked. Other applications, protected controls, elevated windows and the whole desktop are excluded. OffGrid may focus this application. Use the local Stop window or emergency shortcut to stop.") {
 					callErr = computer.ErrControlApproval
 					break
 				}
 				now := time.Now()
-				supervisor = computer.NewNativeSupervisor(journal, computer.LocalConsent{ID: fmt.Sprintf("consent:%d", now.UnixNano()), Binding: binding, IssuedAt: now, ExpiresAt: now.Add(10 * time.Minute), Active: true}, func(ctx context.Context, action computer.PreparedControlAction) (computer.ControlResult, error) {
+				supervisor = computer.NewNativeSupervisor(journal, computer.LocalConsent{ID: fmt.Sprintf("consent:%d", now.UnixNano()), Binding: binding, ApprovalMode: approvalMode, IssuedAt: now, ExpiresAt: now.Add(10 * time.Minute), Active: true}, func(ctx context.Context, action computer.PreparedControlAction) (computer.ControlResult, error) {
 					if err := ctx.Err(); err != nil {
 						return computer.ControlResult{ActionID: action.ID, Outcome: "failed"}, err
 					}
@@ -241,11 +252,43 @@ func run() error {
 					callErr = computer.ErrControlScope
 					break
 				}
+				if callErr = supervisor.Check(); callErr != nil {
+					break
+				}
 				var action computer.PreparedControlAction
 				action, callErr = driver.Prepare(binding, *req.Operation, *req.Observation)
 				if callErr == nil {
 					prepared[action.ID] = action
 					result = action
+				}
+			case "verify":
+				if supervisor == nil {
+					callErr = computer.ErrControlScope
+					break
+				}
+				if callErr = supervisor.Check(); callErr != nil {
+					break
+				}
+				if (req.Operation.Kind != "replace_text" && req.Operation.Kind != "set_checked") || req.Operation.Validate() != nil {
+					callErr = computer.ErrInvalidControl
+					break
+				}
+				verifier, ok := driver.(computer.NativeVerifier)
+				if !ok {
+					callErr = computer.ErrInvalidControl
+					break
+				}
+				var verified bool
+				if req.Operation.Kind == "replace_text" {
+					verified, callErr = verifier.VerifyText(binding, req.Operation.Element, *req.Operation.Text, *req.Observation)
+					if callErr == nil {
+						result = map[string]any{"verified": verified, "check": "control_text_equals", "element": req.Operation.Element, "text": *req.Operation.Text, "observation_id": req.Observation.ID, "target": binding.Target}
+					}
+				} else {
+					verified, callErr = verifier.VerifyChecked(binding, req.Operation.Element, *req.Operation.Checked, *req.Observation)
+					if callErr == nil {
+						result = map[string]any{"verified": verified, "check": "control_checked_equals", "element": req.Operation.Element, "checked": *req.Operation.Checked, "observation_id": req.Observation.ID, "target": binding.Target}
+					}
 				}
 			case "approve":
 				if supervisor == nil || req.Step.Binding != binding {
@@ -265,6 +308,17 @@ func run() error {
 					break
 				}
 				result, callErr = supervisor.Approve(*req.Step, func(step computer.BoundedStep) bool {
+					for _, action := range step.Actions {
+						if !action.ApprovalClass.Valid() || action.ApprovalClass == computer.ActionForbidden {
+							return false
+						}
+						if *req.Automatic && !approvalMode.Allows(action.ApprovalClass) {
+							return false
+						}
+					}
+					if *req.Automatic {
+						return true
+					}
 					detail, err := driver.ApprovalSummary(step)
 					return err == nil && nativeConfirm(detail)
 				})
@@ -310,9 +364,11 @@ func nativeErrorCode(err error) string {
 		return "computer_invalid_action"
 	case errors.Is(err, computer.ErrStaleObservation):
 		return "computer_stale_observation"
+	case errors.Is(err, computer.ErrProhibitedAction):
+		return "computer_prohibited_action"
 	}
 	if strings.HasPrefix(err.Error(), "computer_") {
-		for _, code := range []string{"computer_journal_corrupt", "computer_journal_incompatible", "computer_action_failed", "computer_permission_denied", "computer_desktop_unavailable", "computer_driver_unavailable", "computer_stop_surface_unavailable", "computer_emergency_shortcut_in_use", "computer_input_in_use"} {
+		for _, code := range []string{"computer_journal_corrupt", "computer_journal_incompatible", "computer_action_failed", "computer_permission_denied", "computer_desktop_unavailable", "computer_driver_unavailable", "computer_stop_surface_unavailable", "computer_emergency_shortcut_in_use", "computer_input_in_use", "computer_prohibited_action"} {
 			if err.Error() == code {
 				return code
 			}

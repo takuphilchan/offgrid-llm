@@ -24,6 +24,7 @@ var (
 	ErrControlScope     = errors.New("computer_scope_violation")
 	ErrControlApproval  = errors.New("computer_approval_invalid")
 	ErrStaleObservation = errors.New("computer_stale_observation")
+	ErrProhibitedAction = errors.New("computer_prohibited_action")
 )
 
 // TargetIdentity is issued by the host, never inferred from a window title,
@@ -56,6 +57,13 @@ func (target TargetIdentity) valid() bool {
 		return true
 	}
 	return false
+}
+
+func (target TargetIdentity) Validate() error {
+	if !target.valid() {
+		return ErrControlScope
+	}
+	return nil
 }
 
 type ControlBinding struct {
@@ -139,12 +147,15 @@ func (op Operation) Validate() error {
 		}
 		want.Scroll = op.Scroll
 	case "shortcut":
+		if !opaqueID(op.Element) {
+			return ErrInvalidControl
+		}
 		switch op.Shortcut {
-		case "copy", "paste", "undo", "redo", "select_all", "save":
+		case "copy", "paste", "undo", "redo", "select_all", "save", "enter", "escape", "tab", "reverse_tab", "left", "right", "up", "down", "page_up", "page_down", "home", "end":
 		default:
 			return ErrInvalidControl
 		}
-		want.Shortcut = op.Shortcut
+		want.Element, want.Shortcut = op.Element, op.Shortcut
 	case "navigate", "upload", "download":
 		// Destination is a locally prepared origin/download grant, not an
 		// arbitrary model URL. Upload additionally binds a host-issued file.
@@ -213,11 +224,12 @@ func (op Operation) SeparateConfirmation() bool {
 }
 
 type PreparedControlAction struct {
-	ID              string    `json:"id"`
-	Operation       Operation `json:"operation"`
-	ControlIdentity string    `json:"control_identity"`
-	Precondition    string    `json:"precondition"`    // local driver-issued state digest
-	ExpectedChange  string    `json:"expected_change"` // local prepared change digest
+	ID              string      `json:"id"`
+	Operation       Operation   `json:"operation"`
+	ControlIdentity string      `json:"control_identity"`
+	Precondition    string      `json:"precondition"`    // local driver-issued state digest
+	ExpectedChange  string      `json:"expected_change"` // local prepared change digest
+	ApprovalClass   ActionClass `json:"approval_class"`
 }
 type BoundedStep struct {
 	ID      string                  `json:"id"`
@@ -231,7 +243,7 @@ func (step BoundedStep) Digest() (string, error) {
 	}
 	seen := map[string]bool{}
 	for _, action := range step.Actions {
-		if !opaqueID(action.ID) || seen[action.ID] || action.Operation.Validate() != nil || !opaqueID(action.ControlIdentity) || !digestID(action.Precondition) || !digestID(action.ExpectedChange) {
+		if !opaqueID(action.ID) || seen[action.ID] || action.Operation.Validate() != nil || !opaqueID(action.ControlIdentity) || !digestID(action.Precondition) || !digestID(action.ExpectedChange) || !action.ApprovalClass.Valid() {
 			return "", ErrInvalidControl
 		}
 		if action.Operation.SeparateConfirmation() && len(step.Actions) != 1 {
@@ -263,11 +275,12 @@ type StepGrant struct {
 // LocalConsent is supplied by the host authority, not decoded from model/tool
 // arguments. ID is renewed after restart, pause/takeover, and revocation.
 type LocalConsent struct {
-	ID        string
-	Binding   ControlBinding
-	IssuedAt  time.Time
-	ExpiresAt time.Time
-	Active    bool
+	ID           string
+	Binding      ControlBinding
+	ApprovalMode ApprovalMode
+	IssuedAt     time.Time
+	ExpiresAt    time.Time
+	Active       bool
 }
 
 func (grant StepGrant) Validate(step BoundedStep, consent LocalConsent, now time.Time) error {

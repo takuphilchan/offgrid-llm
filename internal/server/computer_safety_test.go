@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"strings"
@@ -58,11 +59,11 @@ func TestComputerIntermediateVerificationReachesSessionBoundary(t *testing.T) {
 	descriptor, _ := browserDescriptor("browser_verify")
 	execution := agents.ToolExecution{RunID: task.ID, Actor: "alice", ExpectedCapability: &descriptor}
 	err = tools.Authorize(context.Background(), "browser_verify", json.RawMessage(`{"text":"Research notes"}`), execution)
-	if err != computer.ErrSession {
+	if !errors.Is(err, computer.ErrSession) {
 		t.Fatalf("intermediate check did not reach session boundary: %v", err)
 	}
 	err = tools.Authorize(context.Background(), "browser_verify", json.RawMessage(`{"text":"Draft saved"}`), execution)
-	if err != computer.ErrSession {
+	if !errors.Is(err, computer.ErrSession) {
 		t.Fatalf("valid criterion did not reach session boundary: %v", err)
 	}
 }

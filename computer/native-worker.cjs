@@ -57,7 +57,7 @@ class NativeWorker extends EventEmitter {
     if (!this.child || this.stopping || this.revoked) return Promise.reject(Error('computer_worker_stopped'));
     if (!this.booted) return Promise.reject(Error('computer_worker_starting'));
     if (this.pending) return Promise.reject(Error('computer_busy'));
-    const fields = {targets:[],select:['target','binding'],observe:[],prepare:['operation','observation'],approve:['step'],execute:['step','grant']}[kind];
+    const fields = {targets:[],select:['target','binding','approval_mode'],observe:[],prepare:['operation','observation'],verify:['operation','observation'],approve:['step','automatic'],execute:['step','grant']}[kind];
     if (!fields || !args || Object.keys(args).length !== fields.length || fields.some(field => !Object.hasOwn(args,field))) return Promise.reject(Error('computer_invalid_action'));
     const id = randomUUID();
     let encoded;
@@ -93,7 +93,10 @@ class NativeWorker extends EventEmitter {
     if (value.error) {
       const code = typeof value.error === 'string' && /^computer_[a-z_]+$/.test(value.error) ? value.error : 'computer_provider_unavailable';
       pending.reject(Object.assign(Error(code),{result:value.result}));
-    } else pending.resolve(value.result);
+    } else {
+      if (pending.kind === 'targets') this.targets = structuredClone(value.result);
+      pending.resolve(value.result);
+    }
   }
   rejectPending(code) {
     if (!this.pending) return;

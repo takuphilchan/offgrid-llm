@@ -22,10 +22,10 @@ test('stop while browser startup is pending closes the late resource and never p
 });
 test('journal rejects redelivery after a lost acknowledgement instead of repeating an effect',async()=>{
  const directory=await mkdtemp(join(tmpdir(),'offgrid-journal-test-'));let effects=0;
- const action={id:'immutable-action',kind:'browser_click',arguments:{element:'observed'}};
+ const action={id:'immutable-action',kind:'browser_click',arguments:{element:'observed'},authorization:'exact'};
  try {
   for(let attempt=0;attempt<2;attempt++) {
-   const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:async()=>({close:async()=>{},execute:async()=>{effects++;return {verified:false};}})});
+   const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:async()=>({close:async()=>{},prepare:async()=>({prepared:true,approval_class:'consequential'}),execute:async()=>{effects++;return {verified:false};}})});
    session.request=async(path)=>{
     if(path.endsWith('/system'))return {product:'offgrid',api_version:2};
     if(path.endsWith('/pair'))return {token:'test-only',session:{id:'session',origin:'https://example.com'}};
@@ -50,9 +50,9 @@ test('runtime manifests reject tampering and wrong architecture',async()=>{
 
 test('same-session redelivery returns the persisted reply and never repeats input',async()=>{
  const directory=await mkdtemp(join(tmpdir(),'offgrid-replay-test-'));let effects=0,replies=0;
- const action={id:'run:call',kind:'browser_click',arguments:{element:'observed'}};
+ const action={id:'run:call',kind:'browser_click',arguments:{element:'observed'},authorization:'exact'};
  let firstReply;
- const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:async()=>({close:async()=>{},execute:async()=>{effects++;return {changed:true};}})});
+ const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:async()=>({close:async()=>{},prepare:async()=>({prepared:true,approval_class:'consequential'}),execute:async()=>{effects++;return {changed:true};}})});
  session.request=async(path,body)=>{
   if(path.endsWith('/system'))return {product:'offgrid',api_version:2,workspace_id:'workspace'};
   if(path.endsWith('/pair'))return {token:'test-only',session:{id:'session',origin:'https://example.com'}};
@@ -68,4 +68,32 @@ test('same-session redelivery returns the persisted reply and never repeats inpu
   await session.start({origin:'https://example.com',code:'b'.repeat(64)});await session.running;
   assert.equal(effects,1);assert.equal(replies,2);assert.equal(session.state,'stopped');
  }finally{await session.stop();await rm(directory,{recursive:true});}
+});
+
+test('browser companion enforces the immutable local approval mode before input',async()=>{
+ for(const [mode,approvalClass,authorization,wantError,wantEffects] of [
+  ['scoped_changes','consequential','auto','computer_approval_invalid',0],
+  ['full_task','consequential','auto','',1],
+  ['full_task','forbidden','exact','computer_prohibited_action',0],
+  ['ask_every_time','invalid','exact','computer_uncertain_outcome',0],
+ ]) {
+  const directory=await mkdtemp(join(tmpdir(),'offgrid-policy-test-'));let effects=0,reply;
+  const action={id:`run:${mode}:${approvalClass}`,kind:'browser_click',arguments:{observation_id:'observed',element:'control'},authorization};
+  const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:async()=>({
+   close:async()=>{},prepare:async()=>({prepared:true,approval_class:approvalClass}),execute:async()=>{effects++;return {changed:true};}
+  })});
+  session.request=async(path,body)=>{
+   if(path.endsWith('/system'))return {product:'offgrid',api_version:2,workspace_id:'workspace'};
+   if(path.endsWith('/pair')){assert.equal(body.approval_mode,mode);return {token:'test-only',session:{id:'session',origin:'https://example.com'}};}
+   if(path.endsWith('/poll'))return {action};
+   if(path.endsWith('/reply')){reply=body;session.stopping=true;return {};}
+   throw Error('unexpected request');
+  };
+  try {
+   await session.start({origin:'https://example.com',code:'c'.repeat(64),workspace:'workspace',approvalMode:mode});
+   await session.running;
+   assert.equal(effects,wantEffects);
+   assert.equal(reply?.error??'',wantError);
+  } finally {await session.stop();await rm(directory,{recursive:true});}
+ }
 });

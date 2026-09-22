@@ -18,6 +18,7 @@ import { interaction } from '../../i18n/interaction';
 import { ComputerSetup } from './ComputerSetup';
 import { computerRecovery, computerModelCopy } from '../../i18n/computer-recovery';
 import { computerExperience } from '../../i18n/computer-experience';
+import { computerModeText, nativeAppText } from '../../i18n/native-app';
 import { BrowserActionSummary, BrowserActivity } from './BrowserActionSummary';
 
 type AgentView = 'workspace' | 'tools' | 'connections';
@@ -55,6 +56,7 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
   const [style, setStyle] = useWorkspaceState('agent.style', 'react');
   const [busy, setBusy] = useState(false);
   const [computerMode, setComputerMode] = useWorkspaceState(`${selectionScope}:computer.mode`, false);
+  const [computerTargetMode, setComputerTargetMode] = useWorkspaceState<'app'|'browser'>(`${selectionScope}:computer.target`, window.electron?.discoverComputerApps ? 'app' : 'browser');
   const [computerSession, setComputerSession] = useState('');
   const [computerReady, setComputerReady] = useState(false);
   const [submittingComputer, setSubmittingComputer] = useState(false);
@@ -75,6 +77,12 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
   const actionLock = useRef(false);
   const working = busy || execution?.status === 'running' || execution?.status === 'pending';
   const computerBlocked = computerMode && (!computerSession || !computerReady);
+  const computerText = nativeAppText(locale);
+  const modeText = computerModeText(locale);
+  const computerRunLabel = computerBlocked
+    ? (window.electron?.discoverComputerApps ? computerText.select : experience.openDesktop)
+    : submittingComputer ? computerModelCopy[locale].checking
+      : working ? text.agents.running : text.agents.run;
   useEffect(() => {
     if (execution?.computer_session && ['running', 'pending', 'waiting_for_approval', 'interrupted', 'uncertain'].includes(execution.status)) {
       setComputerMode(true); setComputerSession(execution.computer_session);
@@ -319,14 +327,22 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
         <form className="task-card" onSubmit={run}>
           <label className="agent-task-editor" htmlFor="agent-task-input"><span id="agent-task-label">{text.agents.task}</span><textarea id="agent-task-input" aria-labelledby="agent-task-label" aria-describedby="task-guidance" rows={7} value={task} onChange={event => setTask(event.target.value)} placeholder={text.agents.placeholder} /></label>
           <p id="task-guidance" className="task-guidance">{experience.taskHint}</p>
-          <label className="computer-mode"><input type="checkbox" checked={computerMode} disabled={working || !!approval} onChange={event => setComputerMode(event.target.checked)} /><span>{experience.browser} · Preview</span></label>
-          {computerMode && <ComputerSetup model={model} onReady={setComputerReady} value={computerSession} onChange={setComputerSession} disabled={working || !!approval} onAvailability={available => setComputer(current => ({ emergency_stop: false, active_sessions: available ? 1 : 0, ...current, available }))} />}
+          <fieldset className="computer-mode-picker">
+            <legend>{modeText.title} <span className="status-pill">{modeText.preview}</span></legend>
+            <div role="group" aria-label={modeText.title}>
+              <button type="button" aria-pressed={!computerMode} disabled={working || !!approval || !!computerSession} onClick={() => { setComputerMode(false); setComputerReady(false); }}>{modeText.agent}</button>
+              <button type="button" aria-pressed={computerMode && computerTargetMode === 'app'} disabled={working || !!approval || !!computerSession} onClick={() => { setComputerTargetMode('app'); setComputerMode(true); setComputerSession(''); setComputerReady(false); }}>{computerText.window}</button>
+              <button type="button" aria-pressed={computerMode && computerTargetMode === 'browser'} disabled={working || !!approval || !!computerSession} onClick={() => { setComputerTargetMode('browser'); setComputerMode(true); setComputerSession(''); setComputerReady(false); }}>{computerText.browser}</button>
+            </div>
+          </fieldset>
+          {computerMode && <ComputerSetup mode={computerTargetMode} model={model} visionStatus={models.find(item=>item.id===model)?.capability_status?.vision} onReady={setComputerReady} value={computerSession} onChange={setComputerSession} disabled={working || !!approval} onAvailability={available => setComputer(current => ({ emergency_stop: false, active_sessions: available ? 1 : 0, ...current, available }))} />}
           <div className="agent-task-options">
             <ModelSelect models={models} value={model} onChange={setModel} />
             {!computerMode && <label><span>{text.agentRuntime.style}</span><select value={style} onChange={event => setStyle(event.target.value)}><option value="react">{text.agentRuntime.react}</option><option value="plan-execute">{text.agentRuntime.plan}</option><option value="cot">{text.agentRuntime.reasoning}</option></select></label>}
           </div>
           {unsaved && <p role="alert">{text.recovery.draftWarning}</p>}
-          <div className="agent-task-actions"><button className="primary-button" disabled={working || !!approval || !task.trim() || !model || computerBlocked}>{submittingComputer ? computerModelCopy[locale].checking : working ? text.agents.running : text.agents.run}</button></div>
+          {computerBlocked && <p className="task-guidance" role="status">{window.electron?.discoverComputerApps ? computerText.scope : computerText.desktop}</p>}
+          <div className="agent-task-actions"><button className="primary-button" disabled={working || !!approval || !task.trim() || !model || computerBlocked}>{computerRunLabel}</button></div>
         </form>
         <section className="result-card">
           <header className="agent-result-header">

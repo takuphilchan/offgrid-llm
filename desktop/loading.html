@@ -21,9 +21,9 @@
       <dl><div><dt>Desktop</dt><dd id="desktop-version">—</dd></div><div><dt data-copy="service">Service</dt><dd id="service-version">Checking…</dd></div><div class="address"><dt data-copy="address">Address</dt><dd id="address">—</dd></div></dl>
       <p id="timing" class="muted"></p>
       <div id="recovery" hidden>
-        <p id="guidance">Your existing service and saved work are untouched. Update that service to match this desktop, or choose a separate desktop workspace.</p>
+        <p id="guidance">Your existing service and saved work are untouched. Update that service to match this desktop, or temporarily open an isolated recovery workspace.</p>
         <div class="actions"><button id="retry" data-copy="retry" type="button">Retry connection</button><button id="browser" data-copy="browser" type="button" class="secondary" hidden>Open existing web workspace</button></div>
-        <details id="separate"><summary data-copy="separate">Use a separate desktop workspace</summary><p data-copy="separateBody">This starts the bundled, matching service on another local port with separate models and history. It does not copy, upgrade, or stop your existing workspace. Models need to be installed separately. This choice is remembered; change it later under File → Connection on next launch.</p><button id="local" data-copy="local" type="button" class="secondary">Start desktop workspace</button></details>
+        <details id="separate"><summary data-copy="separate">Open an isolated recovery workspace</summary><p data-copy="separateBody">This temporarily starts the bundled service on another local port with separate models and history. It does not copy, upgrade, or stop your existing workspace, and the next launch reconnects to the normal workspace.</p><button id="local" data-copy="local" type="button" class="secondary">Open recovery workspace</button></details>
         <button id="help" data-copy="guide" type="button" class="text-button">Setup and recovery guide ↗</button>
       </div>
       <details id="technical" hidden><summary data-copy="details">Technical details</summary><p id="technical-reason"></p></details>

@@ -18,6 +18,7 @@ import (
 type serviceError struct {
 	status  int
 	message string
+	code    string
 	cause   error
 }
 
@@ -42,6 +43,10 @@ func newServiceError(status int, message string, cause error) error {
 		return &serviceError{status: http.StatusTooManyRequests, message: inference.ErrInferenceQueueFull.Error(), cause: cause}
 	}
 	return &serviceError{status: status, message: message, cause: cause}
+}
+
+func newCodedServiceError(status int, code, message string, cause error) error {
+	return &serviceError{status: status, code: code, message: message, cause: cause}
 }
 
 func authorizeChatAccess(ctx context.Context, requireAuth, knowledge bool) error {
@@ -79,6 +84,10 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	if len(request.Messages) == 0 {
 		return nil, newServiceError(http.StatusBadRequest, "messages are required", nil)
 	}
+	hasImage, err := api.ValidateChatMessages(request.Messages)
+	if err != nil {
+		return nil, newCodedServiceError(http.StatusBadRequest, "invalid_message_content", "message content is invalid or exceeds local safety limits", err)
+	}
 	if err := s.authorizeChat(ctx, request); err != nil {
 		return nil, err
 	}
@@ -88,8 +97,12 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	if s.degradationMgr != nil {
 		defer s.degradationMgr.RequestEnd()
 	}
-	if _, err := s.registry.GetModel(request.Model); err != nil {
+	metadata, err := s.registry.GetModel(request.Model)
+	if err != nil {
 		return nil, newServiceError(http.StatusNotFound, fmt.Sprintf("model not found: %s", request.Model), err)
+	}
+	if hasImage && metadata.ProjectorPath == "" {
+		return nil, newCodedServiceError(http.StatusUnprocessableEntity, "vision_projector_unavailable", "the selected model has no installed vision projector; no image was sent to inference", nil)
 	}
 
 	prepared := *request
@@ -183,6 +196,10 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		}
 	} else if typed, ok := err.(interface{ HTTPStatus() int }); ok {
 		status = typed.HTTPStatus()
+	}
+	if typed, ok := err.(*serviceError); ok && typed.code != "" {
+		writeErrorWithCode(w, message, status, typed.code)
+		return
 	}
 	writeError(w, message, status)
 }

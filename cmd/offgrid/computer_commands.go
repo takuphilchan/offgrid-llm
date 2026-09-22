@@ -13,15 +13,17 @@ import (
 
 func runComputerCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return usage("computer status | targets | pair | stop | check <model> | run <session> <model> [--expect <page-text>] <task>")
+		return usage("computer status | targets | pair | stop | check <model> [--require-vision] | run <session> <model> [--expect <page-text>] <task>")
 	}
 	path, method := "", http.MethodGet
 	var body []byte
+	requireVision := false
 	switch args[0] {
 	case "check":
-		if len(args) != 2 {
-			return usage("computer check <model>")
+		if len(args) != 2 && (len(args) != 3 || args[2] != "--require-vision") {
+			return usage("computer check <model> [--require-vision]")
 		}
+		requireVision = len(args) == 3
 		path, method = "/api/v2/computer/model-check", http.MethodPost
 		body, _ = json.Marshal(map[string]string{"model": args[1]})
 	case "status":
@@ -82,12 +84,23 @@ func runComputerCommand(ctx context.Context, args []string) error {
 		var check struct {
 			Passed  bool   `json:"passed"`
 			Message string `json:"message"`
+			Vision  *struct {
+				Installed bool   `json:"installed"`
+				Passed    bool   `json:"passed"`
+				Message   string `json:"message"`
+			} `json:"vision"`
 		}
 		if err := json.Unmarshal(value, &check); err != nil {
 			return err
 		}
 		if !check.Passed {
 			return fmt.Errorf("%s", check.Message)
+		}
+		if requireVision && (check.Vision == nil || !check.Vision.Installed || !check.Vision.Passed) {
+			if check.Vision != nil && check.Vision.Message != "" {
+				return fmt.Errorf("%s", check.Vision.Message)
+			}
+			return fmt.Errorf("local vision is not installed or did not pass the current runtime check")
 		}
 	}
 	return nil

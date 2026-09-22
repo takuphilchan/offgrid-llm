@@ -13,7 +13,18 @@ const maxJSONRequestBytes = 8 << 20
 // decodeJSON applies the common request-size and single-document rules used by
 // OffGrid's JSON endpoints.
 func decodeJSON(r *http.Request, target interface{}) error {
+	return decodeJSONWithPolicy(r, target, false)
+}
+
+func decodeStrictJSON(r *http.Request, target interface{}) error {
+	return decodeJSONWithPolicy(r, target, true)
+}
+
+func decodeJSONWithPolicy(r *http.Request, target interface{}, strict bool) error {
 	decoder := json.NewDecoder(io.LimitReader(r.Body, maxJSONRequestBytes+1))
+	if strict {
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("invalid request body: %w", err)
 	}

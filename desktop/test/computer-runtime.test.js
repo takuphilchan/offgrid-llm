@@ -13,7 +13,7 @@ function fixture(overrides={}) {
  child.postMessage=m=>{messages.push(m);if(m.type==='stop') queueMicrotask(()=>child.emit('exit',0));};
  child.kill=()=>child.emit('exit',1);
  const runtime=new ComputerRuntime({root:'test-pack',directory:'test-profile',service:()=> 'http://127.0.0.1:11611',
-   identity:async()=>({product:'offgrid',api_version:2,workspace_id:'owned-workspace'}),
+   identity:async()=>({product:'offgrid',api_version:2,workspace_id:'owned-workspace',capabilities:['native-computer-sessions-v2']}),
    pairing:async()=>({code}),
    confirm:async()=>{confirmations++;return true;},
    fork:(...args)=>{forks.push(args);queueMicrotask(()=>child.emit('message',{state:'booted'}));return child;},...overrides});
@@ -30,6 +30,48 @@ test('computer deep links carry no service, credentials, target or command',()=>
  assert.match(main,/require\(app\.isPackaged \? '\.\/computer-pack\/pack\.cjs'/);
  assert.doesNotMatch(main,/require\(path\.join\(root,'pack\.cjs'\)\)/);
 });
+
+test('packaged desktop includes the trusted application launcher',()=>{
+ const packageJSON=JSON.parse(fs.readFileSync(path.join(__dirname,'../package.json'),'utf8'));
+ assert.ok(packageJSON.build.files.includes('application-launcher.js'));
+});
+
+test('normal desktop launches always reconnect to the authoritative workspace',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
+ assert.match(main,/runtime\.connect\(false\)/);
+ assert.doesNotMatch(main,/desktop-connection\.json|nextWorkspace|connection-isolated/);
+ // Recovery remains explicit and session-scoped; it is never remembered.
+ assert.match(main,/startup-local/);
+ assert.doesNotMatch(main,/rememberConnection/);
+});
+
+test('native picker uses one owned controller and pairs only the chosen returned target',async()=>{
+ const f=fixture();const pending=f.runtime.discoverNative({workspace:'owned-workspace'});await tick();
+ assert.equal(f.forks.length,1);assert.match(f.forks[0][0],/native-managed.cjs$/);
+ assert.equal(f.messages[0].type,'discover');assert.equal(f.messages[0].code,undefined);
+ await assert.rejects(f.runtime.start(request),/session_active/);
+ f.child.emit('message',{state:'selecting',targets:[{id:'target',title:'Actual application',driver:'windows-uia'}]});
+ assert.equal((await pending).targets[0].id,'target');
+ await assert.rejects(f.runtime.startNative({workspace:'owned-workspace',target:'invented'}),/stale_target/);
+ const started=f.runtime.startNative({workspace:'owned-workspace',target:'target'});await tick();
+ assert.deepEqual(f.messages.at(-1),{type:'start-native',target:'target',code,approvalMode:'scoped_changes'});
+ f.child.emit('message',{state:'ready',target:{id:'session',origin:'Actual application',driver:'windows-uia'}});
+ assert.equal((await started).target.id,'session');await f.runtime.stop();assert.equal(f.runtime.child,null);
+});
+
+test('native discovery requires administrator access and cancels without launching a late worker',async()=>{
+ const denied=fixture({pairing:async()=>{throw Error('pairing_failed');}});
+ await assert.rejects(denied.runtime.discoverNative({workspace:'owned-workspace'}),/pairing_failed/);assert.equal(denied.forks.length,0);
+ let release;const pendingVerify=new Promise(resolve=>release=resolve);
+ const f=fixture({verify:()=>pendingVerify});const started=f.runtime.discoverNative({workspace:'owned-workspace'});await tick();
+ await f.runtime.stop();release();await started;assert.equal(f.forks.length,0);
+});
+
+test('native discovery refuses an older backend without pretending native support exists',async()=>{
+ const f=fixture({identity:async()=>({product:'offgrid',api_version:2,workspace_id:'owned-workspace'})});
+ await assert.rejects(f.runtime.discoverNative({workspace:'owned-workspace'}),/computer_upgrade_required/);
+ assert.equal(f.forks.length,0);assert.equal(f.messages.length,0);
+});
 test('native consent refusal and workspace mismatch cannot spawn a browser',async()=>{
  const denied=fixture({confirm:async()=>false});
  assert.equal((await denied.runtime.start(request)).code,'consent_declined');
@@ -45,7 +87,7 @@ test('trusted routing is explicit, locally confirmed, and cannot be selected by 
  const f=fixture({confirm:async(...args)=>{received=args;return false;}});
  const requested={origin:'https://example.com/article?q=1',workspace:'owned-workspace',networkMode:'trusted-vpn'};
  assert.equal((await f.runtime.start(requested)).code,'consent_declined');
- assert.deepEqual(received,[requested.origin,'http://127.0.0.1:11611','trusted-vpn']);
+ assert.deepEqual(received,[requested.origin,'http://127.0.0.1:11611','trusted-vpn','scoped_changes']);
  assert.equal(f.forks.length,0);
  for(const invalid of ['automatic','proxy','',true]) await assert.rejects(f.runtime.start({...requested,networkMode:invalid}),/network_mode_invalid/);
  await assert.rejects(f.runtime.start({...requested,proxy:'http://127.0.0.1:9999'}),/invalid_session/);
@@ -75,6 +117,16 @@ test('owned companion receives secrets only over IPC and stops independently of 
  assert.equal((await started).state,'ready');
  await f.runtime.stop();assert.equal(f.runtime.child,null);assert.equal(f.runtime.state.state,'stopped');
  assert.equal(f.messages.at(-1).type,'stop');
+});
+test('upload grants stay in trusted IPC and reject changed or renderer-shaped values',async()=>{
+ const upload={id:'b'.repeat(32),name:'research.pdf',path:path.resolve('private-selection.pdf'),size:42,sha256:'c'.repeat(64)};
+ const f=fixture();const started=f.runtime.start({...request,upload});await tick();
+ assert.deepEqual(f.messages[0].upload,upload);
+ assert.equal(JSON.stringify(f.forks).includes(upload.path),false);
+ f.child.emit('message',{state:'ready',target:{id:'session',origin:'offgrid-demo://research'}});await started;await f.runtime.stop();
+ for(const invalid of [{...upload,path:'relative.pdf'},{...upload,id:'public-path'},{...upload,size:513*1024*1024},{...upload,extra:'authority'}]) {
+   await assert.rejects(fixture().runtime.start({...request,upload:invalid}),/computer_upload_invalid/);
+ }
 });
 test('stop during identity or pack verification cannot launch later',async()=>{
  for(const stage of ['identity','verify']) {

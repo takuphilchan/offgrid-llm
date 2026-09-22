@@ -37,6 +37,9 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 	identity := SystemIdentity{Product: "offgrid", Version: s.version, APIVersion: 2, Revision: BuildRevision, Capabilities: []string{"sessions-v1", "chat-streaming-v1", "durable-agent-runs-v1", "exclusive-workspace-v1", "offline-backup-v1"}}
 	identity.WorkspaceID = s.workspaceID
+	if s.browserHub != nil {
+		identity.Capabilities = append(identity.Capabilities, "native-computer-sessions-v2")
+	}
 	if s.agentManager != nil && s.agentManager.ActivityReplayAvailable() {
 		identity.Capabilities = append(identity.Capabilities, "durable-agent-events-v2")
 	}

@@ -85,6 +85,7 @@ func TestNativeLinuxRealATSPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	field := ""
+	check := ""
 	for _, entry := range view.Elements {
 		if strings.Contains(entry.Name, "SYNTHETIC_TEST_SECRET") {
 			t.Fatal("password exposed")
@@ -92,8 +93,11 @@ func TestNativeLinuxRealATSPI(t *testing.T) {
 		if entry.Writable && entry.Name == "Report title" {
 			field = entry.ID
 		}
+		if entry.Checkable && entry.Name == "Include sources" {
+			check = entry.ID
+		}
 	}
-	if field == "" {
+	if field == "" || check == "" {
 		t.Fatal("editable AT-SPI field missing")
 	}
 	step, _, consent, _ := controlFixture()
@@ -132,6 +136,84 @@ func TestNativeLinuxRealATSPI(t *testing.T) {
 	}
 	if read() != "VALUE "+text {
 		t.Fatal("independent GTK oracle mismatch")
+	}
+	view, err = driver.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range view.Elements {
+		if entry.Writable && entry.Name == "Report title" {
+			field = entry.ID
+		}
+	}
+	action, err = driver.Prepare(step.Binding, Operation{Kind: "shortcut", Element: field, Shortcut: "save"}, view.Observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step.Actions = []PreparedControlAction{action}
+	grant, err = supervisor.Approve(step, func(step BoundedStep) bool { return step.Actions[0].Operation.Shortcut == "save" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = driver.FocusSelected(); err != nil {
+		t.Fatal(err)
+	}
+	results, err = supervisor.Execute(step, grant.ID)
+	if err != nil || len(results) != 1 || results[0].Outcome != "dispatched" {
+		t.Fatal(results, err)
+	}
+	if _, err = in.Write([]byte("status\n")); err != nil {
+		t.Fatal(err)
+	}
+	if read() != "SAVED" {
+		t.Fatal("bound shortcut did not reach owned GTK application")
+	}
+	view, err = driver.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range view.Elements {
+		if entry.Checkable && entry.Name == "Include sources" {
+			check = entry.ID
+		}
+	}
+	wantChecked := true
+	action, err = driver.Prepare(step.Binding, Operation{Kind: "set_checked", Element: check, Checked: &wantChecked}, view.Observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step.Actions = []PreparedControlAction{action}
+	grant, err = supervisor.Approve(step, func(step BoundedStep) bool {
+		return step.Actions[0].Operation.Checked != nil && *step.Actions[0].Operation.Checked
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = driver.FocusSelected(); err != nil {
+		t.Fatal(err)
+	}
+	results, err = supervisor.Execute(step, grant.ID)
+	if err != nil || len(results) != 1 || results[0].Outcome != "verified" {
+		t.Fatal(results, err)
+	}
+	if _, err = in.Write([]byte("checked\n")); err != nil {
+		t.Fatal(err)
+	}
+	if read() != "CHECKED" {
+		t.Fatal("independent GTK checkbox oracle mismatch")
+	}
+	view, err = driver.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range view.Elements {
+		if entry.Checkable && entry.Name == "Include sources" {
+			check = entry.ID
+		}
+	}
+	verified, err := driver.VerifyChecked(step.Binding, check, true, view.Observation)
+	if err != nil || !verified {
+		t.Fatal("checkbox verification failed", err)
 	}
 	view, err = driver.Observe(context.Background())
 	if err != nil {

@@ -1,11 +1,13 @@
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen, utilityProcess, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const { isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
 const { DesktopRuntime } = require('./runtime');
 const { normalize: normalizePresentation, readCopy } = require('./presentation');
 const { ComputerRuntime, isComputerLink } = require('./computer-runtime');
+const { createApplicationLauncher } = require('./application-launcher');
 // Verification code belongs to the application, not the unverified payload.
 const { verifyPack: verifyComputerPack } = require(app.isPackaged ? './computer-pack/pack.cjs' : '../computer/pack.cjs');
 
@@ -44,9 +46,7 @@ let quitting = false;
 let shutdownComplete = false;
 let saveTimer;
 let saveQueue = Promise.resolve();
-let connectionQueue = Promise.resolve();
 let windowCreation;
-let nextWorkspace = 'default';
 let computerRequested = process.argv.some(isComputerLink);
 const computerRoot = app.isPackaged ? path.join(process.resourcesPath,'computer') : path.join(__dirname,'../build/computer-runtime',`${{win32:'win',darwin:'mac',linux:'linux'}[process.platform]}-${process.arch}`);
 let computerCopy;
@@ -67,17 +67,33 @@ const computer = new ComputerRuntime({
       method:'POST',credentials:'include',redirect:'error',headers:{'Content-Type':'application/json',Origin:service},body:'{}',signal:AbortSignal.timeout(10000)});
     if(!response.ok) throw Error('pairing_failed');return response.json();
   },
-  confirm: async (origin, service, networkMode) => {
+  confirm: async (origin, service, networkMode, approvalMode) => {
     const text=computerText();
     const result=await dialog.showMessageBox(mainWindow,{type:'question',title:text.consentTitle,message:text.consentTitle,
-      detail:`${origin}\n${service}\n\n${text.consentBody}${networkMode==='trusted-vpn'?'\n\n'+text.networkWarning:''}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
+      detail:`${origin}\n${service}\n\nApproval policy: ${approvalMode.replaceAll('_',' ')}\n\n${text.consentBody}${networkMode==='trusted-vpn'?'\n\n'+text.networkWarning:''}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
     return result.response===1;
   }
 });
+// Installed-app discovery and launch stay in the trusted main process. The
+// renderer receives opaque catalog IDs only; it can never provide a path or
+// executable command to the host.
+const applicationLauncher = createApplicationLauncher({ platform: process.platform, env: process.env, shell });
+const uploadGrants = new Map();
+async function digestFile(file) {
+  return await new Promise((resolve,reject)=>{const hash=crypto.createHash('sha256');const stream=fs.createReadStream(file);stream.on('data',chunk=>hash.update(chunk));stream.once('error',reject);stream.once('end',()=>resolve(hash.digest('hex')));});
+}
+async function selectComputerUpload() {
+  const result=await dialog.showOpenDialog(mainWindow,{title:'Select one file for this computer task',properties:['openFile','dontAddToRecent']});
+  if(result.canceled || result.filePaths.length!==1)return null;
+  const file=await fs.promises.realpath(result.filePaths[0]);const info=await fs.promises.stat(file);
+  if(!info.isFile() || info.size>512*1024*1024)throw Error('computer_upload_invalid');
+  const grant={id:crypto.randomUUID().replaceAll('-',''),path:file,name:path.basename(file),size:info.size,sha256:await digestFile(file)};
+  uploadGrants.clear();uploadGrants.set(grant.id,grant);
+  return {id:grant.id,name:grant.name,size:grant.size,sha256:grant.sha256};
+}
 computer.on('status',()=>{ if (app.isReady() && presentationCopy) updateMenus(); });
 app.on('open-url',(event,url)=>{ event.preventDefault(); if(isComputerLink(url)){computerRequested=true;if(app.isReady()){showWindow();showWorkspace();}} });
 const statePath = path.join(configRoot, 'window-state.json');
-const connectionPath = path.join(configRoot, 'desktop-connection.json');
 const presentationPath = path.join(configRoot, 'desktop-presentation.json');
 let presentation = normalizePresentation({});
 let presentationCopy;
@@ -201,35 +217,11 @@ async function createMainWindow() {
   showWorkspace();
 }
 
-function rememberConnection(mode) {
-  connectionQueue = connectionQueue.catch(() => {}).then(async () => {
-    await fs.promises.mkdir(configRoot, { recursive: true });
-    await fs.promises.writeFile(connectionPath + '.tmp', JSON.stringify({ mode }));
-    await fs.promises.rename(connectionPath + '.tmp', connectionPath);
-    nextWorkspace = mode;
-    updateMenus();
-  });
-  return connectionQueue;
-}
-
-function connectionMenu() {
-  const select = mode => void rememberConnection(mode).catch(() => {
-    void dialog.showMessageBox(mainWindow, { type: 'warning', message: copy('actionError'), detail: copy('guidance') });
-  });
-  return [
-    { label: copy('reopen'), enabled: false },
-    { type: 'separator' },
-    { id: 'connection-default', label: copy('configured'), type: 'radio', checked: nextWorkspace === 'default', click: () => select('default') },
-    { id: 'connection-isolated', label: copy('separate'), type: 'radio', checked: nextWorkspace === 'isolated', click: () => select('isolated') }
-  ];
-}
-
 function updateMenus() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { label: copy('file'), submenu: [
       { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
-      { label: copy('nextLaunch'), submenu: connectionMenu() },
       { type: 'separator' },
       { role: process.platform === 'darwin' ? 'close' : 'quit' }
     ] },
@@ -239,7 +231,6 @@ function updateMenus() {
   tray?.setContextMenu(Menu.buildFromTemplate([
     { label: copy('open'), click: showWindow },
     { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
-    { label: copy('nextLaunch'), submenu: connectionMenu() },
     { type: 'separator' },
     { label: copy('quit'), click: () => app.quit() }
   ]));
@@ -267,7 +258,18 @@ handleTrustedIPC('get-app-version', () => app.getVersion());
 handleTrustedIPC('get-server-status', () => runtime.state.state === 'ready');
 handleTrustedIPC('get-backend-info', () => runtime.snapshot());
 handleTrustedIPC('computer-status', () => ({...computer.state, installed:fs.existsSync(path.join(computerRoot,'manifest.json'))}));
-handleTrustedIPC('computer-start', request => computer.start(request));
+handleTrustedIPC('computer-start', request => {
+  const upload=request?.uploadGrant ? uploadGrants.get(request.uploadGrant) : undefined;
+  if(request?.uploadGrant && !upload)throw Error('computer_upload_invalid');
+  const {uploadGrant,...safe}=request??{};
+  if(uploadGrant)uploadGrants.delete(uploadGrant);
+  return computer.start({...safe,upload});
+});
+handleTrustedIPC('computer-select-upload', () => selectComputerUpload());
+handleTrustedIPC('computer-targets', request => computer.discoverNative(request));
+handleTrustedIPC('computer-native-start', request => computer.startNative(request));
+handleTrustedIPC('computer-launchable-apps', () => ({ state: 'selecting', targets: applicationLauncher.discover() }));
+handleTrustedIPC('computer-launch-app', request => applicationLauncher.launch(request?.id));
 handleTrustedIPC('computer-stop', () => computer.stop());
 handleTrustedIPC('get-presentation', () => presentationSnapshot());
 handleTrustedIPC('set-presentation', value => {
@@ -286,11 +288,7 @@ handleTrustedIPC('set-presentation', value => {
 });
 handleTrustedIPC('startup-retry', () => runtime.connect(), true);
 handleTrustedIPC('startup-local', async () => {
-  const status = await runtime.connect(true);
-  if (status.state === 'ready' && status.workspaceMode === 'isolated') {
-    await rememberConnection('isolated');
-  }
-  return status;
+  return runtime.connect(true);
 }, true);
 handleTrustedIPC('startup-browser', async () => {
   if (!runtime.state.canOpenBrowser) throw new Error('No identified external OffGrid workspace is available');
@@ -328,9 +326,11 @@ app.whenReady().then(async () => {
   powerMonitor.on('lock-screen',()=>void computer.stop());
   powerMonitor.on('suspend',()=>void computer.stop());
   createTray();
-  try { nextWorkspace = JSON.parse(await fs.promises.readFile(connectionPath, 'utf8')).mode === 'isolated' ? 'isolated' : 'default'; } catch {}
   updateMenus();
-  void runtime.connect(nextWorkspace === 'isolated');
+  // A normal launch always reconnects to the authoritative local workspace.
+  // An isolated workspace is an explicit, session-scoped recovery action only;
+  // it must never silently replace the user's service, models or history.
+  void runtime.connect(false);
   app.on('activate', showWindow);
 });
 app.on('window-all-closed', () => {
@@ -344,7 +344,6 @@ app.on('before-quit', event => {
   clearTimeout(saveTimer);
   void (async () => {
     await saveWindowState();
-    await connectionQueue.catch(() => {});
     await presentationQueue.catch(() => {});
     await computer.stop();
     await runtime.stop(); // Only our child, never a Docker/external service.

@@ -81,43 +81,44 @@ type Server struct {
 	sessionHandlers      *SessionHandlers
 	authMiddleware       *users.Middleware
 	// New feature managers
-	userStore           *users.UserStore
-	quotaManager        *users.QuotaManager
-	kbManager           *users.KnowledgeBaseManager
-	loraManager         *inference.LoRAManager
-	agentManager        *agents.Manager
-	agentRunner         *agents.Runner
-	agentOrchestrator   *agents.Orchestrator
-	toolRegistry        *agents.ToolRegistry
-	mcpHandler          http.Handler
-	p2pDiscovery        *p2p.Discovery
-	p2pTransfer         *p2p.TransferManager
-	p2pIdentity         *p2p.Identity
-	p2pTrust            *p2p.TrustStore
-	offgridMetrics      *metrics.OffGridMetrics
-	wsHub               *websocket.Hub
-	powerManager        *power.PowerManager
-	degradationMgr      *degradation.Manager     // Graceful degradation under resource pressure
-	auditLogger         *audit.AuditLogger       // Enterprise audit logging (optional)
-	ldapAuth            *users.LDAPAuthenticator // LDAP/Active Directory authentication
-	mcpMarketplace      *mcp.Marketplace         // MCP server marketplace
-	loadBalancer        *inference.LoadBalancer  // Multi-backend load balancer
-	distributedRAG      *rag.DistributedRAG      // Distributed RAG index
-	pluginManager       *tools.PluginManager     // Plugin system for custom tools
-	capabilityBroker    *capabilities.Broker     // Shared authorization boundary for tools and agents
-	runLog              *runs.Log                // Durable event stream for agent runs
-	artifactStore       *artifacts.Store         // Content-addressed agent outputs and captures
-	browserHub          *computer.BrowserHub
-	integrationRegistry *integrations.Registry // External agent adapters (Hermes, OpenClaw, ...)
-	sandbox             agents.Sandbox         // Long-lived agent sandbox owned by this server
-	closeOnce           sync.Once
-	closeErr            error
-	runtimeCtx          context.Context
-	runtimeCancel       context.CancelFunc
-	startupErr          error
-	workspaceOwner      *storage.Ownership
-	workspaceID         string
-	startupWorkers      sync.WaitGroup
+	userStore            *users.UserStore
+	quotaManager         *users.QuotaManager
+	kbManager            *users.KnowledgeBaseManager
+	loraManager          *inference.LoRAManager
+	agentManager         *agents.Manager
+	agentRunner          *agents.Runner
+	agentOrchestrator    *agents.Orchestrator
+	toolRegistry         *agents.ToolRegistry
+	mcpHandler           http.Handler
+	p2pDiscovery         *p2p.Discovery
+	p2pTransfer          *p2p.TransferManager
+	p2pIdentity          *p2p.Identity
+	p2pTrust             *p2p.TrustStore
+	offgridMetrics       *metrics.OffGridMetrics
+	wsHub                *websocket.Hub
+	powerManager         *power.PowerManager
+	degradationMgr       *degradation.Manager     // Graceful degradation under resource pressure
+	auditLogger          *audit.AuditLogger       // Enterprise audit logging (optional)
+	ldapAuth             *users.LDAPAuthenticator // LDAP/Active Directory authentication
+	mcpMarketplace       *mcp.Marketplace         // MCP server marketplace
+	loadBalancer         *inference.LoadBalancer  // Multi-backend load balancer
+	distributedRAG       *rag.DistributedRAG      // Distributed RAG index
+	pluginManager        *tools.PluginManager     // Plugin system for custom tools
+	capabilityBroker     *capabilities.Broker     // Shared authorization boundary for tools and agents
+	runLog               *runs.Log                // Durable event stream for agent runs
+	artifactStore        *artifacts.Store         // Content-addressed agent outputs and captures
+	browserHub           *computer.BrowserHub
+	computerVisionChecks sync.Map               // exact runtime/model/projector smoke passes; never persisted
+	integrationRegistry  *integrations.Registry // External agent adapters (Hermes, OpenClaw, ...)
+	sandbox              agents.Sandbox         // Long-lived agent sandbox owned by this server
+	closeOnce            sync.Once
+	closeErr             error
+	runtimeCtx           context.Context
+	runtimeCancel        context.CancelFunc
+	startupErr           error
+	workspaceOwner       *storage.Ownership
+	workspaceID          string
+	startupWorkers       sync.WaitGroup
 	// Runtime tracking
 	requestCount       int64
 	wsConnections      int64
@@ -1916,6 +1917,15 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 		models[index].ContextLength = contextWindow
 		models[index].Capabilities = []string{"chat", "streaming"}
 		models[index].CapabilityStatus = map[string]string{"chat": "declared", "streaming": "declared", "tools": "unknown"}
+		if metadata, err := s.registry.GetModel(models[index].ID); err == nil && metadata.ProjectorPath != "" {
+			// An installed projector is unknown until the current runtime passes
+			// the synthetic image/tool-call check. "tested" remains a smoke-test
+			// status, not end-to-end grounding qualification.
+			models[index].CapabilityStatus["vision"] = "unknown"
+			if s.computerVisionReady(models[index].ID) {
+				models[index].CapabilityStatus["vision"] = "tested"
+			}
+		}
 	}
 	response := api.ModelListResponse{
 		Object: "list",
@@ -2006,11 +2016,20 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Messages are required", http.StatusBadRequest)
 		return
 	}
+	hasImage, err := api.ValidateChatMessages(req.Messages)
+	if err != nil {
+		writeErrorWithCode(w, "Message content is invalid or exceeds local safety limits", http.StatusBadRequest, "invalid_message_content")
+		return
+	}
 
 	// Get model metadata
-	_, err := s.registry.GetModel(req.Model)
+	metadata, err := s.registry.GetModel(req.Model)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
+		return
+	}
+	if hasImage && metadata.ProjectorPath == "" {
+		writeErrorWithCode(w, "The selected model has no installed vision projector; no image was sent to inference", http.StatusUnprocessableEntity, "vision_projector_unavailable")
 		return
 	}
 

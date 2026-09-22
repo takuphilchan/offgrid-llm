@@ -29,19 +29,22 @@ const (
 
 // Step represents a single step in the agent's execution
 type Step struct {
-	ID         int           `json:"id"`
-	Type       string        `json:"type"` // "thought", "action", "observation", "answer"
-	Content    string        `json:"content"`
-	ToolName   string        `json:"tool_name,omitempty"`
-	ToolArgs   string        `json:"tool_args,omitempty"`
-	ToolResult string        `json:"tool_result,omitempty"`
-	Timestamp  time.Time     `json:"timestamp"`
-	Duration   time.Duration `json:"duration,omitempty"`
+	ID            int           `json:"id"`
+	Type          string        `json:"type"` // "thought", "action", "observation", "answer"
+	Content       string        `json:"content"`
+	ToolName      string        `json:"tool_name,omitempty"`
+	ToolArgs      string        `json:"tool_args,omitempty"`
+	ToolResult    string        `json:"tool_result,omitempty"`
+	Timestamp     time.Time     `json:"timestamp"`
+	Duration      time.Duration `json:"duration,omitempty"`
+	Authorization string        `json:"authorization,omitempty"`
 }
 
 // AgentConfig configures agent behavior
 type AgentConfig struct {
 	ComputerSession      string        `json:"computer_session,omitempty"`
+	ComputerDriver       string        `json:"computer_driver,omitempty"`
+	ComputerApprovalMode string        `json:"computer_approval_mode,omitempty"`
 	ComputerExpectedText string        `json:"computer_expected_text,omitempty"`
 	ComputerVerification string        `json:"computer_verification,omitempty"`
 	MaxIterations        int           `json:"max_iterations"`   // Maximum reasoning steps

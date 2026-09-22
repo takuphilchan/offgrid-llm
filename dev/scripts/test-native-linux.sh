@@ -8,6 +8,7 @@ cd "$(dirname "$0")/../.."
 native_test_dir=$(mktemp -d "${TMPDIR:-/tmp}/offgrid-native-linux.XXXXXX")
 export XDG_RUNTIME_DIR="$native_test_dir/runtime"
 export XDG_CONFIG_HOME="$native_test_dir/config"
+export XDG_SESSION_TYPE=x11
 mkdir -m 700 "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME"
 cc computer/native/linux/fixture.c -o "$native_test_dir/fixture" $(pkg-config --cflags --libs gtk+-3.0)
 cc computer/native/linux/consent.c -o "$native_test_dir/offgrid-computer-ui" $(pkg-config --cflags --libs gtk+-3.0 json-glib-1.0)

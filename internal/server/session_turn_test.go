@@ -89,16 +89,25 @@ func TestDurableChatDisconnectReplayAndExplicitCancel(t *testing.T) {
 		t.Fatal("exchange not atomically committed", saved)
 	}
 	finish = make(chan struct{})
-	next, _ := http.Post(server.URL+"/v1/sessions/chat/generate", "application/json", strings.NewReader(`{"content":"next","stream":true,"durable":true,"request_id":"two"}`))
+	next, err := http.Post(server.URL+"/v1/sessions/chat/generate", "application/json", strings.NewReader(`{"content":"next","stream":true,"durable":true,"request_id":"two"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer next.Body.Close()
 	<-started
-	stopped, _ := http.Post(server.URL+"/v1/sessions/chat/turn/cancel", "application/json", strings.NewReader(`{"id":"two"}`))
+	stopped, err := http.Post(server.URL+"/v1/sessions/chat/turn/cancel", "application/json", strings.NewReader(`{"id":"two"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
 	stopped.Body.Close()
 	body, _ = io.ReadAll(next.Body)
 	if !strings.Contains(string(body), `"type":"error"`) {
 		t.Fatal(string(body))
 	}
-	state, _ := http.Get(server.URL + "/v1/sessions/chat/turn")
+	state, err := http.Get(server.URL + "/v1/sessions/chat/turn")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer state.Body.Close()
 	var result map[string]any
 	json.NewDecoder(state.Body).Decode(&result)

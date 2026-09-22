@@ -1,7 +1,11 @@
 import { isIP } from 'node:net';
 import { randomUUID, createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { mkdir, stat } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { chromium } from 'playwright';
 import {publicPage, pinnedDestination, startEgress} from './network.mjs';
+import {classifyBrowserAction} from './approval-policy.mjs';
 export {publicIPv4} from './network.mjs';
 
 // Validate before touching the page. The service repeats this check before
@@ -9,7 +13,10 @@ export {publicIPv4} from './network.mjs';
 export function validateBrowserAction(kind, args) {
   const schemas = {
     browser_observe: {}, browser_navigate: {url:'string'}, browser_verify: {text:'string'},
+    browser_capture: {observation_id:'string'},
     browser_click: {observation_id:'string',element:'string'},
+    browser_download: {observation_id:'string',element:'string'},
+    browser_upload: {observation_id:'string',element:'string'},
     browser_fill: {observation_id:'string',element:'string',text:'string'},
     browser_select: {observation_id:'string',element:'string',option:'string'},
     browser_set_checked: {observation_id:'string',element:'string',checked:'boolean'},
@@ -39,7 +46,7 @@ function describeControl(el) {
 }
 
 export class BrowserDriver {
-  static async open(origin, { headless = false, testLoopback = false, networkMode = 'direct' } = {}) {
+  static async open(origin, { headless = false, testLoopback = false, networkMode = 'direct', downloadDir, upload } = {}) {
     const url = new URL(origin);
     if (url.username || url.password ||
        (!testLoopback && (url.protocol !== 'https:' || isIP(url.hostname)))) throw Error('Select a public HTTPS origin.');
@@ -52,7 +59,7 @@ export class BrowserDriver {
       browser = await chromium.launch({ headless, ...(egress ? {proxy:{server:egress.server,bypass:'<-loopback>'}} : {}), args: [
         '--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'
       ] });
-      const context = await browser.newContext({ acceptDownloads: false, serviceWorkers: 'block' });
+      const context = await browser.newContext({ acceptDownloads: true, serviceWorkers: 'block' });
       const blockedOrigins = new Set();
       await context.route('**/*', route => {
         let allowed = false;
@@ -72,9 +79,8 @@ export class BrowserDriver {
       const page = await context.newPage();
       page.setDefaultTimeout(8000);
       page.on('dialog', dialog => void dialog.dismiss());
-      page.on('download', download => void download.cancel());
       context.on('page', popup => { if (popup !== page) void popup.close(); });
-      const driver = new BrowserDriver(browser, page, url.origin);
+      const driver = new BrowserDriver(browser, page, url.origin, {downloadDir,upload});
       driver.egress = egress;
       driver.blockedOrigins = blockedOrigins;
       try { await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 20000 }); }
@@ -82,7 +88,7 @@ export class BrowserDriver {
       return driver;
     } catch (error) { try { await browser?.close(); } finally { await egress?.close(); } throw error; }
   }
-  constructor(browser, page, origin) { Object.assign(this, { browser, page, origin, elements: new Map(), observation: '', revision: -1 }); }
+  constructor(browser, page, origin, {downloadDir,upload} = {}) { Object.assign(this, { browser, page, origin, downloadDir, upload, elements: new Map(), observation: '', revision: -1 }); }
   async close() { try { await this.browser.close(); } finally { await this.egress?.close(); } }
   async stateDigest() {
     // Property writes need not emit DOM mutations or input events. Keep only a
@@ -154,10 +160,18 @@ export class BrowserDriver {
       const verified = (await this.page.locator('body').innerText()).includes(args.text);
       return { verified, check: 'page_contains_text', text: args.text, url: this.page.url() };
     }
-    if (!['browser_click','browser_fill','browser_select','browser_set_checked'].includes(kind)) throw Error('Unsupported browser action.');
+    if (!['browser_capture','browser_click','browser_download','browser_upload','browser_fill','browser_select','browser_set_checked'].includes(kind)) throw Error('Unsupported browser action.');
     if (args.observation_id !== this.observation || Date.now() - this.observedAt > 120000 ||
         this.page.url() !== this.observedURL || await this.page.evaluate(() => window.__offgridRevision) !== this.revision ||
         await this.stateDigest() !== this.formDigest) throw Error('Stale observation; inspect the page again.');
+    if (kind === 'browser_capture') {
+      const viewport = this.page.viewportSize();
+      if (!viewport || viewport.width < 1 || viewport.height < 1 || viewport.width > 8192 || viewport.height > 8192 || viewport.width * viewport.height > 32 * 1024 * 1024) throw Error('Browser surface exceeds the vision safety limit.');
+      const mask = this.page.locator('input[type="password"], input[autocomplete="current-password"], input[autocomplete="new-password"], input[autocomplete="one-time-code"], input[autocomplete="cc-number"], input[autocomplete="cc-csc"], [data-offgrid-private]');
+      const content = await this.page.screenshot({type:'png',animations:'disabled',caret:'hide',mask:[mask],maskColor:'#000'});
+      if (!content.length || content.length > 5 * 1024 * 1024) throw Error('Browser capture exceeds the vision safety limit.');
+      return {captured:true,observation_id:this.observation,media_type:'image/png',width:viewport.width,height:viewport.height,data:content.toString('base64')};
+    }
     const handle = this.elements.get(args.element);
     if (!handle || !await handle.isVisible()) throw Error('Unknown or hidden element.');
     if ((await handle.evaluate(describeControl)).sensitive) throw Error('Credential/payment entry requires manual takeover.');
@@ -178,6 +192,32 @@ export class BrowserDriver {
       if (await handle.isChecked() !== args.checked) throw Error('Checkbox change could not be verified.');
       return {...await this.observe(), verified:true, check:'checked_state_matches', changed:true};
     }
+    if (kind === 'browser_download') {
+      if (!this.downloadDir) throw Error('Download staging is unavailable.');
+      await mkdir(this.downloadDir, {recursive:true, mode:0o700});
+      const suggested = await handle.getAttribute('download') || await handle.getAttribute('aria-label') || 'download';
+      const safeName = basename(String(suggested)).replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 160) || 'download';
+      const downloadPromise = this.page.waitForEvent('download', {timeout: 15000});
+      await handle.click();
+      const download = await downloadPromise;
+      if (await download.failure()) throw Error('Download failed.');
+      const target = join(this.downloadDir, `${Date.now()}-${safeName}`);
+      await download.saveAs(target);
+      const file = await stat(target);
+      if (!file.isFile() || file.size > 512 * 1024 * 1024) throw Error('Downloaded artifact is invalid.');
+      const sha256 = await fileDigest(target);
+      return {downloaded:true, verified:true, artifact:{name:safeName,size:file.size,sha256,staged:true}};
+    }
+    if (kind === 'browser_upload') {
+      if (!this.upload || !/^[a-f0-9]{32}$/.test(this.upload.id) || !/^[a-f0-9]{64}$/.test(this.upload.sha256)) throw Error('No user-selected upload is available.');
+      if (!await handle.evaluate(el=>el.tagName==='INPUT' && el.type==='file' && !el.multiple)) throw Error('Only one native file input is supported.');
+      const current=await stat(this.upload.path);
+      if (!current.isFile() || current.size!==this.upload.size || await fileDigest(this.upload.path)!==this.upload.sha256) throw Error('Selected upload changed; select it again.');
+      await handle.setInputFiles(this.upload.path);
+      const verified=await handle.evaluate((el,name)=>el.files?.length===1 && el.files[0].name===name,this.upload.name);
+      if(!verified)throw Error('Upload selection could not be verified.');
+      return {uploaded:true,verified:true,file:{grant:this.upload.id,name:this.upload.name,size:this.upload.size,sha256:this.upload.sha256}};
+    }
     if (kind === 'browser_fill') {
       if (typeof args.text !== 'string' || args.text.length > 4000) throw Error('Text exceeds scope.');
       if ((await handle.evaluate(describeControl)).sensitive) throw Error('Credential/payment entry requires manual takeover.');
@@ -190,4 +230,30 @@ export class BrowserDriver {
     await handle.click();
     return { ...await this.observe(), dispatched: true, verified: false, message: 'Click dispatched. This is a fresh observation; independently verify the requested result.' };
   }
+
+  async prepare(kind, args) {
+    validateBrowserAction(kind, args);
+    if (this.page.isClosed() || new URL(this.page.url()).origin !== this.origin) throw Error('Target unavailable or outside scope.');
+    if (['browser_observe','browser_capture','browser_verify'].includes(kind)) return {prepared:true,approval_class:'read_only'};
+    if (kind === 'browser_navigate') {
+      const url = new URL(args.url);
+      if (url.origin !== this.origin || url.username || url.password) throw Error('Navigation is outside approved origin.');
+      return {prepared:true,approval_class:'reversible'};
+    }
+    if (args.observation_id !== this.observation || Date.now() - this.observedAt > 120000 || this.page.url() !== this.observedURL ||
+        await this.page.evaluate(() => window.__offgridRevision) !== this.revision || await this.stateDigest() !== this.formDigest) throw Error('Stale observation; inspect the page again.');
+    const handle = this.elements.get(args.element);
+    if (!handle || !await handle.isVisible() || !await handle.isEnabled()) throw Error('Unknown, hidden, or disabled element.');
+    const control = await handle.evaluate(describeControl);
+    control.riskText = await handle.evaluate(el => `${document.title} ${el.closest('form')?.innerText?.slice(0,1000) ?? ''}`);
+    const approvalClass = classifyBrowserAction(kind, control);
+    return {prepared:true,approval_class:approvalClass};
+  }
+}
+
+function fileDigest(file) {
+  return new Promise((resolve, reject) => {
+    const hash=createHash('sha256'); const stream=createReadStream(file);
+    stream.on('data', chunk=>hash.update(chunk)); stream.once('error', reject); stream.once('end', ()=>resolve(hash.digest('hex')));
+  });
 }

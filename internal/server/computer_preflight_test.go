@@ -42,7 +42,7 @@ func (e *probeEngine) ChatCompletion(ctx context.Context, request *api.ChatCompl
 		return nil, err
 	}
 	e.requests++
-	if request.ToolChoice != "auto" || len(request.Tools) != 7 || request.ParallelToolCalls == nil || *request.ParallelToolCalls || !strings.Contains(request.Messages[0].StringContent(), computerSequentialProtocol) {
+	if request.ToolChoice != "auto" || len(request.Tools) != 9 || request.ParallelToolCalls == nil || *request.ParallelToolCalls || !strings.Contains(request.Messages[0].StringContent(), computerSequentialProtocol) {
 		return nil, errors.New("incorrect probe configuration")
 	}
 	if e.mode == "runtime" {

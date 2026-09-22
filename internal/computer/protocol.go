@@ -10,6 +10,7 @@ type Capabilities struct {
 	ReasonCode      string             `json:"reason_code"`
 	LocalOnly       bool               `json:"local_only"`
 	ApprovalMode    string             `json:"approval_mode"`
+	ApprovalModes   []ApprovalMode     `json:"approval_modes"`
 	Drivers         []DriverCapability `json:"drivers"`
 }
 
@@ -24,7 +25,7 @@ type DriverCapability struct {
 func UnavailableCapabilities() Capabilities {
 	return Capabilities{
 		ProtocolVersion: ProtocolVersion, Preview: true, ReasonCode: "companion_unavailable",
-		LocalOnly: true, ApprovalMode: "supervised",
+		LocalOnly: true, ApprovalMode: "supervised", ApprovalModes: []ApprovalMode{ApprovalAskEveryTime, ApprovalScopedChanges, ApprovalFullTask},
 		Drivers: []DriverCapability{{ID: "browser"}, {ID: "windows-uia"}, {ID: "macos-accessibility"}, {ID: "linux-atspi"}},
 	}
 }

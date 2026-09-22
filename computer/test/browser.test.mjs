@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { BrowserDriver, publicIPv4, validateBrowserAction } from '../browser.mjs';
 import { startDemo, DEMO_ORIGIN } from '../demo.mjs';
 
@@ -9,12 +13,29 @@ test('typed action contracts reject extra fields, coercion and oversized Unicode
   ['browser_observe',{script:'not allowed'}], ['browser_observe',null], ['browser_observe',[]],
   ['browser_select',{observation_id:'seen',element:'1',option:2}],
   ['browser_set_checked',{observation_id:'seen',element:'1',checked:'false'}],
+  ['browser_capture',{observation_id:'seen',extra:true}],
   ['browser_fill',{observation_id:'seen',element:'1',text:'語'.repeat(1334)}],
   ['browser_verify',{text:'語'.repeat(334)}],
   ['browser_click',{observation_id:'',element:'1'}],
  ]) assert.throws(()=>validateBrowserAction(kind,args));
  validateBrowserAction('browser_fill',{observation_id:'seen',element:'1',text:''});
  validateBrowserAction('browser_set_checked',{observation_id:'seen',element:'1',checked:false});
+ validateBrowserAction('browser_capture',{observation_id:'seen'});
+});
+
+test('viewport captures are observation-bound and mask protected controls', async () => {
+ const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<html><body><h1>Local report</h1><label>Password <input id="secret" type="password" value="first secret"></label></body></html>')});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let driver;
+ try {
+  driver=await BrowserDriver.open(`http://127.0.0.1:${server.address().port}`,{headless:true,testLoopback:true});
+  let view=await driver.observe();const first=await driver.execute('browser_capture',{observation_id:view.observation_id});
+  assert.equal(first.captured,true);assert.equal(first.media_type,'image/png');assert.ok(first.data.length>100);
+  assert.equal(Buffer.from(first.data,'base64').subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+  await driver.page.locator('#secret').fill('different secret');view=await driver.observe();
+  const second=await driver.execute('browser_capture',{observation_id:view.observation_id});
+  assert.equal(createHash('sha256').update(first.data).digest('hex'),createHash('sha256').update(second.data).digest('hex'));
+  await assert.rejects(driver.execute('browser_capture',{observation_id:'stale'}),/Stale/);
+ }finally{await driver?.close();await new Promise(resolve=>server.close(resolve));}
 });
 
 test('native dropdowns and checkboxes use observed IDs, explicit state and postcondition checks', async () => {
@@ -58,6 +79,37 @@ test('native dropdowns and checkboxes use observed IDs, explicit state and postc
 test('private/reserved network addresses are rejected', () => {
  for (const ip of ['127.0.0.1','10.1.2.3','172.16.0.1','192.168.1.1','169.254.169.254','100.64.0.1','198.18.0.1','::1']) assert.equal(publicIPv4(ip), false);
  assert.equal(publicIPv4('93.184.215.14'), true);
+});
+
+test('downloads are staged, bounded and digest-verified', async () => {
+ const server=createServer((req,res)=>{if(req.url==='/report.txt'){res.setHeader('Content-Type','text/plain');res.setHeader('Content-Disposition','attachment; filename="research-report.txt"');res.end('OffGrid research artifact\n');return;}res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<a id="download" href="/report.txt" download="research-report.txt">Download report</a>')});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ let driver; const directory=await mkdtemp(join(tmpdir(),'offgrid-download-'));
+ try {
+  // The test uses a same-origin route in the page so the browser origin guard
+  // remains identical to a permitted site; the response body is intercepted
+  // through Playwright's request routing below.
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  driver=await BrowserDriver.open(origin,{headless:true,testLoopback:true,downloadDir:directory});
+  const view=await driver.execute('browser_observe',{}); const link=view.elements.find(el=>el.label==='Download report');
+  const result=await driver.execute('browser_download',{observation_id:view.observation_id,element:link.id});
+  assert.equal(result.downloaded,true); assert.equal(result.verified,true); assert.equal(result.artifact.staged,true);
+  const files=await readdir(directory); assert.equal(files.length,1); assert.equal((await readFile(join(directory,files[0]))).toString(),'OffGrid research artifact\n');
+ } finally { await driver?.close(); await rm(directory,{recursive:true,force:true}); await new Promise(resolve=>server.close(resolve)); }
+});
+
+test('uploads use only the user-selected digest-bound file grant', async () => {
+ const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<label for="source">Research source</label><input id="source" type="file"><p id="status"></p>')});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve)); const directory=await mkdtemp(join(tmpdir(),'offgrid-upload-')); const file=join(directory,'notes.txt');
+ await writeFile(file,'offline research notes\n'); const sha256=createHash('sha256').update('offline research notes\n').digest('hex'); let driver;
+ try {
+  driver=await BrowserDriver.open(`http://127.0.0.1:${server.address().port}`,{headless:true,testLoopback:true,upload:{id:'a'.repeat(32),path:file,name:'notes.txt',size:23,sha256}});
+  let view=await driver.observe(); const input=view.elements.find(el=>el.label==='Research source');
+  const result=await driver.execute('browser_upload',{observation_id:view.observation_id,element:input.id});
+  assert.equal(result.uploaded,true);assert.equal(result.verified,true);assert.equal(result.file.sha256,sha256);assert.equal(await driver.page.locator('#source').evaluate(el=>el.files[0].name),'notes.txt');
+  await writeFile(file,'changed');view=await driver.observe();
+  await assert.rejects(driver.execute('browser_upload',{observation_id:view.observation_id,element:view.elements.find(el=>el.label==='Research source').id}),/changed/);
+ } finally {await driver?.close();await rm(directory,{recursive:true,force:true});server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
 
 test('page hydration retries only observations, and links expose exact in-scope destinations',async()=>{

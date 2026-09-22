@@ -16,6 +16,11 @@ import { readPreference, writePreference } from '../../lib/preferences';
 
 const activeSessionKey = 'offgrid.active-session';
 
+function messageText(content: ChatMessage['content']): string {
+  if (typeof content === 'string') return content;
+  return content.filter(part => part.type === 'text').map(part => part.text).join('');
+}
+
 function readPreferences(key: string): { profile: string; maxTokens: number } {
   try {
     const value = JSON.parse(readPreference(key) ?? '{}');
@@ -145,7 +150,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       setSessions(next);
       // A late startup/retry must never replace a newer selection or its draft.
       if (selection === selectionRevision.current) activate(!preferred && readDraft(draftKey(scope, 'chat')) ? undefined : next.find(item => item.name === preferred) ?? next[0]);
-      if (onboardingPending && next.some(item => item.messages.some(message => message.role === 'assistant' && message.content.trim()))) onFirstResponse();
+      if (onboardingPending && next.some(item => item.messages.some(message => message.role === 'assistant' && messageText(message.content).trim()))) onFirstResponse();
     } catch (reason) {
       if (mounted.current && request === historyRevision.current) setError(reason instanceof Error ? reason.message : text.common.error);
     } finally {
@@ -227,7 +232,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       clearSubmittedDraft(draftKey(scope, 'chat', sessionName), submitted);
       setConversation(result.session.messages);
       setSessions(current => [result.session, ...current.filter(item => item.name !== result.session.name)]);
-      if (onboardingPending && result.message.role === 'assistant' && result.message.content.trim()) onFirstResponse();
+      if (onboardingPending && result.message.role === 'assistant' && messageText(result.message.content).trim()) onFirstResponse();
     } catch (reason) {
       clearTimeout(flush); flush = undefined;
       setStreamed(partial); setInterrupted(true);
@@ -304,10 +309,11 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       <div className="conversation" onScroll={event => { const el = event.currentTarget; followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
         {conversation.length === 0 && !loading && <div className="empty-chat"><div className="orb"><div /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
         {conversation.map((message, index) => {
-          const messageKey = `${index}-${'timestamp' in message ? message.timestamp : message.content.slice(0, 24)}`;
+          const content = messageText(message.content);
+          const messageKey = `${index}-${'timestamp' in message ? message.timestamp : content.slice(0, 24)}`;
           return <article className={`message ${message.role}`} key={messageKey}>
-            <div className="message-heading"><div className="message-label">{message.role === 'user' ? text.chat.you : message.role === 'assistant' ? text.chat.assistant : message.role}</div>{message.role === 'assistant' && <button type="button" className="message-copy" onClick={() => void copyMessage(messageKey, message.content)} aria-label={copiedMessage === messageKey ? text.chat.copied : text.chat.copyResponse}><Icon name={copiedMessage === messageKey ? 'check' : 'copy'} size={14} />{copiedMessage === messageKey ? text.chat.copied : text.chat.copy}</button>}</div>
-            <div className="message-body">{message.role === 'assistant' ? <MarkdownMessage content={message.content} /> : message.content}</div>
+            <div className="message-heading"><div className="message-label">{message.role === 'user' ? text.chat.you : message.role === 'assistant' ? text.chat.assistant : message.role}</div>{message.role === 'assistant' && <button type="button" className="message-copy" onClick={() => void copyMessage(messageKey, content)} aria-label={copiedMessage === messageKey ? text.chat.copied : text.chat.copyResponse}><Icon name={copiedMessage === messageKey ? 'check' : 'copy'} size={14} />{copiedMessage === messageKey ? text.chat.copied : text.chat.copy}</button>}</div>
+            <div className="message-body">{message.role === 'assistant' ? <MarkdownMessage content={content} /> : content}</div>
           </article>;
         })}
         {(busy || streamed) && <article className="message assistant streaming-response"><div className="message-heading"><div className="message-label">{text.chat.assistant}</div>{streamed && <button type="button" className="message-copy" onClick={() => void copyMessage('partial', streamed)}>{copiedMessage === 'partial' ? text.chat.copied : text.chat.copy}</button>}</div>

@@ -52,3 +52,23 @@ func TestComputerRunWithOptionalSuccessCriterion(t *testing.T) {
 		t.Fatalf("automatic verification submission: %+v", received)
 	}
 }
+
+func TestComputerCheckCanRequireVisionWithoutChangingStructuredChecks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/computer/model-check" || r.Method != http.MethodPost {
+			t.Fatalf("wrong model check request: %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"model":"fixture","passed":true,"code":"computer_tool_check_passed","message":"structured passed","retryable":false,"vision":{"installed":true,"passed":false,"code":"computer_vision_check_failed","message":"vision failed safely","retryable":false}}`))
+	}))
+	defer server.Close()
+	t.Setenv("OFFGRID_SERVER_URL", server.URL)
+	if err := runComputerCommand(context.Background(), []string{"check", "fixture"}); err != nil {
+		t.Fatal("ordinary structured check should remain usable:", err)
+	}
+	if err := runComputerCommand(context.Background(), []string{"check", "fixture", "--require-vision"}); err == nil || err.Error() != "vision failed safely" {
+		t.Fatalf("required vision failure was not reported: %v", err)
+	}
+	if err := runComputerCommand(context.Background(), []string{"check", "fixture", "--unknown"}); err == nil {
+		t.Fatal("unknown check option accepted")
+	}
+}

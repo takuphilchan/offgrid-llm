@@ -786,7 +786,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Administrator-only, bounded two-step tool-call smoke check. Executes no browser actions. Not a qualification certificate. Computer-task submission repeats the check against the current runtime. */
+        /** @description Administrator-only, bounded two-step tool-call smoke check for the selected driver. Executes no computer actions. Not a qualification certificate. Computer-task submission repeats the check against the current runtime. */
         post: operations["checkComputerModel"];
         delete?: never;
         options?: never;
@@ -804,6 +804,13 @@ export interface components {
             code: string;
             message: string;
             retryable: boolean;
+            vision?: {
+                installed: boolean;
+                passed: boolean;
+                code: string;
+                message: string;
+                retryable: boolean;
+            };
             runtime?: {
                 build?: string;
                 template_sha256?: string;
@@ -1037,6 +1044,8 @@ export interface components {
             /** @enum {string} */
             status: "downloading" | "finalizing" | "complete" | "failed" | "cancelled";
             error?: string;
+            /** @description Stable machine-readable failure code for recovery and automation. */
+            error_code?: string;
         };
         Verification: {
             model_id: string;
@@ -1051,7 +1060,7 @@ export interface components {
         ChatMessage: {
             /** @enum {string} */
             role: "system" | "developer" | "user" | "assistant" | "tool";
-            content: string;
+            content: string | components["schemas"]["ChatContentPart"][];
             tool_call_id?: string;
             tool_calls?: {
                 id: string;
@@ -1062,6 +1071,20 @@ export interface components {
                     arguments: string;
                 };
             }[];
+        };
+        ChatContentPart: {
+            /** @constant */
+            type: "text";
+            text: string;
+        } | {
+            /** @constant */
+            type: "image_url";
+            image_url: {
+                /** @description Bounded base64 data URL using image/png or image/jpeg. Remote and file URLs are rejected. */
+                url: string;
+                /** @enum {string} */
+                detail?: "auto" | "low" | "high";
+            };
         };
         SessionMessage: components["schemas"]["ChatMessage"] & {
             /** Format: date-time */
@@ -1200,6 +1223,8 @@ export interface components {
             tool_name?: string;
             tool_args?: string;
             tool_result?: string;
+            /** @description Durable record of exact approval or the immutable automatic session policy used for this action. */
+            authorization?: string;
             /** Format: date-time */
             timestamp?: string;
         };
@@ -1235,6 +1260,8 @@ export interface components {
             /** @description Persisted activity cursor. Only advance it after applying the snapshot. */
             event_cursor?: string;
             computer_session?: string;
+            /** @enum {string} */
+            computer_approval_mode?: "ask_every_time" | "scoped_changes" | "full_task";
             computer_expected_text?: string;
             /** @description Restart invalidated local consent. Historical work may be inspected or reconciled */
             computer_session_expired?: boolean;
@@ -1270,6 +1297,8 @@ export interface components {
             pending_approval?: components["schemas"]["ToolApproval"];
             result?: string;
             error?: string;
+            /** @description Stable machine-readable failure code for recovery and automation. */
+            error_code?: string;
             steps?: components["schemas"]["AgentStep"][];
             /** Format: date-time */
             created_at: string;
@@ -1291,6 +1320,7 @@ export interface components {
             local_only: boolean;
             /** @enum {string} */
             approval_mode: "supervised";
+            approval_modes: ("ask_every_time" | "scoped_changes" | "full_task")[];
             drivers: {
                 id: string;
                 available: boolean;
@@ -2689,7 +2719,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Live local browser sessions owned by the requesting administrator. */
+            /** @description Live local computer sessions owned by the requesting administrator. Driver availability is not workflow qualification. Browser clients must not select native sessions. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2699,6 +2729,19 @@ export interface operations {
                         sessions: {
                             id: string;
                             origin: string;
+                            /** @enum {string} */
+                            driver?: "browser" | "windows-uia" | "macos-accessibility" | "linux-atspi";
+                            /** @enum {string} */
+                            approval_mode: "ask_every_time" | "scoped_changes" | "full_task";
+                            /** @description Companion-issued native identity, present only for protocol-2 sessions. */
+                            target?: {
+                                id: string;
+                                os_session: string;
+                                process_generation: string;
+                                surface: string;
+                                /** @enum {string} */
+                                driver: "windows-uia" | "macos-accessibility" | "linux-atspi";
+                            };
                             /** Format: date-time */
                             expires_at: string;
                             remaining_actions: number;
@@ -2722,6 +2765,11 @@ export interface operations {
             content: {
                 "application/json": {
                     model: string;
+                    /**
+                     * @default browser
+                     * @enum {string}
+                     */
+                    driver?: "browser" | "windows-uia" | "macos-accessibility" | "linux-atspi";
                 };
             };
         };

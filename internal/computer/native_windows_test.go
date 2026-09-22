@@ -36,12 +36,13 @@ func TestNativeFixtureHost(t *testing.T) {
 	}
 	edit, _, _ := create.Call(0, ptr("EDIT"), ptr("Original fixture text"), 0x50810080, 20, 40, 540, 45, root, 100, 0, 0)
 	password, _, _ := create.Call(0, ptr("EDIT"), ptr("SYNTHETIC_TEST_SECRET"), 0x508100A0, 20, 100, 540, 45, root, 101, 0, 0)
-	if edit == 0 || password == 0 {
+	checkbox, _, _ := create.Call(0, ptr("BUTTON"), ptr("Include sources"), 0x50010003, 20, 160, 240, 35, root, 102, 0, 0)
+	if edit == 0 || password == 0 || checkbox == 0 {
 		t.Fatal("fixture controls unavailable")
 	}
 	user32.NewProc("ShowWindow").Call(root, 5)
 	user32.NewProc("SetForegroundWindow").Call(root)
-	fmt.Printf("FIXTURE %d %d\n", root, edit)
+	fmt.Printf("FIXTURE %d %d %d\n", root, edit, checkbox)
 	type message struct {
 		Window  uintptr
 		Message uint32
@@ -57,6 +58,16 @@ func TestNativeFixtureHost(t *testing.T) {
 		if int32(value) <= 0 {
 			return
 		}
+		if msg.Message == 0x0100 && msg.WParam == 0x53 { // WM_KEYDOWN / S
+			ctrl, _, _ := user32.NewProc("GetKeyState").Call(0x11)
+			if int16(ctrl) < 0 {
+				user32.NewProc("SetWindowTextW").Call(root, ptr("OffGrid shortcut saved"))
+			}
+		}
+		if msg.Message == 0x8001 { // WM_APP+1: owned fixture focus request
+			user32.NewProc("SetForegroundWindow").Call(root)
+			continue
+		}
 		user32.NewProc("TranslateMessage").Call(uintptr(unsafe.Pointer(&msg)))
 		user32.NewProc("DispatchMessageW").Call(uintptr(unsafe.Pointer(&msg)))
 	}
@@ -65,6 +76,9 @@ func TestNativeFixtureHost(t *testing.T) {
 func TestNativeWindowsLiveUIA(t *testing.T) {
 	if os.Getenv("OFFGRID_TEST_NATIVE_WINDOWS") != "1" {
 		t.Skip("set OFFGRID_TEST_NATIVE_WINDOWS=1 for isolated native UIA test")
+	}
+	if err := NativeWindowsTestEnvironment(); err != nil {
+		t.Skipf("production policy refuses this elevated or isolated runner: %v", err)
 	}
 	executable, err := os.Executable()
 	if err != nil {
@@ -100,11 +114,12 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 		t.Fatal("fixture startup timed out")
 	}
 	fields := strings.Fields(line)
-	if len(fields) != 3 {
+	if len(fields) != 4 {
 		t.Fatal("fixture missing")
 	}
 	root, _ := strconv.ParseUint(fields[1], 10, 64)
 	edit, _ := strconv.ParseUint(fields[2], 10, 64)
+	checkbox, _ := strconv.ParseUint(fields[3], 10, 64)
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	driver, err := NewNativeWindows()
@@ -130,6 +145,23 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 		generation, session, e := processGeneration(pid)
 		t.Fatalf("owned native target not found: visible=%d pid=%d generation=%s session=%s policy=%v", visible, pid, generation, session, e)
 	}
+	focusSelected := func() error {
+		if err := driver.FocusSelected(); err == nil {
+			return nil
+		}
+		// Windows may withdraw foreground permission from a long-running test.
+		// Ask only the owned fixture process to focus itself, then re-run the
+		// production target/focus validation. No production bypass is added.
+		user32.NewProc("PostMessageW").Call(uintptr(root), 0x8001, 0, 0)
+		for attempt := 0; attempt < 25; attempt++ {
+			current, _, _ := foregroundWindow.Call()
+			if current == uintptr(root) {
+				return driver.FocusSelected()
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		return ErrControlScope
+	}
 	if _, err = driver.Select(target.Identity.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -138,6 +170,7 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 		t.Fatal(err)
 	}
 	var field NativeElement
+	var check NativeElement
 	for _, element := range view.Elements {
 		if strings.Contains(element.Name, "SYNTHETIC_TEST_SECRET") {
 			t.Fatal("password content exposed")
@@ -145,8 +178,11 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 		if element.Writable && field.ID == "" {
 			field = element
 		}
+		if element.Checkable && element.Name == "Include sources" {
+			check = element
+		}
 	}
-	if field.ID == "" {
+	if field.ID == "" || check.ID == "" || check.Checked == nil || *check.Checked {
 		t.Fatalf("native edit not discovered: %d controls", len(view.Elements))
 	}
 	step, _, consent, _ := controlFixture()
@@ -173,7 +209,7 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := driver.FocusSelected(); err != nil {
+	if err := focusSelected(); err != nil {
 		t.Fatal(err)
 	}
 	results, err := supervisor.Execute(step, grant.ID)
@@ -185,8 +221,84 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 	if got := windows.UTF16ToString(buffer[:]); got != text {
 		t.Fatalf("independent Win32 oracle mismatch: %q", got)
 	}
+	view, err = driver.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, element := range view.Elements {
+		if element.Writable {
+			field = element
+			break
+		}
+	}
+	action, err = driver.Prepare(step.Binding, Operation{Kind: "shortcut", Element: field.ID, Shortcut: "save"}, view.Observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step.Actions = []PreparedControlAction{action}
+	grant, err = supervisor.Approve(step, func(proposed BoundedStep) bool { return proposed.Actions[0].Operation.Shortcut == "save" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = focusSelected(); err != nil {
+		t.Fatal(err)
+	}
+	results, err = supervisor.Execute(step, grant.ID)
+	if err != nil || len(results) != 1 || results[0].Outcome != "dispatched" {
+		t.Fatal(results, err)
+	}
+	var title [128]uint16
+	user32.NewProc("GetWindowTextW").Call(uintptr(root), uintptr(unsafe.Pointer(&title[0])), 128)
+	if got := windows.UTF16ToString(title[:]); got != "OffGrid shortcut saved" {
+		t.Fatalf("bound save shortcut was not delivered: %q", got)
+	}
 	if _, err := supervisor.Execute(step, grant.ID); err == nil {
 		t.Fatal("approved mutation repeated")
+	}
+	view, err = driver.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, element := range view.Elements {
+		if element.Checkable && element.Name == "Include sources" {
+			check = element
+		}
+	}
+	wantChecked := true
+	action, err = driver.Prepare(step.Binding, Operation{Kind: "set_checked", Element: check.ID, Checked: &wantChecked}, view.Observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step.Actions = []PreparedControlAction{action}
+	grant, err = supervisor.Approve(step, func(proposed BoundedStep) bool {
+		return proposed.Actions[0].Operation.Checked != nil && *proposed.Actions[0].Operation.Checked
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = focusSelected(); err != nil {
+		t.Fatal(err)
+	}
+	results, err = supervisor.Execute(step, grant.ID)
+	if err != nil || len(results) != 1 || results[0].Outcome != "verified" {
+		t.Fatal(results, err)
+	}
+	state, _, _ := user32.NewProc("SendMessageW").Call(uintptr(checkbox), 0x00F0, 0, 0) // BM_GETCHECK
+	if state != 1 {
+		t.Fatal("independent Win32 checkbox oracle mismatch")
+	}
+	view, err = driver.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, element := range view.Elements {
+		if element.Checkable && element.Name == "Include sources" {
+			check = element
+		}
+	}
+	verified, err := driver.VerifyChecked(step.Binding, check.ID, true, view.Observation)
+	if err != nil || !verified {
+		t.Fatal("checkbox verification failed", err)
 	}
 	// A manual/silent edit after observation must invalidate the prepared action.
 	view, err = driver.Observe(context.Background())
@@ -205,7 +317,7 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 	}
 	replacement, _ := windows.UTF16PtrFromString("Manual fixture edit")
 	user32.NewProc("SendMessageW").Call(uintptr(edit), 0x000C, 0, uintptr(unsafe.Pointer(replacement)))
-	if err := driver.FocusSelected(); err != nil {
+	if err := focusSelected(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := driver.Dispatch(context.Background(), action); err != ErrStaleObservation {

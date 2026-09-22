@@ -6,6 +6,7 @@ import { DispatchJournal } from './journal.mjs';
 import { BrowserDriver } from './browser.mjs';
 import { publicPage } from './network.mjs';
 import { startDemo, DEMO_ORIGIN } from './demo.mjs';
+import {policyAllows, validActionClass, validApprovalMode} from './approval-policy.mjs';
 
 export function localService(value) {
   const url = new URL(value);
@@ -18,8 +19,8 @@ export function browserOrigin(value) {
 }
 
 export class CompanionSession {
-  constructor({service, directory, emit = () => {}, openBrowser = BrowserDriver.open, prepared}) {
-    this.service = localService(service); this.directory = directory; this.emit = emit; this.openBrowser = openBrowser;
+  constructor({service, directory, emit = () => {}, openBrowser = BrowserDriver.open, prepared, upload}) {
+    this.service = localService(service); this.directory = directory; this.emit = emit; this.openBrowser = openBrowser; this.upload=upload;
     this.abort = new AbortController(); this.stopping = false; this.token = ''; this.state = 'idle';
     this.driver = prepared?.driver; this.demo = prepared?.demo;
   }
@@ -32,23 +33,26 @@ export class CompanionSession {
     return response.json();
   }
   companion(path, body = {}) { return this.request(`/api/v2/computer/companion/${path}`, body); }
-  async start({origin, code, workspace, networkMode = 'direct'}) {
+  async start({origin, code, workspace, networkMode = 'direct', approvalMode = 'scoped_changes'}) {
     if (this.state !== 'idle' || this.stopping || !/^[a-f0-9]{64}$/.test(code)) throw Error('invalid_session');
     try {
       this.publish('starting');
       const identity = await this.request('/api/v2/system');
       if (identity.product !== 'offgrid' || identity.api_version !== 2 || (workspace && identity.workspace_id !== workspace)) throw Error('workspace_changed');
+      if(!validApprovalMode(approvalMode)) throw Error('invalid_session');
+      this.approvalMode=approvalMode;
       origin = browserOrigin(origin);
       if (!['direct','trusted-vpn'].includes(networkMode) || (origin === DEMO_ORIGIN && networkMode !== 'direct')) throw Error('network_mode_invalid');
       if (origin === DEMO_ORIGIN && !this.demo) this.demo = await startDemo();
       if (this.stopping) throw Error('stopped');
-      if (!this.driver) this.driver = await this.openBrowser(this.demo?.origin ?? origin, {testLoopback: !!this.demo, networkMode});
+      await mkdir(this.directory, {recursive:true, mode:0o700});
+      if (!this.driver) this.driver = await this.openBrowser(this.demo?.origin ?? origin, {testLoopback: !!this.demo, networkMode, downloadDir:join(this.directory,'downloads'),upload:this.upload});
       if (this.stopping) throw Error('stopped');
       this.driver.page?.once('close', () => { void this.stop(); });
       await mkdir(this.directory, {recursive:true, mode:0o700});
       this.journal = new DispatchJournal(join(this.directory, 'dispatch.sqlite'));
       await chmod(join(this.directory, 'dispatch.sqlite'), 0o600);
-      const paired = await this.companion('pair', {code, origin:origin === DEMO_ORIGIN ? origin : new URL(origin).origin, protocol_version:1});
+      const paired = await this.companion('pair', {code, origin:origin === DEMO_ORIGIN ? origin : new URL(origin).origin, protocol_version:1, approval_mode:approvalMode});
       this.token = paired.token;
       this.binding = JSON.stringify([this.service.origin, identity.workspace_id ?? '', paired.session.id]);
       this.journal.discardPreviousSessionResults(this.binding);
@@ -74,10 +78,27 @@ export class CompanionSession {
           continue;
         }
         let result;
-        try { result = await this.driver.execute(action.kind,action.arguments); }
-        catch {
-          if (!this.stopping) await this.companion('reply',{id:action.id,result:'',error:'Action could not be verified. Inspect the browser before reconciling this task.'});
-          throw Error('action_uncertain');
+        try {
+          if(action.kind==='computer_prepare') {
+            if(!action.arguments || Object.keys(action.arguments).sort().join(',')!=='arguments,tool')throw Error('action_conflict');
+            result=await this.driver.prepare(action.arguments.tool,action.arguments.arguments);
+            if(!validActionClass(result?.approval_class))throw Error('computer_protocol_invalid');
+          } else {
+            const prepared=await this.driver.prepare(action.kind,action.arguments);
+            if(!validActionClass(prepared?.approval_class))throw Error('computer_protocol_invalid');
+            if(prepared.approval_class==='forbidden')throw Error('computer_prohibited_action');
+            if(!['auto','exact'].includes(action.authorization) || action.authorization==='auto'&&!policyAllows(this.approvalMode,prepared.approval_class))throw Error('computer_approval_invalid');
+            result = await this.driver.execute(action.kind,action.arguments);
+          }
+          if (action.kind === 'browser_capture') {
+            const stored = await this.companion('capture', {id:action.id,observation_id:result.observation_id,media_type:result.media_type,width:result.width,height:result.height,data:result.data});
+            result = {captured:true,image_ref:stored.image_ref,observation_id:result.observation_id,width:result.width,height:result.height};
+          }
+        }
+        catch(error) {
+          const code=['computer_prohibited_action','computer_approval_invalid'].includes(error.message)?error.message:'computer_uncertain_outcome';
+          if (!this.stopping) await this.companion('reply',{id:action.id,result:'',error:code});
+          throw Error(code==='computer_uncertain_outcome'?'action_uncertain':code);
         }
         if (this.stopping) break;
         const reply = {id:action.id,result:JSON.stringify(result)};
@@ -85,7 +106,7 @@ export class CompanionSession {
         await this.companion('reply', reply);
       }
     } catch (error) {
-      if (!this.stopping) this.publish('error', ['action_conflict','action_uncertain'].includes(error.message) ? error.message : 'connection_lost');
+      if (!this.stopping) this.publish('error', /^(?:action_|computer_)/.test(error.message) ? error.message : 'connection_lost');
     } finally { await this.stop(); }
   }
   async stop() {

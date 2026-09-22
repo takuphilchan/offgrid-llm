@@ -38,6 +38,16 @@ static NSString *digest(id value){
     NSMutableString *result=[NSMutableString string];for(int i=0;i<CC_SHA256_DIGEST_LENGTH;i++)[result appendFormat:@"%02x",bytes[i]];return result;
 }
 static NSString *quoted(NSString *text){NSData *data=[NSJSONSerialization dataWithJSONObject:text options:NSJSONWritingFragmentsAllowed error:nil];return [[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding]autorelease]?:@"";}
+static NSString *approvalClass(NSDictionary *op,NSDictionary *control){
+    NSString *context=[NSString stringWithFormat:@"%@ %@ %@",selected[@"target"][@"title"]?:@"",control[@"name"]?:@"",control[@"role"]?:@""];
+    NSRegularExpression *blocked=[NSRegularExpression regularExpressionWithPattern:@"(?i)\\b(password|passcode|credential|secret|token|one[ -]?time|verification code|credit card|card number|cvv|cvc|payment|pay now|purchase|buy now|checkout|bank|wire|transfer money|install|update software|administrator|admin access|security setting|firewall|antivirus|permanent(?:ly)? delete|delete forever|erase)\\b" options:0 error:nil];
+    if([blocked firstMatchInString:context options:0 range:NSMakeRange(0,context.length)])return @"forbidden";
+    NSString *kind=op[@"kind"];
+    if([kind isEqual:@"replace_text"]||[kind isEqual:@"set_checked"])return @"reversible";
+    if([kind isEqual:@"shortcut"]){NSString *key=op[@"shortcut"];return [key isEqual:@"enter"]?@"consequential":@"reversible";}
+    if([kind isEqual:@"activate"]){NSRegularExpression *safe=[NSRegularExpression regularExpressionWithPattern:@"(?i)\\b(save draft|save|apply|add|create draft|update draft)\\b" options:0 error:nil];return [safe firstMatchInString:context options:0 range:NSMakeRange(0,context.length)]?@"reversible":@"consequential";}
+    return @"forbidden";
+}
 static NSString *timestamp(void){NSDateFormatter *format=[[[NSDateFormatter alloc]init]autorelease];format.locale=[[[NSLocale alloc]initWithLocaleIdentifier:@"en_US_POSIX"]autorelease];format.timeZone=[NSTimeZone timeZoneForSecondsFromGMT:0];format.dateFormat=@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";return [format stringFromDate:[NSDate date]];}
 static BOOL consoleAvailable(void){
     NSDictionary *session=(NSDictionary *)CGSessionCopyCurrentDictionary();
@@ -78,6 +88,14 @@ static BOOL withinTarget(AXUIElementRef element){
     }
     CFRelease(current);return NO;
 }
+static BOOL sendShortcut(NSString *name,pid_t pid){
+    NSDictionary *keys=@{@"copy":@8,@"paste":@9,@"undo":@6,@"redo":@6,@"select_all":@0,@"save":@1,@"enter":@36,@"escape":@53,@"tab":@48,@"reverse_tab":@48,@"left":@123,@"right":@124,@"down":@125,@"up":@126,@"page_up":@116,@"page_down":@121,@"home":@115,@"end":@119};
+    NSNumber *code=keys[name];if(!code)return NO;
+    CGEventFlags flags=0;if([@[@"copy",@"paste",@"undo",@"redo",@"select_all",@"save"] containsObject:name])flags|=kCGEventFlagMaskCommand;if([name isEqual:@"redo"]||[name isEqual:@"reverse_tab"])flags|=kCGEventFlagMaskShift;
+    CGEventRef down=CGEventCreateKeyboardEvent(NULL,(CGKeyCode)code.unsignedShortValue,true),up=CGEventCreateKeyboardEvent(NULL,(CGKeyCode)code.unsignedShortValue,false);
+    if(!down||!up){if(down)CFRelease(down);if(up)CFRelease(up);return NO;}
+    CGEventSetFlags(down,flags);CGEventSetFlags(up,flags);CGEventPostToPid(pid,down);CGEventPostToPid(pid,up);CFRelease(down);CFRelease(up);return YES;
+}
 static NSDictionary *inspect(AXUIElementRef element){
     pid_t pid=0;if(AXUIElementGetPid(element,&pid)!=kAXErrorSuccess||pid!=[selected[@"pid"] intValue])return nil;
     NSString *role=stringAttribute(element,kAXRoleAttribute),*subrole=stringAttribute(element,kAXSubroleAttribute);
@@ -90,9 +108,13 @@ static NSDictionary *inspect(AXUIElementRef element){
     BOOL writable=settable&&([role isEqual:(NSString *)kAXTextFieldRole]||[role isEqual:(NSString *)kAXTextAreaRole]);
     CFArrayRef names=NULL;BOOL invokable=NO;
     if(AXUIElementCopyActionNames(element,&names)==kAXErrorSuccess&&names){invokable=[(NSArray *)names containsObject:(NSString *)kAXPressAction];CFRelease(names);}
-    NSString *value=stringAttribute(element,kAXValueAttribute);
+    id rawValue=attribute(element,kAXValueAttribute);
+    BOOL readable=[rawValue isKindOfClass:[NSString class]];
+    NSString *value=readable?rawValue:@"";
     if(value.length>1048576)return nil;
-    return @{ @"name":name,@"role":role,@"writable":@(writable),@"invokable":@(invokable),@"fingerprint":digest(@[name,role,subrole,@(writable),@(invokable),value]) };
+    BOOL checkable=settable&&([role isEqual:@"AXCheckBox"]||[role isEqual:@"AXSwitch"])&&[rawValue isKindOfClass:[NSNumber class]];
+    NSNumber *checked=checkable?@([rawValue boolValue]):@NO;
+    return @{ @"name":name,@"role":role,@"writable":@(writable),@"invokable":@(invokable),@"checkable":@(checkable),@"checked":checked,@"readable":@(readable),@"value":value,@"fingerprint":digest(@[name,role,subrole,@(writable),@(invokable),@(checkable),checked,@(readable),value]) };
 }
 static NSDictionary *perform(NSDictionary *request){
     NSString *kind=request[@"kind"];id args=request[@"args"];
@@ -145,7 +167,11 @@ static NSDictionary *perform(NSDictionary *request){
             OGAXReference *reference=[[queue objectAtIndex:0] retain];[queue removeObjectAtIndex:0];visited++;
             NSDictionary *info=inspect(reference->element);
             if(info){NSString *key=identifier();NSMutableDictionary *entry=[info mutableCopy];entry[@"id"]=key;entry[@"control_identity"]=identifier();entry[@"ref"]=reference;controls[key]=entry;
-                [elements addObject:@{@"id":key,@"name":info[@"name"],@"role":info[@"role"],@"writable":info[@"writable"],@"invokable":info[@"invokable"]}];[fingerprints addObject:info[@"fingerprint"]];[entry release];}
+                NSString *value=info[@"value"];BOOL truncated=value.length>1000;
+                NSMutableDictionary *visible=[@{@"id":key,@"name":info[@"name"],@"role":info[@"role"],@"writable":info[@"writable"],@"invokable":info[@"invokable"],@"checkable":info[@"checkable"]} mutableCopy];
+                if([info[@"checkable"] boolValue])visible[@"checked"]=info[@"checked"];
+                if([info[@"readable"] boolValue]){visible[@"text"]=truncated?[value substringWithRange:[value rangeOfComposedCharacterSequencesForRange:NSMakeRange(0,1000)]]:value;visible[@"text_limited"]=@(truncated);}
+                [elements addObject:visible];[visible release];[fingerprints addObject:info[@"fingerprint"]];[entry release];}
             CFIndex count=0;if(AXUIElementGetAttributeValueCount(reference->element,kAXChildrenAttribute,&count)==kAXErrorSuccess&&count>0){
                 CFIndex allowed=MIN(count,400-(CFIndex)visited-(CFIndex)queue.count);if(allowed<count)limited=YES;
                 CFArrayRef children=NULL;
@@ -157,6 +183,24 @@ static NSDictionary *perform(NSDictionary *request){
         [observation release];observation=[@{@"id":identifier(),@"target":selected[@"target"][@"identity"],@"sequence":@(++sequence),@"captured_at":timestamp(),@"state_digest":digest(fingerprints)} retain];
         return success(@{@"observation":observation,@"elements":elements,@"limited":@(limited)});
     }
+    if([kind isEqual:@"verify_text"]){
+        if(!observation||![args[@"observation"] isEqual:observation])return failure(@"computer_stale_observation");
+        NSDictionary *control=controls[args[@"element"]];OGAXReference *reference=control[@"ref"];
+        if(!reference||!withinTarget(reference->element))return failure(@"computer_scope_violation");
+        NSDictionary *fresh=inspect(reference->element);
+        if(!fresh||![fresh[@"fingerprint"] isEqual:control[@"fingerprint"]])return failure(@"computer_stale_observation");
+        if(![fresh[@"readable"] boolValue])return failure(@"computer_invalid_action");
+        return success(@([fresh[@"value"] isEqual:args[@"text"]]));
+    }
+    if([kind isEqual:@"verify_checked"]){
+        if(!observation||![args[@"observation"] isEqual:observation])return failure(@"computer_stale_observation");
+        NSDictionary *control=controls[args[@"element"]];OGAXReference *reference=control[@"ref"];
+        if(!reference||!withinTarget(reference->element))return failure(@"computer_scope_violation");
+        NSDictionary *fresh=inspect(reference->element);
+        if(!fresh||![fresh[@"fingerprint"] isEqual:control[@"fingerprint"]])return failure(@"computer_stale_observation");
+        if(![fresh[@"checkable"] boolValue]||![args[@"checked"] isKindOfClass:[NSNumber class]])return failure(@"computer_invalid_action");
+        return success(@([fresh[@"checked"] boolValue]==[args[@"checked"] boolValue]));
+    }
     if([kind isEqual:@"prepare"]){
         NSDictionary *op=args[@"operation"],*observed=args[@"observation"];
         if(!observation||![observed[@"id"] isEqual:observation[@"id"]]||![observed[@"target"] isEqual:observation[@"target"]]||![observed[@"state_digest"] isEqual:observation[@"state_digest"]]||![observed[@"sequence"] isEqual:observation[@"sequence"]])return failure(@"computer_stale_observation");
@@ -164,14 +208,16 @@ static NSDictionary *perform(NSDictionary *request){
         if(!reference||!withinTarget(reference->element))return failure(@"computer_scope_violation");
         NSDictionary *fresh=inspect(reference->element);
         if(!fresh||![fresh[@"fingerprint"] isEqual:control[@"fingerprint"]])return failure(@"computer_stale_observation");
-        BOOL replace=[op[@"kind"] isEqual:@"replace_text"],activate=[op[@"kind"] isEqual:@"activate"];
-        if((!replace&&!activate)||(replace&&![control[@"writable"] boolValue])||(activate&&![control[@"invokable"] boolValue]))return failure(@"computer_invalid_action");
-        NSString *key=identifier();NSDictionary *action=@{@"id":key,@"operation":op,@"control_identity":control[@"control_identity"],@"precondition":control[@"fingerprint"],@"expected_change":digest(op)};prepared[key]=action;return success(action);
+        BOOL replace=[op[@"kind"] isEqual:@"replace_text"],activate=[op[@"kind"] isEqual:@"activate"],shortcut=[op[@"kind"] isEqual:@"shortcut"],setChecked=[op[@"kind"] isEqual:@"set_checked"];
+        if((!replace&&!activate&&!shortcut&&!setChecked)||(replace&&![control[@"writable"] boolValue])||(activate&&![control[@"invokable"] boolValue])||(shortcut&&[op[@"shortcut"] isEqual:@"paste"]&&![control[@"writable"] boolValue])||(setChecked&&(![control[@"checkable"] boolValue]||![op[@"checked"] isKindOfClass:[NSNumber class]])))return failure(@"computer_invalid_action");
+        NSString *key=identifier();NSDictionary *action=@{@"id":key,@"operation":op,@"control_identity":control[@"control_identity"],@"precondition":control[@"fingerprint"],@"expected_change":digest(op),@"approval_class":approvalClass(op,control)};prepared[key]=action;return success(action);
     }
     if([kind isEqual:@"approval_summary"]){
         NSMutableString *text=[NSMutableString stringWithFormat:@"Approve these exact changes in %@?\nOffGrid will focus this application.\n\n",quoted(selected[@"target"][@"title"])];
         for(NSDictionary *action in args[@"actions"]){if(![action isEqual:prepared[action[@"id"]]])return failure(@"computer_approval_invalid");NSDictionary *op=action[@"operation"],*control=controls[op[@"element"]];
-            if([op[@"kind"] isEqual:@"replace_text"])[text appendFormat:@"Replace all text in %@ with:\n%@\n\n",quoted(control[@"name"]),quoted(op[@"text"])];
+            if([op[@"kind"] isEqual:@"set_checked"])[text appendFormat:@"Set %@ to checked=%@.\n\n",quoted(control[@"name"]),[op[@"checked"] boolValue]?@"true":@"false"];
+            else if([op[@"kind"] isEqual:@"shortcut"])[text appendFormat:@"Focus %@ and send the application shortcut %@. Dispatch alone does not verify a save or other outcome.\n\n",quoted(control[@"name"]),quoted(op[@"shortcut"])];
+            else if([op[@"kind"] isEqual:@"replace_text"])[text appendFormat:@"Replace all text in %@ with:\n%@\n\n",quoted(control[@"name"]),quoted(op[@"text"])];
             else [text appendFormat:@"Activate %@. This may submit or change information; dispatch alone does not verify the outcome.\n\n",quoted(control[@"name"])];}
         [text appendString:@"Only these changes are allowed. Use the local Stop control to revoke access."];return success(text);
     }
@@ -184,6 +230,8 @@ static NSDictionary *perform(NSDictionary *request){
         NSDictionary *fresh=inspect(reference->element);
         if(!fresh||![fresh[@"fingerprint"] isEqual:action[@"precondition"]]||![control[@"control_identity"] isEqual:action[@"control_identity"]])return failure(@"computer_stale_observation");
         [observation release];observation=nil;
+        if([op[@"kind"] isEqual:@"set_checked"]){if(![control[@"checkable"] boolValue]||![op[@"checked"] isKindOfClass:[NSNumber class]])return failure(@"computer_invalid_action");BOOL expected=[op[@"checked"] boolValue];if([fresh[@"checked"] boolValue]!=expected&&AXUIElementSetAttributeValue(reference->element,kAXValueAttribute,expected?kCFBooleanTrue:kCFBooleanFalse)!=kAXErrorSuccess)return failure(@"computer_uncertain_outcome");NSDictionary *verified=inspect(reference->element);if(![verified[@"checkable"] boolValue]||[verified[@"checked"] boolValue]!=expected)return failure(@"computer_uncertain_outcome");return success(@{@"action_id":action[@"id"],@"outcome":@"verified",@"evidence_id":digest(@(expected)),@"uncertain":@NO});}
+        if([op[@"kind"] isEqual:@"shortcut"]){if([op[@"shortcut"] isEqual:@"paste"]&&![control[@"writable"] boolValue])return failure(@"computer_invalid_action");if(AXUIElementSetAttributeValue(reference->element,kAXFocusedAttribute,kCFBooleanTrue)!=kAXErrorSuccess||![attribute(reference->element,kAXFocusedAttribute) boolValue])return failure(@"computer_scope_violation");if(!sendShortcut(op[@"shortcut"],[selected[@"pid"] intValue])||!targetValid(YES)||![attribute(reference->element,kAXFocusedAttribute) boolValue])return failure(@"computer_uncertain_outcome");return success(@{@"action_id":action[@"id"],@"outcome":@"dispatched",@"uncertain":@NO});}
         if([op[@"kind"] isEqual:@"replace_text"]){
             if(AXUIElementSetAttributeValue(reference->element,kAXValueAttribute,(CFTypeRef)op[@"text"])!=kAXErrorSuccess)return failure(@"computer_uncertain_outcome");
             NSString *value=stringAttribute(reference->element,kAXValueAttribute);if(![value isEqual:op[@"text"]])return failure(@"computer_uncertain_outcome");

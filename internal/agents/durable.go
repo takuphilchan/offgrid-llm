@@ -45,6 +45,18 @@ type RunTools interface {
 	ExecuteWithPolicy(context.Context, string, json.RawMessage, ToolExecution) (string, error)
 }
 
+// ToolAuthorizationError carries deliberately safe, service-authored recovery
+// text. Ordinary provider errors remain redacted; never put tool/model output
+// in Message. The machine code survives in the durable task snapshot.
+type ToolAuthorizationError struct {
+	Code    string
+	Message string
+	Cause   error
+}
+
+func (e *ToolAuthorizationError) Error() string { return e.Message }
+func (e *ToolAuthorizationError) Unwrap() error { return e.Cause }
+
 // Runner owns execution independently of HTTP/UI lifetimes. Checkpoints are
 // authoritative; event logs and browser state are projections only.
 type Runner struct {
@@ -315,11 +327,20 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			execution := ToolExecution{RunID: task.ID, CallID: call.ID, Actor: task.Actor, Approved: approved, ExpectedCapability: &descriptor}
 			if err := r.tools.Authorize(ctx, call.Function.Name, args, execution); err != nil {
 				if !errors.Is(err, capabilities.ErrApprovalRequired) {
+					var safe *ToolAuthorizationError
+					if errors.As(err, &safe) {
+						task.ErrorCode = safe.Code
+						return r.fail(task, safe.Message)
+					}
 					return r.fail(task, "Tool authorization denied. Review available tools and policy.")
 				}
 				task.Status = TaskWaiting
 				setRunPhase(task, "approval", call.Function.Name)
-				task.PendingApproval = &Approval{ID: "approval-" + runID(), RunID: task.ID, CallID: call.ID, Actor: task.Actor, Tool: call.Function.Name, Arguments: args, ArgumentsJSON: string(args), Capability: descriptor, ExpiresAt: time.Now().UTC().Add(r.approvalTTL)}
+				ttl := r.approvalTTL
+				if task.Config.ComputerSession != "" && ttl > 5*time.Minute {
+					ttl = 5 * time.Minute
+				}
+				task.PendingApproval = &Approval{ID: "approval-" + runID(), RunID: task.ID, CallID: call.ID, Actor: task.Actor, Tool: call.Function.Name, Arguments: args, ArgumentsJSON: string(args), Capability: descriptor, ExpiresAt: time.Now().UTC().Add(ttl)}
 				if err := r.persist(task); err != nil {
 					return nil, err
 				}
@@ -342,7 +363,15 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			}
 			cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: result})
 			cp.Calls, cp.ExecutingCall = cp.Calls[1:], ""
-			task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "action", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: result, Timestamp: time.Now().UTC()})
+			authorization := ""
+			if task.Config.ComputerSession != "" && descriptor.Risk == capabilities.RiskHigh {
+				if execution.Approved {
+					authorization = "exact_approval"
+				} else {
+					authorization = "automatic:" + task.Config.ComputerApprovalMode
+				}
+			}
+			task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "action", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: result, Timestamp: time.Now().UTC(), Authorization: authorization})
 			if err := r.persist(task); err != nil {
 				return nil, err
 			}
@@ -381,8 +410,12 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			if len(message.ToolCalls) != 1 {
 				return r.fail(task, "Computer tasks require exactly one tool call per turn. No calls from this response were executed.")
 			}
-			if len(task.Steps) == 0 && message.ToolCalls[0].Function.Name != "browser_observe" {
-				return r.fail(task, "Computer tasks must inspect the page before acting. No action was executed.")
+			observe := "browser_observe"
+			if task.Config.ComputerDriver != "" && task.Config.ComputerDriver != "browser" {
+				observe = "computer_observe"
+			}
+			if len(task.Steps) == 0 && message.ToolCalls[0].Function.Name != observe {
+				return r.fail(task, "Computer tasks must inspect the selected target before acting. No action was executed.")
 			}
 		}
 		if len(message.ToolCalls) > 16 {

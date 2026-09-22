@@ -1,4 +1,4 @@
-# Computer Tasks browser preview
+# Computer Tasks browser and native-structured preview
 
 ## Native-control foundation (not native availability)
 
@@ -9,9 +9,12 @@ opaque target identities, bounded-step digests, local-consent binding and privat
 length-prefixed worker framing. Its tests reject changed values/targets, expired
 grants, mixed consequential actions, oversized frames and executable strings.
 The native worker implementations below use this contract and a host-local
-supervisor. They are development components, not a qualification claim. Native
-control is not exposed through Agents until the shared client/service cutover and
-required platform checks are complete; vision remains unimplemented.
+supervisor. They are supervised preview components, not a qualification claim.
+The desktop Agents client now exposes application discovery, catalog-based
+launch, window selection and the same durable native session path. Managed
+browser sessions can provide a transient, observation-bound viewport capture to
+an installed model/projector pair; native-window capture and vision remain
+unimplemented.
 
 The host dispatch journal now saves a result before acknowledgment. An identical
 redelivery in the same session can return that recorded result; changed arguments
@@ -27,24 +30,33 @@ profiles are imported. Direct mode blocks VPN fake DNS; explicit trusted-VPN
 routing is described below. Configurable HTTP/SOCKS proxies and native/vision
 setup are still pending.
 
-This is a **managed-browser preview**, not the completed cross-platform Computer
-Tasks program. It controls a separate Chromium browser on the local host. It does
-not control native applications, use vision, attach to personal browser profiles,
-enter credentials, or download files. All drivers remain **unqualified** until
-the full task/model/platform evaluation gates pass.
+This is a **managed-browser and native-structured preview**, not the completed
+cross-platform Computer Tasks program. The desktop app can launch a catalogued
+installed application or select an existing window, then perform only the
+currently implemented structured operations (observe, bounded text replacement,
+explicit checkbox state, activation, fixed application shortcuts and read-back
+verification). Native app control does not use vision, attach to personal browser
+profiles, enter credentials, or perform file transfers. Managed browser mode has
+separate verified staging for downloads and user-selected uploads. All drivers
+remain **unqualified** until the full task/model/platform evaluation gates pass.
 
 ## Installed desktop: no terminal setup
 
-Updated desktop packages include the matching Playwright/Chromium runtime. In
-**Agents**, describe your task, enable **Use a browser**, and enter a public HTTPS
-page URL or choose **Try a practice page**. Paths, query strings and fragments
-are supported; embedded credentials are not. Approve the native consent prompt. OffGrid
-starts and pairs its own companion; no Node installation or copied code is needed.
-Choose a tool-capable model and run the task. Each proposed change still requires
-your approval; removing technical setup does not remove consent.
+Updated desktop packages include the matching Playwright/Chromium runtime and
+native worker. In **Agents**, choose **Use this computer**, select an existing
+application window, or choose **Open an application** to launch a catalogued
+Windows shortcut, macOS application, or Linux desktop entry. OffGrid then pairs
+the selected window through local consent; no Node installation or copied code
+is needed. Browser mode remains available as a separate managed Chromium profile.
+Choose a tool-capable model and run the task. Before connecting, choose one
+session policy: **Ask every time**, **Approve scoped changes**, or **Full task
+access**. The default automatically permits only locally classified reversible
+work in the selected window. Full task access also permits consequential typed
+actions, such as a form submission or verified file transfer, inside that scope.
+The selected policy is fixed for the session and shown in activity history.
 
-Text fields, native single-choice dropdowns, and native checkboxes have typed
-actions. Dropdown options come from the current observation; checkbox actions
+Managed-browser text fields, native single-choice dropdowns, and native checkboxes
+have typed actions. Dropdown options come from the current observation; checkbox actions
 specify checked or unchecked rather than toggling blindly. Approval cards show
 the observed field/option names and the proposed state. Disabled controls,
 unsupported custom/multiple-choice widgets, stale observations, malformed
@@ -194,11 +206,26 @@ starting new work; never blindly repeat a click.
   blocked. Blocked resource origins are reported without request paths, cookies
   or credentials. Closing the browser tears down owned relay sockets.
 - Structured observations are untrusted page data. Password/credential controls
-  are excluded, field values are not collected, and screenshots are not captured.
-  Page text may still be sensitive: approve only pages intended for OffGrid.
-- Exact action approvals cannot be supplied by the model. Stale observations are
-  rejected. GUI effects cannot be sandboxed perfectly; don't use financial,
-  administrative, security-sensitive or account-management pages in this preview.
+  are excluded and field values are not collected. With an installed projector
+  that passes the current runtime's synthetic image/tool-call check, the model
+  may request a current browser-viewport capture after observation. Projector
+  presence alone never enables the capture tool; passes expire on restart or
+  model/projector replacement.
+  Password, payment-autocomplete and explicitly private elements are masked;
+  captures stay in memory, are consumed by the next model turn, and are not
+  written to task history. Masking cannot identify every secret, so approve only
+  pages intended for OffGrid. Native-window screenshots are not implemented.
+- Approval authority cannot be supplied by the model. The local driver prepares
+  and classifies the exact action from a fresh observation; the service applies
+  the immutable session policy, and the companion checks it again immediately
+  before dispatch. Ask every time requires exact review for every mutation.
+  Approve scoped changes automatically permits reversible work. Full task access
+  additionally permits consequential actions exposed by the bounded driver.
+  Credentials and payment controls, financial transactions, privilege/security
+  changes, software installation, arbitrary scripts, permanent deletion, stale
+  actions, and uncertain retries remain blocked in every mode. GUI effects cannot
+  be sandboxed perfectly; do not use financial, administrative, security-sensitive
+  or account-management pages in this preview.
 - Dispatch IDs and argument hashes are journaled in the local user's
   `.offgrid-llm/computer/dispatch.sqlite`. Results can contain observed page text
   and are retained during the session for safe reply replay, then cleared as
@@ -214,27 +241,42 @@ starting new work; never blindly repeat a click.
   Legacy tasks lacking both a criterion and the new verification policy remain
   incomplete; their outcomes are not silently reinterpreted.
 
-Tests: `npm test` exercises a real isolated Chromium fixture. It is not evidence
-that any particular local model can plan a complete task. Native Windows/macOS/
-Linux workflow qualification, vision, signed/offline automation packs, persistent OS-keystore
+Browser sessions support bounded file transfer. Downloads go only to a private
+per-task staging directory and return verified size and SHA-256 metadata; they
+are never executed or silently moved into user data. Uploads use one file chosen
+in the trusted desktop main process. The renderer and model receive an opaque,
+digest-bound grant and filename, never its host path; the companion rechecks the
+file immediately before attachment. Neither operation submits a form.
+
+Tests: `npm test` exercises a real isolated Chromium fixture, including bounded
+capture and protected-control masking. The service separately checks typed image
+transport and an exact image-grounded tool call before exposing capture. Neither
+check is evidence that a particular local vision model can ground or plan a
+complete task. Native Windows/macOS/
+Linux workflow qualification, native vision, signed/offline automation packs, persistent OS-keystore
 pairing, full pause/takeover UX, and the 30-case qualification suite remain pending.
 
 ### Native Windows worker development
 
 `cmd/offgrid-computer` now implements a Windows x64 host process with UI
 Automation target discovery, selected-window observation, exact approved text
-replacement and activation. It uses direct Go COM bindings to Windows UIA, not
+replacement, activation and explicit checkbox state. It uses direct Go COM bindings to Windows UIA, not
 shell commands or simulated keystrokes. This replaces the proposed C++ worker
-implementation for this slice while retaining process isolation. It is **not yet
-connected to the Agents task/session APIs or offered as a native UI option**.
-The existing browser experience remains unchanged.
+implementation for this slice while retaining process isolation. It is connected
+to the Agents task/session APIs through the desktop bridge. The catalog launcher
+remains a trusted main-process operation; renderer and model text cannot provide
+executable paths.
 
 The worker uses private framed pipes, local Yes/No consent, a visible Stop window,
 and Ctrl+Alt+Shift+F12. An independent watchdog terminates a hung owned worker
 after revocation; it never terminates the target application. Structured password
 controls are excluded, but ordinary control labels can still contain sensitive
 data. This is not a guarantee that all secrets are detected. There is no native
-screenshot/vision path or arbitrary keyboard/shell interface.
+screenshot/vision path or arbitrary keyboard/shell interface. A fixed application
+shortcut/navigation set (`copy`, `paste`, `undo`, `redo`, `select_all`, `save`,
+`enter`, `escape`, `tab`, `reverse_tab`, arrows, paging, `home`, `end`) is available
+only after fresh observation, exact service approval, local approval and
+foreground-window validation. Dispatch is not proof that a document was saved.
 
 Dispatch intent/results are recorded in a separate **host-local execution
 journal**, using the existing SQLite connection policy. It is not another task
@@ -268,7 +310,9 @@ adapters. The macOS adapter uses an Objective-C framework shim rather than the
 planned Swift worker; the Linux adapter uses libatspi through cgo. Neither invokes
 AppleScript, shell commands or arbitrary keyboard input. Both retain provider
 objects and check process identity, same-user ownership, window ancestry and
-fresh state before the supported text replacement/activation operations.
+fresh state before the supported text replacement, checkbox and activation operations. macOS
+also supports the fixed application shortcut set. Linux permits it only on X11;
+Wayland refuses it until an XDG RemoteDesktop/EIS grant is implemented.
 
 macOS builds include an AppKit consent/Stop helper with an emergency shortcut.
 Accessibility must be granted to the companion's execution identity. Linux builds
@@ -296,7 +340,7 @@ OFFGRID_NATIVE_ISOLATED_DESKTOP=1 xvfb-run -a dbus-run-session -- bash dev/scrip
 environment. Run it with Docker `--init` and no host display, socket or service
 data mounts. Supply the repository and matching Go toolchain as build inputs.
 No native worker implements screenshots, vision, whole-desktop input or general
-file operations yet; pack manifests explicitly retain `qualified: false`.
+native file operations yet; pack manifests explicitly retain `qualified: false`.
 
 ### Building and validating the desktop integration
 

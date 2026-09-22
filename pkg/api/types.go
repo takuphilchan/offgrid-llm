@@ -87,6 +87,15 @@ func (m ChatMessage) StringContent() string {
 		}
 		return text
 	}
+	if parts, ok := m.Content.([]ChatContentPart); ok {
+		var text string
+		for _, part := range parts {
+			if part.Type == "text" {
+				text += part.Text
+			}
+		}
+		return text
+	}
 	return ""
 }
 

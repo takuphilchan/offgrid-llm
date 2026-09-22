@@ -12,6 +12,12 @@ static int og_state(AtspiAccessible *element, AtspiStateType state){
     AtspiStateSet *states=atspi_accessible_get_state_set(element);
     if(!states)return 0;int present=atspi_state_set_contains(states,state);g_object_unref(states);return present;
 }
+static int og_key(guint key,glong modifier_mask,GError **error){
+    if(modifier_mask&&!atspi_generate_keyboard_event(modifier_mask,NULL,ATSPI_KEY_LOCKMODIFIERS,error))return 0;
+    int ok=atspi_generate_keyboard_event(key,NULL,ATSPI_KEY_SYM,error);
+    if(modifier_mask)atspi_generate_keyboard_event(modifier_mask,NULL,ATSPI_KEY_UNLOCKMODIFIERS,NULL);
+    return ok;
+}
 */
 import "C"
 
@@ -36,6 +42,7 @@ type linuxControl struct {
 	info                  NativeElement
 	identity, fingerprint string
 	action                int
+	value                 *string
 }
 type NativeLinux struct {
 	targets  map[string]*linuxSurface
@@ -277,6 +284,7 @@ func (d *NativeLinux) inspect(object *C.AtspiAccessible) (linuxControl, error) {
 	}
 	info := NativeElement{Name: name, Role: roleName}
 	value := ""
+	var valuePresent *string
 	editable := C.atspi_accessible_get_editable_text_iface(object)
 	if editable != nil {
 		info.Writable = true
@@ -295,6 +303,8 @@ func (d *NativeLinux) inspect(object *C.AtspiAccessible) (linuxControl, error) {
 		if atspiError(e) {
 			return linuxControl{}, ErrControlScope
 		}
+		valuePresent = &value
+		info.Text, info.TextLimited = nativeText(value)
 	}
 	actionIndex := -1
 	if action := C.atspi_accessible_get_action_iface(object); action != nil {
@@ -316,7 +326,11 @@ func (d *NativeLinux) inspect(object *C.AtspiAccessible) (linuxControl, error) {
 		C.og_unref(unsafe.Pointer(action))
 		info.Invokable = actionIndex >= 0
 	}
-	return linuxControl{object: object, info: info, action: actionIndex, fingerprint: nativeHash([]any{name, roleName, info.Writable, info.Invokable, value, actionIndex})}, nil
+	if (role == C.ATSPI_ROLE_CHECK_BOX || role == C.ATSPI_ROLE_CHECK_MENU_ITEM || role == C.ATSPI_ROLE_TOGGLE_BUTTON) && actionIndex >= 0 {
+		checked := C.og_state(object, C.ATSPI_STATE_CHECKED) != 0
+		info.Checkable, info.Checked = true, &checked
+	}
+	return linuxControl{object: object, info: info, action: actionIndex, value: valuePresent, fingerprint: nativeHash([]any{name, roleName, info.Writable, info.Invokable, info.Checkable, info.Checked, value, actionIndex})}, nil
 }
 func (d *NativeLinux) Observe(ctx context.Context) (NativeView, error) {
 	if err := d.check(false); err != nil {
@@ -368,7 +382,42 @@ func (d *NativeLinux) Observe(ctx context.Context) (NativeView, error) {
 	d.sequence++
 	view.Observation = ControlObservation{ID: nativeID(), Target: d.selected.target.Identity, Sequence: d.sequence, CapturedAt: time.Now().UTC(), StateDigest: nativeHash(digests)}
 	d.observed = view.Observation
-	return view, nil
+	return BoundNativeView(view), nil
+}
+func (d *NativeLinux) VerifyText(binding ControlBinding, element, expected string, observation ControlObservation) (bool, error) {
+	if err := d.check(false); err != nil {
+		return false, err
+	}
+	if binding.Validate() != nil || binding.Target != d.selected.target.Identity || observation != d.observed || observation.Validate(binding.Target, time.Now()) != nil {
+		return false, ErrStaleObservation
+	}
+	control, ok := d.controls[element]
+	if !ok || !d.within(control.object) {
+		return false, ErrControlScope
+	}
+	fresh, err := d.inspect(control.object)
+	if err != nil || fresh.fingerprint != control.fingerprint {
+		return false, ErrStaleObservation
+	}
+	return fresh.value != nil && *fresh.value == expected, nil
+}
+
+func (d *NativeLinux) VerifyChecked(binding ControlBinding, element string, expected bool, observation ControlObservation) (bool, error) {
+	if err := d.check(false); err != nil {
+		return false, err
+	}
+	if binding.Validate() != nil || binding.Target != d.selected.target.Identity || observation != d.observed || observation.Validate(binding.Target, time.Now()) != nil {
+		return false, ErrStaleObservation
+	}
+	control, ok := d.controls[element]
+	if !ok || !d.within(control.object) {
+		return false, ErrControlScope
+	}
+	fresh, err := d.inspect(control.object)
+	if err != nil || fresh.fingerprint != control.fingerprint {
+		return false, ErrStaleObservation
+	}
+	return fresh.info.Checkable && fresh.info.Checked != nil && *fresh.info.Checked == expected, nil
 }
 func (d *NativeLinux) Prepare(binding ControlBinding, op Operation, observation ControlObservation) (PreparedControlAction, error) {
 	if err := d.check(false); err != nil {
@@ -380,6 +429,11 @@ func (d *NativeLinux) Prepare(binding ControlBinding, op Operation, observation 
 	if observation != d.observed || observation.Validate(binding.Target, time.Now()) != nil {
 		return PreparedControlAction{}, ErrStaleObservation
 	}
+	// AT-SPI synthetic keys are only qualified on X11. Wayland input must use
+	// an explicitly granted RemoteDesktop/EIS portal session instead.
+	if op.Kind == "shortcut" && strings.ToLower(os.Getenv("XDG_SESSION_TYPE")) != "x11" {
+		return PreparedControlAction{}, ErrInvalidControl
+	}
 	control, ok := d.controls[op.Element]
 	if !ok || !d.within(control.object) {
 		return PreparedControlAction{}, ErrControlScope
@@ -388,10 +442,10 @@ func (d *NativeLinux) Prepare(binding ControlBinding, op Operation, observation 
 	if err != nil || fresh.fingerprint != control.fingerprint {
 		return PreparedControlAction{}, ErrStaleObservation
 	}
-	if op.Kind != "replace_text" && op.Kind != "activate" || op.Kind == "replace_text" && !fresh.info.Writable || op.Kind == "activate" && !fresh.info.Invokable {
+	if op.Kind != "replace_text" && op.Kind != "activate" && op.Kind != "shortcut" && op.Kind != "set_checked" || op.Kind == "replace_text" && !fresh.info.Writable || op.Kind == "activate" && !fresh.info.Invokable || op.Kind == "shortcut" && op.Shortcut == "paste" && !fresh.info.Writable || op.Kind == "set_checked" && (!fresh.info.Checkable || fresh.info.Checked == nil) {
 		return PreparedControlAction{}, ErrInvalidControl
 	}
-	action := PreparedControlAction{ID: nativeID(), Operation: op, ControlIdentity: control.identity, Precondition: control.fingerprint, ExpectedChange: nativeHash(op)}
+	action := PreparedControlAction{ID: nativeID(), Operation: op, ControlIdentity: control.identity, Precondition: control.fingerprint, ExpectedChange: nativeHash(op), ApprovalClass: ClassifyOperation(op, d.selected.target.Title+" "+fresh.info.Name, fresh.info.Role)}
 	d.prepared[action.ID] = action
 	return action, nil
 }
@@ -410,6 +464,22 @@ func (d *NativeLinux) ApprovalSummary(step BoundedStep) (string, error) {
 		saved, ok := d.prepared[action.ID]
 		if !ok || nativeHash(saved) != nativeHash(action) {
 			return "", ErrControlApproval
+		}
+		if action.Operation.Kind == "set_checked" {
+			control, ok := d.controls[action.Operation.Element]
+			if !ok || action.Operation.Checked == nil {
+				return "", ErrControlScope
+			}
+			text += "Set " + strconv.Quote(control.info.Name) + " to checked=" + strconv.FormatBool(*action.Operation.Checked) + ".\n\n"
+			continue
+		}
+		if action.Operation.Kind == "shortcut" {
+			control, ok := d.controls[action.Operation.Element]
+			if !ok {
+				return "", ErrControlScope
+			}
+			text += "Focus " + strconv.Quote(control.info.Name) + " and send the application shortcut " + strconv.Quote(action.Operation.Shortcut) + ". Dispatch alone does not verify a save or other outcome.\n\n"
+			continue
 		}
 		control := d.controls[action.Operation.Element]
 		if action.Operation.Kind == "replace_text" {
@@ -468,6 +538,62 @@ func (d *NativeLinux) Dispatch(ctx context.Context, action PreparedControlAction
 	}
 	d.observed = ControlObservation{}
 	var e *C.GError
+	if action.Operation.Kind == "set_checked" {
+		if action.Operation.Checked == nil || !fresh.info.Checkable || fresh.info.Checked == nil || control.action < 0 {
+			return result, ErrInvalidControl
+		}
+		if *fresh.info.Checked != *action.Operation.Checked {
+			call := C.atspi_accessible_get_action_iface(control.object)
+			if call == nil {
+				return result, ErrControlScope
+			}
+			result.Outcome, result.Uncertain = "uncertain", true
+			okay := C.atspi_action_do_action(call, C.int(control.action), &e)
+			C.og_unref(unsafe.Pointer(call))
+			if atspiError(e) || okay == 0 {
+				return result, ErrUncertain
+			}
+		}
+		verified, err := d.inspect(control.object)
+		if err != nil || !verified.info.Checkable || verified.info.Checked == nil || *verified.info.Checked != *action.Operation.Checked {
+			return result, ErrUncertain
+		}
+		result.Outcome, result.Uncertain = "verified", false
+		result.EvidenceID = nativeHash(*verified.info.Checked)
+		return result, nil
+	}
+	if action.Operation.Kind == "shortcut" {
+		if strings.ToLower(os.Getenv("XDG_SESSION_TYPE")) != "x11" || action.Operation.Shortcut == "paste" && !fresh.info.Writable {
+			return result, ErrInvalidControl
+		}
+		component := C.atspi_accessible_get_component_iface(control.object)
+		if component == nil {
+			return result, ErrControlScope
+		}
+		defer C.og_unref(unsafe.Pointer(component))
+		if C.atspi_component_grab_focus(component, &e) == 0 || atspiError(e) || C.og_state(control.object, C.ATSPI_STATE_FOCUSED) == 0 {
+			return result, ErrControlScope
+		}
+		keys := map[string]C.guint{"copy": 'c', "paste": 'v', "undo": 'z', "redo": 'y', "select_all": 'a', "save": 's',
+			"enter": 0xff0d, "escape": 0xff1b, "tab": 0xff09, "reverse_tab": 0xff09, "left": 0xff51, "up": 0xff52, "right": 0xff53, "down": 0xff54, "page_up": 0xff55, "page_down": 0xff56, "home": 0xff50, "end": 0xff57}
+		key, ok := keys[action.Operation.Shortcut]
+		if !ok {
+			return result, ErrInvalidControl
+		}
+		result.Outcome, result.Uncertain = "uncertain", true
+		e = nil
+		modifier := C.glong(0)
+		if action.Operation.Shortcut == "copy" || action.Operation.Shortcut == "paste" || action.Operation.Shortcut == "undo" || action.Operation.Shortcut == "redo" || action.Operation.Shortcut == "select_all" || action.Operation.Shortcut == "save" {
+			modifier = 1 << C.ATSPI_MODIFIER_CONTROL
+		} else if action.Operation.Shortcut == "reverse_tab" {
+			modifier = 1 << C.ATSPI_MODIFIER_SHIFT
+		}
+		if C.og_key(key, modifier, &e) == 0 || atspiError(e) || C.og_state(control.object, C.ATSPI_STATE_FOCUSED) == 0 || d.check(true) != nil {
+			return result, ErrUncertain
+		}
+		result.Outcome, result.Uncertain = "dispatched", false
+		return result, nil
+	}
 	if action.Operation.Kind == "replace_text" {
 		editable := C.atspi_accessible_get_editable_text_iface(control.object)
 		if editable == nil {

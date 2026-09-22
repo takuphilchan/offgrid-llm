@@ -6,11 +6,82 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
 )
+
+func TestComputerApprovalPoliciesUseCompanionClassification(t *testing.T) {
+	tests := []struct {
+		name          string
+		mode          computer.ApprovalMode
+		class         computer.ActionClass
+		wantApproval  bool
+		wantForbidden bool
+	}{
+		{"ask reviews reversible", computer.ApprovalAskEveryTime, computer.ActionReversible, true, false},
+		{"scoped allows reversible", computer.ApprovalScopedChanges, computer.ActionReversible, false, false},
+		{"scoped reviews consequential", computer.ApprovalScopedChanges, computer.ActionConsequential, true, false},
+		{"full allows consequential", computer.ApprovalFullTask, computer.ActionConsequential, false, false},
+		{"full cannot override forbidden", computer.ApprovalFullTask, computer.ActionForbidden, false, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := computer.NewBrowserHub()
+			code, _ := hub.PairCode("alice")
+			session, token, err := hub.Pair(code, "https://example.com", computer.ProtocolVersion, tc.mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manager := agents.NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+			config := agents.DefaultAgentConfig()
+			config.ComputerSession = session.ID
+			config.ComputerDriver = "browser"
+			config.ComputerApprovalMode = string(tc.mode)
+			runner := agents.NewRunner(manager, agents.NewToolRegistry(), nil)
+			task, err := runner.Create("Update form", "model", "alice", config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tools := &browserRunTools{server: &Server{browserHub: hub, agentManager: manager}}
+			descriptor, _ := browserDescriptor("browser_fill")
+			done := make(chan error, 1)
+			go func() {
+				deadline := time.Now().Add(time.Second)
+				for time.Now().Before(deadline) {
+					action, e := hub.Poll(token)
+					if e != nil {
+						done <- e
+						return
+					}
+					if action != nil {
+						if action.Kind != "computer_prepare" {
+							done <- errors.New("mutation dispatched during authorization")
+							return
+						}
+						payload, _ := json.Marshal(map[string]any{"prepared": true, "approval_class": tc.class})
+						done <- hub.Reply(token, computer.BrowserReply{ID: action.ID, Result: string(payload)})
+						return
+					}
+					time.Sleep(time.Millisecond)
+				}
+				done <- errors.New("prepare not delivered")
+			}()
+			err = tools.Authorize(context.Background(), "browser_fill", json.RawMessage(`{"observation_id":"seen","element":"1","text":"value"}`), agents.ToolExecution{RunID: task.ID, Actor: "alice", ExpectedCapability: &descriptor})
+			if e := <-done; e != nil {
+				t.Fatal(e)
+			}
+			if tc.wantApproval != errors.Is(err, capabilities.ErrApprovalRequired) {
+				t.Fatalf("approval=%v err=%v", tc.wantApproval, err)
+			}
+			if tc.wantForbidden != errors.Is(err, computer.ErrProhibitedAction) {
+				t.Fatalf("forbidden=%v err=%v", tc.wantForbidden, err)
+			}
+		})
+	}
+}
 
 func TestBrowserTypedArguments(t *testing.T) {
 	for _, tc := range []struct {

@@ -1025,8 +1025,8 @@ Remaining implementation gates, in order:
 6. Integrated Computer Tasks UI/CLI, job-event replay, pairing/permissions recovery,
    nine locales, offline packs and installed-application qualification.
 
-Do not expose a runnable Computer Tasks mode, advertise vision readiness, or mark
-the overall plan complete based on these foundation changes. No running user
+The Computer Tasks mode may be exposed for supervised preview, but it must not
+advertise vision readiness or native-platform qualification. No running user
 instance, release artifact, tag or container is replaced by this checkpoint.
 
 Foundation validation: Windows Go tests passed for agents, computer, server,
@@ -1807,3 +1807,179 @@ end-user enrollment/permission setup, Linux global emergency shortcut and portal
 capture/input, all local vision, typed files/downloads/uploads, and multi-origin
 browser workflows. Source and build coverage alone cannot establish model task
 quality, OS permission usability, privacy guarantees, signing, soak or pilot gates.
+
+### Native task transport and runner integration — 2026-09-21
+
+This checkpoint implements an internal protocol-2 path through the existing
+computer queue and durable agent runner. It does not complete application control
+and does not enable a native picker in the released UI.
+
+- Native enrollment binds a host-issued OS/session/process/window identity.
+  Browser-v1 sessions cannot receive native tools; native sessions cannot receive
+  browser tools. Both share the same active-session queue. Actor-scoped listing
+  and execution retain the selected driver without exposing another user's target.
+- `native-session.mjs` translates typed agent calls into private native-worker
+  requests. It verifies workspace identity, uses the actual worker target list,
+  binds one task, obtains local consent, prepares exact actions locally, requests
+  local approval, and journals results before acknowledging them. Credentials
+  never pass through renderer APIs or command-line arguments.
+- The durable runner persists native tool-call approvals before dispatch and
+  requires a real first observation. Native-model preflight uses the actual native
+  tool schemas and unpredictable observed IDs, not the browser-only probe.
+- Native operations remain limited to structured observation, text replacement,
+  and control activation. Control values and screenshots are not returned by this
+  profile. Native task completion deliberately remains unavailable until a real
+  outcome verifier can distinguish editing from saving/submission. Recorded
+  action evidence remains inspectable; an invocation cannot imply task success.
+- Native capabilities are labelled `native_development`, never qualified. The
+  existing browser picker filters native sessions instead of mislabelling or
+  automatically selecting them. The native transport ships in build-time packs,
+  but no new terminal-dependent end-user workflow or incomplete native button is
+  introduced.
+
+Validation at this checkpoint:
+
+- Native transport tests cover all three driver identities, local consent and
+  approval refusal, actor/task/target replacement, stale observations, unexpected
+  fields/tools, reply replay without duplicate input, cancellation during startup,
+  and unconfirmed Stop without false success. These are contract tests with a
+  simulated worker, not macOS/Linux desktop qualification.
+- Go tests cover native HTTP enrollment and renderer-origin rejection, immutable
+  driver bindings, native model-call probes, and a durable runner that observes,
+  reaches persisted approval, and does not dispatch a mutation before approval.
+- The real Windows UIA and private-worker tests passed again against owned Win32
+  fixtures: Unicode editing, independent Win32 verification, marked-password
+  exclusion, consent, and local Stop. This does not yet test the complete new
+  service-to-JavaScript-to-native pipeline with a real planning model.
+- Existing computer/agent/server Go tests and the companion suite passed.
+  Generated TypeScript API schemas and type checking passed.
+
+Remaining implementation: value/document observation with bounded privacy
+controls, independent application outcome verification, broader structured
+actions and validated keyboard/pointer input, existing-browser attachment,
+vision, file operations, persistent enrollment, packaged end-to-end tests on
+all platforms, and the remaining qualification gates. Desktop target-picker,
+shared host controller, and catalog-based app launching are now implemented in
+the native preview but are not yet platform-qualified for release.
+The prior Windows hosted-runner privilege mismatch is not resolved by these
+transport changes. No live container, installed application, tag, or release was
+changed at this checkpoint.
+
+### Native application-selection checkpoint — 2026-09-21
+
+The desktop bridge now exposes a real application-selection path for the
+native preview. In the trusted desktop main process it catalogs user-launchable
+Windows Start Menu shortcuts, macOS applications, and Linux desktop entries,
+returns opaque IDs, and launches only a selected catalog entry. Renderer code
+cannot provide an executable path or command. After launch, the companion
+re-discovers the actual application windows and pairs the selected window using
+the existing protocol-v2 target identity and approval journal. Existing browser
+selection remains available as a separate mode.
+
+Desktop tests cover catalog parsing, opaque-ID enforcement, and shell-free Linux
+launch; the web type-check/build and native picker interaction checks pass.
+This is not evidence that every installed application is controllable: native
+drivers still expose only their currently qualified structured operations
+(observe, bounded text replacement, activation and read-back verification).
+Vision capture/actions, file upload/download/trash workflows, broader control
+patterns, persistent OS-keystore enrollment, and real macOS/Linux desktop
+qualification remain release gates. Users must still grant OS accessibility
+permissions and select a target window; unsupported or elevated applications
+fail closed.
+
+### Native checkbox, shortcut and browser-transfer checkpoint — 2026-09-22
+
+- Managed Chromium now stages downloads privately with size and SHA-256 evidence,
+  and accepts uploads only through a trusted desktop file picker and an opaque,
+  digest-bound grant. The renderer and model never receive the host path. Neither
+  transfer operation submits a form or executes downloaded content.
+- Native selected-window drivers now expose a fixed shortcut vocabulary and
+  explicit checkbox state. Both bind to a freshly observed, non-protected control,
+  require exact service and local approval, revalidate target/focus/state before
+  dispatch, and require a fresh independent state check for task completion.
+  There is no arbitrary chord, key string, pointer coordinate, or shell surface.
+- The Windows UIA fixture independently observed Ctrl+S through its window
+  message queue and checkbox state through `BM_GETCHECK`. The isolated Ubuntu
+  X11 fixture independently observed Ctrl+S and GTK checkbox state. An AT-SPI
+  modifier-mask defect found by that fixture was corrected; the control mask is
+  now passed as a bitmask rather than an enum ordinal.
+- Hosted Windows runners that execute elevated now record the native mutation
+  fixture as a policy skip. OffGrid continues to reject elevated targets in
+  production; CI does not weaken that boundary merely to obtain a green check.
+  The same fixture passes on the normal-user Windows development desktop.
+- The same closed action now includes bounded navigation keys (Enter, Escape,
+  Tab/reverse-Tab, arrows, Page Up/Down and Home/End) on Windows, macOS and X11.
+  These remain selected-control, foreground-validated, separately approved
+  dispatches; arbitrary key strings, global typing and Wayland input are absent.
+- Browser/companion tests pass 49 cases; desktop contracts pass 44; focused Go
+  computer/server/agent suites, real Windows UIA/Stop tests, real Linux AT-SPI,
+  TypeScript checks, and the production renderer build pass locally.
+
+This evidence does not qualify macOS input, GNOME/KDE Wayland portals, vision,
+whole-desktop input, native uploads/downloads/trash, arbitrary applications, or
+model-planned end-to-end workflows. Native manifests remain `qualified: false`.
+
+### Bounded managed-browser vision transport checkpoint — 2026-09-22
+
+- Chat content now has a typed, bounded text/image contract. OffGrid accepts only
+  local base64 PNG/JPEG parts, validates encoding, format, dimensions and byte
+  limits before inference, and rejects remote/file URLs. Image messages require
+  an installed projector; the service returns stable
+  `invalid_message_content` or `vision_projector_unavailable` errors before
+  sending unsafe input to llama.cpp.
+- Managed Chromium can capture only the current, freshly observed viewport.
+  Password, payment-autocomplete, one-time-code and explicitly private controls
+  are masked before bytes leave the companion. The companion uploads the capture
+  through its authenticated action-bound transport, not through renderer APIs.
+- The service keeps image bytes only in a bounded in-memory record tied to actor,
+  run, browser session and pending action. Durable tool steps contain an opaque
+  reference. The reference is consumed only by the immediately following model
+  turn and cannot be replayed across actors, sessions or runs.
+- An installed projector is no longer treated as enough evidence to expose the
+  capture tool. OffGrid generates a bounded synthetic PNG containing a random
+  hexadecimal code, sends it through the same typed multimodal path, and requires
+  exactly one governed tool call containing the code read from the image. A pass
+  is held only in memory and is bound to the current model/projector files; file
+  replacement or service restart invalidates it. Failed vision checks disable
+  capture without blocking structured browser control.
+- Model listings still report `vision: unknown`, distinct from tested support.
+  The smoke check proves local image transport plus one exact tool call, not
+  grounding accuracy or end-to-end task quality.
+
+Local evidence: API content-validation, deterministic synthetic-image, exact
+vision-tool-call and server policy tests pass; the browser suite passes 50 cases
+including real Chromium capture, masking stability, stale observation rejection
+and transfer workflows. This checkpoint does **not**
+qualify grounding accuracy, a specific VLM/projector/runtime tuple, native-window
+capture, coordinate actions, macOS/Linux capture APIs or general computer vision.
+
+### Session-scoped approval policies — 2026-09-22
+
+- Computer sessions now bind one immutable policy selected before local consent:
+  `ask_every_time`, `scoped_changes`, or `full_task`. Existing sessions and
+  checkpoints without a recorded policy retain exact-action approval; they are
+  never upgraded silently.
+- Action risk is classified by the host driver from the freshly observed local
+  control and target context. Model arguments cannot supply an approval class.
+  The durable service applies the policy before dispatch, and the independent
+  companion recomputes and enforces it immediately before browser or native input.
+- Scoped mode permits only read-only and reversible actions automatically. Full
+  task mode additionally permits consequential actions exposed by the typed
+  driver. Both modes still block credential/payment controls, financial actions,
+  privilege or security changes, software installation, scripts, permanent
+  deletion, stale actions, and repeat dispatch after an uncertain outcome.
+- Exact approvals remain actor/run/call/arguments/capability bound and expire as
+  before. Automatically authorized actions are marked with their session policy
+  in durable task steps so history and support evidence distinguish them from
+  explicit approvals.
+- Desktop and browser setup show the policy before pairing and include it in the
+  local consent summary. The current policy is visible in the connected-session
+  selector and activity strip. Changing the selector requires a new session;
+  it cannot mutate authority for work already underway.
+
+Evidence at this checkpoint includes policy-matrix and classifier unit tests,
+browser and native companion enforcement tests, service integration tests for
+automatic reversible work, exact consequential approval, full-task submission,
+and non-overridable prohibited actions, plus desktop IPC and browser UI contract
+tests. These controls reduce approval fatigue; they do not qualify general native
+computer use or remove the remaining platform/model release gates above.

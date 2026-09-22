@@ -2,9 +2,13 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -159,6 +163,49 @@ func TestHandleChatCompletions_MissingMessages(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d", w.Code)
+	}
+}
+
+func boundedTestImage(t *testing.T) string {
+	t.Helper()
+	var content bytes.Buffer
+	if err := png.Encode(&content, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(content.Bytes())
+}
+
+func TestHandleChatCompletionsRejectsRemoteImageURL(t *testing.T) {
+	server := newTestServer(t)
+	body := `{"model":"missing","messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.com/private.png"}}]}]}`
+	w := httptest.NewRecorder()
+	server.handleChatCompletions(w, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body)))
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"code":"invalid_message_content"`) {
+		t.Fatalf("unexpected response: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleChatCompletionsRejectsImageWithoutProjector(t *testing.T) {
+	server := newTestServer(t)
+	modelPath := filepath.Join(server.config.ModelsDir, "text-only.gguf")
+	if err := os.MkdirAll(server.config.ModelsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modelPath, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.registry.ScanModels(); err != nil {
+		t.Fatal(err)
+	}
+	request := api.ChatCompletionRequest{Model: "text-only", Messages: []api.ChatMessage{{Role: "user", Content: []api.ChatContentPart{{Type: "image_url", ImageURL: &api.ChatImageURL{URL: boundedTestImage(t)}}}}}}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	server.handleChatCompletions(w, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body)))
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), `"code":"vision_projector_unavailable"`) {
+		t.Fatalf("unexpected response: %d %s", w.Code, w.Body.String())
 	}
 }
 

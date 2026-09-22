@@ -99,7 +99,24 @@ func (d *NativeDarwin) Observe(ctx context.Context) (NativeView, error) {
 	if err == nil {
 		d.observed = view.Observation
 	}
-	return view, err
+	return BoundNativeView(view), err
+}
+func (d *NativeDarwin) VerifyText(binding ControlBinding, element, expected string, observation ControlObservation) (bool, error) {
+	if binding.Validate() != nil || binding.Target != d.selected.Identity || observation != d.observed || observation.Validate(binding.Target, time.Now()) != nil {
+		return false, ErrStaleObservation
+	}
+	var result bool
+	err := axCall("verify_text", map[string]any{"element": element, "text": expected, "observation": observation}, &result)
+	return result, err
+}
+
+func (d *NativeDarwin) VerifyChecked(binding ControlBinding, element string, expected bool, observation ControlObservation) (bool, error) {
+	if binding.Validate() != nil || binding.Target != d.selected.Identity || observation != d.observed || observation.Validate(binding.Target, time.Now()) != nil {
+		return false, ErrStaleObservation
+	}
+	var result bool
+	err := axCall("verify_checked", map[string]any{"element": element, "checked": expected, "observation": observation}, &result)
+	return result, err
 }
 func (d *NativeDarwin) Prepare(binding ControlBinding, op Operation, observation ControlObservation) (PreparedControlAction, error) {
 	if binding.Validate() != nil || binding.Target != d.selected.Identity || op.Validate() != nil {
@@ -108,7 +125,7 @@ func (d *NativeDarwin) Prepare(binding ControlBinding, op Operation, observation
 	if observation != d.observed || observation.Validate(binding.Target, time.Now()) != nil {
 		return PreparedControlAction{}, ErrStaleObservation
 	}
-	if op.Kind != "replace_text" && op.Kind != "activate" {
+	if op.Kind != "replace_text" && op.Kind != "activate" && op.Kind != "shortcut" && op.Kind != "set_checked" {
 		return PreparedControlAction{}, ErrInvalidControl
 	}
 	var action PreparedControlAction

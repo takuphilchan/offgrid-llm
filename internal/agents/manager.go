@@ -32,6 +32,7 @@ type Task struct {
 	Status                 TaskStatus   `json:"status"`
 	Result                 string       `json:"result,omitempty"`
 	Error                  string       `json:"error,omitempty"`
+	ErrorCode              string       `json:"error_code,omitempty"`
 	Steps                  []Step       `json:"steps,omitempty"`
 	Config                 AgentConfig  `json:"config"`
 	CreatedAt              time.Time    `json:"created_at"`

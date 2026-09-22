@@ -1,9 +1,15 @@
 package computer
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,6 +99,73 @@ func TestBrowserDispatchCannotReplayOrChangeRun(t *testing.T) {
 	h.Stop("alice")
 	if h.Heartbeat(token) == nil {
 		t.Fatal("stopped token still valid")
+	}
+}
+
+func TestBrowserCaptureIsPendingBoundTransientAndSingleUse(t *testing.T) {
+	h, session, token := paired(t)
+	done := make(chan error, 1)
+	go func() {
+		_, err := h.Execute(context.Background(), "alice", session.ID, "run", "capture", "browser_capture", json.RawMessage(`{"observation_id":"observed"}`))
+		done <- err
+	}()
+	var action *BrowserAction
+	deadline := time.Now().Add(time.Second)
+	for action == nil && time.Now().Before(deadline) {
+		action, _ = h.Poll(token)
+		time.Sleep(time.Millisecond)
+	}
+	if action == nil {
+		t.Fatal("capture action was not delivered")
+	}
+	picture := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	picture.Set(0, 0, color.White)
+	var content bytes.Buffer
+	if err := png.Encode(&content, picture); err != nil {
+		t.Fatal(err)
+	}
+	reference, err := h.StoreCapture(token, action.ID, "observed", "image/png", 2, 2, base64.StdEncoding.EncodeToString(content.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Reply(token, BrowserReply{ID: action.ID, Result: `{"captured":true}`}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ResolveCapture("bob", session.ID, "run", reference); err == nil {
+		t.Fatal("cross-actor capture access was accepted")
+	}
+	// A failed actor check consumes nothing belonging to another actor only when
+	// the reference is invalid; resolve a fresh image for the positive case.
+	// StoreCapture cannot run after the action completed, so repeat the action.
+	go func() {
+		_, err := h.Execute(context.Background(), "alice", session.ID, "run", "capture-2", "browser_capture", json.RawMessage(`{"observation_id":"observed-2"}`))
+		done <- err
+	}()
+	action = nil
+	deadline = time.Now().Add(time.Second)
+	for action == nil && time.Now().Before(deadline) {
+		action, _ = h.Poll(token)
+		time.Sleep(time.Millisecond)
+	}
+	reference, err = h.StoreCapture(token, action.ID, "observed-2", "image/png", 2, 2, base64.StdEncoding.EncodeToString(content.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Reply(token, BrowserReply{ID: action.ID, Result: `{"captured":true}`}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	dataURL, err := h.ResolveCapture("alice", session.ID, "run", reference)
+	if err != nil || !strings.HasPrefix(dataURL, "data:image/png;base64,") {
+		t.Fatalf("capture was not resolved: %v", err)
+	}
+	if _, err := h.ResolveCapture("alice", session.ID, "run", reference); err == nil {
+		t.Fatal("capture reference was reusable")
 	}
 }
 func TestBrowserCancellationLeavesUncertainOutcome(t *testing.T) {

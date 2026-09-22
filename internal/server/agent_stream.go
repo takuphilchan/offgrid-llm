@@ -21,6 +21,10 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 		return nil, err
 	}
 	defer release()
+	messages, err = s.attachTransientComputerCapture(task, messages)
+	if err != nil {
+		return nil, err
+	}
 	if err := emit("processing", ""); err != nil {
 		return nil, err
 	}

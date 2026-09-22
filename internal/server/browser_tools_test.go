@@ -1,19 +1,92 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestTransientCaptureIsAttachedOnlyToNextVisionTurn(t *testing.T) {
+	server := newTestServer(t)
+	modelName := "qwen2.5-vl-7b-vision"
+	for name, content := range map[string]string{modelName + ".gguf": "model", "qwen2.5-vl-7b-vision-mmproj-f16.gguf": "projector"} {
+		if err := os.WriteFile(filepath.Join(server.config.ModelsDir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := server.registry.ScanModels(); err != nil {
+		t.Fatal(err)
+	}
+	key, ok := server.visionCheckKey(modelName)
+	if !ok {
+		t.Fatal("vision fixture was not discovered")
+	}
+	server.computerVisionChecks.Store(key, struct{}{})
+	code, _ := server.browserHub.PairCode("alice")
+	session, token, err := server.browserHub.Pair(code, "offgrid-demo://research", computer.ProtocolVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.browserHub.Reserve("alice", session.ID, "run"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := server.browserHub.Execute(context.Background(), "alice", session.ID, "run", "capture", "browser_capture", json.RawMessage(`{"observation_id":"observed"}`))
+		done <- err
+	}()
+	var action *computer.BrowserAction
+	deadline := time.Now().Add(time.Second)
+	for action == nil && time.Now().Before(deadline) {
+		action, _ = server.browserHub.Poll(token)
+		time.Sleep(time.Millisecond)
+	}
+	if action == nil {
+		t.Fatal("capture action not delivered")
+	}
+	var imageData bytes.Buffer
+	if err := png.Encode(&imageData, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	reference, err := server.browserHub.StoreCapture(token, action.ID, "observed", "image/png", 2, 2, base64.StdEncoding.EncodeToString(imageData.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _ := json.Marshal(map[string]any{"captured": true, "image_ref": reference, "observation_id": "observed", "width": 2, "height": 2})
+	if err := server.browserHub.Reply(token, computer.BrowserReply{ID: action.ID, Result: string(result)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	task := &agents.Task{ID: "run", Actor: "alice", Model: modelName, Config: agents.AgentConfig{ComputerSession: session.ID, ComputerDriver: "browser"}}
+	messages := []api.ChatMessage{{Role: "tool", Name: "browser_capture", Content: string(result)}}
+	prepared, err := server.attachTransientComputerCapture(task, messages)
+	if err != nil || len(prepared) != 2 {
+		t.Fatalf("capture not attached: %v", err)
+	}
+	if strings.Contains(messages[0].StringContent(), "base64") || !strings.Contains(prepared[1].StringContent(), "Current selected-browser viewport") {
+		t.Fatal("capture bytes leaked into durable result or text projection was lost")
+	}
+	if _, err := server.attachTransientComputerCapture(task, messages); err == nil {
+		t.Fatal("transient image reference was reusable")
+	}
+}
 
 func TestComputerTaskUsesDeterministicSequentialToolProtocol(t *testing.T) {
 	config := agents.DefaultAgentConfig()
@@ -58,7 +131,7 @@ func TestBrowserToolsUseDurableApprovalsAndCannotEscapeRegistry(t *testing.T) {
 	server := &Server{browserHub: hub, agentManager: manager}
 	tools := &browserRunTools{RunTools: registry, server: server}
 	caller := func(_ context.Context, _ *agents.Task, messages []api.ChatMessage, available []api.Tool) (*api.ChatCompletionResponse, error) {
-		if len(available) != 7 {
+		if len(available) != 9 {
 			t.Fatal("unscoped tools supplied")
 		}
 		if len(messages) == 2 {

@@ -32,6 +32,45 @@ async function fixture(page: Page) {
   return state;
 }
 
+test('desktop application picker connects an existing window without browser-only setup',async({page})=>{
+ await fixture(page);
+ await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'desktop-workspace'}}));
+ let connected=false;
+ await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:connected?[{id:'native-session',origin:'Notes — existing application',driver:'windows-uia',state:'ready',remaining_actions:100}]:[]}}));
+ await page.addInitScript(()=>{
+   const targets=[{id:'opaque-window',title:'Notes — existing application',driver:'windows-uia'}];
+   (window as any).__nativeCalls=[];let state:any={state:'idle',installed:true};
+   (window as any).electron={onThemeChange:()=>()=>{},getSystemTheme:async()=>'light',getComputerStatus:async()=>state,
+     startComputerBrowser:async()=>{throw Error('must not start browser');},
+     discoverComputerApps:async(request:unknown)=>{(window as any).__nativeCalls.push(request);state={state:'selecting',installed:true,targets};return state;},
+     startComputerApp:async(request:unknown)=>{(window as any).__nativeCalls.push(request);state={state:'ready',installed:true,target:{id:'native-session',origin:targets[0].title,driver:'windows-uia'}};return state;},
+     stopComputerBrowser:async()=>{state={state:'stopped',installed:true};return state;}};
+ });
+ await page.goto('/ui/#/agents');await page.getByRole('button',{name:'Application window',exact:true}).click();
+ await expect(page.getByLabel('Website (HTTPS)',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Choose an application',exact:true}).click();
+ await page.getByRole('combobox',{name:'Select a window',exact:true}).selectOption('opaque-window');
+ connected=true;
+ await page.getByRole('button',{name:'Connect application',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).__nativeCalls)).toEqual([{workspace:'desktop-workspace'},{workspace:'desktop-workspace',target:'opaque-window',approvalMode:'scoped_changes'}]);
+ await expect(page.locator('.computer-activity')).toContainText('Application connected');
+ await expect(page.locator('.computer-activity').getByRole('button',{name:'Stop control'})).toBeEnabled();
+ await expect(page.locator('.computer-pair-code')).toHaveCount(0);
+ await page.locator('.primary-nav a[href="#/models"]').click();
+ await expect(page.locator('.computer-activity').getByRole('button',{name:'Stop control'})).toBeEnabled();
+});
+
+test('native permission failures explain OS recovery without raw error codes',async({page})=>{
+ await fixture(page);
+ await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'desktop-workspace'}}));
+ await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:[]}}));
+ await page.addInitScript(()=>{(window as any).electron={onThemeChange:()=>()=>{},getSystemTheme:async()=>'light',getComputerStatus:async()=>({state:'idle',installed:true}),startComputerBrowser:async()=>{},discoverComputerApps:async()=>{throw Error('computer_permission_denied');}};});
+ await page.goto('/ui/#/agents');await page.getByRole('button',{name:'Application window',exact:true}).click();
+ await page.getByRole('button',{name:'Choose an application',exact:true}).click();
+ await expect(page.getByRole('alert').filter({hasText:'Allow accessibility access in your operating system settings'})).toBeVisible();
+ await expect(page.getByText('computer_permission_denied',{exact:true})).toHaveCount(0);
+});
+
 test('desktop browser onboarding uses private IPC without terminal commands or pairing codes', async ({ page }) => {
  await fixture(page);
  await page.route('**/api/v2/system', r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'desktop-workspace'}}));
@@ -43,7 +82,9 @@ test('desktop browser onboarding uses private IPC without terminal commands or p
      startComputerBrowser:async(request:unknown)=>{(window as any).__starts.push(request);return {state:'idle',code:'consent_declined'};},stopComputerBrowser:async()=>{}};
  });
  await page.goto('/ui/#/agents');
- await page.getByRole('checkbox',{name:'Use a browser · Preview'}).check();
+ await page.getByRole('button',{name:'Separate browser',exact:true}).click();
+ await expect(page.getByRole('combobox',{name:'Action approvals',exact:true})).toHaveValue('scoped_changes');
+ await expect(page.getByText('Automatically allow reversible work in the selected scope.',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled();
  await expect(page.getByText('Developer connection',{exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Pair browser',exact:true})).toHaveCount(0);
@@ -52,16 +93,18 @@ test('desktop browser onboarding uses private IPC without terminal commands or p
  expect(task!.y+task!.height).toBeLessThan(setup!.y);
  await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>(window as any).__starts.length)).toBe(1);
- expect(await page.evaluate(()=>(window as any).__starts[0])).toEqual({origin:'demo',workspace:'desktop-workspace',networkMode:'direct'});
+ expect(await page.evaluate(()=>(window as any).__starts[0])).toEqual({origin:'demo',workspace:'desktop-workspace',networkMode:'direct',approvalMode:'scoped_changes'});
  await expect(page.locator('.computer-pair-code')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled();
  await page.getByLabel('Website (HTTPS)',{exact:true}).fill('https://playwright.dev/docs/intro');
  await page.getByText('Network settings',{exact:true}).first().click();
  await page.getByRole('combobox',{name:'Network settings',exact:true}).selectOption('trusted-vpn');
+ await page.getByRole('combobox',{name:'Action approvals',exact:true}).selectOption('full_task');
+ await expect(page.getByText(/Credentials, payments, privilege changes, installation, permanent deletion, scripts, and uncertain retries stay blocked/)).toBeVisible();
  await expect(page.getByText(/Only enable this for a VPN you trust/)).toBeVisible();
  await page.getByRole('button',{name:'Open browser',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>(window as any).__starts.length)).toBe(2);
- expect(await page.evaluate(()=>(window as any).__starts[1])).toEqual({origin:'https://playwright.dev/docs/intro',workspace:'desktop-workspace',networkMode:'trusted-vpn'});
+ expect(await page.evaluate(()=>(window as any).__starts[1])).toEqual({origin:'https://playwright.dev/docs/intro',workspace:'desktop-workspace',networkMode:'trusted-vpn',approvalMode:'full_task'});
  await expect(page.getByText('Permission was declined. No browser session started.',{exact:true})).toBeVisible();
 });
 
@@ -70,7 +113,7 @@ test('known browser network errors explain recovery rather than prescribing rein
  await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'desktop-workspace'}}));
  await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:[]}}));
  await page.addInitScript(()=>{(window as any).electron={onThemeChange:()=>()=>{},getSystemTheme:async()=>'light',getComputerStatus:async()=>({state:'idle',installed:true}),startComputerBrowser:async()=>{throw Error('network_blocked');}};});
- await page.goto('/ui/#/agents');await page.getByRole('checkbox',{name:/Use a browser/}).check();
+ await page.goto('/ui/#/agents');await page.getByRole('button',{name:'Separate browser',exact:true}).click();
  await page.getByLabel('Website (HTTPS)',{exact:true}).fill('https://example.com/article');
  await page.getByRole('button',{name:'Open browser',exact:true}).click();
  await expect(page.getByRole('alert').filter({hasText:'select Trusted VPN routing'})).toBeVisible();
@@ -80,9 +123,11 @@ test('known browser network errors explain recovery rather than prescribing rein
 test('web browser onboarding leads with desktop handoff, not developer setup', async ({ page }) => {
  await fixture(page);
  await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:[]}}));
- await page.goto('/ui/#/agents');await page.getByRole('checkbox',{name:'Use a browser · Preview'}).check();
+ await page.goto('/ui/#/agents');await page.getByRole('button',{name:'Application window',exact:true}).click();
  await expect(page.getByRole('link',{name:'Open desktop app'})).toHaveAttribute('href','offgrid://computer');
+ await expect(page.getByText('Developer connection',{exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Pair browser',exact:true})).not.toBeVisible();
+ await expect(page.getByRole('button',{name:'Open desktop app',exact:true})).toBeDisabled();
  await expect(page.locator('.agent-metrics')).toHaveCount(0);
 });
 
@@ -136,8 +181,8 @@ test('computer tasks ignore retired verification drafts and need no extra config
  await page.route('**/v1/agents/run', r => { submissions++; expect(r.request().postDataJSON()).not.toHaveProperty('computer_expected_text'); return r.fulfill({status:422,json:{error:{message:'Model changed; recheck compatibility.'}}}); });
  await page.goto('/ui/#/agents');
  await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveValue('Keep this task draft');
- await page.getByRole('checkbox',{name:'Use a browser · Preview'}).check();
- await page.getByRole('combobox',{name:'Select a paired browser'}).selectOption('demo-session');
+ await page.getByRole('button',{name:'Separate browser',exact:true}).click();
+ await page.getByRole('combobox',{name:'Target'}).selectOption('demo-session');
  await page.getByRole('textbox',{name:'Task',exact:true}).fill('Inspect the demo');
  const run = page.getByRole('button',{name:'Run task',exact:true});
  await expect(run).toBeEnabled();
@@ -174,11 +219,11 @@ test('consumed browser sessions cannot submit or pair again until stopped', asyn
  await fixture(page);
  await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:[{id:'used',origin:'offgrid-demo://research',remaining_actions:90,state:'finished',run_id:'old'}]}}));
  await page.goto('/ui/#/agents');
- await page.getByRole('checkbox',{name:'Use a browser · Preview'}).check();
+ await page.getByRole('button',{name:'Separate browser',exact:true}).click();
  await expect(page.getByRole('option',{name:/Finished — start a new session/})).toHaveAttribute('disabled','');
- await page.getByText('Developer connection',{exact:true}).click();
- await expect(page.getByRole('button',{name:'Pair browser',exact:true})).toBeDisabled();
- await expect(page.getByRole('button',{name:'Run task',exact:true})).toBeDisabled();
+ await expect(page.getByText('Developer connection',{exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Pair browser',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Open desktop app',exact:true})).toBeDisabled();
  await expect(page.getByText('Stop this session and restart the companion to approve another task.')).toBeVisible();
 });
 
@@ -190,14 +235,14 @@ test('browser stop and task mode survive navigation and reload during approval',
  await page.addInitScript(()=>localStorage.setItem('offgrid.draft.v1:alice%3Aworkspace%3Alegacy:agent-run:','browser-run'));
  await page.route('**/v1/agents/tasks/browser-run',r=>r.fulfill({json:{run_id:'browser-run',task_id:'browser-run',status:'waiting_for_approval',output:'',steps:[],computer_session:'paired',computer_expected_text:'Draft saved: OffGrid test',pending_approval:{id:'approval',tool:'browser_fill',arguments:{text:'OffGrid test'},expires_at:new Date(Date.now()+60000).toISOString()}}}));
  await page.goto('/ui/#/agents');
- await expect(page.getByRole('checkbox',{name:'Use a browser · Preview'})).toBeChecked();
+ await expect(page.getByRole('button',{name:'Separate browser',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('#computer-expected-text')).toHaveCount(0);
  await page.locator('.primary-nav a[href="#/models"]').click();
  await expect(page.locator('.computer-activity').getByRole('button',{name:'Stop browser'})).toBeEnabled();
  await page.locator('.primary-nav a[href="#/agents"]').click();
- await expect(page.getByRole('checkbox',{name:'Use a browser · Preview'})).toBeChecked();
+ await expect(page.getByRole('button',{name:'Separate browser',exact:true})).toHaveAttribute('aria-pressed','true');
  await page.reload();
- await expect(page.getByRole('checkbox',{name:'Use a browser · Preview'})).toBeChecked();
+ await expect(page.getByRole('button',{name:'Separate browser',exact:true})).toHaveAttribute('aria-pressed','true');
  await page.locator('.computer-activity').getByRole('button',{name:'Stop browser'}).click();
  await expect(page.locator('.computer-activity')).toContainText('Stop requested');
  expect(stops).toBe(1);

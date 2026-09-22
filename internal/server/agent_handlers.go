@@ -28,6 +28,10 @@ func (s *Server) callAgentModel(ctx context.Context, task *agents.Task, messages
 		return nil, err
 	}
 	defer release()
+	messages, err = s.attachTransientComputerCapture(task, messages)
+	if err != nil {
+		return nil, err
+	}
 	temperature := float32(task.Config.Temperature)
 	maxTokens := task.Config.MaxTokens
 	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens}
@@ -77,6 +81,7 @@ func taskResponse(task *agents.Task) map[string]any {
 	response["progress"] = task.Progress
 	if task.Config.ComputerSession != "" {
 		response["computer_session"] = task.Config.ComputerSession
+		response["computer_approval_mode"] = task.Config.ComputerApprovalMode
 		response["computer_expected_text"] = task.Config.ComputerExpectedText
 		response["computer_session_expired"] = task.ComputerSessionExpired
 	}
@@ -84,6 +89,9 @@ func taskResponse(task *agents.Task) map[string]any {
 	response["resumable"] = !task.ComputerSessionExpired && task.Checkpoint != nil && task.Checkpoint.ExecutingCall == "" && (task.Status == agents.TaskInterrupted || task.Status == agents.TaskPending || task.Status == agents.TaskWaiting)
 	if task.Error != "" {
 		response["error"] = task.Error
+	}
+	if task.ErrorCode != "" {
+		response["error_code"] = task.ErrorCode
 	}
 	if task.Checkpoint != nil && task.Checkpoint.ExecutingCall != "" {
 		response["uncertain_call_id"] = task.Checkpoint.ExecutingCall
@@ -155,12 +163,31 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if s.browserHub == nil || s.browserHub.Check(s.agentActor(r), req.ComputerSession, "") != nil {
-			writeError(w, "Select an active, unused local browser session", 409)
+			writeError(w, "Select an active, unused local application or browser session", 409)
 			return
 		}
 		config.ComputerSession = req.ComputerSession
+		mode, modeErr := s.browserHub.ApprovalMode(s.agentActor(r), req.ComputerSession)
+		if modeErr != nil {
+			writeError(w, "Selected computer session expired", 409)
+			return
+		}
+		config.ComputerApprovalMode = string(mode)
+		var driverErr error
+		config.ComputerDriver, driverErr = s.browserHub.Driver(s.agentActor(r), req.ComputerSession)
+		if driverErr != nil {
+			writeError(w, "Selected computer session expired", 409)
+			return
+		}
 		config.ComputerExpectedText = req.ComputerExpectedText
 		config.ComputerVerification = "page-evidence-v1"
+		if nativeComputerDriver(config.ComputerDriver) {
+			if req.ComputerExpectedText != "" {
+				writeError(w, "Page-text checks do not apply to native applications", 400)
+				return
+			}
+			config.ComputerVerification = "native-evidence-v2"
+		}
 	}
 	config.SystemPrompt, config.ReasoningStyle = req.SystemPrompt, req.Style
 	if config.ComputerSession != "" {
@@ -181,7 +208,7 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if config.ComputerSession != "" {
-		check := s.checkComputerModel(r.Context(), req.Model)
+		check := s.checkComputerModelDriver(r.Context(), req.Model, config.ComputerDriver)
 		if !check.Passed {
 			status := http.StatusUnprocessableEntity
 			if check.Retryable {
@@ -189,6 +216,12 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 			}
 			writeJSON(w, status, computerCheckError(check))
 			return
+		}
+		// Vision is optional. Check an installed projector automatically once per
+		// exact runtime/file set; failure disables capture without blocking the
+		// structured browser workflow.
+		if config.ComputerDriver == "browser" && !s.computerVisionReady(req.Model) {
+			_ = s.checkComputerVision(r.Context(), req.Model)
 		}
 		if s.browserHub.Check(s.agentActor(r), config.ComputerSession, "") != nil {
 			writeError(w, "Browser session expired during the model check; pair again", 409)

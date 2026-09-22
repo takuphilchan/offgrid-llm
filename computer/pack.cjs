@@ -33,7 +33,7 @@ async function createManifest(root, platform, arch, version) {
 function nativeProfile(platform) {
   const driver={win32:'windows-uia',darwin:'macos-accessibility',linux:'linux-atspi'}[platform];
   if(!driver) throw Error('pack_invalid');
-  return {protocol:2,driver,scope:'selected-window',operations:['observe','replace_text','activate'],vision:false,qualified:false};
+  return {protocol:2,driver,scope:'selected-window',operations:['observe','replace_text','activate','set_checked','shortcut','verify_text','verify_checked'],vision:false,qualified:false};
 }
 async function verifyPack(root, platform = process.platform, arch = process.arch) {
   try {

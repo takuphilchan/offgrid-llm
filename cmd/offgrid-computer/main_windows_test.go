@@ -83,6 +83,9 @@ func TestNativeWorkerPrivatePipeConsentAndRealEdit(t *testing.T) {
 	if os.Getenv("OFFGRID_TEST_NATIVE_WINDOWS") != "1" {
 		t.Skip("opt-in owned native application test")
 	}
+	if err := computer.NativeWindowsTestEnvironment(); err != nil {
+		t.Skipf("production policy refuses this elevated or isolated runner: %v", err)
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
