@@ -40,7 +40,10 @@ async function verifyPack(root, platform = process.platform, arch = process.arch
     const manifest=JSON.parse(await fs.readFile(path.join(root,'manifest.json'),'utf8'));
     if (manifest.protocol!==1 || manifest.platform!==platform || manifest.arch!==arch || manifest.playwright!=='1.62.1') throw Error('pack_invalid');
     if (JSON.stringify(manifest.files)!==JSON.stringify(await entries(root))) throw Error('pack_invalid');
-    if (!manifest.files.some(f=>f.path==='managed.cjs') || !manifest.files.some(f=>f.path.startsWith('browsers/'))) throw Error('pack_invalid');
+    for (const required of ['managed.cjs','native-managed.cjs','session.mjs','native-session.mjs','approval-policy.mjs','browser.mjs','pack.cjs']) {
+      if (!manifest.files.some(file=>file.path===required)) throw Error('pack_invalid');
+    }
+    if (!manifest.files.some(file=>file.path.startsWith('browsers/'))) throw Error('pack_invalid');
     const hasNative=manifest.files.some(file=>file.path===`native/offgrid-computer${platform==='win32'?'.exe':''}`);
     if(hasNative && JSON.stringify(manifest.native)!==JSON.stringify(nativeProfile(platform))) throw Error('pack_invalid');
     if(!hasNative && manifest.native) throw Error('pack_invalid');

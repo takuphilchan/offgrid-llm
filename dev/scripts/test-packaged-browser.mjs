@@ -45,7 +45,7 @@ const server=createServer(async(req,res)=>{
   else if(url.pathname.endsWith('/companion/pair')){assert.equal(body.code,pairingCode);assert.equal(body.origin,session.origin);const first=!paired;paired=true;stopped=false;value={token:'packaged-fixture-token',session};next=first?{id:'read',kind:'browser_observe',arguments:{}}:null;}
   else if(url.pathname.includes('/companion/')){
    assert.equal(req.headers.authorization,'Bearer packaged-fixture-token');
-   if(url.pathname.endsWith('/poll')){value={action:next};next=null;}
+   if(url.pathname.endsWith('/poll')){value={action:next?{...next,authorization:'exact'}:next};next=null;}
    else if(url.pathname.endsWith('/reply')){
     assert.equal(body.error,undefined);const view=JSON.parse(body.result);replies.push(body.id);
     if(body.id==='read')next={id:'write',kind:'browser_fill',arguments:{observation_id:view.observation_id,element:view.elements.find(e=>e.label==='Report title').id,text:'Packaged desktop test'}};
@@ -82,24 +82,25 @@ try{
      return {response:1,checkboxChecked:false};
    };
  });
- await page.getByRole('checkbox',{name:'Use a browser · Preview'}).check();
- await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
+  await page.getByRole('button',{name:'Separate browser',exact:true}).click();
+  await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
  console.log('Requested local browser session');
  await completion;
  assert.equal(await page.locator('.computer-pair-code').count(),0);
- await page.getByRole('combobox',{name:'Select a paired browser'}).waitFor();
+  await page.getByRole('combobox',{name:'Target',exact:true}).waitFor();
  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:join(directory,'desktop-browser-ready.png'),fullPage:true});
- await page.locator('.computer-setup').getByRole('button',{name:'Stop browser',exact:true}).click();
+  await page.locator('.computer-setup').getByRole('button',{name:'Stop browser assistance',exact:true}).click();
  // The owned runtime allows 35 seconds of graceful shutdown plus 5 seconds
  // for its kill acknowledgement. A default 5-second matcher is not that
  // contract; still require confirmed Stop, never accept an error as success.
  await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled({timeout:45000});
- assert.equal((await page.evaluate(()=>window.electron.getComputerStatus())).state,'stopped');
- assert.deepEqual(replies,['read','write','select','check','save','verify','verify-options']);
- // Starting a second session rechecks the installed manifest after actual use.
- await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
- await page.getByRole('combobox',{name:'Select a paired browser'}).waitFor();
- await page.locator('.computer-setup').getByRole('button',{name:'Stop browser',exact:true}).click();
+  assert.equal((await page.evaluate(()=>window.electron.getComputerStatus())).state,'stopped');
+  assert.deepEqual(replies,['read','write','select','check','save','verify','verify-options']);
+  // Starting a second session rechecks the installed manifest after actual use.
+  await page.getByRole('button',{name:'Separate browser',exact:true}).click();
+  await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
+  await page.getByRole('combobox',{name:'Target',exact:true}).waitFor();
+  await page.locator('.computer-setup').getByRole('button',{name:'Stop browser assistance',exact:true}).click();
  await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled({timeout:45000});
  assert.equal((await page.evaluate(()=>window.electron.getComputerStatus())).state,'stopped');
  console.log(`PASS: packaged UI → native consent → private IPC → bundled Chromium → verified result → local Stop. Evidence: ${directory}`);

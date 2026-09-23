@@ -11,7 +11,7 @@ for(const [platform,arch,driver] of [['win32','x64','windows-uia'],['darwin','x6
     const root=await mkdtemp(join(tmpdir(),'offgrid-native-pack-'));
     t.after(()=>rm(root,{recursive:true,force:true}));
     await mkdir(join(root,'browsers'));await mkdir(join(root,'native'));
-    await writeFile(join(root,'managed.cjs'),'// test fixture');
+    for(const file of ['managed.cjs','native-managed.cjs','session.mjs','native-session.mjs','approval-policy.mjs','browser.mjs','pack.cjs'])await writeFile(join(root,file),'// test fixture');
     await writeFile(join(root,'browsers','fixture'),'not an executable');
     const worker=join(root,'native',platform==='win32'?'offgrid-computer.exe':'offgrid-computer');
     await writeFile(worker,'not an executable');
