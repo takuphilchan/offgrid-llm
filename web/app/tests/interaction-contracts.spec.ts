@@ -47,12 +47,17 @@ test('desktop application picker connects an existing window without browser-onl
      stopComputerBrowser:async()=>{state={state:'stopped',installed:true};return state;}};
  });
  await page.goto('/ui/#/agents');await page.getByRole('button',{name:'Application window',exact:true}).click();
+ await page.getByText('Advanced settings',{exact:true}).click();
+ await page.getByRole('combobox',{name:'Action approvals',exact:true}).selectOption('full_task');
+ const computerSetup=page.getByRole('group',{name:'Use this computer'});
+ await expect(computerSetup.getByText(/approval mode above applies within this scope/i).first()).toBeVisible();
+ await expect(computerSetup.getByText(/changes require approval/i)).toHaveCount(0);
  await expect(page.getByLabel('Website (HTTPS)',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Choose an application',exact:true}).click();
  await page.getByRole('combobox',{name:'Select a window',exact:true}).selectOption('opaque-window');
  connected=true;
  await page.getByRole('button',{name:'Connect application',exact:true}).click();
- await expect.poll(()=>page.evaluate(()=>(window as any).__nativeCalls)).toEqual([{workspace:'desktop-workspace'},{workspace:'desktop-workspace',target:'opaque-window',approvalMode:'scoped_changes'}]);
+ await expect.poll(()=>page.evaluate(()=>(window as any).__nativeCalls)).toEqual([{workspace:'desktop-workspace'},{workspace:'desktop-workspace',target:'opaque-window',approvalMode:'full_task'}]);
  await expect(page.locator('.computer-activity')).toContainText('Application connected');
  await expect(page.locator('.computer-activity').getByRole('button',{name:'Stop control'})).toBeEnabled();
  await expect(page.locator('.computer-pair-code')).toHaveCount(0);
@@ -71,6 +76,17 @@ test('native permission failures explain OS recovery without raw error codes',as
  await expect(page.getByText('computer_permission_denied',{exact:true})).toHaveCount(0);
 });
 
+test('native runtime failures never prescribe browser-package repair',async({page})=>{
+ await fixture(page);
+ await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'desktop-workspace'}}));
+ await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:[]}}));
+ await page.addInitScript(()=>{(window as any).electron={onThemeChange:()=>()=>{},getSystemTheme:async()=>'light',getComputerStatus:async()=>({state:'idle',installed:true}),startComputerBrowser:async()=>{},discoverComputerApps:async()=>{throw Error('computer_worker_unavailable');}};});
+ await page.goto('/ui/#/agents');await page.getByRole('button',{name:'Application window',exact:true}).click();
+ await page.getByRole('button',{name:'Choose an application',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('Application control could not connect');
+ await expect(page.getByRole('alert')).not.toContainText('Browser runtime unavailable');
+});
+
 test('desktop browser onboarding uses private IPC without terminal commands or pairing codes', async ({ page }) => {
  await fixture(page);
  await page.route('**/api/v2/system', r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'desktop-workspace'}}));
@@ -83,6 +99,7 @@ test('desktop browser onboarding uses private IPC without terminal commands or p
  });
  await page.goto('/ui/#/agents');
  await page.getByRole('button',{name:'Separate browser',exact:true}).click();
+ await page.getByText('Advanced settings',{exact:true}).click();
  await expect(page.getByRole('combobox',{name:'Action approvals',exact:true})).toHaveValue('scoped_changes');
  await expect(page.getByText('Automatically allow reversible work in the selected scope.',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled();

@@ -41,6 +41,7 @@ export function BrowserActivity({steps}:{steps:AgentStep[]}) {
     {step.tool_name==='browser_download' && result.verified===true && typeof artifact?.name==='string' && <p>{text.verified}: {String(artifact.name)} · {String(artifact.size)} bytes</p>}
     {step.tool_name==='browser_upload' && result.verified===true && typeof file?.name==='string' && <p>{text.verified}: {String(file.name)}</p>}
     {step.tool_name==='browser_capture' && result.captured===true && <p>{String(result.width)} × {String(result.height)}</p>}
+    {step.type==='rejected' && typeof result.message==='string' && <p role="status">{String(result.message)}</p>}
     <details><summary>{text.details}</summary><pre>{step.tool_result}</pre></details>
    </li>;
  })}</ol>;

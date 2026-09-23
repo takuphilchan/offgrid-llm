@@ -341,7 +341,7 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
             {!computerMode && <label><span>{text.agentRuntime.style}</span><select value={style} onChange={event => setStyle(event.target.value)}><option value="react">{text.agentRuntime.react}</option><option value="plan-execute">{text.agentRuntime.plan}</option><option value="cot">{text.agentRuntime.reasoning}</option></select></label>}
           </div>
           {unsaved && <p role="alert">{text.recovery.draftWarning}</p>}
-          {computerBlocked && <p className="task-guidance" role="status">{window.electron?.discoverComputerApps ? computerText.scope : computerText.desktop}</p>}
+          {computerBlocked && <p className="task-guidance" role="status">{computerTargetMode === 'app' ? computerText.connectHelp : computerText.browserHelp}</p>}
           <div className="agent-task-actions"><button className="primary-button" disabled={working || !!approval || !task.trim() || !model || computerBlocked}>{computerRunLabel}</button></div>
         </form>
         <section className="result-card">

@@ -127,7 +127,6 @@ export function ComputerSetup({ value, onChange, disabled, onAvailability, onRea
  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
  async function stop() { setBusy(true);setError('');try { const result=await stopBrowserAssistance();if(result.revoked){onChange('');setSessions([]);setTargets([]);setLaunchTargets([]);setAppTarget('');} if(result.error)setError(result.error==='lost'?taskText.lost:experience[result.error]); } finally {setBusy(false);} }
  return <fieldset className="computer-setup" aria-label={nativeText.title}><legend>{mode==='app'?nativeText.window:nativeText.browser}</legend>
-   {!sessions.length && <div className="field"><label htmlFor="computer-approval-mode">{approvalText.title}</label><select id="computer-approval-mode" aria-describedby="computer-approval-help" value={approvalMode} disabled={busy||disabled} onChange={event=>setApprovalMode(event.target.value as typeof approvalMode)}><option value="ask_every_time">{approvalText.ask}</option><option value="scoped_changes">{approvalText.scoped}</option><option value="full_task">{approvalText.full}</option></select><small id="computer-approval-help">{approvalMode==='ask_every_time'?approvalText.askHelp:approvalMode==='scoped_changes'?approvalText.scopedHelp:approvalText.fullHelp}</small></div>}
    {!sessions.length && nativeManaged && mode==='app' && <div className="browser-onboarding">
      <p>{nativeText.scope}</p>
      {host && !host.installed && <p role="alert">{experience.repair}</p>}
@@ -144,8 +143,9 @@ export function ComputerSetup({ value, onChange, disabled, onAvailability, onRea
      {host && !host.installed && <p role="alert">{experience.repair}</p>}
      {busy && <div className="button-row"><p role="status">{host?.state==='consent'?experience.waiting:experience.starting}</p><button type="button" className="secondary-button" onClick={()=>void stop()}>{experience.stop}</button></div>}
    </div> : <div className="browser-onboarding"><strong>{experience.desktop}</strong><p>{nativeText.desktop}</p><a className="secondary-button" href="offgrid://computer">{experience.openDesktop}</a></div>)}
-   <details><summary>{taskText.advanced}</summary><section aria-label={modelText.check}>
-     <p>{nativeText.scope}</p>
+   <details><summary>{taskText.advanced}</summary>
+     {!sessions.length && <div className="field"><label htmlFor="computer-approval-mode">{approvalText.title}</label><select id="computer-approval-mode" aria-describedby="computer-approval-help" value={approvalMode} disabled={busy||disabled} onChange={event=>setApprovalMode(event.target.value as typeof approvalMode)}><option value="ask_every_time">{approvalText.ask}</option><option value="scoped_changes">{approvalText.scoped}</option><option value="full_task">{approvalText.full}</option></select><small id="computer-approval-help">{approvalMode==='ask_every_time'?approvalText.askHelp:approvalMode==='scoped_changes'?approvalText.scopedHelp:approvalText.fullHelp}</small></div>}
+     <section aria-label={modelText.check}>
      <p role="status">{check?.vision?.passed || visionStatus === 'tested' ? visionCopy[locale][0] : visionStatus ? visionInstallCopy[locale] : visionCopy[locale][1]}</p>
      <p>{modelText.help}</p><strong>{model || '—'}</strong>
      <div className="button-row"><button type="button" className="secondary-button" disabled={!model || checking || disabled} onClick={() => void testModel()}>{checking ? modelText.checking : modelText.check}</button>
