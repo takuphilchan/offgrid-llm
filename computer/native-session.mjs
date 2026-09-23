@@ -148,6 +148,10 @@ export class NativeSession {
             const reply={id:action.id,result:'',error:code};
             this.journal.complete(action.id,reply);
             await this.companion('reply',reply);
+            // These failures happen before input dispatch and do not invalidate
+            // the selected target or transport. Keep the controller alive so one
+            // bad model proposal is not misreported as a lost host connection.
+            if(['computer_invalid_action','computer_observation_required','computer_stale_observation','computer_approval_invalid','computer_prohibited_action'].includes(code)) continue;
           }
           throw error;
         }

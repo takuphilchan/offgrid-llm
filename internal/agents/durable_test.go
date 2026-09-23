@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,11 +17,13 @@ import (
 )
 
 type runTestTools struct {
-	calls   atomic.Int32
-	fail    bool
-	before  func()
-	started chan struct{}
-	release chan struct{}
+	calls     atomic.Int32
+	fail      bool
+	before    func()
+	authorize func(string, json.RawMessage, ToolExecution) error
+	execute   func(string, json.RawMessage, ToolExecution) (string, error)
+	started   chan struct{}
+	release   chan struct{}
 }
 
 func TestShutdownPersistsInterruptedRunAndStopsAdmission(t *testing.T) {
@@ -59,7 +62,10 @@ func (t *runTestTools) GetTools() []api.Tool { return nil }
 func (t *runTestTools) Capability(name string) (capabilities.Descriptor, bool) {
 	return capabilities.Descriptor{Name: name, Source: "test", Kind: capabilities.Write, Risk: capabilities.RiskHigh}, true
 }
-func (t *runTestTools) Authorize(_ context.Context, _ string, _ json.RawMessage, grant ToolExecution) error {
+func (t *runTestTools) Authorize(_ context.Context, name string, args json.RawMessage, grant ToolExecution) error {
+	if t.authorize != nil {
+		return t.authorize(name, args, grant)
+	}
 	if !grant.Approved {
 		return capabilities.ErrApprovalRequired
 	}
@@ -69,6 +75,10 @@ func (t *runTestTools) Authorize(_ context.Context, _ string, _ json.RawMessage,
 	return nil
 }
 func (t *runTestTools) ExecuteWithPolicy(ctx context.Context, name string, args json.RawMessage, grant ToolExecution) (string, error) {
+	if t.execute != nil {
+		t.calls.Add(1)
+		return t.execute(name, args, grant)
+	}
 	if !grant.Approved {
 		return "", capabilities.ErrApprovalRequired
 	}
@@ -85,6 +95,50 @@ func (t *runTestTools) ExecuteWithPolicy(ctx context.Context, name string, args 
 		return "", errors.New("tool may have partially changed the target")
 	}
 	return "saved", nil
+}
+
+func TestComputerTaskRepairsSafePreDispatchValidationFailure(t *testing.T) {
+	tools := &runTestTools{}
+	tools.authorize = func(name string, _ json.RawMessage, _ ToolExecution) error {
+		if name == "computer_replace_text" {
+			return &ToolAuthorizationError{Code: "computer_invalid_action", Message: "The proposed control was invalid.", Cause: errors.New("invalid control")}
+		}
+		return nil
+	}
+	tools.execute = func(name string, _ json.RawMessage, _ ToolExecution) (string, error) {
+		if name != "computer_observe" {
+			t.Fatalf("unexpected tool execution: %s", name)
+		}
+		return `{"observation":{"id":"latest"},"elements":[]}`, nil
+	}
+	caller := func(_ context.Context, _ *Task, messages []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {
+		switch len(messages) {
+		case 2:
+			return runAnswer(api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{{Type: "function", Function: api.FunctionCall{Name: "computer_observe", Arguments: `{}`}}}}), nil
+		case 4:
+			return runAnswer(api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{{Type: "function", Function: api.FunctionCall{Name: "computer_replace_text", Arguments: `{"observation_id":"latest","element":"invented","text":"value"}`}}}}), nil
+		default:
+			if got := messages[len(messages)-1].StringContent(); !strings.Contains(got, "Call the observation tool again") {
+				t.Fatalf("safe recovery was not returned to the model: %s", got)
+			}
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: "Stopped without changing the application."}), nil
+		}
+	}
+	manager := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	runner := NewRunner(manager, tools, caller)
+	config := DefaultAgentConfig()
+	config.ComputerSession, config.ComputerDriver, config.ComputerApprovalMode = "session", "windows-uia", "full_task"
+	task, err := runner.Create("update the editor", "model", "alice", config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err = runner.Continue(context.Background(), task.ID, "alice", "start", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != TaskCompleted || tools.calls.Load() != 1 || len(task.Steps) != 2 || task.Steps[1].Type != "rejected" {
+		t.Fatalf("safe proposal was not repaired without dispatch: %+v calls=%d", task, tools.calls.Load())
+	}
 }
 func runAnswer(message api.ChatMessage) *api.ChatCompletionResponse {
 	reason := "stop"

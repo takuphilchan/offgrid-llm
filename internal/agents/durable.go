@@ -329,6 +329,20 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 				if !errors.Is(err, capabilities.ErrApprovalRequired) {
 					var safe *ToolAuthorizationError
 					if errors.As(err, &safe) {
+						if task.Config.ComputerSession != "" && (safe.Code == "computer_invalid_action" || safe.Code == "computer_stale_observation") {
+							// No input was dispatched: authorization rejected the proposal.
+							// Let the model re-observe and repair opaque IDs instead of
+							// turning a safe validation failure into a broken host session.
+							result, _ := json.Marshal(map[string]string{"error": safe.Code, "message": safe.Message, "recovery": "Call the observation tool again and use only IDs from its newest result."})
+							cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(result)})
+							cp.Calls = cp.Calls[1:]
+							task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "rejected", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: string(result), Timestamp: time.Now().UTC()})
+							setRunPhase(task, "repairing_tool", call.Function.Name)
+							if err := r.persist(task); err != nil {
+								return nil, err
+							}
+							continue
+						}
 						task.ErrorCode = safe.Code
 						return r.fail(task, safe.Message)
 					}

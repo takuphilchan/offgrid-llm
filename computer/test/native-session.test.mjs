@@ -115,19 +115,20 @@ test('native queue replays a persisted reply without repeating input',async()=>{
   const {worker,target,action}=fixture();const directory=await mkdtemp(join(tmpdir(),'offgrid-native-replay-'));
   const session=new NativeSession({service:'http://127.0.0.1:11611',directory,worker});
   const replies=[];let polls=0;
+  const invalid=action('shell',{command:'test'}, {id:'task:invalid'});
   const read=action('computer_observe',{}, {id:'task:observe'});
   const edit=action('computer_replace_text',{observation_id:'observation-1',element:'field',text:'Hello'}, {id:'task:edit'});
   session.request=async(path,body)=>{
     if(path.endsWith('/system'))return {product:'offgrid',api_version:2,workspace_id:'workspace',capabilities:['native-computer-sessions-v2']};
     if(path.endsWith('/pair'))return {session:{id:'session',target:target.identity,driver:target.identity.driver},token:'b'.repeat(64)};
-    if(path.endsWith('/poll')) { if(polls===3){await session.stop();return {};}return {action:[read,edit,edit][polls++]}; }
+    if(path.endsWith('/poll')) { if(polls===4){await session.stop();return {};}return {action:[invalid,read,edit,edit][polls++]}; }
     if(path.endsWith('/reply')) {replies.push(body);return {accepted:true};}
     throw Error('unexpected request');
   };
   try {
     await session.start({code:'a'.repeat(64),workspace:'workspace',target});await session.running;
     assert.equal(worker.calls.filter(c=>c.kind==='execute').length,1);
-    assert.equal(replies.length,3);assert.deepEqual(replies[1],replies[2]);assert.equal(session.token,'');
+    assert.equal(replies.length,4);assert.equal(replies[0].error,'computer_invalid_action');assert.deepEqual(replies[2],replies[3]);assert.equal(session.token,'');
   } finally {await session.stop();await rm(directory,{recursive:true,force:true});}
 });
 

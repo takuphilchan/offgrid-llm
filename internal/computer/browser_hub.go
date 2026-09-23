@@ -384,21 +384,35 @@ func (h *BrowserHub) ExecuteAuthorized(ctx context.Context, actor, id, run, call
 	for {
 		select {
 		case reply := <-s.replies:
-			if reply.ID != actionID || reply.Error != "" {
+			if reply.ID != actionID {
 				h.Stop(actor)
-				if reply.ID == actionID && s.Target != nil {
-					switch reply.Error {
-					case "computer_stale_observation", "computer_stale_target":
-						return "", fmt.Errorf("Selected application changed or its observation expired. Inspect it again before proposing new work: %w", ErrStaleObservation)
-					case "computer_approval_invalid":
-						return "", fmt.Errorf("Local approval was declined, expired, or did not match the requested change: %w", ErrControlApproval)
-					case "computer_scope_violation":
-						return "", fmt.Errorf("The selected application or task scope could not be verified: %w", ErrControlScope)
-					case "computer_prohibited_action":
-						return "", ErrProhibitedAction
-					}
-				}
 				return "", ErrUncertain
+			}
+			if reply.Error != "" {
+				// A reply proves the companion is still connected. Validation,
+				// policy, and stale-observation failures happen before native input
+				// dispatch and must not be presented as a lost host or tear down an
+				// otherwise healthy controller. Unknown and scope-breaking failures
+				// remain terminal because their outcome cannot be established here.
+				switch reply.Error {
+				case "computer_stale_observation":
+					return "", fmt.Errorf("Selected application changed or its observation expired. Inspect it again before proposing new work: %w", ErrStaleObservation)
+				case "computer_invalid_action", "computer_observation_required":
+					return "", fmt.Errorf("The proposed control or action was invalid: %w", ErrInvalidControl)
+				case "computer_approval_invalid":
+					return "", fmt.Errorf("Local approval was declined, expired, or did not match the requested change: %w", ErrControlApproval)
+				case "computer_prohibited_action":
+					return "", ErrProhibitedAction
+				case "computer_stale_target":
+					h.Stop(actor)
+					return "", fmt.Errorf("Selected application changed or its observation expired. Inspect it again before proposing new work: %w", ErrStaleObservation)
+				case "computer_scope_violation":
+					h.Stop(actor)
+					return "", fmt.Errorf("The selected application or task scope could not be verified: %w", ErrControlScope)
+				default:
+					h.Stop(actor)
+					return "", ErrUncertain
+				}
 			}
 			return reply.Result, nil
 		case <-ctx.Done():

@@ -181,6 +181,42 @@ func TestBrowserCancellationLeavesUncertainOutcome(t *testing.T) {
 	}
 }
 
+func TestNativeValidationReplyDoesNotMasqueradeAsDisconnect(t *testing.T) {
+	h := NewBrowserHub()
+	code, err := h.PairCode("alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := TargetIdentity{ID: "window", OSSession: "desktop", ProcessGeneration: "process", Surface: "surface", Driver: "windows-uia"}
+	session, token, err := h.PairNative(code, "Editor", target, ControlProtocolVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, executeErr := h.ExecuteAuthorized(context.Background(), "alice", session.ID, "run", "prepare", "computer_prepare", json.RawMessage(`{}`), "prepare")
+		done <- executeErr
+	}()
+	var action *BrowserAction
+	deadline := time.Now().Add(time.Second)
+	for action == nil && time.Now().Before(deadline) {
+		action, _ = h.Poll(token)
+		time.Sleep(time.Millisecond)
+	}
+	if action == nil {
+		t.Fatal("native action was not delivered")
+	}
+	if err := h.Reply(token, BrowserReply{ID: action.ID, Error: "computer_invalid_action"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, ErrInvalidControl) {
+		t.Fatalf("validation error was reported as %v", err)
+	}
+	if got := h.List("alice"); len(got) != 1 {
+		t.Fatal("safe validation failure stopped the native session")
+	}
+}
+
 func TestBrowserSessionReservationAndPresentation(t *testing.T) {
 	h, s, _ := paired(t)
 	if got := h.List("alice"); len(got) != 1 || got[0].State != "ready" {
