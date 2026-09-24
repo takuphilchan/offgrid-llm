@@ -590,7 +590,80 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /api/v2/jobs:
+    get:
+      operationId: listDurableJobs
+      responses:
+        '200':
+          description: Owner-scoped task history, including linked child tasks
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AgentTask' } }
+    post:
+      operationId: submitDurableTask
+      description: Saves an owner-scoped task before execution. Identical actor/request ID retries return the original task; conflicting reuse returns 409. Computer access is requested as a durable interruption, not a submission prerequisite.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [prompt, model, request_id]
+              properties:
+                prompt: { type: string, minLength: 1, maxLength: 32000 }
+                model: { type: string }
+                request_id: { type: string, minLength: 8, maxLength: 128 }
+                style: { type: string, enum: [react, cot, plan-execute] }
+                max_iterations: { type: integer, minimum: 1, maximum: 50 }
+      responses:
+        '202':
+          description: Persisted task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/jobs/{id}/input:
+    post:
+      operationId: resolveDurableTaskAccess
+      description: Attaches independently consented, owner-scoped host access to the same saved task. Never grants host permission, changes an approval policy, or repeats uncertain execution. Identical input/session retries are idempotent.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [input_id, computer_session]
+              properties:
+                input_id: { type: string }
+                computer_session: { type: string }
+      responses:
+        '202':
+          description: Persisted task resumed or previously resolved snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
   /api/v2/jobs/{id}:
+    delete:
+      operationId: deleteDurableJob
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Terminal history removed; referenced children remain protected until the parent is removed
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
     get:
       operationId: getDurableJobSnapshot
       description: Reads the existing owner-scoped agent task, including the latest durable event cursor. No separate task history is created.
@@ -603,6 +676,66 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AgentRunResponse' }
         '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/jobs/{id}/export:
+    get:
+      operationId: exportDurableJob
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Owner-scoped evidence snapshot; excludes private checkpoints and screenshot bytes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResponse' }
+  /api/v2/jobs/{id}/artifact:
+    get:
+      operationId: downloadTaskArtifact
+      description: Checks current task ownership, a committed artifact reference, size and SHA256 before delivering an attachment. Digest knowledge alone does not grant access.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: digest, in: query, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+      responses:
+        '200':
+          description: Verified artifact bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/jobs/{id}/{action}:
+    post:
+      operationId: commandDurableJob
+      description: All clients share the durable runner. Pause settles or labels in-flight effects uncertain. Takeover revokes the host session. Steering invalidates unexecuted proposals, is idempotent by request_id, and requires explicit resume. Reconnect requests fresh local consent, never an automatic retry.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [approve, deny, cancel, pause, resume, takeover, steer, reconnect, reconcile] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                approval_id: { type: string }
+                call_id: { type: string }
+                result: { type: string, maxLength: 16000 }
+                request_id: { type: string, minLength: 8, maxLength: 128 }
+                instruction: { type: string, maxLength: 16000 }
+                mode: { type: string, enum: [app, browser] }
+                target: { type: string, maxLength: 256 }
+                url: { type: string, maxLength: 2048 }
+                async: { type: boolean }
+      responses:
+        '202':
+          description: Persisted task state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
   /api/v2/jobs/{id}/events:
     get:
@@ -707,7 +840,7 @@ paths:
     get:
       operationId: listMCPServers
       responses:
-        '200': { description: Active and saved MCP connections, including disconnected connections }
+        '200': { description: 'Active and saved MCP connections, including disconnected connections' }
     post:
       operationId: connectMCPServer
       requestBody:
@@ -895,6 +1028,32 @@ paths:
                         remaining_actions: { type: integer }
                         state: { type: string, enum: [ready, in_use, finished, exhausted] }
                         run_id: { type: string }
+  /api/v2/computer/sessions/stop:
+    post:
+      operationId: stopComputerSession
+      description: Revoke only the specified session owned by the requesting administrator. Idempotent; unknown or foreign IDs do not revoke any other session. Host shutdown is acknowledged independently; dispatched effects are not undone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [session_id]
+              properties:
+                session_id: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: This actor's authority for the specified session is revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [revoked] }
+        '400': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
   /api/v2/computer/model-check:
     post:
       operationId: checkComputerModel
@@ -1451,10 +1610,93 @@ components:
         executing_call: { type: string }
         snapshot_sha256: { type: string }
         recorded_at: { type: string, format: date-time }
+    AgentInputRequest:
+      type: object
+      required: [id, call_id, kind, mode, target]
+      properties:
+        id: { type: string }
+        call_id: { type: string }
+        kind: { type: string, enum: [computer] }
+        mode: { type: string, enum: [app, browser] }
+        target: { type: string, description: Model-proposed label only; never a host identity or consent grant. }
+        url: { type: string, description: Proposed HTTPS address for local review. }
+        previous_session: { type: string, description: Revoked session identity; never reusable authority. }
+    TaskPlanItem:
+      type: object
+      required: [id, title, state]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        state: { type: string, enum: [pending, active, done] }
+        evidence_steps: { type: array, items: { type: integer } }
+    TaskChild:
+      type: object
+      required: [id, spec]
+      properties:
+        id: { type: string }
+        spec:
+          type: object
+          required: [key, goal, depends_on, tools]
+          properties:
+            key: { type: string }
+            goal: { type: string }
+            depends_on: { type: array, items: { type: string } }
+            tools: { type: array, items: { type: string } }
+    TaskContext:
+      type: object
+      required: [window, estimated_tokens, compactions, archived_messages]
+      properties:
+        window: { type: integer }
+        estimated_tokens: { type: integer, description: Conservative byte-based estimate, not tokenizer output }
+        measured_prompt_tokens: { type: integer, description: Last runtime-reported prompt usage }
+        compactions: { type: integer }
+        archived_messages: { type: integer }
     AgentRunResponse:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        prompt: { type: string, description: Included in the owner-scoped job GET only, not the event stream. }
+        model: { type: string }
+        error_code: { type: string }
+        artifacts:
+          type: array
+          items:
+            type: object
+            required: [name, format, sha256, bytes, verified, check]
+            properties:
+              name: { type: string }
+              format: { type: string, enum: [text, markdown, json, csv] }
+              sha256: { type: string }
+              bytes: { type: integer }
+              rows: { type: integer }
+              columns: { type: integer }
+              verified: { type: boolean }
+              check: { type: string, enum: [stored_bytes_sha256_and_format] }
+        parent_id: { type: string }
+        children: { type: [array, 'null'], items: { $ref: '#/components/schemas/TaskChild' } }
+        can_steer: { type: boolean, description: Saved state permits a follow-up instruction. Completed child history does not block steering; active delegation and uncertain effects do. Rechecked at execution. }
+        plan: { type: [array, 'null'], items: { $ref: '#/components/schemas/TaskPlanItem' } }
+        context:
+          anyOf:
+            - { $ref: '#/components/schemas/TaskContext' }
+            - { type: 'null' }
+        last_access:
+          anyOf:
+            - { $ref: '#/components/schemas/AgentInputRequest' }
+            - { type: 'null' }
+        instructions:
+          type: [array, 'null']
+          items:
+            type: object
+            required: [request_id, text, at]
+            properties:
+              request_id: { type: string }
+              text: { type: string }
+              at: { type: string, format: date-time }
+        pending_input:
+          anyOf:
+            - { $ref: '#/components/schemas/AgentInputRequest' }
+            - { type: 'null' }
         event_cursor: { type: string, pattern: '^[0-9]{1,19}$', description: Persisted activity cursor. Only advance it after applying the snapshot. }
         computer_session: { type: string }
         computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task] }
@@ -1463,7 +1705,7 @@ components:
         output: { type: string }
         task_id: { type: string }
         run_id: { type: string }
-        status: { type: string, enum: [pending, running, waiting_for_approval, interrupted, uncertain, completed, failed, cancelled] }
+        status: { type: string, enum: [pending, running, waiting_for_approval, waiting_for_input, waiting_for_children, interrupted, uncertain, completed, failed, cancelled] }
         error: { type: string }
         pending_approval:
           anyOf:
@@ -1489,6 +1731,7 @@ components:
       properties:
         deletable: { type: boolean, description: Whether this actor may remove this terminal run or interrupted record without recovery state; the server rechecks ownership and execution state at deletion time. }
         id: { type: string }
+        parent_id: { type: string }
         prompt: { type: string }
         status: { type: string }
         model: { type: string }

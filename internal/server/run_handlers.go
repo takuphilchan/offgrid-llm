@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/artifacts"
 	"github.com/takuphilchan/offgrid-llm/internal/runs"
 )
@@ -22,6 +23,7 @@ type runSummary struct {
 	StartedAt  time.Time      `json:"started_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	EventCount int            `json:"event_count"`
+	Deletable  bool           `json:"deletable"`
 	Data       map[string]any `json:"data,omitempty"`
 }
 
@@ -108,6 +110,11 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 	}
 	byID := make(map[string]*runSummary)
 	for _, event := range events {
+		// Companion audit notifications are not executable jobs and must not be
+		// presented as a perpetually running task in the user's activity list.
+		if event.RunID == "computer-system" {
+			continue
+		}
 		if s.agentManager != nil && s.agentManager.IsDeleted(event.RunID) {
 			continue
 		}
@@ -152,6 +159,7 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 				byID[task.ID] = summary
 			}
 			summary.Status = string(task.Status)
+			summary.Deletable = s.removableTask(task, s.agentActor(r))
 			summary.Data = map[string]any{"prompt": task.Prompt, "model": task.Model, "actor": task.Actor}
 			if task.CompletedAt != nil {
 				summary.UpdatedAt = *task.CompletedAt
@@ -176,6 +184,10 @@ func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	digest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/artifacts/"), "/")
+	if !s.ownsTaskArtifact(s.agentActor(r), digest) {
+		writeJobReadError(w, agents.ErrTaskNotFound)
+		return
+	}
 	reader, metadata, err := s.artifactStore.Open(digest)
 	if err != nil {
 		http.Error(w, `{"error":"artifact not found"}`, http.StatusNotFound)
@@ -187,6 +199,7 @@ func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", `"sha256:`+metadata.Digest+`"`)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Disposition", `attachment; filename="artifact"`)
 	w.Header().Set("Content-Length", strconv.FormatInt(metadata.Size, 10))
 	_, _ = io.Copy(w, reader)
 }

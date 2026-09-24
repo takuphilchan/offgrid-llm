@@ -12,6 +12,7 @@ import '@fontsource/ibm-plex-mono/latin-400.css';
 import './styles.css';
 import './workspace.css';
 import './controls.css';
+import './features/agents/task-workspace.css';
 
 async function start() {
   // File-origin startup and HTTP renderer share native appearance preferences.

@@ -127,7 +127,7 @@ test('Activity presents results with optional technical details', async ({ page 
   await page.route('**/v1/runs', r => r.fulfill({ json: { runs: [{ id: 'report', status: 'completed', updated_at: '2026-09-19T10:00:00Z', event_count: 1, data: { prompt: 'Prepare report' } }] } }));
   await page.route('**/v1/runs/report/events', r => r.fulfill({ json: { events: [{ id: 'e1', type: 'agent.finished', sequence: 1, time: '2026-09-19T10:00:00Z', data: { output: '## Findings\n\nUseful result', diagnostic: 'raw payload' } }] } }));
   await page.goto('/ui/#/activity');
-  await page.getByRole('button', { name: /Prepare report/ }).click();
+  await page.getByRole('button', { name: /^Prepare report/ }).click();
   await expect(page.locator('.event-label')).toHaveText('Completed');
   await expect(page.locator('.event-list h2')).toHaveText('Findings');
   await expect(page.locator('.event-list pre')).toBeHidden();

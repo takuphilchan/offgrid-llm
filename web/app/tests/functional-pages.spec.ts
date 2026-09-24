@@ -9,6 +9,9 @@ const catalogEmbedding = {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
+  await page.route('**/api/v2/**', route => route.fulfill({ json: new URL(route.request().url()).pathname === '/api/v2/system'
+    ? {product:'offgrid',version:'test',api_version:2,workspace_id:'functional-fixture',capabilities:['task-first-agents-v2']}
+    : {} }));
 });
 
 test('knowledge setup downloads one stable model and enables RAG', async ({ page }) => {
@@ -77,6 +80,7 @@ test('agents page exposes runtime tools, durable tasks, MCP, and computer status
     await route.fulfill({ json: { total: 1, enabled_count: toolEnabled ? 1 : 0, tools: [{ name: 'calculator', description: 'Calculate an expression', source: 'builtin', enabled: toolEnabled, capability: { name: 'calculator', namespace: 'tool', source: 'builtin', kind: 'execute', risk: 'low' } }] } });
   });
   await page.route('**/v1/agents/tasks', route => route.fulfill({ json: [{ id: 'run-1', prompt: 'Summarize the report', status: 'completed', created_at: new Date().toISOString() }] }));
+  await page.route('**/api/v2/jobs', route => route.fulfill({ json: [{ id: 'run-' + 'a'.repeat(32), prompt: 'Summarize the report', status: 'completed', created_at: new Date().toISOString() }] }));
   await page.route('**/v1/agents/mcp', route => route.fulfill({ json: { servers: [{ name: 'local-docs', url: 'http://127.0.0.1:3000/mcp', transport: 'http', tools: 2, status: 'connected' }] } }));
   await page.route('**/api/v2/computer/status', route => route.fulfill({ json: { available: false, emergency_stop: false, active_sessions: 0 } }));
   await page.route('**/v1/integrations?*', route => route.fulfill({ json: { provider: 'offgrid', base_url: 'http://127.0.0.1:11611/v1', integrations: [{ id: 'hermes', provider_id: 'offgrid', plugin_id: 'offgrid', name: 'Hermes Agent', description: 'Private OffGrid inference', transport: 'openai-chat-completions', documentation_url: 'https://example.com', minimum_context: 64000, recommended_context: 65536, requires_tools: true, capabilities: ['chat', 'tools'], ready: false, status: 'needs_configuration', model_id: 'chat-model', context_window: 8192, warnings: ['A larger context window is recommended.'] }] } }));
@@ -84,17 +88,17 @@ test('agents page exposes runtime tools, durable tasks, MCP, and computer status
   await page.goto('/ui/#/agents');
   await expect(page.getByText('Summarize the report')).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agents-workspace.png'), fullPage: true });
-  await page.getByRole('tab', { name: 'Permissions' }).click();
+  await page.getByRole('link', { name: 'Available tools', exact: true }).click();
   await expect(page.getByText('1/1 enabled').first()).toBeVisible();
-  await expect(page.getByText('Browser not paired')).toBeVisible();
+  await expect(page.locator('.agent-metrics')).toHaveCount(0);
   await expect(page).toHaveURL(/#\/agents\/tools$/);
   await expect(page.getByText('Calculate an expression')).toBeVisible();
-  await page.getByRole('tab', { name: 'Connections' }).click();
+  await page.getByRole('link', { name: 'Connections', exact: true }).click();
   await expect(page).toHaveURL(/#\/agents\/connections$/);
   await expect(page.getByText('local-docs')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Hermes Agent' })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('tab', { name: 'Connections' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('link', { name: 'Connections', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('local-docs')).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agent-connections.png'), fullPage: true });
 });

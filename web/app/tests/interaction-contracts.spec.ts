@@ -373,7 +373,7 @@ test('history loading, failure and successful recovery stay distinct', async ({ 
 
 test('statistics failure does not hide available run history', async ({ page }) => {
   const state = await fixture(page); state.failStats = true;
-  await page.goto('/ui/#/activity'); await page.getByRole('button', { name: /Saved run/ }).click();
+  await page.goto('/ui/#/activity'); await page.getByRole('button', { name: /^Saved run/ }).click();
   await expect(page.locator('.event-list')).toContainText('No events recorded');
 });
 
@@ -384,7 +384,7 @@ test('connector drafts and selected Activity survive navigation without refetchi
   await page.locator('.primary-nav a[href="#/agents"]').click(); await page.getByRole('tab', { name: 'Connections' }).click();
   await expect(page.locator('.connector-panel input').nth(0)).toHaveValue('Private connector');
   await page.locator('.primary-nav a[href="#/models"]').click(); await expect(page.getByLabel('Model name or publisher', { exact: true })).toHaveValue('Research model');
-  await page.locator('.primary-nav a[href="#/activity"]').click(); await page.getByRole('button', { name: /Saved run/ }).click();
+  await page.locator('.primary-nav a[href="#/activity"]').click(); await page.getByRole('button', { name: /^Saved run/ }).click();
   await page.locator('.primary-nav a[href="#/models"]').click(); await page.locator('.primary-nav a[href="#/activity"]').click();
   await expect(page.locator('.run-row.selected')).toContainText('Saved run');
 });

@@ -6,7 +6,7 @@ const { pathToFileURL } = require('node:url');
 const { isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
 const { DesktopRuntime } = require('./runtime');
 const { normalize: normalizePresentation, readCopy } = require('./presentation');
-const { ComputerRuntime, isComputerLink } = require('./computer-runtime');
+const { ComputerRuntime, parseComputerLink } = require('./computer-runtime');
 const { createApplicationLauncher } = require('./application-launcher');
 // Verification code belongs to the application, not the unverified payload.
 const { verifyPack: verifyComputerPack } = require(app.isPackaged ? './computer-pack/pack.cjs' : '../computer/pack.cjs');
@@ -47,7 +47,7 @@ let shutdownComplete = false;
 let saveTimer;
 let saveQueue = Promise.resolve();
 let windowCreation;
-let computerRequested = process.argv.some(isComputerLink);
+let computerRequested = process.argv.map(parseComputerLink).find(Boolean);
 const computerRoot = app.isPackaged ? path.join(process.resourcesPath,'computer') : path.join(__dirname,'../build/computer-runtime',`${{win32:'win',darwin:'mac',linux:'linux'}[process.platform]}-${process.arch}`);
 let computerCopy;
 const computerText = () => computerCopy?.[presentation.locale] ?? computerCopy?.en;
@@ -92,7 +92,7 @@ async function selectComputerUpload() {
   return {id:grant.id,name:grant.name,size:grant.size,sha256:grant.sha256};
 }
 computer.on('status',()=>{ if (app.isReady() && presentationCopy) updateMenus(); });
-app.on('open-url',(event,url)=>{ event.preventDefault(); if(isComputerLink(url)){computerRequested=true;if(app.isReady()){showWindow();showWorkspace();}} });
+app.on('open-url',(event,url)=>{ event.preventDefault(); const request=parseComputerLink(url);if(request){computerRequested=request;if(app.isReady()){showWindow();showWorkspace();}} });
 const statePath = path.join(configRoot, 'window-state.json');
 const presentationPath = path.join(configRoot, 'desktop-presentation.json');
 let presentation = normalizePresentation({});
@@ -143,7 +143,7 @@ function showWorkspace() {
   if (!mainWindow || mainWindow.isDestroyed() || runtime.state.state !== 'ready' || quitting) return;
   const current = mainWindow.webContents.getURL();
   if (current.startsWith(LOADING_URL) || computerRequested) {
-    const suffix=computerRequested ? '#/agents' : ''; computerRequested=false;
+    const suffix=computerRequested ? (computerRequested.task ? `#/agents/task/${computerRequested.task}` : '#/agents') : ''; computerRequested=undefined;
     void mainWindow.loadURL(runtime.url + '/ui/'+suffix).catch(() => {});
   }
 }
@@ -271,6 +271,7 @@ handleTrustedIPC('computer-native-start', request => computer.startNative(reques
 handleTrustedIPC('computer-launchable-apps', () => ({ state: 'selecting', targets: applicationLauncher.discover() }));
 handleTrustedIPC('computer-launch-app', request => applicationLauncher.launch(request?.id));
 handleTrustedIPC('computer-stop', () => computer.stop());
+handleTrustedIPC('computer-stop-access', request => computer.stopAccess(request));
 handleTrustedIPC('get-presentation', () => presentationSnapshot());
 handleTrustedIPC('set-presentation', value => {
   // Only appearance/language preferences: no caller-provided file paths or commands.
@@ -313,7 +314,7 @@ nativeTheme.on('updated', () => {
 });
 app.on('second-instance', (_event, _argv, _directory, request) => {
   if (request?.quitForInstall === true) app.quit();
-  else { if(_argv.some(isComputerLink)) computerRequested=true; showWindow(); showWorkspace(); }
+  else { const request=_argv.map(parseComputerLink).find(Boolean);if(request)computerRequested=request; showWindow(); showWorkspace(); }
 });
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.offgrid.llm.desktop');

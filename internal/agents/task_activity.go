@@ -248,7 +248,7 @@ func validateLegacyTaskEvents(db *sql.DB) error {
 			return err
 		}
 		timestamp, err := time.Parse(time.RFC3339Nano, recorded)
-		if err != nil || timestamp.IsZero() || sequence <= 0 || validateStoredTask(&Task{ID: id, Status: TaskStatus(status)}) != nil {
+		if err != nil || timestamp.IsZero() || sequence <= 0 || validateTaskIdentityStatus(&Task{ID: id, Status: TaskStatus(status)}) != nil {
 			return fmt.Errorf("invalid legacy agent event %d; repair or restore before migration", sequence)
 		}
 	}
@@ -311,7 +311,7 @@ func validateTaskActivityDatabase(db *sql.DB) error {
 			return err
 		}
 		var event TaskActivity
-		if json.Unmarshal(payload, &event) != nil || sequence <= 0 || event.TaskID != taskID || string(event.Status) != status || event.RecordedAt.IsZero() || event.RecordedAt.Format(time.RFC3339Nano) != recorded || event.CompletedSteps < 0 || validateStoredTask(&Task{ID: taskID, Status: event.Status}) != nil {
+		if json.Unmarshal(payload, &event) != nil || sequence <= 0 || event.TaskID != taskID || string(event.Status) != status || event.RecordedAt.IsZero() || event.RecordedAt.Format(time.RFC3339Nano) != recorded || event.CompletedSteps < 0 || validateTaskIdentityStatus(&Task{ID: taskID, Status: event.Status}) != nil {
 			return fmt.Errorf("invalid agent activity record %d; restore or repair before startup", sequence)
 		}
 		digest, err := hex.DecodeString(event.SnapshotSHA256)

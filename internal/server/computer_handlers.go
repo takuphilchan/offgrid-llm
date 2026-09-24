@@ -1,10 +1,36 @@
 package server
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
 )
+
+// Idempotent, actor-scoped revocation. Unlike emergency stop this cannot affect
+// another session, including one acquired while a setup panel was open.
+func (s *Server) handleComputerSessionStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJobError(w, 405, "method_not_allowed", "Use POST to revoke a computer session.", false)
+		return
+	}
+	var req struct {
+		Session string `json:"session_id"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || req.Session == "" || len(req.Session) > 128 {
+		writeJobError(w, 400, "invalid_computer_session", "Provide the computer session to revoke.", false)
+		return
+	}
+	if s.browserHub == nil {
+		writeJobError(w, 503, "computer_unavailable", "Computer session service is unavailable.", true)
+		return
+	}
+	s.browserHub.StopSession(s.agentActor(r), req.Session)
+	writeJSON(w, 200, map[string]string{"status": "revoked"})
+}
 
 func (s *Server) handleComputerStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

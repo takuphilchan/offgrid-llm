@@ -18,6 +18,7 @@ const (
 	TaskPending     TaskStatus = "pending"
 	TaskRunning     TaskStatus = "running"
 	TaskWaiting     TaskStatus = "waiting_for_approval"
+	TaskInput       TaskStatus = "waiting_for_input"
 	TaskCompleted   TaskStatus = "completed"
 	TaskFailed      TaskStatus = "failed"
 	TaskCancelled   TaskStatus = "cancelled"
@@ -27,24 +28,38 @@ const (
 
 // Task represents an agent task
 type Task struct {
-	ID                     string       `json:"id"`
-	Prompt                 string       `json:"prompt"`
-	Status                 TaskStatus   `json:"status"`
-	Result                 string       `json:"result,omitempty"`
-	Error                  string       `json:"error,omitempty"`
-	ErrorCode              string       `json:"error_code,omitempty"`
-	Steps                  []Step       `json:"steps,omitempty"`
-	Config                 AgentConfig  `json:"config"`
-	CreatedAt              time.Time    `json:"created_at"`
-	StartedAt              *time.Time   `json:"started_at,omitempty"`
-	CompletedAt            *time.Time   `json:"completed_at,omitempty"`
-	DeletedAt              *time.Time   `json:"deleted_at,omitempty"`
-	Model                  string       `json:"model,omitempty"`
-	Actor                  string       `json:"actor,omitempty"`
-	ComputerSessionExpired bool         `json:"computer_session_expired,omitempty"`
-	PendingApproval        *Approval    `json:"pending_approval,omitempty"`
-	Checkpoint             *Checkpoint  `json:"checkpoint,omitempty"`
-	Progress               *RunProgress `json:"progress,omitempty"`
+	SchedulerReady         bool              `json:"scheduler_ready,omitempty"`
+	ParentID               string            `json:"parent_id,omitempty"`
+	ChildHistory           []ChildLink       `json:"children,omitempty"`
+	Delegation             *Delegation       `json:"delegation,omitempty"`
+	DependenciesAttached   bool              `json:"dependencies_attached,omitempty"`
+	Plan                   []PlanItem        `json:"plan,omitempty"`
+	Context                *ContextState     `json:"context,omitempty"`
+	ContextArchive         []ArchivedContext `json:"context_archive,omitempty"`
+	Instructions           []Instruction     `json:"instructions,omitempty"`
+	LastAccess             *InputRequest     `json:"last_access,omitempty"`
+	ID                     string            `json:"id"`
+	Prompt                 string            `json:"prompt"`
+	Status                 TaskStatus        `json:"status"`
+	Result                 string            `json:"result,omitempty"`
+	Error                  string            `json:"error,omitempty"`
+	ErrorCode              string            `json:"error_code,omitempty"`
+	Steps                  []Step            `json:"steps,omitempty"`
+	Config                 AgentConfig       `json:"config"`
+	CreatedAt              time.Time         `json:"created_at"`
+	StartedAt              *time.Time        `json:"started_at,omitempty"`
+	CompletedAt            *time.Time        `json:"completed_at,omitempty"`
+	DeletedAt              *time.Time        `json:"deleted_at,omitempty"`
+	Model                  string            `json:"model,omitempty"`
+	Actor                  string            `json:"actor,omitempty"`
+	ComputerSessionExpired bool              `json:"computer_session_expired,omitempty"`
+	PendingApproval        *Approval         `json:"pending_approval,omitempty"`
+	PendingInput           *InputRequest     `json:"pending_input,omitempty"`
+	ResolvedInputID        string            `json:"resolved_input_id,omitempty"`
+	RequestID              string            `json:"request_id,omitempty"`
+	RequestDigest          string            `json:"request_digest,omitempty"`
+	Checkpoint             *Checkpoint       `json:"checkpoint,omitempty"`
+	Progress               *RunProgress      `json:"progress,omitempty"`
 	cancel                 context.CancelFunc
 }
 
@@ -357,8 +372,16 @@ func (m *Manager) deleteTaskLocked(id string) error {
 	if !CanDeleteTask(task) {
 		return ErrRunConflict
 	}
+	if parent := m.tasks[task.ParentID]; task.ParentID != "" && parent != nil && parent.DeletedAt == nil {
+		return ErrRunConflict
+	}
+	for _, link := range task.ChildHistory {
+		if child := m.tasks[link.ID]; child != nil && child.DeletedAt == nil && !CanDeleteTask(child) {
+			return ErrRunConflict
+		}
+	}
 	now := time.Now().UTC()
-	tombstone := &Task{ID: task.ID, Actor: task.Actor, Status: task.Status, CreatedAt: task.CreatedAt, DeletedAt: &now}
+	tombstone := &Task{ID: task.ID, Actor: task.Actor, Status: task.Status, CreatedAt: task.CreatedAt, DeletedAt: &now, RequestID: task.RequestID, RequestDigest: task.RequestDigest}
 	if err := m.saveTask(tombstone); err != nil {
 		return err
 	}

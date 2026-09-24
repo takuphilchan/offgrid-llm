@@ -1,7 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {EventEmitter}=require('node:events');
-const {ComputerRuntime,isComputerLink,validateTarget}=require('../computer-runtime');
+const {ComputerRuntime,isComputerLink,parseComputerLink,validateTarget}=require('../computer-runtime');
 const copy=require('../../web/app/src/i18n/computer-experience.json');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -29,6 +29,14 @@ test('computer deep links carry no service, credentials, target or command',()=>
  const main=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
  assert.match(main,/require\(app\.isPackaged \? '\.\/computer-pack\/pack\.cjs'/);
  assert.doesNotMatch(main,/require\(path\.join\(root,'pack\.cjs'\)\)/);
+});
+
+test('saved-task handoff accepts only an opaque task ID and never task instructions',()=>{
+ const task='run-'+'a'.repeat(32);
+ assert.deepEqual(parseComputerLink(`offgrid://computer?task=${task}`),{task});
+ for(const link of [`offgrid://computer?task=${task}&task=${task}`,`offgrid://computer?task=${task}&approval=full_task`,'offgrid://computer?task=open-notepad','offgrid://evil/computer','offgrid://user:secret@computer',`offgrid://computer?task=${task}#run`])assert.equal(parseComputerLink(link),null);
+ const main=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
+ assert.match(main,/#\/agents\/task\/\$\{computerRequested.task\}/);
 });
 
 test('packaged desktop includes the trusted application launcher',()=>{
@@ -65,6 +73,46 @@ test('native discovery requires administrator access and cancels without launchi
  let release;const pendingVerify=new Promise(resolve=>release=resolve);
  const f=fixture({verify:()=>pendingVerify});const started=f.runtime.discoverNative({workspace:'owned-workspace'});await tick();
  await f.runtime.stop();release();await started;assert.equal(f.forks.length,0);
+});
+
+test('scoped stop cannot revoke a different task and cancels only its own pending startup',async()=>{
+ for(const method of ['start','discoverNative']) {
+   let release;const verification=new Promise(resolve=>release=resolve);
+   const f=fixture({verify:()=>verification});
+   const args=method==='start'?request:{workspace:'owned-workspace'};
+   const pending=f.runtime[method]({...args,requestId:'input-owned'});await tick();
+   const generation=f.runtime.generation;
+   assert.equal((await f.runtime.stopAccess({requestId:'input-other'})).state,'not_owned');
+   assert.equal(f.runtime.generation,generation);
+   assert.equal((await f.runtime.stopAccess({requestId:'input-owned'})).state,'stopped');
+   release();await pending;assert.equal(f.forks.length,0);
+ }
+});
+
+test('scoped native control binds discovery and start to the same access request',async()=>{
+ const f=fixture();const args={workspace:'owned-workspace',requestId:'input-owned'};
+ const discovery=f.runtime.discoverNative(args);await tick();
+ f.child.emit('message',{state:'selecting',targets:[{id:'target',title:'Editor'}]});await discovery;
+ await assert.rejects(f.runtime.startNative({...args,requestId:'input-other',target:'target'}),/stale_target/);
+ assert.equal((await f.runtime.stopAccess({requestId:'input-other'})).state,'not_owned');
+ const started=f.runtime.startNative({...args,target:'target'});await tick();
+ f.child.emit('message',{state:'ready',target:{id:'session-owned',origin:'Editor'}});await started;
+ assert.equal((await f.runtime.stopAccess({session:'session-other'})).state,'not_owned');
+ assert.equal(f.runtime.child,f.child);
+ assert.equal((await f.runtime.stopAccess({session:'session-owned'})).state,'stopped');
+ assert.equal(f.runtime.child,null);
+ assert.throws(()=>f.runtime.stopAccess({}),/invalid_session/);
+ assert.throws(()=>f.runtime.stopAccess({requestId:'input-owned',session:'session-owned'}),/invalid_session/);
+});
+
+test('scoped browser stop cannot terminate a replacement session',async()=>{
+ const f=fixture();const pending=f.runtime.start({...request,requestId:'input-new'});await tick();
+ f.child.emit('message',{state:'ready',target:{id:'session-new',origin:'offgrid-demo://research'}});await pending;
+ assert.equal((await f.runtime.stopAccess({requestId:'input-old'})).state,'not_owned');
+ assert.equal((await f.runtime.stopAccess({session:'session-old'})).state,'not_owned');
+ assert.equal(f.messages.some(m=>m.type==='stop'),false);
+ await f.runtime.stopAccess({requestId:'input-new'});
+ assert.equal(f.runtime.child,null);
 });
 
 test('native discovery refuses an older backend without pretending native support exists',async()=>{

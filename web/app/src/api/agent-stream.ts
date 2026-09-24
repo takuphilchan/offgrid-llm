@@ -1,6 +1,6 @@
 import type { AgentRun } from './client';
 
-export const agentActive = (run: AgentRun) => run.status === 'running' || run.status === 'pending';
+export const agentActive = (run: AgentRun) => ['running', 'pending', 'waiting_for_children'].includes(run.status);
 
 // Snapshots replace previews (never concatenate them); reconnecting cannot
 // duplicate text or execute a task. Execution only ends through server state.
@@ -18,7 +18,7 @@ export async function readAgentStream(response: Response, id: string, onSnapshot
     const event = JSON.parse(data.join('\n')); data = []; size = 0;
     if (event.type === 'step' || event.type === 'activity') return false; // full snapshot carries committed steps
     if (event.event_cursor !== undefined && (typeof event.event_cursor !== 'string' || !/^\d{1,19}$/.test(event.event_cursor))) throw new Error('Invalid agent event cursor');
-    if (event.run_id !== id || !['pending','running','waiting_for_approval','interrupted','uncertain','completed','failed','cancelled'].includes(event.status) || !Array.isArray(event.steps) || typeof event.output !== 'string') throw new Error('Invalid agent progress snapshot');
+    if (event.run_id !== id || !['pending','running','waiting_for_approval','waiting_for_input','waiting_for_children','interrupted','uncertain','completed','failed','cancelled'].includes(event.status) || !Array.isArray(event.steps) || typeof event.output !== 'string') throw new Error('Invalid agent progress snapshot');
     if (event.progress && (typeof event.progress.preview !== 'string' || typeof event.progress.phase !== 'string' || typeof event.progress.iteration !== 'number')) throw new Error('Invalid agent progress preview');
     onSnapshot(event as AgentRun); onHeartbeat();
     return !agentActive(event);

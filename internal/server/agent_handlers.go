@@ -79,6 +79,13 @@ func taskResponse(task *agents.Task) map[string]any {
 	}
 	response := map[string]any{"task_id": task.ID, "run_id": task.ID, "status": task.Status, "output": task.Result, "steps": steps, "pending_approval": task.PendingApproval}
 	response["progress"] = task.Progress
+	response["model"], response["pending_input"] = task.Model, task.PendingInput
+	response["instructions"] = task.Instructions
+	response["last_access"] = task.LastAccess
+	response["plan"], response["context"] = task.Plan, task.Context
+	response["artifacts"] = taskArtifacts(task)
+	response["parent_id"], response["children"] = task.ParentID, task.ChildHistory
+	response["can_steer"] = agents.CanSteerTask(task)
 	if task.Config.ComputerSession != "" {
 		response["computer_session"] = task.Config.ComputerSession
 		response["computer_approval_mode"] = task.Config.ComputerApprovalMode
@@ -394,6 +401,8 @@ func (s *Server) streamAgentTask(w http.ResponseWriter, r *http.Request, id stri
 			data["type"] = "done"
 		case agents.TaskWaiting:
 			data["type"] = "approval_required"
+		case agents.TaskInput:
+			data["type"] = "input_required"
 		case agents.TaskInterrupted, agents.TaskUncertain, agents.TaskFailed, agents.TaskCancelled:
 			data["type"] = "error"
 		}

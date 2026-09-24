@@ -17,7 +17,7 @@ import (
 )
 
 const taskDatabaseName = "agent-state.sqlite"
-const taskSchemaVersion = 2
+const taskSchemaVersion = 4
 
 // The service owns the workspace lock. Connections are operation-scoped so
 // stopped-workspace backup/restore never races an idle connection or leaked WAL.
@@ -54,14 +54,65 @@ type taskImportFile struct {
 	Actor  string `json:"actor,omitempty"`
 }
 
-func validateStoredTask(task *Task) error {
+func validateTaskIdentityStatus(task *Task) error {
 	if !validTaskID(task.ID) {
 		return fmt.Errorf("invalid task identity")
 	}
 	switch task.Status {
-	case TaskPending, TaskRunning, TaskWaiting, TaskCompleted, TaskFailed, TaskCancelled, TaskInterrupted, TaskUncertain:
+	case TaskPending, TaskRunning, TaskWaiting, TaskInput, TaskChildren, TaskCompleted, TaskFailed, TaskCancelled, TaskInterrupted, TaskUncertain:
 	default:
 		return fmt.Errorf("invalid task status for %s", task.ID)
+	}
+	return nil
+}
+
+func validateStoredTask(task *Task) error {
+	if err := validateTaskIdentityStatus(task); err != nil {
+		return err
+	}
+	if task.Config.ComputerStepOffset < 0 || task.Config.ComputerStepOffset > len(task.Steps) {
+		return fmt.Errorf("invalid computer step boundary")
+	}
+	if cp := task.Checkpoint; cp != nil && cp.ReadOnlyCall != "" {
+		if cp.ExecutingCall != cp.ReadOnlyCall || len(cp.Calls) == 0 || cp.Calls[0].ID != cp.ReadOnlyCall {
+			return fmt.Errorf("read-only intent does not match executing call")
+		}
+		switch cp.Calls[0].Function.Name {
+		case "read_file", "list_files", "calculator", "current_time":
+		default:
+			return fmt.Errorf("invalid read-only intent tool")
+		}
+	}
+	for _, archive := range task.ContextArchive {
+		data, err := json.Marshal(archive.Messages)
+		if err != nil {
+			return err
+		}
+		digest := sha256.Sum256(data)
+		if archive.ID != hex.EncodeToString(digest[:]) {
+			return fmt.Errorf("archived task context digest mismatch")
+		}
+	}
+	if task.Status == TaskChildren {
+		if task.Delegation == nil || task.ParentID != "" || task.Checkpoint == nil || task.Checkpoint.ExecutingCall != "" || len(task.Checkpoint.Calls) != 1 || task.Checkpoint.Calls[0].ID != task.Delegation.CallID {
+			return fmt.Errorf("invalid delegated checkpoint")
+		}
+		specs := []ChildSpec{}
+		for _, child := range task.Delegation.Children {
+			if !validTaskID(child.ID) {
+				return fmt.Errorf("invalid child identity")
+			}
+			specs = append(specs, child.Spec)
+		}
+		if err := validateChildSpecs(specs); err != nil {
+			return err
+		}
+	}
+	if task.Status == TaskInput {
+		input, cp := task.PendingInput, task.Checkpoint
+		if input == nil || input.ID == "" || input.CallID == "" || input.Kind != "computer" || (input.Mode != "app" && input.Mode != "browser") || input.Target == "" || cp == nil || cp.ExecutingCall != "" || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID || task.Config.ComputerSession != "" || !task.Config.TaskFirst {
+			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
+		}
 	}
 	if a := task.PendingApproval; a != nil {
 		if a.ID == "" || a.RunID != task.ID || a.Actor != task.Actor || a.CallID == "" || a.Tool == "" {
@@ -139,7 +190,22 @@ func initializeTaskDatabase(db *sql.DB, directory string) error {
 			if err := tx.Rollback(); err != nil {
 				return err
 			}
-			return migrateTaskActivity(db, directory)
+			if err := migrateTaskActivity(db, directory); err != nil {
+				return err
+			}
+			return migrateTaskInputs(db, directory)
+		}
+		if version == 2 {
+			if err := tx.Rollback(); err != nil {
+				return err
+			}
+			return migrateTaskInputs(db, directory)
+		}
+		if version == 3 {
+			if err := tx.Rollback(); err != nil {
+				return err
+			}
+			return migrateTaskVersion(db, directory, 3, taskSchemaVersion)
 		}
 		if version != taskSchemaVersion {
 			return fmt.Errorf("agent schema %d is incompatible; use a matching OffGrid version", version)

@@ -18,14 +18,21 @@ import (
 )
 
 type agentRunSnapshot struct {
-	RunID           string              `json:"run_id"`
-	Status          string              `json:"status"`
-	Output          string              `json:"output"`
-	Error           string              `json:"error,omitempty"`
-	Resumable       bool                `json:"resumable"`
-	PendingApproval *agents.Approval    `json:"pending_approval"`
-	UncertainCallID string              `json:"uncertain_call_id,omitempty"`
-	Progress        *agents.RunProgress `json:"progress,omitempty"`
+	Evidence        json.RawMessage      `json:"-"`
+	Artifacts       json.RawMessage      `json:"artifacts,omitempty"`
+	Plan            []agents.PlanItem    `json:"plan,omitempty"`
+	Context         *agents.ContextState `json:"context,omitempty"`
+	Children        []agents.ChildLink   `json:"children,omitempty"`
+	ParentID        string               `json:"parent_id,omitempty"`
+	RunID           string               `json:"run_id"`
+	Status          string               `json:"status"`
+	Output          string               `json:"output"`
+	Error           string               `json:"error,omitempty"`
+	Resumable       bool                 `json:"resumable"`
+	PendingApproval *agents.Approval     `json:"pending_approval"`
+	PendingInput    *agents.InputRequest `json:"pending_input,omitempty"`
+	UncertainCallID string               `json:"uncertain_call_id,omitempty"`
+	Progress        *agents.RunProgress  `json:"progress,omitempty"`
 }
 
 // Terminal output contains model/tool data, not terminal control instructions.
@@ -70,11 +77,11 @@ func agentControlContext(ctx context.Context, base string, args []string) (*agen
 	if err != nil {
 		return nil, err
 	}
-	endpoint := "/v1/agents/tasks/" + url.PathEscape(id)
+	endpoint := "/api/v2/jobs/" + url.PathEscape(id)
 	method := http.MethodPost
 	data := map[string]any{"async": true}
 	switch action {
-	case "status", "resume", "cancel":
+	case "status", "resume", "cancel", "pause", "takeover", "reconnect", "export":
 		if len(args) != 2 {
 			return nil, usage("usage: offgrid agent %s RUN_ID", action)
 		}
@@ -88,12 +95,20 @@ func agentControlContext(ctx context.Context, base string, args []string) (*agen
 			return nil, usage("usage: offgrid agent reconcile RUN_ID CALL_ID \"verified outcome\"")
 		}
 		data["call_id"], data["result"] = args[2], strings.Join(args[3:], " ")
+	case "steer":
+		if len(args) < 4 {
+			return nil, usage("agent steer RUN_ID REQUEST_ID <instruction>")
+		}
+		data["request_id"], data["instruction"] = args[2], strings.Join(args[3:], " ")
 	default:
 		return nil, usage("unknown run action %q", action)
 	}
 	var body io.Reader
-	if action == "status" {
+	if action == "status" || action == "export" {
 		method = http.MethodGet
+		if action == "export" {
+			endpoint += "/export"
+		}
 	} else {
 		endpoint += "/" + action
 		encoded, _ := json.Marshal(data)
@@ -104,9 +119,16 @@ func agentControlContext(ctx context.Context, base string, args []string) (*agen
 		return nil, err
 	}
 	defer resp.Body.Close()
-	var snapshot agentRunSnapshot
-	if err := serviceclient.DecodeContext(ctx, resp.Body, &snapshot); err != nil {
+	var raw json.RawMessage
+	if err := serviceclient.DecodeContext(ctx, resp.Body, &raw); err != nil {
 		return nil, err
+	}
+	var snapshot agentRunSnapshot
+	if err := json.Unmarshal(raw, &snapshot); err != nil {
+		return nil, err
+	}
+	if action == "export" {
+		snapshot.Evidence = raw
 	}
 	if snapshot.RunID != id || !validAgentStatus(snapshot.Status) {
 		return nil, &serviceclient.Error{Code: "invalid_response", Message: "OffGrid returned an invalid run snapshot. Check the service version."}
@@ -116,7 +138,7 @@ func agentControlContext(ctx context.Context, base string, args []string) (*agen
 
 func validAgentStatus(status string) bool {
 	switch agents.TaskStatus(status) {
-	case agents.TaskPending, agents.TaskRunning, agents.TaskWaiting, agents.TaskInterrupted, agents.TaskUncertain, agents.TaskCompleted, agents.TaskFailed, agents.TaskCancelled:
+	case agents.TaskPending, agents.TaskRunning, agents.TaskWaiting, agents.TaskInput, agents.TaskChildren, agents.TaskInterrupted, agents.TaskUncertain, agents.TaskCompleted, agents.TaskFailed, agents.TaskCancelled:
 		return true
 	}
 	return false
@@ -124,16 +146,22 @@ func validAgentStatus(status string) bool {
 
 func isAgentControl(action string) bool {
 	switch action {
-	case "status", "approve", "deny", "cancel", "resume", "reconcile":
+	case "status", "approve", "deny", "cancel", "resume", "reconcile", "pause", "takeover", "steer", "reconnect", "export", "artifact":
 		return true
 	}
 	return false
 }
 
 func runAgentControl(ctx context.Context, args []string) error {
+	if len(args) > 0 && args[0] == "artifact" {
+		return downloadJobArtifact(ctx, args[1:])
+	}
 	snapshot, err := agentControlContext(ctx, commandServerURL(), args)
 	if err != nil {
 		return err
+	}
+	if len(snapshot.Evidence) > 0 {
+		return json.NewEncoder(os.Stdout).Encode(snapshot.Evidence)
 	}
 	if output.JSONMode {
 		return json.NewEncoder(os.Stdout).Encode(snapshot)
@@ -149,6 +177,12 @@ func handleAgentControl(args []string) {
 
 func renderAgentSnapshot(w io.Writer, snapshot agentRunSnapshot) {
 	fmt.Fprintf(w, "Status: %s\n", terminalSafe(snapshot.Status))
+	for _, child := range snapshot.Children {
+		fmt.Fprintf(w, "Subtask: %s — %s\n  offgrid agent status %s\n", terminalSafe(child.Spec.Key), terminalSafe(child.Spec.Goal), terminalSafe(child.ID))
+	}
+	if input := snapshot.PendingInput; snapshot.Status == string(agents.TaskInput) && input != nil {
+		fmt.Fprintf(w, "Local access needed: %s\nOpen this saved task in Agents in the matching OffGrid Desktop workspace to review access. No input has been dispatched.\n  offgrid agent cancel %s\n", terminalSafe(input.Target), terminalSafe(snapshot.RunID))
+	}
 	if snapshot.Output != "" {
 		fmt.Fprintln(w, terminalSafe(snapshot.Output))
 	}

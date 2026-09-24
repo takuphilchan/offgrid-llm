@@ -669,7 +669,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, args json.RawMe
 func (r *ToolRegistry) ExecuteWithPolicy(ctx context.Context, name string, args json.RawMessage, execution ToolExecution) (string, error) {
 	executor, err := r.prepareExecution(ctx, name, args, execution)
 	if err != nil {
-		return "", err
+		return "", &ToolFailure{Code: "tool_dispatch_denied", Message: "Tool access changed before execution. No action was dispatched. Review available tools and permissions.", Cause: err}
 	}
 	return executor(ctx, args)
 }

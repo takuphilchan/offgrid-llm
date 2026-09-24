@@ -49,6 +49,9 @@ func (s *Store) Put(ctx context.Context, reader io.Reader, metadata Metadata) (M
 	defer os.Remove(temporaryPath)
 	hash := sha256.New()
 	written, err := copyContext(ctx, io.MultiWriter(temporary, hash), reader)
+	if err == nil {
+		err = temporary.Sync()
+	}
 	if closeErr := temporary.Close(); err == nil {
 		err = closeErr
 	}

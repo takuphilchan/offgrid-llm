@@ -15,7 +15,7 @@ func TestAgentControlUsesExistingRunAndAuthenticatedRequest(t *testing.T) {
 	var calls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.URL.Path != "/v1/agents/tasks/run-123/approve" || r.Method != "POST" || r.Header.Get("Authorization") != "Bearer test-key" {
+		if r.URL.Path != "/api/v2/jobs/run-123/approve" || r.Method != "POST" || r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		var data map[string]any
@@ -69,6 +69,7 @@ func TestAgentStreamRendersResultAndExactApproval(t *testing.T) {
 		want []string
 	}{
 		{`{"type":"done","run_id":"run-1","status":"completed","output":"Finished task"}`, []string{"run-1", "Finished task"}},
+		{`{"type":"input_required","run_id":"run-1","status":"waiting_for_input","pending_input":{"id":"input-1","target":"Notepad","kind":"computer","mode":"app"}}`, []string{"Notepad", "saved task", "offgrid agent cancel run-1"}},
 		{`{"type":"approval_required","run_id":"run-1","status":"waiting_for_approval","pending_approval":{"id":"approval-1","tool":"write_file","arguments":{"path":"notes.txt"}}}`, []string{"notes.txt", "offgrid agent approve run-1 approval-1", "offgrid agent deny run-1 approval-1"}},
 	} {
 		var buffer bytes.Buffer

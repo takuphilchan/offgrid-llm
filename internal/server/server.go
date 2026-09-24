@@ -87,7 +87,6 @@ type Server struct {
 	loraManager          *inference.LoRAManager
 	agentManager         *agents.Manager
 	agentRunner          *agents.Runner
-	agentOrchestrator    *agents.Orchestrator
 	toolRegistry         *agents.ToolRegistry
 	mcpHandler           http.Handler
 	p2pDiscovery         *p2p.Discovery
@@ -258,7 +257,6 @@ func NewWithConfig(cfg *config.Config) *Server {
 	}
 
 	agentManager := agents.NewManagerWithPersistence(nil, executor, nil, dataDir) // With task persistence
-	agentOrchestrator := agents.NewOrchestrator(agentManager)                     // Multi-agent orchestration
 	toolRegistry := agents.NewToolRegistry()                                      // Unified tool registry
 	// Load user-defined tools from config if exists
 	toolsConfigPath := filepath.Join(dataDir, "tools.json")
@@ -476,7 +474,6 @@ func NewWithConfig(cfg *config.Config) *Server {
 		kbManager:            kbManager,
 		loraManager:          loraManager,
 		agentManager:         agentManager,
-		agentOrchestrator:    agentOrchestrator,
 		toolRegistry:         toolRegistry,
 		mcpHandler:           toolRegistry.MCPHTTPHandler(serverVersion),
 		p2pDiscovery:         p2pDiscovery,
@@ -513,7 +510,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 	server.browserHub = computer.NewBrowserHub()
 	server.agentRunner = agents.NewRunner(agentManager, &browserRunTools{RunTools: toolRegistry, server: server}, server.callAgentModel)
 	server.agentRunner.StreamCaller = server.streamAgentModel
+	server.agentRunner.ContextWindow = func(*agents.Task) int { return server.effectiveContextWindow() }
 	server.agentRunner.Observer = func(task *agents.Task) {
+		if task.Status == agents.TaskInput && task.PendingInput != nil {
+			server.browserHub.StopSession(task.Actor, task.PendingInput.PreviousSession)
+		}
 		server.publishRunEvent(context.Background(), task.ID, runs.RunStateChanged, map[string]any{"status": task.Status, "prompt": task.Prompt, "model": task.Model, "actor": task.Actor, "pending_approval": task.PendingApproval})
 		if task.Status == agents.TaskCompleted {
 			if _, err := server.persistRunOutput(context.Background(), task.ID, task.Result); err != nil {
@@ -521,6 +522,7 @@ func NewWithConfig(cfg *config.Config) *Server {
 			}
 		}
 	}
+	server.agentRunner.StartCoordinator(runtimeCtx)
 	sessionHandlers.SetCompleter(func(ctx context.Context, modelID string, messages []api.ChatMessage, useKnowledgeBase bool) (string, error) {
 		response, err := server.completeChat(ctx, &api.ChatCompletionRequest{
 			Model: modelID, Messages: messages, UseKnowledgeBase: &useKnowledgeBase,
@@ -1015,6 +1017,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/agents/tasks", adminOnly(s.handleAgentTasks))
 	mux.HandleFunc("/v1/agents/tasks/", adminOnly(s.handleAgentTaskAction))
 	mux.HandleFunc("/api/v2/jobs/", adminOnly(s.handleJobRead))
+	mux.HandleFunc("/api/v2/jobs", adminOnly(s.handleJobSubmit))
 	mux.HandleFunc("/v1/agents/workflows", adminOnly(s.handleAgentWorkflows))
 	mux.HandleFunc("/v1/agents/orchestrate", adminOnly(s.handleAgentOrchestrate))
 	mux.HandleFunc("/v1/runs", adminOnly(s.handleRuns))
@@ -1030,6 +1033,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v2/computer/stop", adminOnly(s.handleComputerStop))
 	mux.HandleFunc("/api/v2/computer/pairing", adminOnly(s.handleBrowserPairing))
 	mux.HandleFunc("/api/v2/computer/sessions", adminOnly(s.handleBrowserSessions))
+	mux.HandleFunc("/api/v2/computer/sessions/stop", adminOnly(s.handleComputerSessionStop))
 	mux.HandleFunc("/api/v2/computer/model-check", adminOnly(s.handleComputerModelCheck))
 	mux.HandleFunc("/v1/agents/tools", adminOnly(s.handleAgentTools))
 	mux.HandleFunc("/v1/capabilities", adminOnly(s.handleCapabilities))
@@ -4841,8 +4845,9 @@ func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 		if task.Actor != "" && task.Actor != s.agentActor(r) {
 			continue
 		}
-		deletable := agents.CanDeleteTask(task) && (task.Actor == s.agentActor(r) || (task.Actor == "" && s.agentActor(r) == "local-admin"))
+		deletable := s.removableTask(task, s.agentActor(r))
 		task.Checkpoint = nil
+		task.ContextArchive = nil
 		tasks = append(tasks, struct {
 			*agents.Task
 			Deletable bool `json:"deletable"`
@@ -4853,110 +4858,12 @@ func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAgentWorkflows(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	switch r.Method {
-	case http.MethodGet:
-		// Workflows are managed by WorkflowEngine - return info message
-		json.NewEncoder(w).Encode(map[string]any{
-			"workflows": []any{},
-			"message":   "Use POST to register workflows",
-		})
-
-	case http.MethodPost:
-		var wf agents.Workflow
-		if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
-			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
-			return
-		}
-		// Would need a WorkflowEngine instance to register
-		json.NewEncoder(w).Encode(map[string]string{"status": "registered", "id": wf.ID})
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
+	handleLegacyCoordination(w, r)
 }
 
 // handleAgentOrchestrate handles multi-agent orchestration requests
 func (s *Server) handleAgentOrchestrate(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	switch r.Method {
-	case http.MethodGet:
-		// Return list of orchestration results
-		workflows := s.agentOrchestrator.ListWorkflows()
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"workflows": workflows,
-			"modes": []string{
-				string(agents.ModeSequential),
-				string(agents.ModeParallel),
-				string(agents.ModeDebate),
-				string(agents.ModeVoting),
-				string(agents.ModeHierarchy),
-			},
-		})
-
-	case http.MethodPost:
-		// Run a multi-agent orchestration
-		var req struct {
-			ID     string                      `json:"id"`
-			Prompt string                      `json:"prompt"`
-			Mode   agents.OrchestrationMode    `json:"mode"`
-			Agents []agents.AgentRole          `json:"agents"`
-			Config *agents.OrchestrationConfig `json:"config"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error": "invalid request"}`, http.StatusBadRequest)
-			return
-		}
-
-		if req.Prompt == "" {
-			http.Error(w, `{"error": "prompt is required"}`, http.StatusBadRequest)
-			return
-		}
-
-		// Generate ID if not provided
-		if req.ID == "" {
-			req.ID = fmt.Sprintf("orch-%d", time.Now().UnixNano())
-		}
-
-		// Build config
-		config := agents.DefaultOrchestrationConfig()
-		if req.Config != nil {
-			config = *req.Config
-		}
-		if req.Mode != "" {
-			config.Mode = req.Mode
-		}
-		if len(req.Agents) > 0 {
-			config.Agents = req.Agents
-		}
-
-		// Use default agents if none specified
-		if len(config.Agents) == 0 {
-			config.Agents = []agents.AgentRole{
-				{Name: "Researcher", Template: "researcher", Description: "Research and analysis specialist"},
-				{Name: "Coder", Template: "coder", Description: "Code implementation specialist"},
-			}
-		}
-
-		// Run orchestration
-		ctx := r.Context()
-		result, err := s.agentOrchestrator.RunOrchestration(ctx, req.ID, req.Prompt, config)
-		if err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":  err.Error(),
-				"result": result,
-			})
-			return
-		}
-
-		json.NewEncoder(w).Encode(result)
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
+	handleLegacyCoordination(w, r)
 }
 
 // ============================================================================

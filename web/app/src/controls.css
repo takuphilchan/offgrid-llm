@@ -145,6 +145,10 @@
   .model-section + .model-section { padding-block-start: 24px; border-block-start: 1px solid var(--line); }
   .inline-error button { margin-inline-start: 12px; }
   .connector-panel { grid-template-columns: minmax(0, 1fr); }
+  .connector-list article > div { min-width: 0; }
+  .connector-list strong { overflow-wrap: anywhere; }
+  .connector-list .connector-remove { margin-block-start: 8px; min-height: 36px; }
+  .connector-list i[data-connected='false'] { background: var(--faint); }
   @container (min-width: 760px) {
     .connector-panel { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
   }

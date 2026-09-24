@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electron', {
   listComputerApplications: () => ipcRenderer.invoke('computer-launchable-apps'),
   launchComputerApplication: request => ipcRenderer.invoke('computer-launch-app', request),
   stopComputerBrowser: () => ipcRenderer.invoke('computer-stop'),
+  stopComputerAccess: request => ipcRenderer.invoke('computer-stop-access', request),
   retryStartup: () => ipcRenderer.invoke('startup-retry'),
   startDesktopWorkspace: () => ipcRenderer.invoke('startup-local'),
   openExistingWorkspace: () => ipcRenderer.invoke('startup-browser'),

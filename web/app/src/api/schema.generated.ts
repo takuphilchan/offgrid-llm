@@ -510,6 +510,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDurableJobs"];
+        put?: never;
+        /** @description Saves an owner-scoped task before execution. Identical actor/request ID retries return the original task; conflicting reuse returns 409. Computer access is requested as a durable interruption, not a submission prerequisite. */
+        post: operations["submitDurableTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/jobs/{id}/input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Attaches independently consented, owner-scoped host access to the same saved task. Never grants host permission, changes an approval policy, or repeats uncertain execution. Identical input/session retries are idempotent. */
+        post: operations["resolveDurableTaskAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/jobs/{id}": {
         parameters: {
             query?: never;
@@ -521,6 +555,56 @@ export interface paths {
         get: operations["getDurableJobSnapshot"];
         put?: never;
         post?: never;
+        delete: operations["deleteDurableJob"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/jobs/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportDurableJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/jobs/{id}/artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Checks current task ownership, a committed artifact reference, size and SHA256 before delivering an attachment. Digest knowledge alone does not grant access. */
+        get: operations["downloadTaskArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/jobs/{id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description All clients share the durable runner. Pause settles or labels in-flight effects uncertain. Takeover revokes the host session. Steering invalidates unexecuted proposals, is idempotent by request_id, and requires explicit resume. Reconnect requests fresh local consent, never an automatic retry. */
+        post: operations["commandDurableJob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -772,6 +856,23 @@ export interface paths {
         get: operations["listComputerSessions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/computer/sessions/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Revoke only the specified session owned by the requesting administrator. Idempotent; unknown or foreign IDs do not revoke any other session. Host shutdown is acknowledged independently; dispatched effects are not undone. */
+        post: operations["stopComputerSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1257,7 +1358,76 @@ export interface components {
             /** Format: date-time */
             recorded_at: string;
         };
+        AgentInputRequest: {
+            id: string;
+            call_id: string;
+            /** @enum {string} */
+            kind: "computer";
+            /** @enum {string} */
+            mode: "app" | "browser";
+            /** @description Model-proposed label only; never a host identity or consent grant. */
+            target: string;
+            /** @description Proposed HTTPS address for local review. */
+            url?: string;
+            /** @description Revoked session identity; never reusable authority. */
+            previous_session?: string;
+        };
+        TaskPlanItem: {
+            id: string;
+            title: string;
+            /** @enum {string} */
+            state: "pending" | "active" | "done";
+            evidence_steps?: number[];
+        };
+        TaskChild: {
+            id: string;
+            spec: {
+                key: string;
+                goal: string;
+                depends_on: string[];
+                tools: string[];
+            };
+        };
+        TaskContext: {
+            window: number;
+            /** @description Conservative byte-based estimate */
+            estimated_tokens: number;
+            /** @description Last runtime-reported prompt usage */
+            measured_prompt_tokens?: number;
+            compactions: number;
+            archived_messages: number;
+        };
         AgentRunResponse: {
+            /** @description Included in the owner-scoped job GET only */
+            prompt?: string;
+            model?: string;
+            error_code?: string;
+            artifacts?: {
+                name: string;
+                /** @enum {string} */
+                format: "text" | "markdown" | "json" | "csv";
+                sha256: string;
+                bytes: number;
+                rows?: number;
+                columns?: number;
+                verified: boolean;
+                /** @enum {string} */
+                check: "stored_bytes_sha256_and_format";
+            }[];
+            parent_id?: string;
+            children?: components["schemas"]["TaskChild"][] | null;
+            /** @description Saved state permits a follow-up instruction. Completed child history does not block steering; active delegation and uncertain effects do. Rechecked at execution. */
+            can_steer?: boolean;
+            plan?: components["schemas"]["TaskPlanItem"][] | null;
+            context?: components["schemas"]["TaskContext"] | null;
+            last_access?: components["schemas"]["AgentInputRequest"] | null;
+            instructions?: {
+                request_id: string;
+                text: string;
+                /** Format: date-time */
+                at: string;
+            }[] | null;
+            pending_input?: components["schemas"]["AgentInputRequest"] | null;
             /** @description Persisted activity cursor. Only advance it after applying the snapshot. */
             event_cursor?: string;
             computer_session?: string;
@@ -1270,7 +1440,7 @@ export interface components {
             task_id: string;
             run_id: string;
             /** @enum {string} */
-            status: "pending" | "running" | "waiting_for_approval" | "interrupted" | "uncertain" | "completed" | "failed" | "cancelled";
+            status: "pending" | "running" | "waiting_for_approval" | "waiting_for_input" | "waiting_for_children" | "interrupted" | "uncertain" | "completed" | "failed" | "cancelled";
             error?: string;
             pending_approval: components["schemas"]["ToolApproval"] | null;
             /** @description Whether this run has a safe checkpoint for explicit resume. Legacy history without checkpoints is read-only. */
@@ -1291,6 +1461,7 @@ export interface components {
             /** @description Whether this actor may remove this terminal run or interrupted record without recovery state; the server rechecks ownership and execution state at deletion time. */
             deletable?: boolean;
             id: string;
+            parent_id?: string;
             prompt: string;
             status: string;
             model?: string;
@@ -2276,6 +2447,95 @@ export interface operations {
             503: components["responses"]["Error"];
         };
     };
+    listDurableJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped task history, including linked child tasks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTask"][];
+                };
+            };
+        };
+    };
+    submitDurableTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    prompt: string;
+                    model: string;
+                    request_id: string;
+                    /** @enum {string} */
+                    style?: "react" | "cot" | "plan-execute";
+                    max_iterations?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Persisted task */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    resolveDurableTaskAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    input_id: string;
+                    computer_session: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Persisted task resumed or previously resolved snapshot */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
     getDurableJobSnapshot: {
         parameters: {
             query?: never;
@@ -2297,6 +2557,118 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    deleteDurableJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Terminal history removed; referenced children remain protected until the parent is removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    exportDurableJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped evidence snapshot; excludes private checkpoints and screenshot bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+        };
+    };
+    downloadTaskArtifact: {
+        parameters: {
+            query: {
+                digest: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified artifact bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    commandDurableJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                action: "approve" | "deny" | "cancel" | "pause" | "resume" | "takeover" | "steer" | "reconnect" | "reconcile";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    approval_id?: string;
+                    call_id?: string;
+                    result?: string;
+                    request_id?: string;
+                    instruction?: string;
+                    /** @enum {string} */
+                    mode?: "app" | "browser";
+                    target?: string;
+                    url?: string;
+                    async?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Persisted task state */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };
     };
@@ -2467,7 +2839,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active and saved MCP connections */
+            /** @description Active and saved MCP connections, including disconnected connections */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2801,6 +3173,37 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    stopComputerSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    session_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description This actor's authority for the specified session is revoked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "revoked";
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     checkComputerModel: {

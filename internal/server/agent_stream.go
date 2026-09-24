@@ -31,6 +31,7 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	temperature := float32(task.Config.Temperature)
 	maxTokens := task.Config.MaxTokens
 	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens, Stream: true}
+	request.StreamOptions = &api.StreamOptions{IncludeUsage: true}
 	configureComputerRequest(request, task)
 	raw, ok := s.engine.(inference.RawStreamingEngine)
 	if !ok {
@@ -63,6 +64,7 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 // deltas, and never execute a partial call. Runner validates terminal reasons
 // and complete arguments before its existing exact-call approval boundary.
 type agentStreamAccumulator struct {
+	usage  api.Usage
 	text   strings.Builder
 	calls  map[int]*api.ToolCall
 	finish string
@@ -71,6 +73,7 @@ type agentStreamAccumulator struct {
 
 func (a *agentStreamAccumulator) add(data json.RawMessage) (string, bool, error) {
 	var chunk struct {
+		Usage   *api.Usage      `json:"usage"`
 		Error   json.RawMessage `json:"error"`
 		Choices []struct {
 			Index int `json:"index"`
@@ -91,6 +94,9 @@ func (a *agentStreamAccumulator) add(data json.RawMessage) (string, bool, error)
 	}
 	if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
 		return "", false, fmt.Errorf("agent model stream failed")
+	}
+	if chunk.Usage != nil {
+		a.usage = *chunk.Usage
 	}
 	if len(chunk.Choices) == 0 {
 		return "", false, nil
@@ -137,5 +143,5 @@ func (a *agentStreamAccumulator) response() *api.ChatCompletionResponse {
 	for _, index := range indexes {
 		message.ToolCalls = append(message.ToolCalls, *a.calls[index])
 	}
-	return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Index: 0, Message: message, FinishReason: a.finish}}}
+	return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Index: 0, Message: message, FinishReason: a.finish}}, Usage: a.usage}
 }

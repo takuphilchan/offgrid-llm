@@ -21,7 +21,7 @@ export type AgentTask = components['schemas']['AgentTask'];
 export type AgentRun = components['schemas']['AgentRunResponse'];
 export type AgentTool = { name: string; description: string; enabled: boolean; source: string; capability?: { name: string; namespace: string; source: string; kind: string; risk: string; description?: string } };
 export type MCPServer = { name: string; url?: string; transport: string; tools: number; status: string };
-export type RunSummary = { id: string; status: string; started_at: string; updated_at: string; event_count: number; data?: Record<string, unknown> };
+export type RunSummary = { id: string; status: string; started_at: string; updated_at: string; event_count: number; deletable?: boolean; data?: Record<string, unknown> };
 export type RunEvent = { id: string; run_id: string; sequence: number; type: string; time: string; data?: Record<string, any> };
 export type RAGStatus = components['schemas']['RAGStatus'];
 export type ComputerStatus = { available: boolean; emergency_stop: boolean; active_sessions: number };
@@ -161,6 +161,7 @@ export const api = {
     return request<{ integration: ExternalIntegration; setup: IntegrationSetup }>(`/v1/integrations/${encodeURIComponent(id)}/setup?${query}`);
   },
   emergencyStop: () => request<{ status: string }>('/api/v2/computer/stop', { method: 'POST', body: '{}' }),
+  stopComputerSession: (session_id: string) => request<{ status: string }>('/api/v2/computer/sessions/stop', {method: 'POST', body: JSON.stringify({session_id})}),
   runs: async () => {
     const result = await request<{ runs: RunSummary[] | null }>('/v1/runs');
     return Array.isArray(result.runs) ? result.runs : [];
@@ -186,6 +187,14 @@ export const api = {
     method: 'POST', body: JSON.stringify({ model, prompt, style, computer_session: computerSession || undefined, max_iterations: 12, async: true })
   }, computerSession ? 120_000 : 30_000),
   agentRun: (id: string) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}`),
+  job: (id: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}`),
+  jobs: async () => (await request<AgentTask[] | null>('/api/v2/jobs')) ?? [],
+  deleteJob: (id: string) => request<{ success: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}`, {method: 'DELETE'}),
+  exportJob: (id: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/export`),
+  jobAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'pause' | 'resume' | 'takeover' | 'steer' | 'reconnect' | 'reconcile', data: {approval_id?: string; call_id?: string; result?: string; request_id?: string; instruction?: string} = {}) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/${action}`, {method: 'POST', body: JSON.stringify(data)}),
+  submitJob: (prompt: string, model: string, request_id: string) => request<AgentRun>('/api/v2/jobs', {method: 'POST', body: JSON.stringify({prompt, model, request_id})}),
+  // Structured-tool and optional image preflights each have a 90-second bound.
+  resolveJobInput: (id: string, input_id: string, computer_session: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/input`, {method: 'POST', body: JSON.stringify({input_id, computer_session})}, 210_000),
   deleteAgentRun: (id: string) => request<{ success: boolean }>(`/v1/agents/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void, onHeartbeat: () => void, signal: AbortSignal) => {
     const replay = durableAgentEvents;
@@ -224,6 +233,9 @@ export const api = {
   }),
   connectMCP: (name: string, url: string) => request<{ status: string; server: string; tools_added: number }>('/v1/agents/mcp', {
     method: 'POST', body: JSON.stringify({ name, url })
+  }),
+  removeMCP: (name: string) => request<{ status: string; server: string; tools_removed: number }>(`/v1/agents/mcp?name=${encodeURIComponent(name)}`, {
+    method: 'DELETE'
   }),
   reindexDocument: (documentID: string) => request<{ success: boolean; document: Document }>('/v1/documents/reindex', {
     method: 'POST', body: JSON.stringify({ document_id: documentID })

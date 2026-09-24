@@ -14,18 +14,30 @@ import (
 )
 
 // The same task IDs, ownership, snapshots and SQLite transactions as agents.
-// Mutating job operations remain on their existing governed routes during cutover.
+// Commands and subscribers use the same durable runner; legacy routes remain adapters.
 func (s *Server) handleJobRead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if w.Header().Get("X-Request-ID") == "" {
 		w.Header().Set("X-Request-ID", uuid.NewString())
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v2/jobs/"), "/")
+	if len(parts) == 1 && parts[0] != "" && r.Method == http.MethodDelete {
+		s.handleJobCommand(w, r, parts[0], "delete")
+		return
+	}
+	if len(parts) == 2 && parts[0] != "" && parts[1] == "input" {
+		s.handleJobInput(w, r, parts[0])
+		return
+	}
+	if len(parts) == 2 && parts[0] != "" && parts[1] != "events" {
+		s.handleJobCommand(w, r, parts[0], parts[1])
+		return
 	}
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		writeJobError(w, 405, "method_not_allowed", "This job resource supports GET only.", false)
 		return
 	}
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v2/jobs/"), "/")
 	if len(parts) < 1 || len(parts) > 2 || parts[0] == "" || (len(parts) == 2 && parts[1] != "events") {
 		writeJobReadError(w, agents.ErrTaskNotFound)
 		return
@@ -51,6 +63,7 @@ func (s *Server) handleJobRead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if len(parts) == 1 {
 		response := taskResponse(replay.Snapshot)
+		response["prompt"] = replay.Snapshot.Prompt
 		response["event_cursor"] = strconv.FormatInt(replay.Cursor, 10)
 		writeJSON(w, 200, response)
 		return
@@ -96,7 +109,7 @@ func (s *Server) handleJobRead(w http.ResponseWriter, r *http.Request) {
 			lastSent = time.Now()
 			flusher.Flush()
 		}
-		if replay.Snapshot.Status != agents.TaskRunning && replay.Snapshot.Status != agents.TaskPending {
+		if replay.Snapshot.Status != agents.TaskRunning && replay.Snapshot.Status != agents.TaskPending && replay.Snapshot.Status != agents.TaskChildren {
 			return
 		}
 		after = replay.Cursor

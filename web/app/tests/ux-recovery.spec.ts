@@ -18,7 +18,7 @@ test('Activity ignores a late response for the previous selected task',async({pa
   if(path==='/v1/runs')return{runs:['A','B'].map(id=>({id,status:'completed',updated_at:new Date().toISOString(),event_count:1,data:{prompt:'Task '+id}}))};
   if(path.endsWith('/events')){const id=path.includes('/A/')?'A':'B';await new Promise(r=>setTimeout(r,id==='A'?700:50));return{events:[{id,type:id+'-result',sequence:1,time:new Date().toISOString()}]};}
  });
- await page.goto('/ui/#/activity');await page.getByRole('button',{name:/Task A/}).click();await page.getByRole('button',{name:/Task B/}).click();
+ await page.goto('/ui/#/activity');await page.getByRole('button',{name:/^Task A/}).click();await page.getByRole('button',{name:/^Task B/}).click();
   await expect(page.locator('.event-list')).toContainText('B result');await page.waitForTimeout(850);
   await expect(page.locator('.run-row.selected')).toContainText('Task B');await expect(page.locator('.event-list')).not.toContainText('A result');
 });

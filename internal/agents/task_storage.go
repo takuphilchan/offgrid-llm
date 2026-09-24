@@ -71,6 +71,10 @@ func (m *Manager) loadTasks() {
 		m.storageErr = err
 		return
 	}
+	if err := validateTaskGraph(tasks); err != nil {
+		m.storageErr = err
+		return
+	}
 	loaded := make(map[string]*Task, len(tasks))
 	for _, task := range tasks {
 		changed := false
@@ -88,13 +92,14 @@ func (m *Manager) loadTasks() {
 			}
 			changed = true
 		}
-		if task.Status == TaskRunning || task.Status == TaskPending {
+		if task.Status == TaskRunning || task.Status == TaskPending || task.Status == TaskChildren {
 			task.Status = TaskInterrupted
 			task.Error = "Service stopped before this run finished. Review and resume explicitly."
-			if task.Checkpoint != nil && task.Checkpoint.ExecutingCall != "" {
+			if uncertainEffect(task.Checkpoint) {
 				task.Status = TaskUncertain
 				task.Error = "Service stopped during a tool call. Its outcome is unknown; inspect the target before resolving this run."
 			}
+			releaseInterruptedRead(task.Checkpoint)
 			changed = true
 		}
 		if task.Status == TaskWaiting && (task.PendingApproval == nil || task.Checkpoint == nil) {
@@ -148,4 +153,5 @@ func finishTask(task *Task, status TaskStatus, message string) {
 	now := time.Now().UTC()
 	task.Status, task.Error, task.CompletedAt = status, message, &now
 	task.PendingApproval = nil
+	task.PendingInput = nil
 }

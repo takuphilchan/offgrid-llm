@@ -20,7 +20,7 @@ type browserRunTools struct {
 const computerSequentialProtocol = "Use exactly ONE browser tool call per response. Your first tool call must be browser_observe with {}. End that response and wait for its actual result. Do not call browser_verify or an interaction tool in the same response as browser_observe. Never invent observations or tool results."
 
 func configureComputerRequest(request *api.ChatCompletionRequest, task *agents.Task) {
-	if task.Config.ComputerSession != "" {
+	if task.Config.ComputerSession != "" || task.Config.TaskFirst {
 		parallel := false
 		request.ParallelToolCalls = &parallel
 	}
@@ -86,6 +86,19 @@ func (s *Server) attachTransientComputerCapture(task *agents.Task, messages []ap
 }
 
 func (b *browserRunTools) ValidateCompletion(task *agents.Task) error {
+	// Task metadata cannot invalidate or manufacture evidence. Earlier application
+	// sessions cannot satisfy the current target's postcondition either.
+	copy := *task
+	copy.Steps = nil
+	if task.Config.ComputerStepOffset < 0 || task.Config.ComputerStepOffset > len(task.Steps) {
+		return fmt.Errorf("invalid computer evidence boundary")
+	}
+	for _, step := range task.Steps[task.Config.ComputerStepOffset:] {
+		if step.Type != "task_metadata" && step.Type != "rejected" && step.ToolName != taskArtifactToolName {
+			copy.Steps = append(copy.Steps, step)
+		}
+	}
+	task = &copy
 	if nativeComputerDriver(task.Config.ComputerDriver) {
 		return validateNativeCompletion(task)
 	}
@@ -241,14 +254,45 @@ func validateBrowserArguments(name string, args json.RawMessage) error {
 func (b *browserRunTools) ToolsForTask(task *agents.Task) []api.Tool {
 	if task.Config.ComputerSession != "" {
 		if nativeComputerDriver(task.Config.ComputerDriver) {
-			return nativeComputerTools()
+			tools := nativeComputerTools()
+			if task.Config.TaskFirst {
+				tools = append(tools, computerAccessTool())
+				if task.ParentID == "" && b.server.artifactStore != nil {
+					tools = append(tools, taskArtifactTool())
+				}
+			}
+			return tools
 		}
-		if b.server.registry == nil {
-			return browserToolsForVision(false)
+		tools := browserToolsForVision(b.server.registry != nil && b.server.computerVisionReady(task.Model))
+		if task.Config.TaskFirst {
+			tools = append(tools, computerAccessTool())
+			if task.ParentID == "" && b.server.artifactStore != nil {
+				tools = append(tools, taskArtifactTool())
+			}
 		}
-		return browserToolsForVision(b.server.computerVisionReady(task.Model))
+		return tools
 	}
-	return b.RunTools.GetTools()
+	tools := b.RunTools.GetTools()
+	if task.Config.TaskFirst {
+		filtered := make([]api.Tool, 0, len(tools))
+		for _, tool := range tools {
+			if tool.Function.Name != "shell" {
+				switch tool.Function.Name {
+				case "read_file", "list_files", "write_file":
+					tool.Function.Description += " Operates in the SERVICE filesystem only, not the user's desktop. For the user's files, request computer access to their file manager instead."
+				case "current_time":
+					tool.Function.Description += " Returns the SERVICE clock with its timezone, not the desktop's local timezone."
+				}
+				filtered = append(filtered, tool)
+			}
+		}
+		tools = filtered
+		tools = append(append([]api.Tool(nil), tools...), computerAccessTool())
+		if task.ParentID == "" && b.server.artifactStore != nil {
+			tools = append(tools, taskArtifactTool())
+		}
+	}
+	return tools
 }
 func browserDescriptor(name string) (capabilities.Descriptor, bool) {
 	for _, tool := range append(browserTools(), nativeComputerTools()...) {
@@ -263,6 +307,12 @@ func browserDescriptor(name string) (capabilities.Descriptor, bool) {
 	return capabilities.Descriptor{}, false
 }
 func (b *browserRunTools) Capability(name string) (capabilities.Descriptor, bool) {
+	if name == taskArtifactToolName {
+		return taskArtifactDescriptor(), true
+	}
+	if name == computerAccessToolName {
+		return computerAccessDescriptor(), true
+	}
 	if d, ok := browserDescriptor(name); ok {
 		return d, true
 	}
@@ -272,6 +322,34 @@ func (b *browserRunTools) Authorize(ctx context.Context, name string, args json.
 	task, ok := b.server.agentManager.GetTask(e.RunID)
 	if !ok || task.Actor != e.Actor {
 		return agents.ErrTaskNotFound
+	}
+	if task.Config.TaskFirst && name == "shell" {
+		return capabilities.ErrDenied
+	}
+	if task.Config.TaskFirst && task.Config.ComputerSession == "" {
+		if err := b.hostFileAccess(ctx, task, name, args, e); err != nil {
+			return err
+		}
+	}
+	if name == taskArtifactToolName {
+		if !task.Config.TaskFirst || task.ParentID != "" || b.server.artifactStore == nil || e.ExpectedCapability == nil || *e.ExpectedCapability != taskArtifactDescriptor() {
+			return capabilities.ErrDenied
+		}
+		if _, _, err := parseTaskArtifact(args); err != nil {
+			return &agents.ToolAuthorizationError{Code: "invalid_task_artifact", Message: err.Error()}
+		}
+		return nil
+	}
+	if name == computerAccessToolName {
+		if !task.Config.TaskFirst || task.ParentID != "" || e.ExpectedCapability == nil || *e.ExpectedCapability != computerAccessDescriptor() {
+			return capabilities.ErrDenied
+		}
+		if task.Config.ComputerSession != "" {
+			if err := b.ValidateCompletion(task); err != nil {
+				return &agents.ToolAuthorizationError{Code: "computer_invalid_action", Message: "Inspect and verify the current application's outcome before requesting the next application. No new access or action was granted."}
+			}
+		}
+		return computerAccessRequest(args)
 	}
 	if task.Config.ComputerSession != "" {
 		defer func() { authorizationErr = safeComputerAuthorization(authorizationErr) }()
@@ -379,7 +457,10 @@ func safeComputerAuthorization(err error) error {
 }
 func (b *browserRunTools) ExecuteWithPolicy(ctx context.Context, name string, args json.RawMessage, e agents.ToolExecution) (string, error) {
 	if err := b.Authorize(ctx, name, args, e); err != nil {
-		return "", err
+		return "", &agents.ToolFailure{Code: "tool_dispatch_denied", Message: "Tool access changed before execution. No action was dispatched. Review access and try again.", Cause: err}
+	}
+	if name == taskArtifactToolName {
+		return b.server.saveTaskArtifact(ctx, args)
 	}
 	if !strings.HasPrefix(name, "browser_") && !strings.HasPrefix(name, "computer_") {
 		return b.RunTools.ExecuteWithPolicy(ctx, name, args, e)

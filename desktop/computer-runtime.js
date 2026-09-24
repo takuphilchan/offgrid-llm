@@ -1,6 +1,7 @@
 const {EventEmitter} = require('node:events');
 const path = require('node:path');
 const APPROVAL_MODES = new Set(['ask_every_time','scoped_changes','full_task']);
+const validAccessRequest = value => value === undefined || (typeof value === 'string' && /^input-[a-zA-Z0-9_-]{1,122}$/.test(value));
 
 function validateTarget(value) {
   if (value === 'demo') return 'demo';
@@ -9,7 +10,20 @@ function validateTarget(value) {
   if (url.protocol !== 'https:' || url.username || url.password || require('node:net').isIP(url.hostname) || url.hostname.startsWith('[') || !url.hostname.includes('.') || /\.(localhost|local|internal|test|invalid)$/.test(url.hostname)) throw Error('target_invalid');
   return url.pathname==='/' && !url.search && !url.hash ? url.origin : url.href;
 }
-function isComputerLink(value) { return value === 'offgrid://computer' || value === 'offgrid://computer/'; }
+// Deep links identify saved work only. They never carry prompts, service
+// addresses, credentials, targets, approval policies or executable commands.
+function parseComputerLink(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'offgrid:' || url.hostname !== 'computer' || url.port || url.username || url.password || url.hash || !['','/'].includes(url.pathname)) return null;
+    const entries = [...url.searchParams.entries()];
+    if (!entries.length) return {task:null};
+    if (entries.length !== 1 || entries[0][0] !== 'task' || !/^run-[a-f0-9]{32}$/.test(entries[0][1])) return null;
+    return {task:entries[0][1]};
+  } catch { return null; }
+}
+function isComputerLink(value) { return parseComputerLink(value) !== null; }
 
 // One owned worker. Never use ports/PIDs to terminate unrelated processes.
 class ComputerRuntime extends EventEmitter {
@@ -20,7 +34,8 @@ class ComputerRuntime extends EventEmitter {
   publish(value) { this.state = value; this.emit('status',value); return value; }
   async discoverNative(request) {
     if(this.pending || this.child || this.stopping) throw Error('session_active');
-    if(!request || Object.keys(request).length!==1 || typeof request.workspace!=='string' || !request.workspace) throw Error('invalid_session');
+    if(!request || Object.keys(request).some(k=>!['workspace','requestId'].includes(k)) || typeof request.workspace!=='string' || !request.workspace || !validAccessRequest(request.requestId)) throw Error('invalid_session');
+    this.accessRequest=request.requestId;
     this.pending=true;const generation=++this.generation;
     try {
       const service=this.service(),url=new URL(service);
@@ -67,7 +82,7 @@ class ComputerRuntime extends EventEmitter {
   async startNative(request) {
     if(this.pending || this.stopping || !this.child || !this.nativeContext || this.state.state!=='selecting') throw Error('computer_session_unavailable');
     request={...request,approvalMode:request?.approvalMode??'scoped_changes'};
-    if(!request || Object.keys(request).length!==3 || request.workspace!==this.nativeContext.workspace || typeof request.target!=='string' || !this.state.targets.some(t=>t.id===request.target) || !APPROVAL_MODES.has(request.approvalMode)) throw Error('computer_stale_target');
+    if(!request || Object.keys(request).some(k=>!['workspace','target','approvalMode','requestId'].includes(k)) || request.requestId!==this.accessRequest || request.workspace!==this.nativeContext.workspace || typeof request.target!=='string' || !this.state.targets.some(t=>t.id===request.target) || !APPROVAL_MODES.has(request.approvalMode)) throw Error('computer_stale_target');
     this.pending=true;const {service,workspace,generation}=this.nativeContext;
     try {
       const identity=await this.identity(service);
@@ -85,11 +100,12 @@ class ComputerRuntime extends EventEmitter {
   async start(request) {
     if (this.pending || this.child || this.stopping) throw Error('session_active');
     request={...request,approvalMode:request?.approvalMode??'scoped_changes'};
-    if (!request || Object.keys(request).some(k=>!['origin','workspace','networkMode','upload','approvalMode'].includes(k)) || typeof request.workspace !== 'string' || !request.workspace || !APPROVAL_MODES.has(request.approvalMode)) throw Error('invalid_session');
+    if (!request || Object.keys(request).some(k=>!['origin','workspace','networkMode','upload','approvalMode','requestId'].includes(k)) || typeof request.workspace !== 'string' || !request.workspace || !APPROVAL_MODES.has(request.approvalMode) || !validAccessRequest(request.requestId)) throw Error('invalid_session');
     if (request.upload && (Object.keys(request.upload).sort().join(',')!=='id,name,path,sha256,size' || typeof request.upload.path!=='string' || !path.isAbsolute(request.upload.path) || typeof request.upload.name!=='string' || request.upload.name.length>255 || !Number.isSafeInteger(request.upload.size) || request.upload.size<0 || request.upload.size>512*1024*1024 || typeof request.upload.id!=='string' || !/^[a-f0-9]{32}$/.test(request.upload.id) || typeof request.upload.sha256!=='string' || !/^[a-f0-9]{64}$/.test(request.upload.sha256))) throw Error('computer_upload_invalid');
     const origin = validateTarget(request.origin);
     const networkMode = request.networkMode ?? 'direct';
     if (!['direct','trusted-vpn'].includes(networkMode) || (origin === 'demo' && networkMode !== 'direct')) throw Error('network_mode_invalid');
+    this.accessRequest=request.requestId;
     this.pending = true; const generation = ++this.generation;
     try {
       const service = this.service();
@@ -132,6 +148,19 @@ class ComputerRuntime extends EventEmitter {
     } catch (error) { if (generation !== this.generation) return this.state; this.publish({state:'error',code:error.message}); throw error; }
     finally { this.pending = false; }
   }
+  // Check and revoke in the same main-process turn. Renderer status checks alone
+  // race with a different task acquiring the controller. No match is a no-op.
+  stopAccess(request) {
+    if (!request || Object.keys(request).length!==1) throw Error('invalid_session');
+    if (Object.hasOwn(request,'requestId')) {
+      if (!request.requestId || !validAccessRequest(request.requestId)) throw Error('invalid_session');
+      if (request.requestId!==this.accessRequest) return Promise.resolve({state:'not_owned'});
+    } else if (Object.hasOwn(request,'session')) {
+      if (typeof request.session!=='string' || !request.session || request.session.length>128) throw Error('invalid_session');
+      if (request.session!==this.state.target?.id) return Promise.resolve({state:'not_owned'});
+    } else throw Error('invalid_session');
+    return this.stop();
+  }
   stop() {
     if (this.stopping) return this.stopping;
     this.stopping = this.stopOwned().finally(() => { this.stopping = null; });
@@ -161,4 +190,4 @@ class ComputerRuntime extends EventEmitter {
     return this.publish({state:'stopped'});
   }
 }
-module.exports = {ComputerRuntime, validateTarget, isComputerLink};
+module.exports = {ComputerRuntime, validateTarget, isComputerLink, parseComputerLink};

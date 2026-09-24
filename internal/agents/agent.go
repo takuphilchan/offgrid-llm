@@ -42,18 +42,23 @@ type Step struct {
 
 // AgentConfig configures agent behavior
 type AgentConfig struct {
-	ComputerSession      string        `json:"computer_session,omitempty"`
-	ComputerDriver       string        `json:"computer_driver,omitempty"`
-	ComputerApprovalMode string        `json:"computer_approval_mode,omitempty"`
-	ComputerExpectedText string        `json:"computer_expected_text,omitempty"`
-	ComputerVerification string        `json:"computer_verification,omitempty"`
-	MaxIterations        int           `json:"max_iterations"`   // Maximum reasoning steps
-	MaxTokens            int           `json:"max_tokens"`       // Max tokens per LLM call
-	Temperature          float64       `json:"temperature"`      // LLM temperature
-	TimeoutPerStep       time.Duration `json:"timeout_per_step"` // Timeout for each step
-	EnableMemory         bool          `json:"enable_memory"`    // Use conversation memory
-	SystemPrompt         string        `json:"system_prompt"`    // Custom system prompt
-	ReasoningStyle       string        `json:"reasoning_style"`  // "react", "cot", "plan-execute"
+	ContextWindow        int                                `json:"context_window,omitempty"`
+	AllowedTools         []string                           `json:"allowed_tools,omitempty"`
+	AllowedCapabilities  map[string]capabilities.Descriptor `json:"allowed_capabilities,omitempty"`
+	ComputerSession      string                             `json:"computer_session,omitempty"`
+	ComputerDriver       string                             `json:"computer_driver,omitempty"`
+	ComputerStepOffset   int                                `json:"computer_step_offset,omitempty"`
+	TaskFirst            bool                               `json:"task_first,omitempty"`
+	ComputerApprovalMode string                             `json:"computer_approval_mode,omitempty"`
+	ComputerExpectedText string                             `json:"computer_expected_text,omitempty"`
+	ComputerVerification string                             `json:"computer_verification,omitempty"`
+	MaxIterations        int                                `json:"max_iterations"`   // Maximum reasoning steps
+	MaxTokens            int                                `json:"max_tokens"`       // Max tokens per LLM call
+	Temperature          float64                            `json:"temperature"`      // LLM temperature
+	TimeoutPerStep       time.Duration                      `json:"timeout_per_step"` // Timeout for each step
+	EnableMemory         bool                               `json:"enable_memory"`    // Use conversation memory
+	SystemPrompt         string                             `json:"system_prompt"`    // Custom system prompt
+	ReasoningStyle       string                             `json:"reasoning_style"`  // "react", "cot", "plan-execute"
 }
 
 // DefaultAgentConfig returns sensible defaults

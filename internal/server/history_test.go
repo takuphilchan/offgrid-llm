@@ -47,7 +47,12 @@ func TestDeletedLegacyInterruptedAgentStaysAbsent(t *testing.T) {
 		t.Fatalf("legacy deletion not offered: %s", w.Body.String())
 	}
 	w = httptest.NewRecorder()
-	s.handleAgentTaskAction(w, httptest.NewRequest("DELETE", "/v1/agents/tasks/run-legacy", nil))
+	s.handleRuns(w, httptest.NewRequest("GET", "/v1/runs", nil))
+	if !strings.Contains(w.Body.String(), `"deletable":true`) {
+		t.Fatalf("Activity omitted deletion: %s", w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	s.handleJobRead(w, httptest.NewRequest("DELETE", "/api/v2/jobs/run-legacy", nil))
 	if w.Code != 200 {
 		t.Fatalf("delete failed: %d %s", w.Code, w.Body.String())
 	}

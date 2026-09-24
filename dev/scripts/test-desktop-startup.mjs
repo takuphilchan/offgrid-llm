@@ -88,19 +88,19 @@ try {
   assert.equal(await page.evaluate(async () => { try { await window.electron.startDesktopWorkspace(); return 'allowed'; } catch { return 'denied'; } }), 'denied', 'Web UI cannot invoke startup-only process controls');
   await app.close(); app = null;
   assert.equal((await fetch(`${url}/api/v2/system`)).status, 200, 'Quitting never stops the external fixture');
-  assert.equal(JSON.parse(await readFile(join(profile, 'desktop-connection.json'), 'utf8')).mode, 'isolated');
-  // The explicitly chosen workspace survives application restart.
+  // A legacy preference must not silently strand normal launches in a second
+  // workspace. Preserve its data, but require an explicit recovery choice.
+  await writeFile(join(profile, 'desktop-connection.json'), JSON.stringify({mode:'isolated'}));
+  await writeFile(join(paths.data, 'startup-recovery-proof'), 'owned fixture');
   app = await launch(profile);
   const resumed = await app.firstWindow();
+  await resumed.locator('#recovery:not([hidden])').waitFor();
+  assert.equal((await resumed.evaluate(() => window.electron.getBackendInfo())).managedByDesktop, false);
+  await resumed.locator('#separate').click();
+  await resumed.locator('#local').click();
   await resumed.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/ui\//, { timeout: 40000 });
   assert.equal((await resumed.evaluate(() => window.electron.getPaths())).data, paths.data);
-  // Changing the native preference must not interrupt a running workspace.
-  await app.evaluate(({ Menu }) => Menu.getApplicationMenu().getMenuItemById('connection-default').click());
-  for (let i = 0; i < 100; i++) {
-    if (JSON.parse(await readFile(join(profile, 'desktop-connection.json'), 'utf8')).mode === 'default') break;
-    await delay(20);
-  }
-  assert.equal(JSON.parse(await readFile(join(profile, 'desktop-connection.json'), 'utf8')).mode, 'default');
+  assert.equal(await readFile(join(paths.data, 'startup-recovery-proof'), 'utf8'), 'owned fixture');
   assert.equal((await resumed.evaluate(() => window.electron.getBackendInfo())).workspaceMode, 'isolated');
   await app.close(); app = null;
   // A matching external service attaches without a native child, and remains

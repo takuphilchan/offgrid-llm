@@ -61,3 +61,49 @@ func TestComputerStopIsSafeBeforeCompanionStartup(t *testing.T) {
 		}
 	}
 }
+
+func TestScopedSessionStopCannotRevokeAnotherSession(t *testing.T) {
+	s := &Server{browserHub: computer.NewBrowserHub()}
+	pair := func(actor string) (string, string) {
+		t.Helper()
+		code, err := s.browserHub.PairCode(actor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		session, token, err := s.browserHub.Pair(code, "offgrid-demo://research", computer.ProtocolVersion)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return session.ID, token
+	}
+	old, oldToken := pair("local-admin")
+	s.browserHub.StopSession("local-admin", old)
+	current, currentToken := pair("local-admin")
+	stop := func(body string, status int) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		s.handleComputerSessionStop(w, httptest.NewRequest("POST", "/api/v2/computer/sessions/stop", strings.NewReader(body)))
+		if w.Code != status {
+			t.Fatalf("%d: %s", w.Code, w.Body.String())
+		}
+	}
+	for _, id := range []string{old, "unknown"} {
+		stop(`{"session_id":"`+id+`"}`, 200)
+	}
+	for _, body := range []string{`{}`, `{"session_id":""}`, `{"session_id":"` + current + `","all":true}`, `{"session_id":"` + current + `"} {}`} {
+		stop(body, 400)
+	}
+	if s.browserHub.Heartbeat(currentToken) != nil {
+		t.Fatal("unrelated session revoked")
+	}
+	stop(`{"session_id":"`+current+`"}`, 200)
+	stop(`{"session_id":"`+current+`"}`, 200)
+	if s.browserHub.Heartbeat(currentToken) == nil || s.browserHub.Heartbeat(oldToken) == nil {
+		t.Fatal("incorrect revocation scope")
+	}
+	foreign, foreignToken := pair("another-admin")
+	stop(`{"session_id":"`+foreign+`"}`, 200)
+	if s.browserHub.Heartbeat(foreignToken) != nil {
+		t.Fatal("foreign session revoked")
+	}
+}

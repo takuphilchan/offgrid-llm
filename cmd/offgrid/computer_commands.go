@@ -12,8 +12,34 @@ import (
 )
 
 func runComputerCommand(ctx context.Context, args []string) error {
+	if len(args) > 0 {
+		if args[0] == "setup" {
+			if len(args) > 2 {
+				return usage("computer setup [RUN_ID]")
+			}
+			id := ""
+			if len(args) == 2 {
+				id = args[1]
+			}
+			return openComputerWorkspace(id)
+		}
+		if args[0] == "pause" || args[0] == "resume" || args[0] == "takeover" || (args[0] == "stop" && len(args) == 2) {
+			command := append([]string(nil), args...)
+			if command[0] == "stop" {
+				command[0] = "cancel"
+			}
+			return runAgentControl(ctx, command)
+		}
+		if args[0] == "run" {
+			for _, arg := range args[1:] {
+				if arg == "--model" {
+					return runTaskSubmit(ctx, args[1:])
+				}
+			}
+		}
+	}
 	if len(args) == 0 {
-		return usage("computer status | targets | pair | stop | check <model> [--require-vision] | run <session> <model> [--expect <page-text>] <task>")
+		return usage("computer setup [RUN_ID] | status | targets | run <task> --model <model> [--wait] | pause|resume|takeover|stop RUN_ID | check <model>")
 	}
 	path, method := "", http.MethodGet
 	var body []byte

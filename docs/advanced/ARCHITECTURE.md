@@ -125,6 +125,99 @@ If a future hosted control plane is split from the local runtime, a framework
 such as Go-Zero can be evaluated for that independently deployed boundary. It
 should not dictate the local engine architecture.
 
+## Agent task architecture
+
+The interactive workflow is task-first: save an outcome, run the tool loop,
+request missing access as a durable interruption, then continue the same job.
+The model does not grant itself access and the renderer does not own execution.
+
+| Responsibility | Implementation boundary |
+| --- | --- |
+| Admission, tool loop, checkpoints, exact approvals | `internal/agents/durable.go` |
+| Saved input interruption and idempotent resolution | `internal/agents/input.go` |
+| Pause, takeover, steering and recovery | `internal/agents/control.go` |
+| Exact context archival and recorded plans | `context.go`, `runtime_tools.go` |
+| Bounded durable child graph and scheduling | `coordination.go` |
+| Snapshots, ordered activity, schema backup/migration | `sqlite_tasks.go`, `task_activity.go`, `input_migration.go` |
+| HTTP task commands | `internal/server/agent_jobs.go`, `job_commands.go` |
+| Private artifacts, parsing, read-back and owner downloads | `internal/server/task_artifacts.go` |
+| Model request for an environment | `internal/server/agent_access.go` |
+| Actual computer authorization and dispatch | `computer_tools.go`, `internal/computer`, local companion |
+| Draft/history and commands | `TaskWorkspace.tsx` |
+| Read-only snapshot/stream recovery | `useTaskRun.ts` |
+| Contextual host consent and saved-task continuation | `TaskAccess.tsx` |
+
+`POST /api/v2/jobs` stores an actor-scoped request ID and payload digest before
+returning acceptance. Identical retries reuse the task; changed payloads return
+409. Deletion removes content but retains minimal request identity in the
+tombstone, preventing an old retry from resurrecting deleted work.
+`request_computer_access` is a typed model tool that *interrupts before dispatch*.
+Only `/api/v2/jobs/{id}/input`, after host consent, actor/driver checks and model
+preflight, can attach a session and consume that pending call. Tools are selected
+again after resolution. The first computer action must observe; no previous
+planning step counts as a computer observation. Session permissions are immutable.
+
+This separates three lifetimes: durable task history, model execution, and
+ephemeral host authority. Schema 4 gates older binaries against the new task
+states. Migration saves a verified prior-schema SQLite backup plus digest/count
+manifest before activation; it does not dual-write. Task input waits survive a
+restart, while connected host sessions and grants expire.
+
+### Bounded durable coordination
+
+The old `WorkflowEngine` and `Orchestrator` are not the production coordination
+boundary: they retain in-memory workflow results and use `RunImmediate` rather
+than durable, actor-scoped child jobs. The server no longer wires that orchestrator
+as an executable API. Do not re-enable it or reuse its raw executor as a shortcut.
+
+The root model can call `delegate_tasks` before acquiring computer access. It
+creates 1–4 read-only child jobs per group, at most eight per task, one level deep.
+Each child has ten model iterations, the parent's model/context allocation and
+an explicit subset of enabled tools. Capability descriptors are pinned; a tool
+replacement cannot widen the child grant. No child receives computer authority,
+write tools, shell, further delegation, or its parent's exact-call approvals.
+
+Parent, children, dependency edges and events are committed in one SQLite
+transaction. Waiting parents release their runner slot. Ready children pass
+through the same runner and inference admission as interactive tasks; there is
+no second planner backend. Dependency results are bounded, marked as untrusted
+excerpts and linked to full child jobs. Cycles and unknown dependencies fail
+validation. The parent only synthesizes after all children complete; a failed
+branch cannot silently become a successful parent. Pause/stop cascade, uncertain
+calls never replay, and restart requires explicit parent resume. The UI links
+subtasks with their individual approval/recovery controls.
+
+This is bounded delegation, **not** arbitrary workflow registration, recursive
+agent teams, autonomous child computer control or concurrent file writers.
+Reusable workflow templates, multi-model scheduling and graph-wide adjustable
+token/wall-time budgets are not implemented. The legacy workflow API stays retired.
+
+`task_plan` stores model-reported progress with recorded step references. It is
+not an outcome oracle. `context.go` archives whole completed call/result groups
+without dropping user instructions. The model can retrieve exact archived
+records through owner-task `task_history` pages. Byte estimates are explicitly
+labelled estimates, anchored to runtime-reported prompt usage when available;
+they are not a tokenizer or a guarantee that every template will fit. Oversize
+uncompressible input fails before another tool action. Archives persist with
+digest validation and are excluded from public snapshots/exports.
+
+For computer tasks, a verified current application can hand off to a newly
+consented target in the same job. The previous session is revoked, approvals are
+not transferred, and fresh observation is mandatory. Workspace artifact writes
+are bounded typed operations: the service rereads, hashes and parses text,
+Markdown, JSON and CSV outputs. CSV formula-like values are rejected. A committed
+task reference and current ownership are required for download; digest knowledge
+alone grants nothing. These checks establish byte/format integrity, not factual
+quality, a saved Office document, or semantic completion of every requested task.
+
+Prefer single-agent execution. Qualify delegation benefits with identical task
+evaluations rather than assuming extra agents improve quality.
+Relevant primary references are [Anthropic's orchestrator/worker experience](https://www.anthropic.com/engineering/multi-agent-research-system),
+including its limits on tightly coupled work, and [the separation of harness and execution environment](https://www.anthropic.com/engineering/managed-agents).
+These inform the design; they do not qualify OffGrid models or justify a cloud
+dependency. There is no universal September-2026 architecture that makes an
+unreliable local model or unverified driver reliable merely by adding agents.
+
 ## Capability maturity
 
 - **Core:** inference, CLI, OpenAI-compatible APIs, sessions, web/desktop

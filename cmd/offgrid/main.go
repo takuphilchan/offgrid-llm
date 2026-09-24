@@ -1120,6 +1120,7 @@ func main() {
 			handleLoRA(os.Args[2:])
 			return
 		case "agent", "agents":
+			if len(os.Args)>2 && os.Args[2]=="run" {executeCommand(func(ctx context.Context)error{return runTaskSubmit(ctx,os.Args[3:])});return}
 			if len(os.Args) > 2 && isAgentControl(os.Args[2]) {
 				executeCommand(func(ctx context.Context) error { return runAgentControl(ctx, os.Args[2:]) })
 				return

@@ -198,6 +198,22 @@ func (h *BrowserHub) Reserve(actor, id, run string) error {
 	s.run = run
 	return nil
 }
+
+// ReserveTask supports retrying the attachment of a saved access request.
+// It never makes a consumed session available to a different task.
+func (h *BrowserHub) ReserveTask(actor, id, run string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s, err := h.session(actor, id)
+	if err != nil {
+		return err
+	}
+	if run == "" || (s.run != "" && s.run != run) || s.Remaining <= 0 {
+		return ErrSession
+	}
+	s.run = run
+	return nil
+}
 func (h *BrowserHub) Check(actor, id, run string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -229,6 +245,27 @@ func (h *BrowserHub) Stop(actor string) {
 	}
 	for reference, capture := range h.captures {
 		if actor == "" || capture.actor == actor {
+			delete(h.captures, reference)
+		}
+	}
+}
+
+// StopSession revokes only this actor's selected execution authority. Other
+// actors and unrelated jobs are not affected; delivered effects remain uncertain.
+func (h *BrowserHub) StopSession(actor, id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.sessions[id]
+	if s == nil || s.Actor != actor {
+		return
+	}
+	s.stopped = true
+	select {
+	case s.replies <- BrowserReply{Error: "session stopped"}:
+	default:
+	}
+	for reference, capture := range h.captures {
+		if capture.actor == actor && capture.session == id {
 			delete(h.captures, reference)
 		}
 	}

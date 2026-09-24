@@ -1983,3 +1983,381 @@ automatic reversible work, exact consequential approval, full-task submission,
 and non-overridable prohibited actions, plus desktop IPC and browser UI contract
 tests. These controls reduce approval fatigue; they do not qualify general native
 computer use or remove the remaining platform/model release gates above.
+
+### Task-first agent execution and architecture review — 2026-09-24
+
+The working tree adds task-first submission through `/api/v2/jobs` to the existing
+durable runner. An actor-scoped request ID deduplicates submissions, including
+lost acknowledgments and deleted-task tombstones. A model's request for computer
+access persists a `waiting_for_input` checkpoint before returning control to the
+user. Locally approved access resumes that same task; it never submits a second
+task or grants authority from a model-proposed application name. Its first
+computer operation must observe the selected target. Schema 2-to-3 migration
+creates and verifies a SQLite backup and recovery manifest before activation.
+
+The shared renderer now leads with the task, defers access controls until needed,
+and separates new drafts from previous results. Desktop handoff carries only the
+saved task ID, not credentials, task text or executable actions. Older services
+retain the compatibility view. Native runtime failures do not prescribe browser
+repair. The existing monochrome tokens and typography are retained: a discovered
+CSS layer-order regression was corrected and guarded by light/dark computed-style
+tests, including navigation links. This is not a new branding palette.
+
+Local validation:
+
+- Windows: `go test ./...` and a subsequent focused run of agents, computer,
+  server and CLI packages passed.
+- WSL/Linux: `go test -race ./internal/agents ./internal/computer ./internal/server`
+  passed.
+- Web: TypeScript, generated API drift check and production build passed. The
+  build still reports the existing large-JavaScript-chunk warning.
+- Browser contracts: 35 task-first, streaming and interaction tests passed,
+  including nine-locale layout, RTL, reconnect, request deduplication and shared
+  palette checks. These use API/desktop fixtures, not installed-OS or model-task
+  qualification.
+- Desktop: 15 computer-runtime tests passed, including strict ID-only deep links.
+
+Architecture gaps found in this review remain explicit:
+
+- The legacy workflow and multi-agent libraries use in-memory execution state
+  and `RunImmediate`, not durable child jobs. The old workflow registration route
+  also acknowledged work without registering it. Their production HTTP adapters
+  now report unavailable rather than executing a second, non-durable authority
+  or falsely acknowledging registration.
+- The new UI uses task-first submission; CLI computer submission still uses
+  the legacy route and requires a session ID. Existing commands can inspect,
+  cancel and recover shared tasks, but first-use/client lifecycle parity is not
+  complete. Approval/recovery mutations also still use compatibility routes.
+- The durable tool loop has iteration/time limits but no integrated token-aware
+  compaction, durable hierarchical work plan or parent/child budget accounting.
+  Other memory/workflow modules are not evidence of integration into this runner.
+- A connected task receives one scoped computer toolset. Multi-application
+  handoff, general follow-up steering, and a complete shared pause/takeover flow
+  require further work; removing setup fields does not implement those behaviors.
+- Browser/native verification checks bounded application evidence. They do not
+  constitute general independent document/spreadsheet/task outcome verification.
+
+The target architecture and required coordinator invariants are recorded in
+[ARCHITECTURE.md](ARCHITECTURE.md#bounded-durable-coordination).
+Keep one authoritative runner, SQLite persistence, governed tools and shared
+inference admission. Add coordination only through durable scoped child jobs;
+do not equate extra agents, reasoning-style labels or another framework with
+measured task quality. This checkpoint does not qualify general native/vision
+control, multi-agent workflows, signing, installed upgrades or the pilot gates.
+No live container/desktop replacement, commit, push or publication is included.
+
+### Durable task lifecycle and bounded coordination follow-up — 2026-09-24
+
+This follow-up supersedes the implementation gaps listed at the preceding
+checkpoint where specifically described below; it does not qualify the entire
+native-computer or research program.
+
+- Web, desktop renderer and CLI use the same `/api/v2/jobs` submission and
+  lifecycle commands. Pause, follow-up instructions, resume, takeover, stop,
+  reconnect and evidence export operate on the saved job. Actor-scoped request
+  IDs prevent duplicate submissions and duplicate follow-up instructions.
+- Computer handoffs remain in the same job, require verification of the current
+  target and fresh local consent for the next target, revoke the previous
+  session, and require a fresh observation. Uncertain input is never replayed.
+- Model-reported work plans reference recorded steps. Context management archives
+  complete older call/result groups with digests, retains user instructions and
+  exposes bounded history retrieval. Token estimates are labelled and use the
+  allocated window, not a model's advertised maximum.
+- Bounded read-only child jobs and dependency edges share the existing runner,
+  admission control and SQLite transaction. Children have pinned tool grants,
+  fixed iteration/depth/count limits, no computer authority and no shell/write
+  capabilities. Failed branches cannot silently become successful parent jobs;
+  restart recovery requires explicit resume. The old workflow engine remains
+  unavailable rather than becoming a second execution authority.
+- Typed workspace artifacts support UTF-8 text, Markdown, JSON and CSV. Stored
+  bytes are reread, hashed and parsed before evidence is returned. Downloads
+  require a committed owner-task reference; knowing a digest is insufficient.
+  The CLI verifies downloaded bytes before creating a new local file and refuses
+  overwrites. Format/integrity checks do not establish factual correctness or
+  prove that an external document application saved a file.
+- Schema 4 migration preserves a verified prior-schema database and recovery
+  manifest. Older binaries must not use the migrated workspace. The task-first
+  route cannot fall back to arbitrary shell execution.
+
+Validation for this follow-up:
+
+- Windows full Go suite and subsequent focused agents/server/CLI tests passed.
+- WSL race checks passed for agents, server, computer and artifact packages.
+- TypeScript, generated API drift check, production UI build and 15 desktop
+  runtime tests passed. The existing large-JavaScript-chunk warning remains.
+- 39 browser-contract tests passed (10 task-first, 3 streaming, 26 interaction),
+  including light/dark monochrome tokens, responsive layouts and locale cases.
+  These fixtures are not installed-platform qualification.
+- A packaged isolated service using the installed Qwen2.5 7B Q4_K_M model,
+  upstream runtime from the existing GPU image, explicit 8192-token context and
+  q8_0 KV cache passed `dev/scripts/test-task-jobs.mjs`: exact CSV bytes/digest
+  and parsed dimensions, deduplicated submission, two calculator children with
+  dependency ordering and independently checked result 90, and durable native
+  access interruption without dispatch. Synthetic history remains isolated.
+  An earlier adaptive 2048-token fixture correctly refused an oversized context
+  before executing tools; this is not silently retried with a larger allocation.
+
+Still outside this evidence: arbitrary reusable workflow registration, recursive
+agent teams, multi-model scheduling, adjustable graph-wide token/wall-time
+budgets, concurrent computer controllers, general semantic outcome verification,
+native/vision platform qualification, signing, installed desktop upgrades and
+pilot/soak gates. The real-model smoke check establishes these bounded execution
+paths, not general model-planning reliability. No commit, push or release is
+included in this checkpoint.
+
+Authorized local deployment at this checkpoint:
+
+- Replaced `offgrid` with `offgrid-llm:task-runtime-gpu-20260924`, revision
+  `2c75c51-worktree-task-runtime-20260924`; the existing release version remains
+  0.4.11 (this is a local working-tree build, not a published release).
+- Saved and checksum-verified the stopped workspace at
+  `/home/phil/offgrid-computer-backup-78d0tazy/workspace.tar.gz`, with private
+  container configuration and a separately validated migration clone alongside.
+- Kept `offgrid-before-computer-1790225789` stopped for rollback. The isolated
+  real-model probe and migration-check containers are also stopped; exactly one
+  OffGrid container is running on port 11611.
+- Verified health, matching UI build identity, preservation of the pre-upgrade
+  19 task IDs/statuses and four model IDs/sizes. Later user-created tasks are not
+  part of that migration baseline. Models remain in their existing volume.
+- The opt-in read-only installed-UI Playwright check passed against the replaced
+  service: task-first composer, existing history/results, mobile width, no
+  upfront browser-pairing control and no JavaScript runtime errors. No synthetic
+  task was submitted into the live workspace. Desktop host binaries were not
+  replaced by this container deployment.
+
+Post-deployment user testing exposed an additional correctness issue: a built-in
+`list_files` call against `d:\\` ran in the Linux service environment and returned
+`no such file or directory`. The durable runner categorizes all executor errors
+after intent persistence as uncertain, including this known read-only failure,
+and presents manual outcome reconciliation. This is not evidence of a lost
+mutation acknowledgment. Repair needs effect-aware typed tool errors and clear
+service/host filesystem routing; ordinary read failures must not require invented
+human verification. Genuine uncertain mutations must retain no-replay protection.
+This issue is diagnosed, not repaired or qualified by the tests above.
+
+### Read failure recovery and history management repair — 2026-09-24
+
+This repair supersedes the immediately preceding read-error diagnosis:
+
+- Only pinned, service-owned read-only built-ins carry a durable no-side-effect
+  intent marker. Missing files, denied reads and invalid calculations fail with
+  stable safe errors, not an uncertain outcome or a request for invented human
+  verification. Pause/cancel/restart recovery preserves that distinction. A
+  legacy checkpoint, user/MCP replacement or merely low-risk descriptor is not
+  sufficient evidence to classify a tool as read-only.
+- Recognizable foreign desktop paths in task-first filesystem calls pause for
+  local file-manager access before dispatch, after checking tool authorization.
+  The service does not translate paths, expose host mounts or infer consent.
+  Read-only children cannot obtain computer authority. Access-granted results
+  explicitly contain no directory contents; a fresh observation is required.
+- Agents and Activity expose individual confirmed deletion and bulk removable
+  task cleanup using the same `/api/v2/jobs/{id}` deletion authority. Active work,
+  uncertain effects and referenced child records remain protected. Local-owner
+  cleanup of unowned legacy history uses the same rules. Deleted projections do
+  not reappear after restart; audit records and backups are intentionally retained.
+- Companion system audit notifications no longer appear as a perpetually
+  running task. Tools and Connections share top-level Agents navigation and
+  responsive management panels; the existing monochrome tokens and locale
+  resources are preserved. Raw uncertain-call arguments are disclosure details,
+  not the primary content of the exceptional recovery screen.
+
+Evidence: full Windows Go tests, focused agents/server regressions, WSL race
+checks, TypeScript/API drift checks, UI build and 42 browser-contract tests
+(10 task-first, 3 management, 3 streaming, 26 interaction) passed. Tests include
+real built-in filesystem failures, restart markers, protected history, legacy
+deletion, and confirmed cleanup from both UI views. Browser fixtures verify
+management placement and mobile width; they do not qualify native control or
+general model-planning reliability. The existing large UI bundle warning remains.
+
+Historical uncertain calls without trusted effect metadata are not rewritten as
+successful reads. This repair does not add unrestricted desktop filesystem access
+or independently verify previously user-reconciled results.
+
+Authorized local deployment of this repair:
+
+- `offgrid-llm:recovery-ui-gpu-20260924`, revision
+  `2c75c51-worktree-recovery-ui-20260924`, is healthy on loopback port 11611.
+  The local build retains version 0.4.11 and reuses the existing native runtime;
+  it is not a published release or an installed desktop-host update.
+- The stopped workspace backup is
+  `/home/phil/offgrid-computer-backup-4MN11JBa/workspace.tar.gz`; its checksum
+  passed. Private configuration, clone-validation results and activation
+  snapshots are in the same directory. Rollback container
+  `offgrid-before-computer-1790229860` is stopped. Only one OffGrid container
+  runs; the validation clone was stopped before live activation.
+- Clone and live activation snapshots contained all 24 pre-update task IDs with
+  unchanged statuses. The four model IDs and sizes were preserved. Subsequent
+  authenticated-local deletion requests removed finished history; those later
+  changes were not undone by validation. The backup retains the earlier records.
+- Two read-only installed-UI checks passed against the actual replacement:
+  desktop/mobile composer and saved-task inspection; Tools/Connections panels;
+  Activity deletion metadata parity and absence of the phantom system task.
+  Confirmation dialogs were inspected without confirming deletion, and mutating
+  browser requests were blocked in the management smoke test. Screenshots were
+  visually reviewed. No synthetic task or model request was submitted by these
+  live checks. No commit, push or publication is included.
+
+### Pre-release review repairs — 2026-09-24
+
+The five findings from the task-first review are addressed in the working tree:
+
+- Access-panel and task-toolbar cancellation use scoped desktop IPC. Pending
+  discovery/startup is bound to the saved input request; connected control is
+  matched by session ID in the desktop main process before revocation. A stale
+  setup panel cannot stop a replacement task. Late host replies cannot attach
+  access after explicit cancellation. Service revocation uses the actor-scoped,
+  idempotent `/api/v2/computer/sessions/stop` endpoint, not global emergency stop.
+  Global emergency stop remains a separate safety action. Older desktop bridges
+  receive an update-required explanation before task-first setup starts.
+- Delegated grants require known built-in source, namespace, kind and risk,
+  both at creation and dispatch. Pre-existing user replacements with permitted
+  names cannot acquire read-only child authority. Existing unsafe child grants
+  fail closed. Governed HTTP GET remains network access, not evidence that an
+  interrupted request was side-effect-free.
+- Task-first browser input now performs the existing installed-profile vision
+  check. Valid cached passes are reused; missing/failed checks leave only
+  structured controls enabled. A service restart requires a fresh check.
+- Coordinator ticks collect eligible IDs/actors/statuses under the manager lock
+  without copying completed histories, checkpoints or context archives. A
+  regression fixture with large historical payloads checks zero idle allocations.
+- Snapshots expose `can_steer` using the same saved-state predicate as instruction
+  submission. Completed subtasks no longer hide follow-up editing; active
+  delegation and uncertain actions still prevent it. Dispatch rechecks worker
+  settlement and actor ownership.
+
+Validation includes the Windows Go suite and focused uncached tests, WSL race
+checks for agents/server, TypeScript and generated-contract drift checks,
+production UI build, desktop runtime tests and shared UI regressions. The vision
+test uses a test-only reader of the synthetic PNG challenge, not a production
+fake engine or evidence of real-model grounding quality. Browser tests use
+isolated API/IPC fixtures. The pre-existing large UI bundle warning remains.
+
+These repairs do not qualify native/vision workflows on additional platforms,
+installed upgrades, signing, or the soak/pilot gates. Matching service/renderer
+and desktop-host builds are needed to deploy scoped cancellation. No commit,
+push, publication, live container replacement or installed desktop update is
+included in this repair.
+
+Authorized matching local deployment of these repairs:
+
+- Activated `offgrid-llm:review-repairs-gpu-20260924`, revision
+  `2c75c51-worktree-review-repairs-20260924`, retaining local version 0.4.11
+  and the existing native inference runtime. The stopped workspace archive at
+  `/home/phil/offgrid-computer-backup-nqHoQDV3/workspace.tar.gz` passed SHA-256
+  and archive-to-source comparison. Private configuration and clone/live checks
+  are alongside it. Rollback container `offgrid-before-computer-1790234470`
+  remains stopped; exactly one OffGrid container runs on loopback port 11611.
+- Activation preserved the two pre-deployment task IDs/statuses, workspace
+  identity and all four model IDs/sizes. Three additional completed records
+  appeared after activation and were left intact; deployment checks do not
+  create synthetic tasks or roll back subsequent client activity.
+- Updated the installed Windows desktop at
+  `C:\Users\phil\AppData\Local\Programs\OffGrid LLM Desktop`. The previous
+  application remains in the adjacent
+  `OffGrid LLM Desktop.rollback-review-repairs-20260924` directory. Verified
+  data/settings, Electron profile and companion-journal backups are in
+  `build/desktop-backups/before-review-repairs-20260924`; models were untouched.
+  Backup restoration must not roll back the companion duplicate-action journal.
+- Staged and installed Electron executables passed read-only startup checks
+  against the new container with isolated test profiles: matching build identity,
+  no duplicate service, task-first UI and the scoped Stop IPC. Two live browser
+  UI checks and 18 desktop runtime tests passed. Installed browser/native pack
+  digests passed; the service reports healthy with zero restarts. The installed
+  smoke evidence is in
+  `C:\Users\phil\AppData\Local\Temp\offgrid-review-deployment-j6xS0O`.
+- This is an unsigned local Windows build, not a signed-publisher distribution
+  or a new native/vision qualification. WSL and the VPN were not restarted or
+  reconfigured. No commit, push or publication is part of this deployment record.
+
+### MCP connection removal repair — 2026-09-24
+
+- Added an administrator-only, idempotent removal API and a confirmed per-row
+  **Remove connection** action in the shared web/desktop Connections view.
+  Disconnected or disabled saved entries stay discoverable and removable.
+- Removal persists the configuration change before revoking the exact source's
+  tool executors and capability descriptors, then closes the MCP transport.
+  Configuration writes use a synced temporary file and replacement, not in-place
+  truncation. Corrupt/unwritable settings block removal without discarding the
+  connection or other configuration. Connect-and-save is serialized with removal;
+  duplicate live names and conflicting normalized tool namespaces are rejected.
+- Removed connections do not return after restart. Other connections, built-in
+  tools, custom tools and task history are retained. The confirmation explicitly
+  warns that tasks may fail and already dispatched actions are not undone.
+- Evidence: real local Streamable HTTP handshake/tool-call/removal/restart
+  regression tests; closed-session cached-executor rejection; corrupt-storage
+  rollback; unavailable/disabled entries; admin/ordinary-user/unauthenticated API
+  checks; focused Linux race tests. Fourteen browser tests passed, including
+  removal/cancel/error/reload, existing task-management tests, all nine locales
+  and narrow-screen RTL layout. TypeScript, contract drift and production UI
+  build pass. The pre-existing large-bundle warning remains.
+- This is source/build validation, not a live deployment or qualification of
+  any third-party MCP service. No user's saved connection was removed for testing.
+
+Authorized matching local deployment of the MCP removal repair:
+
+- Activated `offgrid-llm:mcp-removal-gpu-20260924`, revision
+  `2c75c51-worktree-mcp-removal-20260924` (local version 0.4.11), reusing the
+  unchanged GPU/llama.cpp runtime. Exactly one OffGrid container runs on loopback
+  port 11611, healthy with zero restarts. The previous container
+  `offgrid-before-computer-1790240737` remains stopped.
+- Workspace archive `/home/phil/offgrid-computer-backup-dS8WbUIB/workspace.tar.gz`
+  passed its SHA-256 check and archive-to-source comparison. Clone validation
+  ran with separate data while the original was stopped. Activation preserved
+  all nine pre-cutover task IDs/statuses, four model IDs/sizes, workspace identity
+  and the saved MCP connection, which reconnected and discovered its two tools.
+- Updated the installed Windows application at
+  `C:\Users\phil\AppData\Local\Programs\OffGrid LLM Desktop`; the previous
+  application remains in sibling `OffGrid LLM Desktop.rollback-mcp-removal-20260924`.
+  Data, settings, Electron profile and companion-journal copies were verified in
+  `build/desktop-backups/before-mcp-removal-20260924`. Model folders were untouched.
+  Restoring the workspace must not roll back the companion duplicate-action journal.
+- Installed and container UI build identities match
+  `b3611a157887f30657fe195f1d3cadbc1ee0900228be64424214b422a2626740`.
+  Two live browser tests and an installed Electron smoke test confirmed the
+  task-first workspace, Connections removal dialog/cancel and unchanged history
+  without submitting tasks or deleting a user's connection. Installed smoke
+  evidence: `C:\Users\phil\AppData\Local\Temp\offgrid-review-deployment-HE6iER`.
+- All 49 desktop unit tests passed. Both staged and installed Electron theme
+  tests passed, including main-process theme synchronization and nine readable
+  option styles; installed evidence is in
+  `C:\Users\phil\AppData\Local\Temp\offgrid-desktop-theme-8usiNv`.
+  This is still an unsigned local Windows build, not a published release or new
+  native/vision qualification. No WSL restart, VPN change, commit, push or tag
+  movement was performed for this deployment.
+
+### Task-history spacing and release preparation — 2026-09-24
+
+- The task list now separates each card from its delete control by 8 px and
+  adjacent rows by 12 px, with scrollbar clearance. Geometry checks cover light,
+  dark, mobile and Arabic RTL layouts without changing the monochrome palette.
+- Authorized local deployment activated
+  `offgrid-llm:history-spacing-gpu-20260924`, revision
+  `2c75c51-worktree-history-spacing-20260924`. The stopped workspace archive
+  `/home/phil/offgrid-computer-backup-AWijRN89/workspace.tar.gz` passed digest
+  and archive-to-source verification. Rollback container
+  `offgrid-before-computer-1790242118` remains stopped; only one OffGrid
+  container runs on port 11611, healthy with zero restarts.
+- The matching Windows application was replaced with a verified staged package.
+  Its previous files remain in `OffGrid LLM Desktop.rollback-history-spacing-20260924`
+  beside the installation; data/settings/profile/journal backups are in
+  `build/desktop-backups/before-history-spacing-20260924`. Models were untouched.
+  Workspace restoration must not roll back the companion execution journal.
+- Browser and installed Electron read-only checks confirmed the current
+  task-first UI and exact spacing. Both UI identities match
+  `acc10841eeede7d3a630c56413def3d4946c15b0a84089ccff006aaffcf57a52`.
+  Installed smoke evidence: `offgrid-review-deployment-fotdnG`; packaged theme
+  evidence: `offgrid-desktop-theme-hz6aM3`, under the Windows temporary directory.
+- Nine existing task records, four models and workspace identity were preserved.
+  A successful `DELETE /v1/agents/mcp` at 09:30:11 after activation removed the
+  saved MCP connection. Verification confirmed that subsequent change and left
+  it removed; deployment tests did not send that deletion or restore it.
+- Release preparation passed the full Windows Go suite, Linux race tests for
+  agents/server/capabilities, 49 desktop unit tests, TypeScript, API generation
+  and production UI build. The complete local browser suite passed 131 tests;
+  three installed/real-service opt-in cases were skipped in that fixture run.
+  Older tests now explicitly mock task-first identity/jobs and distinguish a
+  task selection button from its new delete button. This changes test coverage,
+  not the current application layout. Cross-platform CI remains a separate gate.
+- This local package is unsigned. These checks do not establish broader native
+  or vision qualification, signing, independent security review, or soak/pilot
+  completion. WSL and the VPN were not restarted or reconfigured.

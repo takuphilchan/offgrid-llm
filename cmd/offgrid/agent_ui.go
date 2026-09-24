@@ -2,12 +2,13 @@ package main
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,17 +88,7 @@ func startInteractiveAgent(modelName string) {
 }
 
 func runAgentRequest(url, prompt, model, style string, maxSteps int) {
-	jsonBody, _ := json.Marshal(map[string]any{
-		"prompt": prompt, "model": model, "style": style,
-		"max_steps": maxSteps, "stream": true,
-	})
-	resp, err := agentRequest(httpClientLong, http.MethodPost, url, bytes.NewReader(jsonBody))
-	if err != nil {
-		printError(err.Error())
-		return
-	}
-	defer resp.Body.Close()
-	if err := renderAgentStreamTo(os.Stdout, os.Stderr, resp.Body); err != nil {
+	if err := runTaskSubmit(context.Background(), []string{"--model", model, "--style", style, "--max-steps", strconv.Itoa(maxSteps), "--wait", "--", prompt}); err != nil {
 		printError(err.Error())
 	}
 }
@@ -113,6 +104,7 @@ func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
 	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	runID := ""
 	lastPhase, lastPreview, iteration := "", "", 0
+	lastChildren := ""
 	previewOpen := false
 	endPreview := func() {
 		if previewOpen {
@@ -136,9 +128,33 @@ func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
 		if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "data:"))), &event); err != nil {
 			return fmt.Errorf("invalid agent progress; inspect the saved run before retrying: %w", err)
 		}
+		if event.Type == "activity" {
+			continue
+		}
+		if event.Type == "snapshot" || event.Type == "snapshot_recovery" {
+			event.Type = "status"
+			switch event.Status {
+			case "completed":
+				event.Type = "done"
+			case "waiting_for_approval":
+				event.Type = "approval_required"
+			case "waiting_for_input":
+				event.Type = "input_required"
+			case "interrupted", "uncertain", "failed", "cancelled":
+				event.Type = "error"
+			}
+		}
 		if runID == "" && event.RunID != "" {
 			runID = event.RunID
 			fmt.Fprintf(progress, "Run: %s\n", terminalSafe(runID))
+		}
+		if event.Status == "waiting_for_children" {
+			data, _ := json.Marshal(event.Children)
+			if string(data) != lastChildren {
+				endPreview()
+				renderAgentSnapshot(progress, event.agentRunSnapshot)
+				lastChildren = string(data)
+			}
 		}
 		if p := event.Progress; p != nil && event.Type == "status" {
 			phase := fmt.Sprintf("%d:%s:%s", p.Iteration, p.Phase, p.Tool)
@@ -179,7 +195,7 @@ func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
 			if event.ToolName != "" {
 				fmt.Fprintf(progress, "  %s · %s\n", terminalSafe(event.ToolName), truncateTerminalText(terminalSafe(event.ToolResult), 180))
 			}
-		case "done", "approval_required", "error":
+		case "done", "approval_required", "input_required", "error":
 			endPreview()
 			renderAgentSnapshot(w, event.agentRunSnapshot)
 			if event.Type == "error" {
@@ -215,6 +231,12 @@ func printAgentHelp() {
 	fmt.Println("  offgrid agent deny RUN_ID APPROVAL_ID        Deny a pending call")
 	fmt.Println("  offgrid agent cancel RUN_ID                 Stop work (does not undo tools)")
 	fmt.Println("  offgrid agent resume RUN_ID                 Resume a safe checkpoint")
+	fmt.Println("  offgrid agent pause RUN_ID                  Pause new scheduling")
+	fmt.Println("  offgrid agent takeover RUN_ID               Revoke this task's computer session")
+	fmt.Println("  offgrid agent reconnect RUN_ID              Request fresh local consent")
+	fmt.Println("  offgrid agent steer RUN_ID REQUEST_ID TEXT  Save a follow-up while paused")
+	fmt.Println("  offgrid agent export RUN_ID                 Export evidence as JSON")
+	fmt.Println("  offgrid agent artifact RUN_ID SHA256 --output NEW_FILE")
 	fmt.Println("  offgrid agent reconcile RUN_ID CALL_ID RESULT  Record a verified outcome")
 	fmt.Printf("  %soffgrid agent [chat]%s           Start interactive agent session (default)\n", brandPrimary, colorReset)
 	fmt.Printf("  %soffgrid agent run <prompt>%s     Run a single agent task\n", brandPrimary, colorReset)

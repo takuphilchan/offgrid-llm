@@ -20,6 +20,10 @@ import { computerRecovery, computerModelCopy } from '../../i18n/computer-recover
 import { computerExperience } from '../../i18n/computer-experience';
 import { computerModeText, nativeAppText } from '../../i18n/native-app';
 import { BrowserActionSummary, BrowserActivity } from './BrowserActionSummary';
+import { TaskWorkspace } from './TaskWorkspace';
+import { AgentNavigation } from './AgentNavigation';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { mcpConnectionText } from '../../i18n/mcp-connections';
 
 type AgentView = 'workspace' | 'tools' | 'connections';
 
@@ -33,10 +37,13 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
   const { locale, messages } = useI18n();
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [identityError, setIdentityError] = useState(false);
+  const [taskFirst,setTaskFirst]=useState(false);
+  const [view,setView]=useState(viewFromLocation);
+  useEffect(()=>{const changed=()=>setView(viewFromLocation());window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[]);
   useEffect(() => {
     if (!admin) return;
     let disposed = false;
-    const refresh = () => api.systemIdentity().then(identity => { if (!disposed) { setWorkspace(identity.workspace_id ?? 'legacy'); setIdentityError(false); } }).catch(() => { if (!disposed) setIdentityError(true); });
+    const refresh = () => api.systemIdentity().then(identity => { if (!disposed) { setWorkspace(identity.workspace_id ?? 'legacy'); setTaskFirst(identity.capabilities.includes('task-first-agents-v2')); setIdentityError(false); } }).catch(() => { if (!disposed) setIdentityError(true); });
     void refresh(); const timer = setInterval(() => void refresh(), 5000);
     return () => { disposed = true; clearInterval(timer); };
   }, [admin]);
@@ -44,10 +51,11 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
   // Do not mount an interactive form that will immediately be replaced when
   // identity arrives: that loses focus and can discard a just-selected mode.
   if (!workspace) return <p role={identityError ? 'alert' : 'status'}>{identityError ? messages.common.error : messages.common.loading}</p>;
-  return <AgentWorkspace key={workspace} scope={scope} selectionScope={`${scope}:workspace:${workspace}`} models={models} model={model} setModel={setModel} />;
+  if(taskFirst&&view==='workspace')return <TaskWorkspace key={workspace} scope={scope} workspace={workspace} models={models} model={model} setModel={setModel}/>;
+  return <AgentWorkspace key={workspace} managementOnly={taskFirst} scope={scope} selectionScope={`${scope}:workspace:${workspace}`} models={models} model={model} setModel={setModel} />;
 }
 
-function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { scope: string; selectionScope: string; models: Model[]; model: string; setModel: (model: string) => void }) {
+function AgentWorkspace({ scope, selectionScope, models, model, setModel, managementOnly = false }: { scope: string; selectionScope: string; models: Model[]; model: string; setModel: (model: string) => void; managementOnly?: boolean }) {
   const { messages: text, locale } = useI18n();
   const experience = computerExperience(locale);
   const { value: task, setValue: setTask, key: taskDraftKey, unsaved } = useDraft(scope, 'agent-task');
@@ -97,7 +105,9 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
   const [toolBusy, setToolBusy] = useState('');
   const [connectionName, setConnectionName] = useWorkspaceState('agent.connectorName', '');
   const [connectionURL, setConnectionURL] = useWorkspaceState('agent.connectorURL', '');
-  const [connectionBusy, setConnectionBusy] = useState<'test' | 'connect' | ''>('');
+  const [connectionBusy, setConnectionBusy] = useState<'test' | 'connect' | 'remove' | ''>('');
+  const [removeServer, setRemoveServer] = useState<MCPServer | null>(null);
+  const mcpText = mcpConnectionText(locale);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [integrations, setIntegrations] = useState<ExternalIntegration[]>([]);
   const [integrationSetup, setIntegrationSetup] = useState<{ id: string; name: string; setup: IntegrationSetup } | null>(null);
@@ -243,7 +253,7 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
     finally { setToolBusy(''); }
   };
   const testConnection = async () => {
-    if (!connectionURL.trim()) return;
+    if (!connectionURL.trim() || connectionBusy || removeServer) return;
     setConnectionBusy('test'); setConnectionMessage(''); setError('');
     try { const response = await api.testMCP(connectionURL.trim()); setConnectionMessage(`${response.tools_count} ${text.agentRuntime.tools.toLowerCase()}`); }
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
@@ -251,7 +261,7 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
   };
   const connect = async (event: FormEvent) => {
     event.preventDefault();
-    if (!connectionName.trim() || !connectionURL.trim()) return;
+    if (!connectionName.trim() || !connectionURL.trim() || connectionBusy || removeServer) return;
     setConnectionBusy('connect'); setConnectionMessage(''); setError('');
     try {
       const response = await api.connectMCP(connectionName.trim(), connectionURL.trim());
@@ -260,6 +270,20 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
       await refreshRuntime();
     } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
     finally { setConnectionBusy(''); }
+  };
+
+  const removeConnection = async () => {
+    if (!removeServer || connectionBusy) return;
+    setConnectionBusy('remove'); setConnectionMessage('');
+    try {
+      await api.removeMCP(removeServer.name);
+      // Invalidate older refreshes before updating the list. A later refresh
+      // failure must not resurrect a connection that was successfully removed.
+      runtimeRequest.current++;
+      setServers(current => current.filter(server => server.name !== removeServer.name));
+      setConnectionMessage(mcpText.removed);
+      await refreshRuntime();
+    } finally { setConnectionBusy(''); }
   };
 
   const showIntegrationSetup = async (item: ExternalIntegration) => {
@@ -297,19 +321,20 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
     try { await copyText(result); setResultCopied(true); }
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
   };
-  return <div className="stack agents-page">
+  return <div className={`stack agents-page${managementOnly ? ' agent-management-page' : ''}`}>
+    {managementOnly && <AgentNavigation view={view}/>}
     {selectionNotice && <p role="status" className="permission-notice">{computerRecovery[locale].missing}</p>}
     {runtimeError && <div className="inline-error" role="alert">{runtimeError}<button disabled={loadingRuntime} onClick={() => void refreshRuntime()}>{text.common.retry}</button></div>}
     {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="tasks" remove={api.deleteAgentRun} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     {error && <div className="inline-error" role="alert">{error}</div>}
-    {view !== 'workspace' && <div className="metric-grid agent-metrics">
+    {!managementOnly && view !== 'workspace' && <div className="metric-grid agent-metrics">
       <Metric label={text.agentRuntime.tools} value={loadingRuntime ? '…' : `${enabledTools}/${tools.length} ${text.agentRuntime.enabled}`} />
       <Metric label={text.agentRuntime.history} value={loadingRuntime ? '…' : String(tasks.length)} />
       <Metric label={text.agentRuntime.connectors} value={loadingRuntime ? '…' : String(servers.length)} />
       <Metric label={text.agentRuntime.computer} value={!computer ? loadingRuntime ? text.common.loading : presentation[locale].unknown : computer.available ? text.agentRuntime.available : computerRecovery[locale].unpaired} />
     </div>}
 
-    <div className="section-tabs" role="tablist" aria-label={text.nav.agents} onKeyDown={event => {
+    {!managementOnly && <div className="section-tabs" role="tablist" aria-label={text.nav.agents} onKeyDown={event => {
         const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
         const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
         const rtl = document.documentElement.dir === 'rtl';
@@ -320,7 +345,7 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
       <button id="agent-workspace-tab" role="tab" tabIndex={view === 'workspace' ? 0 : -1} aria-controls="agent-workspace-panel" aria-selected={view === 'workspace'} onClick={() => selectView('workspace')}>{text.shell.work}</button>
       <button id="agent-tools-tab" role="tab" tabIndex={view === 'tools' ? 0 : -1} aria-controls="agent-tools-panel" aria-selected={view === 'tools'} onClick={() => selectView('tools')}>{experience.tools}</button>
       <button id="agent-connections-tab" role="tab" tabIndex={view === 'connections' ? 0 : -1} aria-controls="agent-connections-panel" aria-selected={view === 'connections'} onClick={() => selectView('connections')}>{experience.connections}</button>
-    </div>
+    </div>}
 
     {view === 'workspace' && <div id="agent-workspace-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-workspace-tab">
       <div className="agent-workspace">
@@ -390,10 +415,34 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel }: { sc
       </section>
     </div>}
 
-    {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-tools-tab"><section className="runtime-panel"><div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.tools}</span><h2>{enabledTools}/{tools.length} {text.agentRuntime.enabled}</h2></div><button className="secondary-button" onClick={() => void refreshRuntime()}>{text.common.refresh}</button></div>{tools.length === 0 ? <p className="compact-empty">{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noTools}</p> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><strong>{tool.name}</strong><p>{tool.description}</p><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}</section></div>}
+    {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role={managementOnly ? 'region' : 'tabpanel'} aria-labelledby="agent-tools-tab"><section className="runtime-panel"><div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.tools}</span><h2>{enabledTools}/{tools.length} {text.agentRuntime.enabled}</h2></div><button className="secondary-button" onClick={() => void refreshRuntime()}>{text.common.refresh}</button></div>{tools.length === 0 ? <p className="compact-empty">{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noTools}</p> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><strong>{tool.name}</strong><p>{tool.description}</p><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}</section></div>}
 
-    {view === 'connections' && <div id="agent-connections-panel" className="agent-view" role="tabpanel" aria-labelledby="agent-connections-tab">
-      <section className="runtime-panel connector-panel"><div><span className="eyebrow">{text.agentRuntime.connectors}</span><div className="connector-list">{servers.length === 0 ? <p>{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noConnectors}</p> : servers.map(server => <article key={server.name}><i /><div><strong>{server.name}</strong><small>{server.transport} · {server.tools} {text.agentRuntime.tools.toLowerCase()} · {server.status}</small></div></article>)}</div></div><form onSubmit={connect}><label><span>{text.agentRuntime.connectorName}</span><input value={connectionName} onChange={event => setConnectionName(event.target.value)} /></label><label><span>{text.agentRuntime.connectorURL}</span><input type="url" placeholder="http://127.0.0.1:3000/mcp" value={connectionURL} onChange={event => setConnectionURL(event.target.value)} /></label>{connectionMessage && <small className="connection-success">{connectionMessage}</small>}<div><button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button><button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button></div></form></section>
+    {view === 'connections' && <div id="agent-connections-panel" className="agent-view" role={managementOnly ? 'region' : 'tabpanel'} aria-labelledby="agent-connections-tab">
+      <section className="runtime-panel connector-panel">
+        <div>
+          <span className="eyebrow">{text.agentRuntime.connectors}</span>
+          <div className="connector-list">
+            {servers.length === 0 ? <p>{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noConnectors}</p> : servers.map(server => <article key={server.name}>
+              <i aria-hidden="true" data-connected={server.status === 'connected'} />
+              <div>
+                <strong>{server.name}</strong>
+                <small>{server.transport} · {server.tools} {text.agentRuntime.tools.toLowerCase()} · {server.status === 'connected' ? mcpText.connected : server.status === 'disabled' ? mcpText.disabled : mcpText.disconnected}</small>
+                <button type="button" className="text-button connector-remove" aria-label={`${mcpText.remove}: ${server.name}`} disabled={connectionBusy !== ''} onClick={() => setRemoveServer(server)}><Icon name="trash" size={14} />{mcpText.remove}</button>
+              </div>
+            </article>)}
+          </div>
+          {connectionMessage && <p className="connection-success" role="status">{connectionMessage}</p>}
+        </div>
+        <form onSubmit={connect}>
+          <label><span>{text.agentRuntime.connectorName}</span><input value={connectionName} onChange={event => setConnectionName(event.target.value)} /></label>
+          <label><span>{text.agentRuntime.connectorURL}</span><input type="url" placeholder="https://mcp.example.com/mcp" value={connectionURL} onChange={event => setConnectionURL(event.target.value)} /></label>
+          <div>
+            <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button>
+            <button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button>
+          </div>
+        </form>
+      </section>
+      {removeServer && <ConfirmDialog title={mcpText.title.replace('{name}', removeServer.name)} body={mcpText.body} confirmLabel={mcpText.remove} confirm={removeConnection} close={() => setRemoveServer(null)} />}
       <ExternalProvidersPanel integrations={integrations} loading={loadingRuntime} busy={integrationBusy} setup={integrationSetup} copied={copied} onSetup={showIntegrationSetup} onCopy={copyIntegrationSetup} />
     </div>}
   </div>;
