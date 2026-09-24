@@ -24,6 +24,53 @@ async function fixture(page: Page, locale = 'en', theme = 'dark') {
   });
 }
 
+for (const theme of ['dark', 'light'] as const) {
+  test(`native select options remain readable in ${theme} even with the opposite OS theme`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme === 'dark' ? 'light' : 'dark' });
+    await fixture(page, 'en', theme);
+    for (const route of ['chat', 'agents', 'settings']) {
+      await page.goto(`/ui/#/${route}`);
+      await expect(page.locator('.locale-picker select')).toBeVisible();
+      const options = await page.locator('select option:not(:disabled)').evaluateAll(elements => elements.map(element => {
+        const style = getComputedStyle(element);
+        return { color: style.color, background: style.backgroundColor, scheme: style.colorScheme };
+      }));
+      expect(options.length).toBeGreaterThanOrEqual(9);
+      for (const option of options) {
+        expect(option.color).toBe(theme === 'dark' ? 'rgb(245, 245, 244)' : 'rgb(23, 23, 23)');
+        expect(option.background).toBe(theme === 'dark' ? 'rgb(24, 24, 25)' : 'rgb(255, 255, 255)');
+        expect(option.scheme).toBe(theme);
+      }
+    }
+    const language = page.locator('.locale-picker select');
+    await language.selectOption('ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(language.locator('option')).toHaveCount(9);
+    await language.selectOption('en');
+    await language.focus();
+    await language.press('ArrowDown');
+    await language.press('Enter');
+    await expect(language).toHaveValue('fr');
+    await expect(language).toBeFocused();
+  });
+}
+
+test('native select options respect forced colors instead of locking the application palette', async ({ page }) => {
+  await fixture(page);
+  await page.emulateMedia({ forcedColors: 'active', colorScheme: 'light' });
+  await page.goto('/ui/#/chat');
+  const language = page.locator('.locale-picker select');
+  await expect(language).toBeVisible();
+  for (const element of [language, language.locator('option').first()]) {
+    await expect(element).toHaveCSS('forced-color-adjust', 'auto');
+    const colors = await element.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { text: style.color, surface: style.backgroundColor };
+    });
+    expect(colors.text).not.toBe(colors.surface);
+  }
+});
+
 test('search, task and document controls share sizing and keyboard focus', async ({ page }) => {
   await fixture(page);
   await page.goto('/ui/#/models');

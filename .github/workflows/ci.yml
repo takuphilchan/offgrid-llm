@@ -140,6 +140,7 @@ jobs:
           sudo chmod 4755 desktop/dist/linux-unpacked/chrome-sandbox
           xvfb-run -a node dev/scripts/test-desktop-startup.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
           xvfb-run -a node dev/scripts/test-packaged-browser.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
+          xvfb-run -a node dev/scripts/test-desktop-theme.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
 
       - name: Preserve desktop startup diagnostics
         if: failure()
@@ -149,6 +150,7 @@ jobs:
           path: |
             /tmp/offgrid-desktop-startup-*/
             /tmp/offgrid-packaged-browser-*/
+            /tmp/offgrid-desktop-theme-*/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -216,6 +218,7 @@ jobs:
             npx electron-builder --dir --win --x64 --publish never
             node ../dev/scripts/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
             node ../dev/scripts/test-packaged-browser.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+            node ../dev/scripts/test-desktop-theme.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
           else
             arch=$(node -p process.arch)
             npx electron-builder --dir --mac "--$arch" --publish never
@@ -223,6 +226,7 @@ jobs:
             if [[ "$arch" == arm64 ]]; then package_dir=mac-arm64; fi
             node ../dev/scripts/test-desktop-startup.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
             node ../dev/scripts/test-packaged-browser.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
+            node ../dev/scripts/test-desktop-theme.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
           fi
 
       - name: Build isolated Windows installer test package

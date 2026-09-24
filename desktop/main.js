@@ -281,6 +281,7 @@ handleTrustedIPC('set-presentation', value => {
     await fs.promises.writeFile(presentationPath + '.tmp', JSON.stringify(next), { mode: 0o600 });
     await fs.promises.rename(presentationPath + '.tmp', presentationPath);
     presentation = next;
+    nativeTheme.themeSource = presentation.theme;
     mainWindow?.setBackgroundColor(effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6');
     updateMenus();
   });
@@ -320,6 +321,9 @@ app.whenReady().then(async () => {
   computerCopy = JSON.parse(await fs.promises.readFile(path.join(uiDir,'computer-experience.json'),'utf8'));
   try { presentation = normalizePresentation(JSON.parse(await fs.promises.readFile(presentationPath, 'utf8')), app.getLocale().split('-')[0]); }
   catch { presentation = normalizePresentation({}, app.getLocale().split('-')[0]); }
+  // Chromium popup controls and the renderer must use the same appearance,
+  // including when OffGrid's explicit choice differs from the OS preference.
+  nativeTheme.themeSource = presentation.theme;
   await createWindow();
   // Qualification/alternate profiles must not change the user's default handler.
   if(app.isPackaged && !installerTest && !customHome) app.setAsDefaultProtocolClient('offgrid');

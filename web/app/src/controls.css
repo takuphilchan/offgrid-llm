@@ -65,6 +65,14 @@
     line-height: 22px;
   }
   select { padding-inline-end: 28px; text-overflow: ellipsis; }
+  /* Native popup lists do not reliably inherit a transparent select's surface.
+     Specify both colors so a dark label cannot be painted on an OS-light menu.
+     Keep native keyboard, type-ahead, RTL and forced-colors behavior intact. */
+  select option, select optgroup {
+    color: var(--text);
+    background-color: var(--surface-1);
+  }
+  select option:disabled, select optgroup:disabled { color: var(--faint); }
   textarea { resize: vertical; }
   :where(input, textarea)::placeholder { color: var(--faint); opacity: 1; }
   :where(input, textarea, select):disabled { opacity: .6; cursor: not-allowed; }
