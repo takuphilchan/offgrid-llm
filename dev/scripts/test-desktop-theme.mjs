@@ -45,12 +45,24 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const env = {...process.env,OFFGRID_DESKTOP_HOME:evidence,OFFGRID_PORT:String(server.address().port)};
 delete env.ELECTRON_RUN_AS_NODE;
 let app;
+// Some OS-owned UI blocks Electron's protocol rather than rejecting a call.
+// Bound the harness itself and stop only the isolated process it launched.
+const deadline = setTimeout(() => {
+  console.error('Packaged theme check exceeded its three-minute deadline');
+  app?.process().kill('SIGKILL');
+  process.exit(1);
+}, 180000);
+deadline.unref();
 async function launch() {
+  console.log('Launching isolated packaged theme check');
   app = await electron.launch({executablePath:binary,env,timeout:30000});
+  app.context().setDefaultTimeout(15000);
+  app.context().setDefaultNavigationTimeout(15000);
   const page = await app.firstWindow();
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete','true'));
   await page.waitForURL(/\/ui\//);
   await page.reload();
+  console.log('Packaged theme fixture connected');
   return page;
 }
 try {
@@ -58,6 +70,7 @@ try {
   assert.equal(await app.evaluate(({nativeTheme}) => nativeTheme.themeSource), 'dark', 'Saved preference must reach native controls on startup');
   await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings`);
   for (const theme of ['light','dark','system','dark']) {
+    console.log(`Checking ${theme} appearance on ${process.platform}`);
     await page.getByRole('button',{name:{light:'Light',dark:'Dark',system:'System'}[theme],exact:true}).click();
     await expect.poll(() => app.evaluate(({nativeTheme}) => nativeTheme.themeSource)).toBe(theme);
     const effective = await app.evaluate(({nativeTheme}) => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
@@ -68,18 +81,29 @@ try {
       await expect(option).toHaveCSS('color', effective === 'dark' ? 'rgb(245, 245, 244)' : 'rgb(23, 23, 23)');
       await expect(option).toHaveCSS('background-color', effective === 'dark' ? 'rgb(24, 24, 25)' : 'rgb(255, 255, 255)');
     }
-    await language.focus();
-    await language.press('ArrowDown');
-    await language.press('Enter');
+    if (process.platform === 'darwin') {
+      // macOS runs native select menus outside Chromium's automation event
+      // loop. Opening one can block the next CDP key command indefinitely.
+      // Browser integration covers keyboard selection; this packaged check
+      // verifies main/renderer theme and locale synchronization without claiming
+      // automation of the OS-owned popup itself.
+      await language.selectOption('fr');
+    } else {
+      await language.focus();
+      await language.press('ArrowDown');
+      await language.press('Enter');
+    }
     await expect(language).toHaveValue('fr');
     await language.selectOption('en');
   }
   await page.screenshot({path:join(evidence,'dark-controls.png')});
   await app.close(); app = null;
+  console.log('Checking saved appearance after restart');
   page = await launch();
   assert.equal(await app.evaluate(({nativeTheme}) => nativeTheme.themeSource), 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
   console.log(JSON.stringify({passed:true,platform:process.platform,savedAndLiveNativeTheme:true,readableOptions:9,evidence}));
 } finally {
   await app?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+  clearTimeout(deadline);
 }
