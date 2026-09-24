@@ -22,7 +22,10 @@ test("task styles preserve the established monochrome layers in both themes", as
       const style = getComputedStyle(document.documentElement);
       return {
         accent: style.getPropertyValue("--accent").trim(),
-        surface: style.getPropertyValue("--surface-1").trim(),
+        // Assert the rendered color: production minification can shorten
+        // #ffffff to #fff without changing the established palette.
+        surface: getComputedStyle(document.querySelector(".task-management")!)
+          .backgroundColor,
         font: style.fontFamily,
         link: getComputedStyle(document.querySelector(".task-management a")!)
           .color,
@@ -30,7 +33,7 @@ test("task styles preserve the established monochrome layers in both themes", as
       };
     });
     expect(palette.accent).toBe(theme === "light" ? "#171717" : "#f5f5f4");
-    expect(palette.surface).toBe(theme === "light" ? "#ffffff" : "#181819");
+    expect(palette.surface).toBe(theme === "light" ? "rgb(255, 255, 255)" : "rgb(24, 24, 25)");
     expect(palette.font).toContain("IBM Plex Sans");
     expect(palette.link).toBe(
       theme === "light" ? "rgb(23, 23, 23)" : "rgb(245, 245, 244)",
