@@ -107,10 +107,22 @@ A disconnect leaves the run active: recover by ID instead of resubmitting it.
 
 **Agents → Available tools** shows actual enabled tools and risk descriptors.
 Disable unneeded tools there; choices persist across service restarts.
-**Agents → MCP connections** tests and connects supported HTTP endpoints.
+**Agents → Connections** tests and connects supported HTTP endpoints. Work,
+Available tools and Connections share the navigation at the top of Agents;
+management settings are separate from the task composer.
 Supply a server URL, not an `npx` command in the URL field. Successful connection
 configuration is persisted. External tools are still privileged, even when
 served locally; inspect their capabilities and restrict what the service can access.
+
+To remove an MCP server, open **Agents → Connections**, choose **Remove
+connection** beside its name, and confirm. This forgets the saved connection,
+closes its transport and removes its tools from discovery and execution. Saved
+connections that cannot reconnect are also listed so they can be removed.
+Task history and the remote server's data are not deleted. Tasks using the
+removed tools may fail; removal does not undo actions already sent to a server.
+Reconnect explicitly if you need the server again. Removal is administrator-only,
+including through `DELETE /v1/agents/mcp?name=<URL-encoded connection name>`.
+A persistence failure leaves the connection intact and displays a retryable error.
 
 Computer use is unavailable unless a supported driver is configured. Do not
 interpret a page or status card as evidence of working desktop control.

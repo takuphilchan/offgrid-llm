@@ -24,6 +24,7 @@ type ToolRegistry struct {
 	tools         map[string]api.Tool
 	executors     map[string]SimpleExecutor
 	mcpClients    map[string]*MCPClient
+	mcpConfigs    map[string]MCPServerConfig // Includes saved connections that could not reconnect.
 	configPath    string
 	disabledTools map[string]bool   // Tools that are disabled
 	toolSources   map[string]string // Maps tool name to source (builtin, mcp:servername, user)
@@ -88,6 +89,7 @@ func NewToolRegistry() *ToolRegistry {
 		tools:         make(map[string]api.Tool),
 		executors:     make(map[string]SimpleExecutor),
 		mcpClients:    make(map[string]*MCPClient),
+		mcpConfigs:    make(map[string]MCPServerConfig),
 		disabledTools: make(map[string]bool),
 		toolSources:   make(map[string]string),
 	}
@@ -155,13 +157,15 @@ func (r *ToolRegistry) LoadUserTools(configPath string) error {
 		r.registerCapabilityLocked(ut.Name)
 	}
 	for _, name := range config.DisabledTools {
-		if _, exists := r.tools[name]; exists {
-			r.disabledTools[name] = true
-		}
+		// MCP tools are discovered below (and may be temporarily offline).
+		// Retain their choices so editing a different connection cannot enable
+		// them or erase their saved settings during the next persistence write.
+		r.disabledTools[name] = true
 	}
 
 	// Connect to MCP servers
 	for _, mcp := range config.MCPServers {
+		r.mcpConfigs[mcp.Name] = mcp
 		if mcp.Enabled {
 			if err := r.connectMCPServer(mcp); err != nil {
 				// Log but don't fail
@@ -215,6 +219,9 @@ func (r *ToolRegistry) createUserToolExecutor(ut UserDefinedTool) SimpleExecutor
 
 // connectMCPServer connects to an MCP server and registers its tools
 func (r *ToolRegistry) connectMCPServer(config MCPServerConfig) error {
+	if err := r.validateMCPNameLocked(config.Name); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -241,6 +248,9 @@ func (r *ToolRegistry) connectMCPServer(config MCPServerConfig) error {
 		}
 
 		tools = client.GetTools()
+		if err := r.validateMCPToolsLocked(config.Name, client); err != nil {
+			return err
+		}
 		mcpClient = &MCPClient{
 			Name:      config.Name,
 			Transport: "stdio",
@@ -271,6 +281,9 @@ func (r *ToolRegistry) connectMCPServer(config MCPServerConfig) error {
 		}
 
 		tools = client.GetTools()
+		if err := r.validateMCPToolsLocked(config.Name, client); err != nil {
+			return err
+		}
 		mcpClient = &MCPClient{
 			Name:      config.Name,
 			URL:       config.URL,
@@ -330,6 +343,13 @@ func (r *ToolRegistry) SetCapabilityBroker(broker *capabilities.Broker) {
 func (r *ToolRegistry) LoadMCPTools(name, urlOrCommand string) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.loadMCPToolsLocked(name, urlOrCommand)
+}
+
+func (r *ToolRegistry) loadMCPToolsLocked(name, urlOrCommand string) (int, error) {
+	if err := r.validateMCPNameLocked(name); err != nil {
+		return 0, err
+	}
 
 	// Detect if it's a command (starts with common executables) or URL
 	isCommand := strings.HasPrefix(urlOrCommand, "npx ") ||
@@ -354,6 +374,9 @@ func (r *ToolRegistry) LoadMCPTools(name, urlOrCommand string) (int, error) {
 		}
 
 		tools := client.GetTools()
+		if err := r.validateMCPToolsLocked(name, client); err != nil {
+			return 0, err
+		}
 		r.mcpClients[name] = &MCPClient{
 			Name:      name,
 			Transport: "stdio",
@@ -388,6 +411,9 @@ func (r *ToolRegistry) LoadMCPTools(name, urlOrCommand string) (int, error) {
 	}
 
 	tools := client.GetTools()
+	if err := r.validateMCPToolsLocked(name, client); err != nil {
+		return 0, err
+	}
 	r.mcpClients[name] = &MCPClient{
 		Name:      name,
 		URL:       urlOrCommand,
@@ -470,6 +496,23 @@ func (r *ToolRegistry) GetMCPServers() []map[string]interface{} {
 			"status":    "connected",
 		})
 	}
+	for name, config := range r.mcpConfigs {
+		if _, connected := r.mcpClients[name]; connected {
+			continue
+		}
+		status := "disconnected"
+		if !config.Enabled {
+			status = "disabled"
+		}
+		transport := config.Transport
+		if transport == "" {
+			transport = "http"
+			if config.Command != "" {
+				transport = "stdio"
+			}
+		}
+		servers = append(servers, map[string]interface{}{"name": name, "url": config.URL, "transport": transport, "tools": 0, "status": status})
+	}
 	sort.Slice(servers, func(i, j int) bool { return servers[i]["name"].(string) < servers[j]["name"].(string) })
 	return servers
 }
@@ -542,8 +585,12 @@ func (r *ToolRegistry) SetToolEnabled(name string, enabled bool) error {
 func (r *ToolRegistry) PersistMCPServer(server MCPServerConfig) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.persistMCPServerLocked(server)
+}
+
+func (r *ToolRegistry) persistMCPServerLocked(server MCPServerConfig) error {
 	server.Enabled = true
-	return r.persistSettingsLocked(func(config *ToolsConfig) {
+	err := r.persistSettingsLocked(func(config *ToolsConfig) {
 		for index := range config.MCPServers {
 			if config.MCPServers[index].Name == server.Name {
 				config.MCPServers[index] = server
@@ -552,6 +599,10 @@ func (r *ToolRegistry) PersistMCPServer(server MCPServerConfig) error {
 		}
 		config.MCPServers = append(config.MCPServers, server)
 	})
+	if err == nil {
+		r.mcpConfigs[server.Name] = server
+	}
+	return err
 }
 
 func (r *ToolRegistry) persistSettingsLocked(update func(*ToolsConfig)) error {
@@ -568,14 +619,14 @@ func (r *ToolRegistry) persistSettingsLocked(update func(*ToolsConfig)) error {
 			return fmt.Errorf("parse tools config: %w", err)
 		}
 	}
-	if update != nil {
-		update(&config)
-	}
 	config.DisabledTools = config.DisabledTools[:0]
 	for name := range r.disabledTools {
 		config.DisabledTools = append(config.DisabledTools, name)
 	}
 	sort.Strings(config.DisabledTools)
+	if update != nil {
+		update(&config)
+	}
 	encoded, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode tools config: %w", err)
@@ -583,7 +634,7 @@ func (r *ToolRegistry) persistSettingsLocked(update func(*ToolsConfig)) error {
 	if err := os.MkdirAll(filepath.Dir(r.configPath), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(r.configPath, encoded, 0o600)
+	return writeToolsConfig(r.configPath, encoded)
 }
 
 // GetEnabledCount returns the count of enabled tools

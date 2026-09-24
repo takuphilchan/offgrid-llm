@@ -707,7 +707,7 @@ paths:
     get:
       operationId: listMCPServers
       responses:
-        '200': { description: Connected MCP servers }
+        '200': { description: Active and saved MCP connections, including disconnected connections }
     post:
       operationId: connectMCPServer
       requestBody:
@@ -720,6 +720,29 @@ paths:
               properties: { name: { type: string }, url: { type: string, format: uri } }
       responses:
         '200': { description: MCP server connected and persisted }
+    delete:
+      operationId: removeMCPServer
+      description: Administrator only. Forget the saved connection, unregister its tools, and close its transport. Does not delete task history or undo dispatched actions. Idempotent.
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Connection removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, server, tools_removed]
+                properties:
+                  status: { type: string, enum: [removed] }
+                  server: { type: string }
+                  tools_removed: { type: integer, minimum: 0 }
+        '400': { description: Connection name is required }
+        '403': { description: Administrator access required }
+        '500': { description: Persistence failed; connection retained }
   /v1/agents/mcp/test:
     post:
       operationId: testMCPServer

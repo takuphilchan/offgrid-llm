@@ -120,6 +120,15 @@ func (b *Broker) Resolve(name string) (Descriptor, bool) {
 	return descriptor, ok
 }
 
+// Unregister removes only the descriptor still owned by the given source.
+func (b *Broker) Unregister(name, source string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if descriptor, ok := b.descriptors[name]; ok && descriptor.Source == source {
+		delete(b.descriptors, name)
+	}
+}
+
 // List returns a stable snapshot suitable for discovery UIs and external
 // agent clients.
 func (b *Broker) List() []Descriptor {

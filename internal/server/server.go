@@ -5217,17 +5217,12 @@ func (s *Server) handleAgentMCP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Try to connect to the MCP server and discover tools
-		count, err := s.toolRegistry.LoadMCPTools(req.Name, req.URL)
+		count, err := s.toolRegistry.ConnectAndPersistMCP(req.Name, req.URL)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]string{
 				"error": fmt.Sprintf("failed to connect to MCP server: %v", err),
 			})
-			return
-		}
-		if err := s.toolRegistry.PersistMCPServer(agents.MCPServerConfig{Name: req.Name, URL: req.URL, Transport: "http", Enabled: true}); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("connected but failed to persist MCP server: %v", err)})
 			return
 		}
 
@@ -5236,6 +5231,21 @@ func (s *Server) handleAgentMCP(w http.ResponseWriter, r *http.Request) {
 			"server":      req.Name,
 			"tools_added": count,
 		})
+
+	case http.MethodDelete:
+		name := r.URL.Query().Get("name")
+		if strings.TrimSpace(name) == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Connection name is required.", "code": "mcp_name_required"})
+			return
+		}
+		count, err := s.toolRegistry.RemoveMCPServer(name)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Could not save the connection removal. The connection has not been removed. Please retry.", "code": "mcp_remove_failed"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "removed", "server": name, "tools_removed": count})
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)

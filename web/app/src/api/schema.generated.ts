@@ -610,7 +610,8 @@ export interface paths {
         get: operations["listMCPServers"];
         put?: never;
         post: operations["connectMCPServer"];
-        delete?: never;
+        /** @description Administrator only. Forget the saved connection, unregister its tools, and close its transport. Does not delete task history or undo dispatched actions. Idempotent. */
+        delete: operations["removeMCPServer"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2466,7 +2467,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Connected MCP servers */
+            /** @description Active and saved MCP connections */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2494,6 +2495,54 @@ export interface operations {
         responses: {
             /** @description MCP server connected and persisted */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    removeMCPServer: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "removed";
+                        server: string;
+                        tools_removed: number;
+                    };
+                };
+            };
+            /** @description Connection name is required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Administrator access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failed; connection retained */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
