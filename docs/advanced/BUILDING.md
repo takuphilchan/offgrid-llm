@@ -1,274 +1,106 @@
-# Building and Releasing OffGrid LLM
+# Build OffGrid from source
 
-This document explains how to build, package, and release OffGrid LLM for all supported platforms.
+Build the Go service and shared React UI together. These instructions are for contributors; ordinary users should use [release packages](../setup/installation.md). A build in this checkout does not replace an installed app or running container.
 
-## Quick Start
+## Prerequisites
 
-### Build CLI for Current Platform
+Use the toolchain declared in [go.mod](../../go.mod), Node.js 22, npm, and Git. CI currently uses Go 1.26.6. Dependencies and first-use runtime downloads need network access unless already provisioned.
 
-```bash
-# Using Go directly
-go build -o offgrid ./cmd/offgrid
+Desktop packaging also needs the native build tools for its target OS. macOS native components need the macOS SDK; Linux native components need the development libraries listed in [desktop packaging](../../desktop/README.md). Do not assume a Go cross-compile qualifies native desktop behavior.
 
-# Or using the build script
-./build-all.sh --cli --platform current
-```
+## Build the shared UI
 
-### Build Desktop App
+From the repository root:
 
 ```bash
-# Build for current platform
-cd desktop && npm install && npm run build
-
-# Or use master build script
-./build-all.sh --desktop
+npm ci --prefix web/app
+npm run api:check --prefix web/app
+npm run check --prefix web/app
+npm run build --prefix web/app
 ```
 
-### Build Everything
+This generates `web/dist`, used by the browser service and packaged desktop. Do not edit generated assets or maintain a separate desktop UI.
+
+## Build and start the service
+
+Bash:
 
 ```bash
-# Build CLI + Desktop for all platforms
-./build-all.sh --all
+version=$(tr -d '\r\n' < VERSION)
+go build -trimpath -ldflags "-X main.Version=$version" -o bin/offgrid ./cmd/offgrid
+./bin/offgrid serve
 ```
 
-## Supported Platforms
-
-| Platform | Architecture | Package Format |
-|----------|--------------|----------------|
-| Linux    | x86_64       | `.tar.gz`, `.deb`, `.rpm` |
-| Linux    | ARM64        | `.tar.gz` |
-| macOS    | Intel        | `.dmg`, `.tar.gz` |
-| macOS    | Apple Silicon| `.dmg`, `.tar.gz` |
-| Windows  | x86_64       | `.exe` installer, `.zip` |
-| Windows  | ARM64        | `.zip` |
-
-## Build System Overview
-
-### Directory Structure
-
-```
-offgrid-llm/
-├── build/                  # Built CLI binaries (git-ignored)
-│   ├── linux/offgrid
-│   ├── macos/offgrid
-│   └── windows/offgrid.exe
-├── desktop/                # Electron desktop app
-│   ├── package.json        # With electron-builder config
-│   ├── main.js             # Main process
-│   ├── dist/               # Desktop installers (git-ignored)
-│   └── assets/             # Icons and resources
-├── installers/             # Installation scripts
-│   ├── desktop.sh          # Desktop app installer (Linux/macOS)
-│   └── desktop.ps1         # Desktop app installer (Windows)
-├── install.sh              # CLI installer (root level)
-├── build-all.sh            # Master build script
-└── .github/
-    └── workflows/
-        └── release-unified.yml  # Automated CI/CD
-```
-
-## Manual Building
-
-### 1. Build CLI Binaries
-
-```bash
-# Using build-all.sh (recommended)
-./build-all.sh --cli --platform all
-
-# Or manually with Go
-GOOS=linux GOARCH=amd64 go build -o build/linux/offgrid ./cmd/offgrid
-GOOS=darwin GOARCH=arm64 go build -o build/macos/offgrid ./cmd/offgrid
-GOOS=windows GOARCH=amd64 go build -o build/windows/offgrid.exe ./cmd/offgrid
-
-# Outputs in build/:
-# - build/linux/offgrid
-# - build/macos/offgrid
-# - build/windows/offgrid.exe
-```
-
-### 2. Build Desktop Applications
-
-```bash
-# Prerequisites
-cd desktop && npm install
-
-# Build for all platforms
-npm run build:all
-
-# Or platform-specific
-npm run build:linux   # Creates .AppImage and .deb
-npm run build:mac     # Creates .dmg
-npm run build:win     # Creates .exe installer
-
-# Outputs in desktop/dist/:
-# Linux:   OffGrid-LLM-Desktop-{version}-x86_64.AppImage
-#          OffGrid-LLM-Desktop-{version}-amd64.deb
-# macOS:   OffGrid-LLM-Desktop-{version}-arm64.dmg
-# Windows: OffGrid-LLM-Desktop-Setup-{version}.exe
-```
-
-## Platform-Specific Packaging
-
-### Desktop Application (All Platforms)
-
-The desktop app uses **electron-builder** which automatically creates native installers.
-
-#### Linux
-
-```bash
-cd desktop
-npm run build:linux
-
-# Creates:
-# - AppImage (universal, portable)
-# - .deb package (Debian/Ubuntu)
-# Both x64 and arm64 architectures
-```
-
-#### macOS
-
-```bash
-cd desktop
-npm run build:mac
-
-# Creates .dmg installers:
-# - x64 (Intel Macs)
-# - arm64 (Apple Silicon)
-# - universal (both architectures)
-```
-
-#### Windows
-
-```bash
-cd desktop
-npm run build:win
-
-# Creates:
-# - NSIS installer (.exe)
-# - Portable version (.exe)
-```
-
-### CLI Bundles (with llama.cpp)
-
-CLI bundles are created by the GitHub Actions workflow. See `.github/workflows/release-unified.yml` for the complete process which includes:
-1. Building llama.cpp from source with platform-specific optimizations
-2. Bundling with the OffGrid CLI binary
-3. Creating release archives (.tar.gz, .zip)
-
-## Automated Releases (GitHub Actions)
-
-The current process is documented in [Releasing OffGrid](releasing.md). A
-`vX.Y.Z` tag starts the desktop/CLI release and Docker Hub publishing flows.
-The GitHub release is complete only after its 14 expected assets and
-`checksums-vX.Y.Z.sha256` are present; the matching Docker Hub image must also
-be pullable. Repair branches can finish an existing tag without moving it or
-rebuilding already verified native packages.
-
-The GitHub assets cover Linux AMD64/ARM64, macOS Intel/Apple Silicon, and
-Windows AMD64 runtime bundles, plus Linux, macOS, and Windows desktop
-packages. See the release notes for the exact filenames of a version.
-
-## Installation Instructions
-
-Use the current [installation guide](../setup/installation.md) and the exact
-asset names on the release page. The old v0.1.6 DMG and Windows ARM64
-examples are not current release artifacts. Download only the packages for
-your operating system and architecture, then verify the downloaded file
-against `checksums-vX.Y.Z.sha256` before installation.
-
-Desktop packages are currently unsigned. Do not claim that Windows installers
-or macOS desktop archives are signed or notarized until the signing jobs and
-their verification are part of the release workflow.
-
-## Testing Releases
-
-### Test Locally Before Pushing
-
-```bash
-go test ./...
-go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
-node dev/scripts/test-finalize-release.mjs
-```
-
-CI also builds the web UI, exercises its browser integration tests, and
-packages Electron. See [Releasing OffGrid](releasing.md) for hosted artifact
-and Docker Hub checks.
-
-## Troubleshooting
-
-### Build Fails on macOS
-
-```bash
-# Install Xcode Command Line Tools
-xcode-select --install
-
-# Install Homebrew dependencies
-brew install create-dmg
-```
-
-### Cross-Compilation Issues
-
-```bash
-# Ensure Go version is correct
-go version  # Should be 1.26.6 or later
-
-# Clean and rebuild
-make clean
-rm -rf dist/
-make cross-compile
-```
-
-### Windows Installer Doesn't Build
+PowerShell:
 
 ```powershell
-# Install NSIS
-choco install nsis
-
-# Install EnVar plugin manually:
-# Download from: https://nsis.sourceforge.io/mediawiki/images/7/7f/EnVar_plugin.zip
-# Extract to C:\Program Files (x86)\NSIS\Plugins\
+$buildVersion = (Get-Content -Raw VERSION).Trim()
+go build -trimpath -ldflags "-X main.Version=$buildVersion" -o bin/offgrid.exe ./cmd/offgrid
+.\bin\offgrid.exe serve
 ```
 
-## Release Checklist
+Open <http://127.0.0.1:11611/ui/>. Build from the root so relative UI lookup can find `web/dist`, or set `OFFGRID_UI_DIR` to its absolute path. Stop here if another service owns the port or workspace; do not kill it by port number. For isolated development, set separate `OFFGRID_PORT`, `OFFGRID_DATA_DIR`, and `OFFGRID_MODELS_DIR` before starting.
 
-Before creating a release:
+The service supervises a native `llama-server`. `OFFGRID_LLAMA_SERVER_PATH` selects an explicit runtime executable. A compatible executable on `PATH` or the native fallback installer may otherwise be used; Docker bundles one. See [llama.cpp integration](llama-cpp.md) before assuming a custom runtime supports embeddings or vision.
 
-- [ ] Update version in `Makefile`
-- [ ] Update CHANGELOG.md
-- [ ] Update README.md if needed
-- [ ] Run tests: `make test`
-- [ ] Build locally: `make cross-compile`
-- [ ] Test on target platforms
-- [ ] Create git tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
-- [ ] Push tag: `git push origin vX.Y.Z`
-- [ ] Monitor GitHub Actions workflow
-- [ ] Verify release artifacts on GitHub
-- [ ] Test installation from release
-- [ ] Announce release
+## Develop the UI and desktop
 
-## Version Numbering
+With the service running, `npm run dev --prefix web/app` starts Vite. Its API proxy defaults to port 11611: do not run destructive fixture tests against your real workspace.
 
-We use Semantic Versioning (semver):
+For Electron development:
 
-- `vX.Y.Z` - Stable release
-- `vX.Y.Z-alpha` - Alpha release
-- `vX.Y.Z-beta` - Beta release
-- `vX.Y.Z-rc.N` - Release candidate
+```bash
+npm ci --prefix desktop
+npm run dev --prefix desktop
+```
 
-Examples:
-- `v0.1.6-alpha` - First alpha
-- `v0.1.6-beta.1` - First beta
-- `v0.1.6-rc.1` - First release candidate
-- `v0.1.6` - Stable release
+A separately running service must pass version, API, and UI-build compatibility checks. If desktop needs to launch its own service, put the binary at the platform-specific path in [desktop/README.md](../../desktop/README.md). Both components must come from the same build; setting the version alone does not make unrelated UI assets compatible.
 
-## Support
+## Package desktop
 
-For build issues:
-- Check GitHub Actions logs
-- Review `docs/DISTRIBUTION_STRATEGY.md`
-- Open an issue on GitHub
+Follow [desktop packaging](../../desktop/README.md) on the target OS. The build needs the matching Go binary, generated UI, locked computer dependencies, and bundled browser/native workers. The packaging hooks prepare and verify those components. End users do not install Node, Go, or Playwright.
 
-For platform-specific questions:
-- Linux: See `install.sh`
-- macOS: See `build/macos/`
-- Windows: See `build/windows/` and `installers/install-windows.ps1`
+The current desktop targets are Windows x64 Setup/portable, macOS x64/arm64 ZIP archives, and Linux x64 AppImage/DEB. The authoritative configuration is [desktop/package.json](../../desktop/package.json). CPU/GPU CLI archives and container images are separate release products.
+
+For containers, follow [Docker development](../setup/docker.md#local-development-image). Local builds do not authorize replacing a live container, pushing images, or publishing packages.
+
+## Validate before review
+
+From the root:
+
+```bash
+node --test dev/scripts/check-docs.test.mjs
+node dev/scripts/check-docs.mjs
+go test ./...
+npm test --prefix desktop
+npm ci --prefix computer --ignore-scripts
+npm run browser:install --prefix computer
+npm test --prefix computer
+```
+
+The computer suite requires its browser dependencies. Native/installed-package tests have separate OS and consent requirements; see [computer development](../../computer/README.md).
+
+After building the UI and service, install the test browser once and run the isolated web wrapper:
+
+```bash
+cd web/app
+npx playwright install chromium
+cd ../..
+node dev/scripts/test-web-workspace.mjs bin/offgrid
+```
+
+Use `bin/offgrid.exe` on Windows. The wrapper creates disposable state and a separate port. Do not point `OFFGRID_E2E_URL` at a real workspace: the full browser suite creates and deletes fixtures.
+
+API edits require `npm run api:generate --prefix web/app`, then `api:check`. Review generated changes with the source contract. See [contributing](../../dev/CONTRIBUTING.md), [CI](../../.github/workflows/ci.yml), and [release gates](releasing.md).
+
+## Diagnose build problems
+
+| Symptom | Check |
+| --- | --- |
+| Web build or contract check fails | Install from the lockfile with `npm ci`; inspect type/schema errors rather than bypassing checks. |
+| Desktop reports another UI build | Rebuild and package the same `web/dist` as the service uses. Do not weaken the compatibility check. |
+| Native worker build fails | Build on the required OS with its SDK/libraries; do not substitute an empty worker. |
+| A test changes real history | Stop the test and restore from your backup if necessary. Use isolated fixtures next time. |
+| Package is unsigned | Signing/notarization require real publisher identities. A successful build does not supply them. |
+
+Release only through the documented [release process](releasing.md). Never move a published tag to hide a failed build.

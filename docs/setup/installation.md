@@ -1,432 +1,102 @@
-# OffGrid LLM Installation Guide
+# Install OffGrid
 
-## Quick Install (Recommended)
+Choose one service installation and connect your clients to it. This guide covers desktop, CLI, Docker, and source builds. Installing a client does not migrate an existing workspace or update a separately managed service.
 
-**One command to install everything:**
+## Choose a distribution
+
+| Your goal | Distribution | Next step |
+| --- | --- | --- |
+| Use OffGrid on a personal computer | Desktop package | Install the OS-specific package below |
+| Keep a service in Docker or WSL | CPU or NVIDIA container | [Docker deployment](docker.md) |
+| Use terminal commands or an API server | CLI/runtime archive | Extract it and run `offgrid serve` |
+| Change the code | Source checkout | [Build guide](../advanced/BUILDING.md) |
+| Call an existing service from Python | Python client | [Python guide](../../python/README.md); this does not install the service |
+
+Check memory, storage, CPU instructions, and model requirements before downloading. The project targets lightweight qualified workflows on 8 GB systems and recommends 16 GB; this is not a guarantee for every model, context, or vision workflow. See [CPU support](../advanced/cpu-support.md) and the [reliability plan](../advanced/product-reliability-plan.md).
+
+## Download and verify a release
+
+Use the [official releases](https://github.com/takuphilchan/offgrid-llm/releases). Download the package and `checksums-vX.Y.Z.sha256` from the same release. Do not mix packages from different revisions to resolve a compatibility warning.
+
+| Platform | Desktop package |
+| --- | --- |
+| Windows x64 | Setup `.exe` or portable `.exe` |
+| macOS Intel | x64 `.zip` containing the app |
+| macOS Apple Silicon | arm64 `.zip` containing the app |
+| Linux x64 | `.AppImage` or `.deb` |
+
+CLI/runtime archives also cover Linux ARM64. That does not imply a Linux ARM64 desktop package. Check the release's actual assets; do not assume Windows ARM64, RPM, or universal macOS packages exist.
+
+Calculate the file's SHA-256 and compare the entire digest with its entry in the checksum file:
+
+```powershell
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\YOUR_DOWNLOADED_PACKAGE.exe'
+```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
+# Linux
+sha256sum ./YOUR_DOWNLOADED_PACKAGE.tar.gz
+# macOS
+shasum -a 256 ./YOUR_DOWNLOADED_PACKAGE.zip
 ```
 
-This installs:
-- **CLI** - Command-line tools and server
-- **Desktop App** - Standalone GUI application  
-- **Voice Assistant** - Speech-to-text (Whisper) + Text-to-speech (Piper)
+Checksums detect corruption; they are not a publisher signature. Check the release's signing status and [OS trust guidance](desktop-startup.md#installer-appearance-and-os-warnings). Do not disable security controls to install an untrusted file.
 
-**Then open:** http://localhost:11611
+## Install desktop
 
-### System Requirements
+On Windows, run verified Setup for a registered installation, or launch the portable executable. Close OffGrid normally when Setup requests it. Models and workspace data are stored separately from application files.
 
-| Platform | CPU Build | GPU/Vulkan Build |
-|----------|-----------|------------------|
-| **Linux** | Ubuntu 22.04+, Debian 12+ (GLIBC 2.35+) | Ubuntu 24.04+ (GLIBC 2.38+) |
-| **macOS** | macOS 12.0+ (Monterey) | Metal (Apple Silicon) |
-| **Windows** | Windows 10/11 | - |
+On macOS, extract the archive and place the app in Applications. On Linux, use the distribution's package installer for the DEB, or make the verified AppImage executable and launch it. OS permissions and publisher trust may still need attention; a successful build is not proof of signing or notarization.
 
-> **Note:** The installer auto-detects your system and falls back to CPU if Vulkan is unavailable.
+Open the app. If port 11611 is free, it can start its bundled service. If a compatible service already runs there, it connects to that workspace. Follow the [quickstart](quickstart.md) to download a model; models are not included in the installer.
 
-### Non-Interactive Installation
+## Install the CLI
 
-Use environment variables for automated installations:
+Extract the matching CLI/runtime archive into an application directory. Preserve its bundled runtime and supporting files; consult the archive instructions and [llama.cpp integration](../advanced/llama-cpp.md) for custom runtime selection. Add the CLI directory to `PATH`, or use its full path.
 
 ```bash
-# Install everything (default)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | NONINTERACTIVE=yes bash
-
-# CLI + Voice only (no desktop app)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | DESKTOP=no NONINTERACTIVE=yes bash
-
-# CLI only (minimal, no voice)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | DESKTOP=no AUDIO=no NONINTERACTIVE=yes bash
+offgrid version
+offgrid --help
+offgrid serve
 ```
 
-### GPU Acceleration
+On Windows, from the extracted directory:
 
-The installer auto-detects your GPU and GLIBC version:
-
-| GPU Type | Build | Requirement |
-|----------|-------|-------------|
-| NVIDIA/AMD | Vulkan | GLIBC 2.38+ (Ubuntu 24.04+) |
-| Apple Silicon | Metal | macOS 12.0+ |
-| Intel/None | CPU | GLIBC 2.35+ (Ubuntu 22.04+) |
-
-```bash
-# Force CPU build (maximum compatibility)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | GPU=cpu bash
-
-# Force Vulkan build (requires GLIBC 2.38+ and compatible GPU)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | GPU=vulkan bash
+```powershell
+.\offgrid.exe version
+.\offgrid.exe serve
 ```
 
-> **Auto-fallback:** If you have a GPU but GLIBC < 2.38, the installer automatically uses the CPU build.
----
+Open <http://127.0.0.1:11611/ui/>. If the UI is absent or cannot be located, use a matching desktop/container package or build its UI and configure `OFFGRID_UI_DIR`. Do not copy unrelated release assets.
 
-## Development Installation (Build from Source)
+Repository installer scripts are optional, separate workflows. Read [installer documentation](../../installers/README.md) and the script before running one; they may install dependencies or services. Running a remote script as administrator is not required for desktop first use.
 
-**For older Linux systems (Ubuntu 22.04, Debian 12, etc.) or GPU optimization:**
+## Update an existing installation
 
-```bash
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm
-sudo ./dev/install.sh
+Finish active work, identify the service and data roots, and make a [verified backup](../advanced/workspace-recovery.md).
+
+| Component | What updating it changes | What it does not update |
+| --- | --- | --- |
+| Desktop installer | Shell, bundled UI, service binary, host components | Running container or separately installed service |
+| Container replacement | Application, UI, inference runtime inside it | Desktop app or host companion |
+| CLI archive replacement | Files in that installation directory | Running process, another CLI on `PATH`, or a container |
+| Source edit or build | Checkout and generated local outputs | Installed app or published release |
+
+For desktop plus Docker, update both to matching versions and UI builds, preserve the same volumes, then choose **Retry connection**. See [Docker upgrades](docker.md#upgrade-an-existing-workspace). Use an isolated workspace only if you deliberately want separate data.
+
+Rollback needs compatible application and data snapshots. Replacing only the executable after a schema migration is not safe rollback.
+
+## Remove the application without deleting work
+
+Use the OS uninstaller for registered desktop installations, or remove only the extracted app directory after quitting a portable app. Keep data/model roots and backups unless you separately intend to erase them.
+
+For Docker, stop/remove only the identified container; do not add volume-removal flags. Never delete a workspace as routine startup repair. [Recovery](../advanced/workspace-recovery.md) explains backup coverage.
+
+## Check the connection
+
+```powershell
+curl.exe --max-time 5 http://127.0.0.1:11611/health
+curl.exe --max-time 5 http://127.0.0.1:11611/api/v2/system
 ```
 
-**This installer:**
-- Builds llama.cpp with full GPU optimization
-- Compiles OffGrid from source
-- Sets up systemd services
-- Installs web interface
-- Takes 10-15 minutes
-
-**Installation options:**
-
-```bash
-# Auto-detect GPU (recommended)
-sudo ./dev/install.sh
-
-# Force CPU-only mode
-sudo ./dev/install.sh --cpu-only
-
-# Require GPU (fail if not found)
-sudo ./dev/install.sh --gpu
-
-# Show help
-./dev/install.sh --help
-```
-
----
-
-## What Gets Installed
-
-### Binaries
-- `/usr/local/bin/offgrid` - Main CLI tool
-- `/usr/local/bin/llama-server` - Inference engine (from llama.cpp)
-
-### Web Interface
-- `/var/lib/offgrid/web/ui/` - Web UI files
-
-### Models Directory
-- `/var/lib/offgrid/models/` - Downloaded AI models stored here
-
-### Systemd Services (Linux)
-- `offgrid@<user>.service` - OffGrid API server
-- Auto-starts on boot (if enabled during install)
-
----
-
-## Installation Process
-
-The installer performs these steps:
-
-### 1. System Detection (~1 minute)
-- Check dependencies (curl, git, cmake, gcc, etc.)
-- Detect OS, architecture (x64/arm64)
-- Identify GPU (NVIDIA, AMD, or none)
-- Verify Go installation or install it
-
-### 2. Build llama.cpp (~5-10 minutes)
-- Clone llama.cpp repository
-- Configure with CMake (GPU-optimized if available)
-- Build llama-server binary
-- Install system-wide
-
-### 3. Build OffGrid (~2-3 minutes)
-- Download Go dependencies
-- Compile OffGrid binary
-- Run basic tests
-
-### 4. System Setup (~1 minute)
-- Create `/var/lib/offgrid` directory
-- Install web UI files
-- Set up models directory
-- Configure systemd service
-
-### 5. Start Services (~30 seconds)
-- Start OffGrid server
-- Verify health endpoints
-- Display access URLs
-
----
-
-╭─────────────────────────────────────────────────────────────────╮
-│ SECURITY
-├─────────────────────────────────────────────────────────────────┤
-│  llama-server bound to 127.0.0.1 only (internal IPC)
-│  Random high port 52341 not exposed externally
-│  Only OffGrid port 11611 is publicly accessible
-│  Inference runtime isolated behind the OffGrid service
-╰─────────────────────────────────────────────────────────────────╯
-```
-
-## System Requirements
-
-### Minimum Requirements
-- **OS:** Ubuntu 20.04+, Debian 11+, Fedora 35+, or compatible Linux distribution
-- **CPU:** x86_64 or ARM64 architecture
-- **RAM:** 8 GB (for 7B models)
-- **Disk:** 20 GB free space
-- **Privileges:** sudo access
-
-### Recommended for GPU Acceleration
-- **NVIDIA GPU:** GTX 1060 or better, CUDA 11.7+
-- **AMD GPU:** RX 580 or better, ROCm 5.0+
-- **RAM:** 16 GB
-- **VRAM:** 6 GB+ for 7B models, 24 GB+ for 70B models
-
-## What Gets Installed
-
-### Binaries
-- `/usr/local/bin/offgrid` - Main OffGrid CLI
-- `/usr/local/bin/llama-server` - llama.cpp inference server
-- `/usr/local/bin/llama-server-start.sh` - Service startup script
-
-### Directories
-- `/var/lib/offgrid/` - Data directory (owned by `offgrid` user)
-## After Installation
-
-### Verify It Works
-
-```bash
-# Check if offgrid is installed
-offgrid --version
-
-# Check service status (Linux)
-systemctl status offgrid@$USER
-
-# Test health endpoint
-curl http://localhost:11611/health
-```
-
-### Access the Web Interface
-
-Open in your browser: `http://localhost:11611/ui/`
-
-### Download Your First Model
-
-```bash
-# Search for models
-offgrid search llama --limit 5
-
-# Download a small model (~4GB)
-offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
-  --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
-```
-
----
-
-## Troubleshooting
-
-### Installation Issues
-
-**"Permission denied" error:**
-```bash
-# Run with sudo
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh)
-```
-
-**"GPU not detected" warning:**
-- This is OK - it will use CPU mode
-- Or install GPU drivers first and reinstall
-
-**Build failed:**
-```bash
-# Check you have enough disk space (need 5GB+)
-df -h
-
-# Make sure you have build tools
-sudo apt-get install build-essential cmake git
-```
-
-### Service Won't Start
-
-```bash
-# Check service status
-systemctl status offgrid@$USER
-
-# View logs
-journalctl -u offgrid@$USER -n 50
-
-# Restart service
-systemctl restart offgrid@$USER
-```
-
-### Web UI Not Working
-
-```bash
-# Make sure service is running
-systemctl status offgrid@$USER
-
-# Check if UI files exist
-ls -la /var/lib/offgrid/web/ui/
-
-# If missing, rebuild from a source checkout and copy the generated bundle:
-sudo mkdir -p /var/lib/offgrid/web/ui
-./scripts/sync-ui.sh
-sudo cp -r web/dist/. /var/lib/offgrid/web/ui/
-```
-
----
-
-## Verification
-
-### Check Installation
-
-```bash
-# Verify binary installation
-which offgrid
-offgrid --version
-
-# Check services
-sudo systemctl status offgrid-llm
-sudo systemctl status llama-server
-
-# Test health endpoint
-curl http://localhost:11611/health
-
-# View logs
-## Uninstall
-
-**Stop and remove services:**
-```bash
-# Stop service
-systemctl stop offgrid@$USER
-
-# Disable auto-start
-systemctl disable offgrid@$USER
-
-# Remove binaries
-sudo rm /usr/local/bin/offgrid
-sudo rm /usr/local/bin/llama-server
-```
-
-**Remove data (warning: deletes all models):**
-```bash
-sudo rm -rf /var/lib/offgrid
-```
-
----
-
-## Next Steps
-
-- [Download models](../guides/models.md)
-- [Learn CLI commands](../reference/cli.md)
-- [Use the API](../reference/api.md)
-- [Read feature guide](../guides/features.md)
-
-```
-
-### Test API
-
-```bash
-# List models
-offgrid list
-
-# Download a model
-offgrid download tinyllama
-
-# Test chat
-curl -X POST http://localhost:11611/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "messages": [
-      {"role": "user", "content": "Hello!"}
-    ]
-  }'
-```
-
-## Troubleshooting
-
-### Installation Failed
-
-**Check the error log:**
-```bash
-# The installer shows the exact line where it failed
-# Look for error messages in red
-```
-
-**Common issues:**
-
-1. **Missing sudo access**
-   ```bash
-   # Error: Permission denied
-   # Solution: Run with sudo
-   sudo ./install.sh
-   ```
-
-2. **Conflicting package managers**
-   ```bash
-   # Error: Could not determine package manager
-   # Solution: Ensure you're on a supported Linux distribution
-   cat /etc/os-release
-   ```
-
-3. **GPU not detected**
-   ```bash
-   # Warning: No GPU detected - will use CPU inference
-   # Solution: Install GPU drivers first, or use --cpu-only
-   sudo ./install.sh --cpu-only
-   ```
-
-4. **Build failed**
-   ```bash
-   # Error: Build failed with exit code 2
-   # Solution: Check build log
-   tail -50 /tmp/go_build.log
-   ```
-
-### Service Won't Start
-
-**Check service status:**
-```bash
-sudo systemctl status offgrid-llm
-sudo systemctl status llama-server
-```
-
-**View detailed logs:**
-```bash
-sudo journalctl -u offgrid-llm -n 100 --no-pager
-sudo journalctl -u llama-server -n 100 --no-pager
-```
-
-**Common fixes:**
-
-1. **Port already in use**
-   ```bash
-   # Check what's using port 11611
-   sudo netstat -tlnp | grep 11611
-   # Kill the process or change OffGrid port
-   ```
-
-2. **Model not found**
-   ```bash
-   # Download a model
-   offgrid download tinyllama
-   # Or check model directory
-   ls -la /var/lib/offgrid/models/
-   ```
-       /etc/systemd/system/offgrid-llm-2.service
-
-# Edit to use different port
-sudo nano /etc/systemd/system/offgrid-llm-2.service
-# Change: Environment="OFFGRID_PORT=11612"
-
-# Start second instance
-sudo systemctl enable offgrid-llm-2
-sudo systemctl start offgrid-llm-2
-```
-
-## Next Steps
-
-After installation:
-
-1. **Visit the Web UI:** http://localhost:11611/ui
-2. **Download models:** `offgrid download tinyllama`
-3. **Read the docs:** [Features Guide](../guides/features.md)
-4. **Try the API:** [API Reference](../reference/api.md)
-5. **Configure systemd:** [Deployment Guide](../advanced/deployment.md)
-
-## Support
-
-- **Documentation:** [docs/](../README.md)
-- **Issues:** [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/takuphilchan/offgrid-llm/discussions)
+In Bash, use `curl`. `/health` reports availability; `/api/v2/system` reports version, revision, UI build, and workspace identity. Keep these identities with issue reports, but omit credentials and private data. With WSL, test from Windows as well as inside WSL.

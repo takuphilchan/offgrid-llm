@@ -262,4 +262,4 @@ audit:
 
 - [CLI Reference](../reference/cli.md)
 - [Multi-User Guide](multi-user.md)
-- [Security Best Practices](../advanced/security.md)
+- [Deployment security](../../README.md#security)

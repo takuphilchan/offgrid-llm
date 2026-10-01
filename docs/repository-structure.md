@@ -1,28 +1,55 @@
-# Repository Structure
+# Repository structure
 
-This repository is organized as a single product with multiple distribution surfaces:
+OffGrid is one product with a shared service and several clients. Use this map
+to locate behavior before adding a second implementation.
 
-| Path | Purpose |
-|------|---------|
-| `cmd/offgrid/` | CLI entrypoint for the `offgrid` command. |
-| `internal/` | Private Go application packages for server, inference, RAG, models, agents, audio, P2P, users, and supporting services. |
-| `pkg/api/` | Public API types and the stable OpenAPI contract. |
-| `web/app/` | React and TypeScript application source. |
-| `web/dist/` | Generated UI bundle served by Go and packaged by Electron. |
-| `desktop/` | Electron desktop wrapper and desktop-specific assets. |
-| `python/` | Python SDK and examples. |
-| `docs/` | User, operator, contributor, and architecture documentation. |
-| `docker/` | Dockerfiles, Compose files, and container deployment helpers. |
-| `installers/` | Platform installer scripts. |
-| `scripts/` | Build, install, service, and developer utility scripts. |
-| `examples/` | Standalone examples intended to compile with `go build ./...`. |
-| `dev/` | Developer-only scripts, examples, and setup helpers. |
+| Path | Responsibility |
+| --- | --- |
+| `cmd/offgrid/` | CLI commands, argument parsing, service clients, local maintenance |
+| `cmd/offgrid-computer/` | Host-native computer worker entry point |
+| `internal/server/` | HTTP routes, authentication, transport, service composition |
+| `internal/agents/` | Durable tasks, approvals, context, delegation, SQLite task snapshots/events |
+| `internal/computer/` | Typed control protocol, native OS adapters, target/action validation |
+| `computer/` | Host browser/native session supervision, Playwright, local dispatch journal |
+| `internal/inference/` | Managed native llama-server lifecycle and inference transport |
+| `internal/models/` | Model catalog, downloads, registry, verification |
+| `internal/sessions/`, `internal/rag/`, `internal/storage/` | Conversation, knowledge, and storage primitives |
+| `internal/users/`, `internal/serviceclient/` | Identity/permissions and authenticated client transport |
+| `pkg/api/openapi.yaml` | Versioned HTTP contract; generated clients must match |
+| `web/app/` | Shared React/TypeScript renderer for browser and Electron |
+| `web/dist/` | Generated UI output; never hand-edit |
+| `desktop/` | Electron main/preload trust boundary, startup, consent, packaging |
+| `python/` | Python SDK and examples |
+| `docker/`, `installers/` | Container definitions and platform installation |
+| `scripts/`, `dev/scripts/` | Installation/build helpers and isolated test harnesses |
+| `examples/`, `dev/examples/` | User examples and developer-only experiments |
+| `docs/` | Setup, guides, references, architecture, historical release notes |
+| `openspec/` | Scoped change intent/acceptance; not a substitute for tests or release evidence |
 
-## Cleanup Rules
+## Follow a change through its owners
 
-- Keep generated binaries, local module caches, model files, logs, and build outputs out of Git.
-- Put user-facing examples in `examples/`; put experimental or maintainer-only examples in `dev/examples/`.
-- Prefer OS-specific files with build tags for platform behavior, such as disk, USB, GPU, and process handling.
-- Keep docs aligned with implementation status. If a feature still depends on mock mode or partial integration, say so directly in the relevant guide.
-- Avoid growing large entrypoint files further. New CLI behavior should move toward focused command files or package-level helpers.
-- Treat `pkg/api/openapi.yaml` as the stable HTTP source of truth and regenerate UI types after contract changes.
+A task crosses the UI or CLI, the HTTP job contract, the durable agent runner,
+and its tool authorization. Computer actions additionally cross a host-local
+consent/dispatch boundary before reaching the native or browser driver.
+Changing a dropdown cannot change those authorization rules by itself.
+
+Start with [architecture](advanced/ARCHITECTURE.md),
+[client contracts](advanced/client-contracts.md), and the
+[Computer Tasks implementation notes](../computer/README.md). The
+[reliability plan](advanced/product-reliability-plan.md) owns evidence;
+do not create another competing readiness checklist.
+
+## Keep development predictable
+
+- Preserve OS-specific build tags and small platform adapters.
+- Put shared domain behavior in services, not another UI/CLI-specific runner.
+- Keep generated binaries, models, secrets, caches, logs, and private test data
+  out of Git.
+- Regenerate API types from the contract rather than editing generated output.
+- Use isolated test state, especially for browser, desktop, and migration tests.
+- Preserve historical release notes; correct current instructions in maintained guides.
+- Keep sibling projects such as fine-tuning labs and Edge Delegate outside this
+  repository's product documentation unless an actual integration is documented.
+
+See [Contributing](../dev/CONTRIBUTING.md) for checks and
+[OpenSpec](../openspec/README.md) for substantive development changes.

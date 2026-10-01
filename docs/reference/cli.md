@@ -1,545 +1,264 @@
-# CLI Reference
+# CLI reference
 
-Complete reference for all `offgrid` commands.
+Use `offgrid --help` for the command inventory. This reference covers the main
+supported workflows; optional and legacy commands have different prerequisites.
+Examples assume the executable is on `PATH`. In PowerShell, use
+`.\offgrid.exe` when running from its installation directory.
 
----
+## Service connection
 
-## Quick Start
+Start the service with `offgrid serve`, or use an already-running desktop/container
+service. Do not start a second writer against its workspace.
+
+Service-aware commands use `OFFGRID_SERVER_URL` (default
+`http://127.0.0.1:11611`) and `OFFGRID_API_KEY` when authentication is enabled.
+Set credentials privately in the client environment, not in shared command logs.
+
+Configure the server through environment variables or `OFFGRID_CONFIG`, **not**
+`serve --host`, `serve --port`, or `serve --model`; those are not parsed server
+options in this implementation.
+
+Bash:
 
 ```bash
-offgrid run llama3           # Chat with a model
-offgrid serve                # Start web UI server
-offgrid list                 # Show installed models
-offgrid doctor               # Check system health
-offgrid appliance status     # Check hardware fit for an offline box
+OFFGRID_HOST=127.0.0.1 OFFGRID_PORT=11612 offgrid serve
 ```
 
----
+PowerShell:
+
+```powershell
+$env:OFFGRID_HOST = '127.0.0.1'
+$env:OFFGRID_PORT = '11612'
+offgrid serve
+```
+
+Clients for that example need `OFFGRID_SERVER_URL=http://127.0.0.1:11612`.
+The web UI is at `/ui/`. See [deployment](../advanced/DEPLOYMENT.md) for
+authentication, storage, and service ownership.
 
 ## Models
 
-### Run a Model
-
-```bash
-offgrid run <model>
-```
-
-Start interactive chat. Supports aliases and auto-download:
-
-```bash
-offgrid run llama3           # Uses built-in alias
-offgrid run mistral          # Auto-downloads if missing
-offgrid run ./local.gguf     # Use local file
-```
-
-**Chat commands:** `exit` to quit, `clear` to reset conversation.
-
----
-
-### List Models
-
-```bash
+```sh
 offgrid list
+offgrid list --catalog
+offgrid search phi --limit 5
+offgrid search "large model" --files --limit 5
+offgrid download phi-3.5-mini-instruct
+offgrid download OWNER/REPOSITORY --file MODEL.gguf
+offgrid download-hf OWNER/REPOSITORY --file MODEL.gguf
 ```
 
-Shows installed models with sizes.
+Replace repository/file placeholders with actual results from search. Download
+options include `--quant`, `--file`, `--detach`, `--yes`, and global `--json`.
+Use `offgrid download --help` for its syntax. Quantization is an option, not a
+second positional argument. Listing and downloads operate on the connected
+service; they do not silently fall back to another local registry. CLI search
+currently queries Hugging Face directly from the CLI process, so its network
+environment can differ from the service's web-UI search and download environment.
 
----
+Check [model discovery](../guides/model-discovery.md) for cancellation, resume,
+and projector handling. A projector download is not proof of vision compatibility.
 
-### Search HuggingFace
+### Terminal chat and local model files
 
-```bash
-offgrid search <query> [flags]
-```
-
-| Flag | Description |
-|------|-------------|
-| `--author` | Filter by author |
-| `--sort` | Sort by: downloads, likes, recent |
-| `--limit` | Max results (default: 10) |
-
-```bash
-offgrid search llama
-offgrid search "code llama" --author TheBloke
-offgrid search mistral --sort downloads --limit 5
-```
-
----
-
-### Download Models
-
-**From HuggingFace:**
-```bash
-offgrid download-hf <repo-id> [--file <filename>]
-```
-
-```bash
-offgrid download-hf TheBloke/Llama-2-7B-GGUF
-offgrid download-hf Qwen/Qwen2.5-3B-Instruct-GGUF --file qwen2.5-3b-instruct-q4_k_m.gguf
-```
-
-Vision models auto-download matching projector files.
-
-**From catalog:**
-```bash
-offgrid download <model-id> [quantization]
-offgrid catalog              # Browse available
-```
-
----
-
-### Aliases
-
-Model shortcuts for common models:
-
-```bash
-offgrid alias list           # Show all aliases
-offgrid alias add mymodel TheBloke/MyModel-GGUF
+```sh
+offgrid run YOUR_INSTALLED_MODEL_ID
+offgrid alias list
+offgrid alias set mymodel YOUR_INSTALLED_MODEL_ID
 offgrid alias remove mymodel
 ```
 
-**Built-in aliases:**
+Copy the model ID from `offgrid list`. The legacy `run` path also scans the local
+models directory and resolves aliases there. A host CLI does not see files in a
+container volume automatically: use the web UI or `docker exec -it offgrid offgrid
+run YOUR_INSTALLED_MODEL_ID` for that deployment. Missing aliases may prompt for
+a download; do not rely on unattended automatic selection.
 
-| Alias | Model |
-|-------|-------|
-| `llama3` | Llama 3.2 3B |
-| `llama3:8b` | Llama 3.1 8B |
-| `qwen` | Qwen 2.5 3B |
-| `mistral` | Mistral 7B |
-| `phi` | Phi 3 Mini |
-| `codellama` | Code Llama 7B |
-| `deepseek` | DeepSeek Coder 6.7B |
-| `gemma` | Gemma 2 2B |
-| `tiny` | TinyLlama 1.1B |
+Import/export/removal and alias configuration include local-file behavior.
+Review [model management](../guides/models.md) before using them against an
+installed workspace.
 
-Full list: `offgrid alias list`
+## Sessions
 
----
+These commands use the connected service and its ownership checks:
 
-### Import/Export
-
-```bash
-offgrid import <path>              # From USB/directory
-offgrid export <model> <path>      # To USB/directory
+```sh
+offgrid session list
+offgrid session show "Conversation name"
+offgrid session export "Conversation name" conversation.md
+offgrid export-session "Conversation name" --format json --output conversation.json
 ```
 
-```bash
-offgrid import /media/usb
-offgrid export llama3 /media/usb
+Exports default to stdout when no output path is given. An output file must not
+already exist. To delete a conversation, use `offgrid session delete "Conversation
+name"`; this removes saved history, not external files created during work.
+Review the target and export it first if you need a copy.
+
+See [history management](../guides/history-management.md).
+
+## Agent tasks
+
+Choose an installed tool-capable model, not an unverified alias:
+
+```sh
+offgrid agent run "Calculate 25 * 47 and report the result" --model YOUR_MODEL_ID --wait
+offgrid agent tasks
+offgrid agent status RUN_ID
+offgrid agent chat --model YOUR_MODEL_ID
 ```
 
----
+`agent run` accepts:
 
-### Remove Models
+| Option | Meaning |
+| --- | --- |
+| `--model ID` | Required installed model ID |
+| `--request-id ID` | 8–128 characters; reuse only for an identical submission retry |
+| `--wait` | Follow task progress; input or approval may still be required |
+| `--style react\|cot\|plan-execute` | Instruction style; `plan` aliases `plan-execute` |
+| `--max-steps N` | 1–50 model iterations |
+| `--json` | Return the saved submission snapshot; inspect its run ID for completion |
 
-```bash
-offgrid remove <model>
+Without `--wait`, submission returns after saving the task. Reusing a request ID
+with different work conflicts. `agent chat` accepts `--model`, not the old
+`--template` examples. A style changes neither permissions nor model capability.
+
+### Control and recover a saved task
+
+```sh
+offgrid agent approve RUN_ID APPROVAL_ID
+offgrid agent deny RUN_ID APPROVAL_ID
+offgrid agent pause RUN_ID
+offgrid agent steer RUN_ID UNIQUE_REQUEST_ID "Focus on the three main findings."
+offgrid agent resume RUN_ID
+offgrid agent takeover RUN_ID
+offgrid agent reconnect RUN_ID
+offgrid agent cancel RUN_ID
+offgrid agent export RUN_ID
 ```
 
-Prompts for confirmation.
+Run only the operation intended for the current task, not this whole block.
+Approval IDs come from its pending snapshot. Stop/cancel does not undo effects.
+Use `agent reconcile RUN_ID CALL_ID "verified outcome"` only after independently
+inspecting an uncertain operation; it records a result without rerunning it.
+See [agent recovery](../guides/agents.md).
 
----
+### Computer Tasks
 
-## Server
-
-### Start Server
-
-```bash
-offgrid serve [flags]
+```sh
+offgrid computer status
+offgrid computer targets
+offgrid computer run "Read the selected document and summarize it" --model YOUR_MODEL_ID
+offgrid computer setup RUN_ID
+offgrid computer check YOUR_MODEL_ID
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--host` | Bind address | 127.0.0.1 |
-| `--port` | Port number | 11611 |
-| `--model` | Default model | auto |
+`setup RUN_ID` opens the installed desktop consent flow for the saved task.
+`targets` reports existing computer sessions; it is not unrestricted OS discovery.
+`computer pause|resume|takeover|stop RUN_ID` uses the same durable lifecycle.
+The CLI cannot bypass local consent. See [Computer Tasks](../guides/computer-tasks.md)
+for native/browser/vision limitations.
 
-```bash
-offgrid serve
-offgrid serve --port 8080
-offgrid serve --host 0.0.0.0 --model llama3
-```
+### Tools and MCP
 
-Web UI: http://localhost:11611
+Use **Agents → Available tools** and **Connections** for live service management.
+The older CLI configuration commands are:
 
----
-
-### Health Check
-
-```bash
-curl http://localhost:11611/health
-```
-
----
-
-## Appliance
-
-Plan and prepare offline AI boxes for schools, libraries, clinics, and community
-networks.
-
-```bash
-offgrid appliance <command>
-```
-
-| Command | Description |
-|---------|-------------|
-| `status` | Show this machine's appliance fit |
-| `plan [profile]` | Show hardware and deployment plan |
-| `profile [name]` | Show profile tuning settings |
-| `init [profile]` | Create local appliance metadata |
-
-Profiles:
-
-| Profile | Best Use |
-|---------|----------|
-| `lite` | Raspberry Pi class learning node |
-| `hub` | Refurbished mini PC for schools and community centers |
-| `gpu` | NVIDIA GPU lab machine |
-| `jetson` | Jetson robotics, camera, and edge AI kit |
-
-```bash
-offgrid appliance status
-offgrid appliance plan hub
-offgrid appliance profile lite
-offgrid appliance init hub
-```
-
-See [Appliance Deployment](../setup/appliance.md).
-
----
-
-## AI Agents
-
-### Interactive Agent
-
-```bash
-offgrid agent chat [flags]
-```
-
-| Flag | Description |
-|------|-------------|
-| `--model` | Model for agent |
-| `--style` | `react` or `cot` |
-| `--template` | Use preset template |
-| `--max-steps` | Max reasoning steps |
-
-```bash
-offgrid agent chat
-offgrid agent chat --template coder
-offgrid agent chat --model qwen --style react
-```
-
----
-
-### Run Single Task
-
-```bash
-offgrid agent run "<task>" [flags]
-```
-
-```bash
-offgrid agent run "Calculate factorial of 10"
-offgrid agent run "Search for Python tutorials" --model llama3
-```
-
----
-
-### Templates
-
-Pre-configured agent personas:
-
-```bash
-offgrid agent templates        # List available
-```
-
-| Template | Purpose |
-|----------|---------|
-| `researcher` | Information gathering, summarization |
-| `coder` | Code writing, debugging, review |
-| `analyst` | Data analysis, pattern recognition |
-| `writer` | Content creation, editing |
-| `sysadmin` | System administration, DevOps |
-| `planner` | Task breakdown, project planning |
-
-```bash
-offgrid agent chat --template researcher
-offgrid agent chat --template coder
-```
-
----
-
-### Agent Tools
-
-```bash
-offgrid agent tools            # List available tools
-```
-
-Built-in tools: calculator, web search, file operations, shell commands.
-
----
-
-### MCP Servers
-
-Model Context Protocol integration:
-
-```bash
+```sh
 offgrid agent mcp list
-offgrid agent mcp add <name> "<command>"
-offgrid agent mcp remove <name>
-offgrid agent mcp test "<command>"
+offgrid agent mcp add https://learn.microsoft.com/api/mcp --name learn-docs
+offgrid agent mcp disable learn-docs
+offgrid agent mcp enable learn-docs
+offgrid agent mcp remove learn-docs
 ```
 
-```bash
-offgrid agent mcp add filesystem "npx -y @modelcontextprotocol/server-filesystem /tmp"
-offgrid agent mcp add memory "npx -y @modelcontextprotocol/server-memory"
+These legacy commands edit local `tools.json`, not the connected service through
+`OFFGRID_SERVER_URL`. Do not use them concurrently with a running service or
+expect a Windows host edit to change a container. Prefer the UI; see
+[MCP setup and removal](../guides/mcp.md). An `npx` command is not an HTTP URL,
+and `agent mcp test` is not a supported CLI subcommand.
+
+## Knowledge
+
+```sh
+offgrid kb status
+offgrid kb enable YOUR_EMBEDDING_MODEL_ID
+offgrid kb list
+offgrid kb add ./notes.txt
+offgrid kb search "What are the main decisions?"
+offgrid kb disable
 ```
 
----
+Install the embedding model first. `kb remove DOCUMENT_ID` deletes that indexed
+document; `kb clear --yes` removes all documents available to the operation.
+Do not include destructive commands in a routine smoke test.
+See [embeddings](../guides/embeddings.md) and [shared-index limitations](api.md#knowledge).
 
-## External Agents
+## Workspace maintenance
 
-Install, configure, verify, and launch Hermes Agent through OffGrid:
+Backup and restore are **offline** maintenance operations, not service requests.
+Stop the writer first and preserve models/runtime/configuration separately.
 
-```bash
-offgrid hermes install                    # Complete guided setup
-offgrid hermes install --with-browser     # Also install optional browser/computer-use tools
-offgrid hermes status                     # Inspect setup and model-context preflight
-offgrid hermes test                       # Run an inference smoke test
-offgrid hermes                            # Start interactive Hermes chat
-offgrid hermes -q "Summarize this repo"   # Start with a prompt
+```sh
+offgrid workspace backup --data-dir /path/to/data --output /path/to/backups/workspace.zip
+offgrid workspace verify /path/to/backups/workspace.zip
 ```
 
-The install command uses Hermes' official installer when the runtime is not
-present, installs the native OffGrid provider, and persists configuration
-through Hermes' own configuration CLI. Use `--yes` for an unattended install.
-The default skips npm/browser tools and unrelated full diagnostics; use
-`--with-browser` or `--doctor` to opt in. Optional npm/browser failures are
-reported as warnings after the working core is configured. Hermes requires a
-real OffGrid context of at least 64,000 tokens; do not inflate the Hermes
-setting beyond what OffGrid actually allocates.
+These are placeholders, not installation defaults. Follow
+[backup and restore](../advanced/workspace-recovery.md) for prerequisites,
+version matching, and restoration to a new directory.
 
-Lower-level provider inspection and configuration remain available:
+## Configuration and diagnostics
 
-```bash
-offgrid integrations list
-offgrid integrations setup hermes --model <model-id>
-offgrid openclaw install                   # Install and configure OpenClaw
-offgrid openclaw status                    # Check provider and model readiness
-offgrid openclaw test                      # Headless model-response smoke test
-offgrid openclaw run "Summarize this repo" # Run an isolated local agent turn
-```
-
-`offgrid integrations install openclaw` only copies the provider bundle; use
-`offgrid openclaw install` for complete setup. An installed OpenClaw runtime
-is left at its current version. Missing runtimes use OpenClaw's official
-installer after confirmation; pass `--yes` only when you trust that installer
-and the local provider. The managed setup updates only the `offgrid` provider
-in OpenClaw's config and does not change an existing default model.
-
----
-
-## Knowledge Base (RAG)
-
-Chat with your documents:
-
-```bash
-offgrid kb status              # Show status
-offgrid kb enable <model>      # Enable with an embedding model
-offgrid kb disable             # Disable retrieval
-offgrid kb list                # List documents
-offgrid kb add <path>          # Add file or directory
-offgrid kb search "<query>"    # Search
-offgrid kb remove <id>         # Remove document
-offgrid kb clear               # Clear all
-```
-
-```bash
-offgrid download bge-small-en-v1.5
-offgrid kb enable bge-small-en-v1.5
-offgrid kb add ./docs/manual.pdf
-offgrid kb add ./notes/
-offgrid kb search "how to configure"
-```
-
----
-
-## P2P Network
-
-View beta peer discovery and local-network model transfer status.
-
-P2P is useful for trusted local labs, but USB import/export is still recommended
-for critical offline deployments.
-
-```bash
-offgrid peers                  # List connected peers
-```
-
----
-
-## LoRA Adapters
-
-Register LoRA adapter metadata.
-
-Runtime hot-loading is experimental and is not available for the current
-backend yet.
-
-```bash
-offgrid lora list
-offgrid lora register <name> <path> [scale]
-offgrid lora info <id>
-offgrid lora scale <id> <value>
-offgrid lora remove <id>
-```
-
----
-
-## Audit Logs
-
-Security audit logging with tamper-evident chain:
-
-```bash
-offgrid audit show [--limit N] [--type TYPE]
-offgrid audit stats
-offgrid audit verify
-offgrid audit export-json <file>
-offgrid audit export-csv <file>
-```
-
-| Subcommand | Description |
-|------------|-------------|
-| `show` | Display recent events |
-| `stats` | Show audit statistics |
-| `verify` | Verify chain integrity |
-| `export-json` | Export to JSON file |
-| `export-csv` | Export to CSV file |
-
-```bash
-offgrid audit show --limit 50
-offgrid audit show --type auth
-offgrid audit export-csv /tmp/audit-report.csv
-offgrid audit verify
-```
-
----
-
-## Users
-
-Multi-user mode (requires `OFFGRID_MULTI_USER=true`):
-
-```bash
-offgrid users                  # List users
-offgrid users create <name> [--role admin|user]
-offgrid users delete <id>
-```
-
----
-
-## System
-
-### Version
-
-```bash
+```sh
 offgrid version
-```
-
-Shows version, platform, and GPU detection.
-
----
-
-### Doctor
-
-```bash
-offgrid doctor
-```
-
-Checks:
-- Models directory
-- Server connectivity
-- Disk space
-- GPU availability
-- llama-server binary
-
----
-
-### Info
-
-```bash
 offgrid info
+offgrid doctor
+offgrid config show
+offgrid config validate /path/to/config.yaml
 ```
 
-Shows system information and configuration.
+`config init PATH` writes a configuration file; use a new path rather than
+overwriting an installed configuration. Set `OFFGRID_CONFIG` to load it.
+There are no `config set` or `config reset` subcommands.
 
----
+| Environment variable | Purpose |
+| --- | --- |
+| `OFFGRID_HOST`, `OFFGRID_PORT` | Service bind address and port |
+| `OFFGRID_SERVER_URL`, `OFFGRID_API_KEY` | Service-aware client address/authentication |
+| `OFFGRID_DATA_DIR`, `OFFGRID_MODELS_DIR` | Separate state and model roots |
+| `OFFGRID_UI_DIR` | Matching generated UI |
+| `OFFGRID_LLAMA_SERVER_PATH` | Explicit native inference runtime |
+| `OFFGRID_REQUIRE_AUTH`, `OFFGRID_MULTI_USER` | Authentication and multi-user configuration; see the guide below |
+| `NO_COLOR`, `OFFGRID_UNICODE` | Terminal presentation |
+| `OFFGRID_TUI=0`, `OFFGRID_PLAIN=1` | Line-oriented terminal chat |
 
-### Quantization Guide
+User administration uses `offgrid users list` and
+`offgrid users create NAME ROLE`, where the role is positional. These legacy
+commands access local storage; stop the service and use its actual data path.
+See [multi-user setup](../guides/multi-user.md), not a copied admin password.
 
-```bash
-offgrid quantization
-```
+## Completions
 
-Explains quantization levels (Q4_K_M, Q5_K_M, etc.) and trade-offs.
+Generate shell completions with `offgrid completions bash`,
+`offgrid completions zsh`, or `offgrid completions fish`. Review output before
+installing it into shell configuration. This is shell setup, not model inference.
 
----
+## JSON and exit status
 
-### Benchmark
+For the service-aware command path: `0` is successful command completion,
+`1` operational failure, `2` invalid usage, and `130` cancellation.
+A successful submission does not mean the agent task has completed successfully;
+inspect its persisted status.
 
-```bash
-offgrid benchmark <model>
-```
+Legacy optional commands are not all covered by this contract. Do not infer
+universal JSON support from the global flag. See [JSON output](json-output.md)
+and [client contracts](../advanced/client-contracts.md).
 
-Measures inference speed, memory usage, and latency.
+## Optional commands
 
----
-
-## Configuration
-
-```bash
-offgrid config show            # Show current config
-offgrid config set <key> <val> # Set value
-offgrid config reset           # Reset to defaults
-```
-
-| Key | Description | Default |
-|-----|-------------|---------|
-| `models_dir` | Model storage path | ~/.offgrid-llm/models |
-| `server_port` | Default server port | 11611 |
-| `default_model` | Default model for serve | auto |
-
----
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `OFFGRID_PORT` | Server port |
-| `OFFGRID_HOST` | Server bind address |
-| `OFFGRID_MODELS_DIR` | Models directory |
-| `OFFGRID_MULTI_USER` | Enable multi-user mode |
-| `OFFGRID_LOG_LEVEL` | Log level (debug, info, warn, error) |
-| `NO_COLOR` | Disable colored output |
-| `FORCE_COLOR` | Force terminal styling for compatible non-interactive output |
-| `OFFGRID_UNICODE` | Force (`1`) or disable (`0`) Unicode terminal symbols |
-| `OFFGRID_TUI` | Set to `0` to disable the full-screen chat interface |
-| `OFFGRID_PLAIN` | Set to `1` to use line-oriented chat output |
-
----
-
-## Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | General error |
-| 2 | Invalid arguments |
-| 3 | Model not found |
-| 4 | Connection error |
-| 5 | Permission denied |
-
----
-
-## See Also
-
-- [Quick Start](../setup/quickstart.md)
-- [Agents Guide](../guides/agents.md)
-- [API Reference](api.md)
-- [Configuration](../advanced/configuration.md)
+[External agents](../guides/external-agents.md),
+[appliance planning](../setup/appliance.md), and [audit](../guides/audit.md) have
+separate guides. Audio needs optional installed components. LoRA registration is
+not a training workflow; P2P and native
+computer control have separate preview/qualification boundaries. Consult the
+[capability map](../guides/features.md) before treating their presence as readiness.

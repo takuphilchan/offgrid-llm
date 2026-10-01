@@ -1,160 +1,67 @@
-# Quick Start
+# Start using OffGrid
 
-Get OffGrid LLM running in 3 minutes.
+This guide takes you from installation to a first local answer. Download and startup time depend on your connection, model, and hardware; there is no fixed three-minute setup requirement.
 
----
+## Choose one installation
 
-## Install
+For a personal computer, use the desktop package from the [release page](https://github.com/takuphilchan/offgrid-llm/releases). Choose your OS and architecture, and verify the checksum. See [installation](installation.md) for package types and verification commands.
 
-**One command:**
+Docker users should follow the [Docker quickstart](docker.md#quick-start). Developers should follow [building from source](../advanced/BUILDING.md). A packaged desktop app does not require you to install Go, Node.js, or Docker.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
-```
+Do not start another service if you already have a workspace. Desktop can connect to a matching local service at `http://127.0.0.1:11611`; its version and UI build must match. Follow [desktop recovery](desktop-startup.md) if they differ, rather than creating a new workspace just to dismiss the message.
 
-**Or build from source:**
+## Download a chat model
 
-```bash
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm && go build -o bin/offgrid ./cmd/offgrid
-sudo mv bin/offgrid /usr/local/bin/
-```
+1. Open OffGrid Desktop, or <http://127.0.0.1:11611/ui/> for a running local service.
+2. Open **Models** and choose a chat/instruction model that fits available memory. An embedding model is for document search, not chat.
+3. Download it and wait for the installed state. Use **Find more models** if it is not in the catalog.
+4. Open **Chat**, select the installed model, and ask: "Give me three ways to organize my work this week."
 
----
+A successful reply confirms text generation on this installation. It does not qualify tool calling, retrieval, vision, or computer control. First inference can take longer while the runtime loads the model.
 
-## Run
+For offline use, install the necessary model and runtime before disconnecting. Test the actual workflow with networking disabled; search, downloads, remote tools, and external websites will not work offline.
 
-```bash
-offgrid run llama3
-```
+## Use the CLI with an existing service
 
-That's it. The model downloads automatically and you start chatting.
-
-**Other models to try:**
-
-| Command | Model | RAM Needed |
-|---------|-------|------------|
-| `offgrid run tiny` | TinyLlama 1.1B | 2 GB |
-| `offgrid run phi` | Phi 3 Mini | 4 GB |
-| `offgrid run llama3` | Llama 3.2 3B | 4 GB |
-| `offgrid run qwen` | Qwen 2.5 3B | 4 GB |
-| `offgrid run mistral` | Mistral 7B | 8 GB |
-| `offgrid run codellama` | Code Llama 7B | 8 GB |
-
-See all shortcuts: `offgrid alias list`
-
----
-
-## Web UI
-
-Start the server:
+Keep the service running while using service-aware CLI commands. For a standalone CLI installation, start it in one terminal:
 
 ```bash
 offgrid serve
 ```
 
-Open http://localhost:11611
-
-The web interface includes:
-- Chat with model selection
-- Model download and management
-- Knowledge base (RAG) for documents
-- Session history
-- Voice input/output
-
----
-
-## Common Commands
-
-| Task | Command |
-|------|---------|
-| List installed models | `offgrid list` |
-| Check system | `offgrid doctor` |
-| Search HuggingFace | `offgrid search llama` |
-| Download specific model | `offgrid download-hf TheBloke/Llama-2-7B-GGUF` |
-| Start AI agent | `offgrid agent chat` |
-| View P2P peers | `offgrid peers` |
-| Export audit logs | `offgrid audit export-csv report.csv` |
-| All commands | `offgrid --help` |
-
----
-
-## Models by RAM
-
-| Your RAM | Recommended Models |
-|----------|-------------------|
-| 4 GB | TinyLlama, SmolLM, Qwen 0.5B |
-| 8 GB | Llama 3.2 3B, Phi 3, Gemma 2B |
-| 16 GB | Mistral 7B, Qwen 7B, Code Llama 7B |
-| 32 GB+ | Llama 3.1 8B, DeepSeek, Mixtral |
-
----
-
-## Installation Options
-
-<details>
-<summary>Docker</summary>
+In a second terminal:
 
 ```bash
-git clone https://github.com/takuphilchan/offgrid-llm.git
-cd offgrid-llm && docker-compose up -d
+offgrid version
+offgrid list --catalog
+offgrid download phi-3.5-mini-instruct
+offgrid list
 ```
 
-Open http://localhost:11611
-
-See [Docker Guide](docker.md) for GPU support.
-
-</details>
-
-<details>
-<summary>Desktop App (Electron)</summary>
-
-**Linux/macOS:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
-```
-
-**Windows (PowerShell as Admin):**
-```powershell
-irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
-```
-
-</details>
-
-<details>
-<summary>Python SDK only</summary>
+Copy the installed model ID from `list`. Use **Chat** for a first shared-workspace conversation. The interactive terminal path, `offgrid run YOUR_INSTALLED_MODEL_ID`, currently also looks up local model files. A host CLI does not automatically see models inside Docker volumes. Use the web UI or execute its CLI inside that container:
 
 ```bash
-pip install offgrid
+docker exec -it offgrid offgrid list
+docker exec -it offgrid offgrid run YOUR_INSTALLED_MODEL_ID
 ```
 
-```python
-import offgrid
+`offgrid` must be on `PATH`; otherwise use the executable's path, such as `.\offgrid.exe` in PowerShell. For commands that use the service, `OFFGRID_SERVER_URL` selects its address and `OFFGRID_API_KEY` supplies authentication when enabled.
 
-client = offgrid.Client()
-response = client.chat("Hello!")
-print(response)
-```
+## Try useful work
 
-</details>
+- **Chat:** ask a question or request a draft, then check important facts yourself.
+- **Knowledge:** install an embedding model, import a supported document, wait for indexing, and inspect sources. See [knowledge setup](../guides/embeddings.md).
+- **Agents:** try "Calculate 25 times 47 and report the result." Reliable tool calling is required. See [agent tasks](../guides/agents.md).
+- **Computer tasks:** request work in an application and grant local access when prompted. This is preview functionality, not universal app control. See [computer tasks](../guides/computer-tasks.md).
 
----
+## If something stops you
 
-## Troubleshooting
+| What you see | What to do |
+| --- | --- |
+| Desktop and service versions differ | Update the existing service and desktop to matching builds, then retry. Desktop installation alone does not update Docker. |
+| No models | Check the connected workspace before downloading again. |
+| Model loading fails or memory runs out | Try a smaller model or shorter context. File size is not total memory use. |
+| Access needed | Review the target in desktop, or stop the task if you do not want to grant access. |
+| Outcome unknown | Inspect the affected operation; do not resubmit it just to clear the warning. |
 
-| Problem | Solution |
-|---------|----------|
-| Model download fails | `offgrid doctor` to check connectivity |
-| Server won't start | `lsof -i :11611` to check port usage |
-| Out of memory | Use smaller model: `offgrid run tiny` |
-| Slow responses | Check GPU: `offgrid version` |
-
----
-
-## Next Steps
-
-- [Full Installation Guide](installation.md) - All options and configuration
-- [CLI Reference](../reference/cli.md) - Complete command documentation
-- [AI Agents](../guides/agents.md) - Autonomous task execution
-- [RAG Guide](../guides/embeddings.md) - Chat with your documents
-- [Performance Tuning](../advanced/performance.md) - Optimize for your hardware 
+Continue with [getting started](../guides/getting-started.md) or the [documentation index](../README.md).

@@ -12,8 +12,8 @@ connection state. It does not show an invented installation percentage.
 
 The compatibility check requires matching product versions, supported API
 contracts and UI build identity. A healthy older service is not necessarily
-compatible with a newer desktop. For example, desktop `0.4.4` cannot attach to
-service `0.4.3-history-dev`. Reinstalling the same desktop will not update that
+compatible with a newer desktop. For example, desktop `0.4.12` cannot attach to
+service `0.4.11`. Reinstalling the same desktop will not update that
 Docker container. Even equal version numbers can contain different UI builds.
 
 When the versions differ, choose one of these actions:
@@ -27,11 +27,12 @@ When the versions differ, choose one of these actions:
   another loopback port. This is a different workspace with separate models and
   history; it does not import, upgrade or replace the existing workspace.
 
-The separate-workspace choice is remembered. To change it, choose **File →
-Connection on next launch** (press Alt to reveal the menu on Windows/Linux), or
-use the same submenu on the tray icon. Select **Configured local service** to
-return to the configured port. Changes apply after quitting and reopening the
-app; they do not stop work in progress or delete either workspace.
+The isolated-workspace choice applies only to the current desktop session.
+Quitting and reopening returns to the configured local service. The isolated
+workspace's data remains on disk; it is not merged into the configured workspace.
+Use this only when you want separate work, not as an upgrade workaround. To keep
+using the existing container workspace, back it up and update that service, then
+retry with the matching desktop build. See [installation and upgrades](installation.md#update-an-existing-installation).
 
 If the configured port is free, the desktop can start its bundled service using
 the normal desktop workspace. An occupied, unresponsive or unidentified port is
@@ -70,8 +71,9 @@ window to recovery rather than leaving a blank page.
 For isolated testing, set `OFFGRID_DESKTOP_HOME` to an absolute, empty test
 directory before launching. This also isolates Electron's profile. Set
 `OFFGRID_PORT` to the external test service's port. Do not point qualification
-tests at your working workspace. Product language selection remains in the
-shared UI; the native startup/recovery text currently uses English.
+tests at your working workspace. Language and theme preferences are shared with
+desktop startup/recovery presentation; unsupported locale values fall back to
+English. Translation availability does not replace speaker/accessibility review.
 
 ## Installer appearance and OS warnings
 
@@ -145,7 +147,7 @@ targets; a passing Windows test does not qualify every other package.
 single-flight startup, recovery states, workspace separation and IPC trust.
 `dev/scripts/test-desktop-startup.mjs` launches the real packaged Electron app
 against disposable data and a local fixture, then checks the bundled Go runtime,
-native workspace preference, relaunch, keyboard recovery and external-service
+session-scoped isolated recovery, relaunch, keyboard recovery and external-service
 ownership. CI runs it on Windows, Linux and both Mac architectures.
 
 The separate Windows installer smoke builds a test-only application identity,

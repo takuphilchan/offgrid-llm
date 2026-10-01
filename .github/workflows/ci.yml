@@ -50,6 +50,11 @@ jobs:
           node dev/scripts/test-release-ci.mjs
           node dev/scripts/test-release-containers.mjs
 
+      - name: Check maintained documentation
+        run: |
+          node --test dev/scripts/check-docs.test.mjs
+          node dev/scripts/check-docs.mjs
+
       - name: Test Go packages
         run: go test ./...
 

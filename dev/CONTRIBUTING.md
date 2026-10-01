@@ -4,6 +4,11 @@ OffGrid is one product with several distribution surfaces. Keep behavior in
 shared Go services and the React application rather than implementing another
 copy for a particular installer or host.
 
+Read [AGENTS.md](../AGENTS.md) and the [OpenSpec workflow](../openspec/README.md)
+before substantive features or refactors. Documentation corrections can use a
+focused patch and checks without a full proposal. Release qualification remains
+in the existing reliability documentation, not generated specifications.
+
 ## Repository map
 
 - `cmd/offgrid`: CLI entry point and command wiring.
@@ -16,6 +21,8 @@ copy for a particular installer or host.
 - `pkg/api/openapi.yaml`: stable HTTP contract.
 - `web/app`: the only browser and desktop UI source.
 - `desktop`: Electron lifecycle, preload boundary, and package metadata.
+- `internal/computer`, `cmd/offgrid-computer`, `computer`: typed native control,
+  host supervision, managed browser, and dispatch journal.
 - `docker`: container and Compose deployment.
 
 ## Development setup
@@ -31,11 +38,13 @@ npm ci
 npm run api:check
 npm run check
 npm run build
+cd ../..
 ```
 
-Run the server with `go run ./cmd/offgrid serve`, then open
-`http://127.0.0.1:11611/ui/`. For Electron development, keep the server running
-and use `npm ci && npm run dev` in `desktop`.
+Use the [build guide](../docs/advanced/BUILDING.md) for versioned Bash/PowerShell
+build commands and matching desktop dependencies. Keep test state separate using
+`OFFGRID_DATA_DIR`, `OFFGRID_MODELS_DIR`, and an unused port. Do not run an
+unversioned development service against your installed desktop workspace.
 
 ## Design rules
 
@@ -64,19 +73,36 @@ visible workflow.
 
 ## Before review
 
+Run from the repository root after installing dependencies:
+
 ```bash
 go test ./...
+node --test dev/scripts/check-docs.test.mjs
+node dev/scripts/check-docs.mjs
 
-cd web/app
-npm run api:check
-npm run check
-npm run build
-npm run test:e2e
+npm run api:check --prefix web/app
+npm run check --prefix web/app
+npm run build --prefix web/app
 
-cd ../../desktop
-node --check main.js
-node --check preload.js
+node --check desktop/main.js
+node --check desktop/preload.js
+npm test --prefix desktop
+git diff --check
 ```
+
+After building the service, use `node dev/scripts/test-web-workspace.mjs bin/offgrid`
+(`bin/offgrid.exe` on Windows) for isolated real-service browser tests. Install
+Playwright's Chromium as described in the build guide first. Do not run the full
+E2E suite against the normal workspace; it creates and deletes fixture data.
+
+Run computer/native/installed-package checks appropriate to the affected layer
+from [CI](../.github/workflows/ci.yml). Native side effects require an isolated
+desktop and explicit test scope. A documentation link check is not runtime,
+security, model, or platform qualification. Report unrun checks honestly.
+
+Documentation conventions and checker limits are in the
+[writing guide](../docs/templates/README.md). No check authorizes committing,
+publishing, training, or replacing an installed application without a request.
 
 See [Architecture](../docs/advanced/ARCHITECTURE.md) and
 [Maintainability and generation](../docs/advanced/maintainability.md) for the

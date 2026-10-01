@@ -181,59 +181,121 @@ available and reports `enabled: false`, `stats.storage_available: false`, and an
 actionable error. Repair disk/access/database problems and restart; retain a
 backup before any database recovery. Do not delete the database as a routine fix.
 
-## Agents and MCP
+## Durable jobs and computer access
 
-MCP and agent routes are governed, administrator-level surfaces. Agent
-sandboxes start lazily only when a tool call needs them. Treat terminal,
-computer-use, filesystem, and external MCP tools as privileged operations and
-require explicit policy or user approval. The stable UI integration routes are:
+First-party tasks use `/api/v2/jobs`, not a separate history or runner:
 
-- `POST /v1/agents/run` and `GET /v1/agents/tasks`
-- `GET /v1/agents/tasks/{id}` returns authoritative run state, not the internal checkpoint
-- `POST /v1/agents/tasks/{id}/{approve|deny|cancel|resume|reconcile}` acts on that run
-- `GET/PATCH /v1/agents/tools`
-- `GET/POST /v1/agents/mcp` and `POST /v1/agents/mcp/test`
-- `GET /v1/capabilities`
-- `GET /v1/computer/status`
+| Resource | Purpose |
+| --- | --- |
+| `GET/POST /api/v2/jobs` | List owner-scoped history or submit a saved task |
+| `GET /api/v2/jobs/{id}` | Authoritative snapshot and event cursor |
+| `GET /api/v2/jobs/{id}/events` | Ordered persisted activity and snapshot SSE |
+| `POST /api/v2/jobs/{id}/input` | Attach independently consented computer access to a pending request |
+| `POST /api/v2/jobs/{id}/{action}` | Approve, deny, pause, resume, cancel, take over, steer, reconnect, or reconcile as supported by the contract |
+| `GET /api/v2/jobs/{id}/export` | Evidence export |
+| `GET /api/v2/jobs/{id}/artifact` | Owner-authorized artifact download; parameters are defined in OpenAPI |
+| `DELETE /api/v2/jobs/{id}` | Delete eligible history; not cancellation or undo |
 
-Task state, tool enablement, and successful MCP connection configuration are
-stored in the OffGrid data directory. Computer use remains unavailable until a
-supported native driver is configured; callers must honor the status endpoint.
-These routes are included in the versioned OpenAPI document.
+Submit with an installed model ID and a caller-generated request ID:
 
-For long-lived work use `async: true` on run creation (HTTP `202`) and poll the
-returned `run_id`. `stream: true` emits SSE `status`, committed `step`, `done`,
-`approval_required`, and `error` events; it does not stream speculative model
-tokens. Closing the stream does not cancel the task. Use the cancel action.
+```bash
+curl http://127.0.0.1:11611/api/v2/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Calculate 25 * 47","model":"YOUR_MODEL_ID","request_id":"docs-example-0001"}'
+```
 
-Approve/deny bodies contain the exact pending `approval_id`; never resubmit the
-prompt. The server binds approval to actor, run, invocation, canonical arguments,
-tool capability, and expiry. `canonical_arguments` is the exact JSON string to
-display (avoids browser rounding of large numbers). No preapproved tool list is
-accepted on run creation. Duplicate, expired, or stale actions return `409`.
-`resume` refreshes an expired pending approval without executing it. Actions
-cannot substitute prompts or tool arguments.
+This Bash example assumes loopback unauthenticated mode; protected services also
+need authentication. Use a new request ID for new work. Reuse it only when
+retrying the identical submission. Actor-scoped identical retries return the
+original task; conflicting reuse returns `409`. A `202` acknowledges persistence,
+not completion. Follow the returned `run_id` and `Location`.
 
-An interrupted model call can resume safely. A crash/cancellation/error during
-a tool call produces `uncertain`, even if no side effect actually happened.
-Inspect the external target, then POST `reconcile` with `call_id` and a human-
-verified `result`. This records the outcome without rerunning the tool; explicitly
-resume to continue remaining work. Legacy tasks without checkpoints remain
-read-only history (`resumable: false`).
+Computer setup is a durable interruption: `waiting_for_input` and
+`pending_input` direct the user to local consent. Resolving that input attaches
+an existing owner-scoped session; it does not grant OS permissions or invent a
+target. The desktop bridge controls local selection/consent. See
+[Computer Tasks](../guides/computer-tasks.md).
 
-An unreadable/corrupt task snapshot or failed write makes task operations return
-`503`; fix storage and restart. Successful mutations are atomic snapshots in
-`OFFGRID_DATA_DIR/agent_tasks`, not volatile acknowledgments. Run summaries use
-these checkpoints even if the auxiliary event log is unavailable, reporting
-`event_history_available: false`. Back up the data directory before recovery.
-Full backup restoration is still the operator's responsibility.
+### Activity replay
+
+Connect to `/api/v2/jobs/{id}/events` using `Last-Event-ID` to resume after a
+persisted sequence. Keep IDs as decimal strings, not floating-point numbers.
+The stream delivers `activity`, `snapshot`, and, when the cursor is expired or
+ahead, an explicit `snapshot_recovery` with the current `event_cursor`.
+
+Replace local state from that recovery snapshot; never resubmit the task.
+The current retention window is 256 activity metadata entries per task; completed
+snapshots remain. Persisted events precede delivery and slow/disconnected readers
+do not authorize duplicate execution. Disconnect does not cancel a job. Terminal
+or input-waiting snapshots may close the stream; reconnect after a lifecycle action.
+
+Saved chat streaming has different semantics: the conversation section above
+does **not** promise this job replay protocol.
+
+### Approval and recovery
+
+Approve/deny requests identify the exact pending `approval_id`. The durable
+approval binds actor, run, invocation, canonical arguments, capability, and
+expiry. Display `canonical_arguments` without lossy numeric conversion.
+Stale, duplicate, or conflicting actions fail rather than resubmitting a prompt.
+Computer session policies independently govern which typed actions may be
+automatically approved; a client-provided blanket grant is not accepted.
+
+A mutating call with no durable result may be `uncertain`. Inspect the target
+and reconcile the exact `call_id` with an independently verified result.
+Reconciliation records an outcome; it does not execute the action again.
+Known read-only failures do not automatically imply uncertain side effects.
+See [agent recovery](../guides/agents.md#restart-and-uncertain-outcomes).
+
+Agent snapshots and replay events use transactional
+`OFFGRID_DATA_DIR/agent-state.sqlite`. Legacy `agent_tasks` JSON files are
+validated/imported with originals retained; they are not the current write
+store. Corruption or failed persistence blocks task operations. Preserve the
+workspace and follow [backup/migration recovery](../advanced/workspace-recovery.md).
+
+### Compatibility routes
+
+`/v1/agents/run`, `/v1/agents/tasks`, and their lifecycle endpoints remain for
+older explicit-run clients. They reuse the durable runner. The old
+`stream: true` run response is not a substitute for reconnectable v2 job events.
+New clients should use the versioned job contract.
+
+The implemented computer resources include `/api/v2/computer/capabilities`,
+`/status`, `/sessions`, `/sessions/stop`, `/model-check`, `/stop`, and the
+advanced `/pairing` endpoint. Check methods and fields in OpenAPI rather than
+assuming the entire roadmap resource set exists. Public raw `/v1/computer`
+mutation routes are retired; they do not bypass the job/consent flow.
+
+## Tools and MCP
+
+These administrator-managed surfaces configure the running service:
+
+- `GET/PATCH /v1/agents/tools`: inspect/update enabled tools.
+- `GET/POST /v1/agents/mcp`: list/save connections.
+- `POST /v1/agents/mcp/test`: test a supported HTTP endpoint.
+- `DELETE /v1/agents/mcp?name=URL_ENCODED_NAME`: remove a saved connection,
+  including one currently offline.
+- `GET /v1/capabilities`: inspect broader service capabilities.
+
+A successful connection persists configuration; deletion persists removal
+before detaching the runtime and tools. Failure is reported without claiming
+removal. Neither operation erases remote data or undoes a request already sent.
+See [MCP setup and troubleshooting](../guides/mcp.md).
+
+Treat external tools and their responses as untrusted. Local model inference
+does not keep tool arguments local when an external endpoint is selected.
 
 ## Errors
 
-Stable JSON endpoints return a non-2xx status with a concise public error
-message. Internal process addresses and wrapped system errors are logged by the
-server rather than exposed in the UI. Clients should branch on HTTP status and
-must not parse human-readable error text.
+For v2 job errors, use the structured `error.code`, `message`, `retryable`,
+and `request_id` envelope with its HTTP status. Older routes can retain their
+legacy error shape; consult the contract and support both only where required.
+Do not parse human-readable messages as machine codes.
+
+A retryable transport/storage error is not permission to rerun an uncertain
+side effect. Read the saved job or retry its identical submission with the
+original request ID. Keep server logs private; omit tokens and private tool
+data from issue reports.
 
 ## Changing the contract
 

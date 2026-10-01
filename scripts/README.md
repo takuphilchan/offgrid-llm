@@ -46,6 +46,6 @@ curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scrip
 
 ## Related Documentation
 
-- [Installation Guide](../docs/INSTALLATION.md) - Complete installation documentation
+- [Installation Guide](../docs/setup/installation.md) - Complete installation documentation
 - [Building Guide](../docs/advanced/BUILDING.md) - Build from source instructions
 - [Docker Deployment](../docker/README.md) - Containerized deployment option

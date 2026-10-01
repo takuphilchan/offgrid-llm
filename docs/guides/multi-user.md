@@ -1,162 +1,121 @@
-# Multi-User Mode Guide
+# Authentication and shared-workspace access
 
-OffGrid LLM supports both single-user and multi-user modes. By default, it runs in **single-user mode** for simplicity, making it perfect for local AI workflows without the overhead of user management.
+The default quickstart is an unauthenticated local workspace bound to loopback.
+It is not a safe shared-network configuration. Enabling multi-user features
+alone does not require authentication: configure both intentionally.
 
-## Quick Start
+## Prepare a protected service
 
-### Single-User Mode (Default)
+1. Identify its actual data directory, service owner, and configuration.
+2. Stop the service and make a [verified backup](../advanced/workspace-recovery.md).
+3. Create the initial administrator using the same data root with multi-user
+   mode enabled. The legacy user CLI accesses local files, not the HTTP service.
+4. Configure authentication before allowing other machines to reach the service.
+5. Start it, verify authorized access and rejection of unauthenticated requests,
+   then configure a trusted TLS reverse proxy/firewall if remote access is needed.
 
-When you run OffGrid without any special configuration, it operates in single-user mode:
-
-```bash
-# Start server in single-user mode (default)
-offgrid serve
-```
-
-In single-user mode:
-- No login required
-- No user management UI
-- All features available without authentication
-- Perfect for personal/local use
-
-### Multi-User Mode
-
-To enable multi-user features, set the `OFFGRID_MULTI_USER` environment variable:
+Example administrator creation for Bash; replace the data path with the **stopped**
+workspace's actual root:
 
 ```bash
-# Enable multi-user mode
-export OFFGRID_MULTI_USER=true
-offgrid serve
-
-# Or inline
-OFFGRID_MULTI_USER=true offgrid serve
+OFFGRID_MULTI_USER=true OFFGRID_DATA_DIR=/path/to/data offgrid users create admin admin
 ```
 
-In multi-user mode:
-- User management UI available (Users tab)
-- Metrics dashboard available (Metrics tab)
-- User authentication supported
-- API key management per user
-- Role-based access control (Admin, User, Viewer, Guest)
+PowerShell equivalent:
 
-## Configuration Options
-
-| Environment Variable | Default | Description |
-|---------------------|---------|-------------|
-| `OFFGRID_MULTI_USER` | `false` | Enable multi-user mode |
-| `OFFGRID_REQUIRE_AUTH` | `false` | Require authentication for all requests |
-| `OFFGRID_GUEST_ACCESS` | `true` | Allow guest access when auth not required |
-
-### Config File
-
-You can also set these in your config file (`~/.offgrid-llm/config.yaml`):
-
-```yaml
-multi_user_mode: true
-require_auth: false
-guest_access: true
+```powershell
+$env:OFFGRID_MULTI_USER = 'true'
+$env:OFFGRID_DATA_DIR = 'C:\path\to\data'
+offgrid users create admin admin
 ```
 
-**Note:** Environment variables take precedence over config file values.
+The command prints initial credentials. Store them privately; do not paste them
+in issues or screenshots. Do not run it concurrently with the service.
+For Docker, use the same image and data volume, not a host-side empty workspace;
+see the [authenticated Compose example](../setup/docker.md#production-stack).
 
-## User Roles
+## Configure and connect
 
-| Role | Permissions |
-|------|-------------|
-| **Admin** | Full access - manage users, models, RAG, sessions |
-| **User** | Standard access - chat, models, RAG, own sessions |
-| **Viewer** | Read-only - chat, view models |
-| **Guest** | Minimal - chat only |
+Set these in the service's environment:
 
-## CLI Commands
-
-### List Users (Multi-User Mode Required)
-
-```bash
-# In single-user mode, this shows a helpful message
-offgrid users
-# Output: "User management is disabled in single-user mode..."
-
-# In multi-user mode
-OFFGRID_MULTI_USER=true offgrid users
+```text
+OFFGRID_MULTI_USER=true
+OFFGRID_REQUIRE_AUTH=true
+OFFGRID_GUEST_ACCESS=false
+OFFGRID_HOST=127.0.0.1
 ```
 
-## API Endpoints
+Keep loopback when a local reverse proxy provides network access. Direct remote
+binding needs its own trusted-interface/firewall configuration. Do not expose
+an unauthenticated API while setting up users.
 
-### System Configuration
+The browser uses the login flow and an HTTP-only session cookie. Service-aware
+CLI commands use `OFFGRID_SERVER_URL` and `OFFGRID_API_KEY`. API clients can use
+a bearer key; see [API authentication](../reference/api.md#authentication).
+Never put a credential into a public URL, shell history example, or renderer storage.
 
-```bash
-# Check current mode
-curl http://localhost:11611/v1/system/config
+If using a YAML config, set its path with `OFFGRID_CONFIG`; do not assume that
+writing a file changes a running process. Environment settings can override the
+file. Inspect `offgrid config show` with the same environment.
+
+## Roles and limits
+
+Current built-in role permissions are defined in
+[users.go](../../internal/users/users.go):
+
+| Role | Capability set |
+| --- | --- |
+| Admin | Administration, chat, model management, knowledge management, all sessions, statistics |
+| User | Chat, model listing, knowledge access, own sessions, statistics |
+| Viewer | Chat, model listing, statistics; this is not a no-inference role |
+| Guest | Chat |
+
+Individual permissions and endpoint authorization still apply. Agent execution,
+MCP configuration, and computer-control administration are privileged surfaces;
+ordinary account creation does not grant unrestricted tools or desktop input.
+OS-local consent remains independent of service authentication.
+
+### What is and is not isolated
+
+- Authenticated conversations are owner-scoped. Administrators with
+  `sessions:all` can access legacy unowned conversations.
+- Conversation names remain installation-wide; duplicate names conflict.
+- Tasks check initiating actor ownership. Approvals cannot be transferred between users.
+- The current knowledge index is shared among callers granted RAG access.
+  Uploading a document does **not** create a private collection.
+- Separate projects, explicit memberships, and complete collection isolation
+  in the roadmap must not be assumed from the existence of roles.
+
+Do not use a shared instance for mutually untrusted private document collections
+until the relevant isolation gates are implemented and qualified.
+
+## User maintenance
+
+With the service stopped and its real environment configured:
+
+```sh
+offgrid users list
+offgrid users info USER_ID
+offgrid users quota USER_ID
 ```
 
-Response:
-```json
-{
-  "multi_user_mode": false,
-  "require_auth": false,
-  "guest_access": true,
-  "features": {
-    "users": false,
-    "metrics": true,
-    "agent": true,
-    "lora": true
-  }
-}
-```
+`users create NAME ROLE` takes a positional role. `users reset-key USER_ID`
+rotates a credential; update dependent clients deliberately.
+`users delete USER_ID` removes an account. Inspect the target and retain a backup
+before either mutation. Account removal is not secure erasure of backups,
+audit records, or external tool data.
 
-### User Management (Multi-User Mode)
+## Troubleshoot access
 
-```bash
-# List users
-curl http://localhost:11611/v1/users
+| Symptom | Check |
+| --- | --- |
+| Login not required | Verify `OFFGRID_REQUIRE_AUTH` on the actual running service, not just the shell running a client |
+| CLI returns 401 | Confirm the intended service and a valid privately supplied API key |
+| CLI returns 403 | Check role/permission; do not disable authentication to clear it |
+| A conversation is missing | Check owner and workspace identity; another user's resource can return 404 |
+| Desktop refuses connection | Match desktop/service version, API, and UI build; authentication does not bypass compatibility |
+| Another service owns storage | Stop the legitimate owner for maintenance; do not delete its lock file |
 
-# Get current user
-curl http://localhost:11611/v1/users/me
-
-# Create user
-curl -X POST http://localhost:11611/v1/users \
-  -H "Content-Type: application/json" \
-  -d '{"username": "alice", "password": "secret", "role": "user"}'
-
-# Login
-curl -X POST http://localhost:11611/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "alice", "password": "secret"}'
-```
-
-## UI Features
-
-### Single-User Mode
-
-The sidebar shows:
-- Chat (default)
-- Models
-- RAG
-- Sessions
-- Benchmark
-- Terminal
-- **Advanced**
-  - Agent
-  - LoRA
-
-### Multi-User Mode
-
-The sidebar shows all of the above plus:
-- **Admin**
-  - Users (user management)
-  - Metrics (system monitoring)
-- Auth status in sidebar footer
-
-## Best Practices
-
-1. **Local Development**: Use single-user mode (default)
-2. **Shared Server**: Enable multi-user mode with `OFFGRID_MULTI_USER=true`
-3. **Production**: Enable multi-user mode + require auth with `OFFGRID_REQUIRE_AUTH=true`
-
-## Security Notes
-
-- API keys are generated automatically for each user
-- API keys are hashed before storage (original shown only once)
-- Passwords are hashed with bcrypt-style algorithm
-- Sessions expire after 24 hours by default
+For network deployment and backup/rollback, follow
+[deployment](../advanced/DEPLOYMENT.md). For remaining multi-user qualification,
+see the [reliability plan](../advanced/product-reliability-plan.md).

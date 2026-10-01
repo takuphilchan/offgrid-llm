@@ -177,5 +177,5 @@ rm -rf ~/.offgrid-llm
 
 -  [Documentation](../docs/README.md)
 -  [Quick Start Guide](../README.md#quick-start)
--  [CLI Reference](../docs/CLI_REFERENCE.md)
--  [API Documentation](../docs/API.md)
+-  [CLI Reference](../docs/reference/cli.md)
+-  [API Documentation](../docs/reference/api.md)

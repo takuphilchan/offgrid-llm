@@ -117,7 +117,20 @@ This is deliberately a manual recovery flow. Revision-qualified matched snapshot
 automatic pre-update backup, migration, approved update/rollback, signatures, and
 administrator UI controls still require implementation and qualification.
 
-## Agent schema 2 migration
+## Agent database migrations
+
+The current agent snapshot schema is **4**; it is separate from the public API
+version and from knowledge-index metadata. See [sqlite_tasks.go](../../internal/agents/sqlite_tasks.go)
+and [input_migration.go](../../internal/agents/input_migration.go) for the version
+gate and supported paths. Unknown schema versions block startup.
+
+- Schema 1 upgrades through schema 2's transactional activity replay migration.
+- Schema 2 or 3 upgrades to schema 4 after validated backup. Schema 3 introduced
+  task interruptions; schema 4 includes durable context and child-task graphs.
+- Legacy JSON imports validate every source and ownership record before a
+  transaction activates the database. Originals and a recovery manifest remain.
+
+### Schema 1 to 2
 
 On first startup with agent schema 1, OffGrid validates task ownership and database
 integrity, makes a consistent SQLite backup with `VACUUM INTO`, verifies integrity
@@ -134,7 +147,15 @@ startup instead of being discarded. Backups contain private information and must
 remain protected. This database migration backup is **not** a substitute for a
 full workspace backup before deployment.
 
-Do not start a schema-1-only binary against schema 2. Restore a matched application
+### Schema 2 or 3 to 4
+
+Before activation, the service validates snapshots/activity, uses `VACUUM INTO`
+to create `agent-schema-<old-version>-backup-*/agent-state.sqlite`, validates the
+copy and task/event counts, and records its path and SHA-256 in `agent_migrations`.
+The schema update and manifest commit together. A failure leaves the prior
+schema active and blocks startup; it does not silently discard tasks.
+
+Do not start an older binary against a newer agent schema. Restore a matched application
 and complete workspace backup into a separate directory. Companion dispatch
 journals are host-local and must not be rolled back with the workspace. Restored
 computer tasks require new local consent, and uncertain effects still require

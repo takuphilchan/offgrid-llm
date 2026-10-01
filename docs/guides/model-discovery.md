@@ -33,6 +33,10 @@ service-backed operations; they do not silently edit model files behind a runnin
 service. This prevents the UI and CLI from disagreeing about downloads or loaded
 models. Use `OFFGRID_SERVER_URL` for a non-default address.
 
+CLI `search` currently queries Hugging Face directly from the client process;
+web search and service-managed downloads use the server's network environment.
+Check both when diagnosing a Windows/container routing difference.
+
 ```sh
 offgrid search qwen --limit 5
 offgrid search qwen --quant Q8_0 --files --limit 5

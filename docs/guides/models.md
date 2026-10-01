@@ -1,203 +1,92 @@
-# Model Setup Guide
+# Choose and manage models
 
-This guide explains how to download and set up models for OffGrid LLM.
+Start with [model discovery and download recovery](model-discovery.md) for the
+web/desktop installer. This guide explains model roles, storage, and verification;
+it is not a ranked list of current model recommendations.
 
-Start with the current [built-in model search and download recovery guide](model-discovery.md)
-for the web, desktop, and CLI. The older manual examples below are not an exhaustive
-catalog or current model recommendation; check upstream model cards and runtime support.
+## Choose for the workflow
 
-## Quick Start
+| Workflow | What the model/runtime must support |
+| --- | --- |
+| Conversation or drafting | Instruction/chat generation and the correct template |
+| Document retrieval | A separate compatible embedding model, pooling, and dimensions |
+| Agent tools | Reliable structured tool calls, not just fluent chat |
+| Managed-browser images | Compatible model/projector pair, image transport, and preflight |
+| Native desktop control | The implemented driver and typed tools; a vision model does not add native capture |
 
-1. **Create models directory:**
-   ```bash
-   mkdir -p ~/.offgrid-llm/models
-   ```
+Check the publisher's model card, license, language coverage, and architecture.
+A filename, parameter count, or successful download is not compatibility evidence.
+Evaluate tool calling and useful outcomes separately from text generation.
 
-2. **Download a model** (choose one method below)
+## Fit memory and storage
 
-3. **Start the server:**
-   ```bash
-   ./offgrid
-   ```
+Model file size is only part of memory use. Context, KV cache, image processing,
+runtime buffers, and the operating system also need room. Increasing context or
+loading embeddings alongside chat can change what fits.
 
-## Downloading Models
+Quantization trades weight size against accuracy; a smaller quantization is not
+automatically suitable for tool calling. Start with a modest context and check
+actual runtime allocation/offload. See [performance](../advanced/PERFORMANCE.md)
+and [CPU support](../advanced/cpu-support.md). Hardware recommendations must stay
+within the [recorded qualification profiles](../advanced/product-reliability-plan.md).
 
-### Method 1: Using `curl` or `wget`
+## Download into the correct workspace
 
-Download quantized models from Hugging Face:
+With the intended service running:
 
-```bash
-# Example: Llama 2 7B Q4_K_M (Recommended - ~4GB)
-wget https://huggingface.co/TheBloke/Llama-2-7B-GGUF/resolve/main/llama-2-7b.Q4_K_M.gguf \
-  -P ~/.offgrid-llm/models/
-
-# Example: Mistral 7B Q4_K_M (~4GB)
-wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf \
-  -P ~/.offgrid-llm/models/
-
-# Example: Tiny Llama 1.1B Q4_K_M (Lightweight - ~700MB)
-wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf \
-  -P ~/.offgrid-llm/models/
+```sh
+offgrid list --catalog
+offgrid download phi-3.5-mini-instruct
+offgrid list
 ```
 
-### Method 2: Using Hugging Face CLI
+The catalog example is not a promise of agent or vision quality. For other models,
+use **Models → Find more models** or the [Hugging Face guide](huggingface.md).
+Choose an exact supported GGUF file. Split weights/projectors need their companion
+files; the installer does not treat a single shard as a complete model.
 
-```bash
-# Install Hugging Face CLI
-pip install huggingface-hub
+Use the installed ID returned by the service. Native default storage is
+`~/.offgrid-llm/models`; containers normally use `/var/lib/offgrid/models`.
+`OFFGRID_MODELS_DIR` selects the service's actual root. A second empty model list
+may mean a different workspace, not a failed download.
 
-# Download a model
-huggingface-cli download TheBloke/Llama-2-7B-GGUF \
-  llama-2-7b.Q4_K_M.gguf \
-  --local-dir ~/.offgrid-llm/models/ \
-  --local-dir-use-symlinks False
-```
+## Verify what you installed
 
-### Method 3: From USB/SD Card (Offline)
+1. Wait for **Ready**, not merely 100% transferred.
+2. Inspect the installed model entry and file identity.
+3. Run a short chat request and check model/runtime errors.
+4. Test the intended embedding, tool, or image workflow separately.
+5. Retain source, license, checksums, runtime revision, template, context, and
+   hardware settings when recording reproducible results.
 
-Perfect for air-gapped or offline environments:
+The registry can recognize some legacy file extensions, but recognition is not
+a guarantee that the current llama.cpp runtime can load an old GGML/BIN format.
+Use a compatible GGUF for current workflows; do not rename an incompatible file.
 
-```bash
-# Copy from USB drive
-cp /media/usb/models/*.gguf ~/.offgrid-llm/models/
+## Offline transfer and backups
 
-# Or use the API endpoint (once server is running)
-curl -X POST http://localhost:11611/v1/import \
-  -F "file=@/media/usb/models/llama-2-7b.Q4_K_M.gguf" \
-  -F "name=llama-2-7b.Q4_K_M.gguf"
-```
+Prepare the matching application, UI, runtime, models, and supporting files on a
+connected machine, verify digests after transfer, and test with networking off.
+See [offline deployment](../advanced/DEPLOYMENT.md#prepare-an-offline-installation).
 
-## Recommended Models by Use Case
+Workspace backup covers the data root, not automatically the separate model
+directory. Preserve models and licenses separately. Local-file import/export
+commands must use the intended host paths; they do not magically copy into a
+different container's volumes. Do not overwrite a model currently in use or
+delete partial download files while the worker owns them.
 
-### Low Resource (< 4GB RAM)
-- **TinyLlama 1.1B Q4_K_M** (~700MB)
-  - Best for: Basic chat, simple tasks
-  - Memory: ~1GB
+## Troubleshoot
 
-### Standard (4-8GB RAM)
-- **Llama 2 7B Q4_K_M** (~4GB)
-  - Best for: General purpose, good quality
-  - Memory: ~5GB
-  
-- **Mistral 7B Q4_K_M** (~4GB)
-  - Best for: Code, instruction following
-  - Memory: ~5GB
+| Symptom | Next check |
+| --- | --- |
+| Model absent | Confirm service address, workspace, installed ID, and completed download |
+| Loading fails | Check architecture, runtime revision, file integrity, and available memory |
+| Chat works but tools fail | Check template and structured tool calling; reasoning style is not a repair |
+| Knowledge will not enable | Select an embedding model, not a chat model; inspect index/runtime compatibility |
+| Interrupted download | Resume the same source/file through Models; do not replace partial bytes with another model |
+| GPU detected but slow | Verify actual offloaded layers and context allocation, not just device detection |
+| File copied manually but not listed | Inspect the service's model root; a deliberate rescan/restart may be needed |
 
-### High Performance (16GB+ RAM)
-- **Llama 2 13B Q4_K_M** (~7.4GB)
-  - Best for: Complex tasks, better reasoning
-  - Memory: ~9GB
-
-## Quantization Guide
-
-Models come in different quantizations (compression levels):
-
-- **Q4_0, Q4_K_M**: Best balance of size and quality (Recommended)
-- **Q5_K_M**: Better quality, larger size
-- **Q8_0**: Highest quality, largest size
-- **Q2_K, Q3_K**: Smallest size, lower quality
-
-Example: `model-name.Q4_K_M.gguf`
-
-## Model Formats
-
-OffGrid LLM supports:
-- `.gguf` (Recommended - latest format)
-- `.ggml` (Older format)
-- `.bin` (Legacy)
-
-## Verifying Installation
-
-Once you've downloaded a model:
-
-```bash
-# List models
-curl http://localhost:11611/v1/models
-
-# Test chat completion
-curl http://localhost:11611/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "llama-2-7b.Q4_K_M",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-## Offline Model Distribution
-
-For deploying to offline environments:
-
-### Prepare a USB Drive
-
-```bash
-# Create directory structure on USB
-mkdir -p /media/usb/offgrid-llm/{binary,models,docs}
-
-# Copy binary
-cp ./offgrid /media/usb/offgrid-llm/binary/
-
-# Copy models
-cp ~/.offgrid-llm/models/*.gguf /media/usb/offgrid-llm/models/
-
-# Copy this guide
-cp docs/MODEL_SETUP.md /media/usb/offgrid-llm/docs/
-```
-
-### Deploy on Target Machine
-
-```bash
-# Copy from USB
-cp -r /media/usb/offgrid-llm ~/ 
-
-# Set up
-cd ~/offgrid-llm
-chmod +x binary/offgrid
-
-# Create models directory and copy models
-mkdir -p ~/.offgrid-llm/models
-cp models/*.gguf ~/.offgrid-llm/models/
-
-# Run
-./binary/offgrid
-```
-
-## Troubleshooting
-
-### Model not loading
-- Check file permissions: `chmod 644 ~/.offgrid-llm/models/*.gguf`
-- Verify disk space: `df -h`
-- Check RAM available: `free -h`
-
-### Out of memory
-- Try a smaller model (TinyLlama)
-- Use a more aggressive quantization (Q4_0, Q3_K)
-- Close other applications
-
-### Model not found
-- Ensure model is in correct directory: `ls ~/.offgrid-llm/models/`
-- Check environment variable: `echo $OFFGRID_MODELS_DIR`
-- Restart server to rescan models
-
-## Environment Variables
-
-```bash
-# Custom models directory
-export OFFGRID_MODELS_DIR=/path/to/models
-
-# Memory limit (MB)
-export OFFGRID_MAX_MEMORY_MB=4096
-
-# Number of threads
-export OFFGRID_NUM_THREADS=4
-```
-
-## Popular Model Sources
-
-- [TheBloke on Hugging Face](https://huggingface.co/TheBloke) - Large collection of GGUF models
-- [LM Studio Community](https://lmstudio.ai/models) - Curated model collection
-
-## Next Steps
-
-- Read the [API Documentation](../reference/api.md)
-- Learn about [P2P Model Sharing](P2P.md)
-- Configure [Resource Limits](CONFIGURATION.md)
+Keep installed files and sources when investigating; deleting the whole models
+directory is not routine repair. For CLI/local-path differences, see
+[CLI reference](../reference/cli.md#terminal-chat-and-local-model-files).

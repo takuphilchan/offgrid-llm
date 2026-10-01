@@ -1,176 +1,69 @@
-# Documentation Templates
+# Writing and maintaining documentation
 
-This directory contains templates for writing consistent documentation across the OffGrid LLM project.
+User documentation belongs in this repository alongside the implementation.
+Start with the reader's task, not the internal module layout. Existing guides
+remain authoritative; change proposals belong in [OpenSpec](../../openspec/README.md).
 
-## Available Templates
+## Choose the right home
 
-| Template | Purpose | When to Use |
-|----------|---------|-------------|
-| [feature-template.md](feature-template.md) | Document new features | Adding new capabilities |
-| [api-template.md](api-template.md) | Document API endpoints | New REST endpoints |
-| [guide-template.md](guide-template.md) | Write how-to guides | Tutorials and walkthroughs |
+| Content | Location |
+| --- | --- |
+| First install, upgrade, platform setup | `docs/setup/` |
+| A user task, including failures and recovery | `docs/guides/` |
+| API/CLI contracts | `docs/reference/` |
+| Architecture, operations, qualification | `docs/advanced/` |
+| Historical release facts | `docs/releases/` |
+| Contributor commands | [Contributing](../../dev/CONTRIBUTING.md) |
 
----
+Use lowercase-kebab filenames for new guides. Preserve established filenames
+and exact Git casing when linking: for example,
+[ARCHITECTURE.md](../advanced/ARCHITECTURE.md). Windows may accept a wrong-case
+link that fails on Linux or GitHub.
 
-## Quick Start
+Templates are optional starting points, not required section counts:
 
-1. Copy the appropriate template
-2. Rename to your document name
-3. Fill in the sections
-4. Remove any unused sections
+- [Guide template](guide-template.md): a walkthrough.
+- [Feature template](feature-template.md): capability and limitations.
+- [API template](api-template.md): contract-oriented documentation.
 
-```bash
-# Example: Create a new feature doc
-cp templates/feature-template.md guides/my-feature.md
+Remove placeholder sections and illustrative links before publishing a guide.
+
+## Make instructions usable
+
+- State who the guide is for and what success looks like.
+- Give prerequisites, working directory, shell, and expected service state.
+- Distinguish PowerShell from Bash; do not give Unix environment syntax as a
+  Windows command. Use `npm.cmd` when PowerShell policy blocks `npm.ps1`.
+- Explain placeholders such as `YOUR_MODEL_ID`; use IDs from `offgrid list`.
+- Put warnings before commands that affect installed data, credentials, or services.
+- Explain expected output and the next step if it fails. Never invent benchmark
+  numbers, timing, signing, or hardware evidence.
+- Link to one canonical installation/recovery procedure rather than copying it
+  into every feature guide.
+- Distinguish current implementation, preview limitations, and planned work.
+  An installed model or successful compilation is not workflow qualification.
+- Keep headings short, include blank lines before lists, and label code fences.
+  Add a contents list only when it improves navigation.
+
+Use screenshots only when they explain something the text cannot. Remove
+credentials and personal data, include useful alt text, and capture the current
+monochrome UI. Do not alter product colors to make documentation attractive.
+
+## Verify a documentation change
+
+From the repository root with Node.js 22:
+
+```sh
+node --test dev/scripts/check-docs.test.mjs
+node dev/scripts/check-docs.mjs
+git diff --check
 ```
 
----
+The offline checker validates local link targets with exact Git casing and code
+fence closure in maintained Markdown. It excludes historical release notes and
+illustrative templates. It does **not** check external URL availability, heading
+anchors, command behavior, or prose accuracy; review those separately.
 
-## Documentation Standards
-
-### File Naming
-
-| Location | Convention | Example |
-|----------|------------|---------|
-| All docs | lowercase-kebab | `installation.md`, `api.md` |
-| docs/guides/ | SCREAMING_SNAKE_GUIDE | `AGENT_GUIDE.md` |
-| docs/advanced/ | SCREAMING_SNAKE | `ARCHITECTURE.md` |
-| docs/guides/ | lowercase-kebab | `agents.md`, `getting-started.md` |
-| docs/advanced/ | lowercase-kebab | `architecture.md`, `performance.md` |
-
-### Markdown Standards
-
-```markdown
-# Title (H1) - One per document
-
-Brief introduction (1-2 sentences).
-
----
-
-## Section (H2) - Major sections
-
-### Subsection (H3) - Details within sections
-
-#### Minor heading (H4) - Rarely needed
-```
-
-### Required Sections
-
-Every document should have:
-
-1. **Title** - Clear, descriptive H1
-2. **Brief Description** - 1-2 sentence overview
-3. **Table of Contents** - For docs > 100 lines
-4. **Prerequisites** - What users need first
-5. **Main Content** - Organized with H2/H3
-6. **Examples** - Practical code examples
-7. **Troubleshooting** - Common issues (if applicable)
-8. **See Also** - Related documentation links
-
-### Code Examples
-
-Always specify the language:
-
-````markdown
-```bash
-# Shell commands
-offgrid serve
-```
-
-```go
-// Go code with comments
-func Example() {}
-```
-
-```python
-# Python code
-client = offgrid.Client()
-```
-
-```json
-{
-  "json": "with proper formatting"
-}
-```
-````
-
-### Tables
-
-```markdown
-| Column 1 | Column 2 | Column 3 |
-|----------|----------|----------|
-| Data | Data | Data |
-```
-
-### Callouts
-
-```markdown
-> 💡 **Tip:** Helpful suggestion
-
-> ⚠️ **Warning:** Important caution
-
-> ❌ **Danger:** Critical warning
-
-> ℹ️ **Note:** Additional information
-```
-
----
-
-## Writing Tips
-
-### Do
-
-✅ Write for beginners - assume minimal context  
-✅ Be concise - respect reader's time  
-✅ Use examples - show, don't just tell  
-✅ Stay current - update when code changes  
-✅ Test instructions - verify steps work  
-✅ Use relative links - `../API.md` not absolute URLs  
-
-### Don't
-
-❌ Assume prior knowledge  
-❌ Use jargon without explanation  
-❌ Leave outdated information  
-❌ Skip error handling in examples  
-❌ Use absolute file paths  
-
----
-
-## Cross-References
-
-Use relative paths for internal links:
-
-```markdown
-<!-- From docs/guides/FEATURE.md -->
-[API Reference](../API.md)
-[Installation](../INSTALLATION.md)
-[Contributing](../../dev/CONTRIBUTING.md)
-```
-
----
-
-## Screenshots
-
-- Save in `docs/images/`
-- Use descriptive names: `feature-action-result.png`
-- Include alt text for accessibility
-- Keep file sizes reasonable (<500KB)
-- Use dark mode for consistency
-
-```markdown
-![Feature screenshot](images/feature-action.png)
-```
-
----
-
-## Review Checklist
-
-Before submitting documentation:
-
-- [ ] Follows naming convention
-- [ ] Has all required sections
-- [ ] Code examples are complete and tested
-- [ ] Links work correctly
-- [ ] No spelling/grammar errors
-- [ ] Renders correctly in preview
+Check commands against their actual parser/API and run relevant tests in
+disposable state. Record what ran and what could not be tested. Never run a
+destructive example against the user's normal workspace just to verify a guide.

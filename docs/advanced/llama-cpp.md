@@ -1,264 +1,49 @@
-# llama.cpp Integration Guide
+# Local llama.cpp runtime
 
-## Overview
+The default OffGrid service supervises a native `llama-server` process and communicates with it over local HTTP. It is not a mock-response default, and ordinary builds do not require linking the Go program directly against llama.cpp.
 
-offgrid-llm supports two inference modes:
+## Choose a runtime
 
-1. **Mock Mode** (default) - Returns pre-programmed responses for testing
-2. **llama.cpp Mode** - Real LLM inference using GGUF models
+Packaged containers include their matching inference runtime. For native installations, runtime selection is implemented by [binary_manager.go](../../internal/inference/binary_manager.go): an explicit executable override, a compatible executable on `PATH`, or the managed runtime installation path. Native CPU/Metal fallback downloads require network access unless already installed. A missing compatible GPU runtime fails with guidance rather than silently qualifying a CPU build as GPU-capable.
 
-## Quick Setup (Mock Mode)
+To select a custom executable before starting the service:
 
-The default build uses mock responses - no additional setup needed:
+```powershell
+$env:OFFGRID_LLAMA_SERVER_PATH = 'C:\offgrid-runtime\llama-server.exe'
+offgrid serve
+```
 
 ```bash
-make build
-./offgrid
+export OFFGRID_LLAMA_SERVER_PATH=/path/to/llama-server
+offgrid serve
 ```
 
-## Full Setup (Real Inference)
+Use a real absolute path. `OFFGRID_BIN_DIR` selects the managed binary directory. Run the chosen executable's `--version` and `--help` to inspect it; required runtime flags and the model/template must be compatible. Preserve the revision and digest when recording results.
 
-### Prerequisites
+OffGrid owns the workers it starts. Do not also autostart a separate inference server for the same service or terminate an unrelated process because it occupies a port. See [runtime lifecycle](../../internal/inference/lifecycle.go) and [autostart](../setup/autostart.md).
 
-- GCC/Clang compiler
-- CMake (optional, for optimized builds)
-- Git
+## Validate an installation
 
-### Step 1: Install llama.cpp
+1. Check `/api/v2/system` for the actual service version/revision and UI identity.
+2. Install a chat model and request a short response.
+3. Inspect runtime/model loading failures rather than treating `/health` as proof of inference.
+4. For GPU use, check actual offload and device activity during inference; detecting a GPU is not proof that the model uses it.
+5. Test embeddings, structured tool calling, and vision separately when those workflows are needed.
 
-```bash
-# Clone llama.cpp
-cd /opt  # or your preferred directory
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp
+[Performance](PERFORMANCE.md) explains context, memory, placement, and latency. [Models](../guides/models.md) explains GGUF discovery; [embeddings](../guides/embeddings.md) covers document retrieval.
 
-# Build llama.cpp
-make
+## Separate capabilities
 
-# Install to system (optional)
-sudo make install
-```
+Embeddings need a compatible embedding model with supported pooling and dimensions. Hash-derived placeholder vectors from old builds are not semantic retrieval and cannot qualify as a usable fallback. Preserve sources and follow [index recovery](workspace-recovery.md#recovering-indexes-created-with-placeholder-embeddings).
 
-### Step 2: Set Environment Variables
+Tool calling depends on the model, template, and effective runtime settings. A model's filename or a successful chat response does not prove it supports the expected tool protocol. Browser/native computer tasks have their own checks and limits.
 
-```bash
-# Add llama.cpp to include path
-export C_INCLUDE_PATH=/opt/llama.cpp:$C_INCLUDE_PATH
-export LIBRARY_PATH=/opt/llama.cpp:$LIBRARY_PATH
-export LD_LIBRARY_PATH=/opt/llama.cpp:$LD_LIBRARY_PATH
+Vision additionally needs compatible model/projector components and typed image handling. Managed-browser image support does not imply native desktop capture or qualified computer control. See [computer tasks](../guides/computer-tasks.md).
 
-# Make permanent (add to ~/.bashrc or ~/.zshrc)
-echo 'export C_INCLUDE_PATH=/opt/llama.cpp:$C_INCLUDE_PATH' >> ~/.bashrc
-echo 'export LIBRARY_PATH=/opt/llama.cpp:$LIBRARY_PATH' >> ~/.bashrc
-echo 'export LD_LIBRARY_PATH=/opt/llama.cpp:$LD_LIBRARY_PATH' >> ~/.bashrc
-```
+## Development and qualification
 
-### Step 3: Build offgrid-llm with llama.cpp Support
+The repository retains explicit mock and alternate build-tag implementations for development/testing. Their presence is not proof of the production runtime path. Never use mock output as evidence of inference quality or successful model loading.
 
-```bash
-cd /path/to/offgrid-llm
+The default adapter is [llama_stub.go](../../internal/inference/llama_stub.go), despite its legacy filename; it forwards to the native HTTP engine. [server.go](../../internal/server/server.go) composes the configured engine. Build the ordinary service using the [build guide](BUILDING.md); old `make build-llama` instructions are not the current setup path.
 
-# Build with llama.cpp support
-go build -tags llama -o offgrid ./cmd/offgrid
-
-# Or use make
-make build-llama
-```
-
-### Step 4: Configure & Run
-
-```bash
-# Create config (optional - enables llama.cpp by default)
-./offgrid config init
-
-# Edit config to disable mock mode
-nano ~/.offgrid-llm/config.yaml
-# Set: use_mock_engine: false
-
-# Download a model
-./offgrid download tinyllama-1.1b-chat
-
-# Start server
-./offgrid
-```
-
-## GPU Acceleration (Optional)
-
-### CUDA (NVIDIA GPUs)
-
-```bash
-cd /opt/llama.cpp
-
-# Build with CUDA support
-make LLAMA_CUBLAS=1
-
-# Set GPU layers in config
-./offgrid config init
-nano ~/.offgrid-llm/config.yaml
-# Set: enable_gpu: true
-#      num_gpu_layers: 35  # Adjust based on your GPU VRAM
-```
-
-### Metal (Apple Silicon)
-
-```bash
-cd /opt/llama.cpp
-
-# Build with Metal support
-make LLAMA_METAL=1
-```
-
-### OpenCL / ROCm (AMD GPUs)
-
-```bash
-cd /opt/llama.cpp
-
-# Build with CLBlast
-make LLAMA_CLBLAST=1
-```
-
-## Configuration Options
-
-Edit `~/.offgrid-llm/config.yaml`:
-
-```yaml
-# Use real llama.cpp instead of mock
-use_mock_engine: false
-
-# Model settings
-max_context_size: 4096  # Context window
-num_threads: 8          # CPU threads (set to physical cores)
-
-# GPU settings (optional)
-enable_gpu: true
-num_gpu_layers: 35      # Layers to offload to GPU
-
-# Resource limits
-max_memory_mb: 8192     # Max RAM for models
-max_models: 2           # Max simultaneously loaded models
-```
-
-## Troubleshooting
-
-### Build Error: "common.h: No such file or directory"
-
-```bash
-# Ensure C_INCLUDE_PATH is set correctly
-echo $C_INCLUDE_PATH
-
-# Should include /opt/llama.cpp or your llama.cpp path
-export C_INCLUDE_PATH=/opt/llama.cpp:$C_INCLUDE_PATH
-```
-
-### Runtime Error: "cannot open shared object file"
-
-```bash
-# Ensure LD_LIBRARY_PATH is set
-echo $LD_LIBRARY_PATH
-
-# Add llama.cpp to library path
-export LD_LIBRARY_PATH=/opt/llama.cpp:$LD_LIBRARY_PATH
-
-# Or copy libraries to system path
-sudo cp /opt/llama.cpp/*.so /usr/local/lib/
-sudo ldconfig
-```
-
-### Model Loading Fails
-
-```bash
-# Check model file exists and is valid GGUF format
-ls -lh ~/.offgrid-llm/models/
-
-# Verify SHA256 (if available)
-sha256sum ~/.offgrid-llm/models/tinyllama-1.1b-chat.Q4_K_M.gguf
-
-# Try with more verbose logging
-OFFGRID_LOG_LEVEL=debug ./offgrid
-```
-
-### Out of Memory
-
-```bash
-# Reduce context size
-nano ~/.offgrid-llm/config.yaml
-# Set: max_context_size: 2048
-
-# Or use smaller quantization
-./offgrid download tinyllama-1.1b-chat Q4_K_S  # Smaller than Q4_K_M
-
-# Or enable GPU offloading
-# Set: enable_gpu: true
-#      num_gpu_layers: 20  # Start low, increase gradually
-```
-
-## Performance Tuning
-
-### Optimal Thread Count
-
-```bash
-# Find CPU core count
-nproc
-
-# Set threads = physical cores (not logical)
-# For 8-core CPU with hyperthreading (16 logical):
-nano ~/.offgrid-llm/config.yaml
-# Set: num_threads: 8
-```
-
-### GPU Offloading Sweet Spot
-
-Start with partial offloading and measure:
-
-```bash
-# Profile with different layer counts
-OFFGRID_GPU_LAYERS=10 ./offgrid  # Test
-OFFGRID_GPU_LAYERS=20 ./offgrid  # Test
-OFFGRID_GPU_LAYERS=35 ./offgrid  # Test
-
-# Monitor VRAM usage
-nvidia-smi -l 1  # NVIDIA
-```
-
-### Quantization Trade-offs
-
-| Quantization | Size  | Quality | Speed |
-|--------------|-------|---------|-------|
-| Q4_K_S       | Small | Good    | Fast  |
-| Q4_K_M       | Medium| Better  | Medium|
-| Q5_K_M       | Larger| Great   | Slower|
-| Q8_0         | Large | Best    | Slow  |
-
-## Makefile Targets
-
-```bash
-make build              # Build without llama.cpp (mock mode)
-make build-llama        # Build with llama.cpp support
-make test               # Run tests
-make clean              # Clean build artifacts
-```
-
-## Verifying Installation
-
-```bash
-# Check if built with llama.cpp
-./offgrid config show
-
-# Should show:
-# - "Using llama.cpp engine" when starting server
-# - Real responses instead of "This is a mock response"
-
-# Test inference
-curl -X POST http://localhost:11611/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "tinyllama-1.1b-chat",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-## Next Steps
-
-- [Download Models](../README.md#model-catalog)
-- [API Documentation](../README.md#api-endpoints)
-- [Web Dashboard](../README.md#web-dashboard)
+Use the pinned runtime revisions in release build configuration for repeatable builds. Custom upstream builds need their own tests. Consult the [reliability plan](product-reliability-plan.md) for measured profiles and remaining evidence rather than assuming upstream model support qualifies an OffGrid workflow.

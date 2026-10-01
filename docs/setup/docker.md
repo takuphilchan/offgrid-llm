@@ -6,8 +6,13 @@ application state live in persistent Docker volumes.
 
 ## Quick start
 
+This example creates a **new** container/workspace. For an existing installation,
+use [the upgrade procedure](#upgrade-an-existing-workspace) instead. Commands use
+Bash continuation syntax; in PowerShell enter `docker run` on one line or use
+PowerShell backtick continuations.
+
 ```bash
-docker pull takuphilchan/offgrid-llm:edge
+docker pull takuphilchan/offgrid-llm:0.4.12
 docker run -d \
   --name offgrid \
   --init \
@@ -17,7 +22,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:edge
+  takuphilchan/offgrid-llm:0.4.12
 ```
 
 Open <http://localhost:11611/ui/> and download a model from the Models page, or
@@ -36,15 +41,16 @@ and TLS for remote access.
 | Tag | Meaning |
 | --- | --- |
 | `edge` | Current development image; update deliberately |
-| `latest` | Most recent stable CPU release after the first stable publication |
-| `<version>` | Immutable semantic-version release, for example `1.0.0` |
+| `latest` | Moving alias for the latest published stable CPU release |
+| `<version>` | Versioned release, for example `0.4.12` |
 | `<major>.<minor>` | Most recent patch in a stable minor release |
 | `sha-<commit>` | Image built from an exact source revision |
 | `latest-gpu` | Most recent stable NVIDIA release (Linux AMD64) |
 | `<version>-gpu` | Versioned NVIDIA release (Linux AMD64) |
 
-Use `edge` for the current pre-release build. Pin a full version or digest in
-production once a stable release is published.
+Pin a full version, or an image digest for content identity. `latest` and `edge`
+can move; pulling them is an update, not a reproducible specification. A stable
+container tag does not qualify every model or preview capability inside it.
 
 ## Compose deployments
 
@@ -54,6 +60,7 @@ Clone the repository only when using its Compose definitions:
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm/docker
 cp .env.example .env
+# Edit .env: set OFFGRID_VERSION=0.4.12 before pulling.
 docker compose pull
 docker compose up -d
 ```
@@ -139,6 +146,46 @@ which also stops running WSL containers until Docker restarts.
 
 Back up volumes with your normal Docker volume backup tooling before upgrades.
 The image itself is disposable and should never contain model or user data.
+
+## Upgrade an existing workspace
+
+Updating Windows/macOS/Linux Desktop does not update this container. Identify the
+actual container, Compose project, image, mounts, and configuration first:
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
+docker inspect --format '{{json .Mounts}}' offgrid
+docker exec offgrid offgrid version
+```
+
+Replace `offgrid` with the actual container name. Do not publish a full inspect
+dump: environment configuration may contain secrets.
+
+1. Download the chosen image and retain the old image identity/configuration.
+2. Finish active work and stop computer sessions, then stop the existing service
+   with its supervisor (`docker stop offgrid`, or the matching Compose service).
+3. Use the **currently installed version's** `offgrid workspace backup` and
+   `workspace verify` against its stopped data volume. Run maintenance with the
+   exact data/model mounts and a separate writable backup directory, not a second
+   service. See [offline backup](../advanced/workspace-recovery.md#back-up-a-stopped-workspace)
+   for version and path requirements. Retain models/configuration separately.
+4. For Compose, change the pinned version in the same project's `.env`, then
+   recreate its existing service with the same files/project/volumes. For a
+   `docker run` installation, remove only the stopped container after verified
+   backup and recreate its recorded configuration with the new image. Do not
+   remove volumes or use the fresh-install example if your mounts differ.
+5. Verify health, service identity, saved conversations, models, knowledge status,
+   and agent history. Run a small inference request; health alone is not a model test.
+6. Confirm only the intended replacement is running. Update the host desktop to
+   a matching build before testing computer access; the container cannot do that.
+
+Do not change from `docker run` to Compose, or CPU to GPU storage layouts, during
+an upgrade without explicitly mapping existing volumes. A blank workspace can
+mean the wrong volume, not lost data: stop and inspect before importing or deleting.
+
+If validation fails, preserve the updated data and restore a verified backup to
+a new location with its matching application. Do not run an old image against
+a newly migrated schema. See [safe rollback](../advanced/DEPLOYMENT.md#roll-back-safely).
 
 ## Production stack
 

@@ -377,4 +377,4 @@ offgrid info  # Shows GPU if detected
 - System requirements: `offgrid info`
 - Find models for your RAM: `offgrid search --ram 4`
 - Model recommendations: [4GB_RAM.md](low-memory.md)
-- Performance tuning: [PERFORMANCE.md](performance.md)
+- Performance tuning: [PERFORMANCE.md](PERFORMANCE.md)

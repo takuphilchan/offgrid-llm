@@ -1,344 +1,50 @@
-# Getting Started with OffGrid LLM
+# Use your OffGrid workspace
 
-> From zero to your first AI chat in 5 minutes.
+Once installed, the same workspace is available through the browser, matching desktop app, and service-aware CLI commands. For installation, start with the [quickstart](../setup/quickstart.md).
 
----
+## Check which workspace you opened
 
-## Table of Contents
+Open **Settings** to inspect the connected service. Desktop-managed data normally lives under your user profile; a container uses its mounted volumes. These are not automatically the same workspace. If models or history appear missing, check the address and workspace identity before downloading again.
 
-- [Prerequisites](#prerequisites)
-- [Quick Installation](#quick-installation)
-- [Your First Chat](#your-first-chat)
-- [Understanding the Basics](#understanding-the-basics)
-- [Common Tasks](#common-tasks)
-- [Troubleshooting](#troubleshooting)
-- [Next Steps](#next-steps)
+The service owns saved work. Closing or reloading a page does not cancel submitted tasks; use task controls to pause or stop them.
 
----
+## Have a local conversation
 
-## Prerequisites
+Open **Models**, install a chat model, then select it in **Chat**. Begin with a short question. Long documents, large context windows, and several loaded models require more memory.
 
-### Hardware Requirements
+Check important answers. Fluent text is not evidence of current facts, file access, or a completed computer action. A local model does not automatically browse the internet. See [history management](history-management.md) for conversation rename, export, and deletion.
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| RAM       | 4 GB    | 16 GB       |
-| Storage   | 10 GB   | 50+ GB      |
-| CPU       | Any x64 | AVX2 support|
+## Ask about documents
 
-### Software Requirements
+Knowledge retrieval uses an embedding model as well as a chat model. Enable embeddings, import a supported file, wait for indexing, then ask a grounded question. Inspect the cited source.
 
-- **Operating System:** Linux, macOS, or Windows
-- **Go:** 1.26.6+ (matching the security-patched toolchain in `go.mod`)
-- **Git:** For cloning repository
+Extraction failures, scanned documents, unavailable indexes, and insufficient evidence need different remedies. Follow [knowledge and embeddings](embeddings.md); do not delete sources because an old index needs rebuilding.
 
----
+## Delegate a task
 
-## Quick Installation
+Open **Agents**, describe the outcome, and choose **Start task**. For example:
 
-### Option A: Pre-built Binary (Easiest)
+> Calculate the total of 18.50, 42.75, and 9.25. Save a small CSV showing each amount and the total.
 
-```bash
-# Download latest release
-curl -fsSL https://github.com/yourusername/offgrid-llm/releases/latest/download/offgrid-linux-amd64 -o offgrid
-chmod +x offgrid
-sudo mv offgrid /usr/local/bin/
-```
+The selected model needs reliable tool calling. Inspect the activity and artifact. A verified artifact means its bytes and supported format were checked; it does not guarantee factual or mathematical correctness.
 
-### Option B: Install Script
+For work inside an application, describe the outcome naturally. OffGrid may show **Access needed** and ask you to select the target locally. This consent is separate from the prompt. See [computer tasks](computer-tasks.md) and [agent controls](agents.md#pause-adjust-and-recover).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/offgrid-llm/main/install.sh | bash
-```
+## Add external information deliberately
 
-### Option C: Build from Source
+An [MCP connection](mcp.md) adds tools from another server. Connect only a trusted server, inspect its tools, and start with a non-sensitive query. Inference can remain local while tool arguments travel over the internet.
 
-```bash
-# Clone repository
-git clone https://github.com/yourusername/offgrid-llm.git
-cd offgrid-llm
+Hermes and OpenClaw are [external agents](external-agents.md), not the built-in runner. Their permissions and history are separate.
 
-# Build
-go build -o offgrid ./cmd/offgrid
+## Recover or remove unfinished work
 
-# Install
-sudo mv offgrid /usr/local/bin/
-```
+- **Access needed:** grant the target or stop the task.
+- **Paused or interrupted:** inspect the saved state, then resume or stop deliberately.
+- **Outcome unknown:** inspect the affected target before recording what happened. Do not invent success or repeat a potentially mutating operation blindly.
+- **Completed, failed, or cancelled:** use confirmed deletion when no unresolved execution or linked-child restriction remains.
 
-### Verify Installation
+Tasks and Activity share history. Deleting a task does not undo a file change or remote action; backups and audits are separate. See [agent recovery](agents.md#restart-and-uncertain-outcomes).
 
-```bash
-offgrid version
-# Output: Version 0.2.9
-```
+## Keep your work
 
----
-
-## Your First Chat
-
-### Step 1: Start the Server
-
-```bash
-offgrid serve
-```
-
-You should see:
-
-```
-🌐 Server starting...
-📁 Models directory: ~/.offgrid-llm/models
-🔌 Listening on: http://localhost:11611
-```
-
-### Step 2: Open the Web UI
-
-Open your browser and navigate to:
-
-```
-http://localhost:11611
-```
-
-### Step 3: Download a Model
-
-1. Click **"Models"** in the sidebar
-2. Browse the available models
-3. Click **Download** on a small model (e.g., TinyLlama 1.1B)
-4. Wait for download to complete
-
-### Step 4: Start Chatting!
-
-1. Click **"Chat"** in the sidebar
-2. Select your downloaded model from the dropdown
-3. Type your message and press Enter
-
-🎉 **Congratulations!** You're now running AI locally!
-
----
-
-## Understanding the Basics
-
-### How It Works
-
-```
-You type a message
-         │
-         ▼
-┌─────────────────┐
-│   Web Browser   │
-│   (localhost)   │
-└────────┬────────┘
-         │ HTTP/WebSocket
-         ▼
-┌─────────────────┐
-│  OffGrid Server │  ← Running on YOUR computer
-│   Port 11611    │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   LLM Model     │  ← Stored locally
-│  (llama.cpp)    │
-└────────┬────────┘
-         │
-         ▼
-    AI Response
-```
-
-**Key Points:**
-- Everything runs on YOUR computer
-- No internet required (after model download)
-- Your conversations stay private
-
-### Directory Structure
-
-After installation, OffGrid creates:
-
-```
-~/.offgrid-llm/
-├── models/              # Downloaded model files
-├── data/                # App data (chat history, etc.)
-└── config.yaml          # Settings (created on first run)
-```
-
-### Default Configuration
-
-| Setting        | Default Value | Description              |
-|----------------|---------------|--------------------------|
-| Port           | 11611         | HTTP server port         |
-| Host           | localhost     | Bind address             |
-| Context Size   | 4096          | Token context window     |
-| GPU Layers     | 0             | Layers on GPU (0=CPU)    |
-
----
-
-## Common Tasks
-
-### Change Server Port
-
-```bash
-offgrid serve --port 8080
-```
-
-Or set environment variable:
-
-```bash
-export OFFGRID_PORT=8080
-offgrid serve
-```
-
-### List Downloaded Models
-
-```bash
-offgrid models list
-```
-
-### Download a Model via CLI
-
-```bash
-offgrid models pull <model-name>
-```
-
-### Run a One-Shot Query
-
-```bash
-offgrid chat "What is the capital of France?"
-```
-
-### Enable GPU Acceleration
-
-```bash
-offgrid serve --gpu-layers 35
-```
-
-(Requires CUDA or Metal support)
-
-### Use the REST API
-
-```bash
-curl http://localhost:11611/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "tinyllama-1.1b",
-    "messages": [
-      {"role": "user", "content": "Hello!"}
-    ]
-  }'
-```
-
----
-
-## Troubleshooting
-
-### Server Won't Start
-
-**Symptom:** `Error: port 11611 already in use`
-
-**Solution:**
-```bash
-# Find what's using the port
-lsof -i :11611
-
-# Use a different port
-offgrid serve --port 8080
-```
-
-### Model Download Fails
-
-**Symptom:** Download hangs or errors
-
-**Solutions:**
-1. Check internet connection
-2. Try a smaller model first
-3. Download manually and place in `~/.offgrid-llm/models/`
-
-### Out of Memory
-
-**Symptom:** Process killed or crashes
-
-**Solutions:**
-1. Use a smaller model
-2. Reduce context size: `--context-size 2048`
-3. Close other applications
-
-### Slow Generation
-
-**Symptom:** Responses take a long time
-
-**Solutions:**
-1. Use a smaller/faster model
-2. Enable GPU acceleration
-3. Increase CPU threads: `--threads 8`
-
-### Model Not Found
-
-**Symptom:** `Error: model not found`
-
-**Solution:**
-```bash
-# List available models
-offgrid models list
-
-# Check models directory
-ls ~/.offgrid-llm/models/
-```
-
----
-
-## Next Steps
-
-Now that you're up and running, explore these features:
-
-### 📚 Enable RAG (Document Chat)
-
-Add your documents to chat with them:
-
-```bash
-offgrid rag add ~/Documents/myfile.pdf
-offgrid chat "What does my document say about...?"
-```
-
-**Guide:** [Embeddings Guide](embeddings.md)
-
-### 🎤 Voice Input/Output
-
-Talk to your AI:
-
-```bash
-offgrid serve --enable-voice
-```
-
-**Guide:** [Features Guide](features.md)
-
-### 🤖 Run Agent Tasks
-
-Let AI autonomously complete tasks:
-
-```bash
-offgrid agent "Research quantum computing and summarize"
-```
-
-**Guide:** [Agents Guide](agents.md)
-
-### 🔌 Use the API
-
-Integrate with your own applications:
-
-**Guide:** [API Reference](../reference/api.md)
-
-### 🖥️ Desktop App
-
-Install the native desktop application:
-
-**Guide:** [Desktop Installation](../../desktop/DESKTOP_INSTALL.md)
-
----
-
-## Getting Help
-
-- **Documentation:** [docs/README.md](../README.md)
-- **Issues:** [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues)
-- **Contributing:** [CONTRIBUTING.md](../../dev/CONTRIBUTING.md)
-
----
-
-**Happy chatting! 🎉**
+Back up before upgrades. An image, installer, and Git checkout do not contain your saved workspace. Follow [backup and restore](../advanced/workspace-recovery.md); retain model files and host companion state separately where required.

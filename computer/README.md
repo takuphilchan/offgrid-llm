@@ -1,5 +1,9 @@
 # Computer Tasks browser and native-structured preview
 
+This is the implementation/developer reference. For normal setup and useful
+task examples, start with [Computer Tasks](../docs/guides/computer-tasks.md).
+Capabilities described here remain preview; the reliability plan owns evidence.
+
 ## Native-control foundation (not native availability)
 
 The service no longer instantiates the legacy blanket-approved computer
@@ -43,12 +47,13 @@ remain **unqualified** until the full task/model/platform evaluation gates pass.
 ## Installed desktop: no terminal setup
 
 Updated desktop packages include the matching Playwright/Chromium runtime and
-native worker. In **Agents**, choose **Use this computer**, select an existing
-application window, or choose **Open an application** to launch a catalogued
-Windows shortcut, macOS application, or Linux desktop entry. OffGrid then pairs
-the selected window through local consent; no Node installation or copied code
-is needed. Browser mode remains available as a separate managed Chromium profile.
-Choose a tool-capable model and run the task. Before connecting, choose one
+native worker. In **Agents**, describe the task and choose **Start task**. When
+the saved task requests **Access needed**, select an existing application window
+or launch a catalogued Windows shortcut, macOS application, or Linux desktop
+entry. Local consent connects that actual target to the same saved task; no
+Node installation or copied pairing code is needed. Browser requests use a
+separate managed Chromium profile. A tool-capable model is still required.
+Before connecting, choose one
 session policy: **Ask every time**, **Approve scoped changes**, or **Full task
 access**. The default automatically permits only locally classified reversible
 work in the selected window. Full task access also permits consequential typed
@@ -78,12 +83,13 @@ retains ownership to prevent a duplicate session, and still attempts service
 revocation. Close the separate browser manually and inspect the task before
 retrying. A service outage does not prevent the local stop path from running.
 
-The web edition provides **Open desktop app** (`offgrid://computer`). This only
-opens Agents: the link cannot carry a service URL, credentials, or an action.
+The web edition provides **Continue in desktop** for the saved task. The
+`offgrid://computer` link can carry its validated task ID, not a service URL,
+credentials, or an executable action.
 The desktop must be connected to the same matching workspace (the ordinary local
 container address is `127.0.0.1:11611`). A browser page alone cannot control the
 host. Remote service attachment and silent workspace switching are not supported.
-Developer/manual pairing remains collapsed for CLI users and source checkouts.
+Manual pairing is a developer/legacy CLI fallback, not a normal UI prerequisite.
 
 The browser is bundled rather than downloaded on first use. This adds its size
 to the desktop package but permits offline practice-page startup. A damaged or
@@ -121,27 +127,31 @@ npm run browser:install
 npm start
 ```
 
-In OffGrid **Agents**, enable **Use a browser**, open **Developer connection**,
-then **Pair browser**.
 The companion asks for the local service URL (press Enter for the default), then
 a browser target. Enter a public HTTPS page URL, or `demo` for an isolated practice
 page. For a public site choose `direct` (default) or explicitly `trusted-vpn`.
 After local consent,
 service/network/browser preflight completes **before** asking for a pairing code.
-Only then click **Pair browser** to generate a fresh code. Select the paired browser in OffGrid, choose a
-tool-capable model, and submit a task. Start with a bounded inspection such as
+Only then run `offgrid computer pair` in a second terminal configured for the
+same service and actor, and paste the fresh single-use code into the companion.
+Keep credentials/codes private. `offgrid computer targets` lists connected
+sessions. This legacy developer path submits with
+`offgrid computer run SESSION_ID MODEL_ID "Describe the selected page"`; normal
+task-first setup uses `offgrid computer setup RUN_ID` and desktop consent instead.
+Start with a bounded inspection such as
 finding a heading and verifying its text. Review exact arguments before approving
 navigation, clicking or typing. A browser action succeeding is not proof of the
 entire task's correctness.
 
-Starting a task automatically checks the selected model. For troubleshooting,
-**Advanced settings → Check selected model** runs the same two synthetic tool
+Computer access checks the selected model before dispatch. For troubleshooting,
+`offgrid computer check MODEL_ID` runs the same two synthetic tool
 turns through the selected runtime without reading or controlling your browser:
 an observation call followed by a verification call using a generated heading.
 A prose simulation, malformed call, wrong tool, truncation or incorrect result
 does not pass. The check may load the model and takes up to 90 seconds; you can
-cancel the optional diagnostic. Changing models resets its result. The service checks on
-submission, so clients cannot bypass it; a rejected check creates no task.
+cancel the optional diagnostic. The service enforces the check; clients cannot
+bypass it. In the task-first flow, a failed check leaves the saved task pending
+access. The legacy explicit-session submission can reject before task creation.
 
 The CLI equivalent is `offgrid computer check <model>` (JSON result, nonzero exit
 on failure). Runtime build, template digest and context accompany the UI/API

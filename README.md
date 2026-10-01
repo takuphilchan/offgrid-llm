@@ -13,6 +13,13 @@ Development is tracked against the [production-readiness gates](docs/advanced/pr
 See [client contracts](docs/advanced/client-contracts.md) for the new CLI error
 behavior, desktop compatibility checks, and their current coverage limits.
 
+New here? Start with the [quickstart](docs/setup/quickstart.md), choose an
+[installation](docs/setup/installation.md), or browse the
+[documentation index](docs/README.md). Practical guides cover
+[computer tasks](docs/guides/computer-tasks.md) and [MCP connections](docs/guides/mcp.md).
+
+For development changes, see the [OpenSpec workflow](openspec/README.md).
+
 ## Run with Docker
 
 Use the versioned stable image for a repeatable installation:
@@ -76,18 +83,24 @@ npm run api:check
 npm run build
 cd ../..
 
-go build -trimpath -o bin/offgrid ./cmd/offgrid
+version=$(tr -d '\r\n' < VERSION)
+go build -trimpath -ldflags "-X main.Version=$version" -o bin/offgrid ./cmd/offgrid
 ./bin/offgrid serve
 ```
 
-Open <http://127.0.0.1:11611/ui/>. On Windows, use `bin\offgrid.exe`; in WSL,
-use the Linux command above from `/mnt/d/offgrid-llm`.
+Open <http://127.0.0.1:11611/ui/>. These are Bash commands. For PowerShell,
+native dependencies, isolated tests, and desktop packaging, use the
+[build guide](docs/advanced/BUILDING.md).
 
 Keep `offgrid serve` running while using another terminal for ordinary CLI
 commands. Model listing and downloads intentionally go through that same service,
 so the CLI, browser, desktop app, and container share one registry, permission
 boundary, and durable download state. Set `OFFGRID_SERVER_URL` when the service is
 not at `http://127.0.0.1:11611`.
+
+The legacy terminal `run` path also resolves model files in the local models
+directory. For a container-owned model store, use the web UI or run that command
+inside the container; a host CLI does not automatically see container files.
 
 The CLI is also the container entry point:
 
@@ -196,6 +209,8 @@ legacy source is retained so migration is recoverable.
 ## Development checks
 
 ```bash
+node --test dev/scripts/check-docs.test.mjs
+node dev/scripts/check-docs.mjs
 go test ./...
 
 cd web/app
