@@ -1,0 +1,42 @@
+name: OpenSpec structure
+
+on:
+  pull_request:
+    paths:
+      - 'openspec/**'
+      - 'AGENTS.md'
+      - '.github/workflows/openspec.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'openspec/**'
+      - 'AGENTS.md'
+      - '.github/workflows/openspec.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OPENSPEC_TELEMETRY: '0'
+      DO_NOT_TRACK: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install pinned development tool
+        run: npm install --global @fission-ai/openspec@1.14.0 --ignore-scripts --no-audit --no-fund
+      - name: Inspect workspace
+        run: |
+          openspec --version
+          openspec list --json
+          openspec doctor --json
+      - name: Validate specification structure
+        # An empty bootstrap workspace is valid, not application test evidence.
+        # Application tests and human review remain separate release requirements.
+        run: openspec validate --all --strict --no-interactive

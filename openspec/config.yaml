@@ -1,0 +1,37 @@
+schema: spec-driven
+
+context: |
+  OffGrid is a Go local-first AI runtime with CLI/HTTP clients, a shared React/
+  TypeScript renderer, an Electron desktop host, and installed inference backends.
+  Preserve API, CLI, desktop, streaming, and storage compatibility.
+  Preserve user conversations, models, indexes, credentials, and recovery records.
+  Offline/privacy claims must distinguish local inference from optional downloads
+  or external providers. Do not weaken authentication or desktop IPC trust.
+  Keep Edge Delegate and the fine-tuning lab as separate projects.
+  docs/advanced/production-readiness.md owns release gates; OpenSpec describes
+  individual changes without duplicating the roadmap or asserting qualification.
+
+rules:
+  proposal:
+    - Scope one independently reviewable change; state exclusions and user-visible acceptance criteria.
+    - Inspect existing code and tests first; distinguish current behavior from planned behavior.
+  specs:
+    - Use concrete WHEN/THEN scenarios, including relevant failure and compatibility cases.
+    - Never claim native effects, model quality, or independent approval without matching evidence.
+  design:
+    - Explain boundaries, compatibility, and recovery for affected stateful or security-sensitive paths.
+    - Reference existing architecture documents instead of copying or replacing them.
+  tasks:
+    - Include exact validation commands, expected outcomes, and affected documentation.
+    - Separate implementation from training, native side effects, deployment, and publication.
+    - Mark work complete only after checks actually run; record unavailable checks explicitly.
+
+operations:
+  apply:
+    guidance:
+      - Preserve unrelated work and approved scope; do not commit or push unless requested.
+      - Use the environment and verification guidance in AGENTS.md and openspec/README.md.
+  archive:
+    guidance:
+      - Require verification evidence and no unresolved blocking findings before archiving as completed.
+      - State unrun checks and limitations; archive status alone is not release qualification.
