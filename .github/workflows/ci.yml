@@ -252,15 +252,19 @@ jobs:
         if: failure()
         id: desktop-diagnostics
         shell: bash
-        run: node -e 'const temp=require("node:os").tmpdir().replaceAll("\\", "/"); console.log("path=" + temp + "/offgrid-desktop-startup-*/"); console.log("browser_path=" + temp + "/offgrid-packaged-browser-*/")' >> "$GITHUB_OUTPUT"
+        run: |
+          node -e 'const temp=require("node:os").tmpdir().replaceAll("\\", "/"); console.log("path=" + temp + "/offgrid-desktop-startup-*/"); console.log("browser_path=" + temp + "/offgrid-packaged-browser-*/"); console.log("installer_path=" + temp + "/offgrid-install-*/diagnostics/"); console.log("probe_path=" + temp + "/offgrid-wizard-probe-*/")' >> "$GITHUB_OUTPUT"
 
       - name: Preserve desktop startup diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: desktop-startup-${{ matrix.os }}
+          # Only isolated test diagnostics, not installed packages or user data.
           path: |
             ${{ steps.desktop-diagnostics.outputs.path }}
             ${{ steps.desktop-diagnostics.outputs.browser_path }}
+            ${{ steps.desktop-diagnostics.outputs.installer_path }}
+            ${{ steps.desktop-diagnostics.outputs.probe_path }}
           if-no-files-found: ignore
           retention-days: 7

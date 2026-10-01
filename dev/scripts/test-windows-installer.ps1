@@ -3,9 +3,11 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
 $stage = 'validate the isolated installer package'
+$diagnosticPath = ''
 
 trap {
     $message = "${stage}: $($_.Exception.Message)" -replace '[\r\n]+', ' '
+    Write-WizardDiagnostic $diagnosticPath 'installer-test-failed' @{ stage = $stage; message = $message }
     if ($env:GITHUB_ACTIONS -eq 'true') {
         Write-Output "::error title=Windows installer qualification::$message"
     } else {
@@ -26,13 +28,17 @@ if ((Test-Path -LiteralPath $registryPath) -or (Test-Path -LiteralPath $uninstal
     throw 'An installer smoke-test registration already exists. Inspect it before retrying; nothing was changed.'
 }
 $testRoot = (New-Item -ItemType Directory -Path (Join-Path ([IO.Path]::GetTempPath()) ('offgrid-install-' + [Guid]::NewGuid().ToString('N')))).FullName
+$diagnosticDirectory = (New-Item -ItemType Directory -Path (Join-Path $testRoot 'diagnostics')).FullName
+$diagnosticPath = Join-Path $diagnosticDirectory 'test-events.jsonl'
 $installRoot = [IO.Path]::GetFullPath((Join-Path $testRoot $testName))
 $appExe = Join-Path $installRoot ($testName + '.exe')
 $uninstaller = Join-Path $installRoot ('Uninstall ' + $testName + '.exe')
 
 function Invoke-TestProcess([string]$Executable, [string]$Arguments, [int]$ExpectedExit = 0) {
+    Write-WizardDiagnostic $diagnosticPath 'process-start' @{ stage = $stage; executable = $Executable }
     $process = Start-Process -FilePath $Executable -ArgumentList $Arguments -WindowStyle Hidden -PassThru
     if (-not $process.WaitForExit(180000)) { throw "Timed out waiting for test process $($process.Id); inspect it before cleanup." }
+    Write-WizardDiagnostic $diagnosticPath 'process-end' @{ stage = $stage; process = $process.Id; exitCode = $process.ExitCode }
     if ($process.ExitCode -ne $ExpectedExit) { throw "Test process failed with exit code $($process.ExitCode), expected $ExpectedExit. Evidence: $testRoot" }
 }
 

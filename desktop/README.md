@@ -165,3 +165,14 @@ The native wizard test needs an interactive Windows desktop. Its screenshot capt
 is limited to the test window; it never captures the whole desktop. Clear the
 development-only `ELECTRON_RUN_AS_NODE` variable before launching an installed
 Electron application; the test runner does this for its Finish-launch check.
+
+The installer watchdog records timestamped probes and Win32 errors, and counts
+only consecutive failed observations toward its five-second responsiveness gate.
+Long gaps in monitoring reset that streak; the overall 180-second installer
+deadline still applies. Screenshots run in owned helpers with a five-second
+deadline, so a blocked `PrintWindow` cannot block monitoring. Failed captures
+are reported as missing diagnostics, not successful screenshots. The separate
+`dev/scripts/test-windows-installer-probe.ps1` regression suite checks timing gaps,
+recovery, real frozen/healthy fixture windows, and bounded capture. CI preserves
+installer `diagnostics/` and probe evidence on failure, excluding installer
+binaries and installed application directories.
