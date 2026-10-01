@@ -139,6 +139,21 @@ function Update-WizardCapture($Capture, [switch]$Stop) {
     $Capture.process.Dispose()
 }
 
+function Write-WizardHang([IntPtr]$Window, [string]$OutputPath, [string]$DiagnosticPath) {
+    $worker = Join-Path $PSScriptRoot 'windows-installer-hang.ps1'
+    $ownerId = [OffGridWizard]::Owner($Window)
+    $helper = Start-Process powershell.exe -ArgumentList "-NoProfile -File `"$worker`" -Window $($Window.ToInt64()) -OwnerId $ownerId -OutputPath `"$OutputPath`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$OutputPath.stdout.log" -RedirectStandardError "$OutputPath.stderr.log"
+    try {
+        [void]$helper.Handle
+        $finished = $helper.WaitForExit(5000)
+        if (-not $finished) {
+            $helper.Kill()
+            if (-not $helper.WaitForExit(2000)) { throw 'Hang diagnostic helper did not stop.' }
+        }
+        Write-WizardDiagnostic $DiagnosticPath 'hang-diagnostic' @{ completed = $finished; exitCode = $helper.ExitCode; output = $OutputPath }
+    } finally { $helper.Dispose() }
+}
+
 function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool]$Launch, [bool]$ExpectRunningPrompt) {
     if ([Diagnostics.FileVersionInfo]::GetVersionInfo($Executable).ProductName -ne 'OffGrid Desktop Install Test') { throw 'Only isolated test installers are allowed.' }
     $process = Start-Process -FilePath $Executable -ArgumentList "/currentuser /D=$InstallRoot" -WindowStyle Hidden -PassThru
@@ -245,6 +260,12 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
         [PSCustomObject]@{ finishClosedMs = $finishClosedMs; elapsedMs = $clock.ElapsedMilliseconds; launched = $Launch; runningAppConsent = $consented; detailsItems = $detailsItems }
     } catch {
         Write-WizardDiagnostic $diagnosticPath 'wizard-failed' @{ message = $_.Exception.Message; elapsedMs = $clock.ElapsedMilliseconds; details = $detailsObserved; detailsItems = $detailsItems; processExited = $process.HasExited }
+        # Preserve the failing state without changing the failure or asking the
+        # blocked window to paint. The separate read-only helper is bounded.
+        foreach ($failedWindow in [OffGridWizard]::Windows('OffGrid Desktop Install Test')) {
+            try { Write-WizardHang $failedWindow (Join-Path $evidence.FullName "hang-$($failedWindow.ToInt64()).json") $diagnosticPath }
+            catch { Write-Warning "Could not collect installer wait chain: $($_.Exception.Message)" }
+        }
         throw
     } finally {
         foreach ($capture in $captures) { Update-WizardCapture $capture -Stop }

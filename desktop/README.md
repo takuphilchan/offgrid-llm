@@ -173,6 +173,9 @@ deadline still applies. Screenshots run in owned helpers with a five-second
 deadline, so a blocked `PrintWindow` cannot block monitoring. Failed captures
 are reported as missing diagnostics, not successful screenshots. The separate
 `dev/scripts/test-windows-installer-probe.ps1` regression suite checks timing gaps,
-recovery, real frozen/healthy fixture windows, and bounded capture. CI preserves
+recovery, real frozen/healthy fixture windows, and bounded capture. On failure,
+a separate bounded helper records the isolated installer's thread wait chains
+and control states, without collecting process memory or named lock objects.
+CI preserves
 installer `diagnostics/` and probe evidence on failure, excluding installer
 binaries and installed application directories.

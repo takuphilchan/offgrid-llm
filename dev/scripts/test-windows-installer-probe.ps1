@@ -107,6 +107,14 @@ try {
     if ($clock.ElapsedMilliseconds -lt 5000) { throw 'Visible hang rejected before sustained failure was measured.' }
     Write-Output 'PASS: hidden maintenance window ignored; real sustained visible hang rejected.'
 
+    $hangPath = Join-Path $directory 'hang.json'
+    Write-WizardHang $visible $hangPath $diagnosticPath
+    $hang = Get-Content -LiteralPath $hangPath -Raw | ConvertFrom-Json
+    if ($hang.process -ne $fixture.Id -or -not @($hang.chains | Where-Object { $_.ui -and $_.success }).Count) {
+        throw 'Wait-chain diagnostics did not identify the frozen fixture UI thread.'
+    }
+    Write-Output 'PASS: bounded wait-chain diagnostics identify the isolated frozen UI thread.'
+
     # A blocked window also blocks PrintWindow. Prove that its owned capture
     # helper is bounded while a healthy window can still be monitored.
     $capture = Start-WizardCapture $visible (Join-Path $directory 'blocked.png') $diagnosticPath
