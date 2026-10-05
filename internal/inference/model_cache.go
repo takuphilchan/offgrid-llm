@@ -938,10 +938,11 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 		defer mc.mmapWarmer.Resume()
 	}
 
-	// Phase 1: Wait for server process to start (up to 15 seconds)
+	// Phase 1: Wait for server process to start. GPU runtimes may spend more
+	// than fifteen seconds loading their shared libraries on a cold container.
 	// Fast 200ms polling for quick detection
 	serverStarted := false
-	startupDeadline := time.Now().Add(15 * time.Second)
+	startupDeadline := time.Now().Add(60 * time.Second)
 	attempt := 0
 
 	for time.Now().Before(startupDeadline) {
@@ -953,8 +954,8 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 		}
 		// Update progress: 15-40% during server startup
 		if mc.loadingTracker != nil {
-			elapsed := time.Since(startupDeadline.Add(-15 * time.Second))
-			progress := 15 + int(elapsed.Seconds()*25/15)
+			elapsed := time.Since(startupDeadline.Add(-60 * time.Second))
+			progress := 15 + int(elapsed.Seconds()*25/60)
 			if progress > 40 {
 				progress = 40
 			}
@@ -976,7 +977,7 @@ func (mc *ModelCache) waitForReadyContext(ctx context.Context, port int, modelID
 	}
 
 	if !serverStarted {
-		return fmt.Errorf("llama-server on port %d did not start within 15 seconds", port)
+		return fmt.Errorf("llama-server on port %d did not start within 60 seconds", port)
 	}
 
 	// Update tracker - server started, now loading model
