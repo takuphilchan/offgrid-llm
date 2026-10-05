@@ -41,6 +41,39 @@ pending. Backup/restore do not upgrade schemas or change your active installatio
 The explicit rebuild command replaces only derived knowledge-index data and its
 schema metadata; it is not the transactional workspace migration.
 
+## Model download recovery
+
+`downloads.json` is one schema-1 snapshot containing the legacy single-file
+projection and actor-scoped package operations. The first upgrade validates old
+records, preserves exact original bytes in `downloads-v0-<digest>.json`, and records
+the migration in `downloads-migration.json` before publishing the new snapshot.
+Unknown schemas, malformed records or failed persistence block activation; they
+are not silently dropped. Partial model bytes stay in the model directory.
+Do not run an older binary against the migrated store; restore a matching workspace
+backup while the service is stopped before binary rollback.
+
+Package workers checkpoint acceptance and verified artifacts, persist activation
+intent, then publish a complete directory with an installation receipt. Repair keeps
+the previous directory and a publication journal until the result is durable.
+After a crash, the service reconciles local receipt/manifest identity, restores a
+displaced original where possible, and marks other work interrupted. It never
+restarts downloads by itself. Missing/ambiguous recovery data remains an error.
+Inspect Models or `offgrid model status`, then explicitly Resume or Discard.
+
+Transfers/hash checks do not hold the global model lifecycle lock. One writer owns
+a package revision; verification and runtime leases prevent conflicting replacement.
+On Windows, a sharing violation can prevent atomic rename. The service preserves
+old data, reports failure, and permits an explicit retry after handles are released.
+Snapshot replacement retries brief Windows reader locks without deleting the old
+snapshot. Filesystem/drive failure is not a guarantee of physical power-loss safety.
+
+Confirmed package removal first settles related inactive staging/journals and
+refuses active/resumable work, preventing a deleted package from reappearing.
+Discard never removes the installed revision or unrelated user documents. Orphaned
+data without a valid operation identity is not guessed away: preserve it for support.
+Back up **both** workspace and separate model storage when restoring these records;
+workspace backup alone does not contain weights, staging or publication journals.
+
 ## Single writer
 
 Current builds acquire `.offgrid-owner.lock` in `OFFGRID_DATA_DIR` before opening

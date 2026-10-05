@@ -7,6 +7,13 @@ Examples assume the executable is on `PATH`. In PowerShell, use
 
 ## Service connection
 
+For typed speech/language/embedding discovery and managed speech package operations,
+use `offgrid model help`. `model list|catalog --category asr|tts|language|embeddings`,
+`discover`, `preview`, `install`, `status`, `cancel`, `resume`, `repair`, `verify`,
+`discard`, and `remove` all use the existing authenticated service client. See the
+[complete acquisition examples](../guides/model-discovery.md#service-backed-package-cli-and-python).
+Speech package installation alone does not enable voice inference.
+
 Start the service with `offgrid serve`, or use an already-running desktop/container
 service. Do not start a second writer against its workspace.
 

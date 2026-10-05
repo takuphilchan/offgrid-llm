@@ -5,6 +5,9 @@ import "strings"
 // ModelCatalog contains trusted model sources
 type ModelCatalog struct {
 	Models []CatalogEntry `json:"models"`
+	// Packages share this catalog, but are deliberately absent from the legacy
+	// single-file projection consumed by v1 clients and the GGUF downloader.
+	Packages []PackageCatalogEntry `json:"packages,omitempty"`
 }
 
 // CatalogEntry represents a model in the catalog
@@ -43,6 +46,7 @@ type ModelSource struct {
 // These are curated, verified models from HuggingFace with proper download URLs
 func DefaultCatalog() *ModelCatalog {
 	return &ModelCatalog{
+		Packages: curatedPackageEntries(),
 		Models: []CatalogEntry{
 			// ========== LIGHTWEIGHT MODELS (2-4GB RAM) ==========
 			{

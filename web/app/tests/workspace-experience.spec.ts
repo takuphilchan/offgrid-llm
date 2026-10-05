@@ -115,7 +115,7 @@ test('first-run completes only after a returned assistant message', async ({ pag
   await composer.fill('First line\nSecond line\nThird line');
   expect((await composer.boundingBox())?.height ?? 0).toBeGreaterThan(50);
   await composer.fill('Say hello');
-  await page.locator('.composer button').click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('.message.assistant').getByRole('heading', { name: 'Hello from OffGrid' })).toBeVisible();
   await expect(page.locator('.message.assistant table')).toBeVisible();
   await expect(page.locator('.message.assistant pre code')).toContainText('fmt.Println("offgrid")');

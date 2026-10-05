@@ -48,13 +48,13 @@ async function streamingWorkspace(page: Page) {
   });
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Stream my answer');
-  await page.locator('.composer button').click();
+  await page.locator('.composer-actions > button').click();
   await expect(page.locator('.streaming-response')).toContainText('Hello 世界');
 }
 
 test('chat renders text before completion, decodes split UTF-8, then shows saved result and metrics', async ({ page }) => {
   await streamingWorkspace(page);
-  await expect(page.locator('.composer button')).toHaveText('Stop');
+  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
   expect(await page.evaluate(() => (window as any).generationRequest)).toMatchObject({ stream: true, profile: 'interactive', max_tokens: 1024 });
   await page.evaluate(() => (window as any).finishGeneration());
   await expect(page.locator('.message.assistant')).toContainText('Hello 世界 — finished');
@@ -70,12 +70,12 @@ test('unexpected stream closure retains the draft and labels partial text as uns
   await expect(page.getByRole('alert')).toContainText('before the conversation was confirmed saved');
   await expect(page.locator('.streaming-response')).toContainText('Partial response');
   await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
-  await expect(page.locator('.composer button')).toHaveText('Send');
+  await expect(page.locator('.composer-actions > button')).toHaveText('Send');
 });
 
 test('stop aborts generation and preserves the draft and partial text', async ({ page }) => {
   await streamingWorkspace(page);
-  await page.locator('.composer button').click();
+  await page.locator('.composer-actions > button').click();
   await expect(page.getByRole('alert')).toContainText('Stopped');
   await expect(page.locator('.streaming-response')).toContainText('Hello 世界');
   await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');

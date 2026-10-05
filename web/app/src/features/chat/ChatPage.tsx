@@ -13,6 +13,11 @@ import { copyText } from '../../lib/clipboard';
 import { clearSubmittedDraft, draftKey, readDraft, useDraft, writeDraft } from '../../lib/drafts';
 import { type ChatMetrics, type ChatPhase } from '../../api/session-stream';
 import { readPreference, writePreference } from '../../lib/preferences';
+import { ReadAloudButton, VoiceInputButton } from '../../components/VoiceInputButton';
+import { ResponseSpeech, stopSpeechEvent, type SpeechState } from '../../lib/response-speech';
+import { voiceText } from '../../i18n/voice';
+import { VoiceSettings } from '../../components/VoiceSettings';
+import { selectSpeech, useVoicePreferences } from '../../lib/voice-preferences';
 
 const activeSessionKey = 'offgrid.active-session';
 
@@ -48,6 +53,33 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   onOpenModels: () => void;
 }) {
   const { messages: text, locale } = useI18n();
+  const voiceCopy = voiceText(locale);
+  const { preferences: voicePreferences } = useVoicePreferences();
+  const [speakResponses, setSpeakResponses] = useState(false);
+  const [speechState, setSpeechState] = useState<SpeechState>('idle');
+  const [speechError, setSpeechError] = useState('');
+  const [checkingSpeech, setCheckingSpeech] = useState(false);
+  const speechCheck = useRef<AbortController | null>(null);
+  const speech = useRef<ResponseSpeech | null>(null);
+  const stopSpeech = () => { speech.current?.stop(); speech.current = null; };
+  useEffect(() => {
+    window.addEventListener(stopSpeechEvent, stopSpeech);
+    return () => { window.removeEventListener(stopSpeechEvent, stopSpeech); speechCheck.current?.abort(); stopSpeech(); };
+  }, []);
+  const toggleSpeech = async (enabled: boolean) => {
+    speechCheck.current?.abort();
+    setSpeechError('');
+    if (!enabled) { setSpeakResponses(false); stopSpeech(); return; }
+    const check = new AbortController(); speechCheck.current = check;
+    setCheckingSpeech(true);
+    try {
+      const status = await api.audioStatus(check.signal);
+      if (check.signal.aborted) return;
+      selectSpeech(status, voicePreferences, 'tts');
+      setSpeakResponses(true);
+    } catch (reason) { if (!check.signal.aborted) setSpeechError(reason instanceof Error ? reason.message : voiceCopy.speechUnavailable); }
+    finally { if (!check.signal.aborted) setCheckingSpeech(false); }
+  };
   const sessionKey = `${activeSessionKey}:${encodeURIComponent(scope)}`;
   const preferencesKey = `offgrid.chat.preferences:${encodeURIComponent(scope)}`;
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -126,6 +158,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const activate = (session?: ChatSession) => {
+    stopSpeech(); setSpeechError('');
     const revision = ++selectionRevision.current;
     controller.current?.abort(); controller.current = null; activeTurn.current = null; setBusy(false); setCheckingTurn(Boolean(session)); setError('');
     const name = session?.name ?? '';
@@ -198,6 +231,10 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     if (!prompt || !model || busy || checkingTurn || controller.current || deleteItems) return;
     const requestController = new AbortController();
     const requestID = crypto.randomUUID();
+    window.dispatchEvent(new Event(stopSpeechEvent));
+    setSpeechError('');
+    if (speakResponses) speech.current = new ResponseSpeech(setSpeechState, setSpeechError, voicePreferences);
+    const responseSpeech = speech.current;
     controller.current = requestController;
     const submitted = draft;
     setBusy(true);
@@ -223,6 +260,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         if (event.type === 'phase') setPhase(event.phase);
         else {
           partial += event.delta;
+          responseSpeech?.append(event.delta);
           // Bound React/Markdown updates during fast GPU decoding.
           if (!flush) flush = setTimeout(() => { setStreamed(partial); flush = undefined; }, 40);
         }
@@ -231,9 +269,11 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       setStreamed(''); setMetrics(result.metrics); setLimited(result.finish_reason === 'length');
       clearSubmittedDraft(draftKey(scope, 'chat', sessionName), submitted);
       setConversation(result.session.messages);
+      responseSpeech?.finish(messageText(result.message.content));
       setSessions(current => [result.session, ...current.filter(item => item.name !== result.session.name)]);
       if (onboardingPending && result.message.role === 'assistant' && messageText(result.message.content).trim()) onFirstResponse();
     } catch (reason) {
+      responseSpeech?.stop();
       clearTimeout(flush); flush = undefined;
       setStreamed(partial); setInterrupted(true);
       setError(requestController.signal.aborted ? text.chatStreaming.cancelled : reason instanceof Error ? reason.message : text.common.error);
@@ -252,6 +292,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
 
   const stop = async () => {
+    stopSpeech();
     setErrorAction('cancel');
     if (!activeTurn.current) { controller.current?.abort(); return; }
     try { await api.cancelTurn(activeTurn.current.name, activeTurn.current.id); controller.current?.abort(); }
@@ -312,7 +353,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           const content = messageText(message.content);
           const messageKey = `${index}-${'timestamp' in message ? message.timestamp : content.slice(0, 24)}`;
           return <article className={`message ${message.role}`} key={messageKey}>
-            <div className="message-heading"><div className="message-label">{message.role === 'user' ? text.chat.you : message.role === 'assistant' ? text.chat.assistant : message.role}</div>{message.role === 'assistant' && <button type="button" className="message-copy" onClick={() => void copyMessage(messageKey, content)} aria-label={copiedMessage === messageKey ? text.chat.copied : text.chat.copyResponse}><Icon name={copiedMessage === messageKey ? 'check' : 'copy'} size={14} />{copiedMessage === messageKey ? text.chat.copied : text.chat.copy}</button>}</div>
+            <div className="message-heading"><div className="message-label">{message.role === 'user' ? text.chat.you : message.role === 'assistant' ? text.chat.assistant : message.role}</div>{message.role === 'assistant' && <span className="message-actions"><ReadAloudButton text={content} /><button type="button" className="message-copy" onClick={() => void copyMessage(messageKey, content)} aria-label={copiedMessage === messageKey ? text.chat.copied : text.chat.copyResponse}><Icon name={copiedMessage === messageKey ? 'check' : 'copy'} size={14} />{copiedMessage === messageKey ? text.chat.copied : text.chat.copy}</button></span>}</div>
             <div className="message-body">{message.role === 'assistant' ? <MarkdownMessage content={content} /> : content}</div>
           </article>;
         })}
@@ -325,7 +366,14 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         {error && <div className="inline-error" role="alert">{error}{errorAction && <button className="secondary-button" onClick={() => void (errorAction === 'cancel' ? stop() : loadSessions())}>{errorAction === 'cancel' ? text.chat.stop : errorAction === 'history' ? interaction[locale].refreshHistory : interaction[locale].checkRequest}</button>}</div>}<div ref={end} />
         {unsaved && <div className="inline-error" role="alert">{text.recovery.draftWarning}</div>}
       </div>
-      <div className="composer"><div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small>{text.chat.enterHint}</small></div><button disabled={busy ? false : loading || checkingTurn || !draft.trim() || !model} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
+      <div className="composer-voice-toolbar chat-speech-controls">
+        <VoiceSettings />
+        <label className="switch"><input type="checkbox" checked={speakResponses} disabled={checkingSpeech || (busy && !speakResponses)} onChange={event => void toggleSpeech(event.target.checked)} /><span />{voiceCopy.speakResponses}</label>
+        {speechState !== 'idle' && <button type="button" className="text-button" onClick={stopSpeech}>{voiceCopy.stopSpeaking}</button>}
+        {speechState !== 'idle' && <small role="status">{speechState === 'waiting' ? voiceCopy.speechWaiting : speechState === 'preparing' ? voiceCopy.preparingHint : busy ? voiceCopy.provisionalSpeech : voiceCopy.speak}</small>}
+        {speechError && <small role="alert">{speechError} <a href="#/models">{text.nav.models}</a></small>}
+      </div>
+      <div className="composer"><div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small>{text.chat.enterHint}</small></div><div className="composer-actions"><VoiceInputButton contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => setDraft(draft ? `${draft} ${value}` : value)} /><button disabled={busy ? false : loading || checkingTurn || !draft.trim() || !model} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{text.chat.send}</span><Icon name="send" size={18} /></>}</button></div></div>
     </div>
   </div>;
 }

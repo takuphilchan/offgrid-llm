@@ -84,7 +84,7 @@ func (c *Client) Do(ctx context.Context, method, path, contentType string, body 
 		defer resp.Body.Close()
 		// Do not echo arbitrary response bodies: old servers and proxies can
 		// include secrets, file paths, terminal escapes, or full HTML pages.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4097))
 		message := fmt.Sprintf("OffGrid returned HTTP %d.", resp.StatusCode)
 		code := "service_error"
 		switch resp.StatusCode {
@@ -102,6 +102,18 @@ func (c *Client) Do(ctx context.Context, method, path, contentType string, body 
 			code, message = "busy", "OffGrid is busy. Wait before submitting another request."
 		case 503:
 			code, message = "unavailable", "The requested capability is unavailable. Check service diagnostics."
+		}
+		// Preserve recognized model error codes, but never echo arbitrary server,
+		// proxy or repository text into terminals/logs.
+		var detail struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if len(body) <= 4096 && json.Unmarshal(body, &detail) == nil {
+			if safe, ok := modelErrorMessages[detail.Error.Code]; ok {
+				code, message = detail.Error.Code, safe
+			}
 		}
 		// Only rejection before admission is advertised as safe to retry.
 		return nil, &Error{Status: resp.StatusCode, Code: code, Message: message, Retryable: resp.StatusCode == 429, RequestID: safeRequestID(resp.Header.Get("X-Request-ID"))}

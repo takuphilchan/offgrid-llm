@@ -18,7 +18,7 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	if err := s.authorizeChat(ctx, request); err != nil {
 		return result, err
 	}
-	if _, err := s.registry.GetModel(request.Model); err != nil {
+	if _, err := s.registry.GetChatModel(request.Model); err != nil {
 		return result, newServiceError(http.StatusNotFound, "Model not found", err)
 	}
 	if s.degradationMgr != nil {

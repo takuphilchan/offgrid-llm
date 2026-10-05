@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close';
+export type IconName = 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic';
 
 const paths: Record<IconName, string[]> = {
   chat: ['M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'],
@@ -18,7 +18,8 @@ const paths: Record<IconName, string[]> = {
   copy: ['M8 8h11v11H8z', 'M5 16H4V5h11v1'],
   search: ['m21 21-4.4-4.4', 'M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0z'],
   menu: ['M4 6h16M4 12h16M4 18h16'],
-  close: ['M18 6 6 18M6 6l12 12']
+  close: ['M18 6 6 18M6 6l12 12'],
+  mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3', 'M8 22h8']
 };
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }): ReactNode {

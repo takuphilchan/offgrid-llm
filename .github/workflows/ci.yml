@@ -59,7 +59,7 @@ jobs:
         run: go test ./...
 
       - name: Race-test privacy, storage, and request lifecycle
-        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient
+        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio
 
       - name: Generate and build web UI
         working-directory: web/app
@@ -101,6 +101,12 @@ jobs:
           cd web/app
           npx playwright install --with-deps chromium
           OFFGRID_E2E_URL=http://127.0.0.1:11611 npm run test:e2e -- --reporter=line,github
+
+      - name: Test real-service speech acquisition and restart recovery
+        run: |
+          go build -tags modeltestfixtures -o build/linux/offgrid-model-fixtures ./cmd/offgrid
+          node dev/scripts/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-acquisition.spec.ts --workers=1
+          node dev/scripts/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-restart.spec.ts --workers=1
 
       - name: Preserve failed browser diagnostics
         if: failure() && steps.browser-tests.outcome == 'failure'

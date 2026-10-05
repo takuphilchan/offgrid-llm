@@ -64,6 +64,7 @@ test('models page starts only one download for a rapid repeated click', async ({
   });
 
   await page.goto('/ui/#/models');
+  await page.getByRole('button', { name: 'Embeddings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'BGE M3' })).toBeVisible();
   await page.getByRole('button', { name: 'Download' }).dblclick();
   await expect.poll(() => downloadRequests).toBe(1);

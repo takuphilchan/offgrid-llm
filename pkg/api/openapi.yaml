@@ -9,6 +9,208 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /api/v2/models:
+    get:
+      operationId: listTypedModels
+      description: Shared installed inventory. Requires model-read permission; legacy IDs remain unchanged and speech is never a chat model.
+      parameters:
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/ModelCategory' } }
+      responses:
+        '200':
+          description: Installed legacy files and packages, including damaged package records.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [models]
+                properties:
+                  models: { type: array, items: { $ref: '#/components/schemas/InstalledTypedModel' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v2/models/catalog:
+    get:
+      operationId: typedModelCatalog
+      description: Shared curated catalog or explicit public Hugging Face search. Search results are leads, not compatible packages.
+      parameters:
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/ModelCategory' } }
+        - { name: source, in: query, schema: { type: string, enum: [curated, huggingface] } }
+        - { name: q, in: query, schema: { type: string, maxLength: 512 } }
+      responses:
+        '200':
+          description: Typed curated variants or repository metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [models, repositories]
+                properties:
+                  models: { type: array, items: { $ref: '#/components/schemas/TypedCatalogModel' } }
+                  repositories:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, downloads, likes]
+                      properties:
+                        id: { type: string }
+                        downloads: { type: integer, format: int64 }
+                        likes: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '502': { description: Public source unavailable; check service connectivity. }
+  /api/v2/models/discover:
+    get:
+      operationId: discoverSpeechPackages
+      description: Bounded public repository listing pinned to a full commit. No weight download or code execution.
+      parameters:
+        - { name: repository, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Supported complete variants and explanations for incomplete layouts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PackageDiscovery' }
+        '422': { description: Unsupported source, incomplete listing or source identity mismatch. }
+  /api/v2/models/resolve:
+    post:
+      operationId: resolveModelPackage
+      description: Model-management permission required. Resolve a curated ID or discovered immutable variant; bounded small data may be fetched, never weights. Preview expires after ten minutes and is actor-bound. Missing runtime is disclosed, not installed automatically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveModelRequest' }
+      responses:
+        '200':
+          description: Complete data manifest, provenance, license notices and disk/runtime preflight.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelResolution' }
+        '403': { description: Model management permission required. }
+        '422': { description: Source or package cannot be resolved safely. }
+        '507': { description: Insufficient staging and recovery space. }
+  /api/v2/models/operations:
+    get:
+      operationId: listModelOperations
+      description: Actor-scoped durable package operations; administrators can inspect all. Legacy file downloads retain their compatible v1 progress projection in the same store.
+      responses:
+        '200':
+          description: Persisted operations; reading never restarts them.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [operations]
+                properties:
+                  operations: { type: array, items: { $ref: '#/components/schemas/ModelOperation' } }
+    post:
+      operationId: submitModelOperation
+      description: Management permission required. Persist before acceptance; same actor/request ID and payload returns the original operation, conflicting reuse is 409. Repair uses an earlier completed source-bound operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_id, action]
+              properties:
+                request_id: { type: string, minLength: 8, maxLength: 128 }
+                action: { type: string, enum: [install, repair] }
+                resolution_id: { type: string, description: Required for install. }
+                source_operation_id: { type: string, description: Required for exact-source repair. }
+      responses:
+        '202':
+          description: Durably accepted, not necessarily installed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelOperation' }
+        '409': { description: Conflicting request/source, expired preview, or package already owned by an operation. }
+        '503': { description: Acceptance could not be persisted; no worker started. }
+  /api/v2/models/operations/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getModelOperation
+      responses:
+        '200':
+          description: Operation snapshot with aggregate and per-artifact progress.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelOperation' }
+        '404': { description: Not found or owned by another actor. }
+  /api/v2/models/operations/{id}/{action}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: action, in: path, required: true, schema: { type: string, enum: [cancel, resume, discard] } }
+    post:
+      operationId: controlModelOperation
+      description: Management permission and actor/admin ownership required. Cancel settles before Resume; restart never resumes automatically. Discard tombstones inactive work before removing its staging, not user documents or installed packages.
+      responses:
+        '200':
+          description: New snapshot; cancelling means the worker has not settled yet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelOperation' }
+        '409': { description: Active work or lifecycle conflict. }
+  /api/v2/models/packages:
+    get:
+      operationId: listModelPackages
+      description: Managed speech package inventory; model-read permission required. Installation is not runtime compatibility or qualification.
+      responses:
+        '200':
+          description: Inventory including damaged packages that need repair.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [packages]
+                properties:
+                  packages: { type: array, items: { $ref: '#/components/schemas/ModelPackageState' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: importModelPackage
+      description: Model-management permission required. Stream manifest first, then one part per artifact in manifest order, using its exact path as the form name. No extra parts. Limits 1 MiB manifest, 2048 artifacts, 32 GiB total data. No runtime installation or code execution.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [manifest]
+              properties:
+                manifest: { $ref: '#/components/schemas/ModelPackageManifest' }
+              additionalProperties: { type: string, format: binary }
+      responses:
+        '201':
+          description: Complete package verified and activated; not an asynchronous acceptance.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelPackageState' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Model management permission required. }
+        '409': { description: Immutable revision already installed. }
+        '413': { description: Upload limit exceeded. }
+        '422': { description: Invalid manifest or incomplete, corrupt, or unsafe artifacts. }
+  /api/v2/models/packages/{id}/{revision}/{operation}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: revision, in: path, required: true, schema: { type: string } }
+      - { name: operation, in: path, required: true, schema: { type: string, enum: [verify, remove] } }
+    post:
+      operationId: manageModelPackage
+      description: Model-management permission required. Verify checks all managed bytes; remove refuses an active lease and removes only this revision.
+      responses:
+        '200':
+          description: Verification evidence or removal result.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/ModelPackageState' }
+                  - { type: object, required: [removed], properties: { removed: { type: boolean } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Model management permission required. }
+        '404': { description: Revision not installed. }
+        '409': { description: Package is leased by active work. }
+        '422': { description: Integrity verification failed; existing files preserved. }
   /v1/search:
     get:
       operationId: searchPublicModels
@@ -1258,6 +1460,256 @@ components:
         token: { type: string, writeOnly: true }
         expires_at: { type: string, format: date-time }
         auth_method: { type: string }
+    ModelPackageManifest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, id, revision, name, architecture, runtime, capabilities, languages, sample_rates, license, artifacts]
+      properties:
+        schema_version: { type: integer, const: 1 }
+        id: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{0,95}$' }
+        revision: { type: string, description: Immutable revision, not main/master/latest. }
+        name: { type: string, maxLength: 200 }
+        architecture: { type: string, enum: [whisper, piper, zipformer-streaming, kokoro, qwen3-asr, qwen3-tts] }
+        runtime:
+          type: object
+          additionalProperties: false
+          required: [adapter, revision]
+          properties:
+            adapter: { type: string, enum: [whisper.cpp, piper, sherpa-onnx, qwen3-asr, qwen3-tts] }
+            revision: { type: string }
+        capabilities:
+          type: array
+          items: { type: string, enum: [transcription, streaming_recognition, speech_synthesis, incremental_synthesis] }
+        languages: { type: array, minItems: 1, maxItems: 256, items: { type: string } }
+        sample_rates: { type: array, minItems: 1, maxItems: 16, items: { type: integer, minimum: 8000, maximum: 192000 } }
+        license: { type: string, maxLength: 256 }
+        voices:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, language]
+            properties:
+              id: { type: string }
+              language: { type: string }
+        hardware_profiles:
+          type: array
+          maxItems: 64
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, memory_bytes, evidence]
+            properties:
+              id: { type: string }
+              memory_bytes: { type: integer, format: int64 }
+              evidence: { type: string, description: Reference only, never self-certified qualification. }
+        artifacts:
+          type: array
+          minItems: 1
+          maxItems: 2048
+          items:
+            type: object
+            additionalProperties: false
+            required: [path, role, size, sha256, license]
+            properties:
+              path: { type: string, maxLength: 240 }
+              role: { type: string }
+              size: { type: integer, format: int64, minimum: 1, maximum: 34359738368 }
+              sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+              license: { type: string }
+              source:
+                type: object
+                additionalProperties: false
+                required: [repository, revision, path]
+                properties:
+                  repository: { type: string, format: uri }
+                  revision: { type: string, description: Full immutable repository commit. }
+                  path: { type: string }
+    ModelPackageState:
+      type: object
+      required: [id, revision, installed, integrity, runtime_compatible, smoke_tested, qualified, provenance, in_use]
+      properties:
+        id: { type: string }
+        revision: { type: string }
+        manifest: { $ref: '#/components/schemas/ModelPackageManifest' }
+        installed: { type: boolean }
+        integrity: { type: string, enum: [unchecked, checked, failed] }
+        verified_at: { type: string, format: date-time, description: Last check in this service process; runtime leases reverify. }
+        runtime_compatible: { type: boolean }
+        smoke_tested: { type: boolean }
+        qualified: { type: boolean }
+        provenance: { type: string, enum: [local_untrusted, repository_metadata, curated_manifest] }
+        issue: { type: string }
+        in_use: { type: integer, minimum: 0 }
+        operation: { type: string }
+    ModelCategory:
+      type: string
+      enum: [language, embeddings, speech_recognition, speech_generation]
+    ModelReadiness:
+      type: object
+      required: [installed, integrity, runtime_compatible, smoke_tested, qualified]
+      properties:
+        installed: { type: boolean }
+        integrity: { type: string, enum: [unchecked, checked, failed] }
+        runtime_compatible: { type: boolean }
+        smoke_tested: { type: boolean }
+        qualified: { type: boolean }
+        issue: { type: string }
+    ModelProvenance:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string }
+        repository: { type: string }
+        revision: { type: string }
+    ModelInstallationTarget:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, file]
+          properties:
+            kind: { type: string, const: legacy_file }
+            file:
+              type: object
+              required: [model_id, repository, file, revision]
+              properties:
+                model_id: { type: string }
+                repository: { type: string }
+                file: { type: string }
+                revision: { type: string }
+                sha256: { type: string }
+        - type: object
+          additionalProperties: false
+          required: [kind, package]
+          properties:
+            kind: { type: string, const: package }
+            package: { $ref: '#/components/schemas/ModelPackageManifest' }
+    TypedCatalogModel:
+      type: object
+      required: [id, name, description, category, capabilities, license, variants]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { $ref: '#/components/schemas/ModelCategory' }
+        capabilities: { type: array, items: { type: string } }
+        license: { type: string }
+        source_notices: { type: array, items: { type: string } }
+        variants:
+          type: array
+          items:
+            type: object
+            required: [id, name, size_bytes, target, provenance, readiness]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              size_bytes: { type: integer, format: int64 }
+              target: { $ref: '#/components/schemas/ModelInstallationTarget' }
+              provenance: { $ref: '#/components/schemas/ModelProvenance' }
+              readiness: { $ref: '#/components/schemas/ModelReadiness' }
+    InstalledTypedModel:
+      type: object
+      required: [id, name, kind, capabilities, readiness, provenance]
+      properties:
+        id: { type: string }
+        revision: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [legacy_file, package] }
+        category: { $ref: '#/components/schemas/ModelCategory' }
+        capabilities: { type: array, items: { type: string } }
+        readiness: { $ref: '#/components/schemas/ModelReadiness' }
+        provenance: { $ref: '#/components/schemas/ModelProvenance' }
+        package: { $ref: '#/components/schemas/ModelPackageState' }
+        legacy: { $ref: '#/components/schemas/Model' }
+    PackageDiscovery:
+      type: object
+      required: [repository, revision, license, choices]
+      properties:
+        repository: { type: string }
+        revision: { type: string }
+        license: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, architecture, name, supported]
+            properties:
+              id: { type: string }
+              architecture: { type: string }
+              name: { type: string }
+              supported: { type: boolean }
+              reason: { type: string }
+    ResolveModelRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        catalog_id: { type: string }
+        repository: { type: string }
+        revision: { type: string }
+        variant: { type: string }
+        architecture: { type: string }
+    ModelResolution:
+      type: object
+      required: [id, expires_at, resolution, preflight]
+      properties:
+        id: { type: string }
+        expires_at: { type: string, format: date-time }
+        resolution:
+          type: object
+          required: [manifest, provenance, source_notices, transfer_bytes]
+          properties:
+            manifest: { $ref: '#/components/schemas/ModelPackageManifest' }
+            provenance: { $ref: '#/components/schemas/ModelProvenance' }
+            source_notices: { type: [array, 'null'], items: { type: string } }
+            transfer_bytes: { type: integer, format: int64 }
+        preflight:
+          type: object
+          required: [transfer_bytes, required_free_bytes, available_bytes, runtime, runtime_available, readiness, warnings]
+          properties:
+            transfer_bytes: { type: integer, format: int64 }
+            required_free_bytes: { type: integer, format: int64 }
+            available_bytes: { type: integer, format: int64 }
+            runtime:
+              type: object
+              required: [adapter, revision]
+              properties:
+                adapter: { type: string }
+                revision: { type: string }
+            runtime_available: { type: boolean }
+            readiness: { $ref: '#/components/schemas/ModelReadiness' }
+            warnings: { type: array, items: { type: string } }
+    ModelOperation:
+      type: object
+      required: [id, actor_id, request_id, request_digest, action, target, provenance, state, created_at, updated_at, artifacts, bytes_done, bytes_total, retained_bytes, discarded, activation_intent]
+      properties:
+        id: { type: string }
+        actor_id: { type: string }
+        request_id: { type: string }
+        request_digest: { type: string }
+        action: { type: string, enum: [install, repair] }
+        target: { $ref: '#/components/schemas/ModelInstallationTarget' }
+        provenance: { $ref: '#/components/schemas/ModelProvenance' }
+        state: { type: string, enum: [queued, downloading, verifying, activating, complete, cancelling, cancelled, interrupted, failed] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        bytes_done: { type: integer, format: int64 }
+        bytes_total: { type: integer, format: int64 }
+        retained_bytes: { type: integer, format: int64 }
+        discarded: { type: boolean }
+        activation_intent: { type: boolean }
+        error_code: { type: string }
+        message: { type: string }
+        artifacts:
+          type: array
+          items:
+            type: object
+            required: [path, bytes_done, bytes_total, verified]
+            properties:
+              path: { type: string }
+              bytes_done: { type: integer, format: int64 }
+              bytes_total: { type: integer, format: int64 }
+              verified: { type: boolean }
     Model:
       type: object
       required: [id]

@@ -1,0 +1,56 @@
+{
+  "manifest": {
+    "schema_version": 1,
+    "id": "ggml-tiny.en-f56b5b8014a2",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "name": "ggerganov/whisper.cpp · ggml-tiny.en.bin",
+    "architecture": "whisper",
+    "runtime": {
+      "adapter": "whisper.cpp",
+      "revision": "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+    },
+    "capabilities": [
+      "transcription"
+    ],
+    "languages": [
+      "en"
+    ],
+    "sample_rates": [
+      16000
+    ],
+    "license": "mit",
+    "artifacts": [
+      {
+        "path": "README.md",
+        "role": "license",
+        "size": 3196,
+        "sha256": "21fd967098804f33fc84e803fb0e5ab7666d71801f4027cf28a65e7af09c1758",
+        "license": "mit",
+        "source": {
+          "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+          "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+          "path": "README.md"
+        }
+      },
+      {
+        "path": "ggml-tiny.en.bin",
+        "role": "weights",
+        "size": 77704715,
+        "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+        "license": "mit",
+        "source": {
+          "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+          "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+          "path": "ggml-tiny.en.bin"
+        }
+      }
+    ]
+  },
+  "provenance": {
+    "kind": "repository_metadata",
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1"
+  },
+  "source_notices": null,
+  "transfer_bytes": 77707911
+}

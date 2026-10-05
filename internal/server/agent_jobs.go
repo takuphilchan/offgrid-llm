@@ -43,7 +43,7 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 		writeJobReadError(w, agents.ErrRunStorage)
 		return
 	}
-	if _, err := s.registry.GetModel(req.Model); err != nil {
+	if _, err := s.registry.GetChatModel(req.Model); err != nil {
 		writeJobError(w, 422, "model_unavailable", "Choose an installed model in task settings.", false)
 		return
 	}

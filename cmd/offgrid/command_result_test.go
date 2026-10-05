@@ -72,6 +72,18 @@ func TestCLIProcessExitAndJSON(t *testing.T) {
 			io.WriteString(w, `{"models":[]}`)
 			return
 		}
+		if r.URL.Path == "/api/v2/models" {
+			if r.URL.Query().Get("category") != "speech_recognition" {
+				t.Error("CLI category was not normalized")
+			}
+			io.WriteString(w, `{"models":[]}`)
+			return
+		}
+		if r.URL.Path == "/api/v2/models/operations/op-conflict/resume" {
+			w.WriteHeader(409)
+			io.WriteString(w, `{"error":{"code":"source_conflict","message":"PRIVATE SOURCE TEXT"}}`)
+			return
+		}
 		http.Error(w, "Forbidden secret", 403)
 	}))
 	defer server.Close()
@@ -81,6 +93,11 @@ func TestCLIProcessExitAndJSON(t *testing.T) {
 		contains string
 	}{
 		{[]string{"list", "--json"}, 0, `"service-model"`},
+		{[]string{"model", "list", "--category", "asr", "--json"}, 0, `"models":[]`},
+		{[]string{"model", "resume", "op-conflict", "--json"}, 1, `"source_conflict"`},
+		{[]string{"model", "install", "catalog-id", "--json"}, 2, `"invalid_usage"`},
+		{[]string{"model", "discard", "op", "--json"}, 2, `"invalid_usage"`},
+		{[]string{"model", "list", "--category", "unsupported", "--json"}, 2, `"invalid_usage"`},
 		{[]string{"download", "--help", "--json"}, 0, `"usage"`},
 		{[]string{"download", "missing", "--json"}, 2, `"invalid_usage"`},
 		{[]string{"download", "--file", "--json"}, 2, `"invalid_usage"`},

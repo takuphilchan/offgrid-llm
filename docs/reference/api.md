@@ -11,6 +11,67 @@ curl http://127.0.0.1:11611/openapi.yaml
 The OpenAPI document is the source of truth for request and response fields.
 This page explains the main workflows and persistence semantics.
 
+## Model packages (development contract)
+
+The shared catalog/inventory types distinguish `legacy_file` and `package`
+installation targets and four capability categories (`language`, `embeddings`,
+`speech_recognition`, `speech_generation`). Each variant carries provenance and
+independent readiness fields. This is not a change to the existing v1 model IDs
+or chat/embedding projections.
+
+| Resource | Behavior |
+| --- | --- |
+| `GET /api/v2/models?category=...` | Typed installed inventory with independent readiness |
+| `GET /api/v2/models/catalog?category=...` | Shared curated variants |
+| `GET /api/v2/models/catalog?category=...&source=huggingface&q=...` | Explicit public repository metadata search |
+| `GET /api/v2/models/discover?repository=owner/repo` | Complete variants bound to an immutable commit |
+| `POST /api/v2/models/resolve` | `{catalog_id}` or `{repository,revision,variant,architecture}`; actor-bound preview, licenses and space preflight |
+| `POST /api/v2/models/operations` | Install with `{action:"install",request_id,resolution_id}`, or repair with `{action:"repair",request_id,source_operation_id}` |
+| `GET /api/v2/models/operations[/{id}]` | Actor-scoped durable progress; administrators can inspect all |
+| `POST /api/v2/models/operations/{id}/{cancel,resume,discard}` | Explicit lifecycle controls; discard requires settled work |
+
+GET requires model-read permission; POST requires model-management permission.
+Previews expire after ten minutes and do not start transfers. Acceptance is `202`
+only after source/actor/request/checkpoints are persisted. Retry the same request
+ID and payload after a lost acknowledgment; changed source returns `409
+request_conflict`. A new unexpired actor-owned preview of the identical immutable
+manifest/source also deduplicates. This never replays a completed download.
+An operation is a package target; legacy v1 file transfers retain their original
+projection in the same versioned download store. Do not fabricate package filenames.
+
+States: `queued`, `downloading`, `verifying`, `activating`, `complete`, `cancelling`,
+`cancelled`, `failed`, `interrupted`. `bytes_done` is not installation readiness.
+`retained_bytes` includes staged artifact and recovery-copy bytes, excludes small
+control metadata and may exceed transfer size during repair. Requests and snapshots
+carry safe errors (`resolution_expired`, `package_in_use`, `source_conflict`,
+`source_identity_mismatch`, `insufficient_space`, etc.). Restart reconciles durable
+local publication receipts but never resumes network transfers. See
+[storage recovery](../advanced/workspace-recovery.md#model-download-recovery).
+
+`GET /api/v2/models/packages` lists managed speech packages without changing the
+legacy `/v1/models` chat/embedding projection. It requires model-read permission.
+The `installed`, `integrity`, `runtime_compatible`, `smoke_tested`, and `qualified`
+fields are independent. Currently package storage does not certify speech runtime
+compatibility or qualification. `verified_at` records a past byte check, not a
+guarantee against later local modification; runtime leases always reverify.
+
+Model-management permission is required for these mutations:
+
+- `POST /api/v2/models/packages`: streamed multipart import. First send `manifest`,
+  then artifact parts in manifest order with each exact relative artifact path as
+  its **form name**. Extra parts are rejected before activation. The response is
+  `201` after activation, not `202` acceptance of an asynchronous job.
+- `POST /api/v2/models/packages/{id}/{revision}/verify`: recheck all declared data.
+- `POST /api/v2/models/packages/{id}/{revision}/remove`: remove only that managed
+  revision; an active lease returns `409 package_in_use`.
+
+Imports are bounded to 32 GiB of model artifacts plus limited multipart metadata;
+ordinary endpoints retain their existing 64 MiB request limit. Failed imports do
+not activate partial models. Local inputs remain untouched. The manifest/layout
+rules and outstanding program work are in the [model guide](../guides/models.md).
+Folder import is synchronous; repository acquisition uses the durable operations
+above. Verified portable speech/runtime offline-export packs remain a later stage.
+
 ## Health and readiness
 
 ```bash
@@ -286,6 +347,43 @@ Treat external tools and their responses as untrusted. Local model inference
 does not keep tool arguments local when an external endpoint is selected.
 
 ## Errors
+
+### Experimental speech compatibility endpoints
+
+`GET /v1/audio/status` and `GET /v1/audio/models` include `profiles` for managed
+speech packages alongside the legacy fields. Each profile provides `id`,
+`revision`, `name`, `architecture`, `adapter`, `capabilities`, `languages`,
+`voices`, `available`, `smoke_tested`, and an actionable `issue` when unavailable.
+These are service runtime capabilities, not client microphone permission or
+qualification. Streaming capabilities from a model manifest are not advertised
+as implemented by these file/chunk endpoints.
+
+`POST /v1/audio/transcriptions` accepts multipart `file`, optional `model`,
+`language`, and `response_format`. The request body is limited to 25 MiB.
+`POST /v1/audio/speech` accepts `input`, optional `model`, `voice`, `speed`, and
+`response_format`. WAV is the only currently encoded output; another requested
+format returns `422 unsupported_audio_format`, never WAV labelled as MP3.
+Qwen currently accepts speed 1; unsupported values fail explicitly.
+
+Managed model selection accepts the installed ID, `id@revision`, exact display
+name, or source repository ID. Omitted models select an available profile for
+the requested capability; `whisper-1` and `tts-1` are default-capability aliases.
+An explicit incompatible package fails instead of falling back to another model.
+Legacy local model names continue through their matching legacy engine.
+
+Web voice controls send `id@revision` for the selected managed model on each
+transcription and synthesis request. A response pins one model/voice across its
+chunks. Managed Piper `voice` values are validated numeric speaker IDs from the
+selected package, not alternate model paths; the legacy voice-name path remains
+compatible. Client preferences are browser-local, not a new server preference API.
+
+Requests are bounded to five minutes including the speech queue. Disconnecting
+cancels an owned managed inference process; no microphone data is replayed.
+Request completion is not proof of transcription accuracy or acceptable voice
+quality. Runtime packs, Talk WebSockets, and language/hardware qualification
+remain separate delivery gates.
+
+## Error handling
 
 For v2 job errors, use the structured `error.code`, `message`, `retryable`,
 and `request_id` envelope with its HTTP status. Older routes can retain their

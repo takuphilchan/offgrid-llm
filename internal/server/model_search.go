@@ -23,7 +23,7 @@ func searchRepositories(w http.ResponseWriter, r *http.Request, hf repositorySea
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	filter := models.SearchFilter{Query: r.URL.Query().Get("query"), Author: r.URL.Query().Get("author"), SortBy: r.URL.Query().Get("sort"), Limit: 20}
+	filter := models.SearchFilter{Query: r.URL.Query().Get("query"), Author: r.URL.Query().Get("author"), SortBy: r.URL.Query().Get("sort"), Category: models.ModelCategory(r.URL.Query().Get("category")), Limit: 20}
 	if r.Method == http.MethodPost {
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&filter); err != nil {
 			writeError(w, "Invalid search body", http.StatusBadRequest)
@@ -31,6 +31,10 @@ func searchRepositories(w http.ResponseWriter, r *http.Request, hf repositorySea
 		}
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
+	if filter.Category != "" && filter.Category != models.CategoryLanguage && filter.Category != models.CategoryEmbeddings {
+		writeError(w, "Use the v2 package discovery API for speech categories.", http.StatusBadRequest)
+		return
+	}
 	if len(filter.Query) > 200 || filter.Limit < 1 || filter.Limit > 50 {
 		writeError(w, "Query must be at most 200 characters; limit must be 1–50", http.StatusBadRequest)
 		return

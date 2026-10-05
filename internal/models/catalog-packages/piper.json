@@ -1,0 +1,89 @@
+{
+  "manifest": {
+    "schema_version": 1,
+    "id": "en_us-lessac-medium-561cb333873c",
+    "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+    "name": "rhasspy/piper-voices · en_US-lessac-medium.onnx",
+    "architecture": "piper",
+    "runtime": {
+      "adapter": "piper",
+      "revision": "fee9b9cefae4ebf9e196cfe994dea418f051506c"
+    },
+    "capabilities": [
+      "speech_synthesis"
+    ],
+    "languages": [
+      "en-US"
+    ],
+    "voices": [
+      {
+        "id": "0",
+        "language": "en-US"
+      }
+    ],
+    "sample_rates": [
+      22050
+    ],
+    "license": "LicenseRef-Voice-Model-Card",
+    "artifacts": [
+      {
+        "path": "README.md",
+        "role": "license",
+        "size": 497,
+        "sha256": "33e93643fce5180886300f9f0070eeeab8af148efb8e84361f8904def80fd9fb",
+        "license": "LicenseRef-Voice-Model-Card",
+        "source": {
+          "repository": "https://huggingface.co/rhasspy/piper-voices",
+          "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+          "path": "README.md"
+        }
+      },
+      {
+        "path": "en/en_US/lessac/medium/MODEL_CARD",
+        "role": "license",
+        "size": 351,
+        "sha256": "ce49eb457742208166d399a40cdec2c7fa9db77960930031564ab56f12882645",
+        "license": "LicenseRef-Voice-Model-Card",
+        "source": {
+          "repository": "https://huggingface.co/rhasspy/piper-voices",
+          "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+          "path": "en/en_US/lessac/medium/MODEL_CARD"
+        }
+      },
+      {
+        "path": "en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+        "role": "weights",
+        "size": 63201294,
+        "sha256": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f",
+        "license": "LicenseRef-Voice-Model-Card",
+        "source": {
+          "repository": "https://huggingface.co/rhasspy/piper-voices",
+          "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+          "path": "en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+        }
+      },
+      {
+        "path": "en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+        "role": "config",
+        "size": 4885,
+        "sha256": "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0",
+        "license": "LicenseRef-Voice-Model-Card",
+        "source": {
+          "repository": "https://huggingface.co/rhasspy/piper-voices",
+          "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+          "path": "en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+        }
+      }
+    ]
+  },
+  "provenance": {
+    "kind": "repository_metadata",
+    "repository": "rhasspy/piper-voices",
+    "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117"
+  },
+  "source_notices": [
+    "# Model card for lessac (medium)\n\n* Language: en_US (English, United States)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/\n* License: https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html\n\n## Training\n\nTrained from scratch.\n",
+    "Piper runtime requires separately packaged eSpeak phonemizer data. Voice and runtime licenses differ; review the voice model card."
+  ],
+  "transfer_bytes": 63207027
+}

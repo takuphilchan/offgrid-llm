@@ -24,24 +24,30 @@ type HuggingFaceClient struct {
 
 // HFModel represents a model from HuggingFace Hub
 type HFModel struct {
-	ID            string    `json:"id"`                      // e.g., "TheBloke/Llama-2-7B-Chat-GGUF"
-	ModelID       string    `json:"modelId"`                 // Alternative field name
-	Downloads     int64     `json:"downloads"`               // Download count
-	Likes         int       `json:"likes"`                   // Like count
-	Tags          []string  `json:"tags"`                    // Model tags
-	CreatedAt     time.Time `json:"createdAt"`               // Creation date
-	LastModified  time.Time `json:"lastModified"`            // Last update
-	Private       bool      `json:"private"`                 // Is private
-	Gated         HFGated   `json:"gated,omitempty"`         // false, true, "auto", or "manual"
-	LibraryName   string    `json:"library_name"`            // e.g., "transformers", "gguf"
-	PipelineTag   string    `json:"pipeline_tag"`            // e.g., "text-generation"
-	Siblings      []HFFile  `json:"siblings,omitempty"`      // Files in the repo (only in detailed view)
-	CardData      HFCard    `json:"cardData,omitempty"`      // Model card metadata (optional)
-	Author        string    `json:"author,omitempty"`        // Model author (optional)
-	Description   string    `json:"description,omitempty"`   // Short description (optional)
-	Disabled      bool      `json:"disabled,omitempty"`      // Is disabled (optional)
-	SHA           string    `json:"sha,omitempty"`           // Commit SHA (optional)
-	TrendingScore float64   `json:"trendingScore,omitempty"` // Trending score (optional)
+	ID            string         `json:"id"`                 // e.g., "TheBloke/Llama-2-7B-Chat-GGUF"
+	ModelID       string         `json:"modelId"`            // Alternative field name
+	Downloads     int64          `json:"downloads"`          // Download count
+	Likes         int            `json:"likes"`              // Like count
+	Tags          []string       `json:"tags"`               // Model tags
+	CreatedAt     time.Time      `json:"createdAt"`          // Creation date
+	LastModified  time.Time      `json:"lastModified"`       // Last update
+	Private       bool           `json:"private"`            // Is private
+	Gated         HFGated        `json:"gated,omitempty"`    // false, true, "auto", or "manual"
+	LibraryName   string         `json:"library_name"`       // e.g., "transformers", "gguf"
+	PipelineTag   string         `json:"pipeline_tag"`       // e.g., "text-generation"
+	Siblings      []HFFile       `json:"siblings,omitempty"` // Files in the repo (only in detailed view)
+	SafeTensors   *HFSafeTensors `json:"safetensors,omitempty"`
+	CardData      HFCard         `json:"cardData,omitempty"`      // Model card metadata (optional)
+	Author        string         `json:"author,omitempty"`        // Model author (optional)
+	Description   string         `json:"description,omitempty"`   // Short description (optional)
+	Disabled      bool           `json:"disabled,omitempty"`      // Is disabled (optional)
+	SHA           string         `json:"sha,omitempty"`           // Commit SHA (optional)
+	TrendingScore float64        `json:"trendingScore,omitempty"` // Trending score (optional)
+}
+
+// HFSafeTensors counts parameters, not download bytes.
+type HFSafeTensors struct {
+	Total int64 `json:"total"`
 }
 
 // HFFile represents a file in a HuggingFace model repo
@@ -64,20 +70,21 @@ type HFCard struct {
 
 // SearchFilter contains search and filter options
 type SearchFilter struct {
-	MetadataOnly   bool     `json:"-"` // Load file choices only after the user selects a repository.
-	Query          string   // Search query
-	Tags           []string // Filter by tags (e.g., "gguf", "llama", "q4_k_m")
-	Author         string   // Filter by author
-	MinDownloads   int64    // Minimum download count
-	MinLikes       int      // Minimum like count
-	MaxSize        int64    // Maximum file size in bytes
-	MinSize        int64    // Minimum file size in bytes
-	Quantization   string   // Filter by quantization (e.g., "Q4_K_M")
-	SortBy         string   // Sort by: "downloads", "likes", "created", "modified"
-	Limit          int      // Max results to return
-	OnlyGGUF       bool     // Only return GGUF models
-	ExcludeGated   bool     // Exclude gated models
-	ExcludePrivate bool     // Exclude private models
+	Category       ModelCategory // Capability filter; speech discovery is metadata-only.
+	MetadataOnly   bool          `json:"-"` // Load file choices only after the user selects a repository.
+	Query          string        // Search query
+	Tags           []string      // Filter by tags (e.g., "gguf", "llama", "q4_k_m")
+	Author         string        // Filter by author
+	MinDownloads   int64         // Minimum download count
+	MinLikes       int           // Minimum like count
+	MaxSize        int64         // Maximum file size in bytes
+	MinSize        int64         // Minimum file size in bytes
+	Quantization   string        // Filter by quantization (e.g., "Q4_K_M")
+	SortBy         string        // Sort by: "downloads", "likes", "created", "modified"
+	Limit          int           // Max results to return
+	OnlyGGUF       bool          // Only return GGUF models
+	ExcludeGated   bool          // Exclude gated models
+	ExcludePrivate bool          // Exclude private models
 }
 
 // SearchResult represents a search result with computed metrics
@@ -118,6 +125,17 @@ func NewHuggingFaceClient() *HuggingFaceClient {
 	}
 }
 
+// WithHTTPClient supplies service transport policy or isolated HTTP fixtures
+// without changing repository URLs or package redirect checks.
+func (hf *HuggingFaceClient) WithHTTPClient(client *http.Client) *HuggingFaceClient {
+	copy := *hf
+	if client != nil {
+		owned := *client
+		copy.client = &owned
+	}
+	return &copy
+}
+
 // SearchModels searches HuggingFace Hub for models matching the filter
 func (hf *HuggingFaceClient) SearchModels(filter SearchFilter) ([]SearchResult, error) {
 	return hf.SearchModelsContext(context.Background(), filter)
@@ -129,6 +147,24 @@ func (hf *HuggingFaceClient) SearchModelsContext(ctx context.Context, filter Sea
 	// Build search URL
 	searchURL := fmt.Sprintf("%s/models", hf.baseURL)
 	params := url.Values{}
+	if len(filter.Query) > 512 || len(filter.Author) > 96 {
+		return nil, fmt.Errorf("search query or author exceeds limit")
+	}
+	if filter.Category != "" && !filter.Category.Valid() {
+		return nil, fmt.Errorf("invalid model category")
+	}
+	switch filter.Category {
+	case CategoryRecognition:
+		params.Set("pipeline_tag", "automatic-speech-recognition")
+		filter.OnlyGGUF, filter.MetadataOnly = false, true
+	case CategoryGeneration:
+		params.Set("pipeline_tag", "text-to-speech")
+		filter.OnlyGGUF, filter.MetadataOnly = false, true
+	case CategoryEmbeddings:
+		params.Set("pipeline_tag", "feature-extraction")
+	case CategoryLanguage:
+		params.Set("pipeline_tag", "text-generation")
+	}
 
 	// Apply search query
 	if filter.Query != "" {
@@ -190,7 +226,7 @@ func (hf *HuggingFaceClient) SearchModelsContext(ctx context.Context, filter Sea
 
 	req.Header.Set("User-Agent", "OffGrid-LLM/0.1.0")
 
-	resp, err := hf.client.Do(req)
+	resp, err := hf.packageClient(true).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch models: %w", err)
 	}
@@ -202,7 +238,11 @@ func (hf *HuggingFaceClient) SearchModelsContext(ctx context.Context, filter Sea
 
 	// Parse response
 	var models []HFModel
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&models); err != nil {
+	data, err := io.ReadAll(io.LimitReader(resp.Body, (4<<20)+1))
+	if err != nil || len(data) > 4<<20 {
+		return nil, fmt.Errorf("model search response exceeded its limit or was interrupted")
+	}
+	if err := json.Unmarshal(data, &models); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	if len(models) > limit {
@@ -281,7 +321,7 @@ func (hf *HuggingFaceClient) SearchModelsContext(ctx context.Context, filter Sea
 			continue
 		}
 		if filter.MetadataOnly {
-			results = append(results, SearchResult{Model: model})
+			results = append(results, SearchResult{Model: model, TotalSize: modelTotalSize(model)})
 			continue
 		}
 
@@ -356,6 +396,19 @@ func (hf *HuggingFaceClient) SearchModelsContext(ctx context.Context, filter Sea
 	}
 
 	return results, nil
+}
+
+// modelTotalSize uses only metadata already present in the search response.
+// Search stays metadata-only; detailed package discovery obtains authoritative
+// file sizes after the user selects a repository.
+func modelTotalSize(model HFModel) int64 {
+	var total int64
+	for _, file := range model.Siblings {
+		if file.Size > 0 {
+			total += file.Size
+		}
+	}
+	return total
 }
 
 // parseGGUFFilesFromTree parses GGUF files from tree API response with actual sizes

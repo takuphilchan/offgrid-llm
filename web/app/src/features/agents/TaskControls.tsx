@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, type AgentRun } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { taskControls } from '../../i18n/task-controls';
+import { VoiceInputButton } from '../../components/VoiceInputButton';
 import { draftKey, readDraft, writeDraft, clearSubmittedDraft, useDraft } from '../../lib/drafts';
 
 export type TaskCommand = Parameters<typeof api.jobAction>[1];
@@ -80,7 +81,7 @@ export function TaskDetails({run, scope, refresh, onError, childStatus}: {run: A
     {run.parent_id && <a href={`#/agents/task/${run.parent_id}`}>{copy.plan}</a>}
     {!!run.plan?.length && <details><summary>{copy.plan}</summary><p>{copy.planHint}</p><ol>{run.plan.map(item => <li key={item.id}>{item.title} · {item.state === 'done' ? messages.recovery.completed : item.state === 'active' ? messages.recovery.running : messages.recovery.pending}{!!item.evidence_steps?.length && <small> · #{item.evidence_steps.join(', #')}</small>}</li>)}</ol></details>}
     {(run.can_steer ?? (run.status === 'interrupted' && !run.uncertain_call_id && !run.children?.length)) && <section className="task-steering">
-      <label className="field"><span>{copy.instruction}</span><textarea rows={3} value={draft.value} maxLength={16000} onChange={e => {draft.setValue(e.target.value); setSaved(false);}} /></label>
+      <label className="field"><span>{copy.instruction}</span><textarea rows={3} value={draft.value} maxLength={16000} onChange={e => {draft.setValue(e.target.value); setSaved(false);}} /><VoiceInputButton contextKey={draft.key} disabled={saving} onTranscript={value => { draft.setValue(draft.value ? `${draft.value} ${value}` : value); setSaved(false); }} /></label>
       <button className="secondary-button" disabled={saving || !draft.value.trim()} onClick={() => void steer()}>{saving ? messages.common.loading : copy.save}</button>
       {saved && <p role="status">{copy.saved}</p>}
     </section>}

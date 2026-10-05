@@ -179,7 +179,7 @@ func (s *Server) handleComputerModelCheck(w http.ResponseWriter, r *http.Request
 		writeError(w, "Model registry unavailable", 503)
 		return
 	}
-	if _, err := s.registry.GetModel(req.Model); err != nil {
+	if _, err := s.registry.GetChatModel(req.Model); err != nil {
 		writeError(w, "Model not found", 404)
 		return
 	}

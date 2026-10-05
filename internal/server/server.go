@@ -26,6 +26,7 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/artifacts"
+	"github.com/takuphilchan/offgrid-llm/internal/audio"
 	"github.com/takuphilchan/offgrid-llm/internal/audit"
 	"github.com/takuphilchan/offgrid-llm/internal/cache"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
@@ -54,6 +55,9 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
+	audioMutex           sync.Mutex
+	audioEngine          *audio.Engine
+	speechPackages       *audio.PackageRuntime
 	httpServer           *http.Server
 	config               *config.Config
 	registry             *models.Registry
@@ -68,6 +72,10 @@ type Server struct {
 	downloadMutex        sync.RWMutex
 	downloadCancelFuncs  map[string]context.CancelFunc // Cancel functions for active downloads
 	downloadWorkers      sync.WaitGroup
+	modelOperations      map[string]*ModelOperation // Same coordinator and snapshot as legacy downloads.
+	downloadStateWriter  func(string, any) error    // Instance-local fault injection; nil uses durable storage.
+	modelResolutions     map[string]modelResolutionRecord
+	modelHub             *models.HuggingFaceClient
 	exportProgress       map[string]*ExportProgress
 	exportMutex          sync.RWMutex
 	modelCache           *inference.ModelCache
@@ -702,6 +710,10 @@ func (s *Server) switchModelWithContextSize(ctx context.Context, modelID string,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	metadata, err := s.registry.GetChatModel(modelID)
+	if err != nil {
+		return err
+	}
 
 	// Fast path: if model is already loaded and active, skip reload
 	if s.currentModelID == modelID && s.currentPort > 0 && s.currentContext == effectiveContext {
@@ -715,12 +727,6 @@ func (s *Server) switchModelWithContextSize(ctx context.Context, modelID string,
 	}
 
 	log.Printf("Switching to model: %s", modelID)
-
-	// Get model metadata
-	metadata, err := s.registry.GetModel(modelID)
-	if err != nil {
-		return fmt.Errorf("model not found: %w", err)
-	}
 
 	// ModelCache owns the llama-server process, so the effective context must
 	// be set before GetOrLoadContext launches it.
@@ -900,6 +906,10 @@ func (s *Server) Start() error {
 
 	// API v1 routes (OpenAI-compatible)
 	mux.HandleFunc("/v1/models", modelsOnly(s.rateLimiter.Middleware(s.handleListModels)))
+	mux.HandleFunc(modelPackagePath, s.rateLimiter.Middleware(s.handleModelPackages))
+	mux.HandleFunc(modelPackagePath+"/", s.rateLimiter.Middleware(s.handleModelPackages))
+	mux.HandleFunc("/api/v2/models", s.rateLimiter.Middleware(s.handleModelsV2))
+	mux.HandleFunc("/api/v2/models/", s.rateLimiter.Middleware(s.handleModelsV2))
 	mux.HandleFunc("/v1/models/delete", modelManagerOnly(s.rateLimiter.Middleware(s.handleDeleteModel)))
 	mux.HandleFunc("/v1/models/download", modelManagerOnly(s.rateLimiter.Middleware(s.handleDownloadModel)))
 	mux.HandleFunc("/v1/models/download/progress", modelsOnly(s.handleDownloadProgress))
@@ -1213,6 +1223,14 @@ func (s *Server) Close() error {
 			}
 		}
 		s.startupWorkers.Wait()
+		s.audioMutex.Lock()
+		if s.speechPackages != nil {
+			s.speechPackages.Close()
+		}
+		if s.audioEngine != nil {
+			s.audioEngine.Close()
+		}
+		s.audioMutex.Unlock()
 		s.downloadWorkers.Wait()
 		if s.sessionHandlers != nil {
 			s.sessionHandlers.closeTurns()
@@ -1258,7 +1276,11 @@ const maxRequestBodyBytes int64 = 64 << 20
 func requestBodyLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+			limit := maxRequestBodyBytes
+			if r.Method == http.MethodPost && r.URL.Path == modelPackagePath {
+				limit = maxModelPackageRequestBytes
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -1917,6 +1939,9 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 			models[index].CapabilityStatus = map[string]string{"embeddings": "declared"}
 			continue
 		}
+		if !models[index].SupportsChat() {
+			continue
+		}
 		models[index].ContextWindow = contextWindow
 		models[index].ContextLength = contextWindow
 		models[index].Capabilities = []string{"chat", "streaming"}
@@ -2027,7 +2052,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get model metadata
-	metadata, err := s.registry.GetModel(req.Model)
+	metadata, err := s.registry.GetChatModel(req.Model)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
 		return
@@ -2262,7 +2287,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Prompt is required", http.StatusBadRequest)
 		return
 	}
-	if _, err := s.registry.GetModel(req.Model); err != nil {
+	if _, err := s.registry.GetChatModel(req.Model); err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
 		return
 	}

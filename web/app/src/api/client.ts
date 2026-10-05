@@ -4,6 +4,14 @@ import { readAgentStream } from './agent-stream';
 import { workflowText } from '../i18n/workflow';
 
 export type Model = components['schemas']['Model'];
+export type ModelPackageManifest = components['schemas']['ModelPackageManifest'];
+export type ModelPackageState = components['schemas']['ModelPackageState'];
+export type ModelCategory = components['schemas']['ModelCategory'];
+export type TypedCatalogModel = components['schemas']['TypedCatalogModel'];
+export type InstalledTypedModel = components['schemas']['InstalledTypedModel'];
+export type ModelResolution = components['schemas']['ModelResolution'];
+export type PackageDiscovery = components['schemas']['PackageDiscovery'];
+export type ModelOperation = components['schemas']['ModelOperation'];
 export type Document = components['schemas']['Document'];
 export type ChatMessage = components['schemas']['ChatMessage'];
 export type SessionMessage = components['schemas']['SessionMessage'];
@@ -30,6 +38,8 @@ export type ComputerSession = { id: string; origin: string; driver?: 'browser' |
 export type ExternalIntegration = components['schemas']['IntegrationStatus'];
 export type IntegrationSetup = components['schemas']['IntegrationSetup'];
 export type SystemConfig = { version: string; inference_slots: number; multi_user_mode: boolean; require_auth: boolean; guest_access: boolean; features: Record<string, boolean> };
+export type SpeechProfile = { id: string; revision: string; name: string; architecture: string; adapter: string; capabilities: string[]; languages?: string[]; voices?: { id: string; language: string }[]; available: boolean; smoke_tested: boolean; issue?: string };
+export type AudioStatus = { profiles?: SpeechProfile[]; asr?: { available: boolean; whisper_path?: string; issue?: string }; tts?: { available: boolean; piper_path?: string; voices?: number; issue?: string } };
 
 export class APIError extends Error {
   constructor(message: string, readonly status: number, readonly data?: Record<string, any>) { super(message); }
@@ -71,7 +81,19 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000): P
 }
 
 export const api = {
-  searchModels: (query: string, signal: AbortSignal) => request<{ results: DiscoveredModel[]; total: number }>(`/v1/search?${new URLSearchParams({ query })}`, { signal }),
+  typedModels: async (category?: ModelCategory, signal?: AbortSignal) => (await request<{ models: InstalledTypedModel[] }>(`/api/v2/models?${new URLSearchParams(category ? { category } : {})}`, { signal })).models,
+  typedCatalog: (category: ModelCategory, query?: string, signal?: AbortSignal) => request<{ models: TypedCatalogModel[]; repositories: { id: string; downloads: number; likes: number; size_bytes?: number }[] }>(`/api/v2/models/catalog?${new URLSearchParams(query === undefined ? { category } : { category, source: 'huggingface', q: query })}`, { signal }),
+  discoverPackage: (repository: string, signal?: AbortSignal) => request<PackageDiscovery>(`/api/v2/models/discover?${new URLSearchParams({ repository })}`, { signal }, 180_000),
+  resolvePackage: (input: components['schemas']['ResolveModelRequest'], signal?: AbortSignal) => request<ModelResolution>('/api/v2/models/resolve', { method: 'POST', body: JSON.stringify(input), signal }, 180_000),
+  modelOperations: async (signal?: AbortSignal) => (await request<{ operations: ModelOperation[] }>('/api/v2/models/operations', { signal })).operations,
+  installPackage: (resolution: string, requestID: string) => request<ModelOperation>('/api/v2/models/operations', { method: 'POST', body: JSON.stringify({ action: 'install', resolution_id: resolution, request_id: requestID }) }),
+  repairPackage: (sourceOperationID: string, requestID: string) => request<ModelOperation>('/api/v2/models/operations', { method: 'POST', body: JSON.stringify({ action: 'repair', source_operation_id: sourceOperationID, request_id: requestID }) }),
+  controlModelOperation: (id: string, action: 'cancel' | 'resume' | 'discard') => request<ModelOperation>(`/api/v2/models/operations/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: '{}' }),
+  modelPackages: async (signal?: AbortSignal) => (await request<{ packages: ModelPackageState[] }>('/api/v2/models/packages', { signal })).packages,
+  importModelPackage: (body: FormData, signal: AbortSignal) => request<ModelPackageState>('/api/v2/models/packages', { method: 'POST', body, signal }, 30 * 60_000),
+  verifyModelPackage: (id: string, revision: string, signal: AbortSignal) => request<ModelPackageState>(`/api/v2/models/packages/${encodeURIComponent(id)}/${encodeURIComponent(revision)}/verify`, { method: 'POST', body: '{}', signal }, 30 * 60_000),
+  removeModelPackage: (id: string, revision: string, signal: AbortSignal) => request<{ removed: boolean }>(`/api/v2/models/packages/${encodeURIComponent(id)}/${encodeURIComponent(revision)}/remove`, { method: 'POST', body: '{}', signal }),
+  searchModels: (query: string, signal: AbortSignal, category?: ModelCategory) => request<{ results: DiscoveredModel[]; total: number }>(`/v1/search?${new URLSearchParams(category ? { query, category } : { query })}`, { signal }),
   modelFiles: (repo: string, signal: AbortSignal) => request<{ repo: string; files: DiscoveredFile[] }>(`/v1/search/files?${new URLSearchParams({ repo })}`, { signal }),
   systemIdentity: async () => {
     const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system');
@@ -81,6 +103,24 @@ export const api = {
     return identity;
   },
   health: () => request<{ status: string; version?: string }>('/health'),
+  audioStatus: (signal?: AbortSignal) => request<AudioStatus>('/v1/audio/status', { signal }),
+  transcribeAudio: async (blob: Blob, filename: string, signal?: AbortSignal, selection?: { model?: string }) => {
+    const form = new FormData(); form.append('file', blob, filename); form.append('response_format', 'json');
+    if (selection?.model) form.append('model', selection.model);
+    return request<{ text: string }>('/v1/audio/transcriptions', { method: 'POST', body: form, signal }, 300_000);
+  },
+  synthesizeSpeech: async (input: string, signal?: AbortSignal, selection?: { model?: string; voice?: string }) => {
+    const response = await fetch('/v1/audio/speech', { method: 'POST', signal, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input, response_format: 'wav', speed: 1, ...selection }) });
+    if (!response.ok) {
+      const body = await response.text(); let message = 'Speech playback is unavailable.';
+      try { const parsed = JSON.parse(body); message = parsed.error?.message ?? parsed.error ?? message; } catch { /* keep safe message */ }
+      throw new APIError(message, response.status);
+    }
+    if (!response.headers.get('Content-Type')?.includes('audio/wav')) throw new APIError('Speech runtime returned an unsupported audio format.', 502);
+    const blob = await response.blob();
+    if (blob.size <= 44) throw new APIError('Speech runtime returned empty audio.', 502);
+    return blob;
+  },
   currentUser: () => request<components['schemas']['CurrentUser']>('/v1/users/me'),
   login: (username: string, password: string) => request<{ user: PublicUser; expires_at: string; auth_method: string }>('/v1/auth/login', {
     method: 'POST', body: JSON.stringify({ username, password })

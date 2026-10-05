@@ -1,12 +1,15 @@
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
+import { supportsChat } from '../../api/model-capabilities';
 import { interaction } from '../../i18n/interaction';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useEffect, useRef, useState } from 'react';
-import { api, type CatalogModel, type DownloadProgress, type Model, type Verification } from '../../api/client';
+import { api, type CatalogModel, type DownloadProgress, type Model, type ModelCategory, type Verification } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { isActiveDownload, ModelDownloadProgress } from '../../components/ModelDownloadProgress';
 import { useI18n } from '../../i18n';
 import { ModelSearch } from './ModelSearch';
+import { PackageModels } from './PackageModels';
+import { modelAcquisition } from '../../i18n/model-acquisition';
 import { formatBytes } from './model-format';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { workflow } from '../../i18n/workflow';
@@ -28,6 +31,11 @@ function downloadFor(model: CatalogModel, progress: Record<string, DownloadProgr
 export function ModelsPage({ models, selected, setSelected, onRefresh, onboardingPending }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void>; onboardingPending: boolean }) {
   const { messages: text, locale } = useI18n();
   const { admin } = useWorkspace();
+  const [category, setCategory] = useWorkspaceState<ModelCategory>('models.category', 'language');
+  const packageMode = category === 'speech_recognition' || category === 'speech_generation';
+  const categories: ModelCategory[] = ['language', 'embeddings', 'speech_recognition', 'speech_generation'];
+  const categoryCopy = modelAcquisition[locale];
+  const visibleModels = models.filter(model => category === 'embeddings' ? model.type === 'embedding' : supportsChat(model));
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const [progress, setProgress] = useState<Record<string, DownloadProgress>>({});
   const [loading, setLoading] = useState(true);
@@ -39,9 +47,9 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   const [verification, setVerification] = useState<Verification | null>(null);
   const completed = useRef(new Set<string>());
   const activeOperations = useRef(new Set<string>());
-  const needsChatModel = onboardingPending && !models.some(item => item.type !== 'embedding');
-  const sortedCatalog = catalog.filter(item => `${item.name} ${item.description} ${item.parameters} ${item.quant}`.toLocaleLowerCase(locale).includes(catalogQuery.trim().toLocaleLowerCase(locale))).sort((a, b) => {
-    const rank = (item: CatalogModel) => (item.type !== 'embedding' ? 2 : 0) + (item.recommended ? 1 : 0);
+  const needsChatModel = onboardingPending && !models.some(supportsChat);
+  const sortedCatalog = catalog.filter(item => (category === 'embeddings' ? item.type === 'embedding' : supportsChat(item)) && `${item.name} ${item.description} ${item.parameters} ${item.quant}`.toLocaleLowerCase(locale).includes(catalogQuery.trim().toLocaleLowerCase(locale))).sort((a, b) => {
+    const rank = (item: CatalogModel) => (supportsChat(item) ? 2 : 0) + (item.recommended ? 1 : 0);
     return rank(b) - rank(a);
   });
 
@@ -129,17 +137,19 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   };
 
   return <div className="stack models-workspace">
+    <div className="model-category-picker" role="group" aria-label={categoryCopy.category}>{categories.map(value => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryCopy[value]}</button>)}</div>
+    {packageMode ? <PackageModels key={category} category={category} /> : <>
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
     {needsChatModel && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
-    {admin ? <ModelSearch models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>}
+    {admin ? <ModelSearch key={category} category={category} models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>}
     {error && <div className="inline-error" role="alert">{error}</div>}
     {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
     {verification && <div className={verification.verified ? 'verification success' : 'verification'}><Icon name={verification.verified ? 'check' : 'models'} size={17} /><div><strong>{verification.file_name}</strong><span>{verification.message} {verification.sha256 && `· SHA-256 ${verification.sha256}`}</span></div></div>}
     {Object.values(progress).filter(item => item.status !== 'complete' && !catalog.some(model => `${model.id}.gguf` === item.file_name)).map(item => <article className="catalog-card" key={item.file_name}><strong>{item.file_name}</strong><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={operation !== '' || !item.repository || !item.source_file || !item.model_id} onClick={() => void download({ id: item.model_id!, repo: item.repository!, file: item.source_file!, quant: item.quantization ?? '' }, item.enable_knowledge === true)}>{text.models.resume}</button>}</div></article>)}
     <section className="model-section">
-      <div className="section-heading"><div><span className="eyebrow">{text.models.installed}</span><h2>{models.length} {text.models.available}</h2></div></div>
-      {models.length === 0 ? <div className="compact-empty">{text.models.empty}</div> : <div className="installed-models">{models.map(model => { const Identity = model.type === 'embedding' ? 'div' : 'button'; return <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
-        <Identity className="installed-model-main" onClick={model.type === 'embedding' ? undefined : () => setSelected(model.id)} aria-pressed={model.type === 'embedding' ? undefined : selected === model.id}><div className="model-glyph"><Icon name="models" /></div><div><strong>{model.id}</strong><span>{model.type === 'embedding' ? text.models.embedding : text.models.local}</span></div><small>{model.size_gb || formatBytes(model.size ?? 0)}</small></Identity>
+      <div className="section-heading"><div><span className="eyebrow">{text.models.installed}</span><h2>{visibleModels.length} {text.models.available}</h2></div></div>
+      {visibleModels.length === 0 ? <div className="compact-empty">{text.models.empty}</div> : <div className="installed-models">{visibleModels.map(model => { const Identity = supportsChat(model) ? 'button' : 'div'; return <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
+        <Identity className="installed-model-main" onClick={supportsChat(model) ? () => setSelected(model.id) : undefined} aria-pressed={supportsChat(model) ? selected === model.id : undefined}><div className="model-glyph"><Icon name="models" /></div><div><strong>{model.id}</strong><span>{model.type === 'embedding' ? text.models.embedding : text.models.local}</span></div><small>{model.size_gb || formatBytes(model.size ?? 0)}</small></Identity>
         <div className="model-actions"><button disabled={!admin || operation !== ''} onClick={() => void verify(model)}>{operation === `verify:${model.id}` ? text.common.loading : text.models.verify}</button><button className="danger-button" disabled={!admin || operation !== ''} onClick={() => setConfirmDelete(model.id)}>{text.models.delete}</button></div>
       </article>; })}</div>}
     </section>
@@ -159,5 +169,6 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
         </article>;
       })}</div>}
     </section>
+    </>}
   </div>;
 }

@@ -76,7 +76,7 @@ test('failed chat send retains the draft in the created conversation', async ({ 
   await workspace(page);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Question that must not disappear');
-  await page.locator('.composer button').click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Knowledge retrieval unavailable');
   await expect(page.locator('.composer textarea')).toHaveValue('Question that must not disappear');
   await page.reload();
@@ -124,7 +124,7 @@ test('a late chat response cannot erase a newer draft', async ({ page }) => {
   });
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Original');
-  await page.locator('.composer button').click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => !!finish).toBe(true);
   await page.locator('.composer textarea').fill('My next question');
   finish!();

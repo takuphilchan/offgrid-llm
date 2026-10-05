@@ -30,6 +30,12 @@ func openResumableResponseContext(ctx context.Context, client *http.Client, sour
 	} else if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("inspect partial download: %w", err)
 	}
+	return openResumableOffsetContext(ctx, client, sourceURL, userAgent, offset, func() error { return os.Truncate(tmpPath, 0) })
+}
+
+// Package transfers pass an already-confined file handle. The shared range
+// protocol never needs to reopen an untrusted absolute staging path.
+func openResumableOffsetContext(ctx context.Context, client *http.Client, sourceURL, userAgent string, offset int64, reset func() error) (*resumableResponse, error) {
 
 	for attempt := 0; attempt < 2; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
@@ -54,7 +60,7 @@ func openResumableResponseContext(ctx context.Context, client *http.Client, sour
 			if ok && offset == remoteTotal {
 				return &resumableResponse{offset: offset, total: remoteTotal, complete: true}, nil
 			}
-			if err := os.Truncate(tmpPath, 0); err != nil {
+			if err := reset(); err != nil {
 				return nil, fmt.Errorf("reset invalid partial download: %w", err)
 			}
 			offset = 0
@@ -78,7 +84,7 @@ func openResumableResponseContext(ctx context.Context, client *http.Client, sour
 			// A 200 response to a ranged request contains the whole object. Reset
 			// the partial file so the response replaces it instead of appending.
 			if offset > 0 {
-				if err := os.Truncate(tmpPath, 0); err != nil {
+				if err := reset(); err != nil {
 					resp.Body.Close()
 					return nil, fmt.Errorf("reset unresumable partial download: %w", err)
 				}

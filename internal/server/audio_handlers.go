@@ -9,19 +9,43 @@ import (
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/audio"
+	"github.com/takuphilchan/offgrid-llm/internal/models"
 )
 
-// audioEngine is the global audio engine instance
-var audioEngine *audio.Engine
-
-// initAudioEngine initializes the audio engine
-func initAudioEngine(dataDir string) error {
+// getAudioEngine is scoped to this service/workspace, not process-global.
+// Status and Models polling reuse it instead of orphaning loaded workers.
+func (s *Server) getAudioEngine() (*audio.Engine, error) {
+	s.audioMutex.Lock()
+	defer s.audioMutex.Unlock()
+	dataDir := s.getAudioDataDir()
+	if s.audioEngine != nil {
+		return s.audioEngine, nil
+	}
 	cfg := audio.Config{
 		DataDir: dataDir,
 	}
-	var err error
-	audioEngine, err = audio.NewEngine(cfg)
-	return err
+	engine, err := audio.NewEngine(cfg)
+	if err != nil {
+		return nil, err
+	}
+	s.audioEngine = engine
+	return engine, nil
+}
+
+func (s *Server) getSpeechRuntime() (*audio.PackageRuntime, error) {
+	legacy, err := s.getAudioEngine()
+	if err != nil {
+		return nil, err
+	}
+	s.audioMutex.Lock()
+	defer s.audioMutex.Unlock()
+	if s.speechPackages == nil {
+		if s.registry == nil {
+			return nil, fmt.Errorf("model registry unavailable")
+		}
+		s.speechPackages = audio.NewPackageRuntime(s.registry.Packages(), s.config.ModelsDir, s.getAudioDataDir(), legacy)
+	}
+	return s.speechPackages, nil
 }
 
 // getAudioDataDir returns the audio data directory
@@ -36,24 +60,27 @@ func (s *Server) handleAudioTranscriptions(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
-	if !audioEngine.IsASRAvailable() {
-		writeErrorWithCode(w, "Speech-to-text not available. Run: offgrid audio setup whisper", http.StatusServiceUnavailable, "asr_not_available")
+	_ = audioEngine
+	speech, err := s.getSpeechRuntime()
+	if err != nil {
+		writeErrorWithCode(w, "Speech runtime is unavailable.", 503, "audio_init_error")
 		return
 	}
 
 	// Parse multipart form (max 25MB for audio files)
+	r.Body = http.MaxBytesReader(w, r.Body, 25<<20)
 	if err := r.ParseMultipartForm(25 << 20); err != nil {
 		writeErrorWithCode(w, "Failed to parse form data: "+err.Error(), http.StatusBadRequest, "invalid_form")
 		return
 	}
+
+	defer r.MultipartForm.RemoveAll()
 
 	// Get the audio file
 	file, header, err := r.FormFile("file")
@@ -78,7 +105,7 @@ func (s *Server) handleAudioTranscriptions(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Perform transcription
-	result, err := audioEngine.Transcribe(req)
+	result, err := speech.Transcribe(r.Context(), req)
 	if err != nil {
 		writeErrorWithCode(w, "Failed to transcribe audio: "+err.Error(), http.StatusInternalServerError, "transcription_error")
 		return
@@ -105,16 +132,16 @@ func (s *Server) handleAudioSpeech(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
-	if !audioEngine.IsTTSAvailable() {
-		writeErrorWithCode(w, "Text-to-speech not available. Install piper and download a voice. Run: offgrid audio setup piper", http.StatusServiceUnavailable, "tts_not_available")
+	_ = audioEngine
+	speech, err := s.getSpeechRuntime()
+	if err != nil {
+		writeErrorWithCode(w, "Speech runtime is unavailable.", 503, "audio_init_error")
 		return
 	}
 
@@ -134,8 +161,12 @@ func (s *Server) handleAudioSpeech(w http.ResponseWriter, r *http.Request) {
 		req.Speed = 1.0
 	}
 
+	if req.ResponseFormat != "" && req.ResponseFormat != "wav" {
+		writeErrorWithCode(w, "This speech endpoint currently supports WAV output only.", 422, "unsupported_audio_format")
+		return
+	}
 	// Generate speech
-	audioData, err := audioEngine.Speak(req)
+	audioData, err := speech.Speak(r.Context(), req)
 	if err != nil {
 		writeErrorWithCode(w, "Failed to generate speech: "+err.Error(), http.StatusInternalServerError, "tts_error")
 		return
@@ -163,12 +194,10 @@ func (s *Server) handleAudioVoices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
 	// Get installed voices
@@ -231,12 +260,10 @@ func (s *Server) handleAudioWhisperModels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
 	// Get installed models
@@ -284,12 +311,10 @@ func (s *Server) handleAudioModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
 	models, err := audioEngine.ListWhisperModels()
@@ -305,6 +330,16 @@ func (s *Server) handleAudioModels(w http.ResponseWriter, r *http.Request) {
 	// List available for download
 	availableWhisper := audio.ListAvailableWhisperModels()
 	availableVoices := audio.ListAvailablePiperVoices()
+	speech, err := s.getSpeechRuntime()
+	if err != nil {
+		writeErrorWithCode(w, "Speech inventory is unavailable.", 503, "speech_inventory_error")
+		return
+	}
+	profiles, err := speech.Profiles(r.Context())
+	if err != nil {
+		writeErrorWithCode(w, "Speech inventory is unavailable.", 503, "speech_inventory_error")
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -316,6 +351,7 @@ func (s *Server) handleAudioModels(w http.ResponseWriter, r *http.Request) {
 			"installed": voices,
 			"available": availableVoices,
 		},
+		"profiles": profiles,
 	})
 }
 
@@ -326,13 +362,45 @@ func (s *Server) handleAudioStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		initAudioEngine(s.getAudioDataDir())
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
 	// Get engine status
 	status := audioEngine.Status()
+	if speech, err := s.getSpeechRuntime(); err == nil {
+		profiles, err := speech.Profiles(r.Context())
+		if err != nil {
+			writeErrorWithCode(w, "Speech inventory is unavailable.", 503, "speech_inventory_error")
+			return
+		}
+		status["profiles"] = profiles
+		for _, profile := range profiles {
+			for _, capability := range profile.Capabilities {
+				kind := ""
+				if capability == models.CapabilityTranscription {
+					kind = "asr"
+				}
+				if capability == models.CapabilitySynthesis {
+					kind = "tts"
+				}
+				if kind == "" {
+					continue
+				}
+				entry := status[kind].(map[string]interface{})
+				if profile.Available && entry["available"] != true {
+					entry["available"] = true
+					entry["model"] = profile.ID
+					entry["adapter"] = profile.Adapter
+					delete(entry, "issue")
+				} else if entry["available"] != true && entry["issue"] == nil {
+					entry["issue"] = profile.Issue
+				}
+			}
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
@@ -345,12 +413,10 @@ func (s *Server) handleAudioDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
 	var req struct {
@@ -397,12 +463,10 @@ func (s *Server) handleAudioSetupWhisper(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
 	var req struct {
@@ -459,12 +523,10 @@ func (s *Server) handleAudioSetupPiper(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize audio engine if needed
-	if audioEngine == nil {
-		if err := initAudioEngine(s.getAudioDataDir()); err != nil {
-			writeErrorWithCode(w, "Failed to initialize audio engine: "+err.Error(), http.StatusInternalServerError, "audio_init_error")
-			return
-		}
+	audioEngine, initErr := s.getAudioEngine()
+	if initErr != nil {
+		writeErrorWithCode(w, "Failed to initialize audio engine", http.StatusInternalServerError, "audio_init_error")
+		return
 	}
 
 	var req struct {

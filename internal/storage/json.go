@@ -32,5 +32,5 @@ func WriteJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), path)
+	return replaceSnapshot(file.Name(), path)
 }

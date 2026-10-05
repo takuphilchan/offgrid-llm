@@ -1,11 +1,12 @@
 import { useWorkspaceState } from '../../lib/workspace-context';
 import { useEffect, useRef, useState } from 'react';
-import { api, type CatalogModel, type DiscoveredModel, type DiscoveredFile, type DownloadProgress, type Model } from '../../api/client';
+import { api, type CatalogModel, type DiscoveredModel, type DiscoveredFile, type DownloadProgress, type Model, type ModelCategory } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { isActiveDownload, ModelDownloadProgress } from '../../components/ModelDownloadProgress';
 import { formatBytes } from './model-format';
 
 type Props = {
+  category?: ModelCategory;
   models: Model[];
   progress: Record<string, DownloadProgress>;
   busy: boolean;
@@ -13,14 +14,14 @@ type Props = {
   cancel: (progress: DownloadProgress) => Promise<void>;
 };
 
-export function ModelSearch({ models, progress, busy, download, cancel }: Props) {
+export function ModelSearch({ category, models, progress, busy, download, cancel }: Props) {
   const { messages: text } = useI18n();
   const copy = text.modelSearch;
-  const [query, setQuery] = useWorkspaceState('models.query', '');
-  const [results, setResults] = useWorkspaceState<DiscoveredModel[] | null>('models.results', null);
-  const [repo, setRepo] = useWorkspaceState('models.repo', '');
-  const [files, setFiles] = useWorkspaceState<DiscoveredFile[]>('models.files', []);
-  const [selected, setSelected] = useWorkspaceState('models.file', '');
+  const [query, setQuery] = useWorkspaceState(`models.${category}.query`, '');
+  const [results, setResults] = useWorkspaceState<DiscoveredModel[] | null>(`models.${category}.results`, null);
+  const [repo, setRepo] = useWorkspaceState(`models.${category}.repo`, '');
+  const [files, setFiles] = useWorkspaceState<DiscoveredFile[]>(`models.${category}.files`, []);
+  const [selected, setSelected] = useWorkspaceState(`models.${category}.file`, '');
   const [loading, setLoading] = useState(false);
   const [filesLoading, setFilesLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +35,7 @@ export function ModelSearch({ models, progress, busy, download, cancel }: Props)
     const controller = new AbortController(); request.current = controller;
     setLoading(true); setFilesLoading(false); setResults(null); setRepo(''); setFiles([]); setError('');
     try {
-      const response = await api.searchModels(query.trim(), controller.signal);
+      const response = await api.searchModels(query.trim(), controller.signal, category);
       if (!controller.signal.aborted) setResults(response.results ?? []);
     } catch {
       if (!controller.signal.aborted) setError(copy.unavailable);

@@ -28,6 +28,37 @@ for m in models:
 
 ## Full Usage
 
+### Speech model packages
+
+```python
+from offgrid import Client
+from uuid import uuid4
+
+client = Client()  # Supply api_key privately when the service requires it.
+catalog = client.models.catalog("speech_recognition")
+preview = client.models.preview_package(catalog_id=catalog["models"][0]["id"])
+print(preview["preflight"], preview["resolution"]["source_notices"])
+# After explicitly reviewing the download and license notices:
+operation = client.models.install_package(preview["id"], request_id=str(uuid4()))
+result = client.models.wait_for_model_operation(operation["id"])
+print(client.models.inventory("speech_recognition"))
+```
+
+`discover_package(repository)` returns complete pinned variants for
+`preview_package(repository=..., revision=..., variant=..., architecture=...)`.
+These methods use the same authenticated client transport; no Python downloader
+or model repository code runs. `model_operation(id)`/`model_operations()` inspect
+saved work, and `control_model_operation(id, "cancel"|"resume"|"discard")` controls
+it. `repair_package(completed_id, request_id=...)`, `verify_package(id, revision)`
+and `remove_package(id, revision)` act on the exact managed revision.
+
+Keep the request ID and preview ID when retrying a lost install acknowledgment.
+Mutations do not automatically retry. Poll timeout leaves accepted work running;
+KeyboardInterrupt requests cancellation and re-raises, so inspect status if the
+service was unreachable. Types live in `offgrid.model_types`; no extra dependency
+is required. Legacy `models.list`, `download`, `search`, and audio methods remain.
+Downloaded speech packages do not establish runtime compatibility or enable voice.
+
 ### Chat
 
 ```python

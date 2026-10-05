@@ -1,0 +1,26 @@
+package serviceclient
+
+var modelErrorMessages = map[string]string{
+	"request_conflict":           "This request ID was used for different model work. Inspect the original operation before continuing.",
+	"source_conflict":            "Retained model data belongs to a different source. Resume the original operation or explicitly discard it.",
+	"source_identity_mismatch":   "The model source no longer matches the pinned artifact identity. Preview the source again.",
+	"resolution_expired":         "The model preview expired. Preview the model again before installing.",
+	"package_operation_conflict": "This package already has an operation. Inspect, resume or discard it before starting another.",
+	"package_in_use":             "This package is in use. Wait for active work to settle before changing it.",
+	"package_conflict":           "This package is already installed. Verify or repair it instead.",
+	"package_not_found":          "This package is not installed.",
+	"repair_source_unavailable":  "No completed source-bound installation is available for repair. Re-import local packages.",
+	"operation_state_conflict":   "This model operation cannot perform that action in its current state.",
+	"model_operation_not_found":  "Model operation not found or inaccessible to this account.",
+	"insufficient_space":         "Insufficient disk space for complete model staging and recovery.",
+	"space_unavailable":          "Cannot inspect model storage. Check permissions and disk availability.",
+	"unsafe_source":              "The model source is not a supported public HTTPS source.",
+	"unsupported_layout":         "The model variant does not have a complete supported package layout.",
+	"missing_artifact_identity":  "A required artifact has no usable immutable digest identity.",
+	"incomplete_listing":         "The repository listing is incomplete or exceeds supported limits.",
+	"public_access_required":     "Private or gated repositories are not supported by this acquisition workflow.",
+	"artifact_integrity_failed":  "Model bytes failed verification. Retained data can be inspected, retried or discarded.",
+	"model_storage_unavailable":  "Model storage needs attention. Check free space and permissions; existing files are preserved.",
+	"model_operation_limit":      "Model-operation capacity is full. Wait for active work to settle.",
+	"model_request_interrupted":  "Model request was interrupted. Inspect saved state before retrying.",
+}

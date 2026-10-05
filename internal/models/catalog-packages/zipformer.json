@@ -1,0 +1,93 @@
+{
+  "manifest": {
+    "schema_version": 1,
+    "id": "encoder-epoch-99-avg-1-chunk-16-left-128.int8-7df0f9c4c838",
+    "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+    "name": "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26 · encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+    "architecture": "zipformer-streaming",
+    "runtime": {
+      "adapter": "sherpa-onnx",
+      "revision": "26aa2fa93210376a89de3a65a1a4dd320c37f5e9"
+    },
+    "capabilities": [
+      "transcription",
+      "streaming_recognition"
+    ],
+    "languages": [
+      "en"
+    ],
+    "sample_rates": [
+      16000
+    ],
+    "license": "apache-2.0",
+    "artifacts": [
+      {
+        "path": "README.md",
+        "role": "license",
+        "size": 216,
+        "sha256": "c914dd28e23310a6dd345ea10495003d3e4820d2ed987181e4c2d67e501b6b76",
+        "license": "apache-2.0",
+        "source": {
+          "repository": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+          "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+          "path": "README.md"
+        }
+      },
+      {
+        "path": "decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "role": "decoder",
+        "size": 1307236,
+        "sha256": "98da299f471e38bb4e1a8df579b8cc9122d6039576a77e357b3c60f17dd83b02",
+        "license": "apache-2.0",
+        "source": {
+          "repository": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+          "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+          "path": "decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx"
+        }
+      },
+      {
+        "path": "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "role": "encoder",
+        "size": 71083163,
+        "sha256": "563fde436d16cf7607cf408cd6b30909819d03162652ef389c2450ced3f45ac1",
+        "license": "apache-2.0",
+        "source": {
+          "repository": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+          "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+          "path": "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx"
+        }
+      },
+      {
+        "path": "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "role": "joiner",
+        "size": 259335,
+        "sha256": "d944208d660d67c8d72cd2acaeac971fa5ceb8c80e76c1968148846fedd6e297",
+        "license": "apache-2.0",
+        "source": {
+          "repository": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+          "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+          "path": "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx"
+        }
+      },
+      {
+        "path": "tokens.txt",
+        "role": "tokens",
+        "size": 5048,
+        "sha256": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb",
+        "license": "apache-2.0",
+        "source": {
+          "repository": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+          "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+          "path": "tokens.txt"
+        }
+      }
+    ]
+  },
+  "provenance": {
+    "kind": "repository_metadata",
+    "repository": "csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+    "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24"
+  },
+  "source_notices": null,
+  "transfer_bytes": 72654998
+}

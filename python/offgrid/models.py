@@ -9,6 +9,8 @@ import time
 from typing import Callable, Dict, List, Optional
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
+from urllib.parse import urlencode, quote
+from .model_types import ModelCategory, TypedModel, ModelResolution, ModelOperation
 
 
 class ModelManager:
@@ -32,6 +34,98 @@ class ModelManager:
             List of model dictionaries
         """
         return self._client.list_models()
+
+    def inventory(self, category: Optional[ModelCategory] = None) -> List[TypedModel]:
+        """Typed inventory, including packages; legacy list() remains unchanged."""
+        query = "?" + urlencode({"category": category}) if category else ""
+        return self._client._request("GET", "/api/v2/models" + query)["models"]
+
+    def catalog(self, category: Optional[ModelCategory] = None, query: Optional[str] = None) -> Dict:
+        """Curated models, or explicit public Hugging Face metadata search."""
+        params = {}
+        if category:
+            params["category"] = category
+        if query is not None:
+            params.update(source="huggingface", q=query)
+        return self._client._request("GET", "/api/v2/models/catalog?" + urlencode(params))
+
+    def discover_package(self, repository: str) -> Dict:
+        return self._client._request("GET", "/api/v2/models/discover?" + urlencode({"repository": repository}))
+
+    def preview_package(self, catalog_id: Optional[str] = None, *, repository: Optional[str] = None,
+                        revision: Optional[str] = None, variant: Optional[str] = None,
+                        architecture: Optional[str] = None) -> ModelResolution:
+        """Inspect source, dependencies, licenses and disk requirements; no weights downloaded."""
+        if catalog_id and any((repository, revision, variant, architecture)):
+            raise ValueError("Use a catalog ID or a complete repository variant, not both")
+        if catalog_id:
+            payload = {"catalog_id": catalog_id}
+        elif all((repository, revision, variant, architecture)):
+            payload = dict(repository=repository, revision=revision, variant=variant, architecture=architecture)
+        else:
+            raise ValueError("A catalog ID or repository/revision/variant/architecture is required")
+        return self._client._request("POST", "/api/v2/models/resolve", payload, retry=False)
+
+    def install_package(self, resolution_id: str, *, request_id: str) -> ModelOperation:
+        """Accept a reviewed preview. Reuse request_id and resolution_id after a lost acknowledgment."""
+        return self._client._request("POST", "/api/v2/models/operations", {
+            "action": "install", "resolution_id": resolution_id, "request_id": request_id
+        }, retry=False)
+
+    def model_operations(self) -> List[ModelOperation]:
+        return self._client._request("GET", "/api/v2/models/operations")["operations"]
+
+    def model_operation(self, operation_id: str) -> ModelOperation:
+        return self._client._request("GET", "/api/v2/models/operations/" + quote(operation_id, safe=""))
+
+    def control_model_operation(self, operation_id: str, action: str) -> ModelOperation:
+        """Cancel settles before resume/discard. Discard deletes retained download data only."""
+        if action not in ("cancel", "resume", "discard"):
+            raise ValueError("Expected cancel, resume or discard")
+        return self._client._request("POST", "/api/v2/models/operations/" + quote(operation_id, safe="") + "/" + action, {}, retry=False)
+
+    def repair_package(self, source_operation_id: str, *, request_id: str) -> ModelOperation:
+        """Repair from the original immutable source; preserves the prior package on failure."""
+        return self._client._request("POST", "/api/v2/models/operations", {
+            "action": "repair", "source_operation_id": source_operation_id, "request_id": request_id
+        }, retry=False)
+
+    def verify_package(self, package_id: str, revision: str) -> Dict:
+        return self._package_action(package_id, revision, "verify")
+
+    def remove_package(self, package_id: str, revision: str) -> Dict:
+        """Remove exactly one managed revision; cancel/discard incomplete operations first."""
+        return self._package_action(package_id, revision, "remove")
+
+    def _package_action(self, package_id: str, revision: str, action: str) -> Dict:
+        path = "/api/v2/models/packages/" + quote(package_id, safe="") + "/" + quote(revision, safe="") + "/" + action
+        return self._client._request("POST", path, {}, retry=False)
+
+    def wait_for_model_operation(self, operation_id: str, timeout: float = 1800,
+                                 poll_interval: float = 1, progress_callback=None) -> ModelOperation:
+        """Poll without resubmitting. Timeout leaves work running; KeyboardInterrupt requests cancellation."""
+        from .client import OffGridError
+        if timeout <= 0 or poll_interval <= 0:
+            raise ValueError("Timeout and poll interval must be positive")
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                operation = self.model_operation(operation_id)
+                if progress_callback:
+                    progress_callback(operation)
+                if operation["state"] == "complete":
+                    return operation
+                if operation["state"] in ("cancelled", "failed", "interrupted"):
+                    raise OffGridError(operation.get("message", "Model operation stopped"), code=operation.get("error_code", operation["state"]))
+                if time.monotonic() >= deadline:
+                    raise OffGridError("Polling timed out; inspect operation status before retrying", code="model_wait_timeout")
+                time.sleep(min(poll_interval, max(0, deadline - time.monotonic())))
+        except KeyboardInterrupt:
+            try:
+                self.control_model_operation(operation_id, "cancel")
+            except Exception:
+                pass  # Preserve interruption; cancellation may need explicit status inspection.
+            raise
     
     def refresh(self) -> List[Dict]:
         """

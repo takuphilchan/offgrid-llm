@@ -12,6 +12,25 @@ import (
 
 type fakeRepositorySearcher func(context.Context, models.SearchFilter) ([]models.SearchResult, error)
 
+func TestModelSearchCategoryIsExplicitAndSpeechUsesPackages(t *testing.T) {
+	hf := fakeRepositorySearcher(func(_ context.Context, f models.SearchFilter) ([]models.SearchResult, error) {
+		if f.Category != models.CategoryEmbeddings {
+			t.Fatal("category lost", f.Category)
+		}
+		return nil, nil
+	})
+	w := httptest.NewRecorder()
+	searchRepositories(w, httptest.NewRequest("GET", "/v1/search?query=test&category=embeddings", nil), hf)
+	if w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	w = httptest.NewRecorder()
+	searchRepositories(w, httptest.NewRequest("GET", "/v1/search?query=test&category=speech_recognition", nil), hf)
+	if w.Code != 400 {
+		t.Fatal("speech routed to legacy GGUF search")
+	}
+}
+
 func (f fakeRepositorySearcher) SearchModelsContext(ctx context.Context, filter models.SearchFilter) ([]models.SearchResult, error) {
 	return f(ctx, filter)
 }

@@ -1,4 +1,5 @@
 import { refreshWorkspace } from './lib/workspace-refresh';
+import { supportsChat } from './api/model-capabilities';
 import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
 import { APIError, api, type Model, type PublicUser } from './api/client';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
@@ -94,8 +95,8 @@ export function App() {
       setAccess('ready');
       setModels(modelResult.value);
       setModel(current => {
-        if (current && modelResult.value.some(item => item.id === current && item.type !== 'embedding')) return current;
-        return modelResult.value.find(item => item.type !== 'embedding')?.id ?? '';
+        if (current && modelResult.value.some(item => item.id === current && supportsChat(item))) return current;
+        return modelResult.value.find(supportsChat)?.id ?? '';
       });
     } else if (modelResult.reason instanceof APIError && modelResult.reason.status === 401) {
       setAccess('login');
@@ -147,7 +148,7 @@ export function App() {
     setShowOnboarding(false);
     window.location.hash = `#/${target}`;
   };
-  const chatModels = models.filter(item => item.type !== 'embedding');
+  const chatModels = models.filter(supportsChat);
   const currentGroup = navigationGroups.find(group => group.items.includes(page))?.label ?? 'work';
   const commandActions: CommandAction[] = [
     ...navigationGroups.flatMap(group => group.items.map(item => ({ id: `page-${item}`, label: text.nav[item], group: text.shell[group.label], icon: item, run: () => { window.location.hash = `#/${item}`; } }))),

@@ -97,7 +97,7 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	if s.degradationMgr != nil {
 		defer s.degradationMgr.RequestEnd()
 	}
-	metadata, err := s.registry.GetModel(request.Model)
+	metadata, err := s.registry.GetChatModel(request.Model)
 	if err != nil {
 		return nil, newServiceError(http.StatusNotFound, fmt.Sprintf("model not found: %s", request.Model), err)
 	}

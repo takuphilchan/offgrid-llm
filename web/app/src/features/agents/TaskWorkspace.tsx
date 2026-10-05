@@ -26,6 +26,8 @@ import { AgentNavigation } from './AgentNavigation';
 import { Icon } from '../../components/Icon';
 import { AgentPreview, AgentProgress } from "./AgentProgress";
 import { BrowserActionSummary, BrowserActivity } from "./BrowserActionSummary";
+import { VoiceInputButton } from "../../components/VoiceInputButton";
+import { VoiceSettings } from "../../components/VoiceSettings";
 
 function taskFromLocation() {
   const part = window.location.hash.match(
@@ -254,7 +256,8 @@ export function TaskWorkspace({
                 onChange={(e) => draft.setValue(e.target.value)}
                 aria-describedby="task-first-hint"
               />
-            </label>
+              </label>
+              <div className="composer-voice-toolbar"><VoiceInputButton contextKey={draft.key} disabled={busy} onTranscript={value => draft.setValue(draft.value ? `${draft.value} ${value}` : value)} /><VoiceSettings /></div>
             <p id="task-first-hint">{copy.hint}</p>
             <details>
               <summary>

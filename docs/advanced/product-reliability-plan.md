@@ -28,6 +28,224 @@ framework migration to solve local state and lifecycle problems.
 - Keep experimental capabilities visibly separate from supported workflows.
 - No automatic publishing: validate locally before a separately approved release.
 
+## Voice review corrections, source-only validation (2026-10-05)
+
+- Fixed microphone ownership across delayed permission, composer changes and
+  unmount; transcription retains concurrent draft edits, and Stop stays usable
+  during text generation. Tests use synthetic media, not user recordings.
+- Added independent ASR/TTS/declared-voice selection in shared browser-scoped
+  preferences. Selection is pinned per recording/answer; removed explicit models
+  cannot silently fall back. Managed Piper validates and forwards speaker IDs.
+  Speak responses and its settings now sit beside the composer. Existing
+  monochrome styling is preserved; the rendered desktop-width panel was inspected.
+- Removed duplicate hidden acquisition previews. Review expands conditions in
+  the model card; a real multi-variant choice is retained, while single variants
+  need no intermediate selection screen. Hub keyword searches no longer use a
+  Qwen-only shortcut. Safetensors parameter counts are not shown as byte sizes.
+- Passed the full Windows Go suite, all CI-listed Linux race packages, 49 desktop
+  unit tests, 19 Python client tests, TypeScript/build, API drift, maintained-doc
+  checks and strict OpenSpec validation. Linux tests include the executable
+  Piper speaker fixture; fixture success is not real-model quality evidence.
+- The full isolated browser run passed 152 tests, with three opt-in cases skipped,
+  in `offgrid-web-qualification-WxL4Hd` under Windows temporary storage. Earlier
+  failures exposed four stale composer-button selectors, now fixed. A parallel
+  acquisition/restart run interrupted another test's metadata request; the
+  final run serialized these shared-service tests, as the CI fixture steps do.
+- A final targeted voice run passed 14 tests, including removed-model refusal
+  before device access and keyboard/narrow-screen checks in both themes.
+  Evidence is in `offgrid-web-qualification-0QHexH`; Playwright screenshots are
+  under `web/app/test-results` until the next run. These mock recognition and
+  synthesis and do not establish real hardware latency or echo handling.
+- The first Linux race attempt exhausted the existing `/tmp` tmpfs. Rerunning
+  with an isolated `/var/tmp/offgrid-voice-race.KdorA7` build directory passed;
+  no user files, installed models or running containers were deleted or changed.
+- **Release gates remain:** standard container/desktop speech-runtime packs,
+  installed Windows/macOS/Linux microphone and playback qualification, complete
+  translated speech-control copy (currently English fallback), and real-model
+  quality/latency, soak and pilot evidence. The sherpa-onnx execution adapter,
+  Talk sessions and durable recording workflows remain later program work.
+  Browser-local preferences are not the planned server preference API.
+- This correction did not download models, record a microphone, deploy, commit,
+  push or publish. Prior live-image measurements below are not requalification
+  of this source build. The broader acquisition tasks remain unchecked where
+  their specified recovery/platform evidence has not been established.
+
+## Response speech correction and local deployment (2026-10-05)
+
+- Managed speech now routes by declared architecture/capability, with leases,
+  private cancellable workers, truthful unsupported-profile errors, and no hidden
+  reference-voice cloning. Status polling no longer replaces loaded engines.
+  Whisper/Piper execution fixtures and noisy Python import/cancellation fixtures
+  test protocol behavior, not model quality. Kokoro/Zipformer still lack executable
+  sherpa adapters; their installed files are not advertised as usable voices.
+- Read-aloud now checks readiness, shows preparation/errors, stops immediately,
+  and permits owned blob audio in both CSP policies. Chat's session-only **Speak
+  responses** opt-in consumes new text incrementally, with one look-ahead request,
+  a 2,400-character unsynthesized backlog limit and five-minute playback budget.
+  Code/reasoning are excluded; the final fragment waits for persisted completion.
+  Failure/stop/navigation discards audio without replaying restored turns. This is
+  bounded sentence/chunk synthesis, not native audio-token streaming or full Talk.
+- Passed: `go test ./...`; audio/server Linux race checks; UI typecheck/build and
+  API drift; 49 desktop unit tests; documentation check (71 files, zero problems).
+  Thirteen focused browser tests cover playback, text streaming, package lifecycle,
+  early audio, final-tail delivery, errors, interruption, bounded prefetch and
+  navigation. Latest isolated evidence: Windows temp
+  `offgrid-web-qualification-L5qvvE`. Browser tests use synthetic audio/transport;
+  real inference checks are recorded separately below.
+- Authorized deployment: `offgrid-llm:voice-streaming-20261005`, image manifest
+  `ea0e9dbea3606a01b8922b76b0cc1b485955760b8ae2dd36ed81de6cb7e25cf7`.
+  Exactly one serving container, `offgrid`, on loopback port 11611. Previous
+  container `offgrid-backup-voice-routing-20261005-215421` is stopped. Consistent
+  workspace copy: `build/container-backups/voice-routing-20261005-215421/data`.
+  Existing model/data volumes and Base/ASR packages were preserved. The Qwen
+  transfer was explicitly settled before replacement and resumed afterward.
+- After the user authorized necessary downloads, the shared model service installed
+  Piper Lessac medium (63,207,027 bytes), revision
+  `c10ece1aade47bb51c153c893d14e5bf8e5b7117`. Local test image includes Piper 1.8.0
+  (Linux x64 wheel SHA-256
+  `25b4d3f31ff70c8fa7151908e00aaa5650cbdf16bca8fcf21299f3941b89a7d3`),
+  pathvalidate 3.3.1 (SHA-256
+  `5263baab691f8e1af96092fa5137ee17df5bdfbd6cff1fcac4d6ef4bc2e1735f`),
+  existing ONNX Runtime 1.23.2, Qwen TTS 0.1.1, ASR 0.0.6, and CPU torch 2.9.1.
+  Wheels were hash-checked and installed offline while building, not during
+  inference. [Piper license/runtime metadata](https://pypi.org/project/piper-tts/1.8.0/)
+  and the separate voice model card remain distribution obligations; this local
+  image is not a qualified/published speech pack.
+- Real Piper synthesis of “Hello. This is a local speech test.” produced nonempty
+  PCM WAV at 22,050 Hz in 1,738 ms and 1,293 ms (2.29/2.35 seconds of audio).
+  Qwen ASR transcribed that synthetic audio back to the exact sentence in 39,061 ms
+  including cold loading. No microphone or private recording was used.
+- Real Phi chat and concurrent Piper synthesis succeeded: first text/audio/text
+  completion at 9,590/15,715/22,724 ms on the first run and
+  520/7,430/9,795 ms on a warm follow-up. Audio was available before text completion
+  in both. These individual CPU observations are **not** p95 qualification and do
+  not meet the full Talk five-second target. UI buffering cannot eliminate model
+  loading, first-sentence generation or inference cost.
+- A headless Chromium check used the deployed UI and real `/v1/audio/speech`,
+  decoded/played/completed the generated Piper WAV without CSP/autoplay errors
+  (5,102 ms to playback). Conversation history was an unsaved isolated fixture;
+  no user conversation was read or modified. Screenshot:
+  `bin/voice-repair/playback.png` (local ignored test artifact).
+- Qwen CustomVoice acquisition resolved revision
+  `85e237c12c027371202489a0ec509ded67b5e4b5` and retained 2,054,584,519 of
+  2,498,386,873 bytes in operation `model-d1972257c19843159a4d5899636468da`.
+  Subsequent resume could not reach the source; a bounded container HTTPS probe
+  reported OS error 101, “Network is unreachable.” No VPN/proxy setting was changed.
+  The partial package remains explicitly resumable, not installed/usable. Actual
+  Qwen CustomVoice synthesis remains unverified; default Piper playback works
+  without it. Existing Qwen Base and ASR packages are preserved.
+- Windows desktop installation was not replaced. No commits, pushes, publication,
+  microphone recording or voice cloning. Full cross-platform installed tests,
+  speech-language/quality/latency qualification, complete translations, soak and
+  pilot remain unrun gates. The Voice program is not complete.
+
+## Voice program: model-package foundation evidence (2026-10-04)
+
+The approved local Voice program is **not complete**. The first independently
+reviewable OpenSpec change is `voice-model-foundation`. It provides:
+
+- Strict schema-1, data-only manifests for Whisper, Piper, streaming Zipformer,
+  and Kokoro layouts; explicit capabilities, dependencies, digests and licenses.
+- Registry-owned managed package storage, bounded atomic local imports, explicit
+  verification, corrupt-record visibility, and lease-protected removal.
+- Permission-gated package HTTP APIs, generated TypeScript contracts, and a
+  collapsed development section in Models for folder import, verification and
+  confirmed deletion, with text in all nine interface locales.
+- Positive chat-model admission in shared selectors and service/CLI paths. Both
+  historical `chat`/`llm` types and `vlm` remain supported; speech and unknown
+  explicit types are not accepted for language inference.
+
+Validation performed on the working tree:
+
+- Windows `go test ./...`: passed; targeted models/server/CLI/API checks rerun
+  after the compatibility changes.
+- WSL Go 1.26.6 race suite: sessions, RAG, server, users, cache, agents, runs,
+  storage, serviceclient, models and audio passed. Windows race execution was
+  unavailable without a configured C compiler; it was not represented as a pass.
+- API generation/drift check, TypeScript check and production UI build passed.
+  The existing bundle-size warning remains; no production performance claim.
+- Isolated real-service browser suite: **133 passed, 3 opt-in tests skipped**.
+  Includes actual temporary-directory package import/verify/delete and ordinary
+  model download/search regressions. The initial run caught a rejected legacy
+  `chat` type; the allowlist was corrected before the passing rerun.
+- Desktop unit tests: **49 passed**. Documentation checker: **71 maintained files,
+  zero problems**, plus its six tests. These are not installed-package tests.
+- Python client unit suite: **16 passed** after repairing pre-existing test
+  isolation and obsolete URL-constructor expectations. The initial test mocks
+  missed the pooled opener and inadvertently contacted the running localhost
+  service. The harness now routes pooled requests through its mocks and blocks
+  actual socket connections. No Python production behavior was changed.
+
+Fixtures contain synthetic model bytes, not real inference weights. Symlink
+checks run on Linux; Windows skips link fixtures if local privileges prohibit
+creating them. This evidence does **not** establish actual ASR/TTS inference,
+speech-language accuracy, macOS installation, live microphone permissions,
+Talk latency, accessibility qualification, or speech-model quality.
+
+Remaining approved work, in delivery order (not waived):
+
+Acquisition implementation update (2026-10-04): typed shared catalog/inventory,
+four data-only resolution recipes and space/source preflight have passed targeted
+Windows `go test ./internal/models ./internal/server ./pkg/api`. Resolver fixtures
+cover missing dependencies, source changes, digest identity, unsafe pagination,
+redirects, credentials, gated access and capability filters. This is not yet the
+completed download/API/UI integration or the final integration-suite rerun.
+
+Real metadata was resolved through the already configured Windows proxy without
+changing the VPN. No model weights or executable runtimes were downloaded.
+Small configuration, model-card, token and phonemizer data were fetched to check
+Git object identity and derive SHA-256; manifests are in
+`internal/models/catalog-packages`. These are source-identity checks, not inference.
+
+| Recipe/source | Immutable source revision | Complete transfer bytes |
+| --- | --- | ---: |
+| [Whisper tiny.en](https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1) | `5359861c739e955e79d9a303bcbc70fb988958b1` | 77,707,911 |
+| [Piper lessac medium](https://huggingface.co/rhasspy/piper-voices/tree/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/lessac/medium) | `c10ece1aade47bb51c153c893d14e5bf8e5b7117` | 63,207,027 |
+| [Streaming Zipformer English int8](https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/tree/672fbf1b30579d6585301139bb363f42a0ad4a24) | `672fbf1b30579d6585301139bb363f42a0ad4a24` | 72,654,998 |
+| [Kokoro v1.0 English profile](https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/tree/f7b96bb6bef5c5da4d3aa4f4e0498fbbf62dc78b) | `f7b96bb6bef5c5da4d3aa4f4e0498fbbf62dc78b` | 384,089,462 |
+
+Kokoro includes 362 declared artifacts (including eSpeak data), not just weights.
+Only English voice 0 is exposed by this initial recipe. Piper's voice license is
+explicitly a model-card reference; the repository's MIT label is **not** projected
+onto the voice/dataset. Its separate conditions must be reviewed before use.
+Kokoro model assets and bundled eSpeak data have separate Apache/GPL declarations.
+Redistribution review remains a release gate, as does all runtime qualification.
+
+Adapter requirements pin upstream commits: whisper.cpp `v1.8.2`
+(`4979e04f5dcaccb36057e059bbaed8a2f5288315`), Piper `v1.3.0`
+(`fee9b9cefae4ebf9e196cfe994dea418f051506c`), sherpa-onnx `v1.12.14`
+(`26aa2fa93210376a89de3a65a1a4dd320c37f5e9`). Public GitHub tag metadata was
+checked; no executable was installed, tested, or marked compatible.
+
+The following program stages remain required:
+
+1. Complete shared durable model operations: curated multi-artifact downloads,
+   resumable operations, runtime/offline packs, verified repair/rollback, legacy
+   speech migration and dependency-aware removal. The current synchronous import
+   endpoint is a foundation, not the final resumable operation contract.
+2. Replace legacy global audio initialization with per-service supervised,
+   cancellable adapters; accurate format encoding/decoding, resource admission,
+   whisper.cpp/Piper/sherpa-onnx execution, runtime validation and packaging.
+3. Shared explicit-gesture dictation/read-aloud in Chat and Agents, trusted desktop
+   microphone permissions, accessible controls, preferences and CLI/SDK parity.
+4. Dedicated authenticated audio WebSocket protocol, independent capture/turn/
+   playback lifecycle, Talk finalization, echo handling, interruption, bounded
+   queues and idempotent submissions. Never replay old audio after reconnect.
+5. Existing durable agent submission/steering/approvals with concise narration;
+   voice never grants access or treats recognized approval words as authorization.
+6. Bounded recording uploads, restricted decoding, durable transcription jobs,
+   transcript review/versioning/export, explicit Knowledge indexing, provenance,
+   retention and deletion.
+7. Real profile qualification on Windows, both macOS architectures, Linux desktop
+   and container-backed clients; 200 English utterances, 30 workflows repeated
+   three times per advertised profile, human speech-quality review, hardware and
+   latency measurements, installed/offline/recovery tests, soak and pilot gates.
+
+No speech runtime/model was downloaded, no microphone was activated, and no
+commit, live replacement or publication was performed for this change. Existing
+Whisper/Piper installations remain untouched. Importing a package does not yet
+enable Voice, and no profile is marked runtime-compatible or qualified here.
+
 ## Stage 1: privacy and data safety
 
 First delivery slice:

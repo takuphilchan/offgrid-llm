@@ -4,6 +4,169 @@
  */
 
 export interface paths {
+    "/api/v2/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Shared installed inventory. Requires model-read permission; legacy IDs remain unchanged and speech is never a chat model. */
+        get: operations["listTypedModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Shared curated catalog or explicit public Hugging Face search. Search results are leads, not compatible packages. */
+        get: operations["typedModelCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Bounded public repository listing pinned to a full commit. No weight download or code execution. */
+        get: operations["discoverSpeechPackages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Model-management permission required. Resolve a curated ID or discovered immutable variant; bounded small data may be fetched, never weights. Preview expires after ten minutes and is actor-bound. Missing runtime is disclosed, not installed automatically. */
+        post: operations["resolveModelPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Actor-scoped durable package operations; administrators can inspect all. Legacy file downloads retain their compatible v1 progress projection in the same store. */
+        get: operations["listModelOperations"];
+        put?: never;
+        /** @description Management permission required. Persist before acceptance; same actor/request ID and payload returns the original operation, conflicting reuse is 409. Repair uses an earlier completed source-bound operation. */
+        post: operations["submitModelOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/operations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getModelOperation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/operations/{id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                action: "cancel" | "resume" | "discard";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Management permission and actor/admin ownership required. Cancel settles before Resume; restart never resumes automatically. Discard tombstones inactive work before removing its staging, not user documents or installed packages. */
+        post: operations["controlModelOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Managed speech package inventory; model-read permission required. Installation is not runtime compatibility or qualification. */
+        get: operations["listModelPackages"];
+        put?: never;
+        /** @description Model-management permission required. Stream manifest first, then one part per artifact in manifest order, using its exact path as the form name. No extra parts. Limits 1 MiB manifest, 2048 artifacts, 32 GiB total data. No runtime installation or code execution. */
+        post: operations["importModelPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/models/packages/{id}/{revision}/{operation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                revision: string;
+                operation: "verify" | "remove";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Model-management permission required. Verify checks all managed bytes; remove refuses an active lease and removes only this revision. */
+        post: operations["manageModelPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/search": {
         parameters: {
             query?: never;
@@ -1032,6 +1195,214 @@ export interface components {
             expires_at: string;
             auth_method: string;
         };
+        ModelPackageManifest: {
+            /** @constant */
+            schema_version: 1;
+            id: string;
+            /** @description Immutable revision */
+            revision: string;
+            name: string;
+            /** @enum {string} */
+            architecture: "whisper" | "piper" | "zipformer-streaming" | "kokoro" | "qwen3-asr" | "qwen3-tts";
+            runtime: {
+                /** @enum {string} */
+                adapter: "whisper.cpp" | "piper" | "sherpa-onnx" | "qwen3-asr" | "qwen3-tts";
+                revision: string;
+            };
+            capabilities: ("transcription" | "streaming_recognition" | "speech_synthesis" | "incremental_synthesis")[];
+            languages: string[];
+            sample_rates: number[];
+            license: string;
+            voices?: {
+                id: string;
+                language: string;
+            }[];
+            hardware_profiles?: {
+                id: string;
+                /** Format: int64 */
+                memory_bytes: number;
+                /** @description Reference only */
+                evidence: string;
+            }[];
+            artifacts: {
+                path: string;
+                role: string;
+                /** Format: int64 */
+                size: number;
+                sha256: string;
+                license: string;
+                source?: {
+                    /** Format: uri */
+                    repository: string;
+                    /** @description Full immutable repository commit. */
+                    revision: string;
+                    path: string;
+                };
+            }[];
+        };
+        ModelPackageState: {
+            id: string;
+            revision: string;
+            manifest?: components["schemas"]["ModelPackageManifest"];
+            installed: boolean;
+            /** @enum {string} */
+            integrity: "unchecked" | "checked" | "failed";
+            /**
+             * Format: date-time
+             * @description Last check in this service process; runtime leases reverify.
+             */
+            verified_at?: string;
+            runtime_compatible: boolean;
+            smoke_tested: boolean;
+            qualified: boolean;
+            /** @enum {string} */
+            provenance: "local_untrusted" | "repository_metadata" | "curated_manifest";
+            issue?: string;
+            in_use: number;
+            operation?: string;
+        };
+        /** @enum {string} */
+        ModelCategory: "language" | "embeddings" | "speech_recognition" | "speech_generation";
+        ModelReadiness: {
+            installed: boolean;
+            /** @enum {string} */
+            integrity: "unchecked" | "checked" | "failed";
+            runtime_compatible: boolean;
+            smoke_tested: boolean;
+            qualified: boolean;
+            issue?: string;
+        };
+        ModelProvenance: {
+            kind: string;
+            repository?: string;
+            revision?: string;
+        };
+        ModelInstallationTarget: {
+            /** @constant */
+            kind: "legacy_file";
+            file: {
+                model_id: string;
+                repository: string;
+                file: string;
+                revision: string;
+                sha256?: string;
+            };
+        } | {
+            /** @constant */
+            kind: "package";
+            package: components["schemas"]["ModelPackageManifest"];
+        };
+        TypedCatalogModel: {
+            id: string;
+            name: string;
+            description: string;
+            category: components["schemas"]["ModelCategory"];
+            capabilities: string[];
+            license: string;
+            source_notices?: string[];
+            variants: {
+                id: string;
+                name: string;
+                /** Format: int64 */
+                size_bytes: number;
+                target: components["schemas"]["ModelInstallationTarget"];
+                provenance: components["schemas"]["ModelProvenance"];
+                readiness: components["schemas"]["ModelReadiness"];
+            }[];
+        };
+        InstalledTypedModel: {
+            id: string;
+            revision?: string;
+            name: string;
+            /** @enum {string} */
+            kind: "legacy_file" | "package";
+            category?: components["schemas"]["ModelCategory"];
+            capabilities: string[];
+            readiness: components["schemas"]["ModelReadiness"];
+            provenance: components["schemas"]["ModelProvenance"];
+            package?: components["schemas"]["ModelPackageState"];
+            legacy?: components["schemas"]["Model"];
+        };
+        PackageDiscovery: {
+            repository: string;
+            revision: string;
+            license: string;
+            choices: {
+                id: string;
+                architecture: string;
+                name: string;
+                supported: boolean;
+                reason?: string;
+            }[];
+        };
+        ResolveModelRequest: {
+            catalog_id?: string;
+            repository?: string;
+            revision?: string;
+            variant?: string;
+            architecture?: string;
+        };
+        ModelResolution: {
+            id: string;
+            /** Format: date-time */
+            expires_at: string;
+            resolution: {
+                manifest: components["schemas"]["ModelPackageManifest"];
+                provenance: components["schemas"]["ModelProvenance"];
+                source_notices: string[] | null;
+                /** Format: int64 */
+                transfer_bytes: number;
+            };
+            preflight: {
+                /** Format: int64 */
+                transfer_bytes: number;
+                /** Format: int64 */
+                required_free_bytes: number;
+                /** Format: int64 */
+                available_bytes: number;
+                runtime: {
+                    adapter: string;
+                    revision: string;
+                };
+                runtime_available: boolean;
+                readiness: components["schemas"]["ModelReadiness"];
+                warnings: string[];
+            };
+        };
+        ModelOperation: {
+            id: string;
+            actor_id: string;
+            request_id: string;
+            request_digest: string;
+            /** @enum {string} */
+            action: "install" | "repair";
+            target: components["schemas"]["ModelInstallationTarget"];
+            provenance: components["schemas"]["ModelProvenance"];
+            /** @enum {string} */
+            state: "queued" | "downloading" | "verifying" | "activating" | "complete" | "cancelling" | "cancelled" | "interrupted" | "failed";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: int64 */
+            bytes_done: number;
+            /** Format: int64 */
+            bytes_total: number;
+            /** Format: int64 */
+            retained_bytes: number;
+            discarded: boolean;
+            activation_intent: boolean;
+            error_code?: string;
+            message?: string;
+            artifacts: {
+                path: string;
+                /** Format: int64 */
+                bytes_done: number;
+                /** Format: int64 */
+                bytes_total: number;
+                verified: boolean;
+            }[];
+        };
         Model: {
             id: string;
             object?: string;
@@ -1529,6 +1900,407 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listTypedModels: {
+        parameters: {
+            query?: {
+                category?: components["schemas"]["ModelCategory"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed legacy files and packages, including damaged package records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        models: components["schemas"]["InstalledTypedModel"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    typedModelCatalog: {
+        parameters: {
+            query?: {
+                category?: components["schemas"]["ModelCategory"];
+                source?: "curated" | "huggingface";
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Typed curated variants or repository metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        models: components["schemas"]["TypedCatalogModel"][];
+                        repositories: {
+                            id: string;
+                            /** Format: int64 */
+                            downloads: number;
+                            likes: number;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Public source unavailable; check service connectivity. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    discoverSpeechPackages: {
+        parameters: {
+            query: {
+                repository: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Supported complete variants and explanations for incomplete layouts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackageDiscovery"];
+                };
+            };
+            /** @description Unsupported source */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolveModelPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveModelRequest"];
+            };
+        };
+        responses: {
+            /** @description Complete data manifest, provenance, license notices and disk/runtime preflight. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelResolution"];
+                };
+            };
+            /** @description Model management permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source or package cannot be resolved safely. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Insufficient staging and recovery space. */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listModelOperations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted operations; reading never restarts them. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        operations: components["schemas"]["ModelOperation"][];
+                    };
+                };
+            };
+        };
+    };
+    submitModelOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    request_id: string;
+                    /** @enum {string} */
+                    action: "install" | "repair";
+                    /** @description Required for install. */
+                    resolution_id?: string;
+                    /** @description Required for exact-source repair. */
+                    source_operation_id?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Durably accepted, not necessarily installed. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOperation"];
+                };
+            };
+            /** @description Conflicting request/source */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Acceptance could not be persisted; no worker started. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getModelOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operation snapshot with aggregate and per-artifact progress. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOperation"];
+                };
+            };
+            /** @description Not found or owned by another actor. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    controlModelOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                action: "cancel" | "resume" | "discard";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New snapshot; cancelling means the worker has not settled yet. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOperation"];
+                };
+            };
+            /** @description Active work or lifecycle conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listModelPackages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inventory including damaged packages that need repair. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        packages: components["schemas"]["ModelPackageState"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    importModelPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    manifest: components["schemas"]["ModelPackageManifest"];
+                } & {
+                    [key: string]: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Complete package verified and activated; not an asynchronous acceptance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPackageState"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Model management permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Immutable revision already installed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload limit exceeded. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid manifest or incomplete */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manageModelPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                revision: string;
+                operation: "verify" | "remove";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verification evidence or removal result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPackageState"] | {
+                        removed: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Model management permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision not installed. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Package is leased by active work. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integrity verification failed; existing files preserved. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     searchPublicModels: {
         parameters: {
             query: {

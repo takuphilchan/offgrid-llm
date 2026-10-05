@@ -7,12 +7,29 @@ Run with: pytest tests/
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
+import socket
+import urllib.request
 
 # Import the library
 import sys
 sys.path.insert(0, '..')
 from offgrid import Client, OffGridError
 from offgrid.client import Client as ClientClass
+import offgrid.client as client_module
+
+
+@pytest.fixture(autouse=True)
+def isolated_client_transport(monkeypatch):
+    """Keep unit tests off installed services, including the pooled HTTP path."""
+    def reject_network(*args, **kwargs):
+        raise AssertionError("Unit tests must not access a real network service")
+
+    monkeypatch.setattr(socket.socket, "connect", reject_network)
+    monkeypatch.setattr(socket, "create_connection", reject_network)
+    opener = Mock()
+    # Resolve the decorated mock at request time, not fixture construction time.
+    opener.open.side_effect = lambda *args, **kwargs: client_module.urlopen(*args, **kwargs)
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *args, **kwargs: opener)
 
 
 class TestClient:
@@ -21,15 +38,13 @@ class TestClient:
     def test_client_init(self):
         """Test client initialization with defaults."""
         client = Client()
-        assert client.host == "localhost"
-        assert client.port == 11611
+        assert client.host == "http://localhost:11611"
         assert client.base_url == "http://localhost:11611"
     
     def test_client_custom_config(self):
         """Test client with custom configuration."""
-        client = Client(host="192.168.1.100", port=8080, timeout=60)
-        assert client.host == "192.168.1.100"
-        assert client.port == 8080
+        client = Client(host="http://192.168.1.100:8080", timeout=60)
+        assert client.host == "http://192.168.1.100:8080"
         assert client.timeout == 60
         assert client.base_url == "http://192.168.1.100:8080"
     
@@ -162,6 +177,57 @@ class TestClient:
 
 class TestModelManager:
     """Test ModelManager class."""
+
+    @patch('offgrid.client.urlopen')
+    def test_package_operations_use_authenticated_existing_transport(self, send):
+        from urllib.parse import parse_qs, urlsplit
+        response = MagicMock()
+        response.read.return_value = b'{"models": [], "id": "op", "state": "complete"}'
+        send.return_value = response
+        client = Client(api_key="fixture-key")
+        assert client.models.inventory("speech_recognition") == []
+        req = send.call_args[0][0]
+        assert req.get_header("Authorization") == "Bearer fixture-key"
+        assert parse_qs(urlsplit(req.full_url).query)["category"] == ["speech_recognition"]
+        client.models.install_package("preview-1", request_id="stable-request")
+        first = send.call_args[0][0].data
+        client.models.install_package("preview-1", request_id="stable-request")
+        assert send.call_args[0][0].data == first
+        client.models.control_model_operation("op", "cancel")
+        assert send.call_args[0][0].full_url.endswith("/op/cancel")
+        client.models.remove_package("fixture", "rev-1")
+        assert send.call_args[0][0].full_url.endswith("/fixture/rev-1/remove")
+
+    def test_package_validation_and_polling_never_resubmit(self):
+        client = Client()
+        client._request = Mock(side_effect=[{"state": "downloading"}, {"state": "complete"}])
+        with patch("offgrid.models.time.sleep"):
+            assert client.models.wait_for_model_operation("op")["state"] == "complete"
+        assert all(call.args[0] == "GET" for call in client._request.call_args_list)
+        with pytest.raises(ValueError):
+            client.models.control_model_operation("op", "execute")
+        with pytest.raises(ValueError):
+            client.models.preview_package(repository="org/repo")
+        with pytest.raises(ValueError):
+            client.models.preview_package("id", repository="org/repo")
+        client._request = Mock(return_value={"state": "interrupted", "message": "Resume explicitly", "error_code": "recovery_required"})
+        with pytest.raises(OffGridError) as error:
+            client.models.wait_for_model_operation("op")
+        assert error.value.code == "recovery_required"
+        client._request = Mock(side_effect=[KeyboardInterrupt(), {"state": "cancelling"}])
+        with pytest.raises(KeyboardInterrupt):
+            client.models.wait_for_model_operation("op")
+        assert client._request.call_args.args[1].endswith("/cancel")
+
+    @patch('offgrid.client.urlopen')
+    def test_package_http_conflicts_are_not_retried(self, send):
+        from urllib.error import HTTPError
+        from io import BytesIO
+        send.side_effect = HTTPError("https://fixture.invalid", 409, "conflict", {}, BytesIO(b'{"error":{"message":"Changed source", "code":"request_conflict"}}'))
+        with pytest.raises(OffGridError) as error:
+            Client(api_key="fixture").models.install_package("preview", request_id="request-id")
+        assert error.value.code == "request_conflict"
+        assert send.call_count == 1
     
     @patch('offgrid.client.urlopen')
     def test_search(self, mock_urlopen):

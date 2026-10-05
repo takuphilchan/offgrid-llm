@@ -481,6 +481,9 @@ func waitForModelReady(port string, maxWaitSeconds int) error {
 
 // startLlamaServerInBackground starts llama-server with the specified model
 func startLlamaServerInBackground(modelPath string) error {
+	if models.IsManagedPackagePath(modelPath) {
+		return fmt.Errorf("managed speech packages cannot be loaded by llama.cpp; use their declared speech adapter")
+	}
 	// Get llama-server binary via BinaryManager (auto-downloads if needed)
 	homeDir, _ := os.UserHomeDir()
 	binDir := filepath.Join(homeDir, ".offgrid-llm", "bin")
@@ -1059,6 +1062,9 @@ func main() {
 		case "list":
 			handleList(os.Args[2:])
 			return
+		case "model", "models":
+			executeCommand(func(ctx context.Context) error { return runModelPackageCommand(ctx, os.Args[2:]) })
+			return
 		case "verify":
 			handleVerify(os.Args[2:])
 			return
@@ -1120,7 +1126,10 @@ func main() {
 			handleLoRA(os.Args[2:])
 			return
 		case "agent", "agents":
-			if len(os.Args)>2 && os.Args[2]=="run" {executeCommand(func(ctx context.Context)error{return runTaskSubmit(ctx,os.Args[3:])});return}
+			if len(os.Args) > 2 && os.Args[2] == "run" {
+				executeCommand(func(ctx context.Context) error { return runTaskSubmit(ctx, os.Args[3:]) })
+				return
+			}
 			if len(os.Args) > 2 && isAgentControl(os.Args[2]) {
 				executeCommand(func(ctx context.Context) error { return runAgentControl(ctx, os.Args[2:]) })
 				return
@@ -3795,6 +3804,10 @@ func handleRun(args []string) {
 		}
 	}
 
+	if models.IsManagedPackagePath(model.Path) {
+		printError("Speech packages are not chat models. Use their declared speech adapter.")
+		os.Exit(1)
+	}
 	if isLikelyEmbeddingModel(modelName, resolvedModelName, resolvedModelPath, model.Path) && !allowEmbeddingChat {
 		fmt.Println()
 		printWarning(embeddingModelChatError(resolvedModelName))

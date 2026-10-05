@@ -4,6 +4,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,18 @@ import (
 	"strings"
 	"sync"
 )
+
+// RuntimeConfig describes an optional managed speech runtime.  The legacy
+// whisper.cpp/Piper paths remain supported, while managed packages are routed
+// through the supervised worker instead of being treated as arbitrary binaries.
+type RuntimeConfig struct {
+	PythonPath       string
+	ASRModelDir      string
+	TTSModelDir      string
+	WhisperModelPath string
+	PiperModelPath   string
+	PiperConfigPath  string
+}
 
 // Engine manages audio transcription and synthesis
 type Engine struct {
@@ -33,16 +46,19 @@ type Engine struct {
 	dataDir    string
 	tempDir    string
 	sampleRate int
+	runtime    RuntimeConfig
+	worker     *managedWorker
 }
 
 // Config holds audio engine configuration
 type Config struct {
-	DataDir      string `json:"data_dir" yaml:"data_dir"`
-	WhisperPath  string `json:"whisper_path" yaml:"whisper_path"`
-	WhisperModel string `json:"whisper_model" yaml:"whisper_model"`
-	PiperPath    string `json:"piper_path" yaml:"piper_path"`
-	PiperModel   string `json:"piper_model" yaml:"piper_model"`
-	SampleRate   int    `json:"sample_rate" yaml:"sample_rate"`
+	DataDir      string        `json:"data_dir" yaml:"data_dir"`
+	WhisperPath  string        `json:"whisper_path" yaml:"whisper_path"`
+	WhisperModel string        `json:"whisper_model" yaml:"whisper_model"`
+	PiperPath    string        `json:"piper_path" yaml:"piper_path"`
+	PiperModel   string        `json:"piper_model" yaml:"piper_model"`
+	SampleRate   int           `json:"sample_rate" yaml:"sample_rate"`
+	Runtime      RuntimeConfig `json:"runtime" yaml:"runtime"`
 }
 
 // TranscriptionRequest represents a speech-to-text request
@@ -114,6 +130,16 @@ func NewEngine(cfg Config) (*Engine, error) {
 		piperDir:     filepath.Join(cfg.DataDir, "piper"),
 		tempDir:      filepath.Join(cfg.DataDir, "temp"),
 		sampleRate:   cfg.SampleRate,
+		runtime:      cfg.Runtime,
+	}
+	if e.runtime.PythonPath == "" {
+		e.runtime.PythonPath = os.Getenv("OFFGRID_SPEECH_PYTHON")
+		if e.runtime.PythonPath == "" {
+			e.runtime.PythonPath = "python3"
+		}
+	}
+	if e.runtime.ASRModelDir != "" || e.runtime.TTSModelDir != "" {
+		e.worker = newManagedWorker(e.runtime)
 	}
 
 	// Create directories
@@ -201,18 +227,35 @@ func (e *Engine) HasPiperBinary() bool {
 	return e.piperPath != ""
 }
 
+// HasManagedRuntime reports whether this engine was bound to an installed
+// managed speech package. The server uses it to refresh the binding after a
+// package download without requiring a service restart.
+func (e *Engine) HasManagedRuntime() bool {
+	return e != nil && e.worker != nil && (e.runtime.ASRModelDir != "" || e.runtime.TTSModelDir != "")
+}
+
 // IsASRAvailable checks if speech-to-text is available
 func (e *Engine) IsASRAvailable() bool {
+	if e.worker != nil && e.runtime.ASRModelDir != "" {
+		return e.worker.available("asr", e.runtime.ASRModelDir)
+	}
 	return e.whisperPath != "" && e.hasWhisperModel()
 }
 
 // IsTTSAvailable checks if text-to-speech is available
 func (e *Engine) IsTTSAvailable() bool {
+	if e.worker != nil && e.runtime.TTSModelDir != "" {
+		return e.worker.available("tts", e.runtime.TTSModelDir)
+	}
 	return e.piperPath != "" && e.hasPiperModel()
 }
 
 // hasWhisperModel checks if a whisper model is available
 func (e *Engine) hasWhisperModel() bool {
+	if e.runtime.WhisperModelPath != "" {
+		_, err := os.Stat(e.runtime.WhisperModelPath)
+		return err == nil
+	}
 	model := e.whisperModel
 	if model == "" {
 		model = "base.en"
@@ -235,6 +278,10 @@ func (e *Engine) hasWhisperModel() bool {
 
 // hasPiperModel checks if a piper model is available
 func (e *Engine) hasPiperModel() bool {
+	if e.runtime.PiperModelPath != "" {
+		_, err := os.Stat(e.runtime.PiperModelPath)
+		return err == nil
+	}
 	model := e.piperModel
 	if model == "" {
 		model = "en_US-amy-medium"
@@ -257,8 +304,15 @@ func (e *Engine) hasPiperModel() bool {
 
 // Transcribe converts speech to text using Whisper
 func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, error) {
+	return e.TranscribeContext(context.Background(), req)
+}
+
+func (e *Engine) TranscribeContext(ctx context.Context, req TranscriptionRequest) (*TranscriptionResponse, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	if e.worker != nil && e.runtime.ASRModelDir != "" {
+		return e.worker.transcribe(ctx, req, e.runtime.ASRModelDir)
+	}
 
 	if !e.IsASRAvailable() {
 		return nil, fmt.Errorf("ASR not available: whisper not found or no model installed")
@@ -296,7 +350,7 @@ func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, e
 		// Try ffmpeg conversion
 		ffmpegPath, _ := exec.LookPath("ffmpeg")
 		if ffmpegPath != "" {
-			cmd := exec.Command(ffmpegPath, "-y", "-i", tempPath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavPath)
+			cmd := exec.CommandContext(ctx, ffmpegPath, "-nostdin", "-protocol_whitelist", "file,pipe", "-y", "-i", tempPath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavPath)
 			if err := cmd.Run(); err != nil {
 				// Fallback: try using the original file directly
 				wavPath = tempPath
@@ -333,7 +387,8 @@ func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, e
 	args := []string{
 		"-m", modelPath,
 		"-f", wavPath,
-		"-oj",                           // Output JSON
+		"-oj", // Output JSON
+		"-of", tempPath + "-transcript",
 		"-t", fmt.Sprintf("%d", numCPU), // Use multiple threads
 	}
 
@@ -345,7 +400,8 @@ func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, e
 		args = append(args, "--prompt", req.Prompt)
 	}
 
-	cmd := exec.Command(e.whisperPath, args...)
+	defer os.Remove(tempPath + "-transcript.json")
+	cmd := exec.CommandContext(ctx, e.whisperPath, args...)
 
 	// Set LD_LIBRARY_PATH so whisper can find its shared libraries
 	whisperDir := filepath.Dir(e.whisperPath)
@@ -376,13 +432,13 @@ func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, e
 		} `json:"transcription"`
 	}
 
-	// Try to parse as JSON, fallback to plain text
-	output := stdout.String()
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
-		// Plain text output
-		return &TranscriptionResponse{
-			Text: strings.TrimSpace(output),
-		}, nil
+	// whisper.cpp writes -oj output to a file, not its diagnostic stdout.
+	output, err := os.ReadFile(tempPath + "-transcript.json")
+	if err != nil {
+		return nil, fmt.Errorf("whisper did not produce a transcript: %w", err)
+	}
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("invalid whisper transcript: %w", err)
 	}
 
 	// Build response
@@ -404,6 +460,9 @@ func (e *Engine) Transcribe(req TranscriptionRequest) (*TranscriptionResponse, e
 
 // findModelPath finds the full path to a whisper model
 func (e *Engine) findModelPath(model string) string {
+	if e.runtime.WhisperModelPath != "" {
+		return e.runtime.WhisperModelPath
+	}
 	patterns := []string{
 		filepath.Join(e.whisperDir, "ggml-"+model+".bin"),
 		filepath.Join(e.whisperDir, model+".bin"),
@@ -421,8 +480,21 @@ func (e *Engine) findModelPath(model string) string {
 
 // Speak converts text to speech using Piper
 func (e *Engine) Speak(req SpeechRequest) (io.Reader, error) {
+	return e.SpeakContext(context.Background(), req)
+}
+
+func (e *Engine) Close() {
+	if e.worker != nil {
+		e.worker.close()
+	}
+}
+
+func (e *Engine) SpeakContext(ctx context.Context, req SpeechRequest) (io.Reader, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	if e.worker != nil && e.runtime.TTSModelDir != "" {
+		return e.worker.speak(ctx, req, e.runtime.TTSModelDir)
+	}
 
 	if !e.IsTTSAvailable() {
 		return nil, fmt.Errorf("TTS not available: piper not found or no model installed")
@@ -464,12 +536,29 @@ func (e *Engine) Speak(req SpeechRequest) (io.Reader, error) {
 		"--model", modelPath,
 		"--output_file", tempPath,
 	}
+	if e.runtime.PiperConfigPath != "" {
+		args = append(args, "--config", e.runtime.PiperConfigPath)
+		if req.Voice != "" && req.Voice != "default" {
+			// Managed Piper voices are speaker IDs, not alternate model paths.
+			var config struct {
+				NumSpeakers int `json:"num_speakers"`
+			}
+			data, err := os.ReadFile(e.runtime.PiperConfigPath)
+			var speaker int
+			_, parseErr := fmt.Sscanf(req.Voice, "%d", &speaker)
+			if err != nil || json.Unmarshal(data, &config) != nil || parseErr != nil || fmt.Sprint(speaker) != req.Voice || speaker < 0 || speaker >= config.NumSpeakers {
+				os.Remove(tempPath)
+				return nil, fmt.Errorf("selected Piper speaker is unavailable")
+			}
+			args = append(args, "--speaker", req.Voice)
+		}
+	}
 
 	if req.Speed != 0 && req.Speed != 1.0 {
 		args = append(args, "--length_scale", fmt.Sprintf("%.2f", 1.0/req.Speed))
 	}
 
-	cmd := exec.Command(e.piperPath, args...)
+	cmd := exec.CommandContext(ctx, e.piperPath, args...)
 	cmd.Stdin = strings.NewReader(req.Input)
 
 	// Set LD_LIBRARY_PATH for shared libraries (piper needs its bundled libs)
@@ -498,6 +587,9 @@ func (e *Engine) Speak(req SpeechRequest) (io.Reader, error) {
 // findPiperModelPath finds the full path to a piper model
 // Returns empty string if either the .onnx or .onnx.json file is missing
 func (e *Engine) findPiperModelPath(model string) string {
+	if e.runtime.PiperModelPath != "" {
+		return e.runtime.PiperModelPath
+	}
 	patterns := []string{
 		filepath.Join(e.piperDir, model+".onnx"),
 		filepath.Join(e.piperDir, "voices", model+".onnx"),
@@ -579,11 +671,15 @@ func (e *Engine) Status() map[string]interface{} {
 			"available":    e.IsASRAvailable(),
 			"whisper_path": e.whisperPath,
 			"models":       whisperModels,
+			"runtime":      e.runtime.ASRModelDir != "" && e.worker != nil,
+			"model_dir":    e.runtime.ASRModelDir,
 		},
 		"tts": map[string]interface{}{
 			"available":  e.IsTTSAvailable(),
 			"piper_path": e.piperPath,
 			"voices":     len(voices),
+			"runtime":    e.runtime.TTSModelDir != "" && e.worker != nil,
+			"model_dir":  e.runtime.TTSModelDir,
 		},
 		"data_dir": e.dataDir,
 	}

@@ -18,6 +18,7 @@ type Registry struct {
 	models       map[string]*api.ModelMetadata
 	modelsDir    string
 	loadedModels map[string]interface{} // actual loaded model instances
+	packages     *PackageStore
 }
 
 // NewRegistry creates a new model registry
@@ -26,8 +27,13 @@ func NewRegistry(modelsDir string) *Registry {
 		models:       make(map[string]*api.ModelMetadata),
 		modelsDir:    modelsDir,
 		loadedModels: make(map[string]interface{}),
+		packages:     NewPackageStore(modelsDir),
 	}
 }
+
+// Packages shares the registry's managed root but is excluded from its legacy
+// single-file inference projection.
+func (r *Registry) Packages() *PackageStore { return r.packages }
 
 // ScanModels scans the models directory for available models
 func (r *Registry) ScanModels() error {
@@ -53,6 +59,9 @@ func (r *Registry) ScanModels() error {
 		}
 
 		if info.IsDir() {
+			if info.Name() == PackageDirectory {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -185,6 +194,33 @@ func (r *Registry) GetModel(id string) (*api.ModelMetadata, error) {
 
 	copy := *model
 	return &copy, nil
+}
+
+// GetChatModel is the language-generation admission boundary. Speech packages
+// are not in this projection and unknown explicit types are never chat models.
+func (r *Registry) GetChatModel(id string) (*api.ModelMetadata, error) {
+	m, err := r.GetModel(id)
+	if err != nil {
+		return nil, err
+	}
+	if !api.IsChatModelType(m.Type) || IsManagedPackagePath(m.Path) {
+		return nil, fmt.Errorf("model %q does not support chat", id)
+	}
+	return m, nil
+}
+
+// IsManagedPackagePath prevents explicit paths and legacy aliases from bypassing
+// package routing. Symlinks to managed artifacts are resolved when possible.
+func IsManagedPackagePath(filename string) bool {
+	if resolved, err := filepath.EvalSymlinks(filename); err == nil {
+		filename = resolved
+	}
+	for _, part := range strings.Split(strings.ReplaceAll(filepath.Clean(filename), `\`, "/"), "/") {
+		if strings.EqualFold(part, PackageDirectory) {
+			return true
+		}
+	}
+	return false
 }
 
 // LoadModel records that the runtime successfully loaded a model. Runtime
