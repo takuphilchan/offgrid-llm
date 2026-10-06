@@ -11,8 +11,8 @@
   .package-preview-active { position: sticky; top: 12px; z-index: 2; box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 10%, transparent); }
   .composer-voice-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
   .voice-settings { position: relative; font-size: 13px; }
-  .voice-settings summary { cursor: pointer; padding: 8px; }
-  .voice-settings-panel { display: grid; gap: 12px; position: absolute; bottom: 100%; inset-inline-start: 0; z-index: 5; width: min(340px, calc(100vw - 64px)); padding: 16px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-1); box-shadow: var(--shadow); }
+  .voice-settings-panel { position: fixed; inset: auto; margin: 0; overflow-y: auto; padding: 16px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--text); background: var(--surface-1); box-shadow: var(--shadow); }
+  .voice-settings-panel:popover-open { display: grid; gap: 12px; }
   .voice-settings-panel select { width: 100%; min-width: 0; }
   .voice-settings-panel small { color: var(--muted); }
   .model-info-banner { display: flex; gap: 12px; align-items: baseline; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); color: var(--muted); }
@@ -237,7 +237,9 @@
   .chat-performance label { display: flex; align-items: center; gap: 8px; }
   .chat-performance select { color: var(--text); background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
   .chat-performance p { flex-basis: 100%; margin: 0; max-width: 70ch; }
-  .composer { background: var(--surface-1); border-color: var(--line-strong); border-radius: 11px; box-shadow: none; backdrop-filter: none; }
+  .composer { grid-template-columns: minmax(0, 1fr); background: var(--surface-1); border-color: var(--line-strong); border-radius: 11px; box-shadow: none; backdrop-filter: none; }
+  .composer-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+  .composer-footer > .composer-actions { margin-inline-start: auto; }
   .composer:focus-within { border-color: var(--text); }
   .composer-input { min-width: 0; display: grid; }
   .composer textarea { width: 100%; overflow-y: auto; color: var(--text); font-size: 15px; }

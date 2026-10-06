@@ -315,3 +315,56 @@ test('voice settings remain visible and keyboard reachable on narrow light and d
     await page.screenshot({ path: info.outputPath(`voice-${theme}-mobile.png`), fullPage: true });
   }
 });
+
+for (const surface of ['chat', 'agents']) {
+  test(`${surface} voice settings dismiss outside and with Escape, retaining selections`, async ({ page }, info) => {
+    await microphoneFixture(page);
+    if (surface === 'agents') {
+      await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', api_version: 2, capabilities: ['task-first-agents-v2'] } }));
+      await page.route('**/api/v2/jobs*', route => route.fulfill({ json: [] }));
+      await page.route('**/v1/agents/tasks', route => route.fulfill({ json: [] }));
+      await page.route('**/v1/agents/tools', route => route.fulfill({ json: { tools: [], enabled_count: 0 } }));
+      await page.route('**/v1/agents/mcp', route => route.fulfill({ json: { servers: [] } }));
+      await page.goto('/ui/#/agents/workspace');
+    }
+    const button = page.getByRole('button', { name: 'Voice settings', exact: true });
+    const panel = page.getByRole('region', { name: 'Voice settings', exact: true });
+    const editor = surface === 'chat' ? page.locator('.composer textarea') : page.getByRole('textbox', { name: 'Task', exact: true });
+    const outside = surface === 'chat' ? editor : page.getByRole('heading', { name: 'Agents', exact: true });
+    await expect(panel).toBeHidden();
+    await button.click();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await page.getByLabel('Recognition model', { exact: true }).selectOption('asr-b@r2');
+    await expect(panel).toBeVisible();
+    await outside.click();
+    await expect(panel).toBeHidden();
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    if (surface === 'chat') await expect(editor).toBeFocused();
+    await button.click();
+    await expect(page.getByLabel('Recognition model', { exact: true })).toHaveValue('asr-b@r2');
+    await page.getByLabel('Speech model', { exact: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(button).toBeFocused();
+    await button.press('Enter');
+    await expect(panel).toBeVisible();
+    await button.click();
+    await expect(panel).toBeHidden();
+    if (surface === 'chat') {
+      await expect(page.locator('.composer').getByRole('button', { name: 'Voice settings', exact: true })).toBeVisible();
+      await expect(page.locator('.composer').getByRole('checkbox', { name: 'Speak responses' })).toBeVisible();
+    }
+    await page.screenshot({ path: info.outputPath(`${surface}-voice-controls.png`), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.dir = 'rtl');
+    await button.click();
+    const box = await panel.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    await page.screenshot({ path: info.outputPath(`${surface}-voice-rtl.png`), fullPage: true });
+    await outside.click();
+    await expect(panel).toBeHidden();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+}

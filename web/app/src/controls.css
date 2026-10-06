@@ -37,7 +37,7 @@
     border-color: var(--accent-strong);
     font-weight: 600;
   }
-  .text-button { background: transparent; border-color: transparent; }
+  .text-button { color: var(--text); background: transparent; border-color: transparent; }
   .danger-button { color: var(--red); }
   :where(.secondary-button, .text-button, .danger-button, .new-chat-button,
     .resource-actions button, .model-actions button, .inline-error button):hover:not(:disabled) {

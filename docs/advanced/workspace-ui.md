@@ -52,6 +52,12 @@ grow; do not set fixed heights that clip translated labels.
   regression suite includes 320px/390px and desktop layouts; Electron packages
   consume the same compiled renderer, not a separate styling implementation.
 
+Chat keeps voice settings and response playback controls inside the composer
+footer, alongside microphone and send actions. Chat and Agents share the voice
+settings popover: clicking outside or pressing Escape dismisses it without
+resetting model selections. Escape returns keyboard focus to its trigger; the
+panel stays within the viewport in narrow and RTL layouts.
+
 The palette is deliberately monochrome. Statuses may use restrained semantic
 contrast where losing the distinction would be unsafe. IBM Plex Sans, IBM Plex
 Sans Arabic, and IBM Plex Mono are bundled with the application, so typography
