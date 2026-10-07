@@ -4,7 +4,7 @@ OffGrid is not limited to its curated catalog. Larger models are available to
 users with suitable hardware; there is no automatic catalog-sized RAM restriction.
 Discovery requires internet access to Hugging Face. Ordinary local inference does not.
 
-## Web and desktop
+## Language and embedding models
 
 1. Open **Models**, choose **Language** or **Embeddings**, then **Find more models**.
 2. Enter a model or publisher and choose **Search**. Typing alone does not send a query.
@@ -58,23 +58,26 @@ Ctrl+C exits 130. Search progress goes to stderr; `--json` output stays parseabl
 `--all` can include gated repository metadata but does not authenticate gated downloads.
 For a container-backed CLI, prepend `docker exec -it offgrid` (omit `-it` when scripting).
 
-## Download phases and recovery
+## Speech models from Hugging Face
 
-### Speech models from Hugging Face
+1. Choose **Models → Speech recognition** or **Speech generation**.
+2. Use a curated entry, or search Hugging Face by model or publisher. Speech
+   searches do not apply the language-model GGUF-only filter.
+3. Choose **Review download** on the result. A single supported package resolves
+   directly; choose a variant inline only when more than one is supported.
+4. Review package size, required disk space, source revision, license and runtime
+   warnings in that card, then choose **Download** there. There is no separate
+   file-collection or repeated review step for a single supported package.
 
-Speech discovery now has a bounded data-only resolver behind the shared model
-client. `speech_recognition` and `speech_generation` searches do not apply the
-GGUF-only filter. Repository selection resolves an immutable commit before
-offering complete variants. Choose **Models → Speech recognition** or **Speech
-generation**, then a curated entry's **Review download**, or explicitly search
-Hugging Face and choose a repository and variant. The preview shows the full
-package, exact source revision, licenses, download size, required free space and
-missing runtime. **Download** installs every declared dependency; users do not
-assemble manifests or collect files. Advanced offline folder import stays collapsed.
+Installation includes the declared **model artifacts**, not executable runtime
+dependencies. Advanced offline folder import stays collapsed. Download size is
+not RAM/VRAM demand; unknown sizes remain unknown, not zero. Keyword search can
+return related repositories, but only complete supported layouts are installable.
 
-This milestone installs speech models, **not speech runtimes or voice interfaces**.
-Installed, integrity checked, runtime compatible, smoke-tested and qualified remain
-independent. A download never enables a microphone or puts speech models in Chat.
+Installed, integrity checked, runtime compatible, smoke-tested and qualified are
+independent states. A download never starts the microphone or places ASR/TTS
+models in the language-model selector. Dictation and read-aloud require compatible
+installed runtimes; see [Voice setup](voice.md) for selection and testing.
 
 Supported recipes include English whisper.cpp `ggml-*.en.bin`, Piper ONNX with
 its matching JSON configuration and voice model card, streaming Zipformer with
@@ -152,6 +155,8 @@ failures 1. Identical request IDs deduplicate accepted source-bound work; change
 sources conflict. A fresh preview of the same immutable package can recover the
 original operation, but never restarts it. See [Python examples](../../python/README.md#speech-model-packages).
 
+## Language and embedding download recovery
+
 - **Downloading**: transfer bytes and speed; Cancel keeps the partial file.
 - **Preparing model**: bytes have arrived; OffGrid closes the file, promotes it,
   and refreshes its registry. 100% transferred does not mean the model is ready yet.
@@ -172,3 +177,19 @@ Do not disable antivirus or delete all model data to work around a file lock.
 
 Source changes are not installed updates: already-running desktop apps/containers
 need a separately built and explicitly applied package/image before these fixes appear.
+
+## Search and installation troubleshooting
+
+| What you see | What to check |
+| --- | --- |
+| Search unavailable or timed out | The service's network/proxy path for web search and downloads; legacy CLI search uses the client's network |
+| No complete supported speech package | The architecture and required artifacts, not just the publisher name; an ASR search result may be an aligner or unsupported conversion |
+| Missing upstream SHA-256 identity | Discovery could not establish an immutable artifact identity; do not bypass the check or substitute another model's digest |
+| Needs attention | Read the operation's error and retained-byte state; use Resume for that pinned operation after addressing its cause |
+| Installed but runtime unavailable | Inspect runtime dependencies/profile compatibility; downloading the same weights again will not install a runtime |
+| An explicit model selection stopped working | Confirm the workspace and revision, then select a supported model in Voice settings |
+| Package is in use | Finish/cancel its speech work and allow idle unloading before repair/removal |
+
+Search and recovery must not silently disable a VPN, change proxy trust, discard
+partial data or start another service. Preserve the operation ID and safe error
+code when requesting help; do not include credentials or private audio.

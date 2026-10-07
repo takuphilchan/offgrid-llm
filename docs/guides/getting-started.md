@@ -14,6 +14,18 @@ Open **Models**, install a chat model, then select it in **Chat**. Begin with a 
 
 Check important answers. Fluent text is not evidence of current facts, file access, or a completed computer action. A local model does not automatically browse the internet. See [history management](history-management.md) for conversation rename, export, and deletion.
 
+## Use voice without changing the task workflow
+
+With a compatible ASR runtime and model, **Use microphone** records a draft in
+Chat or Agents. Stop recording, review the transcription, then send/start it
+yourself. Dictation does not approve tools or submit work automatically.
+
+With a compatible TTS runtime and model, **Read aloud** plays an existing Chat
+answer. **Speak responses** in the Chat composer opts into speech for new
+answers. **Voice settings** selects ASR and TTS independently; close the panel
+by clicking elsewhere or pressing Escape. See [voice setup and recovery](voice.md)
+before downloading: model weights alone do not install the speech runtime.
+
 ## Ask about documents
 
 Knowledge retrieval uses an embedding model as well as a chat model. Enable embeddings, import a supported file, wait for indexing, then ask a grounded question. Inspect the cited source.

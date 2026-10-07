@@ -346,9 +346,9 @@ See [MCP setup and troubleshooting](../guides/mcp.md).
 Treat external tools and their responses as untrusted. Local model inference
 does not keep tool arguments local when an external endpoint is selected.
 
-## Errors
+## Experimental speech compatibility endpoints
 
-### Experimental speech compatibility endpoints
+For the user-facing workflow and model prerequisites, see [Voice](../guides/voice.md).
 
 `GET /v1/audio/status` and `GET /v1/audio/models` include `profiles` for managed
 speech packages alongside the legacy fields. Each profile provides `id`,
@@ -364,6 +364,10 @@ as implemented by these file/chunk endpoints.
 `response_format`. WAV is the only currently encoded output; another requested
 format returns `422 unsupported_audio_format`, never WAV labelled as MP3.
 Qwen currently accepts speed 1; unsupported values fail explicitly.
+The Qwen ASR adapter currently fails when the API language code `en` is explicitly
+passed. Omit the optional language field to use automatic detection; the UI
+dictation path does not set that override. This is a known adapter limitation,
+not evidence that all language overrides or profiles are qualified.
 
 Managed model selection accepts the installed ID, `id@revision`, exact display
 name, or source repository ID. Omitted models select an available profile for

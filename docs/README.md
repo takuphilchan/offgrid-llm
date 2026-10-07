@@ -11,6 +11,7 @@ Start here to install OffGrid, finish a task, or maintain an existing workspace.
 | Use my existing workspace after updating desktop | [Desktop startup and recovery](setup/desktop-startup.md) |
 | Update a container without losing data | [Docker upgrades](setup/docker.md#upgrade-an-existing-workspace) |
 | Find and download a model | [Model discovery](guides/model-discovery.md) |
+| Dictate or hear an answer aloud | [Voice setup and controls](guides/voice.md) |
 | Ask questions about local documents | [Knowledge and embeddings](guides/embeddings.md) |
 | Run a task or connect tools | [Agents](guides/agents.md) and [MCP connections](guides/mcp.md) |
 | Understand computer access and its limits | [Computer tasks](guides/computer-tasks.md) |
@@ -30,6 +31,7 @@ Local inference does not require a cloud model provider. Downloads, public model
 - [Installation](setup/installation.md), [Docker](setup/docker.md), and [autostart](setup/autostart.md)
 - [Desktop recovery](setup/desktop-startup.md) and [deployment](advanced/DEPLOYMENT.md)
 - [Models](guides/models.md), [model discovery](guides/model-discovery.md), and [Hugging Face downloads](guides/huggingface.md)
+- [Voice](guides/voice.md): ASR/TTS selection, dictation, playback and troubleshooting
 - [Multi-user access](guides/multi-user.md), [audit records](guides/audit.md), and [metrics](guides/metrics.md)
 - [Performance](advanced/PERFORMANCE.md), [CPU support](advanced/cpu-support.md), and [low-memory tradeoffs](advanced/low-memory.md)
 - [Appliance planning](setup/appliance.md) for shared offline installations

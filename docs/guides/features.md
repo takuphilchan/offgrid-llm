@@ -8,6 +8,7 @@ OffGrid provides local model inference and a shared workspace through its web UI
 | --- | --- | --- |
 | Chat and drafting | Local generation with an installed chat model; verify important claims | [Getting started](getting-started.md) |
 | Model management | Catalog/search, downloads, installed models, and recovery | [Model discovery](model-discovery.md) |
+| Voice input and playback | Experimental dictation in Chat/Agents and Chat read-aloud; compatible ASR/TTS runtimes required | [Voice](voice.md) |
 | Document questions | Local embeddings and indexed sources; inspect evidence and extraction limits | [Knowledge](embeddings.md) |
 | Agent tasks | Durable jobs, visible tool activity, approvals, recovery, and bounded artifacts | [Agents](agents.md) |
 | External tools | Administrator-managed MCP connections; calls may leave the computer | [MCP](mcp.md) |

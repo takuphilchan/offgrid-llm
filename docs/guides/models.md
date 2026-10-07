@@ -13,6 +13,8 @@ it is not a ranked list of current model recommendations.
 | Agent tools | Reliable structured tool calls, not just fluent chat |
 | Managed-browser images | Compatible model/projector pair, image transport, and preflight |
 | Native desktop control | The implemented driver and typed tools; a vision model does not add native capture |
+| Dictation | A speech-recognition model and its compatible ASR runtime |
+| Spoken answers | A supported direct-speech TTS profile and runtime; a chat model still generates the answer |
 
 Check the publisher's model card, license, language coverage, and architecture.
 A filename, parameter count, or successful download is not compatibility evidence.
@@ -52,6 +54,8 @@ may mean a different workspace, not a failed download.
 
 ## Verify what you installed
 
+For a language model:
+
 1. Wait for **Ready**, not merely 100% transferred.
 2. Inspect the installed model entry and file identity.
 3. Run a short chat request and check model/runtime errors.
@@ -61,11 +65,22 @@ may mean a different workspace, not a failed download.
 
 The registry can recognize some legacy file extensions, but recognition is not
 a guarantee that the current llama.cpp runtime can load an old GGML/BIN format.
-Use a compatible GGUF for current workflows; do not rename an incompatible file.
+Use a compatible GGUF for language/embedding workflows; do not rename an
+incompatible file. Speech packages have their own architecture-specific formats.
 
-## Offline transfer and backups
+For speech, distinguish these states before trying the microphone or playback:
 
-### Speech package foundation (development)
+| State | What it establishes |
+| --- | --- |
+| Installed | A complete package has been published to managed storage |
+| Integrity checked | Its managed artifacts matched recorded digests |
+| Runtime available | A matching execution path and dependencies were found |
+| Smoke-tested | A request succeeded for that revision in the current service lifetime |
+| Qualified | A recorded workflow/language/hardware evaluation passed; this is not implied by any earlier state |
+
+See [Voice](voice.md) for ASR/TTS selection and a short dictation/playback test.
+
+## Speech model packages
 
 The shared model contract distinguishes four capability categories: `language`,
 `embeddings`, `speech_recognition`, and `speech_generation`. An installation
@@ -84,7 +99,7 @@ access. `unsafe_source`, `source_identity_mismatch`, `incomplete_listing`, and
 `missing_artifact_identity` stop resolution before installation. Private/gated
 sources return `public_access_required` rather than prompting for URL tokens.
 An absent speech runtime is reported separately: package download may be useful
-for preparation/offline transfer, but does not enable speech in this build.
+for preparation/offline transfer, but does not by itself enable speech.
 
 Speech models use versioned multi-file manifests, not renamed GGUF downloads.
 Normally choose a speech category, discover a Hugging Face package and select
@@ -99,8 +114,11 @@ refresh the inventory if an acknowledgment was lost near completion.
 
 The model package storage code accepts Whisper, Piper, streaming Zipformer,
 Kokoro, and reviewed Qwen3-ASR/Qwen3-TTS declarative layouts. This is
-**storage validation**, not a claim that their speech runtimes, model quality,
-or voice interfaces are implemented or qualified.
+**storage validation**, not a claim that every corresponding runtime is executable
+or qualified. Whisper, Piper and reviewed Qwen execution adapters have separate
+runtime prerequisites; Kokoro/Zipformer execution remains unimplemented.
+
+### Advanced: package contract and import limits
 
 Schema `1` requires `id`, immutable `revision`, `name`, `architecture`,
 `runtime: {adapter, revision}`, explicit `capabilities`, `languages`,
@@ -132,9 +150,9 @@ the managed bytes again; restarting clears in-memory verification evidence.
 Runtime consumers must hold a package lease, which prevents removal until the
 work releases it. Removal is confined to that package revision, not recordings or
 user documents. Interrupted staging is not an installed model. Source-bound
-downloads support durable cancel/resume and exact-revision repair. Runtime/offline
-distribution packs, legacy speech migration, and user-facing voice workflows
-remain later stages of the approved Voice program.
+downloads support durable cancel/resume and exact-revision repair. Complete
+runtime/offline distribution packs, legacy speech migration, Talk sessions and
+durable recording workflows remain unfinished stages of the Voice program.
 
 ### Speech runtime selection and read-aloud
 
@@ -151,46 +169,11 @@ For Qwen response playback, select **CustomVoice**, not **Base** or **VoiceDesig
 Base needs reference audio; read-aloud does not clone a voice or select a hidden
 reference recording. Installed incompatible packages are retained and explained.
 
-The response's **Read aloud** control prepares short WAV chunks, displays progress,
-and permits cancellation before or during playback. It prefetches at most one
-chunk. Navigating away stops playback and pending synthesis. Text remains the
-authoritative response; this is not automatic Talk mode or native streaming TTS.
-Cold model loading and CPU synthesis can still be slow; interactive latency and
-voice quality have not been qualified. No response speech is generated until the
-user requests it.
-
-In Chat, turn on **Speak responses** before sending to hear new answers while
-their text arrives. This opt-in lasts only for the open Chat page, never replays
-history, and checks for a compatible installed voice first. Complete sentences
-are synthesized with at most one look-ahead chunk. The last incomplete fragment
-waits until the response is saved. Speech heard before saving is provisional.
-**Stop reading** stops only audio; Chat's **Stop** stops audio immediately and
-requests cancellation of generation. Leaving Chat stops audio. If speech falls
-too far behind, it stops with an explanation while text generation continues.
-This is chunked speech during text streaming, not native audio-token streaming
-or the full Talk/turn-taking feature.
-
-**Voice settings**, beside the Chat composer and in the Agents task composer,
-selects recognition and speech models independently. Only runtime-available
-profiles can be selected. Automatic selection shows the available default;
-an explicitly selected model that becomes unavailable produces an error rather
-than silently switching. Where the selected TTS profile declares voices, choose
-one there. Settings are saved for the current account/workspace in this browser,
-not synchronized between devices. They do not remember microphone permission
-or enable automatic playback. Each recording or answer pins its model revision
-and voice; changes take effect on the next recording/playback, not mid-answer.
-
-Speech controls now sit immediately above the Chat composer. Dictation preserves
-edits made while recognition is running. Stop remains usable during generation;
-changing composer context or leaving the page cancels pending capture and
-transcription, including a microphone permission request that resolves late.
-
-In speech-model search, **Review download** expands transfer size, required space,
-licenses and runtime warnings inside the result card; **Download** starts the
-transfer there. A single supported variant is resolved directly. Repositories
-with multiple supported variants require an inline choice, never an arbitrary
-first variant. Keyword search queries Hugging Face rather than a Qwen-only
-shortlist. Unknown transfer sizes stay unknown: parameter counts are not bytes.
+Select recognition and speech models independently in **Voice settings**, inside
+the Chat composer footer or beside the microphone in the Agents task composer.
+The [voice guide](voice.md) covers dictation, read-aloud, Speak responses, model
+preferences, cancellation and troubleshooting. None of these controls grants
+new agent permissions or enables the planned full Talk mode.
 
 One speech package is kept loaded for short follow-ups and released after 30 idle
 seconds. Switching packages releases its process and lease before loading the
@@ -198,7 +181,7 @@ next one. Removal/repair of a leased package is refused; wait for idle unloading
 Runtime availability is not a passed inference test. A successful request records
 an in-memory smoke result for that revision, never hardware/language qualification.
 
-### Existing model transfer
+## Offline transfer and backups
 
 Prepare the matching application, UI, runtime, models, and supporting files on a
 connected machine, verify digests after transfer, and test with networking off.

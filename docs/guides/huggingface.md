@@ -1,7 +1,7 @@
 # Find models on Hugging Face
 
 OffGrid can discover public GGUF repositories beyond its curated catalog.
-Use [Models → Find more models](model-discovery.md#web-and-desktop) for the
+Use [Models → Find more models](model-discovery.md#language-and-embedding-models) for the
 guided workflow. This page covers CLI selection and its limits, not publisher
 endorsement or current model rankings.
 
@@ -57,7 +57,7 @@ supplying authentication in a repository URL.
 
 ## Recover a transfer
 
-Use the [download phases and recovery guide](model-discovery.md#download-phases-and-recovery).
+Use the [download phases and recovery guide](model-discovery.md#language-and-embedding-download-recovery).
 Cancellation preserves resumable partial bytes; reuse the same repository/file
 identity. Disk errors, permissions, Windows file locks, upstream access, and
 network failures require different repairs.

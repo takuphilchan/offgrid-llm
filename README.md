@@ -17,6 +17,8 @@ New here? Start with the [quickstart](docs/setup/quickstart.md), choose an
 [installation](docs/setup/installation.md), or browse the
 [documentation index](docs/README.md). Practical guides cover
 [computer tasks](docs/guides/computer-tasks.md) and [MCP connections](docs/guides/mcp.md).
+For dictation and spoken answers, see [voice setup and troubleshooting](docs/guides/voice.md),
+including which speech models need separately installed runtimes.
 
 For development changes, see the [OpenSpec workflow](openspec/README.md).
 
