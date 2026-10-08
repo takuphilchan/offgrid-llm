@@ -364,6 +364,33 @@ The OpenSpec change remains **26/30**: manual screen-reader evidence, the exact
 pre-change latency comparison, the five-person formative study and remaining
 installed-platform checks are not supplied by this deployment.
 
+### Workspace release preparation (2026-10-09)
+
+- Updated the locked Electron runtime from 43.4.0 to 43.7.9 and compatible
+  transitive build dependencies. `npm ci` succeeds for web and desktop. The web
+  audit reports zero vulnerabilities; the desktop audit reports zero high or
+  critical findings and eight remaining moderate build-chain findings. The
+  browser companion audit reports zero. No forced builder downgrade was used.
+- API drift, TypeScript, production UI build and all 49 desktop unit tests pass.
+  The complete renderer suite passes **279/289, ten opt-in skips, zero failures**
+  in `offgrid-web-qualification-Ob47Mh`. These are automated fixture checks, not
+  real-model qualification or the pending human usability study.
+- The rebuilt, isolated Windows package passes theme/locale synchronization,
+  all six routes at true 200% zoom, keyboard focus and appearance after restart
+  in `offgrid-desktop-theme-DnMb1V`. The first runs exposed a test race: a generic
+  last-button locator focused Knowledge's disabled loading control before the
+  intended action appeared. The harness now waits for the committed route and
+  the named, enabled Knowledge action, retaining the actual-focus assertion.
+- All five release-automation suites pass against a clean LF export of the
+  committed scripts in `/home/phil/offgrid-release-checks-niCO1k`. The initial
+  WSL run against a Windows CRLF checkout failed the workflow-step text parser.
+  A temporary export then encountered an already nearly full `/tmp`; its own
+  partial files were removed and the bounded script export used `/home/phil`.
+  No workspace data, models or unrelated temporary files were removed.
+- Publication still requires passing CI at the exact release revision and the
+  existing complete-asset/container gate. These local checks neither close the
+  remaining OpenSpec qualification tasks nor update the installed user app.
+
 ## Workspace redesign stage 2: shared shell and controls (2026-10-08)
 
 - Implemented OpenSpec change `workspace-shell-foundation`: compact header,

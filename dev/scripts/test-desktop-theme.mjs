@@ -108,12 +108,16 @@ try {
     window.setSize(1280, 900); window.webContents.setZoomFactor(2);
   });
   for (const route of ['chat','agents','models','knowledge','activity','settings']) {
+    console.log(`Checking 200% zoom on ${route}`);
     await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/${route}`);
+    // Hash navigation completes before React commits the new route. Wait for
+    // its heading so a generic locator cannot focus the previous page's button.
+    await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents',models:'Models',knowledge:'Knowledge',activity:'Activity',settings:'Settings'}[route]);
     await expect(page.locator('.page-content')).toBeVisible();
     // Empty Activity intentionally has no page-level action: its refresh belongs
     // to the shared header. Exercise the remaining diagnostics disclosure.
-    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.getByRole('textbox',{name:'Task',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
-    await expect(target).toBeVisible(); await target.focus(); await target.scrollIntoViewIfNeeded();
+    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.getByRole('textbox',{name:'Task',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
+    await expect(target).toBeVisible(); await expect(target).toBeEnabled(); await target.focus(); await target.scrollIntoViewIfNeeded();
     await expect(target).toBeFocused();
     await page.evaluate(() => document.fonts.ready);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
