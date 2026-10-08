@@ -62,6 +62,12 @@ folders. Settings identifies the connected backend. Never connect two services
 to the same writable workspace directory. See [workspace backup and
 recovery](../advanced/workspace-recovery.md) before upgrading or moving data.
 
+The updated Settings presentation has **Preferences**, **Workspace**, and
+**Diagnostics** groups. Workspace shows the connected endpoint/version once;
+Diagnostics includes API/UI identity and explicitly labelled desktop-local
+folders, which are not container storage paths. Refreshing these details does
+not replace or stop a service.
+
 Closing a successfully connected window keeps the app in the tray where
 available. Use **Quit OffGrid** to exit. Quitting stops only a child started by
 this desktop; it never stops an externally managed container/service. Failed

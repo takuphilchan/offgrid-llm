@@ -281,8 +281,11 @@ an unknown outcome must be inspected and reconciled, never silently replayed.
 The web UI and `offgrid agent status/approve/deny/cancel/resume/reconcile` use the
 same durable state. See the [agent recovery guide](docs/guides/agents.md).
 
-Chat and agent drafts are saved locally as you type, separately for each account.
-They survive navigation and failed sends; browser storage failures show a warning.
+Chat and agent drafts are saved locally as you type, separately for each account
+and identified workspace. Previous account-only drafts require an explicit
+**Restore previous drafts here** choice; originals and newer drafts are preserved.
+Services without workspace identity keep new drafts in session memory only.
+Drafts survive navigation and failed sends; browser storage failures show a warning.
 Drafts are not encrypted or synchronized across devices. See the reliability plan
 for remaining collection isolation, replayable chat progress, and release gates.
 

@@ -22,6 +22,7 @@ test('a completed transfer stays cancellable while finalizing, then a failed pro
     await route.fulfill({ json: { success: true, status: state, file_name: 'tinyllama.gguf' } });
   });
   await page.goto('/ui/#/models');
+  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   const card = page.locator('.catalog-card').filter({ has: page.getByRole('heading', { name: 'TinyLlama', exact: true }) });
   await expect(card.getByRole('status')).toHaveText('Preparing model · 100.0%');
   await expect(card.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
@@ -35,6 +36,7 @@ test('a completed transfer stays cancellable while finalizing, then a failed pro
   await expect(card.getByRole('status')).toHaveText('Installed');
   await expect(card.getByRole('progressbar')).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Installed', exact: true })).toHaveCount(0);
+  await expect(page.locator('.catalog-card').filter({ hasText: 'Other model' }).getByRole('button', { name: 'Review download', exact: true })).toBeEnabled();
+  await page.getByRole('tab', { name: 'Installed', exact: true }).click();
   await expect(page.locator('.installed-model')).toContainText('tinyllama');
-  await expect(page.locator('.catalog-card').filter({ hasText: 'Other model' }).getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
 });

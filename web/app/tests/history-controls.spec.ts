@@ -65,6 +65,7 @@ test('bulk chat deletion only removes confirmed matches and retries failures, no
   state.fail('Delete second');
   await page.goto('/ui/#/chat');
   await page.getByRole('searchbox',{name:'Search conversations'}).fill('Delete');
+  await page.getByRole('button', {name:'Manage history',exact:true}).click();
   await page.getByRole('button',{name:'Delete listed chats',exact:true}).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Delete 2 listed conversations');
@@ -120,6 +121,7 @@ test('late history refresh cannot replace a newer conversation or draft', async 
   requested=true;await delayed;
   await r.fulfill({json:{sessions:state.chats()}});returned=true;
  });
+ await page.getByRole('button',{name:'Manage history',exact:true}).click();
  await page.locator('#conversation-history').getByRole('button',{name:'Refresh',exact:true}).click();
  await expect.poll(()=>requested).toBe(true);
  await page.getByRole('button',{name:'New chat',exact:true}).click();
@@ -137,6 +139,7 @@ test('mobile history confirmation fits and search does not erase the composer dr
   await page.locator('.composer textarea').fill('Keep my unsent text');
   await page.getByRole('button',{name:'Show conversations',exact:true}).click();
   await page.getByRole('searchbox',{name:'Search conversations'}).fill('Delete');
+  await page.getByRole('button', {name:'Manage history',exact:true}).click();
   await page.getByRole('button',{name:'Delete listed chats',exact:true}).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeInViewport();

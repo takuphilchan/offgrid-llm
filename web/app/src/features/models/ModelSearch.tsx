@@ -4,6 +4,9 @@ import { api, type CatalogModel, type DiscoveredModel, type DiscoveredFile, type
 import { useI18n } from '../../i18n';
 import { isActiveDownload, ModelDownloadProgress } from '../../components/ModelDownloadProgress';
 import { formatBytes } from './model-format';
+import { LegacyDownloadReview } from './LegacyDownloadReview';
+import { modelAcquisition } from '../../i18n/model-acquisition';
+import { modelLibrary } from '../../i18n/model-library';
 
 type Props = {
   category?: ModelCategory;
@@ -15,7 +18,7 @@ type Props = {
 };
 
 export function ModelSearch({ category, models, progress, busy, download, cancel }: Props) {
-  const { messages: text } = useI18n();
+  const { messages: text, locale } = useI18n();
   const copy = text.modelSearch;
   const [query, setQuery] = useWorkspaceState(`models.${category}.query`, '');
   const [results, setResults] = useWorkspaceState<DiscoveredModel[] | null>(`models.${category}.results`, null);
@@ -63,7 +66,7 @@ export function ModelSearch({ category, models, progress, busy, download, cancel
     <p className="model-search-hint">{copy.hint}</p>
     <form className="model-search-form" onSubmit={event => { event.preventDefault(); void search(); }}>
       <label className="field" htmlFor="model-search-query"><span>{copy.query}</span>
-        <input id="model-search-query" type="search" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.query} />
+        <input id="model-search-query" type="search" maxLength={200} value={query} onChange={event => { request.current?.abort(); fileRequest.current?.abort(); setLoading(false); setFilesLoading(false); setQuery(event.target.value); }} placeholder={copy.query} />
       </label>
       <button className="primary-button" disabled={loading || !query.trim()}>{loading ? text.common.loading : copy.search}</button>
     </form>
@@ -71,16 +74,16 @@ export function ModelSearch({ category, models, progress, busy, download, cancel
     {results?.length === 0 && <p role="status">{copy.empty}</p>}
     <div className="model-search-results" aria-busy={loading}>
       {results?.map(result => <article className="model-search-result" key={result.id}>
-        <div className="model-search-repo"><div><h3>{result.id}</h3><a href={`https://huggingface.co/${encodeURI(result.id)}`} target="_blank" rel="noreferrer">{copy.modelCard}</a></div>
-          <button className="secondary-button" aria-expanded={repo === result.id} disabled={repo === result.id && filesLoading} onClick={() => void chooseRepo(result.id)}>{repo === result.id && filesLoading ? text.common.loading : copy.choose}</button></div>
+        <div className="model-search-repo"><div><h3>{result.id}</h3><p>{modelLibrary(locale).repositorySize}: {modelLibrary(locale).unknown}</p></div>
+          <button className="secondary-button" aria-expanded={repo === result.id} disabled={repo === result.id && filesLoading} onClick={() => void chooseRepo(result.id)}>{repo === result.id && filesLoading ? text.common.loading : modelAcquisition[locale].preview}</button></div>
         {repo === result.id && !filesLoading && <div className="model-search-files">
-          {files.length === 0 ? <p role="status">{copy.noFiles}</p> : <>
-            <label htmlFor="model-search-file">{copy.file}</label>
+          {!files.some(file => file.supported) ? <p role="status">{copy.noFiles}</p> : <>
+            {files.filter(file => file.supported).length > 1 && <><label htmlFor="model-search-file">{copy.file}</label>
             <select id="model-search-file" value={selected} onChange={event => setSelected(event.target.value)}>
               {!selected && <option value="">{copy.noFiles}</option>}
               {files.map(file => <option key={file.id} value={file.id} disabled={!file.supported}>{file.file} · {file.size_bytes > 0 ? formatBytes(file.size_bytes) : copy.unknownSize}{!file.supported ? ` · ${copy.unsupported}` : ''}</option>)}
-            </select>
-            <p className="model-search-hint">{copy.compatibility}</p>
+            </select></>}
+            {choice && <LegacyDownloadReview repository={repo} file={choice.file} bytes={choice.size_bytes} />}
             {current && current.status !== 'complete' && <ModelDownloadProgress download={current} />}
             <div className="catalog-actions">{installed ? <span className="installed-status" role="status">{text.models.installed}</span> : current && isActiveDownload(current)
               ? <button className="danger-button" disabled={busy} onClick={() => void cancel(current)}>{text.models.cancel}</button>

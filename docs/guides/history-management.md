@@ -4,11 +4,21 @@ Web and desktop share these controls. Deletion always requires confirmation and
 applies to the listed items captured when the confirmation opens, not new items
 created in another tab afterwards. Nothing is deleted just by opening the dialog.
 
+In the updated development renderer, Chat and task-first Agents group bulk actions
+under **Manage history** beside history search. Empty histories show a next-step
+message without disabled bulk controls; a failed read still offers Retry. Trash
+buttons remain visible on individual rows. Manage history explains protected task
+states; these restrictions have not changed. Older compatible agent clients may
+retain the previous toolbar layout.
+
 ## Conversations
 
 - Use the visible trash button beside a conversation to delete it.
 - Search conversations by title. **Delete listed chats** removes the conversations
   matching that search; clear the search first to remove all listed conversations.
+- The first twenty matching conversations are rendered; **Show more** reveals
+  the next twenty. Search and confirmed bulk deletion cover all loaded matches,
+  not only the rows currently rendered. This is not server-side pagination.
 - Confirmation shows the count and previews titles. Cancel or Escape closes it.
 - Deleting a conversation also clears its draft on this browser. Drafts on other
   devices and existing backups are not erased. Deleting the selected conversation
@@ -40,6 +50,17 @@ the dialog for retry. Successful items are not sent again. Normal ownership and
 administrator-only agent permissions still apply; these controls grant no access.
 
 ## Retention and recovery boundaries
+
+Activity shows available current/recent work first. Select an item to inspect its
+events; **Open task** appears only when its durable job identity is known. It opens
+the same task, never a new run. Legacy event records may have no task link.
+Runtime counters live under **Diagnostics**; their failure does not hide history.
+
+Knowledge documents have separate **Manage document** controls for reindexing and
+confirmed deletion. **View source** reads retained source with current permissions;
+it cannot reconstruct an unretained original. Deleting a history entry is not
+document deletion, and **Ask using Knowledge** only prepares the existing Chat
+composer—it does not ingest, submit, or delete anything.
 
 History deletion is not secure erasure and cannot undo actions performed by a
 tool. Tool-created files, separate audit/event logs, artifact storage and existing

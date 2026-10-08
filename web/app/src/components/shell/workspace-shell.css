@@ -1,0 +1,74 @@
+/* Shared frame only. Feature layout remains in workspace.css; controls.css
+   retains final ownership of button and field geometry. */
+@layer workspace {
+  .app-shell {
+    --sidebar-width: 228px;
+    --header-height: 64px;
+    --page-gutter: clamp(20px, 2.5vw, 32px);
+    --page-block-space: 24px;
+    --mobile-nav-height: 112px;
+    display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: 100dvh;
+  }
+  .app-shell.navigation-collapsed { --sidebar-width: 72px; }
+  .sidebar { position: sticky; inset-block-start: 0; height: 100dvh; min-width: 0; display: flex; flex-direction: column; gap: 24px; overflow-y: auto; padding: 16px 12px; background: var(--surface-1); border-inline-end: 1px solid var(--line); z-index: 5; }
+  .sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand strong { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .brand-mark, .brand-mark.large { width: 34px; height: 34px; display: grid; place-items: center; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface-2); }
+  .brand-mark span { width: 14px; height: 14px; border: 2px solid var(--text); border-radius: 50% 50% 50% 3px; transform: rotate(-45deg); }
+  .sidebar-toggle { border-color: transparent; background: transparent; }
+  .primary-nav { display: grid; gap: 22px; }
+  .nav-group { display: grid; gap: 3px; }
+  .nav-group-label { padding: 0 12px 6px; color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+  .nav-link { position: relative; width: 100%; display: flex; align-items: center; min-height: 42px; gap: 11px; padding: 8px 12px; border-radius: 8px; color: var(--muted); background: transparent; text-align: start; text-decoration: none; transition: background .12s ease, color .12s ease; }
+  .nav-link svg { flex-shrink: 0; }
+  .nav-link:hover, .nav-link.active { background: var(--accent-soft); color: var(--text); }
+  .nav-link.active { font-weight: 600; }
+  .nav-link.active::before { content: ''; position: absolute; inset-inline-start: -12px; width: 2px; height: 23px; background: var(--text); }
+  .nav-link span { font-size: 14px; overflow-wrap: anywhere; }
+  .sidebar-foot { margin-block-start: auto; padding: 14px 8px 0; border-block-start: 1px solid var(--line); display: grid; gap: 8px; }
+  .service-state { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+  .service-state i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--text); }
+  .service-state.offline i { background: transparent; border: 1px solid var(--text); }
+  .navigation-collapsed .brand, .navigation-collapsed .nav-group-label, .navigation-collapsed .nav-link span { display: none; }
+  .navigation-collapsed .sidebar-heading, .navigation-collapsed .nav-link, .navigation-collapsed .service-state { justify-content: center; }
+  .navigation-collapsed .nav-link { padding-inline: 0; }
+  .navigation-collapsed .service-state span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .workspace { min-width: 0; }
+  .topbar { min-height: var(--header-height); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px var(--page-gutter); border-block-end: 1px solid var(--line); background: var(--surface-0); }
+  .topbar h1 { min-width: 0; margin: 0; color: var(--text); font-size: 20px; font-weight: 600; line-height: 1.4; letter-spacing: -.02em; overflow-wrap: anywhere; }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .command-trigger { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--muted); background: var(--surface-1); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; cursor: pointer; }
+  .command-trigger:hover { color: var(--text); border-color: var(--line-strong); }
+  .command-trigger kbd { padding: 3px 6px; color: var(--faint); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; font: 10px/1.2 var(--mono); }
+  .workspace-options-panel { font-size: 13px; }
+  .known-work-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .known-work-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; }
+  .known-work-list button, .known-work-list a { overflow-wrap: anywhere; text-align: start; }
+  .known-work-list small { color: var(--muted); max-width: 14ch; overflow-wrap: anywhere; }
+  .workspace-account { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-block-start: 12px; border-block-start: 1px solid var(--line); }
+  .page-content { max-width: 1440px; min-height: calc(100dvh - var(--header-height)); margin: 0 auto; padding: var(--page-block-space) var(--page-gutter); }
+  .mobile-nav { display: none; }
+
+  @media (max-width: 980px) {
+    .app-shell { --sidebar-width: 212px; }
+    .command-trigger span { display: none; }
+  }
+  @media (max-width: 700px) {
+    html { scroll-padding-block-end: 124px; }
+    .page-content :is(button, a, input, select, textarea, summary) { scroll-margin-block-end: 124px; }
+    .app-shell, .app-shell.navigation-collapsed { --sidebar-width: 0px; --header-height: 64px; --page-gutter: 16px; --page-block-space: 16px; display: block; padding-block-end: var(--mobile-nav-height); }
+    .sidebar { display: none; }
+    .topbar { flex-wrap: wrap; gap: 8px; }
+    .topbar > * { min-width: 0; max-width: 100%; }
+    .topbar-actions { margin-inline-start: auto; }
+    .topbar h1 { font-size: 18px; }
+    .command-trigger { width: 40px; justify-content: center; padding: 0; }
+    .command-trigger kbd { display: none; }
+    .page-content { min-height: calc(100dvh - var(--header-height) - var(--mobile-nav-height)); }
+    .mobile-nav { position: fixed; inset-inline: 0; inset-block-end: 0; min-height: var(--mobile-nav-height); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface-1); border-block-start: 1px solid var(--line); z-index: 10; }
+    .mobile-nav a { min-width: 0; min-height: 44px; display: grid; place-content: center; justify-items: center; gap: 4px; padding: 4px; color: var(--muted); text-decoration: none; }
+    .mobile-nav a.active { color: var(--text); background: var(--accent-soft); }
+    .mobile-nav span { max-width: 100%; font-size: 11px; overflow-wrap: anywhere; text-align: center; }
+  }
+}

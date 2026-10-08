@@ -4,8 +4,12 @@ Use voice to draft a message or agent task, or listen to a Chat answer. These
 controls are experimental and require a compatible speech runtime and model in
 the connected OffGrid service. Typed Chat and Agents work without speech.
 
-This guide describes the shared web/desktop interface in v0.4.14. It does not
-describe the planned hands-free Talk mode.
+The development renderer groups **Voice settings** beside the selected language
+model below the Chat/Agents prompt. **Speak responses** stays beside Chat's
+microphone and Send/Stop controls; changing voice settings does not start capture
+or playback. This placement requires a matching rebuilt renderer, not merely a
+service restart. Released builds may retain the earlier composer layout.
+This guide does not describe the planned hands-free Talk mode.
 
 ## Before you start
 
@@ -13,7 +17,7 @@ Three model roles are independent:
 
 | Role | Used for | Where to select it |
 | --- | --- | --- |
-| Chat/language model | Producing answers and planning agent work | Chat model selector or Agent task settings |
+| Chat/language model | Producing answers and planning agent work | Model selector beside the Chat or Agents prompt |
 | Speech recognition (ASR) | Converting a recording into text | Voice settings → Recognition model |
 | Speech generation (TTS) | Reading an answer aloud | Voice settings → Speech model |
 
@@ -90,7 +94,12 @@ approve an action. Agent permissions and approvals still apply. Saying “yes”
 into a recording is not an authorization mechanism.
 
 While a recording or transcription is active, the microphone control can stop or
-cancel that work. Changing composer context or leaving the page cancels pending
+cancel that work. Before capture it distinguishes **Checking voice availability**
+from **Waiting for microphone permission**, with **Cancel microphone setup**
+available in both phases. After capture, **Transcribing** has a separate **Cancel
+transcription** action; it is not labelled as recording. These setup/cancellation
+labels are localized in all nine interface languages.
+Changing composer context or leaving the page cancels pending
 capture/transcription and releases microphone tracks, including late permission
 results. This does not cancel an already-submitted agent task.
 
@@ -151,8 +160,10 @@ runtime and exact safe error text instead.
 This preview does not provide always-on listening, wake words, full-duplex Talk,
 voice-only consequential approvals, agent progress narration, or the planned
 recording-review-to-Knowledge workflow. File transcription APIs do not establish
-that those UI workflows exist. Voice labels currently fall back to English;
-interface locale alone does not establish recognition-language support.
+that those UI workflows exist. Voice preferences, capture and playback feedback
+use all nine interface locales; technical model identities and service-provided
+diagnostics retain their original text. Interface locale alone does not establish
+recognition-language support or native-speaker translation review.
 
 Speech inference does not silently fall back to a hosted provider or download
 code/models during inference. Model acquisition can use the network explicitly.

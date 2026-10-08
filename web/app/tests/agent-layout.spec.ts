@@ -154,7 +154,9 @@ for (const locale of ['ar', 'de']) {
     await page.setViewportSize({ width: 1100, height: 800 });
     const state = await fixture(page);
     await start(page);
+    await page.locator('.workspace-options > button').click();
     await page.locator('.locale-picker select').selectOption(locale);
+    await page.keyboard.press('Escape');
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
     // Locale selection may load a different font. Compare task transitions
     // after that layout is ready, not a fallback-font frame against Arabic.

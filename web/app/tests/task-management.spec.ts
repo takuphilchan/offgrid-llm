@@ -43,6 +43,33 @@ test('task deletion is visible beside history and confirmed without affecting ac
   expect(deleted).toHaveLength(1);
 });
 
+test('task history management is contextual and excludes protected work', async ({ page }) => {
+  const deleted = await fixture(page);
+  await page.goto('/ui/#/agents/new');
+  await expect(page.getByRole('button', { name: 'Clear removable tasks', exact: true })).toBeHidden();
+  await page.getByRole('searchbox', { name: 'Search task history' }).fill('Finished');
+  const manage = page.getByRole('button', { name: 'Manage history', exact: true });
+  await manage.focus(); await manage.press('Enter');
+  await page.getByRole('button', { name: 'Clear removable tasks', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Finished report');
+  await expect(page.getByRole('dialog')).not.toContainText('Current task');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(deleted).toHaveLength(0);
+  await page.keyboard.press('Escape');
+  await expect(manage).toBeFocused();
+});
+
+test('empty chat and task histories do not expose bulk management', async ({ page }) => {
+  await fixture(page);
+  await page.route('**/api/v2/jobs', r => r.fulfill({ json: [] }));
+  for (const destination of ['chat', 'agents/new']) {
+    await page.goto(`/ui/#/${destination}`);
+    await expect(page.getByRole('button', { name: 'Manage history' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Delete listed chats|Clear removable tasks/ })).toHaveCount(0);
+    await expect(page.locator('.task-history-hint')).toHaveCount(0);
+  }
+});
+
 for (const layout of [
   {name:'desktop-light', width:1280, theme:'light', locale:'en'},
   {name:'desktop-dark', width:1280, theme:'dark', locale:'en'},

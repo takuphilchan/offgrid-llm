@@ -20,7 +20,7 @@ export type Messages = {
   activity: { title: string; subtitle: string; uptime: string; requests: string; currentModel: string; version: string; runs: string; noRuns: string; selectRun: string };
   settings: { title: string; subtitle: string; service: string; version: string; inferenceSlots: string; knowledge: string; enabled: string; disabled: string; safety: string; computerUse: string; available: string; unavailable: string; stopped: string; sessions: string; emergencyStop: string; setup: string; showGuide: string };
   onboarding: { title: string; body: string; service: string; models: string; privacy: string; local: string; continue: string; chooseModel: string; startChat: string; retryService: string; modelHint: string; firstReplyHint: string; close: string };
-  common: { refresh: string; retry: string; loading: string; error: string; language: string; localProcessing: string; runtime: string; document: string };
+  common: { refresh: string; retry: string; loading: string; error: string; language: string; serviceDetails: string; runtime: string; document: string };
 };
 
 export type LocaleDefinition = { code: string; label: string; direction: 'ltr' | 'rtl'; messages: Messages };

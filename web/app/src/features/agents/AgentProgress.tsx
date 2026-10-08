@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AgentRun } from '../../api/client';
 import { agentActive } from '../../api/agent-stream';
 import { useI18n } from '../../i18n';
-import { browserActionLabel } from '../../i18n/computer-experience';
+import { browserActionLabel, computerExperience } from '../../i18n/computer-experience';
 
 function duration(since: string | null | undefined, now: number) {
   const seconds = since ? Math.max(0, Math.floor((now - Date.parse(since)) / 1000)) : 0;
@@ -21,7 +21,7 @@ export function AgentProgress({ run, connection, showPreview, setShowPreview }: 
   return <div className="agent-progress">
     {active && <>
       <div className="agent-progress-heading" role="status"><span className="agent-progress-dot" aria-hidden="true" /><strong>{phases[progress?.phase ?? ''] ?? text.recovery.running}{progress?.tool ? ` · ${run.computer_session ? browserActionLabel(locale,progress.tool) : progress.tool}` : ''}</strong><small>{text.agentLive.step} {progress?.iteration ?? 1}</small></div>
-      <div className="agent-progress-meta"><span>{text.agentLive.elapsed} {duration(run.started_at, now)}</span><span>{connection === 'live' ? text.agentLive.live : text.agentLive.reconnecting}</span>{progress?.updated_at && <span>{text.agentLive.lastUpdate} {duration(progress.updated_at, now)}</span>}</div>
+      <details><summary>{computerExperience(locale).details}</summary><div className="agent-progress-meta"><span>{text.agentLive.elapsed} {duration(run.started_at, now)}</span><span>{connection === 'live' ? text.agentLive.live : text.agentLive.reconnecting}</span>{progress?.updated_at && <span>{text.agentLive.lastUpdate} {duration(progress.updated_at, now)}</span>}</div></details>
       {connection !== 'live' && <p className="agent-connection-note" role="status">{text.agentLive.reconnectHint}</p>}
     </>}
     {!run.computer_session && (active || (incomplete && progress?.preview)) && <label className="agent-preview-toggle"><input type="checkbox" checked={showPreview} onChange={event => setShowPreview(event.target.checked)} />{text.agentLive.showPreview}</label>}

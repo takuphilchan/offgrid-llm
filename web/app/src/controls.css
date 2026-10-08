@@ -10,7 +10,7 @@
 
   :where(.primary-button, .secondary-button, .text-button, .danger-button,
     .new-chat-button, .resource-actions button, .model-actions button,
-    .composer button, .inline-error button) {
+    .composer button, .voice-button, .message-copy, .inline-error button, .error-banner button) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -24,6 +24,7 @@
     font-weight: 500;
     line-height: 22px;
     white-space: normal;
+    text-decoration: none;
     overflow-wrap: anywhere;
     color: var(--text);
     background: var(--surface-1);
@@ -31,20 +32,34 @@
     transition: background .12s ease, border-color .12s ease;
     transform: none;
   }
-  :where(.primary-button, .composer button) {
+  :where(.primary-button, .composer-actions > button) {
     color: var(--on-accent);
     background: var(--accent-strong);
     border-color: var(--accent-strong);
     font-weight: 600;
   }
-  .text-button { color: var(--text); background: transparent; border-color: transparent; }
+  /* Legacy text-button call sites use the same visible secondary control.
+     Workspace actions must not depend on hover to reveal their boundary. */
+  .message-copy { opacity: 1; }
+  .message-heading, .message-actions { flex-wrap: wrap; }
+  .message-actions { max-width: 100%; }
+  .known-work-list :is(button, a) { justify-content: flex-start; text-align: start; }
   .danger-button { color: var(--red); }
   :where(.secondary-button, .text-button, .danger-button, .new-chat-button,
-    .resource-actions button, .model-actions button, .inline-error button):hover:not(:disabled) {
+    .resource-actions button, .model-actions button, .voice-button, .message-copy,
+    .inline-error button, .error-banner button):hover:not(:disabled) {
     background: var(--surface-2);
     border-color: var(--line-strong);
   }
-  :where(.primary-button, .composer button):hover:not(:disabled) { opacity: .87; transform: none; }
+  :where(.primary-button, .composer-actions > button):hover:not(:disabled) { opacity: .87; transform: none; }
+  /* Selection belongs in the final control layer too: generic secondary-button
+     styling must not hide the current library view or category. */
+  .model-library-tabs [aria-selected='true'] {
+    color: var(--on-accent); background: var(--accent-strong); border-color: var(--accent-strong);
+  }
+  .model-category-picker button[aria-pressed='true'] {
+    color: var(--text); background: var(--surface-2); border-color: var(--text); font-weight: 600;
+  }
   button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
   button > svg { flex-shrink: 0; }
   .icon-button { width: var(--control-height); height: var(--control-height); flex-shrink: 0; border-radius: var(--control-radius); }
@@ -114,14 +129,13 @@
   .permission-notice { padding: 12px 16px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
   .diagnostic-details summary { cursor: pointer; padding-block: 12px; }
   .command-search input { min-height: 56px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 15px; }
-  .composer textarea { border: 0; background: transparent; padding: 10px; resize: none; }
+  .composer textarea { border: 0; background: transparent; padding: 10px; resize: none; font-size: 16px; }
   .composer textarea:focus-visible { outline-offset: -2px; }
-  .locale-picker { padding: 0 0 0 10px; gap: 6px; }
-  [dir='rtl'] .locale-picker { padding: 0 10px 0 0; }
-  .locale-picker select { width: auto; max-width: 160px; border: 0; background: transparent; }
   .model-select { min-width: 0; }
   .model-select > span { flex-shrink: 0; }
   .chat-toolbar .model-select select { width: min(280px, 100%); }
+  .chat-toolbar .history-toggle { display: none; }
+  @media (max-width: 900px) { .chat-toolbar .history-toggle { display: inline-flex; } }
 
   .action-group, .settings-actions, .resource-actions, .model-actions, .catalog-actions,
   .connector-panel form > div {
@@ -153,10 +167,6 @@
     .connector-panel { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
   }
   @media (max-width: 700px) {
-    .topbar { flex-wrap: wrap; gap: 12px; }
-    .topbar > * { min-width: 0; max-width: 100%; }
-    .topbar h1 { overflow-wrap: anywhere; }
-    .topbar-actions { margin-inline-start: auto; }
     .section-actions .action-group { margin-inline-start: 0; justify-content: flex-start; width: 100%; }
     .chat-toolbar { flex-wrap: wrap; }
     .chat-toolbar-leading { max-width: 100%; flex: 1 1 220px; }

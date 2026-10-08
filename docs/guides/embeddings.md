@@ -2,6 +2,17 @@
 
 This guide explains how to use embedding models with OffGrid LLM for semantic search, document similarity, and RAG (Retrieval Augmented Generation).
 
+In the development Chat composer, **Context & response** contains Knowledge
+readiness and the explicit retrieval switch. **Set up Knowledge** can take you to
+this setup without discarding your draft. **Return to your draft** rechecks
+readiness but does not turn retrieval on or send the question. A previously chosen
+retrieval switch is not silently cleared by a failed readiness check. The service
+searches the permitted knowledge base; setup does not create a document-only scope.
+The return shortcut is held only for the current account/workspace until reload.
+Drafts are separate for each account and identified workspace. Older unassigned
+drafts require **Restore previous drafts here**; that copy-only operation preserves
+originals and newer drafts, and does not enable Knowledge or send a question.
+
 ## What are Embeddings?
 
 Embeddings are vector representations of text that capture semantic meaning. They enable:
@@ -23,8 +34,16 @@ Embeddings are vector representations of text that capture semantic meaning. The
 4. Add a document. The retained source can be reindexed later after parser or
    chunking upgrades.
 
-The Knowledge page reports the active embedding model. Chat only uses the
-index when **Use knowledge base** is enabled for that conversation.
+Knowledge foregrounds your documents, index readiness and **View source**.
+**Manage Knowledge** contains the active embedding model and disabling retrieval;
+each document's **Manage document** contains reindexing, chunk details and deletion.
+These controls stay available according to your permissions, including source
+inspection and deletion while retrieval is disabled.
+
+**Ask using Knowledge** opens Chat with retrieval explicitly selected and preserves
+the existing draft. It never sends the draft. Retrieval searches the permitted
+knowledge base, not just a selected document; the composer states that scope and
+checks readiness again. Ordinary navigation to Chat does not enable retrieval.
 
 ### CLI
 

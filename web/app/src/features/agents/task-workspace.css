@@ -1,7 +1,7 @@
 @layer workspace {
   .task-workspace {
     display: grid;
-    grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
+    grid-template-columns: minmax(12rem, 14rem) minmax(0, 1fr);
     gap: 1.5rem;
     align-items: start;
   }
@@ -103,11 +103,13 @@
     padding: clamp(1rem, 3vw, 2rem);
   }
   .task-composer {
-    max-width: 52rem;
+    max-width: 50rem;
     margin: auto;
     display: grid;
     gap: 1.25rem;
   }
+  /* The editor is the input surface; a second enclosing card adds no boundary. */
+  .task-entry { background: transparent; border: 0; padding: 16px 0; }
   .task-composer h2,
   .task-detail h2 {
     font-size: 1.35rem;
@@ -186,6 +188,16 @@
   .task-children { display: grid; gap: .75rem; padding-inline-start: 1.25rem; }
   .task-children li { overflow-wrap: anywhere; }
   .task-artifacts li { overflow-wrap: anywhere; }
+  .task-artifacts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .task-artifact { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; padding-block: 16px; border-block-start: 1px solid var(--line); }
+  .task-artifact > div:first-child { flex: 1 1 16rem; min-width: 0; }
+  .task-artifact p { margin-block: 4px; color: var(--muted); }
+  .task-result > .workspace-secondary, .task-artifacts > .workspace-secondary, .task-artifact p { font-size: .875rem; line-height: 1.5; }
+  .task-artifact > .workspace-notice { flex-basis: 100%; }
+  .task-result { display: grid; gap: 12px; }
+  .task-result h3, .task-steering h3 { margin: 0; }
+  .task-steering { padding-block: 20px; border-block-start: 1px solid var(--line); }
+  .approval-destination { overflow-wrap: anywhere; }
   .task-children small { display: block; color: var(--text-muted); }
   .task-workspace .button-row {
     display: flex;

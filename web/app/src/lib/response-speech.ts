@@ -1,4 +1,6 @@
 import { api } from '../api/client';
+import type { LocaleCode } from '../i18n';
+import { speechFeedback } from '../i18n/speech-feedback';
 import { defaultVoicePreferences, selectSpeech, type SpeechSelection, type VoicePreferences } from './voice-preferences';
 
 export const stopSpeechEvent = 'offgrid-stop-read-aloud';
@@ -33,21 +35,21 @@ export class ResponseSpeech {
   private ready = false;
   private selection?: SpeechSelection;
   private pending?: Promise<{ blob?: Blob; error?: unknown }>;
-  constructor(private state: (state: SpeechState) => void, private error: (message: string) => void, private preferences: VoicePreferences = defaultVoicePreferences) {
-    this.timer = setTimeout(() => this.fail('Speech took too long. Audio stopped; the text response is unaffected.'), 300_000);
+  constructor(private state: (state: SpeechState) => void, private error: (message: string) => void, private preferences: VoicePreferences = defaultVoicePreferences, private locale: LocaleCode = 'en') {
+    this.timer = setTimeout(() => this.fail(speechFeedback(this.locale).timeout), 300_000);
     this.state('waiting');
   }
   append(delta: string) {
     if (this.controller.signal.aborted || this.finished) return;
     this.raw += delta;
     if (this.raw.length > 64_000 || spokenProse(this.raw).length - this.consumed > 2400) {
-      this.fail('Speech cannot keep up with this response. Audio stopped; read the text or use Read aloud afterward.'); return;
+      this.fail(speechFeedback(this.locale).lag); return;
     }
     this.prepareNext(); void this.pump();
   }
   finish(committedText: string) {
     if (this.controller.signal.aborted) return;
-    if (!committedText.startsWith(this.raw)) { this.fail('The saved response changed. Audio stopped; use Read aloud for the saved answer.'); return; }
+    if (!committedText.startsWith(this.raw)) { this.fail(speechFeedback(this.locale).changed); return; }
     this.append(committedText.slice(this.raw.length));
     this.finished = true; this.prepareNext(); void this.pump();
   }
@@ -77,7 +79,7 @@ export class ResponseSpeech {
     this.pending = (async () => {
       if (!this.ready) {
         const status = await api.audioStatus(this.controller.signal);
-        this.selection = selectSpeech(status, this.preferences, 'tts');
+        this.selection = selectSpeech(status, this.preferences, 'tts', this.locale);
         this.ready = true;
       }
       this.controller.signal.throwIfAborted();
@@ -96,21 +98,21 @@ export class ResponseSpeech {
         this.pending = undefined;
         if (this.controller.signal.aborted) break;
         if (result.error) throw result.error;
-        if (!result.blob) throw new Error('Speech returned no audio.');
+        if (!result.blob) throw new Error(speechFeedback(this.locale).empty);
         this.prepareNext();
         this.url = URL.createObjectURL(result.blob); this.player.src = this.url;
         await new Promise<void>((resolve, reject) => {
           const cleanup = () => { this.player.onended = null; this.player.onerror = null; this.controller.signal.removeEventListener('abort', aborted); };
           const aborted = () => { cleanup(); reject(new DOMException('Stopped', 'AbortError')); };
           this.player.onended = () => { cleanup(); resolve(); };
-          this.player.onerror = () => { cleanup(); reject(new Error('Audio playback failed. Check your output device.')); };
+          this.player.onerror = () => { cleanup(); reject(new Error(speechFeedback(this.locale).playback)); };
           this.controller.signal.addEventListener('abort', aborted, { once: true });
           void this.player.play().then(() => { if (!this.controller.signal.aborted) this.state('playing'); }).catch(e => { cleanup(); reject(e); });
         });
         if (this.url) { URL.revokeObjectURL(this.url); this.url = undefined; }
       }
     } catch (reason) {
-      if (!this.controller.signal.aborted) this.fail(reason instanceof Error ? reason.message : 'Speech playback failed.');
+      if (!this.controller.signal.aborted) this.fail(reason instanceof Error ? reason.message : speechFeedback(this.locale).playback);
     } finally { this.busy = false; }
   }
 }

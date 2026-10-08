@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { Icon } from './Icon';
 import { useI18n } from '../i18n';
 import { voiceText } from '../i18n/voice';
+import { operationFeedback } from '../i18n/operation-feedback';
 import { spokenProse, stopSpeechEvent } from '../lib/response-speech';
 import { selectSpeech, useVoicePreferences } from '../lib/voice-preferences';
 
@@ -32,13 +33,14 @@ async function toWav(blob: Blob): Promise<Blob> {
 }
 
 type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number };
+type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing';
 
 export function VoiceInputButton({ onTranscript, contextKey, disabled = false }: { onTranscript: (text: string) => void; contextKey: string; disabled?: boolean }) {
   const { preferences } = useVoicePreferences();
   const { locale } = useI18n();
   const copy = voiceText(locale);
-  const [recording, setRecording] = useState(false);
-  const [working, setWorking] = useState(false);
+  const feedback = operationFeedback(locale);
+  const [phase, setPhase] = useState<CapturePhase>('idle');
   const [error, setError] = useState('');
   const current = useRef<RecordingWork | null>(null);
   // Use the current draft callback, but never deliver a result to another composer.
@@ -54,17 +56,17 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
     work.stream?.getTracks().forEach(track => track.stop());
   };
   useEffect(() => {
-    setRecording(false); setWorking(false); setError('');
+    setPhase('idle'); setError('');
     return cancel;
   }, [contextKey]);
   const stop = () => {
     const work = current.current;
     if (work?.recorder?.state === 'recording') {
       clearTimeout(work.timer);
+      setPhase('transcribing');
       work.recorder.stop();
       work.stream?.getTracks().forEach(track => track.stop());
-      setRecording(false);
-    } else { cancel(); setWorking(false); setRecording(false); }
+    } else { cancel(); setPhase('idle'); }
   };
 
   const start = async () => {
@@ -76,14 +78,15 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
     }
     const work: RecordingWork = { controller: new AbortController() };
     current.current = work;
-    setWorking(true);
+    setPhase('checking');
     const active = () => current.current === work && !work.controller.signal.aborted && target.current.contextKey === contextKey;
     try {
       // Check the service before requesting a device permission. This prevents
       // a confusing microphone prompt when no local ASR runtime is installed.
       const status = await api.audioStatus(work.controller.signal);
       if (!active()) return;
-      const selection = selectSpeech(status, preferences, 'asr');
+      const selection = selectSpeech(status, preferences, 'asr', locale);
+      setPhase('permission');
       const input = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!active()) { input.getTracks().forEach(track => track.stop()); return; }
       work.stream = input;
@@ -95,16 +98,15 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
       next.ondataavailable = event => {
         if (!active() || !event.data.size) return;
         bytes += event.data.size;
-        if (bytes > 12 * 1024 * 1024) { cancel(); setRecording(false); setWorking(false); setError(copy.failed); return; }
+        if (bytes > 12 * 1024 * 1024) { cancel(); setPhase('idle'); setError(copy.failed); return; }
         chunks.push(event.data);
       };
-      next.onerror = () => { if (active()) { cancel(); setError(copy.failed); setRecording(false); setWorking(false); } };
+      next.onerror = () => { if (active()) { cancel(); setError(copy.failed); setPhase('idle'); } };
       next.onstop = async () => {
         clearTimeout(work.timer);
         work.stream?.getTracks().forEach(track => track.stop());
         if (!active()) return;
-        setRecording(false);
-        setWorking(true);
+        setPhase('transcribing');
         try {
           const blob = new Blob(chunks, { type: next.mimeType || 'audio/webm' });
           if (!blob.size) return;
@@ -114,25 +116,27 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
           if (active() && result.text.trim()) target.current.onTranscript(result.text.trim());
         } catch (reason) {
           if (active()) setError(reason instanceof Error ? reason.message : copy.failed);
-        } finally { if (active()) { current.current = null; setWorking(false); } }
+        } finally { if (active()) { current.current = null; setPhase('idle'); } }
       };
       next.start(1000);
       work.timer = window.setTimeout(() => { if (active()) stop(); }, 120_000);
-      setWorking(false);
-      setRecording(true);
+      setPhase('recording');
     } catch (reason) {
       if (!active()) return;
-      cancel(); setWorking(false); setRecording(false);
+      cancel(); setPhase('idle');
       if ((reason as DOMException)?.name === 'NotAllowedError') setError(copy.permission);
       else setError(reason instanceof Error ? reason.message : copy.failed);
     }
   };
 
-  return <span className="voice-input-control">
-    <button type="button" className={recording ? 'voice-button recording' : 'voice-button'} disabled={disabled && !current.current} onClick={current.current ? stop : () => void start()} aria-label={recording || working ? copy.stop : copy.record} aria-pressed={recording} title={recording || working ? copy.stop : copy.record}>
+  const label = phase === 'recording' ? copy.stop : phase === 'transcribing' ? feedback.cancelTranscription : phase === 'idle' ? copy.record : feedback.cancelVoice;
+  const status = phase === 'checking' ? feedback.checkingVoice : phase === 'permission' ? feedback.permissionPending : phase === 'transcribing' ? copy.transcribing : '';
+  return <span className="voice-input-control" data-capture-phase={phase}>
+    <button type="button" className={phase === 'recording' ? 'voice-button recording' : 'voice-button'} disabled={disabled && !current.current} onClick={current.current ? stop : () => void start()} aria-label={label} aria-pressed={phase === 'recording'} title={label}>
       <Icon name="mic" size={18} />
-      <span>{working ? copy.transcribing : recording ? copy.recording : copy.record}</span>
+      <span>{phase === 'recording' ? copy.recording : label}</span>
     </button>
+    {status && <small role="status">{status}</small>}
     {error && <small className="voice-error" role="status">{error}</small>}
   </span>;
 }
@@ -195,7 +199,7 @@ export function ReadAloudButton({ text }: { text: string }) {
     try {
       const status = await api.audioStatus(work.controller.signal);
       if (current.current !== work) return;
-      const selection = selectSpeech(status, preferences, 'tts');
+      const selection = selectSpeech(status, preferences, 'tts', locale);
       const chunks = speechChunks(text);
       if (!chunks.length) throw new Error(copy.noSpeech);
       // At most one look-ahead request; errors are settled immediately so a

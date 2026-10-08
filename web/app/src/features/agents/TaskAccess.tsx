@@ -7,6 +7,8 @@ import {
 } from "../../api/client";
 import { useI18n } from "../../i18n";
 import { taskWorkspaceText } from "../../i18n/task-workspace";
+import { operationFeedback } from "../../i18n/operation-feedback";
+import { taskStopText } from '../../i18n/task-presentation';
 import {
   approvalPolicyText,
   nativeAppError,
@@ -132,7 +134,7 @@ export function TaskAccess({
       // A handoff releases only the old session belonging to this saved task.
       await stopOwnedComputer(input.previous_session);
       if (!current()) return;
-      if (input.mode === "app" && !targets.length) {
+      if (input.mode === "app" && !launch && !targets.length) {
         const state = await window.electron!.discoverComputerApps!({
           workspace,
           requestId: input.id,
@@ -150,6 +152,7 @@ export function TaskAccess({
         setTarget(matches.length === 1 ? matches[0].id : "");
         return;
       }
+      if (input.mode === "app" && !target) return;
       if (input.mode === "app" && launch) {
         await window.electron!.launchComputerApplication!({ id: target });
         if (!current()) return;
@@ -218,7 +221,7 @@ export function TaskAccess({
     if (!mounted.current) return;
     setStopping(false); setBusy(false);
     if (results.some(result => result.status === 'rejected')) {
-      setError(experience.stopUnconfirmed);
+      setError(taskStopText(locale).unconfirmed);
       return;
     }
     writeDraft(connectionKey, '');
@@ -351,16 +354,18 @@ export function TaskAccess({
               disabled={
                 busy ||
                 (!session &&
-                  ((targets.length > 0 && !target) ||
+                  (((launch || targets.length > 0) && !target) ||
                     (input.mode === "browser" && !url.trim())))
               }
               onClick={() => void allow()}
             >
               {busy
                 ? messages.common.loading
-                : launch
+                : !session && launch
                   ? native.launch
-                  : copy.allow}
+                  : !session && input.mode === "app" && !targets.length
+                    ? copy.choose
+                    : copy.allow}
             </button>
             {input.mode === "app" &&
               !session &&
@@ -376,6 +381,7 @@ export function TaskAccess({
                       setTargets(state.targets ?? []);
                       setTarget("");
                       setLaunch(true);
+                      setError(state.targets?.length ? "" : operationFeedback(locale).emptyApplications);
                     })
                   }
                 >

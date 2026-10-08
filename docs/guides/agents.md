@@ -10,9 +10,15 @@ tool execution is **not** governed by this runner's approval broker. See
 
 ## Start and inspect work
 
+Available tools and Connections remain separate, labelled administration views.
+Their lists use the same headings and action controls as the rest of the workspace.
+Task drafts survive a visit to these views; testing a connection or opening tool
+details does not run a task or change its approval policy. See [MCP setup](mcp.md).
+
 On matching task-first builds, open **Agents**, describe the outcome and choose
-**Start task**. The task is saved before execution. Model selection is under
-**Task settings**; application and browser setup are not prerequisites for
+**Start task**. The task is saved before execution. In the updated development
+renderer, model and voice settings sit beside the prompt (older builds use
+**Task settings**); application and browser setup are not prerequisites for
 submitting a task. A model with reliable structured tool calling is still required.
 
 When the model requests computer access, the saved task displays **Access needed**.
@@ -69,7 +75,9 @@ offgrid agent status RUN_ID
 
 The web UI uses **Agents → Work**. It restores the selected run after navigation
 or reload, including pending approvals and committed tool results. Task drafts
-save while editing, separately per signed-in account. Browser drafts are not
+save while editing, separately per account and identified workspace. Old
+account-only drafts require explicit restoration; originals and newer text are
+preserved. Browser drafts are not
 encrypted or synchronized between devices; a warning means storage failed and
 the page must remain open to retain the in-memory text.
 
@@ -94,6 +102,34 @@ starting a second job. Resume explicitly when ready. Reusing the same instructio
 request ID retries the save without appending it twice. Active delegation must be
 resolved rather than silently discarded by a changed instruction.
 Completed subtasks remain inspectable and do not prevent follow-up instructions.
+
+In the updated renderer, **Next step** presents instruction updates only when
+the saved task supports them. A lost save acknowledgment checks the same task's
+recorded instruction ID; an explicit retry retains that ID. A terminal or
+incompatible task instead offers **Start a new task from this**. This prepares a
+draft, never changes the original result, never overwrites an existing new-task
+draft and requires a separate **Start task** action.
+
+Approvals remain attached to the exact task and call. Their expiry is visible;
+after expiry, **Refresh** only reads the task, without approving or resuming it.
+Unknown tools show their technical identity, an explicit effects warning and
+exact canonical arguments. Stop immediately shows a pending acknowledgment;
+failed acknowledgment remains labelled unconfirmed, not undone.
+
+### Read results and output files
+
+Saved answers and **Output files** precede the collapsed activity log. Generated
+answers are not independent verification. **File integrity checked** specifically
+means the service recorded checks of stored bytes and format, not factual
+correctness of the contents. The renderer rechecks the downloaded bytes against
+the selected digest and length before offering a file.
+
+Downloads use the owner-authorized task artifact endpoint. Revoked, removed or
+failed-integrity files show an error beside that file while retaining the saved
+answer. There is no executable embedded document preview; download an unfamiliar
+format and inspect it with an appropriate application. **Export evidence** under
+**Context usage** retains the saved job record for inspection. These views do not
+independently prove that a model's requested real-world outcome occurred.
 
 Stopping from a task's access panel cancels that saved task and its own pending
 computer setup; it does not stop another task's connected application. The local

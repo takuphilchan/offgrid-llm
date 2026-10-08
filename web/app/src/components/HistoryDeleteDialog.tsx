@@ -24,8 +24,16 @@ export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose }:
   const id = useId();
   useEffect(() => {
     const element = dialog.current!;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // showModal closes a native auto-popover. Its action is no longer a valid
+    // focus destination after Cancel, so remember the visible utility trigger.
+    const trigger = previous?.closest('.utility-popover')?.querySelector<HTMLElement>('button[popovertarget]');
     element.showModal(); cancel.current?.focus();
-    return () => element.close();
+    return () => {
+      element.close();
+      const target = previous?.isConnected && previous.getClientRects().length ? previous : trigger;
+      if (target?.isConnected && target.getClientRects().length) target.focus();
+    };
   }, []);
   const confirm = async () => {
     if (locked.current) return;

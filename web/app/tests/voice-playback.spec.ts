@@ -215,6 +215,43 @@ async function microphoneFixture(page: Page) {
   ] } }));
 }
 
+test('microphone readiness and permission waiting have distinct cancellable feedback', async ({ page }) => {
+  await microphoneFixture(page);
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/v1/audio/status', async route => {
+    await held;
+    await route.fulfill({ json: { asr: { available: true } } });
+  });
+  await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
+  await expect(page.getByText('Checking voice availability…', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cancel microphone setup', exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(0);
+  release();
+  await expect(page.getByText('Waiting for microphone permission…', { exact: true })).toBeVisible();
+  await expect(page.getByText('Transcribing…', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cancel microphone setup', exact: true }).click();
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.stops)).toBe(1);
+  expect(await page.evaluate(() => (window as any).micTest.starts)).toBe(0);
+  await expect(page.getByRole('button', { name: 'Use microphone', exact: true })).toBeVisible();
+});
+
+test('cancelling transcription preserves the draft and ignores late text', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.locator('.composer textarea').fill('Keep my draft');
+  await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect(page.getByText('Transcribing…', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.getByRole('button', { name: 'Cancel transcription', exact: true }).click();
+  await page.evaluate(() => (window as any).micTest.finish());
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep my draft');
+  await expect(page.getByRole('button', { name: 'Use microphone', exact: true })).toBeVisible();
+});
+
 test('late microphone permission after navigation releases tracks without starting capture', async ({ page }) => {
   await microphoneFixture(page);
   await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
@@ -316,6 +353,51 @@ test('voice settings remain visible and keyboard reachable on narrow light and d
   }
 });
 
+test('voice utility remains bounded after resizing to a short viewport', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.setViewportSize({ width: 320, height: 480 });
+  const trigger = page.getByRole('button', { name: 'Voice settings', exact: true });
+  await trigger.click();
+  const panel = page.getByRole('region', { name: 'Voice settings', exact: true });
+  await expect(panel).toBeVisible();
+  await expect.poll(async () => {
+    const box = await panel.boundingBox();
+    return !!box && box.x >= 0 && box.x + box.width <= 320 && box.y >= 0 && box.y + box.height <= 480;
+  }).toBe(true);
+  await panel.getByRole('link', { name: 'Manage speech models' }).focus();
+  await expect(panel.getByRole('link', { name: 'Manage speech models' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test('dismissed voice metadata is cancelled and cannot replace a reopened panel', async ({ page }) => {
+  await fixture(page);
+  await page.evaluate(() => {
+    const original = window.fetch.bind(window);
+    const pending = (window as any).metadata = { aborted: 0, replies: [] as ((name: string) => void)[] };
+    window.fetch = (input, init) => {
+      if (!String(input).endsWith('/v1/audio/status')) return original(input, init);
+      // Deliberately allow a late response after abort to exercise the stale guard.
+      init?.signal?.addEventListener('abort', () => pending.aborted++, { once: true });
+      return new Promise(resolve => pending.replies.push((name: string) => resolve(new Response(JSON.stringify({ profiles: [
+        { id: name, revision: 'r1', name, available: true, capabilities: ['transcription'] },
+      ] }), { headers: { 'Content-Type': 'application/json' } }))));
+    };
+  });
+  const trigger = page.getByRole('button', { name: 'Voice settings', exact: true });
+  await trigger.click();
+  await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.length)).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.evaluate(() => (window as any).metadata.aborted)).toBe(1);
+  await trigger.click();
+  await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.length)).toBe(2);
+  await page.evaluate(() => (window as any).metadata.replies[1]('Current profile'));
+  await expect(page.getByLabel('Recognition model', { exact: true })).toContainText('Current profile');
+  await page.evaluate(() => (window as any).metadata.replies[0]('Stale profile'));
+  await expect(page.getByLabel('Recognition model', { exact: true })).not.toContainText('Stale profile');
+});
+
 for (const surface of ['chat', 'agents']) {
   test(`${surface} voice settings dismiss outside and with Escape, retaining selections`, async ({ page }, info) => {
     await microphoneFixture(page);
@@ -363,7 +445,9 @@ for (const surface of ['chat', 'agents']) {
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
     expect(box!.y).toBeGreaterThanOrEqual(0);
     await page.screenshot({ path: info.outputPath(`${surface}-voice-rtl.png`), fullPage: true });
-    await outside.click();
+    // On narrow layouts the panel legitimately overlays the editor. Use the
+    // exposed header as the outside target, rather than clicking through it.
+    await page.locator('.topbar h1').click();
     await expect(panel).toBeHidden();
     await expect(page.getByRole('alert')).toHaveCount(0);
   });

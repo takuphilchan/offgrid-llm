@@ -10,6 +10,10 @@ import { useI18n } from '../../i18n';
 import { workflow } from '../../i18n/workflow';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DocumentSourceDialog } from './DocumentSourceDialog';
+import { SectionHeading, ListSearch, EmptyState } from '../../components/WorkspacePresentation';
+import { UtilityPopover } from '../../components/UtilityPopover';
+import { workspaceManagement } from '../../i18n/workspace-management';
+import { useSetupHandoff } from '../../lib/setup-handoff';
 
 type Props = {
   models: Model[];
@@ -26,6 +30,8 @@ export function KnowledgePage(props: Props) {
 function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
   const { messages: text, locale } = useI18n();
   const copy = workflow[locale];
+  const management = workspaceManagement(locale);
+  const handoff = useSetupHandoff();
   const permissions = useWorkspace();
   const [deleting, setDeleting] = useState<Document | null>(null);
   const [sourceID, setSourceID] = useState('');
@@ -162,11 +168,16 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
 
   const enabled = status?.enabled === true;
   const shownDocuments = documents.filter(document => document.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const readiness = (document: Document) => document.index_status === 'ready' ? management.indexed : ['indexing', 'building'].includes(document.index_status ?? '') ? management.indexing : document.index_status === 'failed' ? management.indexFailed : presentation[locale].unknown;
   return <div className="stack knowledge-workspace">
     {!permissions.admin && <p className="permission-notice">{interaction[locale].adminOnly}</p>}
 	{typeof status?.stats?.index_error === 'string' && <div className="error-banner" role="alert">{status.stats.index_error}</div>}
     {sourceID && <DocumentSourceDialog id={sourceID} close={() => setSourceID('')} />}
     {deleting && <ConfirmDialog title={deleting.name} body={copy.deleteDocument} close={() => setDeleting(null)} confirm={async () => { await api.deleteDocument(deleting.id); await refresh(); }} />}
+    <SectionHeading title={`${management.documents} · ${documents.length}`} actions={
+      <button className="primary-button" onClick={() => input.current?.click()} disabled={busy || !enabled || !permissions.admin}><Icon name="upload" size={17} />{busy ? text.common.loading : text.knowledge.add}</button>
+    } />
+    <input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} />
     {permissions.admin && !enabled && !busy && status !== null && <section className="knowledge-setup">
       <div className="knowledge-setup-copy"><div className="model-glyph"><Icon name="knowledge" /></div><div><span className="eyebrow">{text.knowledgeSetup.title}</span><h2>{text.knowledge.disabled}</h2><p>{text.knowledgeSetup.body}</p></div></div>
       <div className="knowledge-setup-controls">
@@ -180,22 +191,20 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
       </div>
     </section>}
 
-    <div className="section-actions">
-      <div className="notice"><span>{documents.length} · {text.knowledge.title}</span>{enabled && <span className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model}</span>}</div>
-      <input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} />
-      <div className="action-group">
-        {permissions.admin && enabled && <button className="text-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
-        <button className="secondary-button" disabled={busy} onClick={() => void refresh()}>{text.common.refresh}</button>
-        <button className="primary-button" onClick={() => input.current?.click()} disabled={busy || !enabled || !permissions.admin}><Icon name="upload" size={17} />{busy ? text.common.loading : text.knowledge.add}</button>
-      </div>
-    </div>
+    {enabled && <div className="knowledge-actions">
+      <button className="secondary-button" disabled={busy || !documents.length || !!status?.stats?.index_error} onClick={handoff.askKnowledge}>{management.askKnowledge}</button>
+      <UtilityPopover label={management.manageKnowledge} triggerClassName="secondary-button">
+        <p className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model || presentation[locale].unknown}</p>
+        {permissions.admin && <button className="secondary-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
+      </UtilityPopover>
+      <p>{management.retrievalScope}</p>
+    </div>}
     {!enabled && documents.length > 0 && <p>{copy.offlineLibrary}</p>}
     {error && <div className="inline-error" role="alert">{error}<button onClick={() => void refresh()}>{text.common.retry}</button></div>}
-    {documents.length > 0 && <input type="search" aria-label={text.knowledge.title} placeholder={text.knowledge.title} value={query} onChange={event => setQuery(event.target.value)} />}
-    {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? <EmptyPanel text={query ? text.history.noMatches : text.knowledge.empty} /> : <div className="card-grid">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><small>{document.chunk_count} {text.knowledge.chunks} · {document.index_status ?? presentation[locale].unknown}</small><div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button disabled={!permissions.admin || !document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><button className="danger-button" disabled={!permissions.admin || busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></div></div></article>)}</div>}
+    {documents.length > 0 && <ListSearch label={text.knowledge.title} value={query} onChange={setQuery} />}
+    {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? !error && <EmptyState title={query ? management.noDocuments : text.knowledge.empty} /> : <div className="knowledge-documents">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><p className="document-readiness">{readiness(document)}</p>{document.last_error && <p role="status">{document.last_error}</p>}<div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button className="secondary-button" disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><UtilityPopover label={`${management.manageDocument}: ${document.name}`} trigger={management.manageDocument} triggerClassName="secondary-button"><p>{document.chunk_count} {text.knowledge.chunks}</p><button className="secondary-button" disabled={!permissions.admin || !document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button className="danger-button" disabled={!permissions.admin || busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></UtilityPopover></div>{!document.source_retained && <p className="workspace-secondary">{copy.sourceMissing}</p>}</div></article>)}</div>}
   </div>;
 }
 
-function EmptyPanel({ text }: { text: string }) { return <div className="empty-panel"><div className="empty-lines"><i /><i /><i /></div><p>{text}</p></div>; }
 function SkeletonCards() { return <div className="card-grid">{[1, 2, 3].map(item => <div className="skeleton-card" key={item}><i /><div><span /><span /></div></div>)}</div>; }
 function formatBytes(bytes: number) { if (!bytes) return '0 B'; const units = ['B', 'KB', 'MB', 'GB', 'TB']; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return `${(bytes / 1024 ** index).toFixed(index > 1 ? 1 : 0)} ${units[index]}`; }

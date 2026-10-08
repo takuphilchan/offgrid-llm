@@ -5,6 +5,7 @@ test.describe('complete package acquisition through a real isolated service', ()
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale', 'en'); });
     await page.goto('/ui/#/models');
+    await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   });
   test('multiple supported variants require an explicit inline choice', async ({ page, request }) => {
     const discovered = await (await request.get('/api/v2/models/discover?repository=fixture/whisper')).json();
@@ -47,6 +48,7 @@ test.describe('complete package acquisition through a real isolated service', ()
       await page.getByRole('button', { name: 'Language', exact: true }).click();
       await page.getByRole('button', { name: category, exact: true }).click();
       const card = page.getByRole('region', { name: 'Installed', exact: true }).locator('article').filter({ hasText: `fixture/${architecture}` });
+      await page.getByRole('tab', { name: 'Installed', exact: true }).click();
       await expect(card.getByRole('button', { name: 'Verify', exact: true })).toBeVisible({ timeout: 30000 });
       await card.getByRole('button', { name: 'Verify', exact: true }).click();
       await expect(card.getByText('Integrity checked', { exact: true })).toBeVisible();

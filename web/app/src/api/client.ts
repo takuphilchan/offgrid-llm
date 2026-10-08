@@ -48,8 +48,13 @@ export class APIError extends Error {
 let durableAgentEvents = false;
 let agentWorkspace = '';
 const agentCursors = new Map<string, string>();
+let agentReplayScope = '', agentReplayGeneration = 0;
+export function setAgentReplayScope(scope: string) {
+  if (scope === agentReplayScope) return;
+  agentReplayScope = scope; agentReplayGeneration++; agentCursors.clear();
+}
 
-async function request<T>(path: string, init?: RequestInit, timeout = 30_000): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, timeout = 30_000, decode?: (response: Response) => Promise<T>): Promise<T> {
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), timeout);
   try {
@@ -72,6 +77,7 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000): P
     if (response.status === 401 && !path.startsWith('/v1/auth/') && path !== '/v1/users/me') window.dispatchEvent(new Event('offgrid:unauthenticated'));
     throw new APIError(message, response.status, data);
   }
+  if (decode) return await decode(response);
   if (!response.headers.get('content-type')?.includes('application/json')) throw new APIError('Unexpected service response. Check the backend address and version.', 502);
   return await response.json() as T;
   } catch (reason) {
@@ -97,7 +103,7 @@ export const api = {
   modelFiles: (repo: string, signal: AbortSignal) => request<{ repo: string; files: DiscoveredFile[] }>(`/v1/search/files?${new URLSearchParams({ repo })}`, { signal }),
   systemIdentity: async () => {
     const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system');
-    if (agentWorkspace !== (identity.workspace_id ?? '')) agentCursors.clear();
+    if (agentWorkspace !== (identity.workspace_id ?? '')) { agentCursors.clear(); agentReplayGeneration++; }
     agentWorkspace = identity.workspace_id ?? '';
     durableAgentEvents = Array.isArray(identity.capabilities) && identity.capabilities.includes('durable-agent-events-v2');
     return identity;
@@ -142,7 +148,7 @@ export const api = {
   generateSession: (name: string, content: string, modelID: string, useKnowledgeBase: boolean, signal?: AbortSignal) => request<{ session: ChatSession; message: SessionMessage }>(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
     method: 'POST', signal, body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase })
   }),
-  currentTurn: (name: string) => request<{ turn: SessionTurn | null }>(`/v1/sessions/${encodeURIComponent(name)}/turn`),
+  currentTurn: (name: string, signal?: AbortSignal) => request<{ turn: SessionTurn | null }>(`/v1/sessions/${encodeURIComponent(name)}/turn`, { signal }),
   cancelTurn: (name: string, id: string) => request<{ success: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/turn/cancel`, { method: 'POST', body: JSON.stringify({ id }) }),
   followTurn: async (name: string, id: string, onEvent: (event: SessionEvent) => void, signal: AbortSignal) => {
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/turn/events?id=${encodeURIComponent(id)}`, { credentials: 'same-origin', signal });
@@ -170,7 +176,7 @@ export const api = {
   downloadModel: (model: Pick<CatalogModel, 'id' | 'repo' | 'file' | 'quant'>, enableKnowledge = false) => request<{ success: boolean; exists?: boolean; status: string; file_name: string }>('/v1/models/download', {
     method: 'POST', body: JSON.stringify({ model_id: model.id, repository: model.repo, file_name: model.file, quantization: model.quant, enable_knowledge: enableKnowledge })
   }),
-  downloadProgress: () => request<Record<string, DownloadProgress>>('/v1/models/download/progress'),
+  downloadProgress: (signal?: AbortSignal) => request<Record<string, DownloadProgress>>('/v1/models/download/progress', { signal }),
   cancelDownload: (fileName: string) => request<{ success: boolean }>('/v1/models/download/cancel', {
     method: 'POST', body: JSON.stringify({ file_name: fileName })
   }),
@@ -182,7 +188,7 @@ export const api = {
     const result = await request<{ documents: Document[] | null; count: number }>('/v1/documents');
     return { ...result, documents: Array.isArray(result.documents) ? result.documents : [] };
   },
-  ragStatus: () => request<RAGStatus>('/v1/rag/status'),
+  ragStatus: (signal?: AbortSignal) => request<RAGStatus>('/v1/rag/status', { signal }),
   enableRAG: (embeddingModel: string) => request<{ success: boolean; message: string }>('/v1/rag/enable', {
     method: 'POST', body: JSON.stringify({ embedding_model: embeddingModel })
   }),
@@ -227,24 +233,41 @@ export const api = {
     method: 'POST', body: JSON.stringify({ model, prompt, style, computer_session: computerSession || undefined, max_iterations: 12, async: true })
   }, computerSession ? 120_000 : 30_000),
   agentRun: (id: string) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}`),
-  job: (id: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}`),
-  jobs: async () => (await request<AgentTask[] | null>('/api/v2/jobs')) ?? [],
+  job: (id: string, signal?: AbortSignal) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}`, { signal }),
+  jobs: async (signal?: AbortSignal) => (await request<AgentTask[] | null>('/api/v2/jobs', { signal })) ?? [],
   deleteJob: (id: string) => request<{ success: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}`, {method: 'DELETE'}),
   exportJob: (id: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/export`),
+  taskArtifact: (id: string, digest: string, signal: AbortSignal) => request<Blob>(`/api/v2/jobs/${encodeURIComponent(id)}/artifact?digest=${encodeURIComponent(digest)}`, { signal }, 30_000, async response => {
+    // Matches the existing bounded task-artifact contract, not arbitrary URLs.
+    if (!response.headers.get('content-type')?.includes('application/octet-stream') || !response.body) throw new APIError('Unexpected artifact response.', 502);
+    const reader = response.body.getReader(), chunks: Uint8Array<ArrayBuffer>[] = [];
+    let length = 0;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        length += value.byteLength;
+        if (length > 128 * 1024) throw new APIError('Artifact exceeds the supported size.', 502);
+        chunks.push(value);
+      }
+      return new Blob(chunks, { type: 'application/octet-stream' });
+    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  }),
   jobAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'pause' | 'resume' | 'takeover' | 'steer' | 'reconnect' | 'reconcile', data: {approval_id?: string; call_id?: string; result?: string; request_id?: string; instruction?: string} = {}) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/${action}`, {method: 'POST', body: JSON.stringify(data)}),
   submitJob: (prompt: string, model: string, request_id: string) => request<AgentRun>('/api/v2/jobs', {method: 'POST', body: JSON.stringify({prompt, model, request_id})}),
   // Structured-tool and optional image preflights each have a 90-second bound.
   resolveJobInput: (id: string, input_id: string, computer_session: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/input`, {method: 'POST', body: JSON.stringify({input_id, computer_session})}, 210_000),
   deleteAgentRun: (id: string) => request<{ success: boolean }>(`/v1/agents/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void, onHeartbeat: () => void, signal: AbortSignal) => {
+  streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void | boolean, onHeartbeat: () => void, signal: AbortSignal) => {
     const replay = durableAgentEvents;
+    const generation = agentReplayGeneration;
     const headers: Record<string,string> = { Accept: 'text/event-stream' };
     const cursor = agentCursors.get(id);
     if (replay && cursor) headers['Last-Event-ID'] = cursor;
     const response = await fetch(`${replay ? '/api/v2/jobs' : '/v1/agents/tasks'}/${encodeURIComponent(id)}/events`, { credentials: 'same-origin', headers, signal });
     if (!response.ok) throw new APIError('Agent progress unavailable', response.status);
     return readAgentStream(response, id, run => {
-      onSnapshot(run);
+      if (signal.aborted || generation !== agentReplayGeneration) return;
+      if (onSnapshot(run) === false) return;
       if (replay && run.event_cursor) {
         agentCursors.delete(id);
         agentCursors.set(id,run.event_cursor);

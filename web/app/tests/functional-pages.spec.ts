@@ -46,6 +46,7 @@ test('knowledge setup downloads one stable model and enables RAG', async ({ page
   await expect.poll(() => downloadRequests).toBe(1);
   await expect.poll(() => enabled).toBe(true);
   expect(enableRequests).toBe(0); // Activation belongs to the service worker.
+  await page.getByRole('button', { name: 'Manage Knowledge', exact: true }).click();
   await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('knowledge.png'), fullPage: true });
 });
@@ -65,7 +66,9 @@ test('models page starts only one download for a rapid repeated click', async ({
 
   await page.goto('/ui/#/models');
   await page.getByRole('button', { name: 'Embeddings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'BGE M3' })).toBeVisible();
+  await page.getByRole('button', { name: 'Review download', exact: true }).click();
   await page.getByRole('button', { name: 'Download' }).dblclick();
   await expect.poll(() => downloadRequests).toBe(1);
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('models.png'), fullPage: true });

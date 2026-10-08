@@ -26,6 +26,7 @@ test('saved conversations survive reload and can be deleted', async ({ page, req
 
 test('model catalog renders real actionable entries', async ({ page }) => {
   await page.goto('/ui/#/models');
+  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   await expect(page.locator('.catalog-card').first()).toBeVisible();
   await expect(page.locator('.catalog-card .primary-button').first()).toBeEnabled();
   await expect(page.locator('.catalog-card').first()).toContainText(/Q\d/i);

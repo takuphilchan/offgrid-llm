@@ -12,6 +12,12 @@ MCP lets an agent call tools exposed by another server. It is optional: ordinary
 
 Connection testing checks protocol connectivity; task success also depends on the tool schema, model, permissions, and remote service. OffGrid's model can run locally while tool arguments are sent to an external destination. Never include private documents or credentials in a test prompt.
 
+Connections and Available tools are named administration views, not required
+setup panels in the task composer. The list shows saved connection state beside
+its removal action; the Connect form keeps Test connection and Connect together.
+Leaving these views preserves the current task draft. A successful connection
+does not grant a task permission or submit any work.
+
 ## Try a public documentation server
 
 Microsoft documents a free Streamable HTTP server that does not require authentication. It searches documentation and code samples; see [Microsoft's overview](https://learn.microsoft.com/en-us/training/support/mcp) and [endpoint reference](https://learn.microsoft.com/en-us/training/support/mcp-developer-reference).

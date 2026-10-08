@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { APIError, api, type AgentRun } from "../../api/client";
 import { agentActive } from "../../api/agent-stream";
 
@@ -11,8 +11,10 @@ export function useTaskRun(id: string) {
   >("connecting");
   const [error, setError] = useState("");
   const [revision, refresh] = useState(0);
+  const latest = useRef<AgentRun | null>(null);
   useEffect(() => {
-    setRun(null);
+    if (latest.current?.run_id !== id) latest.current = null;
+    setRun(latest.current);
     setError("");
     setConnection("connecting");
     if (!id) return;
@@ -21,16 +23,30 @@ export function useTaskRun(id: string) {
     let timer: ReturnType<typeof setTimeout>,
       watchdog: ReturnType<typeof setTimeout>,
       controller: AbortController;
+    const accept = (next: AgentRun) => {
+      if (disposed || next.run_id !== id) return false;
+      const previous = latest.current;
+      // Durable cursors order committed snapshots. A delayed reconnect must
+      // not restore an older approval or result. Equal cursors may still carry
+      // a fresher provisional preview; legacy services lack this guarantee.
+      const cursor = /^\d{1,19}$/;
+      if (previous?.event_cursor && next.event_cursor &&
+          cursor.test(previous.event_cursor) && cursor.test(next.event_cursor) &&
+          BigInt(next.event_cursor) < BigInt(previous.event_cursor)) return false;
+      latest.current = { ...next, prompt: next.prompt ?? previous?.prompt, model: next.model ?? previous?.model };
+      setRun(latest.current);
+      return true;
+    };
     const follow = async () => {
       try {
-        const snapshot = await api.job(id);
+        controller = new AbortController();
+        const snapshot = await api.job(id, controller.signal);
         if (disposed) return;
-        setRun(snapshot);
+        accept(snapshot);
         setError("");
         setConnection("live");
         retries = 0;
-        if (agentActive(snapshot)) {
-          controller = new AbortController();
+        if (latest.current && agentActive(latest.current)) {
           const alive = () => {
             clearTimeout(watchdog);
             watchdog = setTimeout(() => controller.abort(), 20_000);
@@ -38,19 +54,13 @@ export function useTaskRun(id: string) {
           alive();
           await api.streamAgent(
             id,
-            (next) => {
-              if (!disposed)
-                setRun((previous) => ({
-                  ...next,
-                  prompt: previous?.prompt ?? snapshot.prompt,
-                }));
-            },
+            accept,
             alive,
             controller.signal,
           );
         }
         // Includes saved input/approval waits: another client may resolve them.
-        if (!disposed) timer = setTimeout(() => void follow(), 2500);
+        if (!disposed && latest.current && !['completed', 'failed', 'cancelled'].includes(latest.current.status)) timer = setTimeout(() => void follow(), 2500);
       } catch (reason) {
         if (disposed) return;
         setConnection("reconnecting");
@@ -58,6 +68,7 @@ export function useTaskRun(id: string) {
           reason instanceof APIError &&
           [401, 403, 404].includes(reason.status)
         ) {
+          latest.current = null;
           setRun(null);
           setError(reason.message);
           return;

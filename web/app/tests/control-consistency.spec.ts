@@ -30,6 +30,7 @@ for (const theme of ['dark', 'light'] as const) {
     await fixture(page, 'en', theme);
     for (const route of ['chat', 'agents', 'settings']) {
       await page.goto(`/ui/#/${route}`);
+      await page.locator('.workspace-options > button').click();
       await expect(page.locator('.locale-picker select')).toBeVisible();
       const options = await page.locator('select option:not(:disabled)').evaluateAll(elements => elements.map(element => {
         const style = getComputedStyle(element);
@@ -60,6 +61,7 @@ test('native select options respect forced colors instead of locking the applica
   await page.emulateMedia({ forcedColors: 'active', colorScheme: 'light' });
   await page.goto('/ui/#/chat');
   const language = page.locator('.locale-picker select');
+  await page.locator('.workspace-options > button').click();
   await expect(language).toBeVisible();
   for (const element of [language, language.locator('option').first()]) {
     await expect(element).toHaveCSS('forced-color-adjust', 'auto');
@@ -74,6 +76,7 @@ test('native select options respect forced colors instead of locking the applica
 test('search, task and document controls share sizing and keyboard focus', async ({ page }) => {
   await fixture(page);
   await page.goto('/ui/#/models');
+  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   const query = page.locator('#model-search-query');
   await expect(query).toBeVisible();
   await expect(query).toHaveCSS('min-height', '40px');
@@ -92,10 +95,45 @@ test('search, task and document controls share sizing and keyboard focus', async
   await expect(page.locator('.task-card select').first()).toHaveCSS('min-height', '40px');
   await expect(page.locator('.task-card textarea')).toHaveCSS('border-radius', '8px');
   await page.goto('/ui/#/knowledge');
-  const controls = page.locator('.section-actions .action-group button');
-  await expect(controls).toHaveCount(3);
-  for (const control of await controls.all()) await expect(control).toHaveCSS('min-height', '40px');
+  const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
+  for (const control of controls) {
+    await expect(control).toBeVisible();
+    await expect(control).toHaveCSS('min-height', '40px');
+    await control.focus();
+    await expect(control).toBeFocused();
+  }
   await expect(page.locator('.knowledge-workspace > button')).toHaveCount(0);
+});
+
+for (const theme of ['light', 'dark']) test(`workspace actions have consistent visible button boundaries in ${theme}`, async ({ page }, info) => {
+  await fixture(page, 'en', theme);
+  await page.route('**/v1/rag/status', route => route.fulfill({ json: { enabled: false } }));
+  await page.goto('/ui/#/chat');
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  // Measure the resting surface, not the pointer hover left by opening the menu.
+  await page.mouse.move(0, 0);
+  const actions = [
+    page.getByRole('button', { name: 'Context & response', exact: true }),
+    page.getByRole('button', { name: 'Voice settings', exact: true }),
+    page.getByRole('button', { name: 'Use microphone', exact: true }),
+    page.getByRole('link', { name: 'Set up Knowledge', exact: true }),
+  ];
+  for (const action of actions) {
+    await expect(action).toHaveCSS('min-height', '40px');
+    await expect(action).toHaveCSS('border-radius', '8px');
+    await expect(action).toHaveCSS('text-decoration-line', 'none');
+    await expect(action).toHaveCSS('background-color', theme === 'dark' ? 'rgb(24, 24, 25)' : 'rgb(255, 255, 255)');
+    await expect(action).toHaveCSS('border-top-width', '1px');
+    expect(await action.evaluate(el => getComputedStyle(el).borderTopColor)).not.toBe('rgba(0, 0, 0, 0)');
+  }
+  const voiceSettings = page.getByRole('button', { name: 'Voice settings', exact: true });
+  await voiceSettings.focus(); await voiceSettings.press('Enter');
+  const manage = page.getByRole('link', { name: 'Manage speech models' });
+  await expect(manage).toHaveCSS('min-height', '40px');
+  await expect(manage).toHaveCSS('text-decoration-line', 'none');
+  await manage.focus(); await expect(manage).toHaveCSS('outline-width', '2px');
+  await page.screenshot({ path: info.outputPath(`action-controls-${theme}.png`) });
+  await manage.press('Enter'); await expect(page).toHaveURL(/#\/models$/);
 });
 
 for (const profile of [

@@ -7,7 +7,7 @@ async function mockWorkspace(page: Page, hasChatModel: boolean) {
     try { if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale', 'en'); } catch { /* Storage-denial fixture. */ }
   });
   await page.route('**/health', route => route.fulfill({ contentType: 'application/json', body: '{"status":"healthy"}' }));
-  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', revision: 'test-revision', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'] } }));
+  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', revision: 'test-revision', workspace_id: 'experience-fixture', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'] } }));
   await page.route(/\/(?:v1|api\/v2\/computer)\//, route => {
     const path = new URL(route.request().url()).pathname;
     const model = { id: 'workspace-test-model', type: 'chat', context_window: 8192 };
@@ -147,23 +147,25 @@ test('southern African languages are complete, selectable, and persistent', asyn
   await page.goto('/ui/#/settings');
 
   const language = page.getByLabel('Language');
+  await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
   await expect(language.locator('option')).toHaveCount(9);
 
   await language.selectOption('sn');
   await expect(page.locator('html')).toHaveAttribute('lang', 'sn');
-  await expect(page.getByRole('heading', { name: 'Zvirongwa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Zvirongwa', level: 1 })).toBeVisible();
 
   await page.getByLabel('Mutauro').selectOption('nd');
   await expect(page.locator('html')).toHaveAttribute('lang', 'nd');
-  await expect(page.getByRole('heading', { name: 'Izilungiselelo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Izilungiselelo', level: 1 })).toBeVisible();
 
   await page.getByLabel('Ulimi').selectOption('zu');
   await expect(page.locator('html')).toHaveAttribute('lang', 'zu');
   await page.getByLabel('Ulimi').selectOption('de');
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-  await expect(page.getByRole('heading', { name: 'Einstellungen' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Einstellungen', level: 1 })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('offgrid.locale'))).toBe('de');
   await page.reload();
+  await page.locator('.workspace-options > button').click();
   await expect(page.getByLabel('Sprache')).toHaveValue('de');
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
 });

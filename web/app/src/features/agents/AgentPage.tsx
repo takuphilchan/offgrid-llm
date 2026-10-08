@@ -24,6 +24,8 @@ import { TaskWorkspace } from './TaskWorkspace';
 import { AgentNavigation } from './AgentNavigation';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { mcpConnectionText } from '../../i18n/mcp-connections';
+import { useDraftScope } from '../../lib/draft-scope';
+import { ActionGroup, EmptyState, SectionHeading } from '../../components/WorkspacePresentation';
 
 type AgentView = 'workspace' | 'tools' | 'connections';
 
@@ -58,7 +60,7 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
 function AgentWorkspace({ scope, selectionScope, models, model, setModel, managementOnly = false }: { scope: string; selectionScope: string; models: Model[]; model: string; setModel: (model: string) => void; managementOnly?: boolean }) {
   const { messages: text, locale } = useI18n();
   const experience = computerExperience(locale);
-  const { value: task, setValue: setTask, key: taskDraftKey, unsaved } = useDraft(scope, 'agent-task');
+  const { value: task, setValue: setTask, key: taskDraftKey, unsaved } = useDraft(useDraftScope(), 'agent-task');
   const { value: selectedRun, setValue: selectRun } = useDraft(selectionScope, 'agent-run');
   const [selectionNotice, setSelectionNotice] = useState(false);
   const [style, setStyle] = useWorkspaceState('agent.style', 'react');
@@ -403,7 +405,7 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel, manage
         </section>
       </div>
       <section className="runtime-panel agent-history-panel">
-        <div className="section-heading"><span className="eyebrow">{text.agentRuntime.history} · {tasks.length}</span><div className="history-tools"><button className="secondary-button" disabled={loadingRuntime || busy} onClick={() => void refreshRuntime()}>{text.common.refresh}</button><button className="secondary-button" disabled={loadingRuntime || busy || !matchingTasks.some(item => item.deletable)} onClick={() => setDeleteItems(matchingTasks.filter(item => item.deletable).map(item => ({ id: item.id, label: item.prompt })))}>{text.history.clearTasks}</button></div></div>
+        <div className="section-heading"><span className="eyebrow">{text.agentRuntime.history} · {tasks.length}</span><div className="history-tools"><button className="secondary-button" disabled={loadingRuntime || busy || !matchingTasks.some(item => item.deletable)} onClick={() => setDeleteItems(matchingTasks.filter(item => item.deletable).map(item => ({ id: item.id, label: item.prompt })))}>{text.history.clearTasks}</button></div></div>
         <label className="history-search"><Icon name="search" size={15} /><input type="search" value={historyQuery} onChange={event => { setHistoryQuery(event.target.value); setHistoryLimit(20); }} placeholder={text.history.searchTasks} aria-label={text.history.searchTasks} /></label>
         <p className="history-notice">{text.history.protectedTasks}</p>
         {historyNotice && <p className="history-notice" role="status">{historyNotice}</p>}
@@ -415,31 +417,35 @@ function AgentWorkspace({ scope, selectionScope, models, model, setModel, manage
       </section>
     </div>}
 
-    {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role={managementOnly ? 'region' : 'tabpanel'} aria-labelledby="agent-tools-tab"><section className="runtime-panel"><div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.tools}</span><h2>{enabledTools}/{tools.length} {text.agentRuntime.enabled}</h2></div><button className="secondary-button" onClick={() => void refreshRuntime()}>{text.common.refresh}</button></div>{tools.length === 0 ? <p className="compact-empty">{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noTools}</p> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><strong>{tool.name}</strong><p>{tool.description}</p><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}</section></div>}
+    {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role={managementOnly ? 'region' : 'tabpanel'} aria-labelledby="agent-tools-tab"><section className="runtime-panel management-list-panel">
+      <SectionHeading title={text.agentRuntime.tools} description={`${enabledTools}/${tools.length} ${text.agentRuntime.enabled}`} />
+      {tools.length === 0 ? loadingRuntime ? <p role="status">{text.common.loading}</p> : runtimeError ? null : <EmptyState title={text.agentRuntime.noTools} /> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><h3>{tool.name}</h3><p>{tool.description}</p><details><summary>{presentation[locale].details}</summary><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></details></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}
+    </section></div>}
 
     {view === 'connections' && <div id="agent-connections-panel" className="agent-view" role={managementOnly ? 'region' : 'tabpanel'} aria-labelledby="agent-connections-tab">
       <section className="runtime-panel connector-panel">
         <div>
-          <span className="eyebrow">{text.agentRuntime.connectors}</span>
+          <SectionHeading title={text.agentRuntime.connectors} />
           <div className="connector-list">
-            {servers.length === 0 ? <p>{loadingRuntime ? text.common.loading : runtimeError ? presentation[locale].unknown : text.agentRuntime.noConnectors}</p> : servers.map(server => <article key={server.name}>
+            {servers.length === 0 ? loadingRuntime ? <p role="status">{text.common.loading}</p> : runtimeError ? null : <EmptyState title={text.agentRuntime.noConnectors} /> : servers.map(server => <article key={server.name}>
               <i aria-hidden="true" data-connected={server.status === 'connected'} />
               <div>
-                <strong>{server.name}</strong>
+                <h3>{server.name}</h3>
                 <small>{server.transport} · {server.tools} {text.agentRuntime.tools.toLowerCase()} · {server.status === 'connected' ? mcpText.connected : server.status === 'disabled' ? mcpText.disabled : mcpText.disconnected}</small>
-                <button type="button" className="text-button connector-remove" aria-label={`${mcpText.remove}: ${server.name}`} disabled={connectionBusy !== ''} onClick={() => setRemoveServer(server)}><Icon name="trash" size={14} />{mcpText.remove}</button>
+                <ActionGroup><button type="button" className="secondary-button connector-remove" aria-label={`${mcpText.remove}: ${server.name}`} disabled={connectionBusy !== ''} onClick={() => setRemoveServer(server)}><Icon name="trash" size={14} />{mcpText.remove}</button></ActionGroup>
               </div>
             </article>)}
           </div>
           {connectionMessage && <p className="connection-success" role="status">{connectionMessage}</p>}
         </div>
-        <form onSubmit={connect}>
+        <form onSubmit={connect} aria-label={text.agentRuntime.connect}>
+          <h3>{text.agentRuntime.connect}</h3>
           <label><span>{text.agentRuntime.connectorName}</span><input value={connectionName} onChange={event => setConnectionName(event.target.value)} /></label>
           <label><span>{text.agentRuntime.connectorURL}</span><input type="url" placeholder="https://mcp.example.com/mcp" value={connectionURL} onChange={event => setConnectionURL(event.target.value)} /></label>
-          <div>
+          <ActionGroup>
             <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button>
             <button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button>
-          </div>
+          </ActionGroup>
         </form>
       </section>
       {removeServer && <ConfirmDialog title={mcpText.title.replace('{name}', removeServer.name)} body={mcpText.body} confirmLabel={mcpText.remove} confirm={removeConnection} close={() => setRemoveServer(null)} />}
@@ -462,8 +468,8 @@ function ExternalProvidersPanel({ integrations, loading, busy, setup, copied, on
   const { messages: text } = useI18n();
   const managedHermes = setup?.id === 'hermes';
   return <section className="runtime-panel external-providers">
-    <div className="section-heading"><div><span className="eyebrow">{text.agentRuntime.externalProviders}</span><h2>{text.agentRuntime.providerPluginsTitle}</h2><p>{text.agentRuntime.externalProvidersBody}</p></div></div>
-    {!loading && integrations.length === 0 && <p className="compact-empty">{text.agentRuntime.noExternalProviders}</p>}
+    <SectionHeading title={text.agentRuntime.providerPluginsTitle} description={text.agentRuntime.externalProvidersBody} />
+    {!loading && integrations.length === 0 && <EmptyState title={text.agentRuntime.noExternalProviders} />}
     <div className="provider-grid">{integrations.map(item => <article key={item.id} className="provider-card">
       <div><span className={item.ready ? 'status-pill' : 'status-pill warning'}>{item.ready ? text.agentRuntime.providerReady : text.agentRuntime.providerNeedsSetup}</span><h3>{item.name}</h3><p>{item.description}</p></div>
       <dl><div><dt>{text.agentRuntime.provider}</dt><dd>{item.provider_id}</dd></div><div><dt>{text.agentRuntime.transport}</dt><dd>{item.transport}</dd></div><div><dt>{text.agentRuntime.model}</dt><dd>{item.model_id ?? '—'}</dd></div><div><dt>{text.agentRuntime.context}</dt><dd>{item.context_window.toLocaleString()} / {item.minimum_context.toLocaleString()}</dd></div></dl>

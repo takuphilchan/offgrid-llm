@@ -154,7 +154,7 @@ export function ComputerSetup({ value, onChange, disabled, onAvailability, onRea
      {check?.vision && <p role={check.vision.passed ? 'status' : 'alert'}>{check.vision.message}</p>}
      {check?.runtime && <small>{check.runtime.build} · {check.runtime.context} tokens · {check.runtime.template_sha256?.slice(0,12)}</small>}
      {checkError && <p role="alert">{checkError}</p>}
-     {check && !check.passed && <a href="#/models">{messages.nav.models}</a>}
+     {check && !check.passed && <a className="secondary-button" href="#/models">{messages.nav.models}</a>}
    </section></details>
    {sessions.length > 0 && <label className="field"><span>{experience.target}</span><select value={value} disabled={disabled} onChange={e => onChange(e.target.value)}><option value="">{nativeText.select}</option>{sessions.map(s => <option key={s.id} value={s.id} disabled={s.state !== 'ready'}>{s.origin} · {s.approval_mode==='full_task'?approvalText.full:s.approval_mode==='scoped_changes'?approvalText.scoped:approvalText.ask} · {taskText[s.state ?? 'in_use']} · {s.remaining_actions}</option>)}</select></label>}
    {sessions.map(s => <p key={s.id}>{['finished','exhausted'].includes(s.state ?? '') ? (managed?experience.fresh:taskText.renew) : ''}{s.expires_at && <span className="browser-expiry">{taskText.remaining}: {Math.max(0, Math.ceil((Date.parse(s.expires_at) - now) / 1000))}</span>}</p>)}

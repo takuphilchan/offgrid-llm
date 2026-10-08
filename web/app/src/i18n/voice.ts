@@ -34,7 +34,7 @@ const english: VoiceCopy = {
   speak: 'Read aloud',
   stopSpeaking: 'Stop reading',
   preparing: 'Preparing audio · Stop',
-  preparingHint: 'Generating speech locally. You can stop at any time.',
+  preparingHint: 'Generating speech on the connected service. You can stop at any time.',
   speechFailed: 'Audio playback failed. Check the selected speech model and output device.',
   speechTimeout: 'Speech took too long. Playback was stopped; try a shorter passage or a lighter model.',
   noSpeech: 'This response has no readable prose.',

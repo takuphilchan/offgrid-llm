@@ -6,10 +6,28 @@ Discovery requires internet access to Hugging Face. Ordinary local inference doe
 
 ## Language and embedding models
 
-1. Open **Models**, choose **Language** or **Embeddings**, then **Find more models**.
+If you arrived from a missing-model action in Chat or Agents, the development UI
+offers **Return to your draft**. Setup refreshes model readiness but never sends
+your text or downloads a model without your action. The return reference is
+private, account/workspace-scoped memory; reloading loses that shortcut, not the
+existing saved draft. Older services without workspace identity keep drafts only
+in session memory and ordinary navigation instead of guessing a cross-workspace
+return. For previous account-only drafts, **Restore previous drafts here** makes
+copies only after your confirmation; originals and newer drafts remain intact.
+If a conversation was removed during setup, its draft stays available without
+being attached to another conversation or resubmitted.
+
+1. Open **Models → Discover models**, choose **Language** or **Embeddings**.
 2. Enter a model or publisher and choose **Search**. Typing alone does not send a query.
-3. Choose a repository, then **Choose files**. Only that repository's file list is loaded.
+3. Choose **Review download** on a repository. Its decision opens in that result.
 4. Read its model card and license. Select the exact GGUF file/quantization, then Download.
+
+A single supported variant needs no file-selection step; alternatives stay in
+the same card. Curated language/embedding models use the same review-then-download
+flow. Review, variant selection and page navigation do not start transfers. The
+legacy downloader does not expose immutable source revisions or a disk-space
+preflight, so these limitations are shown explicitly rather than borrowing speech
+package guarantees or displaying invented free space.
 
 The list displays up to 1,000 repository entries, including nested files. Unknown
 sizes are labelled, not presented as zero-byte models. Split weights and multimodal
@@ -25,6 +43,16 @@ download remains visible on the Models page even when another search is displaye
 File size is **not** total RAM/VRAM use. Runtime support for the model architecture,
 context/KV-cache memory, available disk space, license, and model quality still need
 checking. A successful download is not a hardware qualification or publisher endorsement.
+
+Installed and discovered entries share readable identities and labelled sizes:
+**Installed size** is stored model artifacts; **Download size** is a selected
+variant (or a range for multiple catalog variants); **Repository size (all files)**
+can include alternatives you will not download. Missing metadata stays **Unknown**.
+Expand **Model details** for exact IDs, revisions and available provenance. Legacy
+files without a source receipt do not inherit provenance merely by matching a
+catalog filename. **Loaded** is a runtime state, not a quality certification;
+**Runtime unchecked** does not mean a file is corrupt. An empty catalog is distinct
+from having no installed models.
 
 ## CLI
 
@@ -60,7 +88,13 @@ For a container-backed CLI, prepend `docker exec -it offgrid` (omit `-it` when s
 
 ## Speech models from Hugging Face
 
-1. Choose **Models → Speech recognition** or **Speech generation**.
+Search and package-review errors keep their own recovery action: **Retry search**
+repeats the failed query, and **Retry model review** repeats only its metadata
+inspection. Editing the query cancels an older pending search. Inventory refreshes
+do not clear those errors. After an uncertain installation reply, **Check saved
+state** reads the existing operation history; it does not submit another download.
+
+1. Choose **Models → Discover models → Speech recognition** or **Speech generation**.
 2. Use a curated entry, or search Hugging Face by model or publisher. Speech
    searches do not apply the language-model GGUF-only filter.
 3. Choose **Review download** on the result. A single supported package resolves
@@ -73,6 +107,12 @@ Installation includes the declared **model artifacts**, not executable runtime
 dependencies. Advanced offline folder import stays collapsed. Download size is
 not RAM/VRAM demand; unknown sizes remain unknown, not zero. Keyword search can
 return related repositories, but only complete supported layouts are installable.
+
+**Installed** is a local inventory with a local filter. **Discover models** has
+one explicit online search plus curated suggestions; it does not search merely
+because you type or revisit the page. The view, category, queries and reviewed
+results survive page navigation within the same workspace. Operations remain
+reachable in either view. Category switches never place a speech model in Chat.
 
 Installed, integrity checked, runtime compatible, smoke-tested and qualified are
 independent states. A download never starts the microphone or places ASR/TTS
@@ -115,6 +155,13 @@ received bytes from publication. Expand **Package files** for individual progres
 Cancellation first enters **Stopping**, then settles; partial bytes are kept and
 reported. **Resume** rechecks complete artifacts and continues the original pinned
 source. A changed upstream default branch cannot replace the approved revision.
+
+Recovery cards include the exact model/revision and remain reachable in both
+Installed and Discover views. If reading download status fails, the last known
+operation stays visible with **Check saved state**; a valid installed inventory
+is not hidden. Legacy integrity-check results remain beside their model while
+navigating within the same workspace. They are check results, not a continuing
+guarantee about external file changes, and can be refreshed with **Verify**.
 Restart never automatically downloads. **Discard partial data** confirms cleanup
 of only that operation's staging/recovery data; installed models remain.
 

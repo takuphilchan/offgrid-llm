@@ -4,7 +4,7 @@ async function fixture(page: Page) {
   const state = { role: 'admin', authRequired: true, failHistory: false, slowHistory: false, failStats: false, knowledge: false, deletes: [] as string[], calls: [] as string[] };
   await page.addInitScript(() => { localStorage.setItem('offgrid.locale', 'en'); localStorage.setItem('offgrid.onboarding.complete', 'true'); });
   await page.route('**/health', r => r.fulfill({ json: { status: 'healthy' } }));
-  await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', version: 'test', api_version: 2 } }));
+  await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', version: 'test', api_version: 2, workspace_id: 'legacy' } }));
   await page.route(/\/(?:v1|api\/v2\/computer)\//, async r => {
     const path = new URL(r.request().url()).pathname;
     state.calls.push(path);
@@ -155,7 +155,7 @@ test('missing saved agent selection clears once without losing the task draft', 
    if (sessionStorage.getItem('seeded-missing-run')) return;
    sessionStorage.setItem('seeded-missing-run', 'true');
    localStorage.setItem(key, 'missing-run');
-   localStorage.setItem('offgrid.draft.v1:alice:agent-task:', 'Keep my research draft');
+   localStorage.setItem(`offgrid.draft.v2:${encodeURIComponent(JSON.stringify(['alice', 'legacy']))}:agent-task:`, 'Keep my research draft');
  }, {key});
  let calls = 0;
  await page.route('**/v1/agents/tasks/missing-run', r => { calls++; return r.fulfill({status:404, json:{error:'Agent run not found'}}); });
@@ -189,7 +189,7 @@ test('computer tasks ignore retired verification drafts and need no extra config
  await page.addInitScript(({obsoleteKey,unrelatedKey}) => {
    localStorage.setItem(obsoleteKey, 'done');
    localStorage.setItem(unrelatedKey, 'Do not touch another workspace');
-   localStorage.setItem('offgrid.draft.v1:alice:agent-task:', 'Keep this task draft');
+   localStorage.setItem(`offgrid.draft.v2:${encodeURIComponent(JSON.stringify(['alice', 'legacy']))}:agent-task:`, 'Keep this task draft');
  }, {obsoleteKey,unrelatedKey});
  let passed = false;
  let submissions = 0;
@@ -341,7 +341,9 @@ test('mobile conversation drawer contains focus and Escape restores its trigger'
   await fixture(page); await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/ui/#/chat');
   const trigger = page.getByRole('button', { name: 'Show conversations', exact: true });
   await trigger.click();
-  for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); expect(await page.evaluate(() => !!document.activeElement?.closest('#conversation-history'))).toBe(true); }
+  await expect(page.locator('#conversation-history')).toBeVisible();
+  await expect(page.locator('#conversation-history .history-close')).toBeFocused();
+  for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); const focus = await page.evaluate(() => ({ inside: !!document.activeElement?.closest('#conversation-history'), element: document.activeElement?.outerHTML.slice(0, 1000) })); expect(focus.inside, `Tab ${i + 1}: ${focus.element}`).toBe(true); }
   await page.keyboard.press('Escape'); await expect(page.locator('#conversation-history')).not.toBeVisible(); await expect(trigger).toBeFocused();
 });
 
@@ -350,7 +352,7 @@ test('member UI does not call administrator endpoints or offer privileged action
   await page.goto('/ui/#/agents'); await expect(page.getByText('Administrator access required')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run task', exact: true })).toHaveCount(0);
   await page.goto('/ui/#/settings'); await expect(page.locator('.settings-page')).toContainText('Administrator access required');
-  await page.goto('/ui/#/models'); await expect(page.locator('.catalog-card .primary-button')).toBeDisabled();
+  await page.goto('/ui/#/models'); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await expect(page.locator('.catalog-card .primary-button')).toBeDisabled();
   await page.goto('/ui/#/knowledge'); await expect(page.getByRole('button', { name: 'Add document' })).toBeDisabled();
   expect(state.calls.filter(path => path.startsWith('/v1/agents/') || path === '/api/v2/computer/status' || path === '/v1/models/download/progress')).toEqual([]);
 });
@@ -380,7 +382,7 @@ test('statistics failure does not hide available run history', async ({ page }) 
 test('connector drafts and selected Activity survive navigation without refetching online searches', async ({ page }) => {
   await fixture(page); await page.goto('/ui/#/agents/connections');
   await page.locator('.connector-panel input').nth(0).fill('Private connector'); await page.locator('.connector-panel input').nth(1).fill('http://localhost:3000/mcp');
-  await page.locator('.primary-nav a[href="#/models"]').click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
+  await page.locator('.primary-nav a[href="#/models"]').click(); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
   await page.locator('.primary-nav a[href="#/agents"]').click(); await page.getByRole('tab', { name: 'Connections' }).click();
   await expect(page.locator('.connector-panel input').nth(0)).toHaveValue('Private connector');
   await page.locator('.primary-nav a[href="#/models"]').click(); await expect(page.getByLabel('Model name or publisher', { exact: true })).toHaveValue('Research model');
@@ -405,6 +407,7 @@ test('unknown index status is never presented as ready and unavailable knowledge
   await fixture(page); await page.goto('/ui/#/knowledge');
   await expect(page.locator('.resource-card')).toContainText('Status unavailable');
   await page.locator('.primary-nav a[href="#/chat"]').click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).toBeDisabled();
 });
 

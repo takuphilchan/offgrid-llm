@@ -43,7 +43,7 @@ test('knowledge activation survives leaving its setup page',async({page})=>{
  });
  await page.goto('/ui/#/knowledge');await page.getByRole('button',{name:'Install and enable'}).click();await expect(page.locator('.knowledge-setup')).toContainText('10.0%');
  await page.locator('.primary-nav a[href="#/models"]').click();await page.locator('.primary-nav a[href="#/knowledge"]').click();await expect(page.locator('.knowledge-setup-controls .primary-button')).toBeDisabled();
- complete=true;await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
+ complete=true;await page.getByRole('button',{name:'Manage Knowledge',exact:true}).click();await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
 });
 
 test('disabled knowledge keeps source inspection and confirmed deletion available',async({page})=>{
@@ -54,7 +54,9 @@ test('disabled knowledge keeps source inspection and confirmed deletion availabl
   if(path==='/v1/documents/delete'){removed=true;deletions++;return{success:true};}
  });
  await page.goto('/ui/#/knowledge');await page.getByRole('button',{name:'View source'}).click();await expect(page.getByRole('dialog')).toContainText('Retained source 世界');await page.getByRole('dialog').getByRole('button').click();
+ await page.getByRole('button',{name:`Manage document: ${doc.name}`,exact:true}).click();
  await page.getByRole('button',{name:'Delete',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Cancel'}).click();expect(deletions).toBe(0);
+ await page.getByRole('button',{name:`Manage document: ${doc.name}`,exact:true}).click();
  await page.getByRole('button',{name:'Delete',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete'}).click();await expect.poll(()=>deletions).toBe(1);await expect(page.getByRole('heading',{name:doc.name})).toHaveCount(0);
 });
 

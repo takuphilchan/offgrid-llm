@@ -12,7 +12,6 @@ import {
 } from "../../lib/drafts";
 import { useWorkspaceRefresh } from "../../lib/workspace-refresh";
 import { ModelSelect } from "../../components/ModelSelect";
-import { MarkdownMessage } from "../../components/MarkdownMessage";
 import {
   HistoryDeleteDialog,
   type HistoryItem,
@@ -25,9 +24,19 @@ import { taskControls } from '../../i18n/task-controls';
 import { AgentNavigation } from './AgentNavigation';
 import { Icon } from '../../components/Icon';
 import { AgentPreview, AgentProgress } from "./AgentProgress";
-import { BrowserActionSummary, BrowserActivity } from "./BrowserActionSummary";
+import { BrowserActivity } from "./BrowserActionSummary";
+import { TaskApproval } from './TaskApproval';
+import { TaskResult } from './TaskResult';
+import { TaskContinuation } from './TaskContinuation';
+import { taskStopText } from '../../i18n/task-presentation';
 import { VoiceInputButton } from "../../components/VoiceInputButton";
 import { VoiceSettings } from "../../components/VoiceSettings";
+import { EmptyState, ScopedNotice, SectionHeading } from '../../components/WorkspacePresentation';
+import { HistoryToolbar } from '../../components/HistoryToolbar';
+import { useWorkspaceState } from '../../lib/workspace-context';
+import { SetupLink } from '../../lib/setup-handoff';
+import { useDraftScope } from '../../lib/draft-scope';
+import { useWorkActions } from '../../lib/active-work';
 
 function taskFromLocation() {
   const part = window.location.hash.match(
@@ -51,7 +60,8 @@ export function TaskWorkspace({
   const { locale, messages: text } = useI18n(),
     copy = taskWorkspaceText(locale),
     experience = computerExperience(locale);
-  const draft = useDraft(scope, "agent-task");
+  const draft = useDraft(useDraftScope(), "agent-task");
+  const work = useWorkActions();
   const selected = useDraft(`${scope}:workspace:${workspace}`, "agent-run");
   const [id, setID] = useState(() =>
     window.location.hash === "#/agents/new"
@@ -63,23 +73,28 @@ export function TaskWorkspace({
   const accessCancellation = useMemo(() => new AbortController(), [run?.pending_input?.id]);
   const [tasks, setTasks] = useState<AgentTask[]>([]),
     [historyError, setHistoryError] = useState("");
-  const [query, setQuery] = useState(""),
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [query, setQuery] = useWorkspaceState(`task-history:${workspace}`, ""),
     [limit, setLimit] = useState(20);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [preview, setPreview] = useState(false),
     [copied, setCopied] = useState(false);
   const [reconciliation, setReconciliation] = useState("");
+  const [stopState, setStopState] = useState<'idle' | 'pending' | 'unconfirmed'>('idle');
   const [deleting, setDeleting] = useState<HistoryItem[] | null>(null);
   const lock = useRef(false),
     editor = useRef<HTMLTextAreaElement>(null),
     heading = useRef<HTMLHeadingElement>(null);
   const generation = useRef(0);
+  const currentID = useRef(id);
+  currentID.current = id;
   const refreshHistory = async () => {
     const attempt = ++generation.current;
     try {
       const next = await api.jobs();
       if (attempt === generation.current) {
+        work.seedJobs(next);
         setTasks(
           next.sort(
             (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
@@ -90,6 +105,8 @@ export function TaskWorkspace({
     } catch (e) {
       if (attempt === generation.current)
         setHistoryError(e instanceof Error ? e.message : text.common.error);
+    } finally {
+      if (attempt === generation.current) setHistoryLoading(false);
     }
   };
   useEffect(() => {
@@ -114,6 +131,7 @@ export function TaskWorkspace({
     setError("");
     setReconciliation("");
     setCopied(false);
+    setStopState('idle');
   }, [id]);
   const select = (next: string) => {
     setID(next);
@@ -161,6 +179,9 @@ export function TaskWorkspace({
     lock.current = true;
     setBusy(true);
     setError("");
+    const taskID = run.run_id;
+    const stopping = ['takeover', 'cancel'].includes(action);
+    if (stopping) setStopState('pending');
     try {
       if (action === 'cancel') accessCancellation.abort();
       const operations = [api.jobAction(id, action, {
@@ -173,11 +194,15 @@ export function TaskWorkspace({
       })];
       const localStop = ['takeover', 'cancel'].includes(action) ? stopOwnedComputer(run.computer_session, run.pending_input?.id) : Promise.resolve();
       const results = await Promise.allSettled([...operations, localStop]);
+      if (currentID.current !== taskID) return;
       refresh();
       void refreshHistory();
       const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (failure) throw failure.reason;
+      if (stopping) setStopState('idle');
     } catch (e) {
+      if (currentID.current !== taskID) return;
+      if (stopping) setStopState('unconfirmed');
       setError(e instanceof Error ? e.message : text.common.error);
     } finally {
       lock.current = false;
@@ -189,7 +214,7 @@ export function TaskWorkspace({
       ? copy.needsAccess
       : (text.recovery[value as keyof typeof text.recovery] ?? value);
   const filtered = tasks.filter((t) =>
-    (!t.parent_id || !tasks.some(parent => parent.id === t.parent_id)) && t.prompt.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+    (!t.parent_id || !tasks.some(parent => parent.id === t.parent_id)) && `${t.prompt} ${t.id}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
   );
   const title =
     run?.prompt ?? tasks.find((t) => t.id === id)?.prompt ?? text.agents.task;
@@ -198,25 +223,13 @@ export function TaskWorkspace({
     <div className="task-workspace">
       <AgentNavigation />
       <aside className="task-list" aria-label={text.agentRuntime.history}>
-        <button className="primary-button" onClick={() => select("")}>
+        {(id || tasks.length > 0) && <button className="secondary-button" onClick={() => select("")}>
           {copy.newTask}
-        </button>
-        <label className="field">
-          <span>{text.history.searchTasks}</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setLimit(20);
-            }}
-          />
-        </label>
-        <div className="task-history-actions">
-          <button className="text-button" onClick={() => void refreshHistory()}>{text.common.refresh}</button>
-          <button className="text-button" disabled={!filtered.some(t => t.deletable)} onClick={() => setDeleting(filtered.filter(t => t.deletable).map(t => ({id:t.id,label:t.prompt})))}>{text.history.clearTasks}</button>
-        </div>
-        {historyError && <p role="alert">{historyError}</p>}
+        </button>}
+        <HistoryToolbar query={query} onQuery={value => { setQuery(value); setLimit(20); }} searchLabel={text.history.searchTasks} count={tasks.length} refresh={() => void refreshHistory()} clearLabel={text.history.clearTasks} clearDisabled={!filtered.some(t => t.deletable)} clear={() => setDeleting(filtered.filter(t => t.deletable).map(t => ({ id: t.id, label: t.prompt })))} protection={text.history.protectedTasks} />
+        {historyError && <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refreshHistory()}>{text.common.retry}</button>}>{historyError}</ScopedNotice>}
+        {!historyError && !tasks.length && (historyLoading ? <p role="status">{text.common.loading}</p> : <EmptyState title={text.agentRuntime.noTasks} />)}
+        {!!tasks.length && !filtered.length && <EmptyState title={text.history.noMatches} />}
         <ul>
           {filtered.slice(0, limit).map((task) => (
             <li key={task.id}>
@@ -240,14 +253,14 @@ export function TaskWorkspace({
             {text.history.showMore}
           </button>
         )}
-        <small className="task-history-hint">{text.history.protectedTasks}</small>
       </aside>
-      <section className="task-surface" aria-label={text.agents.task}>
+      <section className={id ? 'task-surface' : 'task-surface task-entry'} aria-label={text.agents.task}>
         {!id ? (
           <form className="task-composer" onSubmit={submit}>
-            <h2>{copy.title}</h2>
-            <label className="field">
-              <span>{text.agents.task}</span>
+            <SectionHeading title={copy.title} />
+            <div className="composer task-prompt">
+            <label className="composer-input">
+              <span className="sr-only">{text.agents.task}</span>
               <textarea
                 ref={editor}
                 rows={6}
@@ -257,27 +270,26 @@ export function TaskWorkspace({
                 aria-describedby="task-first-hint"
               />
               </label>
-              <div className="composer-voice-toolbar"><VoiceInputButton contextKey={draft.key} disabled={busy} onTranscript={value => draft.setValue(draft.value ? `${draft.value} ${value}` : value)} /><VoiceSettings /></div>
-            <p id="task-first-hint">{copy.hint}</p>
-            <details>
-              <summary>
-                {copy.settings}
-                {model ? ` · ${model}` : ""}
-              </summary>
+            <div className="composer-context">
               <ModelSelect models={models} value={model} onChange={setModel} />
-            </details>
+              <VoiceSettings />
+            </div>
+            <div className="composer-footer">
+              <p id="task-first-hint" className="composer-hint">{copy.hint}</p>
+              <div className="composer-actions">
+                <VoiceInputButton contextKey={draft.key} disabled={busy} onTranscript={value => draft.setValue(draft.value ? `${draft.value} ${value}` : value)} />
+                <button className="primary-button" disabled={busy || !draft.value.trim() || !model}>
+                  {busy ? text.common.loading : copy.start}
+                </button>
+              </div>
+            </div>
+            </div>
             {!model && (
               <p role="status">
-                {copy.noModel} <a href="#/models">{text.nav.models}</a>
+                {copy.noModel} <SetupLink destination="models" draft={{ kind: 'task', id: '' }}>{text.nav.models}</SetupLink>
               </p>
             )}
             {draft.unsaved && <p role="alert">{text.recovery.draftWarning}</p>}
-            <button
-              className="primary-button"
-              disabled={busy || !draft.value.trim() || !model}
-            >
-              {busy ? text.common.loading : copy.start}
-            </button>
           </form>
         ) : (
           <section className="task-detail" aria-labelledby="task-title">
@@ -323,21 +335,6 @@ export function TaskWorkspace({
                 </>
               )}
             </header>
-            {run && (
-              <button
-                className="text-button task-reuse"
-                disabled={!!draft.value.trim()}
-                title={
-                  draft.value.trim() ? text.history.draftProtected : undefined
-                }
-                onClick={() => {
-                  draft.setValue(title);
-                  select("");
-                }}
-              >
-                {text.history.reuseTask}
-              </button>
-            )}
             {!run && !readError && <p role="status">{text.common.loading}</p>}
             {readError && (
               <p role="alert">
@@ -347,6 +344,7 @@ export function TaskWorkspace({
                 </button>
               </p>
             )}
+            {stopState !== 'idle' && <ScopedNotice kind={stopState === 'unconfirmed' ? 'error' : 'status'}>{taskStopText(locale)[stopState]}</ScopedNotice>}
             {run?.pending_input && run.status === "waiting_for_input" && (
               <TaskAccess
                 key={run.pending_input.id}
@@ -356,50 +354,7 @@ export function TaskWorkspace({
                 cancelSignal={accessCancellation.signal}
               />
             )}
-            {approval && (
-              <section
-                className="approval-card"
-                aria-labelledby="task-approval-title"
-              >
-                <h3 id="task-approval-title">{text.agents.approvalTitle}</h3>
-                {run.computer_session ? (
-                  <BrowserActionSummary
-                    tool={approval.tool}
-                    args={approval.arguments as Record<string, unknown>}
-                    steps={run.steps}
-                  />
-                ) : (
-                  <pre>
-                    {approval.canonical_arguments ??
-                      JSON.stringify(approval.arguments, null, 2)}
-                  </pre>
-                )}
-                <div className="button-row">
-                  <button
-                    className="secondary-button"
-                    disabled={busy}
-                    onClick={() => void act("deny")}
-                  >
-                    {text.agents.deny}
-                  </button>
-                  <button
-                    className="primary-button"
-                    disabled={busy}
-                    onClick={() =>
-                      void act(
-                        Date.parse(approval.expires_at) <= Date.now()
-                          ? "resume"
-                          : "approve",
-                      )
-                    }
-                  >
-                    {Date.parse(approval.expires_at) <= Date.now()
-                      ? text.common.refresh
-                      : text.agents.approve}
-                  </button>
-                </div>
-              </section>
-            )}
+            {approval && run.status === 'waiting_for_approval' && <TaskApproval key={`approval:${approval.id}`} run={run} busy={busy || connection !== 'live'} refresh={refresh} act={action => void act(action)} />}
             {run?.status === "uncertain" && (
               <section className="approval-card">
                 <h3>{text.recovery.uncertain}</h3>
@@ -432,18 +387,12 @@ export function TaskWorkspace({
                   {text.models.resume}
                 </button>
               )}
-            {run?.output && (
-              <div className="markdown-body">
-                <MarkdownMessage content={run.output} />
-              </div>
-            )}
+            {run && <TaskResult key={`result:${run.run_id}`} run={run} />}
             {run?.error && <p role="alert">{run.error}</p>}
-            {run && <TaskDetails key={run.run_id} run={run} scope={`${scope}:workspace:${workspace}`} refresh={refresh} onError={setError} childStatus={child => status(tasks.find(t => t.id === child)?.status ?? 'pending')} />}
+            {run && <TaskContinuation key={`continuation:${run.run_id}`} run={run} scope={`${scope}:workspace:${workspace}`} refresh={refresh} newDraftExists={!!draft.value.trim()} createDraft={value => { if (!draft.value.trim()) { draft.setValue(value || title); select(''); } }} />}
+            {run && <TaskDetails key={`details:${run.run_id}`} run={run} onError={setError} childStatus={child => status(tasks.find(t => t.id === child)?.status ?? 'pending')} />}
             {!!run?.steps.length && (
-              <details
-                className="task-activity"
-                open={run.status === "running"}
-              >
+              <details className="task-activity">
                 <summary>
                   {copy.activity} · {run.steps.length}
                 </summary>
@@ -465,7 +414,7 @@ export function TaskWorkspace({
             {run && <AgentPreview run={run} showPreview={preview} />}
           </section>
         )}
-        {error && <p role="alert">{error}</p>}
+        {error && <ScopedNotice kind="error">{error}</ScopedNotice>}
       </section>
       {deleting && (
         <HistoryDeleteDialog

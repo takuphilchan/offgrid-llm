@@ -29,7 +29,7 @@ const server = createServer(async (request, response) => {
       response.end(await readFile(file)); return;
     }
     const data = {
-      '/api/v2/system': {product:'offgrid',version,api_version:2,ui_build_id:uiBuild,capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2']},
+      '/api/v2/system': {product:'offgrid',version,api_version:2,workspace_id:'packaged-theme-fixture',ui_build_id:uiBuild,capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2']},
       '/health': {status:'healthy'}, '/v1/users/me': {authenticated:false,auth_required:false,user:null},
       '/v1/models': {data:[{id:'theme-fixture',type:'chat'}]}, '/v1/sessions': {sessions:[]},
       '/v1/agents/tasks': [], '/v1/agents/tools': {tools:[],enabled_count:0},
@@ -76,6 +76,7 @@ try {
     const effective = await app.evaluate(({nativeTheme}) => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
     await expect(page.locator('html')).toHaveAttribute('data-theme', effective);
     const language = page.locator('.locale-picker select');
+    await page.locator('.workspace-options > button').click();
     await expect(language.locator('option')).toHaveCount(9);
     for (const option of await language.locator('option').all()) {
       await expect(option).toHaveCSS('color', effective === 'dark' ? 'rgb(245, 245, 244)' : 'rgb(23, 23, 23)');
@@ -95,8 +96,35 @@ try {
     }
     await expect(language).toHaveValue('fr');
     await language.selectOption('en');
+    await page.keyboard.press('Escape');
+    // Native popup dismissal can consume Escape before the parent popover.
+    if (await language.isVisible()) await page.locator('.workspace-options > button').click();
+    await expect(language).toBeHidden();
   }
   await page.screenshot({path:join(evidence,'dark-controls.png')});
+  // Real Chromium browser zoom, not CSS zoom or viewport-only simulation.
+  await app.evaluate(({BrowserWindow}) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    window.setSize(1280, 900); window.webContents.setZoomFactor(2);
+  });
+  for (const route of ['chat','agents','models','knowledge','activity','settings']) {
+    await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/${route}`);
+    await expect(page.locator('.page-content')).toBeVisible();
+    // Empty Activity intentionally has no page-level action: its refresh belongs
+    // to the shared header. Exercise the remaining diagnostics disclosure.
+    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.getByRole('textbox',{name:'Task',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
+    await expect(target).toBeVisible(); await target.focus(); await target.scrollIntoViewIfNeeded();
+    await expect(target).toBeFocused();
+    await page.evaluate(() => document.fonts.ready);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    const capture = await app.evaluate(async ({BrowserWindow}) => {
+      const window=BrowserWindow.getAllWindows()[0];
+      return {zoom:window.webContents.getZoomFactor(),image:(await window.webContents.capturePage()).toPNG().toString('base64')};
+    });
+    assert.equal(capture.zoom,2);
+    await writeFile(join(evidence,`zoom-200-${route}.png`),Buffer.from(capture.image,'base64'));
+  }
+  await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
   await app.close(); app = null;
   console.log('Checking saved appearance after restart');
   page = await launch();

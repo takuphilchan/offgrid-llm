@@ -4,6 +4,57 @@ import { taskWorkspaceText } from "../src/i18n/task-workspace";
 const id = "run-" + "a".repeat(32),
   model = "task-test-model";
 
+test('unknown approval keeps exact arguments visible, including integers beyond JS precision', async ({ page }) => {
+  const f = await fixture(page);
+  f.setState('waiting_for_approval', { pending_approval: { id: 'exact-1', tool: 'external_transfer', arguments: { destination: 'Approved recipient', quantity: 9007199254740992 }, canonical_arguments: '{"destination":"Approved recipient","quantity":9007199254740993}', expires_at: '2099-01-01T00:00:00Z' } });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  const card = page.locator('.approval-card');
+  await expect(card).toContainText('effects are not described here');
+  await expect(card.locator('pre')).toContainText('9007199254740993');
+  await card.getByRole('button', { name: 'Approve exact call', exact: true }).click();
+  expect(f.commands.map(c => [c.action, c.data.approval_id])).toEqual([['approve', 'exact-1']]);
+});
+
+test('expiry changes approval to a read-only refresh without resuming or approving', async ({ page }) => {
+  const f = await fixture(page), at = new Date('2026-10-08T10:00:00Z');
+  await page.clock.install({ time: at });
+  f.setState('waiting_for_approval', { pending_approval: { id: 'expiring', tool: 'write_file', arguments: { path: '/allowed/draft.txt' }, expires_at: new Date(+at + 1500).toISOString() } });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await expect(page.locator('.approval-card').getByRole('button', { name: 'Approve exact call', exact: true })).toBeVisible();
+  await page.clock.fastForward(2000);
+  await expect(page.locator('.approval-card')).toContainText('This approval has expired');
+  await expect(page.locator('.approval-card').getByRole('button', { name: 'Approve exact call', exact: true })).toHaveCount(0);
+  await page.locator('.approval-card').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.locator('.approval-card')).toContainText('does not approve or resume');
+  expect(f.commands).toEqual([]);
+});
+
+test('uncertain effects remain explicit and cannot be resumed without reconciliation', async ({ page }) => {
+  const f = await fixture(page);
+  f.setState('uncertain', { uncertain_call_id: 'call-uncertain', uncertain_call: { tool: 'external_submission', arguments: { recipient: 'Chosen recipient' } } });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await expect(page.locator('.approval-card')).toContainText('Outcome unknown');
+  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+  const reconcile = page.getByRole('button', { name: 'Record verified outcome', exact: true });
+  await expect(reconcile).toBeDisabled();
+  await page.getByRole('textbox', { name: 'Record verified outcome' }).fill('Inspected acknowledgment: submitted once.');
+  await reconcile.click();
+  expect(f.commands.map(c => [c.action, c.data.call_id])).toEqual([['reconcile', 'call-uncertain']]);
+});
+
+test('stop responds immediately and labels a failed acknowledgment without claiming rollback', async ({ page }) => {
+  const f = await fixture(page); f.setState('running');
+  let release: (() => Promise<void>) | undefined;
+  await page.route(`**/api/v2/jobs/${id}/cancel`, r => new Promise<void>(resolve => { release = async () => { await r.fulfill({ status: 503, json: { error: 'Connection interrupted' } }); resolve(); }; }));
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Stop requested' })).toBeVisible();
+  await expect.poll(() => !!release).toBeTruthy(); await release!();
+  await expect(page.getByRole('alert').filter({ hasText: 'Stopping is not confirmed' })).toBeVisible();
+  await expect(page.locator('.task-state')).toContainText('Running');
+  expect(f.commands).toEqual([]);
+});
+
 test("task styles preserve the established monochrome layers in both themes", async ({
   page,
 }, testInfo) => {
@@ -187,6 +238,24 @@ async function fixture(
   return { submissions, commands, setState: (value: string, fields: Record<string, unknown> = {}) => {state = value; extra = fields;}, inputCount: () => inputCount };
 }
 
+test('empty installed-app selection cannot launch, discover or grant access', async ({ page }) => {
+  const f = await fixture(page, { desktop: true });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.evaluate(() => {
+    const host = (window as any).electron;
+    host.listComputerApplications = async () => ({ targets: [] });
+    host.launchComputerApplication = async () => { throw Error('must not launch'); };
+    host.discoverComputerApps = async () => { throw Error('must not discover'); };
+  });
+  // Refresh the task snapshot to render the newly exposed fixture capability.
+  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.getByRole('button', { name: 'Open an application', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Launch selected application', exact: true })).toBeDisabled();
+  await expect(page.getByText(/No launchable applications were found/)).toBeVisible();
+  expect(f.inputCount()).toBe(0);
+  expect(await page.evaluate(() => (window as any).hostRequest)).toBeUndefined();
+});
+
 test('pause, steering, resume and evidence export use one saved job', async ({page}) => {
   const f = await fixture(page);
   await page.goto('/ui/#/agents/new');
@@ -261,7 +330,7 @@ for (const control of ['panel', 'toolbar']) test(`${control} stop during startup
     window.electron!.startComputerApp=async()=>new Promise(resolve=>{(window as any).completeStart=resolve;});
     window.electron!.stopComputerBrowser=async()=>{throw Error('global stop must not be called')};
   });
-  await page.getByRole('button',{name:'Allow access and continue'}).click();
+  await page.getByRole('button',{name:'Choose an application',exact:true}).click();
   await page.getByRole('button',{name:'Allow access and continue'}).click();
   await expect.poll(()=>page.evaluate(()=>typeof (window as any).completeStart)).toBe('function');
   await page.route(`**/api/v2/jobs/${id}/cancel`,route=>route.fulfill({status:503,json:{error:{message:'Offline'}}}));
@@ -386,10 +455,13 @@ test("desktop continues the same saved task with host-issued target and local po
     .getByRole("textbox", { name: "Task", exact: true })
     .fill("Read Notepad.");
   await page.getByRole("button", { name: "Start task", exact: true }).click();
-  await page.getByRole("button", { name: "Allow access and continue" }).click();
+  await expect(page.getByRole("button", { name: "Allow access and continue" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Choose an application", exact: true }).click();
   await expect(
     page.getByRole("combobox", { name: "Choose an application" }),
   ).toHaveValue("opaque-target");
+  expect(f.inputCount()).toBe(0);
+  expect(await page.evaluate(() => (window as any).hostRequest)).toBeUndefined();
   await page.getByRole("button", { name: "Allow access and continue" }).click();
   await expect(
     page.getByText("Verified result from the saved task."),
@@ -418,7 +490,7 @@ test("task-first native failures do not prescribe browser repair", async ({
     .getByRole("textbox", { name: "Task", exact: true })
     .fill("Read Notepad.");
   await page.getByRole("button", { name: "Start task", exact: true }).click();
-  await page.getByRole("button", { name: "Allow access and continue" }).click();
+  await page.getByRole("button", { name: "Choose an application", exact: true }).click();
   const error = page.locator(".task-access [role=alert]");
   await expect(error).toBeVisible();
   await expect(error).not.toContainText(/browser|Unexpected native IPC/i);

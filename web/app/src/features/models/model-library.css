@@ -1,0 +1,26 @@
+@layer workspace {
+  .model-library-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .model-display { min-width: 0; display: grid; gap: 8px; }
+  .model-display h3, .model-display p { margin: 0; overflow-wrap: anywhere; }
+  .model-display h3 { font-size: 16px; line-height: 1.5; }
+  .model-display .model-meta { gap: 8px; }
+  .model-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+  .model-display .model-meta span { font-size: 13px; }
+  .model-display .model-size, .model-display-details { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .model-display-details p { margin-block-start: 8px; }
+  .model-display-details summary { cursor: pointer; }
+  .legacy-download-review { display: grid; gap: 12px; padding-block: 12px; border-block-start: 1px solid var(--line); font-size: 13px; line-height: 1.6; }
+  .legacy-download-review p { margin: 0; color: var(--muted); }
+  .legacy-download-review .package-facts { margin: 0; }
+  .legacy-download-review dd { overflow-wrap: anywhere; }
+  .legacy-download-review .secondary-button { width: fit-content; }
+  .installed-model > .model-display { padding: 16px; }
+  .model-display .installed-model-main { display: block; text-align: start; width: fit-content; max-width: 100%; }
+  .model-display .installed-model-main strong { white-space: normal; overflow-wrap: anywhere; font-size: 15px; }
+  .installed-model .model-actions { flex-wrap: wrap; }
+  .model-section > .field { max-width: 560px; }
+  .model-verification { grid-column: 1 / -1; grid-row: 2; display: grid; margin: 0 16px 16px; overflow-wrap: anywhere; }
+  @media (max-width: 600px) {
+    .installed-model .model-actions { padding: 0 16px 16px; }
+  }
+}
