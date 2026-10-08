@@ -21,4 +21,8 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 # CUDA libraries, llama-server, healthcheck, permissions and startup settings.
 COPY --from=application --chmod=0755 /usr/local/bin/offgrid /usr/local/bin/offgrid
 COPY --from=application --chown=1000:1000 /var/lib/offgrid/web/ui /var/lib/offgrid/web/ui
-ENV OFFGRID_VERSION=${VERSION}
+# Reused speech runtimes may point at /usr/local/share/offgrid/ui. Always select
+# the matching renderer copied above; operators must also update any container
+# environment override when recreating a previously deployed container.
+ENV OFFGRID_VERSION=${VERSION} \
+    OFFGRID_UI_DIR=/var/lib/offgrid/web/ui

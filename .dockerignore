@@ -54,6 +54,11 @@ Thumbs.db
 *.out
 coverage.txt
 coverage.html
+# Browser-run output is mutable and may contain private captured content. It is
+# neither application source nor an image input.
+**/test-results/
+**/playwright-report/
+**/blob-report/
 
 # Documentation (can be fetched separately)
 docs/
