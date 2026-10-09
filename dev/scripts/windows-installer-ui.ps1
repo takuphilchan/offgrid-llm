@@ -228,6 +228,11 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                     # bounded failure for a genuinely incomplete installer page.
                     if ($checks.Count -eq 0 -and $clock.ElapsedMilliseconds - $finishPageAt -lt 10000) { continue }
                     if ($checks.Count -ne 1) { throw "Expected launch checkbox on Finish, got $($checks.Count): $text" }
+                    $visibleText = ($children | Where-Object { [OffGridWizard]::IsWindowVisible($_) } | ForEach-Object { [OffGridWizard]::Text($_) }) -join "`n"
+                    if (-not $visibleText.Contains('OffGrid installed') -or -not $visibleText.Contains('Separately managed services, including Docker, are not upgraded by this installer.')) {
+                        if ($clock.ElapsedMilliseconds - $finishPageAt -lt 10000) { continue }
+                        throw "Finish must display installation and external-service guidance: $visibleText"
+                    }
                     # Keep probing while a bounded helper captures the settled page.
                     # Click Finish only afterwards; its two-second close gate remains.
                     if ($detailsCapture -and -not $detailsCapture.done) { continue }

@@ -29,7 +29,7 @@ const server = createServer(async (request, response) => {
       response.end(await readFile(file)); return;
     }
     const data = {
-      '/api/v2/system': {product:'offgrid',version,api_version:2,workspace_id:'packaged-theme-fixture',ui_build_id:uiBuild,capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2']},
+      '/api/v2/system': {product:'offgrid',version,api_version:2,workspace_id:'packaged-theme-fixture',ui_build_id:uiBuild,desktop_bridge:{status:'ready',schema_version:1,protocol:1,ui_build_id:uiBuild},capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2']},
       '/health': {status:'healthy'}, '/v1/users/me': {authenticated:false,auth_required:false,user:null},
       '/v1/models': {data:[{id:'theme-fixture',type:'chat'}]}, '/v1/sessions': {sessions:[]},
       '/v1/agents/tasks': [], '/v1/agents/tools': {tools:[],enabled_count:0},

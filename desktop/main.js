@@ -38,9 +38,15 @@ const workspace = root => ({ config: root, models: path.join(root, 'models'), da
 const runtime = new DesktopRuntime({
   url: 'http://127.0.0.1:' + port, version: app.getVersion(), binary: path.join(binaryRoot, binaryName), uiDir,
   workspace: workspace(configRoot), isolatedWorkspace: workspace(path.join(configRoot, 'desktop-workspace')),
+  onIdentityChange: async () => {
+    uploadGrants.clear();
+    await computer.stop();
+    if (computer.child || computer.pending || computer.stopping) throw Error('Computer access could not be stopped for the changed workspace');
+  },
   uiBuildID: fs.existsSync(path.join(uiDir, 'index.html')) ? fingerprintUI(fs.readFileSync(path.join(uiDir, 'index.html'))) : null
 });
 let mainWindow = null;
+let workspaceNavigationPending = false;
 let tray = null;
 let quitting = false;
 let shutdownComplete = false;
@@ -140,7 +146,7 @@ function safeExternal(value) {
 }
 
 function showWorkspace() {
-  if (!mainWindow || mainWindow.isDestroyed() || runtime.state.state !== 'ready' || quitting) return;
+  if (!mainWindow || mainWindow.isDestroyed() || runtime.state.state !== 'ready' || quitting || workspaceNavigationPending) return;
   const current = mainWindow.webContents.getURL();
   if (current.startsWith(LOADING_URL) || computerRequested) {
     const suffix=computerRequested ? (computerRequested.task ? `#/agents/task/${computerRequested.task}` : '#/agents') : ''; computerRequested=undefined;
@@ -190,6 +196,19 @@ async function createMainWindow() {
     if (isTrustedPage(url, runtime.url, LOADING_URL)) return;
     event.preventDefault();
     if (safeExternal(url)) void shell.openExternal(url);
+  });
+  // Full document reloads can reach a replaced service. Hash navigation does
+  // not make a network request. Block the bridge while reassessing a reload.
+  mainWindow.webContents.session.webRequest.onBeforeRequest((details, callback) => {
+    const contents = mainWindow?.webContents;
+    if (!contents || details.webContentsId !== contents.id || details.resourceType !== 'mainFrame' ||
+        !isTrustedPage(details.url, runtime.url, LOADING_URL) || details.url.startsWith('file:') ||
+        contents.getURL().startsWith(LOADING_URL)) return callback({});
+    workspaceNavigationPending = true;
+    void runtime.connect().then(status => {
+      callback({ cancel: status.state !== 'ready' });
+      if (status.state !== 'ready' && mainWindow && !mainWindow.isDestroyed()) void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
+    }).catch(() => callback({cancel:true})).finally(() => { workspaceNavigationPending = false; });
   });
   mainWindow.webContents.on('did-fail-load', (_event, code, _description, _url, isMainFrame) => {
     if (code === -3 || !isMainFrame || quitting) return;
@@ -249,6 +268,9 @@ function handleTrustedIPC(channel, handler, startupOnly = false) {
   ipcMain.handle(channel, (event, ...args) => {
     if (!isTrustedSender(event, mainWindow?.webContents, runtime.url, LOADING_URL) ||
         (startupOnly && event.senderFrame.url !== LOADING_URL)) throw new Error('Untrusted desktop IPC sender');
+    const loading = event.senderFrame.url === LOADING_URL;
+    if ((!loading && runtime.state.state !== 'ready' && !['get-backend-info','get-server-status'].includes(channel)) ||
+        (loading && (channel.startsWith('computer-') || ['get-paths','select-directory'].includes(channel)))) throw new Error('Desktop workspace access is not ready');
     return handler(...args);
   });
 }

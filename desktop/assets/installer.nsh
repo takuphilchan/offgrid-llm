@@ -56,8 +56,8 @@ FunctionEnd
 ; Keep the Finish callback trivial. Shell activation/virus scanning must not
 ; block the wizard's UI thread while its Finish button is still on screen.
 !macro customFinishPage
-  !define MUI_FINISHPAGE_TITLE "OffGrid is ready"
-  !define MUI_FINISHPAGE_TEXT "Installation complete. Your models and saved workspace are kept.$\r$\n$\r$\nOpen OffGrid to get started."
+  !define MUI_FINISHPAGE_TITLE "OffGrid installed"
+  !define MUI_FINISHPAGE_TEXT "Your models and saved work are preserved. OffGrid checks workspace compatibility when it opens.$\r$\n$\r$\nSeparately managed services, including Docker, are not upgraded by this installer."
   !ifndef HIDE_RUN_AFTER_FINISH
     Var OffGridLaunchRequested
     !define MUI_FINISHPAGE_RUN

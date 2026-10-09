@@ -1108,6 +1108,14 @@ export interface components {
             api_version: 2;
             /** @description SHA-256 of the served UI index; empty when not installed. */
             ui_build_id: string;
+            /** @description Renderer-to-desktop compatibility, not authorization. Missing legacy metadata is distinct from invalid metadata. */
+            desktop_bridge?: {
+                /** @enum {string} */
+                status: "missing" | "invalid" | "ready";
+                schema_version?: number;
+                protocol?: number;
+                ui_build_id?: string;
+            };
             /** @description Opaque persistent workspace namespace; not an authorization credential. */
             workspace_id?: string;
             capabilities: string[];

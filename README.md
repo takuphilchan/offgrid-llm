@@ -138,8 +138,9 @@ npm run dev
 
 If no server is already listening, the packaged desktop app starts its bundled
 runtime. Desktop data defaults to `~/.offgrid-llm`.
-If a different service is already running, the startup window explains the
-mismatch and offers safe recovery choices. See [desktop setup and
+Compatible external services can use a different release version. If a service
+is incompatible, the startup window explains which component needs attention
+and offers safe recovery choices. The installer does not upgrade Docker. See [desktop setup and
 recovery](docs/setup/desktop-startup.md), including Windows SmartScreen and macOS
 signing requirements. Source changes do not update an already-installed app.
 

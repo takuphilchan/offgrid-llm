@@ -69,3 +69,53 @@ func TestInjectedBuildRevision(t *testing.T) {
 		t.Fatalf("container revision lost: %+v", identity)
 	}
 }
+
+func TestDesktopBridgeIdentity(t *testing.T) {
+	root := t.TempDir()
+	index := []byte("<html>\ncontract renderer</html>\n")
+	digest := sha256.Sum256(index)
+	hash := hex.EncodeToString(digest[:])
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte(strings.ReplaceAll(string(index), "\n", "\r\n")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OFFGRID_UI_DIR", root)
+	for _, tc := range []struct{ name, manifest, status string }{
+		{"missing", "", "missing"},
+		{"ready", `{"schema_version":1,"protocol":1,"ui_build_id":"` + hash + `"}`, "ready"},
+		{"future protocol preserved for client assessment", `{"schema_version":1,"protocol":2,"ui_build_id":"` + hash + `"}`, "ready"},
+		{"different renderer", `{"schema_version":1,"protocol":1,"ui_build_id":"` + strings.Repeat("b", 64) + `"}`, "invalid"},
+		{"missing fields", `{}`, "invalid"},
+		{"corrupt", `{`, "invalid"},
+		{"schema", `{"schema_version":2,"protocol":1,"ui_build_id":"` + hash + `"}`, "invalid"},
+		{"oversized", strings.Repeat(" ", 4097), "invalid"},
+		{"null", `null`, "invalid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.manifest != "" {
+				if err := os.WriteFile(filepath.Join(root, "desktop-compatibility.json"), []byte(tc.manifest), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			w := httptest.NewRecorder()
+			(&Server{version: "test"}).handleSystemIdentity(w, httptest.NewRequest("GET", "/api/v2/system", nil))
+			var identity SystemIdentity
+			if err := json.Unmarshal(w.Body.Bytes(), &identity); err != nil {
+				t.Fatal(err)
+			}
+			if identity.DesktopBridge == nil || identity.DesktopBridge.Status != tc.status {
+				t.Fatalf("unexpected bridge: %+v", identity.DesktopBridge)
+			}
+			if strings.Contains(w.Body.String(), root) {
+				t.Fatal("private path exposed")
+			}
+			if tc.status == "ready" && identity.DesktopBridge.UIBuildID != hash {
+				t.Fatal("renderer fingerprint lost")
+			}
+		})
+	}
+	// A manifest in one root must not qualify a different custom renderer root.
+	other := t.TempDir()
+	if result := desktopBridgeIdentity(other, hash); result.Status != "missing" {
+		t.Fatal(result)
+	}
+}

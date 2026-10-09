@@ -6,6 +6,10 @@
 ARG APPLICATION_IMAGE=offgrid-llm:local-application
 ARG RUNTIME_IMAGE=offgrid-llm:local-runtime
 FROM ${APPLICATION_IMAGE} AS application
+FROM node:22-alpine AS checked-ui
+COPY --from=application /var/lib/offgrid/web/ui /ui
+COPY desktop/compatibility.cjs /compatibility.cjs
+RUN node -e "require('/compatibility.cjs').verifyUI('/ui')"
 FROM ${RUNTIME_IMAGE}
 
 ARG RUNTIME_IMAGE
@@ -20,7 +24,7 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 # The application is a static Go binary. Preserve the base runtime's user,
 # CUDA libraries, llama-server, healthcheck, permissions and startup settings.
 COPY --from=application --chmod=0755 /usr/local/bin/offgrid /usr/local/bin/offgrid
-COPY --from=application --chown=1000:1000 /var/lib/offgrid/web/ui /var/lib/offgrid/web/ui
+COPY --from=checked-ui --chown=1000:1000 /ui /var/lib/offgrid/web/ui
 # Reused speech runtimes may point at /usr/local/share/offgrid/ui. Always select
 # the matching renderer copied above; operators must also update any container
 # environment override when recreating a previously deployed container.

@@ -10,13 +10,21 @@ The desktop opens a lightweight, monochrome window before checking the service.
 It shows the desktop version, detected service version, local address and actual
 connection state. It does not show an invented installation percentage.
 
-The compatibility check requires matching product versions, supported API
-contracts and UI build identity. A healthy older service is not necessarily
-compatible with a newer desktop. For example, desktop `0.4.12` cannot attach to
-service `0.4.11`. Reinstalling the same desktop will not update that
-Docker container. Even equal version numbers can contain different UI builds.
+The updated desktop uses explicit API and renderer/desktop bridge compatibility
+for independently managed services. Different release numbers alone no longer
+block a compatible workspace. The bundled service still must exactly match the
+desktop package. Unknown old builds, unsupported protocols, or inconsistent
+files remain blocked with a specific explanation.
 
-When the versions differ, choose one of these actions:
+The reviewed workspace-refresh renderer served by the reported 0.4.14 container
+and the 0.4.15 build is supported through a narrow legacy mapping. This does not
+qualify every older build. See [client contracts](../advanced/client-contracts.md)
+for the exact mapping. Existing installed desktops need the new fix before they
+can use this policy; editing source does not change them.
+
+The service supplies the UI you see. Installing desktop alone does not update a
+Docker service or its features. Reinstalling desktop is not a remedy for an
+incompatible external service. When recovery is required:
 
 - **Open existing web workspace:** continue using the identified service in your
   normal browser, with its existing models and history. This does not bypass the
@@ -32,13 +40,15 @@ Quitting and reopening returns to the configured local service. The isolated
 workspace's data remains on disk; it is not merged into the configured workspace.
 Use this only when you want separate work, not as an upgrade workaround. To keep
 using the existing container workspace, back it up and update that service, then
-retry with the matching desktop build. See [installation and upgrades](installation.md#update-an-existing-installation).
+retry with a compatible desktop build. See [installation and upgrades](installation.md#update-an-existing-installation).
 
 If the configured port is free, the desktop can start its bundled service using
 the normal desktop workspace. An occupied, unresponsive or unidentified port is
 never treated as permission to replace that service. Startup checks are bounded;
 after a timeout, retry reconnects to an already-started child rather than
 spawning another one.
+If a previously attached external service goes offline, Retry waits for that
+service to return; it does not silently start the bundled service in its place.
 
 For a container running in WSL, also check `wsl --list --verbose` in PowerShell.
 A stopped distribution cannot serve the Windows desktop. Verify the URL from
@@ -101,6 +111,9 @@ The Finish callback records whether you chose to launch; app activation runs aft
 the wizard closes. Setup no longer waits for application startup with a frozen
 Finish window. Decompression, antivirus inspection and disk performance still
 affect installation time; no artificial progress/acceleration is claimed.
+Finish says **OffGrid installed**: application files are installed, but workspace
+compatibility is checked when the app opens. Separately managed services,
+including Docker, are not upgraded or stopped by Setup.
 
 Reinstalling a running app asks you to finish active work and approve a normal
 close. It does not use repeated PowerShell process scans or force-kill processes.

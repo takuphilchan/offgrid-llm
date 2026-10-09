@@ -17,6 +17,7 @@ RUN set -eu; \
         sleep $((attempt * 5)); \
     done
 COPY web/app/ ./
+COPY desktop/compatibility.cjs /build/desktop/compatibility.cjs
 RUN npm run build
 
 # =============================================================================

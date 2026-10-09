@@ -5,12 +5,35 @@ const { once } = require('node:events');
 const { assessIdentity, inspectBackend, isTrustedPage, isTrustedSender, fingerprintUI } = require('../backend');
 
 const hash = 'a'.repeat(64);
-const identity = { product: 'offgrid', version: '0.4.3', api_version: 2, revision: 'abc', ui_build_id: hash, capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'] };
+const identity = { product: 'offgrid', version: '0.4.3', api_version: 2, revision: 'abc', ui_build_id: hash, capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'], desktop_bridge: {status:'ready',schema_version:1,protocol:1,ui_build_id:hash} };
 
-test('identity requires matching product, API, version, capabilities, and UI build', () => {
-  assert.equal(assessIdentity(identity, '0.4.3', hash), null);
-  for (const altered of [null, {}, { ...identity, product: 'other' }, { ...identity, api_version: 1 }, { ...identity, version: '0.4.2' }, { ...identity, capabilities: [] }, { ...identity, ui_build_id: 'b'.repeat(64) }]) {
-    assert.equal(typeof assessIdentity(altered, '0.4.3', hash), 'string');
+test('identity requires product, API, capabilities, and renderer-bound bridge contract', () => {
+  assert.equal(assessIdentity(identity, '0.4.3', hash).state, 'ready');
+  assert.equal(assessIdentity(identity, '0.5.0', 'b'.repeat(64)).state, 'ready');
+  for (const altered of [null, {}, { ...identity, product: 'other' }, { ...identity, api_version: 1 }, { ...identity, capabilities: [] }, { ...identity, ui_build_id: 'b'.repeat(64) }, {...identity,desktop_bridge:null}, {...identity,desktop_bridge:{...identity.desktop_bridge,protocol:2}}, {...identity,desktop_bridge:{...identity.desktop_bridge,schema_version:2}}]) {
+    assert.equal(assessIdentity(altered, '0.4.3', hash).state, 'incompatible');
+  }
+});
+
+test('owned child must match package; external compatibility cannot mask a bad installation', () => {
+  assert.equal(assessIdentity(identity, identity.version, hash, 'owned').state, 'ready');
+  for (const [version, ui] of [['other',hash], [identity.version,'b'.repeat(64)], [identity.version,null]]) {
+    assert.equal(assessIdentity(identity, version, ui, 'owned').code, 'bundle_inconsistent');
+  }
+});
+
+test('reviewed legacy tuple survives a new UI fingerprint and cannot override invalid metadata', () => {
+  const entry = require('../legacy-compatibility.json').entries[0];
+  for (const version of entry.versions) {
+    const old = {...identity, version, ui_build_id:entry.ui_build_id}; delete old.desktop_bridge;
+    assert.equal(assessIdentity(old, 'future-desktop', hash).compatibilityBasis, 'reviewed-legacy');
+    assert.equal(assessIdentity({...old,desktop_bridge:{status:'missing'}}, 'future-desktop', hash).state, 'ready');
+    assert.equal(assessIdentity({...old,version:'0.4.13'}, 'future-desktop', hash).code, 'service_legacy_unreviewed');
+    assert.equal(assessIdentity({...old,ui_build_id:hash}, 'future-desktop', hash).state, 'incompatible');
+    for (const desktop_bridge of [null,{}, {status:'invalid'}, {status:'missing',protocol:2}, {status:'ready',schema_version:1,protocol:2,ui_build_id:entry.ui_build_id}]) {
+      assert.equal(assessIdentity({...old,desktop_bridge}, 'future-desktop', hash).state, 'incompatible');
+    }
+    assert.equal(assessIdentity(old, version, entry.ui_build_id, 'owned').code, 'bundle_inconsistent');
   }
 });
 
@@ -47,10 +70,10 @@ test('an occupied unresponsive port is not treated as free', async t => {
   assert.equal((await inspectBackend(`http://127.0.0.1:${server.address().port}`, '0.4.3', hash, 30)).state, 'unavailable');
 });
 
-test('version mismatch includes actual version; cancellation closes a pending handshake', async t => {
+test('incompatible contract includes actual version; cancellation closes a pending handshake', async t => {
   let pending = false;
   const server = http.createServer((_request, response) => {
-    if (!pending) response.end(JSON.stringify({ ...identity, version: '0.4.3-history-dev' }));
+    if (!pending) response.end(JSON.stringify({ ...identity, version: '0.4.3-history-dev', desktop_bridge:{status:'invalid'} }));
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(() => { server.closeAllConnections(); server.close(); });

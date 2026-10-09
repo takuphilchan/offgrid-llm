@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,13 +16,52 @@ import (
 // credentials, user identities, or model/document inventory. Capability names
 // describe implemented contracts, not claims of production qualification.
 type SystemIdentity struct {
-	Product      string   `json:"product"`
-	Version      string   `json:"version"`
-	Revision     string   `json:"revision"`
-	APIVersion   int      `json:"api_version"`
-	UIBuildID    string   `json:"ui_build_id"`
-	Capabilities []string `json:"capabilities"`
-	WorkspaceID  string   `json:"workspace_id,omitempty"`
+	Product       string                 `json:"product"`
+	Version       string                 `json:"version"`
+	Revision      string                 `json:"revision"`
+	APIVersion    int                    `json:"api_version"`
+	UIBuildID     string                 `json:"ui_build_id"`
+	Capabilities  []string               `json:"capabilities"`
+	WorkspaceID   string                 `json:"workspace_id,omitempty"`
+	DesktopBridge *DesktopBridgeIdentity `json:"desktop_bridge,omitempty"`
+}
+
+// DesktopBridgeIdentity is compatibility metadata, never authorization.
+type DesktopBridgeIdentity struct {
+	Status        string `json:"status"`
+	SchemaVersion int    `json:"schema_version,omitempty"`
+	Protocol      int    `json:"protocol,omitempty"`
+	UIBuildID     string `json:"ui_build_id,omitempty"`
+}
+
+func desktopBridgeIdentity(root, uiBuildID string) *DesktopBridgeIdentity {
+	file, err := os.Open(filepath.Join(root, "desktop-compatibility.json"))
+	if os.IsNotExist(err) {
+		return &DesktopBridgeIdentity{Status: "missing"}
+	}
+	invalid := &DesktopBridgeIdentity{Status: "invalid"}
+	if err != nil {
+		return invalid
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 4096 {
+		return invalid
+	}
+	data, err := io.ReadAll(io.LimitReader(file, 4097))
+	if err != nil || len(data) > 4096 {
+		return invalid
+	}
+	var manifest struct {
+		SchemaVersion int    `json:"schema_version"`
+		Protocol      int    `json:"protocol"`
+		UIBuildID     string `json:"ui_build_id"`
+	}
+	if json.Unmarshal(data, &manifest) != nil || manifest.SchemaVersion != 1 || manifest.Protocol < 1 ||
+		manifest.Protocol > 2147483647 || len(uiBuildID) != 64 || manifest.UIBuildID != uiBuildID {
+		return invalid
+	}
+	return &DesktopBridgeIdentity{Status: "ready", SchemaVersion: 1, Protocol: manifest.Protocol, UIBuildID: uiBuildID}
 }
 
 // BuildRevision is injected when the build context excludes .git (containers).
@@ -59,12 +99,14 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if data, err := os.ReadFile(filepath.Join(resolveUIRoot(), "index.html")); err == nil {
+	uiRoot := resolveUIRoot()
+	if data, err := os.ReadFile(filepath.Join(uiRoot, "index.html")); err == nil {
 		// Git checkouts can use CRLF on Windows and LF in containers. A
 		// newline-only difference is not a different renderer build.
 		digest := sha256.Sum256(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")))
 		identity.UIBuildID = hex.EncodeToString(digest[:])
 	}
+	identity.DesktopBridge = desktopBridgeIdentity(uiRoot, identity.UIBuildID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(identity)
 }

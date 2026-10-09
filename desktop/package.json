@@ -38,6 +38,8 @@
     "files": [
       "main.js",
       "backend.js",
+      "compatibility.cjs",
+      "legacy-compatibility.json",
       "runtime.js",
       "computer-runtime.js",
       "application-launcher.js",

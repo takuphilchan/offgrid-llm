@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve, join, basename } from 'node:path';
+import { resolve, join, basename, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -20,6 +20,9 @@ const version = JSON.parse(await readFile(join(root, 'desktop/package.json'), 'u
 const uiBuild = createHash('sha256').update((await readFile(join(root, 'web/dist/index.html'), 'utf8')).replace(/\r\n/g, '\n')).digest('hex');
 const evidence = await mkdtemp(join(tmpdir(), 'offgrid-desktop-startup-'));
 let responseVersion = `${version}-older-fixture`;
+let bridgeProtocol = 2;
+let legacy = false;
+const legacyBuild = JSON.parse(await readFile(join(root, 'desktop/legacy-compatibility.json'), 'utf8')).entries[0].ui_build_id;
 let requests = 0;
 let hang = false;
 const server = createServer((request, response) => {
@@ -27,7 +30,8 @@ const server = createServer((request, response) => {
     requests++;
     if (hang) return;
     response.setHeader('Content-Type', 'application/json');
-    response.end(JSON.stringify({ product: 'offgrid', version: responseVersion, api_version: 2, ui_build_id: uiBuild,
+    response.end(JSON.stringify({ product: 'offgrid', version: responseVersion, api_version: 2, ui_build_id: legacy ? legacyBuild : uiBuild,
+      workspace_id:'startup-fixture', ...(legacy ? {} : {desktop_bridge:{status:'ready',schema_version:1,protocol:bridgeProtocol,ui_build_id:uiBuild}}),
       capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'] }));
   } else { response.setHeader('Content-Type', 'text/html'); response.end('<!doctype html><title>Fixture workspace</title><h1>Fixture workspace</h1>'); }
 });
@@ -73,6 +77,9 @@ try {
   assert.equal(requests, 1, 'One startup controller, no duplicate renderer probes');
   const status = await page.evaluate(() => window.electron.getBackendInfo());
   assert.equal(status.managedByDesktop, false);
+  assert.equal(status.code, 'service_contract_unsupported');
+  assert.match(await page.locator('#status-title').innerText(), /service needs an update/);
+  assert.equal(await page.evaluate(async () => { try { await window.electron.launchComputerApplication({id:'invalid'}); return 'allowed'; } catch(error) { return error.message; } }), "Error invoking remote method 'computer-launch-app': Error: Desktop workspace access is not ready");
   await capture('version-recovery.png');
   await page.locator('#separate').click();
   await page.locator('#local').click();
@@ -105,13 +112,51 @@ try {
   await app.close(); app = null;
   // A matching external service attaches without a native child, and remains
   // alive after Electron quits. It does not adopt the isolated profile's data.
-  responseVersion = version;
+  bridgeProtocol = 1;
   app = await launch(profile);
   const external = await app.firstWindow();
   await external.waitForURL(url + '/ui/');
   assert.equal((await external.evaluate(() => window.electron.getBackendInfo())).managedByDesktop, false);
+  assert.equal((await external.evaluate(() => window.electron.getBackendInfo())).version, responseVersion);
+  assert.notEqual(responseVersion, version, 'Compatible cross-version attachment must be exercised');
+  // A changed contract on full reload is checked before the new UI can use IPC.
+  bridgeProtocol = 2;
+  await external.evaluate(() => location.reload());
+  await external.locator('#recovery:not([hidden])').waitFor();
+  assert.equal((await external.evaluate(() => window.electron.getBackendInfo())).code, 'service_contract_unsupported');
   await app.close(); app = null;
   assert.equal((await fetch(`${url}/api/v2/system`)).status, 200);
+  bridgeProtocol = 1;
+  legacy = true; responseVersion = '0.4.14';
+  assert.notEqual(legacyBuild, uiBuild, 'Regression requires a newly rebuilt desktop renderer');
+  for (let launchIndex = 0; launchIndex < 2; launchIndex++) {
+    app = await launch(profile);
+    const legacyPage = await app.firstWindow();
+    await legacyPage.waitForURL(url + '/ui/');
+    const legacyState = await legacyPage.evaluate(() => window.electron.getBackendInfo());
+    assert.equal(legacyState.compatibilityBasis, 'reviewed-legacy');
+    assert.equal(legacyState.managedByDesktop, false);
+    await app.close(); app = null;
+  }
+  legacy = false; responseVersion = version;
+  // Tamper only this test package's metadata, then restore it even on failure.
+  const resources = process.platform === 'darwin' ? resolve(dirname(binary), '../Resources') : join(dirname(binary), 'resources');
+  const manifestPath = join(resources, 'ui/desktop-compatibility.json');
+  const originalManifest = await readFile(manifestPath);
+  try {
+    await writeFile(manifestPath, JSON.stringify({schema_version:1,protocol:1,ui_build_id:'b'.repeat(64)}));
+    bridgeProtocol = 2;
+    app = await launch(join(evidence, 'mixed-bundle-profile'));
+    const mixed = await app.firstWindow();
+    await mixed.locator('#recovery:not([hidden])').waitFor();
+    await mixed.locator('#separate').click(); await mixed.locator('#local').click();
+    await mixed.waitForFunction(() => document.getElementById('status-title').textContent === 'Desktop files need repair');
+    assert.equal((await mixed.evaluate(() => window.electron.getBackendInfo())).code, 'bundle_inconsistent');
+  } finally {
+    if (app) { await app.close(); app = null; }
+    await writeFile(manifestPath, originalManifest);
+    bridgeProtocol = 1;
+  }
   // A hung port still gets an interactive recovery window, not a blank screen,
   // duplicate startup loop or an unapproved replacement process.
   hang = true;
@@ -123,7 +168,7 @@ try {
   assert.match(timeoutState.reason, /timed out/);
   assert.equal(timeoutState.managedByDesktop, false);
   const presentation = await timeout.evaluate(() => window.electron.getPresentation());
-  assert.equal(await timeout.locator('#status-text').innerText(), presentation.copy.guidance);
+  assert.equal(await timeout.locator('#status-text').innerText(), presentation.copy.unavailableBody);
   // Recovery guidance stays readable; the underlying failure remains available
   // in the expandable details rather than replacing the localized guidance.
   assert.equal(await timeout.locator('#technical').getAttribute('open'), null);

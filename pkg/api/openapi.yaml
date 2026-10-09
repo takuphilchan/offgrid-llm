@@ -1359,6 +1359,15 @@ components:
         revision: { type: string }
         api_version: { type: integer, const: 2 }
         ui_build_id: { type: string, description: SHA-256 of the served UI index; empty when not installed. }
+        desktop_bridge:
+          type: object
+          description: Renderer-to-desktop compatibility, not authorization. Missing legacy metadata is distinct from invalid metadata.
+          required: [status]
+          properties:
+            status: { type: string, enum: [missing, invalid, ready] }
+            schema_version: { type: integer }
+            protocol: { type: integer }
+            ui_build_id: { type: string }
         workspace_id: { type: string, description: Opaque persistent workspace namespace; not an authorization credential. }
         capabilities: { type: array, items: { type: string } }
     ChatStreamPhase:

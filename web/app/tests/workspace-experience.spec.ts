@@ -141,6 +141,25 @@ test('appearance choice survives reload and changes the whole shell', async ({ p
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('settings.png') });
 });
 
+test('desktop diagnostics distinguish a compatible external service from an upgraded desktop', async ({ page }) => {
+  await mockWorkspace(page, false);
+  await page.addInitScript(() => {
+    localStorage.setItem('offgrid.onboarding.complete', 'true');
+    window.electron = {
+      isDesktop:true, platform:'win32',
+      getPaths:async()=>{throw Error('external workspace');},
+      getBackendInfo:async()=>({state:'ready',url:location.origin,desktopVersion:'0.4.15',version:'0.4.14',managedByDesktop:false,compatibilityBasis:'reviewed-legacy',bridgeProtocol:1}),
+      getSystemTheme:async()=> 'light', onThemeChange:()=>()=>{}
+    } as unknown as NonNullable<Window['electron']>;
+  });
+  await page.goto('/ui/#/settings');
+  await page.getByText('Diagnostics', {exact:true}).click();
+  await expect(page.getByText('Reviewed legacy build · 1', {exact:true})).toBeVisible();
+  await expect(page.getByText('Separately managed service', {exact:true})).toBeVisible();
+  await expect(page.locator('.desktop-local-paths')).toHaveCount(0);
+  await expect(page.locator('.settings-page').getByText('0.4.15', {exact:true})).toBeVisible();
+});
+
 test('southern African languages are complete, selectable, and persistent', async ({ page }) => {
   await mockWorkspace(page, false);
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));

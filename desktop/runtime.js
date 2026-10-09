@@ -38,9 +38,21 @@ class DesktopRuntime extends EventEmitter {
     return this.snapshot();
   }
 
+  async accept(result) {
+    const identity = result.state === 'ready' ? JSON.stringify([this.url, result.workspaceID, result.uiBuildID, result.bridgeProtocol]) : null;
+    if (this.acceptedIdentity && identity !== this.acceptedIdentity) {
+      // Keep the bridge unavailable until local dispatch has been revoked.
+      await this.options.onIdentityChange?.();
+    }
+    if (this.closing) return this.snapshot();
+    this.acceptedIdentity = identity;
+    if (identity && !this.child) this.externalAttached = true;
+    return this.publish(result);
+  }
+
   connect(isolated = false) {
     if (this.pending) return this.pending;
-    if (this.closing || this.state.state === 'ready') return Promise.resolve(this.snapshot());
+    if (this.closing || (isolated && this.state.state === 'ready')) return Promise.resolve(this.snapshot());
     // No renderer-supplied paths, commands, or addresses. This explicit action
     // starts a different workspace; it never upgrades/stops the existing one.
     if (isolated && (this.child || !['checking', 'incompatible', 'unavailable', 'error'].includes(this.state.state))) {
@@ -56,25 +68,31 @@ class DesktopRuntime extends EventEmitter {
   }
 
   async run(isolated) {
-    this.publish({ state: 'checking', reason: undefined, version: undefined, canOpenBrowser: false });
+    this.publish({ state: 'checking', reason: undefined, code: undefined, version: undefined, canOpenBrowser: false, compatibilityBasis: undefined, bridgeProtocol: undefined });
     if (isolated) {
+      this.externalAttached = false;
       this.url = `http://127.0.0.1:${await this.options.availablePort()}`;
       this.workspace = this.options.isolatedWorkspace;
       this.state.workspaceMode = 'isolated';
     }
     const probe = () => this.options.inspect(this.url, this.options.version, this.options.uiBuildID,
-      Math.max(1, Math.min(2000, this.options.timeoutMs - (Date.now() - this.started))), this.abort.signal);
+      Math.max(1, Math.min(2000, this.options.timeoutMs - (Date.now() - this.started))), this.abort.signal, this.child ? 'owned' : 'external');
     let result = await probe();
     if (this.closing) return this.snapshot();
     if (this.state.workspaceMode === 'isolated' && !this.child && result.state !== 'offline') {
       return this.publish({ state: 'unavailable', reason: 'The selected local port is already occupied. Choose Start desktop workspace again to try another port; no existing service was changed.' });
     }
-    if (result.state === 'ready') return this.publish(result);
-    if (!this.child && result.state !== 'offline') return this.publish(result);
+    if (result.state === 'ready') return this.accept(result);
+    if (!this.child && result.state !== 'offline') return this.accept(result);
+    if (!this.child && this.externalAttached) return this.accept({state:'unavailable', code:'service_unavailable', reason:'The previously connected external service is offline. Restart that service and retry; no replacement workspace was started.'});
+    if (this.acceptedIdentity) {
+      await this.options.onIdentityChange?.();
+      this.acceptedIdentity = null;
+    }
     if (!this.child) {
       this.publish({ state: 'starting', reason: undefined });
       try { await this.options.fs.access(this.options.binary); }
-      catch { return this.publish({ state: 'error', reason: 'The bundled OffGrid service is missing or inaccessible. Repair or reinstall the desktop application, then retry.' }); }
+      catch { return this.publish({ state: 'error', code: 'bundle_inconsistent', reason: 'The bundled OffGrid service is missing or inaccessible. Repair or reinstall the desktop application, then retry.' }); }
       for (const directory of [this.workspace.models, this.workspace.data]) {
         await this.options.fs.mkdir(directory, { recursive: true });
       }
@@ -103,7 +121,7 @@ class DesktopRuntime extends EventEmitter {
     while (!this.closing && this.child && Date.now() - this.started < this.options.timeoutMs) {
       result = await probe();
       if (this.closing || !this.child) break;
-      if (result.state === 'ready' || result.state === 'incompatible') return this.publish(result);
+      if (result.state === 'ready' || result.state === 'incompatible') return this.accept(result);
       this.publish({ state: 'starting' });
       await delay(this.options.retryMs, undefined, { signal: this.abort.signal }).catch(() => {});
     }

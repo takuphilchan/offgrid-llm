@@ -20,6 +20,9 @@ bin/
 web/dist/
 web/ui/
 desktop/
+!desktop/
+desktop/*
+!desktop/compatibility.cjs
 dev/
 examples/
 installers/

@@ -4,10 +4,12 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
 $stage = 'validate the isolated installer package'
 $diagnosticPath = ''
+$externalFixtureProcess = $null
 
 trap {
     $message = "${stage}: $($_.Exception.Message)" -replace '[\r\n]+', ' '
     Write-WizardDiagnostic $diagnosticPath 'installer-test-failed' @{ stage = $stage; message = $message }
+    if ($externalFixtureProcess -and -not $externalFixtureProcess.HasExited) { $externalFixtureProcess.Kill() }
     if ($env:GITHUB_ACTIONS -eq 'true') {
         Write-Output "::error title=Windows installer qualification::$message"
     } else {
@@ -58,11 +60,24 @@ $sentinel = Join-Path $smoke.evidence 'isolated-profile/desktop-workspace/data/i
 [IO.File]::WriteAllText($sentinel, 'OffGrid installer preservation fixture')
 $before = (Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash
 
+# Keep an independently owned fixture alive across repair, Finish and uninstall.
+# Only this process object is cleaned up; never identify services by port/name.
+$externalRoot = (New-Item -ItemType Directory -Path (Join-Path $testRoot 'external-fixture')).FullName
+$fixtureScript = Join-Path $PSScriptRoot 'desktop-external-fixture.mjs'
+$externalFixtureProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList "`"$fixtureScript`" `"$externalRoot`"" -WindowStyle Hidden -PassThru
+$fixtureReady = Join-Path $externalRoot 'ready.json'
+for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path -LiteralPath $fixtureReady); $attempt++) { Start-Sleep -Milliseconds 100 }
+if (-not (Test-Path -LiteralPath $fixtureReady)) { throw 'External installer fixture did not start.' }
+$externalPort = (Get-Content -LiteralPath $fixtureReady | ConvertFrom-Json).port
+$externalURL = "http://127.0.0.1:$externalPort"
+$externalBefore = Invoke-RestMethod -Uri "$externalURL/fixture-status" -TimeoutSec 2
+
 # Exercise same-version repair/update; this does not qualify every older upgrade.
 $stage = 'repair the installed package silently'
 Invoke-TestProcess $installer "/S /currentuser /D=$installRoot"
 if (-not (Test-Path -LiteralPath $appExe)) { throw 'Reinstall removed the application.' }
 if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) { throw 'Reinstall changed the workspace fixture.' }
+if ((Invoke-RestMethod -Uri "$externalURL/fixture-status" -TimeoutSec 2).digest -ne $externalBefore.digest) { throw 'Repair changed the external workspace.' }
 
 # Exercise the actual Finish checkbox and callback, not /S or a separately
 # launched executable. A dedicated profile/port prevents touching the user's app.
@@ -73,10 +88,7 @@ $oldRunAsNode = $env:ELECTRON_RUN_AS_NODE
 $env:ELECTRON_RUN_AS_NODE = $null
 $env:OFFGRID_DESKTOP_HOME = Join-Path $testRoot 'finish-workspace'
 $env:OFFGRID_DESKTOP_TEST_HIDDEN = '1'
-$listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-$listener.Start()
-$env:OFFGRID_PORT = [string]$listener.LocalEndpoint.Port
-$listener.Stop()
+$env:OFFGRID_PORT = [string]$externalPort
 try {
     $stage = 'complete the installer and launch the application'
     $finish = Invoke-InstallerWizard $installer $installRoot $true $false
@@ -84,7 +96,8 @@ try {
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
         try {
             $identity = Invoke-RestMethod -Uri "http://127.0.0.1:$env:OFFGRID_PORT/api/v2/system" -TimeoutSec 1
-            if ($identity.product -eq 'offgrid') { $ready = $true; break }
+            $externalState = Invoke-RestMethod -Uri "$externalURL/fixture-status" -TimeoutSec 1
+            if ($identity.product -eq 'offgrid' -and $externalState.uiRequests -gt $externalBefore.uiRequests) { $ready = $true; break }
         } catch {}
         Start-Sleep -Milliseconds 500
     }
@@ -94,11 +107,14 @@ try {
     Invoke-TestProcess $installer "/S /currentuser /D=$installRoot" 2
     $identity = Invoke-RestMethod -Uri "http://127.0.0.1:$env:OFFGRID_PORT/api/v2/system" -TimeoutSec 2
     if ($identity.product -ne 'offgrid') { throw 'Silent reinstall stopped active work.' }
+    $activeTestProcesses = @(Get-Process -Name $testName -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $appExe })
+    if ($activeTestProcesses.Count -eq 0) { throw 'Silent reinstall stopped the desktop even though the external service survived.' }
     $stage = 'repair interactively while the application is running'
     $reinstall = Invoke-InstallerWizard $installer $installRoot $false $true
     # Unchecked launch must not leave a desktop/backend running after reinstall.
     $testProcesses = @(Get-Process -Name $testName -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $appExe })
     if ($testProcesses.Count -ne 0) { throw 'Unchecked Finish launched the app or reinstall did not close it.' }
+    if ((Invoke-RestMethod -Uri "$externalURL/fixture-status" -TimeoutSec 2).digest -ne $externalBefore.digest) { throw 'Interactive reinstall changed the external service.' }
     if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) { throw 'Interactive reinstall changed saved data.' }
 } finally {
     $env:OFFGRID_DESKTOP_HOME = $oldProfile
@@ -117,5 +133,8 @@ Invoke-TestProcess $resolvedUninstaller "/S /currentuser _?=$installRoot"
 if (Test-Path -LiteralPath $appExe) { throw 'Uninstall did not remove the test application.' }
 if (Test-Path -LiteralPath $uninstallKey) { throw 'Uninstall left its test registration.' }
 if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) { throw 'Uninstall changed the workspace fixture.' }
+if ((Invoke-RestMethod -Uri "$externalURL/fixture-status" -TimeoutSec 2).digest -ne $externalBefore.digest) { throw 'Uninstall changed the external service.' }
+$externalFixtureProcess.Kill()
+$externalFixtureProcess.WaitForExit()
 
-[PSCustomObject]@{ passed = $true; installRoot = $installRoot; startupEvidence = $smoke.evidence; finish = $finish; reinstall = $reinstall; tested = 'clean install, installed startup, Finish with/without launch, silent running-app refusal, interactive running-app reinstall, uninstall, fixture preservation' } | ConvertTo-Json
+[PSCustomObject]@{ passed = $true; installRoot = $installRoot; startupEvidence = $smoke.evidence; finish = $finish; reinstall = $reinstall; tested = 'clean install, installed startup, Finish with/without launch, silent running-app refusal, interactive running-app reinstall, uninstall, fixture preservation, compatible legacy external-service survival' } | ConvertTo-Json

@@ -65,14 +65,43 @@ An API version of 2 here does **not** mean every v2 operation is available.
 ordered activity replay; it does not advertise v2 submissions, native control or
 vision. See [live agent progress](agent-live-progress.md).
 
-Electron requires the same product version, supported contracts, and matching UI
-build when its local bundle is present. The UI build ID is SHA-256 of `index.html`
-with CRLF normalized to LF (it references content-hashed assets): a compatibility identifier, **not** a
-signature or complete artifact-integrity proof. An incompatible or nonresponsive
+Desktop attachment distinguishes **external service compatibility** from
+**bundled package consistency**. External services can have different release
+versions and renderer builds when their API capabilities and renderer/desktop
+bridge protocol are supported. An owned bundled child must additionally match
+the exact desktop package version and renderer fingerprint.
+
+The additive `desktop_bridge` identity field has `status: missing | invalid |
+ready`. Ready metadata includes `schema_version: 1`, `protocol`, and `ui_build_id`.
+The service validates a bounded `desktop-compatibility.json` from its actual UI
+root against that root's index. Invalid/unsupported metadata cannot fall back to
+legacy handling. The UI build ID is SHA-256 of `index.html` with CRLF normalized
+to LF (it references content-hashed assets): a compatibility identifier, **not** a
+signature or complete artifact-integrity proof. Protocol compatibility never
+grants authentication, computer access, or local consent.
+
+Protocol 1 describes the existing bounded `window.electron` main/preload API.
+Breaking argument, response, or permission semantics require a new protocol;
+supporting an older protocol requires retained tests. The renderer build emits
+its declaration, and packaging verifies the copied UI. Keep declarations and
+tests aligned when changing desktop IPC; do not derive protocols from semver.
+
+Legacy metadata absence is accepted only by `desktop/legacy-compatibility.json`:
+service 0.4.14 or 0.4.15 with renderer fingerprint
+`a7336324e4ea09e8a9f5e25aabf2a53c2f9cb39b81eb990a081ba9a84e66f617`.
+This is the reviewed workspace-refresh renderer, not every 0.4.14 build. Its
+main/preload/computer-runtime contracts are unchanged between those release tags.
+The mapping survives a newer desktop renderer build; unknown legacy tuples
+remain blocked. Old installed desktops retain their old strict policy until
+updated. Explicit invalid metadata is never treated as legacy absence.
+
+An incompatible or nonresponsive
 occupied port is not replaced. An externally managed backend is never stopped
 by Electron, and its paths are not misrepresented as desktop-local paths.
 
-Settings shows the active service address, versions, API and UI build ID. Build
+Settings shows the active service address, versions, API, UI build ID, attachment
+basis, and ownership. The service supplies its own UI; updating desktop alone
+does not update an external service's features. Build
 the UI and runtime from the same checkout before testing desktop development;
 restart/redeploy an old service explicitly rather than expecting new source to
 change a running process or container.

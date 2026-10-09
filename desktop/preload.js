@@ -4,6 +4,7 @@ try { const value = process.argv.find(item => item.startsWith('--offgrid-present
 
 // Expose safe APIs to renderer process
 contextBridge.exposeInMainWorld('electron', {
+  bridgeProtocol: 1,
   presentation,
   getPresentation: () => ipcRenderer.invoke('get-presentation'),
   setPresentation: preferences => ipcRenderer.invoke('set-presentation', preferences),

@@ -1,25 +1,39 @@
 const http = require('node:http');
 const { URL } = require('node:url');
-const { createHash } = require('node:crypto');
-
-function fingerprintUI(index) {
-  return createHash('sha256').update(index.toString('utf8').replace(/\r\n/g, '\n')).digest('hex');
-}
+const { fingerprintUI, BRIDGE_PROTOCOL } = require('./compatibility.cjs');
+const legacy = require('./legacy-compatibility.json').entries;
 
 const requiredCapabilities = ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'];
 
-function assessIdentity(value, expectedVersion, expectedUIBuild) {
-  if (!value || value.product !== 'offgrid' || value.api_version !== 2 ||
+function assessIdentity(value, expectedVersion, expectedUIBuild, mode = 'external') {
+  const fail = (code, reason) => ({ state: 'incompatible', code, reason });
+  if (!value || value.product !== 'offgrid') return fail('service_not_offgrid', 'The occupied address did not identify an OffGrid workspace.');
+  if (value.api_version !== 2 ||
       !Array.isArray(value.capabilities) || !requiredCapabilities.every(item => value.capabilities.includes(item))) {
-    return 'This service does not implement the required OffGrid client contract.';
+    const missing = requiredCapabilities.filter(item => !Array.isArray(value.capabilities) || !value.capabilities.includes(item));
+    return fail('service_contract_unsupported', `Required OffGrid API contract unavailable (API 2; missing: ${missing.join(', ') || 'supported API version'}).`);
   }
-  if (value.version !== expectedVersion) return `Desktop ${expectedVersion} and service ${String(value.version || 'unknown').slice(0, 80)} are different versions. Your existing workspace has not been changed.`;
-  if (typeof value.ui_build_id !== 'string' || !/^[a-f0-9]{64}$/.test(value.ui_build_id)) return 'The service has no identifiable web UI build installed.';
-  if (expectedUIBuild && value.ui_build_id !== expectedUIBuild) return 'The running service contains a different UI build. Rebuild or update it before connecting this desktop app.';
-  return null;
+  if (typeof value.version !== 'string' || !value.version || value.version.length > 80 ||
+      typeof value.ui_build_id !== 'string' || !/^[a-f0-9]{64}$/.test(value.ui_build_id)) return fail('service_metadata_invalid', 'The service has no valid version or renderer identity.');
+  if (!['owned', 'external'].includes(mode)) return fail('bundle_inconsistent', 'Unknown desktop attachment context.');
+  if (mode === 'owned' && (value.version !== expectedVersion || !expectedUIBuild || value.ui_build_id !== expectedUIBuild)) {
+    return fail('bundle_inconsistent', 'The bundled service version or renderer differs from this desktop package. Repair the desktop application.');
+  }
+  const bridge = value.desktop_bridge;
+  const missing = !Object.hasOwn(value, 'desktop_bridge') || (bridge?.status === 'missing' && Object.keys(bridge).length === 1);
+  if (missing) {
+    const match = mode === 'external' && legacy.find(item => item.versions.includes(value.version) && item.ui_build_id === value.ui_build_id && item.protocol === BRIDGE_PROTOCOL);
+    if (!match) return fail(mode === 'owned' ? 'bundle_inconsistent' : 'service_legacy_unreviewed', 'This renderer has no reviewed desktop compatibility contract. Update the workspace service or open it in your browser.');
+    return { state: 'ready', bridgeProtocol: match.protocol, compatibilityBasis: 'reviewed-legacy' };
+  }
+  if (bridge?.status !== 'ready' || bridge.schema_version !== 1 || !Number.isSafeInteger(bridge.protocol) || bridge.protocol < 1 || bridge.ui_build_id !== value.ui_build_id) {
+    return fail(mode === 'owned' ? 'bundle_inconsistent' : 'service_metadata_invalid', 'The renderer compatibility declaration is invalid or refers to different UI files.');
+  }
+  if (bridge.protocol !== BRIDGE_PROTOCOL) return fail(mode === 'owned' ? 'bundle_inconsistent' : 'service_contract_unsupported', 'This renderer requires an unsupported desktop bridge protocol. Update the desktop and service to compatible builds.');
+  return { state: 'ready', bridgeProtocol: bridge.protocol, compatibilityBasis: 'declared-contract' };
 }
 
-function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs = 2000, signal) {
+function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs = 2000, signal, mode = 'external') {
   return new Promise(resolve => {
     let settled = false;
     let timer;
@@ -28,7 +42,7 @@ function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs =
       settled = true;
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
-      resolve({ url: serverURL, ...result });
+      resolve({ url: serverURL, code: result.state === 'unavailable' ? 'service_unavailable' : result.state === 'incompatible' ? 'service_metadata_invalid' : undefined, ...result });
     };
     const abort = () => {
       finish({ state: 'unavailable', reason: 'Connection check cancelled.' });
@@ -53,11 +67,11 @@ function inspectBackend(serverURL, expectedVersion, expectedUIBuild, timeoutMs =
       response.on('end', () => {
         try {
           const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          const reason = assessIdentity(value, expectedVersion, expectedUIBuild);
-          if (reason) finish({ state: 'incompatible', reason,
+          const assessment = assessIdentity(value, expectedVersion, expectedUIBuild, mode);
+          if (assessment.state !== 'ready') finish({ ...assessment,
             version: typeof value?.version === 'string' ? value.version.slice(0, 80) : undefined,
             canOpenBrowser: value?.product === 'offgrid' && typeof value?.ui_build_id === 'string' && /^[a-f0-9]{64}$/.test(value.ui_build_id) });
-          else finish({ state: 'ready', version: value.version, revision: String(value.revision || 'unknown'), uiBuildID: value.ui_build_id, apiVersion: value.api_version });
+          else finish({ ...assessment, version: value.version, revision: String(value.revision || 'unknown').slice(0, 128), uiBuildID: value.ui_build_id, apiVersion: value.api_version, workspaceID: typeof value.workspace_id === 'string' ? value.workspace_id.slice(0,128) : undefined });
         } catch {
           finish({ state: 'incompatible', reason: 'The service returned invalid identity metadata.' });
         }

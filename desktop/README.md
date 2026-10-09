@@ -29,13 +29,22 @@ Use `build/windows/offgrid.exe` on Windows and an architecture-specific binary
 under `build/macos` on macOS. Set `OFFGRID_PORT` before starting Electron to use
 another local port. Invalid port values fall back to `11611`.
 
-Electron checks `/api/v2/system` before attaching: product, API, supported
-contracts, matching product version, and UI build identity must agree. A 200
-health response alone is not enough. Rebuild the UI/runtime together with the
-version in `desktop/package.json`. The startup window now offers retry, opening
+Electron checks `/api/v2/system` before attaching: product, API, and the served
+renderer/desktop bridge contract must agree. Compatible external services need
+not have the same release number or UI fingerprint. An owned bundled child must
+also match the exact package version and UI build. A 200 health response alone
+is not enough. Rebuild the bundled UI/runtime together with the version in
+`desktop/package.json`. The startup window offers retry, opening
 an identified existing workspace in the browser, or explicitly starting a separate
 desktop workspace. An occupied incompatible or unresponsive service is left
 untouched. See [desktop startup and recovery](../docs/setup/desktop-startup.md).
+
+The renderer build produces `desktop-compatibility.json`; the after-pack hook
+verifies the actual copied UI. Protocol 1 describes the existing bounded
+main/preload bridge. Keep old protocol tests when retaining compatibility, and
+change the protocol when argument, result, or permission semantics break.
+Only exact reviewed legacy identities in `legacy-compatibility.json` can omit
+this declaration. Invalid declarations never fall back to that table.
 
 ## Packaging
 
@@ -95,8 +104,8 @@ SmartScreen, Gatekeeper and verification limitations.
 - The application keeps models in `~/.offgrid-llm/models` and all other state in
   `~/.offgrid-llm/data`.
 - The optional separate workspace uses `~/.offgrid-llm/desktop-workspace` instead.
-  Change the remembered choice using **File → Connection on next launch** or the
-  tray menu. Neither choice deletes data; it takes effect after quitting/reopening.
+  It is an explicit session-only recovery choice. The next launch reconnects to
+  the configured service; neither choice deletes data.
 - Closing a successfully connected window keeps the app in the tray on Windows
   and Linux when available; **Quit** stops the runtime owned by Electron. Failed
   launches remain visible and can be closed normally.

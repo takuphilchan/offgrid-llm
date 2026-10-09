@@ -3,6 +3,7 @@
 const path=require('node:path');
 const {verifyPack}=require('../computer/pack.cjs');
 module.exports=async context=>{
+ require('./compatibility.cjs').verifyUI(path.join(context.packager.getResourcesDir(context.appOutDir),'ui'));
  const root=path.join(context.packager.getResourcesDir(context.appOutDir),'computer');
  const arch=require('builder-util').Arch[context.arch];
  await verifyPack(root,context.electronPlatformName,arch);

@@ -1,5 +1,12 @@
 {
   "en": {
+    "serviceUpdateTitle": "Workspace service needs an update",
+    "serviceUpdateBody": "This workspace is managed separately. Update its service to a compatible build, then retry. Reinstalling the desktop does not update it.",
+    "bundleRepairTitle": "Desktop files need repair",
+    "bundleRepairBody": "The bundled service and desktop files do not match. Repair or reinstall the desktop; your saved work is preserved.",
+    "addressConflictTitle": "Another application is using this address",
+    "addressConflictBody": "This address did not identify an OffGrid workspace. Check the configured service address; no application was stopped.",
+    "unavailableBody": "The service did not respond. Check that it is running and that localhost forwarding is available, then retry.",
     "opening": "Opening your workspace",
     "ready": "Connected",
     "attention": "Startup needs attention",
@@ -29,6 +36,13 @@
     "details": "Technical details"
   },
   "fr": {
+    "serviceUpdateTitle": "Le service de l’espace doit être mis à jour",
+    "serviceUpdateBody": "Cet espace est géré séparément. Mettez son service à jour vers une version compatible, puis réessayez. Réinstaller le bureau ne le met pas à jour.",
+    "bundleRepairTitle": "Les fichiers du bureau doivent être réparés",
+    "bundleRepairBody": "Le service intégré et les fichiers du bureau ne correspondent pas. Réparez ou réinstallez le bureau ; votre travail est conservé.",
+    "addressConflictTitle": "Une autre application utilise cette adresse",
+    "addressConflictBody": "Cette adresse n’identifie pas un espace OffGrid. Vérifiez l’adresse du service ; aucune application n’a été arrêtée.",
+    "unavailableBody": "Le service ne répond pas. Vérifiez qu’il fonctionne et que le transfert localhost est disponible, puis réessayez.",
     "opening": "Ouverture de votre espace",
     "ready": "Connecté",
     "attention": "Le démarrage nécessite votre attention",
@@ -58,6 +72,13 @@
     "details": "Détails techniques"
   },
   "de": {
+    "serviceUpdateTitle": "Arbeitsbereichsdienst muss aktualisiert werden",
+    "serviceUpdateBody": "Dieser Arbeitsbereich wird separat verwaltet. Aktualisieren Sie seinen Dienst auf eine kompatible Version und versuchen Sie es erneut. Eine Desktop-Neuinstallation aktualisiert ihn nicht.",
+    "bundleRepairTitle": "Desktop-Dateien müssen repariert werden",
+    "bundleRepairBody": "Der mitgelieferte Dienst und die Desktop-Dateien passen nicht zusammen. Reparieren oder installieren Sie den Desktop neu; Ihre Arbeit bleibt erhalten.",
+    "addressConflictTitle": "Eine andere Anwendung verwendet diese Adresse",
+    "addressConflictBody": "Diese Adresse identifiziert keinen OffGrid-Arbeitsbereich. Prüfen Sie die Dienstadresse; keine Anwendung wurde beendet.",
+    "unavailableBody": "Der Dienst antwortet nicht. Prüfen Sie, ob er läuft und die localhost-Weiterleitung verfügbar ist, und versuchen Sie es erneut.",
     "opening": "Arbeitsbereich wird geöffnet",
     "ready": "Verbunden",
     "attention": "Start erfordert Aufmerksamkeit",
@@ -87,6 +108,13 @@
     "details": "Technische Details"
   },
   "es": {
+    "serviceUpdateTitle": "El servicio del espacio necesita actualizarse",
+    "serviceUpdateBody": "Este espacio se gestiona por separado. Actualiza su servicio a una versión compatible y vuelve a intentarlo. Reinstalar la aplicación de escritorio no lo actualiza.",
+    "bundleRepairTitle": "Los archivos de escritorio necesitan reparación",
+    "bundleRepairBody": "El servicio incluido y los archivos de escritorio no coinciden. Repara o reinstala la aplicación; tu trabajo se conserva.",
+    "addressConflictTitle": "Otra aplicación usa esta dirección",
+    "addressConflictBody": "Esta dirección no identifica un espacio OffGrid. Comprueba la dirección del servicio; no se ha detenido ninguna aplicación.",
+    "unavailableBody": "El servicio no responde. Comprueba que esté en ejecución y que la redirección localhost esté disponible, y vuelve a intentarlo.",
     "opening": "Abriendo su espacio",
     "ready": "Conectado",
     "attention": "El inicio requiere atención",
@@ -116,6 +144,13 @@
     "details": "Detalles técnicos"
   },
   "ar": {
+    "serviceUpdateTitle": "تحتاج خدمة مساحة العمل إلى تحديث",
+    "serviceUpdateBody": "تُدار مساحة العمل هذه بشكل منفصل. حدّث خدمتها إلى إصدار متوافق ثم أعد المحاولة. إعادة تثبيت تطبيق سطح المكتب لا تُحدّث الخدمة.",
+    "bundleRepairTitle": "تحتاج ملفات سطح المكتب إلى إصلاح",
+    "bundleRepairBody": "الخدمة المرفقة وملفات سطح المكتب غير متطابقة. أصلح التطبيق أو أعد تثبيته؛ يبقى عملك محفوظاً.",
+    "addressConflictTitle": "يستخدم تطبيق آخر هذا العنوان",
+    "addressConflictBody": "لا يعرّف هذا العنوان مساحة عمل OffGrid. تحقّق من عنوان الخدمة؛ لم يتم إيقاف أي تطبيق.",
+    "unavailableBody": "لم تستجب الخدمة. تحقّق من تشغيلها وتوفّر إعادة توجيه localhost ثم أعد المحاولة.",
     "opening": "جارٍ فتح مساحة العمل",
     "ready": "متصل",
     "attention": "بدء التشغيل يحتاج إلى انتباه",
@@ -145,6 +180,13 @@
     "details": "التفاصيل التقنية"
   },
   "sw": {
+    "serviceUpdateTitle": "Huduma ya eneo la kazi inahitaji kusasishwa",
+    "serviceUpdateBody": "Eneo hili linasimamiwa kando. Sasisha huduma yake iwe toleo linalooana, kisha jaribu tena. Kusakinisha upya programu ya kompyuta hakusasishi huduma hiyo.",
+    "bundleRepairTitle": "Faili za programu zinahitaji kurekebishwa",
+    "bundleRepairBody": "Huduma iliyojumuishwa na faili za programu hazilingani. Rekebisha au sakinisha upya programu; kazi yako imehifadhiwa.",
+    "addressConflictTitle": "Programu nyingine inatumia anwani hii",
+    "addressConflictBody": "Anwani hii haitambui eneo la kazi la OffGrid. Angalia anwani ya huduma; hakuna programu iliyosimamishwa.",
+    "unavailableBody": "Huduma haikujibu. Hakikisha inaendeshwa na uelekezaji wa localhost unapatikana, kisha jaribu tena.",
     "opening": "Inafungua eneo lako la kazi",
     "ready": "Imeunganishwa",
     "attention": "Uanzishaji unahitaji uangalizi",
@@ -174,6 +216,13 @@
     "details": "Maelezo ya kiufundi"
   },
   "sn": {
+    "serviceUpdateTitle": "Sevhisi yenzvimbo yebasa inoda kuvandudzwa",
+    "serviceUpdateBody": "Nzvimbo iyi inotongwa yakazvimirira. Vandudza sevhisi yayo kuti ienderane, woedza zvakare. Kuisa app yekombiyuta patsva hakuvandudzi sevhisi iyoyo.",
+    "bundleRepairTitle": "Mafaira eapp anoda kugadziriswa",
+    "bundleRepairBody": "Sevhisi yakabatanidzwa nemafaira eapp hazvienderani. Gadzirisa kana kuisa app patsva; basa rako rakachengetedzwa.",
+    "addressConflictTitle": "Imwe app iri kushandisa kero iyi",
+    "addressConflictBody": "Kero iyi haisi kuratidza nzvimbo yebasa yeOffGrid. Tarisa kero yesevhisi; hapana app yamiswa.",
+    "unavailableBody": "Sevhisi haina kupindura. Tarisa kuti iri kushanda uye kufambiswa kwelocalhost kunowanikwa, woedza zvakare.",
     "opening": "Kuvhura nzvimbo yako yebasa",
     "ready": "Yakabatana",
     "attention": "Kutanga kunoda kutariswa",
@@ -203,6 +252,13 @@
     "details": "Ruzivo rwehunyanzvi"
   },
   "nd": {
+    "serviceUpdateTitle": "Isevisi yendawo yokusebenza idinga ukubuyekezwa",
+    "serviceUpdateBody": "Indawo le iphathwa ngokwehlukana. Buyekeza isevisi yayo ibe yinguqulo ehambelanayo, ubusuzama futhi. Ukufaka uhlelo lwekhompyutha kutsha akuyibuyekezi.",
+    "bundleRepairTitle": "Amafayela ohlelo adinga ukulungiswa",
+    "bundleRepairBody": "Isevisi efakiweyo lamafayela ohlelo akuhambelani. Lungisa kumbe ufake uhlelo kutsha; umsebenzi wakho ugciniwe.",
+    "addressConflictTitle": "Olunye uhlelo lusebenzisa leli kheli",
+    "addressConflictBody": "Leli kheli kalikhombi indawo yokusebenza yeOffGrid. Hlola ikheli lesevisi; akulaluhlelo olumisiweyo.",
+    "unavailableBody": "Isevisi kayiphendulanga. Hlola ukuthi iyasebenza lokuthi ukudluliswa kwelocalhost kuyatholakala, ubusuzama futhi.",
     "opening": "Kuvulwa indawo yakho yokusebenza",
     "ready": "Kuxhunyiwe",
     "attention": "Ukuqalisa kudinga ukunakwa",
@@ -232,6 +288,13 @@
     "details": "Imininingwane yobuchwepheshe"
   },
   "zu": {
+    "serviceUpdateTitle": "Isevisi yendawo yokusebenza idinga ukubuyekezwa",
+    "serviceUpdateBody": "Le ndawo iphathwa ngokwehlukana. Buyekeza isevisi yayo ibe yinguqulo ehambisanayo, bese uzama futhi. Ukufaka kabusha uhlelo lwekhompyutha akuyibuyekezi.",
+    "bundleRepairTitle": "Amafayela ohlelo adinga ukulungiswa",
+    "bundleRepairBody": "Isevisi efakiwe namafayela ohlelo akuhambisani. Lungisa noma ufake kabusha uhlelo; umsebenzi wakho ugciniwe.",
+    "addressConflictTitle": "Olunye uhlelo lusebenzisa leli kheli",
+    "addressConflictBody": "Leli kheli alikhombi indawo yokusebenza yeOffGrid. Hlola ikheli lesevisi; alukho uhlelo olumisiwe.",
+    "unavailableBody": "Isevisi ayiphendulanga. Hlola ukuthi iyasebenza nokuthi ukudluliswa kwelocalhost kuyatholakala, bese uzama futhi.",
     "opening": "Kuvulwa indawo yakho yokusebenza",
     "ready": "Kuxhunyiwe",
     "attention": "Ukuqalisa kudinga ukunakwa",

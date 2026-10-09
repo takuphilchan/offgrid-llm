@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "versions": ["0.4.14", "0.4.15"],
+      "ui_build_id": "a7336324e4ea09e8a9f5e25aabf2a53c2f9cb39b81eb990a081ba9a84e66f617",
+      "protocol": 1,
+      "source_revision": "6a311f40ab721d41d76df9c0e9e3f87b9c70553f",
+      "rationale": "Workspace-refresh renderer also served by the reported 0.4.14 local image. Desktop main/preload/computer-runtime are unchanged between v0.4.14 and v0.4.15. Exact tuple only; no patch-version range. Regression: backend.test.js and test-desktop-startup.mjs."
+    }
+  ]
+}

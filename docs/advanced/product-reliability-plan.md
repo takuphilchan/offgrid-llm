@@ -28,6 +28,91 @@ framework migration to solve local state and lifecycle problems.
 - Keep experimental capabilities visibly separate from supported workflows.
 - No automatic publishing: validate locally before a separately approved release.
 
+## Desktop/service compatibility repair (2026-10-09)
+
+Source-only implementation of `desktop-service-compatibility`, based on
+`6a311f40ab721d41d76df9c0e9e3f87b9c70553f` plus this uncommitted change.
+The reported desktop 0.4.15 / external service 0.4.14 failure was caused by
+release equality being used for both independently managed services and bundled
+children. The new policy checks external API/renderer bridge compatibility;
+owned children still require exact package version and renderer consistency.
+
+- Renderer builds emit an index-bound, bounded compatibility manifest. The Go
+  identity projection distinguishes missing, invalid and ready metadata from the
+  actual UI root. Desktop and reused-runtime packaging verify the copied files.
+- The reviewed legacy tuple is version 0.4.14 or 0.4.15 and UI fingerprint
+  `a7336324e4ea09e8a9f5e25aabf2a53c2f9cb39b81eb990a081ba9a84e66f617`,
+  bridge protocol 1. The main/preload/computer-runtime diff between these tags
+  is empty. Regression fixtures deliberately use a different new-package UI
+  fingerprint. Unknown tuples and explicitly invalid declarations remain denied.
+- Explicit reconnect and full-document reload reassess attachment. Observed
+  identity changes revoke prior computer authority before accepting another
+  workspace; failed revocation keeps the bridge unavailable. A disconnected
+  external workspace does not silently become a new bundled workspace on Retry.
+- Recovery gives localized, reason-specific guidance without duplicate text.
+  Settings distinguishes ownership and compatibility basis. Installer completion
+  says application installation, not service readiness or a Docker upgrade.
+
+Executed local checks (Windows x64 build 26200, Electron 43.7.9):
+
+- `go test ./...` passes. Windows race execution cannot run without a C compiler;
+  the eleven-package race command in the OpenSpec task list passes in WSL with
+  Go 1.26.6 and GCC. Its temporary directory is under `/home/phil` because WSL's
+  existing `/tmp` is full; no unrelated temporary files were removed.
+- API generation/drift, TypeScript and production renderer build pass.
+  `node dev/scripts/test-web-workspace.mjs build/windows/offgrid.exe --workers=2`
+  passes **280 tests, ten opt-in skips, zero failures**, using the temporary
+  service/profile `offgrid-web-qualification-kEqBQL`, not the live workspace.
+- `npm --prefix desktop test` passes **58 tests**, including malformed/hostile
+  identities, owned/external separation, legacy fallback, consent/auth/IPC
+  boundaries, stop failure, and disconnected-service retries.
+- After a fresh `electron-builder --dir --win --x64 --publish never`, packaged
+  startup, browser and theme scripts pass. Evidence directories under Windows
+  `%TEMP%`: `offgrid-desktop-startup-QRuZHi`,
+  `offgrid-packaged-browser-rZtphL`, and `offgrid-desktop-theme-LZie9N`.
+  Startup first window was 1,620 ms and incompatible-contract recovery 1,803 ms.
+  These are individual fixture measurements, not latency qualification.
+  Tests cover legacy relaunch, contract changes on reload, mixed-package refusal,
+  external-service survival, all six routes at true 200% zoom, light/dark/system
+  themes and nine readable language options. Browser actions use only the
+  controlled fixture and owned browser; no user's application is controlled.
+- Docker `ui-builder` and `application-artifacts` targets build, and the
+  reused-runtime `checked-ui` stage verifies the copied manifest. Local images
+  are `offgrid-compat-ui-check:local`, `offgrid-compat-application-check:local`
+  and `offgrid-compat-reuse-check:local`. These are build checks, not a live
+  container replacement or full GPU-image qualification.
+- The bounded Windows installer diagnostic/probe suite passes, including
+  deliberately blocked/invalid capture fixtures; their expected warnings are
+  not installation failures.
+- `electron-builder --config installer-test.cjs --win nsis --x64 --publish never`
+  and `test-windows-installer.ps1` pass with the test-only product registration.
+  Final evidence: `%TEMP%/offgrid-install-b77e186fffe941dfb386561a1a129435`,
+  installed startup: `offgrid-desktop-startup-1MlLuE`. Clean install, silent
+  repair, actual Finish launch, silent running-app refusal, consent-driven
+  reinstall and uninstall preserve both the desktop fixture and the running
+  legacy external service's sentinel digest. Silent refusal leaves the desktop
+  process alive too. Finish closes in 79/61 ms with launch checked/unchecked;
+  these are fixture observations, not a performance guarantee. Native visible
+  controls contain the installation/external-service guidance. The PrintWindow
+  image omits some static labels, so it is not the sole oracle for that text.
+- An intermediate installer repeat failed because the separately running probe
+  suite's deliberately frozen window shared the test-title prefix. The installer
+  did not hang. Only that repeat's test app was gracefully closed/uninstalled;
+  diagnostics and fixture data remain. The final installer run above is serial
+  and passes all assertions. Run the probe and lifecycle suites sequentially.
+- Documentation tests (6), link checks (93 maintained files), strict OpenSpec
+  validation and `git diff --check` pass. These checks do not replace runtime
+  tests or authorize a release.
+
+Limitations: Linux and macOS Intel/Apple Silicon packaged startup tests for this
+change have not run on their platform runners. No cross-platform qualification,
+publisher signature, notarization, native-control/model qualification, or
+soak/pilot completion is claimed. No production registration, installed app,
+workspace data, model, live container, VPN or WSL configuration was changed.
+There is no commit, push, tag movement or publication in this validation.
+Existing installed desktops still require an explicitly approved updated
+package; source changes alone do not fix their running binary.
+
 ## Workspace outcome experience: baseline (2026-10-08)
 
 Implementation of `workspace-outcome-experience` starts from HEAD

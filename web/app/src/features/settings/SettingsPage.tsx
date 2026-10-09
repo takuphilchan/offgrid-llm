@@ -9,6 +9,7 @@ import type { DesktopPaths, DesktopBackend } from '../../platform';
 import type { ThemeChoice } from '../../theme';
 import { SectionHeading } from '../../components/WorkspacePresentation';
 import { workspaceManagement } from '../../i18n/workspace-management';
+import { desktopCompatibility } from '../../i18n/desktop-compatibility';
 
 type Health = 'checking' | 'ready' | 'offline';
 type Details = {
@@ -35,6 +36,7 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
   const stopPending = useRef(false);
   const refreshRevision = useRef(0);
   const management = workspaceManagement(locale);
+  const compatibility = desktopCompatibility(locale);
   const unknown = loading ? text.common.loading : presentation[locale].unknown;
 
   const refresh = async () => {
@@ -96,6 +98,7 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
     </section>
     <details className="settings-diagnostics desktop-storage"><summary>{management.diagnostics}</summary><dl>
       <div><dt>API</dt><dd>{details.identity?.api_version ?? unknown}</dd></div>
+      {backend && <><div><dt>{compatibility.title}</dt><dd>{backend.compatibilityBasis === 'declared-contract' ? compatibility.declared : backend.compatibilityBasis === 'reviewed-legacy' ? compatibility.legacy : unknown}{backend.bridgeProtocol ? ` · ${backend.bridgeProtocol}` : ''}</dd></div><div><dt>{text.settings.service}</dt><dd>{backend.managedByDesktop ? compatibility.owned : compatibility.external}</dd></div></>}
       <div><dt>UI SHA-256</dt><dd><code>{details.identity?.ui_build_id || unknown}</code></dd></div>
       <div><dt>{text.settings.inferenceSlots}</dt><dd>{details.config?.inference_slots ?? unknown}</dd></div>
       {knowledge && <div><dt>{text.settings.knowledge}</dt><dd>{!details.rag ? unknown : details.rag.enabled ? text.settings.enabled : text.settings.disabled}</dd></div>}

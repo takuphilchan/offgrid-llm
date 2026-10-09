@@ -98,3 +98,42 @@ test('child exit is visible; shutdown cannot spawn after a pending probe', async
   await stop;
   assert.equal(two.calls.spawn.length, 0);
 });
+
+test('probe context remains owned after spawn and on retry', async () => {
+  const modes = [];
+  const {runtime} = fixture(async (...args) => { modes.push(args[5]); return {state:modes.length === 1 ? 'offline' : 'ready'}; });
+  await runtime.connect(); await runtime.connect(); await runtime.stop();
+  assert.deepEqual(modes, ['external','owned','owned']);
+});
+
+test('explicit reconnect reassesses identity and revokes old authority before readiness', async () => {
+  let workspaceID = 'first'; let bridgeProtocol = 1; let invalid = false;
+  const revoked = [];
+  const {runtime,calls} = fixture(async () => invalid ? {state:'incompatible'} : {state:'ready',workspaceID,uiBuildID:'a',bridgeProtocol}, {
+    onIdentityChange: async () => { assert.equal(runtime.state.state, 'checking'); revoked.push(workspaceID); }
+  });
+  await runtime.connect(); await runtime.connect(); assert.deepEqual(revoked, []);
+  workspaceID = 'second'; await runtime.connect();
+  bridgeProtocol = 2; await runtime.connect();
+  invalid = true; await runtime.connect();
+  assert.deepEqual(revoked, ['second','second','second']);
+  assert.equal(runtime.state.state, 'incompatible');
+  assert.equal(calls.spawn.length, 0);
+});
+
+test('uncertain local revocation cannot accept a replacement workspace', async () => {
+  let workspaceID = 'first';
+  const {runtime} = fixture(async () => ({state:'ready',workspaceID}), {onIdentityChange:async()=>{throw Error('stop uncertain');}});
+  await runtime.connect(); workspaceID = 'second';
+  assert.equal((await runtime.connect()).state, 'error');
+});
+
+test('a disconnected external workspace never silently becomes a bundled workspace on retry', async () => {
+  let state = 'ready'; let revoked = 0;
+  const {runtime,calls} = fixture(async()=>({state,workspaceID:'external'}), {onIdentityChange:async()=>{revoked++;}});
+  await runtime.connect(); state = 'offline';
+  assert.equal((await runtime.connect()).state, 'unavailable');
+  assert.equal((await runtime.connect()).state, 'unavailable');
+  assert.equal(calls.spawn.length, 0);
+  assert.equal(revoked, 1);
+});

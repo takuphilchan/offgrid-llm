@@ -1,7 +1,8 @@
 export type DesktopPaths = { config: string; models: string; data: string };
-export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offline' | 'incompatible' | 'unavailable' | 'error'; url: string; managedByDesktop: boolean; desktopVersion: string; version?: string; revision?: string; uiBuildID?: string; apiVersion?: number; reason?: string };
+export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offline' | 'incompatible' | 'unavailable' | 'error'; url: string; managedByDesktop: boolean; desktopVersion: string; version?: string; revision?: string; uiBuildID?: string; apiVersion?: number; reason?: string; code?: string; bridgeProtocol?: number; compatibilityBasis?: 'declared-contract' | 'reviewed-legacy' };
 
 export type DesktopBridge = {
+  bridgeProtocol?: number;
   discoverComputerApps?: (request:{workspace:string;requestId?:string}) => Promise<{state:string;targets?:{id:string;title:string;driver:string}[];code?:string}>;
   startComputerApp?: (request:{workspace:string;requestId?:string;target:string;approvalMode:'ask_every_time'|'scoped_changes'|'full_task'}) => Promise<{state:string;target?:{id:string;origin:string};code?:string}>;
   listComputerApplications?: () => Promise<{state:string;targets?:{id:string;title:string;driver:string}[];code?:string}>;

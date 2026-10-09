@@ -29,7 +29,7 @@ const server=createServer(async(req,res)=>{
    res.setHeader('Content-Type',mime[extname(file)]||'application/octet-stream');res.end(await readFile(file));return;
   }
   let raw='';for await(const chunk of req)raw+=chunk;const body=raw?JSON.parse(raw):{};let value={};
-  if(url.pathname==='/api/v2/system')value={product:'offgrid',api_version:2,version,ui_build_id:uiBuild,workspace_id:'packaged-fixture',capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1']};
+  if(url.pathname==='/api/v2/system')value={product:'offgrid',api_version:2,version,ui_build_id:uiBuild,desktop_bridge:{status:'ready',schema_version:1,protocol:1,ui_build_id:uiBuild},workspace_id:'packaged-fixture',capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1']};
   else if(url.pathname==='/health')value={status:'healthy'};
   else if(url.pathname==='/v1/users/me'){res.setHeader('Set-Cookie','fixture-auth=owned; HttpOnly; SameSite=Strict; Path=/');value={authenticated:false,auth_required:false,user:null};}
   else if(url.pathname==='/v1/models')value={data:[{id:'fixture-model',type:'chat'}]};
