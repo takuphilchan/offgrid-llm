@@ -11,6 +11,8 @@ import (
 	"io"
 	"time"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 )
 
 // ControlProtocolVersion is the next driver contract, NOT an advertised or
@@ -319,7 +321,7 @@ func (observation ControlObservation) Validate(target TargetIdentity, now time.T
 // DecodeControlMessage rejects unknown fields, oversized frames and trailing
 // JSON. Private worker transports add framing; EOF is never an executable call.
 func DecodeControlMessage(data []byte, destination any) error {
-	if len(data) == 0 || len(data) > MaxIPCFrame || bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+	if len(data) == 0 || len(data) > MaxIPCFrame || bytes.Equal(bytes.TrimSpace(data), []byte("null")) || jsonwire.Validate(data) != nil {
 		return ErrInvalidControl
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))

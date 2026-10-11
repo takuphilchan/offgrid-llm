@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -115,6 +116,9 @@ func runID() string {
 func CanonicalArguments(args json.RawMessage) (json.RawMessage, error) {
 	if len(args) == 0 {
 		args = json.RawMessage(`{}`)
+	}
+	if jsonwire.Validate(args) != nil {
+		return nil, fmt.Errorf("tool arguments contain malformed Unicode or repeated fields")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(args))
 	decoder.UseNumber()
