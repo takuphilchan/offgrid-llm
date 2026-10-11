@@ -16,6 +16,10 @@ Examples:
 import sys
 import argparse
 
+# This is an explicitly invoked live-service script, not a pytest fixture suite.
+# Keep ordinary test discovery isolated from a user's running service.
+__test__ = False
+
 # Add parent directory to path for local development
 sys.path.insert(0, "..")
 
