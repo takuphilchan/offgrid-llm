@@ -17,6 +17,8 @@ const version=JSON.parse(await readFile(join(root,'desktop/package.json'),'utf8'
 const uiBuild=createHash('sha256').update((await readFile(join(ui,'index.html'),'utf8')).replace(/\r\n/g,'\n')).digest('hex');
 const directory=await mkdtemp(join(tmpdir(),'offgrid-packaged-browser-'));
 const pairingCode='b'.repeat(64);let paired=false;let stopped=false;let next=null;const replies=[];
+const runId='run-'+'a'.repeat(32);let inputId='input-1';let attached=false;const attachments=[];
+const snapshot=()=>({run_id:runId,task_id:runId,prompt:'Complete the owned browser practice form',model:'fixture-model',status:attached?'paused':'waiting_for_input',steps:[],output:'',pending_input:attached?null:{id:inputId,call_id:'call-1',kind:'computer',mode:'browser',target:'Owned practice page',url:'demo'}});
 const session={id:'packaged-session',origin:'offgrid-demo://research',state:'ready',remaining_actions:100,expires_at:new Date(Date.now()+600000).toISOString()};
 let finished,failed;const completion=new Promise((res,rej)=>{finished=res;failed=rej;});
 completion.catch(()=>{}); // A UI failure may precede the awaited protocol result.
@@ -29,7 +31,7 @@ const server=createServer(async(req,res)=>{
    res.setHeader('Content-Type',mime[extname(file)]||'application/octet-stream');res.end(await readFile(file));return;
   }
   let raw='';for await(const chunk of req)raw+=chunk;const body=raw?JSON.parse(raw):{};let value={};
-  if(url.pathname==='/api/v2/system')value={product:'offgrid',api_version:2,version,ui_build_id:uiBuild,desktop_bridge:{status:'ready',schema_version:1,protocol:1,ui_build_id:uiBuild},workspace_id:'packaged-fixture',capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1']};
+  if(url.pathname==='/api/v2/system')value={product:'offgrid',api_version:2,version,ui_build_id:uiBuild,desktop_bridge:{status:'ready',schema_version:1,protocol:1,ui_build_id:uiBuild},workspace_id:'packaged-fixture',capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2']};
   else if(url.pathname==='/health')value={status:'healthy'};
   else if(url.pathname==='/v1/users/me'){res.setHeader('Set-Cookie','fixture-auth=owned; HttpOnly; SameSite=Strict; Path=/');value={authenticated:false,auth_required:false,user:null};}
   else if(url.pathname==='/v1/models')value={data:[{id:'fixture-model',type:'chat'}]};
@@ -38,6 +40,9 @@ const server=createServer(async(req,res)=>{
   else if(url.pathname==='/v1/agents/mcp')value={servers:[]};
   else if(url.pathname==='/v1/integrations')value={integrations:[]};
   else if(url.pathname==='/v1/sessions')value={sessions:[]};
+  else if(url.pathname==='/api/v2/jobs'){assert.equal(req.method,'GET','Observing a saved task must not submit another');value=[{id:runId,prompt:snapshot().prompt,status:snapshot().status,created_at:'2026-10-01T00:00:00Z'}];}
+  else if(url.pathname===`/api/v2/jobs/${runId}`)value=snapshot();
+  else if(url.pathname===`/api/v2/jobs/${runId}/input`){assert.equal(req.method,'POST');assert.deepEqual(body,{input_id:inputId,computer_session:session.id});attachments.push(inputId);attached=true;value=snapshot();}
   else if(url.pathname==='/api/v2/computer/status')value={available:paired&&!stopped};
   else if(url.pathname==='/api/v2/computer/sessions')value={sessions:paired&&!stopped?[session]:[]};
   else if(url.pathname==='/api/v2/computer/pairing'){assert.match(req.headers.cookie||'',/fixture-auth=owned/);value={code:pairingCode,expires_seconds:120};}
@@ -82,27 +87,30 @@ try{
      return {response:1,checkboxChecked:false};
    };
  });
-  await page.getByRole('button',{name:'Separate browser',exact:true}).click();
-  await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
+  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/agents/task/${runId}`);
+  await expect(page.locator('.computer-mode-picker, .computer-setup, .task-card, .result-card')).toHaveCount(0);
+  await page.locator('.task-access').getByRole('button',{name:'Allow access and continue',exact:true}).click();
  console.log('Requested local browser session');
  await completion;
  assert.equal(await page.locator('.computer-pair-code').count(),0);
-  await page.getByRole('combobox',{name:'Target',exact:true}).waitFor();
+  await expect.poll(()=>attachments.length,{timeout:60000}).toBe(1);
  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:join(directory,'desktop-browser-ready.png'),fullPage:true});
-  await page.locator('.computer-setup').getByRole('button',{name:'Stop browser assistance',exact:true}).click();
+  await page.locator('.computer-activity').getByRole('button',{name:'Stop control',exact:true}).click();
  // The owned runtime allows 35 seconds of graceful shutdown plus 5 seconds
  // for its kill acknowledgement. A default 5-second matcher is not that
  // contract; still require confirmed Stop, never accept an error as success.
- await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled({timeout:45000});
+ await expect.poll(async()=>(await page.evaluate(()=>window.electron.getComputerStatus())).state,{timeout:45000}).toBe('stopped');
   assert.equal((await page.evaluate(()=>window.electron.getComputerStatus())).state,'stopped');
   assert.deepEqual(replies,['read','write','select','check','save','verify','verify-options']);
   // Starting a second session rechecks the installed manifest after actual use.
-  await page.getByRole('button',{name:'Separate browser',exact:true}).click();
-  await page.getByRole('button',{name:'Try a practice page',exact:true}).click();
-  await page.getByRole('combobox',{name:'Target',exact:true}).waitFor();
-  await page.locator('.computer-setup').getByRole('button',{name:'Stop browser assistance',exact:true}).click();
- await expect(page.getByRole('button',{name:'Try a practice page',exact:true})).toBeEnabled({timeout:45000});
+  inputId='input-2';attached=false;
+  await page.reload();
+  await page.locator('.task-access').getByRole('button',{name:'Allow access and continue',exact:true}).click();
+  await expect.poll(()=>attachments.length,{timeout:60000}).toBe(2);
+  await page.locator('.computer-activity').getByRole('button',{name:'Stop control',exact:true}).click();
+ await expect.poll(async()=>(await page.evaluate(()=>window.electron.getComputerStatus())).state,{timeout:45000}).toBe('stopped');
  assert.equal((await page.evaluate(()=>window.electron.getComputerStatus())).state,'stopped');
+ assert.deepEqual(attachments,['input-1','input-2']);
  console.log(`PASS: packaged UI → native consent → private IPC → bundled Chromium → verified result → local Stop. Evidence: ${directory}`);
 }catch(error){
  if(app){const page=await app.firstWindow();await page.screenshot({path:join(directory,'failure.png')}).catch(()=>{});console.error(await page.locator('body').innerText());console.error(await page.evaluate(()=>window.electron?.getComputerStatus?.()).catch(()=>null));}
