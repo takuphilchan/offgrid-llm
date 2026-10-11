@@ -296,6 +296,52 @@ These checks support a development checkpoint, not release, real-model document
 accuracy, native app compatibility or performance claims. Container replacement
 and installed-desktop verification are recorded separately only when completed.
 
+### Coordinated local test deployment (2026-10-12)
+
+The authorized replacement deployed implementation revision `dfcea08` as
+`offgrid-llm:document-checkpoint-20261012` and installed the matching unsigned
+Windows desktop 0.4.16 development package. This is not a new published version.
+The document feature remains gated and the change remains **17/32**; remaining
+work includes implementation as well as native/platform qualification.
+
+- The desktop exited normally without force termination. Its previous application,
+  local state and Electron profile are preserved in the access-restricted backup
+  `D:\offgrid-llm-backups\desktop-documents-20261012`.
+- The service was stopped for a consistent workspace backup. The archive passed
+  verification and restoration to isolated state before activation. Backup and
+  comparison evidence is retained at
+  `/home/phil/offgrid-document-checkpoint-backup-20261012-KIwnadME`.
+  Every current model file matched the independently verified snapshot at
+  `/home/phil/offgrid-consent-edge-backup-20261010-Q4mOPmBn`; model files were not
+  replaced or downloaded.
+- Validation used the restored workspace and a read-only model volume while the
+  original service was stopped. A short Qwen text response passed. Before/after
+  checks preserved workspace identity, conversation names, task IDs/statuses,
+  installed model IDs and ASR/TTS readiness. No uncertain task was resumed,
+  reconciled or submitted again.
+- Only `offgrid` runs, on loopback port 11611. The previous container remains
+  stopped as `offgrid-before-document-checkpoint-20261012-1791742632`.
+  Temporary validation containers were removed without deleting data volumes.
+- Packaged startup/recovery, saved/live appearance, 200% zoom, access-panel and
+  managed-browser workflow tests passed. The browser test was corrected to use
+  the current saved-task access flow instead of the removed legacy page. It
+  verified form text, selection, checkbox state, local Stop and a second
+  connection using only its owned local fixture. This is not native-app or
+  model-driven workflow qualification.
+- Installed executable, app bundle, backend, renderer and computer worker/helper
+  hashes match the staged package. Installed read-only Electron verification
+  passed, using an isolated profile and blocking mutating service requests.
+  Installed and service UI identities both equal
+  `d586cd9823a7b87537c2ebea1a5cd944bbe067f430b5f3fbe90fd00da33d8795`.
+  Evidence directories under the Windows temporary directory are
+  `offgrid-desktop-startup-fNv6ZI`, `offgrid-desktop-theme-eFiFYj`,
+  `offgrid-desktop-access-YT7qNj`, `offgrid-packaged-browser-U08WdL` and
+  `offgrid-installed-document-checkpoint-UgJqsD`.
+
+Source and verification changes were committed locally. No push, tag, release,
+personal native input, microphone activation or new desktop access grant occurred.
+The deployment does not complete the new-document creation/editing workflow.
+
 ## Bounded desktop context, progress and registered applications (2026-10-10)
 
 ### Declaration and pre-edit repair (2026-10-11)
