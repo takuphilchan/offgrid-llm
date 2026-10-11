@@ -97,19 +97,16 @@
     outline-offset: 2px;
     box-shadow: none;
   }
-  .field, .task-card > label, .task-card .model-select, .connector-panel form label {
+  .field, .connector-panel form label {
     display: grid; gap: 8px; min-width: 0; color: var(--muted); font-size: 13px;
   }
   .field > span { line-height: 20px; }
-  .task-card > .agent-task-editor { display: flex; flex-direction: column; }
 
   /* One border/focus surface for compound fields, not two stacked inputs. */
   .history-search { min-height: var(--control-height); padding: 0 12px; }
   .history-search input { min-height: 38px; padding: 8px 0; border: 0; border-radius: 0; background: transparent; }
   .history-search:focus-within { outline: 2px solid var(--text); outline-offset: -2px; }
   .history-search input:focus-visible, .command-search input:focus-visible { outline: none; }
-  .agent-history-panel { display: grid; gap: 16px; }
-  .agent-history-panel .history-notice, .agent-history-panel .task-history { margin-block: 0; }
   dialog.command-palette {
     --palette-top: min(72px, 8dvh);
     width: min(620px, calc(100vw - 32px)); margin: var(--palette-top) auto auto;

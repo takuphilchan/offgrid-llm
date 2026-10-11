@@ -7,8 +7,8 @@ async function fixture(page: Page, locale = 'en', theme = 'dark') {
     localStorage.setItem('offgrid.theme', theme);
   }, { locale, theme });
   await page.route('**/health', route => route.fulfill({ json: { status: 'healthy' } }));
-  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'fixture', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: [] } }));
-  await page.route('**/v1/**', route => {
+  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'fixture', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['task-first-agents-v2'] } }));
+  await page.route(/\/(?:v1\/|api\/v2\/(?:computer\/|jobs(?:\/|$)))/, route => {
     const path = new URL(route.request().url()).pathname;
     const data: Record<string, unknown> = {
       '/v1/users/me': { authenticated: false, user: null },
@@ -17,7 +17,7 @@ async function fixture(page: Page, locale = 'en', theme = 'dark') {
       '/v1/catalog': { models: [] },
       '/v1/documents': { count: 1, documents: [{ id: 'source', name: 'A document with a long title for layout checks', size: 10, chunk_count: 1, source_retained: true }] },
       '/v1/rag/status': { enabled: true, embedding_model: 'embedding-model-with-a-long-name', stats: {} },
-      '/v1/agents/tasks': [], '/v1/agents/tools': { tools: [], total: 0, enabled_count: 0 },
+      '/api/v2/jobs': [], '/v1/agents/tasks': [], '/v1/agents/tools': { tools: [], total: 0, enabled_count: 0 },
       '/v1/agents/mcp': { servers: [] }, '/v1/integrations': { integrations: [] }
     };
     return route.fulfill({ json: data[path] ?? {} });
@@ -92,8 +92,8 @@ test('search, task and document controls share sizing and keyboard focus', async
   const [inputBox, buttonBox] = await Promise.all([query.boundingBox(), search.boundingBox()]);
   expect(inputBox!.height).toBe(buttonBox!.height);
   await page.goto('/ui/#/agents');
-  await expect(page.locator('.task-card select').first()).toHaveCSS('min-height', '40px');
-  await expect(page.locator('.task-card textarea')).toHaveCSS('border-radius', '8px');
+  await expect(page.locator('.task-composer select').first()).toHaveCSS('min-height', '40px');
+  await expect(page.locator('.task-composer textarea')).toHaveCSS('border-radius', '8px');
   await page.goto('/ui/#/knowledge');
   const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
   for (const control of controls) {

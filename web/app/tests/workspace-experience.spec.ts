@@ -7,8 +7,8 @@ async function mockWorkspace(page: Page, hasChatModel: boolean) {
     try { if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale', 'en'); } catch { /* Storage-denial fixture. */ }
   });
   await page.route('**/health', route => route.fulfill({ contentType: 'application/json', body: '{"status":"healthy"}' }));
-  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', revision: 'test-revision', workspace_id: 'experience-fixture', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'] } }));
-  await page.route(/\/(?:v1|api\/v2\/computer)\//, route => {
+  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', revision: 'test-revision', workspace_id: 'experience-fixture', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1', 'task-first-agents-v2'] } }));
+  await page.route(/\/(?:v1\/|api\/v2\/(?:computer\/|jobs(?:\/|$)))/, route => {
     const path = new URL(route.request().url()).pathname;
     const model = { id: 'workspace-test-model', type: 'chat', context_window: 8192 };
     const user = { role: 'user', content: 'Say hello', timestamp: now };

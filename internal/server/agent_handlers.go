@@ -79,6 +79,9 @@ func taskResponse(task *agents.Task) map[string]any {
 	}
 	response := map[string]any{"task_id": task.ID, "run_id": task.ID, "status": task.Status, "output": task.Result, "steps": steps, "pending_approval": task.PendingApproval}
 	response["progress"] = task.Progress
+	if task.Workflow != nil {
+		response["verification"] = task.Workflow
+	}
 	response["model"], response["pending_input"] = task.Model, task.PendingInput
 	response["instructions"] = task.Instructions
 	response["last_access"] = task.LastAccess
@@ -86,6 +89,18 @@ func taskResponse(task *agents.Task) map[string]any {
 	response["artifacts"] = taskArtifacts(task)
 	response["parent_id"], response["children"] = task.ParentID, task.ChildHistory
 	response["can_steer"] = agents.CanSteerTask(task)
+	if outcome := agents.TaskOutcome(task); outcome != "" {
+		response["outcome"] = outcome
+	}
+	if task.Config.RequestedComputerApprovalMode != "" {
+		response["requested_computer_approval_mode"] = task.Config.RequestedComputerApprovalMode
+	}
+	if task.Config.RequestedComputerScope != "" {
+		response["requested_computer_scope"] = task.Config.RequestedComputerScope
+	}
+	if task.Config.ComputerScope != "" {
+		response["computer_scope"] = task.Config.ComputerScope
+	}
 	if task.Config.ComputerSession != "" {
 		response["computer_session"] = task.Config.ComputerSession
 		response["computer_approval_mode"] = task.Config.ComputerApprovalMode

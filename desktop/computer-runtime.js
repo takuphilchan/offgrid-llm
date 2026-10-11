@@ -27,11 +27,102 @@ function isComputerLink(value) { return parseComputerLink(value) !== null; }
 
 // One owned worker. Never use ports/PIDs to terminate unrelated processes.
 class ComputerRuntime extends EventEmitter {
-  constructor({fork, root, directory, service, confirm, identity, pairing, verify = async () => {}, stopGraceMs = 35000, stopAckMs = 5000}) {
-    super(); Object.assign(this,{fork,root,directory,service,confirm,identity,pairing,verify,stopGraceMs,stopAckMs});
+  constructor({fork, root, directory, service, confirm, identity, pairing, task, principal, verify = async () => {}, stopGraceMs = 35000, stopAckMs = 5000}) {
+    super(); Object.assign(this,{fork,root,directory,service,confirm,identity,pairing,task,principal,verify,stopGraceMs,stopAckMs});
     this.state = {state:'idle'}; this.generation = 0;
   }
   publish(value) { this.state = value; this.emit('status',value); return value; }
+  async desktopContext(workspace) {
+    const service=this.service(),url=new URL(service);
+    if(!['127.0.0.1','[::1]'].includes(url.hostname)||!['http:','https:'].includes(url.protocol)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw Error('service_invalid');
+    const identity=await this.identity(service);
+    if(identity.product!=='offgrid'||identity.api_version!==2||identity.workspace_id!==workspace)throw Error('workspace_changed');
+    if(!identity.capabilities?.includes('task-desktop-sessions-v3'))throw Error('computer_upgrade_required');
+    const actor=await this.principal(service);
+    if(typeof actor!=='string'||!/^[a-zA-Z0-9:_-]{1,256}$/.test(actor))throw Error('computer_scope_violation');
+    return {service,workspace,actor};
+  }
+  async desktopAccessStatus() {
+    const access=this.desktopAccess,generation=this.generation;
+    if(access){
+      try{const current=await this.desktopContext(access.workspace);if(JSON.stringify(current)!==JSON.stringify(access))throw Error('computer_scope_violation');}
+      catch{if(generation===this.generation)await this.stop();}
+    }
+    return {enabled:!!this.desktopAccess,workspace:this.desktopAccess?.workspace};
+  }
+  async enableDesktopAccess(request) {
+    if(!request||Object.keys(request).join(',')!=='workspace'||typeof request.workspace!=='string'||!request.workspace)throw Error('invalid_session');
+    if(this.pending||this.child||this.stopping)throw Error('session_active');
+    this.pending=true;const generation=++this.generation;
+    try{
+      const context=await this.desktopContext(request.workspace);if(generation!==this.generation)throw Error('computer_stopped');
+      await this.verify(this.root);if(generation!==this.generation)throw Error('computer_stopped');
+      const env={...process.env};delete env.NODE_OPTIONS;delete env.NODE_PATH;delete env.ELECTRON_RUN_AS_NODE;
+      const child=this.fork(path.join(this.root,'native-managed.cjs'),[],{stdio:'ignore',serviceName:'OffGrid desktop access',env});this.child=child;
+      child.on('message',message=>{
+        if(this.child!==child||generation!==this.generation)return;
+        if(message?.state==='booted')child.postMessage({type:'enable-desktop',...context,directory:this.directory});
+        if(message?.state==='consent')this.publish({state:'consent'});
+        if(message?.state==='access_ready'){this.desktopAccess=context;this.accessRequest=undefined;this.publish({state:'access_ready'});}
+        if(message?.state==='ready'&&message.target?.id)this.publish({state:'ready',target:message.target});
+        if(message?.state==='error')this.publish({state:'error',code:message.code});
+      });
+      child.once('exit',()=>{if(this.child===child){this.desktopAccess=null;clearInterval(this.accessMonitor);this.child=null;this.publish({state:'stopped'});}});
+      this.publish({state:'starting'});
+      await this.waitNativeState('access_ready',generation,300000);
+      // Recheck after the human response, including account changes during consent.
+      await this.desktopAccessStatus();if(generation!==this.generation||!this.desktopAccess)throw Error('computer_scope_violation');
+      this.accessMonitor=setInterval(()=>{if(!this.accessChecking){this.accessChecking=this.desktopAccessStatus().finally(()=>{this.accessChecking=null;});}},2000);
+      this.accessMonitor.unref?.();
+      return {enabled:true,workspace:context.workspace};
+    }catch(error){if(generation===this.generation)await this.stop();throw error;}
+    finally{this.pending=false;}
+  }
+  async startDesktop(request) {
+    const reuse=!!this.desktopAccess&&!!this.child&&this.state.state==='access_ready';
+    if(this.pending||this.child&&!reuse||this.stopping)throw Error('session_active');
+    if(!request||Object.keys(request).sort().join(',')!=='requestId,runId,workspace'||!/^run-[a-f0-9]{32}$/.test(request.runId)||!request.requestId||!validAccessRequest(request.requestId)||typeof request.workspace!=='string'||!request.workspace)throw Error('invalid_session');
+    this.pending=true;this.accessRequest=request.requestId;const generation=reuse?this.generation:++this.generation;
+    try {
+      const service=this.service(),url=new URL(service);
+      if(!['127.0.0.1','[::1]'].includes(url.hostname)||!['http:','https:'].includes(url.protocol)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw Error('service_invalid');
+      const identity=await this.identity(service);if(generation!==this.generation)throw Error('computer_stopped');
+      if(identity.product!=='offgrid'||identity.api_version!==2||identity.workspace_id!==request.workspace)throw Error('workspace_changed');
+      if(!identity.capabilities?.includes('task-desktop-sessions-v3'))throw Error('computer_upgrade_required');
+      // Prompt and policy come from the authenticated saved task, not IPC text
+      // that could misdescribe what the user is consenting to.
+      const saved=await this.task(service,request.runId);if(generation!==this.generation)throw Error('computer_stopped');
+      if(saved.run_id!==request.runId||saved.status!=='waiting_for_input'||saved.pending_input?.id!==request.requestId||!['desktop','app'].includes(saved.pending_input?.mode)||saved.requested_computer_scope==='selected_window'||!APPROVAL_MODES.has(saved.requested_computer_approval_mode)||typeof saved.prompt!=='string'||!saved.prompt)throw Error('computer_scope_violation');
+      if(reuse){
+        await this.desktopAccessStatus();
+        if(generation!==this.generation||!this.desktopAccess||this.desktopAccess.service!==service||this.desktopAccess.workspace!==request.workspace||saved.requested_computer_approval_mode!=='full_task')throw Error('computer_scope_violation');
+      }
+      await this.verify(this.root);if(generation!==this.generation)throw Error('computer_stopped');
+      const {code}=await this.pairing(service,{protocol_version:3,run_id:request.runId,input_id:request.requestId});
+      if(generation!==this.generation)throw Error('computer_stopped');
+      if(!/^[a-f0-9]{64}$/.test(code))throw Error('pairing_failed');
+      if(reuse){
+        this.publish({state:'starting'});
+        this.child.postMessage({type:'start-desktop',service,directory:this.directory,workspace:request.workspace,actor:this.desktopAccess.actor,run:request.runId,input:request.requestId,prompt:saved.prompt,approvalMode:saved.requested_computer_approval_mode,code});
+        return await this.waitNativeState('ready',generation,60000);
+      }
+      const env={...process.env};delete env.NODE_OPTIONS;delete env.NODE_PATH;delete env.ELECTRON_RUN_AS_NODE;
+      const child=this.fork(path.join(this.root,'native-managed.cjs'),[],{stdio:'ignore',serviceName:'OffGrid desktop task',env});
+      this.child=child;
+      child.on('message',message=>{
+        if(this.child!==child||generation!==this.generation)return;
+        if(message?.state==='booted')child.postMessage({type:'start-desktop',service,directory:this.directory,workspace:request.workspace,run:request.runId,input:request.requestId,prompt:saved.prompt,approvalMode:saved.requested_computer_approval_mode,code});
+        if(message?.state==='consent')this.publish({state:'consent',target:message.target});
+        if(message?.state==='ready'&&message.target?.id)this.publish({state:'ready',target:message.target});
+        if(message?.state==='error')this.publish({state:'error',code:message.code});
+        if(message?.state==='stopped')this.publish({state:'stopped'});
+      });
+      child.once('exit',()=>{if(this.child===child){this.child=null;if(this.state.state!=='error')this.publish({state:'stopped'});}});
+      this.publish({state:'starting'});
+      return await this.waitNativeState('ready',generation,300000);
+    }catch(error){if(generation===this.generation)this.publish({state:'error',code:error.message});throw error;}
+    finally{this.pending=false;}
+  }
   async discoverNative(request) {
     if(this.pending || this.child || this.stopping) throw Error('session_active');
     if(!request || Object.keys(request).some(k=>!['workspace','requestId'].includes(k)) || typeof request.workspace!=='string' || !request.workspace || !validAccessRequest(request.requestId)) throw Error('invalid_session');
@@ -67,7 +158,7 @@ class ComputerRuntime extends EventEmitter {
     } catch(error) {if(generation===this.generation)this.publish({state:'error',code:error.message});throw error;}
     finally {this.pending=false;}
   }
-  waitNativeState(expected,generation) {
+  waitNativeState(expected,generation,timeout=60000) {
     return new Promise((resolve,reject)=>{
       const check=()=>{
         if(generation!==this.generation || this.state.state==='stopped')return finish(Error('computer_stopped'));
@@ -75,7 +166,7 @@ class ComputerRuntime extends EventEmitter {
         if(this.state.state===expected)return finish();
       };
       const finish=error=>{clearTimeout(timer);this.removeListener('status',check);error?reject(error):resolve(this.state);};
-      const timer=setTimeout(()=>{void this.stop();finish(Error('computer_worker_timeout'));},60000);
+      const timer=setTimeout(()=>{void this.stop();finish(Error('computer_worker_timeout'));},timeout);
       this.on('status',check);check();
     });
   }
@@ -168,6 +259,7 @@ class ComputerRuntime extends EventEmitter {
   }
   async stopOwned() {
     ++this.generation;
+    this.desktopAccess=null;clearInterval(this.accessMonitor);
     const child = this.child;
     if (child) {
       const stopped = await new Promise(resolve => {

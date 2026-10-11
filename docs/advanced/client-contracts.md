@@ -106,6 +106,27 @@ the UI and runtime from the same checkout before testing desktop development;
 restart/redeploy an old service explicitly rather than expecting new source to
 change a running process or container.
 
+## Native document feature negotiation (development)
+
+Document support is an explicit `native_documents:1` contract, not inferred from
+desktop protocol 3, a release number or whole-value replacement support. Pack
+metadata declares the understood contract revision. Worker startup reports only
+contracts implemented by its provider; the parent rejects a revision absent from
+the verified pack, unknown feature keys, and malformed startup fields. A legacy
+pack/startup has no document feature and remains limited to its existing tools.
+
+The service advertises `native-document-negotiation-v1` only to indicate that it
+understands this handshake. Companions send optional `native_features` during
+pairing only when both service and worker understand it, and validate the echoed
+selection. Missing support at either end yields no negotiated document tools.
+Unknown revisions are refused, not silently downgraded. Features live in the
+actor-owned session and do not extend its selected-window or desktop grant.
+
+Negotiation is not execution readiness: the provider must additionally expose
+the operation for the current, fully bound document. At this implementation stage
+the legacy adapters do not advertise document support and new document execution
+is not enabled. Protocol tests do not qualify UIA, AX or AT-SPI editing.
+
 ## Incomplete agent output
 
 The durable and structured agent runners validate the model's completion reason

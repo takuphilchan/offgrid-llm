@@ -1,5 +1,14 @@
 # Architecture
 
+Document-aware task checks (workflow v2) bind declarations before preparation.
+Creation names an observed command, not an invented future tab. Text edits name
+the exact document/snapshot, operation and input. Only a recorded successful host
+action supplies the resulting document, action identity, preimage and expected
+digests. Assessment copies these fields into the same durable task transaction;
+a failed result write cannot trigger another input. A later independent read is
+required to verify the edit. Rejected declarations cannot partially update other
+checks. This does not upgrade legacy tasks or enable unsupported host providers.
+
 OffGrid is a local-first application, not a collection of independently
 deployed microservices. One Go process owns the HTTP API, model lifecycle,
 durable state, and optional subsystems. The browser, Electron application, CLI,
@@ -49,6 +58,17 @@ Internal runtime errors are logged server-side; API clients receive a stable,
 user-facing error message.
 
 ## State ownership
+
+Native tool effects use the reviewed `native-effects-v1` operation table in
+`internal/capabilities`. The service authors descriptors with that revision;
+the durable runner checks provider, namespace, kind and revision before saving
+a read-only intent marker. The native transport uses the same operation table
+for desktop action-budget accounting. MCP names, annotations and low-risk labels
+cannot establish read-only execution. A failed native read does not require a
+human mutation outcome, and does not undo an earlier launch or edit. Unknown
+operations/revisions and legacy intents without saved evidence retain conservative
+uncertainty handling. Descriptor revisions also invalidate mismatched approvals;
+they never broaden an existing grant.
 
 OffGrid uses two authoritative roots:
 

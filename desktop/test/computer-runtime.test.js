@@ -8,6 +8,10 @@ const path=require('node:path');
 const code='a'.repeat(64);
 const request={origin:'demo',workspace:'owned-workspace'};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+const desktopRun='run-'+'d'.repeat(32);
+const desktopRequest={workspace:'owned-workspace',runId:desktopRun,requestId:'input-desktop'};
+const desktopIdentity=async()=>({product:'offgrid',api_version:2,workspace_id:'owned-workspace',capabilities:['task-desktop-sessions-v3']});
+const desktopTask=async()=>({run_id:desktopRun,status:'waiting_for_input',pending_input:{id:'input-desktop',mode:'desktop'},prompt:'Open Chrome',requested_computer_scope:'desktop',requested_computer_approval_mode:'full_task'});
 function fixture(overrides={}) {
  const child=new EventEmitter(); const messages=[]; const forks=[]; let confirmations=0;
  child.postMessage=m=>{messages.push(m);if(m.type==='stop') queueMicrotask(()=>child.emit('exit',0));};
@@ -19,6 +23,65 @@ function fixture(overrides={}) {
    fork:(...args)=>{forks.push(args);queueMicrotask(()=>child.emit('message',{state:'booted'}));return child;},...overrides});
  return {runtime,child,messages,forks,confirmations:()=>confirmations};
 }
+
+test('task desktop consent uses saved task policy, no picker and exact v3 enrollment',async()=>{
+ const pair=[];const f=fixture({identity:desktopIdentity,task:desktopTask,verify:async()=>{},pairing:async(_service,body)=>{pair.push(body);return {code};}});
+ const pending=f.runtime.startDesktop(desktopRequest);await tick();
+ assert.equal(f.forks.length,1);assert.equal(f.messages[0].type,'start-desktop');
+ assert.equal(f.messages[0].prompt,'Open Chrome');assert.equal(f.messages[0].approvalMode,'full_task');
+ assert.deepEqual(pair,[{protocol_version:3,run_id:desktopRun,input_id:'input-desktop'}]);
+ assert.equal(f.messages.some(m=>m.type==='discover'||m.type==='start-native'),false);
+ f.child.emit('message',{state:'ready',target:{id:'session',scope:'desktop'}});
+ assert.equal((await pending).target.scope,'desktop');await f.runtime.stop();
+});
+
+async function fullAccessFixture(overrides={}){
+ const f=fixture({identity:desktopIdentity,principal:async()=> 'local-admin',task:desktopTask,...overrides});
+ const enabling=f.runtime.enableDesktopAccess({workspace:'owned-workspace'});await tick();
+ assert.equal(f.messages[0].type,'enable-desktop');
+ assert.equal(f.runtime.desktopAccess,undefined,'spawn does not mean consent');
+ f.child.emit('message',{state:'access_ready'});await enabling;
+ return f;
+}
+test('explicit session consent reuses one owned host across tasks without another enable',async()=>{
+ const f=await fullAccessFixture();
+ try{
+  for(let i=0;i<2;i++){
+   const pending=f.runtime.startDesktop(desktopRequest);await tick();
+   assert.equal(f.messages.at(-1).type,'start-desktop');assert.equal(f.messages.at(-1).actor,'local-admin');
+   f.child.emit('message',{state:'ready',target:{id:'session-'+i}});await pending;
+   f.child.emit('message',{state:'access_ready'});
+  }
+  assert.equal(f.forks.length,1);assert.equal(f.messages.filter(m=>m.type==='enable-desktop').length,1);
+  await assert.rejects(f.runtime.enableDesktopAccess({workspace:'owned-workspace',approved:true}),/invalid_session/);
+ }finally{await f.runtime.stop();}
+ assert.equal((await f.runtime.desktopAccessStatus()).enabled,false);
+ assert.equal(fixture().runtime.desktopAccess,undefined,'restart cannot restore permission');
+});
+test('actor/workspace change and stop during session consent revoke the owned permission',async()=>{
+ for(const field of ['principal','identity']){
+  const f=await fullAccessFixture();
+  f.runtime[field]=async()=>field==='principal'?'different-actor':({...await desktopIdentity(),workspace_id:'different'});
+  assert.equal((await f.runtime.desktopAccessStatus()).enabled,false);assert.equal(f.runtime.child,null);
+ }
+ const f=fixture({identity:desktopIdentity,principal:async()=> 'local-admin'});
+ const pending=f.runtime.enableDesktopAccess({workspace:'owned-workspace'});const rejected=assert.rejects(pending,/computer_stopped/);await tick();
+ await f.runtime.stop();f.child.emit('message',{state:'access_ready'});await rejected;assert.equal(f.runtime.desktopAccess,null);
+});
+test('a session permission never overrides the saved task policy or active input lease',async()=>{
+ const f=await fullAccessFixture({task:async()=>({...await desktopTask(),requested_computer_approval_mode:'ask_every_time'})});
+ try{await assert.rejects(f.runtime.startDesktop(desktopRequest),/computer_scope_violation/);assert.equal(f.messages.filter(m=>m.type==='start-desktop').length,0);}finally{await f.runtime.stop();}
+});
+test('task desktop refuses protocol skew and limited-scope expansion before spawning',async()=>{
+ for(const overrides of [{task:desktopTask},{identity:desktopIdentity,task:async()=>({...await desktopTask(),requested_computer_scope:'selected_window'})}]){
+  const f=fixture(overrides);await assert.rejects(f.runtime.startDesktop(desktopRequest),/upgrade_required|scope_violation/);assert.equal(f.forks.length,0);
+ }
+});
+test('stopping during saved-task lookup cannot produce a late desktop consent',async()=>{
+ let release;const f=fixture({identity:desktopIdentity,task:()=>new Promise(resolve=>{release=resolve;}),verify:async()=>{}});
+ const pending=f.runtime.startDesktop(desktopRequest);const rejection=assert.rejects(pending,/computer_stopped/);await tick();
+ await f.runtime.stopAccess({requestId:'input-desktop'});release(await desktopTask());await rejection;assert.equal(f.forks.length,0);
+});
 test('computer deep links carry no service, credentials, target or command',()=>{
  assert.equal(isComputerLink('offgrid://computer'),true);
  for(const value of ['offgrid://computer?code=secret','offgrid://computer/run','offgrid://computer#command','https://computer']) assert.equal(isComputerLink(value),false);

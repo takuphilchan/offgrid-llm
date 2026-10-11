@@ -34,6 +34,7 @@ type Task struct {
 	Delegation             *Delegation       `json:"delegation,omitempty"`
 	DependenciesAttached   bool              `json:"dependencies_attached,omitempty"`
 	Plan                   []PlanItem        `json:"plan,omitempty"`
+	Workflow               *WorkflowEvidence `json:"workflow,omitempty"`
 	Context                *ContextState     `json:"context,omitempty"`
 	ContextArchive         []ArchivedContext `json:"context_archive,omitempty"`
 	Instructions           []Instruction     `json:"instructions,omitempty"`

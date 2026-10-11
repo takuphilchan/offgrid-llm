@@ -5,6 +5,7 @@ const path = require('node:path');
 const {randomUUID} = require('node:crypto');
 const {verifyNativePack} = require('./pack.cjs');
 const {EventEmitter} = require('node:events');
+const {nativeFeatures} = require('./native-features.cjs');
 const MAX_FRAME = 1024 * 1024;
 
 function frame(value) {
@@ -15,21 +16,24 @@ function frame(value) {
 }
 
 class NativeWorker extends EventEmitter {
-  constructor({root, directory, platform = process.platform, arch = process.arch, verify = verifyNativePack, spawnWorker = spawn, timeoutMs = 30000, approvalMs = 300000, stopMs = 3000}) {
-    super(); Object.assign(this, {root, directory, platform, arch, verify, spawnWorker, timeoutMs, approvalMs, stopMs});
+  constructor({root, directory, protocol = 2, platform = process.platform, arch = process.arch, verify = verifyNativePack, spawnWorker = spawn, timeoutMs = 30000, approvalMs = 300000, stopMs = 3000}) {
+    super(); Object.assign(this, {root, directory, protocol, platform, arch, verify, spawnWorker, timeoutMs, approvalMs, stopMs});
     this.generation = 0; this.buffer = Buffer.alloc(0); this.revoked = true;
   }
   async start() {
     if (this.child || this.starting || this.stopping) throw Error('computer_input_in_use');
     this.starting = true; const generation = ++this.generation;
     try {
+      if (![2,3].includes(this.protocol)) throw Error('computer_protocol_invalid');
       if (!{win32:['x64'],darwin:['x64','arm64'],linux:['x64']}[this.platform]?.includes(this.arch)) throw Error('computer_driver_unavailable');
-      await this.verify(this.root, this.platform, this.arch);
+      const profile=await this.verify(this.root, this.platform, this.arch);
+      this.contracts=nativeFeatures(profile?.contracts);
+      this.features={};
       if (generation !== this.generation) throw Error('computer_stopped');
       const env = {...process.env};
       delete env.NODE_OPTIONS; delete env.NODE_PATH; delete env.ELECTRON_RUN_AS_NODE;
       const executable = this.platform === 'win32' ? 'offgrid-computer.exe' : 'offgrid-computer';
-      const child = this.spawnWorker(path.join(this.root, 'native', executable), ['--state', path.resolve(this.directory)], {windowsHide:true, shell:false, stdio:['pipe','pipe','pipe'], env});
+      const child = this.spawnWorker(path.join(this.root, 'native', executable), ['--state', path.resolve(this.directory), ...(this.protocol===3?['--protocol','3']:[]), ...(this.platform==='win32'?['--stop-control','app']:[])], {windowsHide:true, shell:false, stdio:['pipe','pipe','pipe'], env});
       this.child = child;
       this.revoked = false;
       this.booted = false;
@@ -57,13 +61,16 @@ class NativeWorker extends EventEmitter {
     if (!this.child || this.stopping || this.revoked) return Promise.reject(Error('computer_worker_stopped'));
     if (!this.booted) return Promise.reject(Error('computer_worker_starting'));
     if (this.pending) return Promise.reject(Error('computer_busy'));
-    const fields = {targets:[],select:['target','binding','approval_mode'],observe:[],prepare:['operation','observation'],verify:['operation','observation'],approve:['step','automatic'],execute:['step','grant']}[kind];
+    if (!args || typeof args !== 'object' || Array.isArray(args)) return Promise.reject(Error('computer_invalid_action'));
+    const documentOperation = args.operation?.kind === 'document' || Array.isArray(args.step?.actions) && args.step.actions.some(action => action?.operation?.kind === 'document');
+    if (documentOperation && this.features.native_documents !== 1) return Promise.reject(Error('computer_document_unavailable'));
+    const fields = {targets:[],select:['target','binding','approval_mode'],observe:[],prepare:['operation','observation'],verify:['operation','observation'],approve:['step','automatic'],execute:['step','grant'],...(this.features.native_documents===1?{documents:[],read_document:['observation',...(Object.hasOwn(args,'page')?['page']:[])]} : {}),...(this.protocol===3?{enable_desktop:['permission'],release_desktop:[],desktop_identity:[],grant_desktop:['desktop','approval_mode','prompt',...(Object.hasOwn(args,'service')?['service']:[])],applications:[],surfaces:[],prepare_lifecycle:['operation'],verify_application:['application']}:{})}[kind];
     if (!fields || !args || Object.keys(args).length !== fields.length || fields.some(field => !Object.hasOwn(args,field))) return Promise.reject(Error('computer_invalid_action'));
     const id = randomUUID();
     let encoded;
-    try { encoded = frame({protocol:2,id,kind,...args}); } catch { return Promise.reject(Error('computer_invalid_action')); }
+    try { encoded = frame({protocol:this.protocol,id,kind,...args}); } catch { return Promise.reject(Error('computer_invalid_action')); }
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.fail(kind === 'execute' ? 'computer_uncertain_outcome' : 'computer_worker_timeout'); }, ['select','approve'].includes(kind) ? this.approvalMs : this.timeoutMs);
+      const timer = setTimeout(() => { this.fail(kind === 'execute' ? 'computer_uncertain_outcome' : 'computer_worker_timeout'); }, ['select','approve','grant_desktop','enable_desktop'].includes(kind) ? this.approvalMs : this.timeoutMs);
       this.pending = {id,kind,resolve,reject,timer};
       try { this.child.stdin.write(encoded); } catch { this.fail('computer_worker_unavailable'); }
     });
@@ -83,12 +90,18 @@ class NativeWorker extends EventEmitter {
     try { value = JSON.parse(this.buffer.subarray(4).toString('utf8')); } catch { this.fail('computer_protocol_invalid'); return; }
     this.buffer = Buffer.alloc(0);
     if (!this.booted) {
-      if (!value || value.protocol!==2 || value.id!=='startup' || !this.startup || Object.keys(value).some(k=>!['protocol','id','result','error'].includes(k))) {this.fail('computer_protocol_invalid');return;}
+      if (!value || value.protocol!==this.protocol || value.id!=='startup' || !this.startup || Object.keys(value).some(k=>!['protocol','id','result','error'].includes(k))) {this.fail('computer_protocol_invalid');return;}
       if(value.error){this.fail(/^computer_[a-z_]+$/.test(value.error)?value.error:'computer_provider_unavailable');return;}
       if(value.result?.ready!==true){this.fail('computer_protocol_invalid');return;}
+      try {
+        if(Object.keys(value.result).some(key=>!['ready','native_features'].includes(key)))throw Error('computer_protocol_invalid');
+        const advertised=nativeFeatures(value.result.native_features);
+        if(advertised.native_documents && this.contracts.native_documents!==advertised.native_documents)throw Error('computer_protocol_invalid');
+        this.features=advertised;
+      }catch {this.fail('computer_protocol_invalid');return;}
       const startup=this.startup;this.startup=null;clearTimeout(startup.timer);this.booted=true;startup.resolve();return;
     }
-    if (!value || value.protocol !== 2 || value.id !== this.pending?.id || Object.keys(value).some(k=>!['protocol','id','result','error'].includes(k))) { this.fail('computer_protocol_invalid'); return; }
+    if (!value || value.protocol !== this.protocol || value.id !== this.pending?.id || Object.keys(value).some(k=>!['protocol','id','result','error'].includes(k))) { this.fail('computer_protocol_invalid'); return; }
     const pending = this.pending; this.pending = null; clearTimeout(pending.timer);
     if (value.error) {
       const code = typeof value.error === 'string' && /^computer_[a-z_]+$/.test(value.error) ? value.error : 'computer_provider_unavailable';
@@ -127,7 +140,7 @@ class NativeWorker extends EventEmitter {
         try {if(child.kill()===false)finish('computer_stop_unconfirmed');} catch {finish('computer_stop_unconfirmed');}
       };
       timeout=setTimeout(force,this.stopMs);
-      try {child.stdin.write(frame({protocol:2,id:randomUUID(),kind:'stop'}));} catch {clearTimeout(timeout);force();}
+      try {child.stdin.write(frame({protocol:this.protocol,id:randomUUID(),kind:'stop'}));} catch {clearTimeout(timeout);force();}
     });
     // Do not clear ownership on a timer or on a response. Only process exit
     // proves this worker cannot dispatch another provider call.

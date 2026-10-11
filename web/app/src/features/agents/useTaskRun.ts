@@ -82,7 +82,10 @@ export function useTaskRun(id: string) {
         clearTimeout(watchdog);
       }
     };
-    void follow();
+    // React's development StrictMode mounts/cleans/remounts effects. Wait one
+    // microtask so the discarded follower never starts a redundant HTTP read.
+    // Selection changes still invalidate it before any snapshot is accepted.
+    queueMicrotask(() => { if (!disposed) void follow(); });
     return () => {
       disposed = true;
       clearTimeout(timer);

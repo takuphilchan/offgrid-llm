@@ -87,6 +87,35 @@ func TestInputSurvivesRestartAndResolvesOnce(t *testing.T) {
 	}
 }
 
+func TestInputCannotChangeRequestedPolicy(t *testing.T) {
+	m, r, task, _, _ := waitingInputFixture(t)
+	_, err := m.updateTask(task.ID, func(task *Task) error { task.Config.RequestedComputerApprovalMode = "ask_every_time"; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"", "full_task", "ask_every_time"} {
+		cfg := task.Config
+		cfg.ComputerSession = "host"
+		cfg.ComputerDriver = "windows-uia"
+		cfg.ComputerApprovalMode = "full_task"
+		cfg.RequestedComputerApprovalMode = mode
+		if _, err := r.ResolveComputerInput(task.ID, task.Actor, task.PendingInput.ID, cfg); !errors.Is(err, ErrRunConflict) {
+			t.Fatalf("policy modified: %q %v", mode, err)
+		}
+	}
+	saved, _ := m.GetTask(task.ID)
+	if saved.Status != TaskInput || saved.Config.ComputerSession != "" {
+		t.Fatal("mismatch changed task")
+	}
+	cfg := saved.Config
+	cfg.ComputerSession = "host"
+	cfg.ComputerDriver = "windows-uia"
+	cfg.ComputerApprovalMode = "ask_every_time"
+	if _, err := r.ResolveComputerInput(task.ID, task.Actor, task.PendingInput.ID, cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolvedInputDoesNotCountAsAComputerObservation(t *testing.T) {
 	manager, _, task, tools, _ := waitingInputFixture(t)
 	runner := NewRunner(manager, tools, func(_ context.Context, _ *Task, _ []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {

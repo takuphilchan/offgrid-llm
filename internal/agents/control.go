@@ -129,7 +129,18 @@ func (r *Runner) Steer(id, actor, requestID, instruction string) (*Task, error) 
 		if !CanSteerTask(t) {
 			return ErrRunConflict
 		}
+		if err := reviseWorkflow(t, requestID, digest); err != nil {
+			return err
+		}
 		abandonProposals(t, "Not executed: the user changed the task while paused.")
+		if t.Checkpoint.ProposalUnresolved || t.Checkpoint.ProposalRepairs > 0 {
+			t.Checkpoint.ProposalRepairs = 0
+			t.Checkpoint.NativeReadRepair = nil
+			// An explicit user correction can change the requested outcome.
+			t.Checkpoint.ProposalUnresolved = false
+			t.Checkpoint.ProposalTool = ""
+			t.Checkpoint.WorkflowEditPending = false
+		}
 		t.Checkpoint.Messages = append(t.Checkpoint.Messages, api.ChatMessage{Role: "user", Content: instruction})
 		t.Instructions = append(t.Instructions, Instruction{requestID, digest, instruction, time.Now().UTC()})
 		t.Error, t.ErrorCode = "Instruction saved. Resume this task to continue.", "task_paused"

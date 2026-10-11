@@ -26,6 +26,8 @@ import { Icon } from '../../components/Icon';
 import { AgentPreview, AgentProgress } from "./AgentProgress";
 import { BrowserActivity } from "./BrowserActionSummary";
 import { TaskApproval } from './TaskApproval';
+import { TaskEvidence } from './TaskEvidence';
+import { DocumentProgress } from './DocumentProgress';
 import { TaskResult } from './TaskResult';
 import { TaskContinuation } from './TaskContinuation';
 import { taskStopText } from '../../i18n/task-presentation';
@@ -37,6 +39,12 @@ import { useWorkspaceState } from '../../lib/workspace-context';
 import { SetupLink } from '../../lib/setup-handoff';
 import { useDraftScope } from '../../lib/draft-scope';
 import { useWorkActions } from '../../lib/active-work';
+import { TaskAccessPolicy, taskComputerPolicy } from './TaskAccessPolicy';
+import { taskAccessText } from '../../i18n/task-access';
+import { taskDesktopText } from '../../i18n/task-desktop';
+import { grantTaskDesktop } from './TaskDesktopAccess';
+import {ensureDesktopSessionAccess} from './desktopSessionAccess';
+import {taskSessionAccessText} from '../../i18n/task-session-access';
 
 function taskFromLocation() {
   const part = window.location.hash.match(
@@ -50,17 +58,24 @@ export function TaskWorkspace({
   models,
   model,
   setModel,
+  available = true,
 }: {
   scope: string;
   workspace: string;
   models: Model[];
   model: string;
   setModel: (value: string) => void;
+  available?: boolean;
 }) {
   const { locale, messages: text } = useI18n(),
     copy = taskWorkspaceText(locale),
     experience = computerExperience(locale);
   const draft = useDraft(useDraftScope(), "agent-task");
+  const policyDraft = useDraft(useDraftScope(), 'agent-computer-policy');
+  const computerPolicy = taskComputerPolicy(policyDraft.value);
+  const scopeDraft=useDraft(useDraftScope(),'agent-computer-scope');
+  const computerScope=window.electron?.desktopComputerProtocol===3?(scopeDraft.value==='selected_window'?'selected_window':'desktop'):undefined;
+  const [consentTask,setConsentTask]=useState('');
   const work = useWorkActions();
   const selected = useDraft(`${scope}:workspace:${workspace}`, "agent-run");
   const [id, setID] = useState(() =>
@@ -69,6 +84,7 @@ export function TaskWorkspace({
       : taskFromLocation() || selected.value,
   );
   const { run, connection, error: readError, refresh } = useTaskRun(id);
+  const refreshRun=useRef(refresh);refreshRun.current=refresh;
   // Only an explicit Stop aborts setup; navigation/reconnect never cancels work.
   const accessCancellation = useMemo(() => new AbortController(), [run?.pending_input?.id]);
   const [tasks, setTasks] = useState<AgentTask[]>([]),
@@ -142,7 +158,7 @@ export function TaskWorkspace({
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (lock.current || !draft.value.trim() || !model) return;
+    if (!available || lock.current || !draft.value.trim() || !model) return;
     lock.current = true;
     setBusy(true);
     setError("");
@@ -150,19 +166,27 @@ export function TaskWorkspace({
       prompt = submitted.trim();
     const key = draftKey(`${scope}:workspace:${workspace}`, "agent-submission");
     // A lost acknowledgment retries the same durable request, including reload.
-    let request: { prompt: string; model: string; id: string } | undefined;
+    let request: { prompt: string; model: string; id: string; computer_approval_mode?: typeof computerPolicy;computer_scope?:'desktop'|'selected_window' } | undefined;
     try {
       request = JSON.parse(readDraft(key));
     } catch {}
-    if (!request || request.prompt !== prompt || request.model !== model)
-      request = { prompt, model, id: crypto.randomUUID() };
+    // Preserve a pre-upgrade lost acknowledgment with its original payload.
+    // Only a deliberate policy edit changes that legacy intent.
+    if (!request || request.prompt !== prompt || request.model !== model || (request.computer_scope!==computerScope && scopeDraft.value!=='') || (request.computer_approval_mode !== computerPolicy && (request.computer_approval_mode !== undefined || policyDraft.value !== '')))
+      request = { prompt, model, id: crypto.randomUUID(), computer_approval_mode: computerPolicy,computer_scope:computerScope };
     writeDraft(key, JSON.stringify(request));
     try {
-      const next = await api.submitJob(prompt, model, request.id);
+      if(request.computer_scope==='desktop'&&request.computer_approval_mode==='full_task')await ensureDesktopSessionAccess(workspace);
+      const next = await api.submitJob(prompt, model, request.id, request.computer_approval_mode,request.computer_scope);
       clearSubmittedDraft(draft.key, submitted);
       clearSubmittedDraft(key, JSON.stringify(request));
       select(next.run_id);
       void refreshHistory();
+      if(next.pending_input?.mode==='desktop'&&next.requested_computer_scope==='desktop'&&window.electron?.desktopComputerProtocol===3){
+        setConsentTask(next.run_id);
+        await grantTaskDesktop(next,workspace);
+        await refreshRun.current();
+      }
     } catch (e) {
       if (e instanceof APIError && typeof e.data?.run_id === "string")
         select(e.data.run_id);
@@ -170,6 +194,7 @@ export function TaskWorkspace({
     } finally {
       lock.current = false;
       setBusy(false);
+      setConsentTask('');
     }
   };
   const act = async (
@@ -209,8 +234,8 @@ export function TaskWorkspace({
       setBusy(false);
     }
   };
-  const status = (value: string) =>
-    value === 'waiting_for_children' ? taskControls(locale).waiting : value === "waiting_for_input"
+  const status = (value: string, outcome?: string) =>
+    value === 'completed' && outcome === 'answer_only' ? taskAccessText(locale).answered : value === 'waiting_for_children' ? taskControls(locale).waiting : value === "waiting_for_input"
       ? copy.needsAccess
       : (text.recovery[value as keyof typeof text.recovery] ?? value);
   const filtered = tasks.filter((t) =>
@@ -239,7 +264,7 @@ export function TaskWorkspace({
                 onClick={() => select(task.id)}
               >
                 <span>{task.prompt}</span>
-                <small>{status(task.status)}</small>
+                <small>{status(task.status, task.outcome)}</small>
               </button>
               <button className="task-delete icon-button" disabled={!task.deletable} aria-label={`${text.history.deleteTask}: ${task.prompt}`} title={task.deletable ? text.history.deleteTask : text.history.protectedTasks} onClick={() => setDeleting([{id:task.id,label:task.prompt}])}><Icon name="trash" size={16}/></button>
             </li>
@@ -272,13 +297,14 @@ export function TaskWorkspace({
               </label>
             <div className="composer-context">
               <ModelSelect models={models} value={model} onChange={setModel} />
+              <TaskAccessPolicy value={computerPolicy} onChange={policyDraft.setValue} disabled={busy || !available} scope={computerScope} onScopeChange={scopeDraft.setValue} workspace={workspace} />
               <VoiceSettings />
             </div>
             <div className="composer-footer">
-              <p id="task-first-hint" className="composer-hint">{copy.hint}</p>
+              <p id="task-first-hint" className="composer-hint">{computerScope==='desktop'?(computerPolicy==='full_task'&&window.electron?.enableDesktopAccess?taskSessionAccessText(locale).hint:taskDesktopText(locale).hint):copy.hint}</p>
               <div className="composer-actions">
                 <VoiceInputButton contextKey={draft.key} disabled={busy} onTranscript={value => draft.setValue(draft.value ? `${draft.value} ${value}` : value)} />
-                <button className="primary-button" disabled={busy || !draft.value.trim() || !model}>
+                <button className="primary-button" disabled={!available || busy || !draft.value.trim() || !model}>
                   {busy ? text.common.loading : copy.start}
                 </button>
               </div>
@@ -289,7 +315,7 @@ export function TaskWorkspace({
                 {copy.noModel} <SetupLink destination="models" draft={{ kind: 'task', id: '' }}>{text.nav.models}</SetupLink>
               </p>
             )}
-            {draft.unsaved && <p role="alert">{text.recovery.draftWarning}</p>}
+            {(draft.unsaved || policyDraft.unsaved) && <p role="alert">{text.recovery.draftWarning}</p>}
           </form>
         ) : (
           <section className="task-detail" aria-labelledby="task-title">
@@ -300,7 +326,7 @@ export function TaskWorkspace({
               {run && (
                 <>
                   <div className="task-state">
-                    <span role="status">{status(run.status)}</span>
+                    <span role="status">{status(run.status, run.outcome)}</span>
                     <small>{run.model}</small>
                   </div>
                   <div className="button-row">
@@ -347,6 +373,7 @@ export function TaskWorkspace({
             {stopState !== 'idle' && <ScopedNotice kind={stopState === 'unconfirmed' ? 'error' : 'status'}>{taskStopText(locale)[stopState]}</ScopedNotice>}
             {run?.pending_input && run.status === "waiting_for_input" && (
               <TaskAccess
+                initialConsentPending={consentTask===run.run_id}
                 key={run.pending_input.id}
                 run={run}
                 workspace={workspace}
@@ -387,6 +414,8 @@ export function TaskWorkspace({
                   {text.models.resume}
                 </button>
               )}
+            {run && <DocumentProgress run={run} />}
+            {run && <TaskEvidence key={`evidence:${run.run_id}`} run={run} />}
             {run && <TaskResult key={`result:${run.run_id}`} run={run} />}
             {run?.error && <p role="alert">{run.error}</p>}
             {run && <TaskContinuation key={`continuation:${run.run_id}`} run={run} scope={`${scope}:workspace:${workspace}`} refresh={refresh} newDraftExists={!!draft.value.trim()} createDraft={value => { if (!draft.value.trim()) { draft.setValue(value || title); select(''); } }} />}

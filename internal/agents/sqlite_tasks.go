@@ -70,6 +70,9 @@ func validateStoredTask(task *Task) error {
 	if err := validateTaskIdentityStatus(task); err != nil {
 		return err
 	}
+	if err := validateWorkflowEvidence(task.Workflow); err != nil {
+		return err
+	}
 	if task.Config.ComputerStepOffset < 0 || task.Config.ComputerStepOffset > len(task.Steps) {
 		return fmt.Errorf("invalid computer step boundary")
 	}
@@ -77,11 +80,12 @@ func validateStoredTask(task *Task) error {
 		if cp.ExecutingCall != cp.ReadOnlyCall || len(cp.Calls) == 0 || cp.Calls[0].ID != cp.ReadOnlyCall {
 			return fmt.Errorf("read-only intent does not match executing call")
 		}
-		switch cp.Calls[0].Function.Name {
-		case "read_file", "list_files", "calculator", "current_time":
-		default:
+		if !validReadOnlyIntent(cp) {
 			return fmt.Errorf("invalid read-only intent tool")
 		}
+	}
+	if cp := task.Checkpoint; cp != nil && cp.ReadOnlyCall == "" && cp.ReadOnlyCapability != nil {
+		return fmt.Errorf("read-only descriptor without intent")
 	}
 	for _, archive := range task.ContextArchive {
 		data, err := json.Marshal(archive.Messages)
@@ -110,7 +114,11 @@ func validateStoredTask(task *Task) error {
 	}
 	if task.Status == TaskInput {
 		input, cp := task.PendingInput, task.Checkpoint
-		if input == nil || input.ID == "" || input.CallID == "" || input.Kind != "computer" || (input.Mode != "app" && input.Mode != "browser") || input.Target == "" || cp == nil || cp.ExecutingCall != "" || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID || task.Config.ComputerSession != "" || !task.Config.TaskFirst {
+		if input == nil || input.ID == "" || input.Kind != "computer" || input.Target == "" || cp == nil || cp.ExecutingCall != "" || task.Config.ComputerSession != "" || !task.Config.TaskFirst {
+			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
+		}
+		initialDesktop := input.Mode == "desktop" && input.CallID == "" && cp.Iteration == 0 && len(cp.Calls) == 0 && task.Config.RequestedComputerScope == "desktop" && task.Config.RequestedComputerApprovalMode != "" && task.ResolvedInputID == ""
+		if !initialDesktop && (input.CallID == "" || (input.Mode != "app" && input.Mode != "browser") || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID) {
 			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
 		}
 	}

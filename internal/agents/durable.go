@@ -33,11 +33,19 @@ type Approval struct {
 }
 
 type Checkpoint struct {
-	Messages      []api.ChatMessage `json:"messages"`
-	Iteration     int               `json:"iteration"`
-	Calls         []api.ToolCall    `json:"calls,omitempty"`
-	ExecutingCall string            `json:"executing_call,omitempty"`
-	ReadOnlyCall  string            `json:"read_only_call,omitempty"`
+	NativeReadRepair    *NativeReadRepair        `json:"native_read_repair,omitempty"`
+	CompletionRepairs   int                      `json:"completion_repairs,omitempty"`
+	CompletionProgress  string                   `json:"completion_progress,omitempty"`
+	ProposalRepairs     int                      `json:"proposal_repairs,omitempty"`
+	ProposalUnresolved  bool                     `json:"proposal_unresolved,omitempty"`
+	ProposalTool        string                   `json:"proposal_tool,omitempty"`
+	WorkflowEditPending bool                     `json:"workflow_edit_pending,omitempty"`
+	Messages            []api.ChatMessage        `json:"messages"`
+	Iteration           int                      `json:"iteration"`
+	Calls               []api.ToolCall           `json:"calls,omitempty"`
+	ExecutingCall       string                   `json:"executing_call,omitempty"`
+	ReadOnlyCall        string                   `json:"read_only_call,omitempty"`
+	ReadOnlyCapability  *capabilities.Descriptor `json:"read_only_capability,omitempty"`
 }
 
 type RunCaller func(context.Context, *Task, []api.ChatMessage, []api.Tool) (*api.ChatCompletionResponse, error)
@@ -69,6 +77,7 @@ type Runner struct {
 	// Configure before accepting runs. Only public response text is emitted.
 	StreamCaller    RunStreamCaller
 	ContextWindow   func(*Task) int
+	CountContext    func(context.Context, *Task, []api.ChatMessage, []api.Tool) (int, error)
 	mu              sync.Mutex
 	active          map[string]context.CancelFunc
 	approvalTTL     time.Duration
@@ -167,6 +176,18 @@ func (r *Runner) CreateRequest(prompt, model, actor string, config AgentConfig, 
 	}
 	task := &Task{ID: "run-" + runID(), Prompt: prompt, Model: model, Actor: actor, Status: TaskPending, Config: config, CreatedAt: time.Now().UTC(),
 		Checkpoint: &Checkpoint{Messages: []api.ChatMessage{{Role: "system", Content: config.SystemPrompt}, {Role: "user", Content: prompt}}}}
+	if err := initializeWorkflow(task); err != nil {
+		return nil, false, err
+	}
+	if config.RequestedComputerScope != "" && config.RequestedComputerScope != "selected_window" {
+		if config.RequestedComputerScope != "desktop" || !config.TaskFirst || config.ComputerSession != "" || config.RequestedComputerApprovalMode == "" {
+			return nil, false, ErrRunConflict
+		}
+		// Admission and access intent are one durable write. A crash cannot leave
+		// an initially runnable task without its mandatory host consent boundary.
+		task.Status = TaskInput
+		task.PendingInput = &InputRequest{ID: "input-" + runID(), Kind: "computer", Mode: "desktop", Target: "Task desktop"}
+	}
 	r.manager.mu.Lock()
 	defer r.manager.mu.Unlock()
 	if requestID != "" {
@@ -216,6 +237,9 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		if task.Actor != actor {
 			return ErrTaskNotFound
 		}
+		if !WorkflowVersionSupported(task) {
+			return ErrWorkflowVersion
+		}
 		if task.ComputerSessionExpired {
 			return ErrRunConflict
 		}
@@ -258,6 +282,10 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		case "resume":
 			if task.Status != TaskPending && task.Status != TaskInterrupted && !(task.Status == TaskWaiting && task.PendingApproval != nil && time.Now().After(task.PendingApproval.ExpiresAt)) {
 				return ErrRunConflict
+			}
+			if task.ErrorCode == proposalRepairLimitCode {
+				task.Checkpoint.ProposalUnresolved = true
+				task.Checkpoint.ProposalRepairs = 0
 			}
 		case "approve":
 			if task.Status != TaskWaiting || task.PendingApproval == nil || task.PendingApproval.ID != approvalID || time.Now().After(task.PendingApproval.ExpiresAt) {
@@ -374,6 +402,13 @@ func (r *Runner) observe(task *Task) {
 
 func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Task, error) {
 	cp := task.Checkpoint
+	// Older checkpoints persisted the repair budget without a separate marker.
+	if cp.ProposalRepairs > 0 {
+		cp.ProposalUnresolved = true
+		if cp.ProposalTool == "" && task.Config.ComputerSession == "" {
+			cp.ProposalTool = "request_computer_access"
+		}
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -406,7 +441,31 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			if !ok {
 				return r.fail(task, "The model requested an unavailable tool.")
 			}
+			if usesWorkflow(task) && workflowMutation(call.Function.Name, descriptor) && (task.Workflow == nil || len(task.Workflow.Checks) == 0) {
+				if err := r.rejectProposal(task, &ToolAuthorizationError{Code: "workflow_expectations_required", Message: "No action was dispatched. Record outcome expectations before changing applications."}, workflowDeclarationGuidance(task)); err != nil {
+					return nil, err
+				}
+				grant = nil
+				if task.Status != TaskRunning {
+					return task, nil
+				}
+				continue
+			}
 			approved := grant != nil && grant.RunID == task.ID && grant.Actor == task.Actor && grant.CallID == call.ID && grant.Tool == call.Function.Name && bytes.Equal(grant.Arguments, args) && grant.Capability == descriptor && time.Now().Before(grant.ExpiresAt)
+			if usesWorkflow(task) && workflowMutation(call.Function.Name, descriptor) {
+				if binder, ok := r.tools.(interface{ BindWorkflowExpectations(*Task) error }); ok {
+					if err := binder.BindWorkflowExpectations(task); err != nil {
+						if err := r.rejectProposal(task, &ToolAuthorizationError{Code: "workflow_binding_required", Message: "No action dispatched. A declared control has no matching current evidence."}, "Observe the declared target and declare its exact control before input. User steering is required to replace an immutable expectation."); err != nil {
+							return nil, err
+						}
+						grant = nil
+						if task.Status != TaskRunning {
+							return task, nil
+						}
+						continue
+					}
+				}
+			}
 			execution := ToolExecution{RunID: task.ID, CallID: call.ID, Actor: task.Actor, Approved: approved, ExpectedCapability: &descriptor}
 			if err := r.tools.Authorize(ctx, call.Function.Name, args, execution); err != nil {
 				var input *InputRequired
@@ -429,17 +488,13 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 				if !errors.Is(err, capabilities.ErrApprovalRequired) {
 					var safe *ToolAuthorizationError
 					if errors.As(err, &safe) {
-						if task.Config.ComputerSession != "" && (safe.Code == "computer_invalid_action" || safe.Code == "computer_stale_observation") {
-							// No input was dispatched: authorization rejected the proposal.
-							// Let the model re-observe and repair opaque IDs instead of
-							// turning a safe validation failure into a broken host session.
-							result, _ := json.Marshal(map[string]string{"error": safe.Code, "message": safe.Message, "recovery": "Call the observation tool again and use only IDs from its newest result."})
-							cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(result)})
-							cp.Calls = cp.Calls[1:]
-							task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "rejected", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: string(result), Timestamp: time.Now().UTC()})
-							setRunPhase(task, "repairing_tool", call.Function.Name)
-							if err := r.persist(task); err != nil {
+						if recovery := proposalRecovery(task, call.Function.Name, safe); recovery != "" {
+							if err := r.rejectProposal(task, safe, recovery); err != nil {
 								return nil, err
+							}
+							grant = nil
+							if task.Status != TaskRunning {
+								return task, nil
 							}
 							continue
 						}
@@ -451,7 +506,7 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 				task.Status = TaskWaiting
 				setRunPhase(task, "approval", call.Function.Name)
 				ttl := r.approvalTTL
-				if task.Config.ComputerSession != "" && ttl > 5*time.Minute {
+				if task.Config.ComputerSession != "" && companionCapability(descriptor) && ttl > 5*time.Minute {
 					ttl = 5 * time.Minute
 				}
 				task.PendingApproval = &Approval{ID: "approval-" + runID(), RunID: task.ID, CallID: call.ID, Actor: task.Actor, Tool: call.Function.Name, Arguments: args, ArgumentsJSON: string(args), Capability: descriptor, ExpiresAt: time.Now().UTC().Add(ttl)}
@@ -464,8 +519,11 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			// point is uncertain, even when the process never reached the tool.
 			cp.ExecutingCall = call.ID
 			cp.ReadOnlyCall = ""
+			cp.ReadOnlyCapability = nil
 			if readOnlyBuiltin(descriptor) {
 				cp.ReadOnlyCall = call.ID
+				copy := descriptor
+				cp.ReadOnlyCapability = &copy
 			}
 			setRunPhase(task, "tool", call.Function.Name)
 			task.PendingApproval = nil
@@ -479,15 +537,31 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			if err != nil {
 				var failure *ToolFailure
 				if readOnlyBuiltin(descriptor) {
-					failure = readFailure(err)
+					if !capabilities.TrustedNativeRead(descriptor) || !errors.As(err, &failure) {
+						failure = readFailure(err)
+					}
 				} else {
 					_ = errors.As(err, &failure)
 				}
 				if failure != nil {
-					encoded, _ := json.Marshal(map[string]any{"status": "failed", "code": failure.Code, "message": failure.Message, "effects": "none", "verified": false})
+					details := map[string]any{"status": "failed", "code": failure.Code, "message": failure.Message, "recovery": failure.Recovery, "effects": "none", "verified": false}
+					if failure.Readiness != "" {
+						details["readiness"] = failure.Readiness
+					}
+					encoded, _ := json.Marshal(details)
 					cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(encoded)})
 					cp.Calls, cp.ExecutingCall, cp.ReadOnlyCall = cp.Calls[1:], "", ""
+					cp.ReadOnlyCapability = nil
 					task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "tool_error", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: string(encoded), Timestamp: time.Now().UTC()})
+					if capabilities.TrustedNativeRead(descriptor) && failure.Recovery != "" {
+						if err := r.repairNativeRead(task, call); err != nil {
+							return nil, err
+						}
+						if task.Status != TaskRunning {
+							return task, nil
+						}
+						continue
+					}
 					task.ErrorCode = failure.Code
 					return r.fail(task, failure.Message)
 				}
@@ -506,15 +580,34 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			}
 			cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: modelResult})
 			cp.Calls, cp.ExecutingCall, cp.ReadOnlyCall = cp.Calls[1:], "", ""
+			cp.ReadOnlyCapability = nil
+			resolveNativeReadRepair(cp, call.Function.Name, result)
+			if cp.NativeReadRepair == nil && !cp.WorkflowEditPending && cp.ProposalTool != "computer_open_application" && cp.ProposalTool != "task_expectations" {
+				cp.ProposalRepairs = 0
+			}
+			// An unrelated successful read cannot resolve missing computer
+			// access. Only attachment resolves the access proposal. Native
+			// control repair starts from a fresh observation or corrected call.
+			if cp.NativeReadRepair == nil && !cp.WorkflowEditPending && cp.ProposalTool != "request_computer_access" && cp.ProposalTool != "computer_open_application" && cp.ProposalTool != "task_expectations" && (cp.ProposalTool == call.Function.Name || call.Function.Name == "computer_observe" || call.Function.Name == "browser_observe" || call.Function.Name == "computer_verify_application") {
+				cp.ProposalUnresolved, cp.ProposalTool = false, ""
+			}
 			authorization := ""
-			if task.Config.ComputerSession != "" && descriptor.Risk == capabilities.RiskHigh {
-				if execution.Approved {
-					authorization = "exact_approval"
-				} else {
-					authorization = "automatic:" + task.Config.ComputerApprovalMode
-				}
+			if execution.Approved {
+				authorization = "exact_approval"
+			} else if task.Config.ComputerSession != "" && companionCapability(descriptor) && descriptor.Risk == capabilities.RiskHigh {
+				authorization = "automatic:" + task.Config.ComputerApprovalMode
 			}
 			task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "action", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: result, Timestamp: time.Now().UTC(), Authorization: authorization})
+			r.assessWorkflow(task)
+			if cp.NativeReadRepair == nil && !cp.WorkflowEditPending && cp.ProposalTool == "computer_open_application" && len(PendingApplicationLaunches(task)) == 0 && (call.Function.Name == "computer_verify_application" || advancedVerifiedApplicationRepair(task, call.Function.Name)) {
+				cp.ProposalRepairs, cp.ProposalUnresolved, cp.ProposalTool = 0, false, ""
+			}
+			if cp.NativeReadRepair == nil && cp.WorkflowEditPending && guardedWorkflowMutation(call.Function.Name) {
+				// Only actual progress through the guarded edit path clears this
+				// repair. Reads and unrelated metadata cannot reset its budget.
+				cp.WorkflowEditPending = false
+				cp.ProposalRepairs, cp.ProposalUnresolved, cp.ProposalTool = 0, false, ""
+			}
 			if err := r.persist(task); err != nil {
 				return nil, err
 			}
@@ -528,8 +621,16 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 		}
 		stepCtx, cancel := context.WithTimeout(ctx, task.Config.TimeoutPerStep)
 		tools := r.tools.GetTools()
-		if scoped, ok := r.tools.(interface{ ToolsForTask(*Task) []api.Tool }); ok {
+		if scoped, ok := r.tools.(interface {
+			ToolsForTaskContext(context.Context, *Task) []api.Tool
+		}); ok {
+			tools = scoped.ToolsForTaskContext(stepCtx, task)
+		} else if scoped, ok := r.tools.(interface{ ToolsForTask(*Task) []api.Tool }); ok {
 			tools = scoped.ToolsForTask(task)
+		} else if scoped, ok := r.tools.(interface {
+			ToolsForExecution(context.Context, ToolExecution) []api.Tool
+		}); ok {
+			tools = scoped.ToolsForExecution(stepCtx, ToolExecution{Actor: task.Actor, RunID: task.ID})
 		}
 		if task.ParentID != "" {
 			filtered := []api.Tool{}
@@ -543,7 +644,7 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 			tools = filtered
 		}
 		tools = append(tools, runtimeTools(task)...)
-		messages, prepareErr := r.prepareContext(task, tools)
+		messages, prepareErr := r.prepareContextWithContext(stepCtx, task, tools)
 		if prepareErr != nil {
 			cancel()
 			return r.fail(task, prepareErr.Error())
@@ -582,8 +683,31 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 				if step.ToolName == observe && step.Type == "action" {
 					observed = true
 				}
+				if task.Config.ComputerScope == "desktop" && step.Type == "action" && step.ToolName == "computer_verify_application" {
+					var evidence struct {
+						Verified bool `json:"verified"`
+						View     struct {
+							Observation struct {
+								ID string `json:"id"`
+							} `json:"observation"`
+						} `json:"view"`
+					}
+					if json.Unmarshal([]byte(step.ToolResult), &evidence) == nil && evidence.Verified && evidence.View.Observation.ID != "" {
+						observed = true
+					}
+				}
 			}
-			if !observed && message.ToolCalls[0].Function.Name != observe && message.ToolCalls[0].Function.Name != "request_computer_access" && !isRuntimeTool(message.ToolCalls[0].Function.Name) {
+			name := message.ToolCalls[0].Function.Name
+			descriptor, known := r.tools.Capability(name)
+			registryTool := known && descriptor.Kind != capabilities.Computer && (descriptor.Namespace == "tools" || descriptor.Namespace == "mcp")
+			needsObservation := !task.Config.TaskFirst || !registryTool
+			if task.Config.ComputerScope == "desktop" {
+				switch name {
+				case "computer_applications", "computer_windows", "computer_open_application", "computer_focus_window", "computer_verify_application":
+					needsObservation = false
+				}
+			}
+			if needsObservation && !observed && name != observe && name != "request_computer_access" && !isRuntimeTool(name) {
 				return r.fail(task, "Computer tasks must inspect the selected target before acting. No action was executed.")
 			}
 		}
@@ -594,6 +718,11 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 		// calls with identical arguments or reused upstream model call IDs.
 		for i := range message.ToolCalls {
 			call := &message.ToolCalls[i]
+			if resolver, ok := r.tools.(interface {
+				ResolveModelArguments(*Task, string, string) string
+			}); ok {
+				call.Function.Arguments = resolver.ResolveModelArguments(task, call.Function.Name, call.Function.Arguments)
+			}
 			args, err := CanonicalArguments(json.RawMessage(call.Function.Arguments))
 			if err != nil {
 				return r.fail(task, "Model returned invalid tool arguments.")
@@ -604,10 +733,27 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 		cp.Messages = append(cp.Messages, message)
 		cp.Calls = append([]api.ToolCall(nil), message.ToolCalls...)
 		if len(cp.Calls) == 0 {
+			if (cp.ProposalUnresolved || cp.ProposalRepairs > 0) && cp.ExecutingCall == "" {
+				if err := r.rejectUnrepairedCompletion(task); err != nil {
+					return nil, err
+				}
+				if task.Status != TaskRunning {
+					return task, nil
+				}
+				continue
+			}
 			if message.StringContent() == "" {
 				return r.fail(task, "Model returned an empty answer.")
 			}
-			if validator, ok := r.tools.(interface{ ValidateCompletion(*Task) error }); ok {
+			if repair, err := r.repairWorkflowCompletion(task); err != nil {
+				return nil, err
+			} else if repair {
+				if task.Status != TaskRunning {
+					return task, nil
+				}
+				continue
+			}
+			if validator, ok := r.tools.(interface{ ValidateCompletion(*Task) error }); ok && !usesWorkflow(task) {
 				if err := validator.ValidateCompletion(task); err != nil {
 					return r.fail(task, err.Error())
 				}

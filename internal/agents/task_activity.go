@@ -21,17 +21,18 @@ var ErrEventCursor = errors.New("task event cursor requires snapshot recovery")
 // TaskActivity deliberately excludes prompts, page contents, arguments and
 // credentials. The owner-only snapshot holds the actual results and approvals.
 type TaskActivity struct {
-	Sequence       int64      `json:"sequence"`
-	TaskID         string     `json:"task_id"`
-	Status         TaskStatus `json:"status"`
-	Phase          string     `json:"phase,omitempty"`
-	Tool           string     `json:"tool,omitempty"`
-	Iteration      int        `json:"iteration,omitempty"`
-	CompletedSteps int        `json:"completed_steps"`
-	ApprovalID     string     `json:"approval_id,omitempty"`
-	ExecutingCall  string     `json:"executing_call,omitempty"`
-	SnapshotSHA256 string     `json:"snapshot_sha256"`
-	RecordedAt     time.Time  `json:"recorded_at"`
+	Sequence          int64      `json:"sequence"`
+	TaskID            string     `json:"task_id"`
+	Status            TaskStatus `json:"status"`
+	Phase             string     `json:"phase,omitempty"`
+	Tool              string     `json:"tool,omitempty"`
+	Iteration         int        `json:"iteration,omitempty"`
+	CompletedSteps    int        `json:"completed_steps"`
+	ApprovalID        string     `json:"approval_id,omitempty"`
+	ExecutingCall     string     `json:"executing_call,omitempty"`
+	SnapshotSHA256    string     `json:"snapshot_sha256"`
+	RecordedAt        time.Time  `json:"recorded_at"`
+	VerificationState string     `json:"verification_state,omitempty"`
 }
 
 type TaskReplay struct {
@@ -39,6 +40,14 @@ type TaskReplay struct {
 	Snapshot *Task
 	Cursor   int64
 	Recovery bool
+}
+
+// ActivityReplaySupported describes the configured contract, not current health.
+// A storage failure must block operations without changing the client's UI/API.
+func (m *Manager) ActivityReplaySupported() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.dataDir != ""
 }
 
 func (m *Manager) ActivityReplayAvailable() bool {
@@ -50,6 +59,9 @@ func (m *Manager) ActivityReplayAvailable() bool {
 func appendTaskActivity(tx *sql.Tx, task *Task, snapshot []byte) error {
 	digest := sha256.Sum256(snapshot)
 	event := TaskActivity{TaskID: task.ID, Status: task.Status, CompletedSteps: len(task.Steps), SnapshotSHA256: hex.EncodeToString(digest[:]), RecordedAt: time.Now().UTC()}
+	if task.Workflow != nil && WorkflowVersionSupported(task) {
+		event.VerificationState = task.Workflow.State
+	}
 	if task.Progress != nil {
 		event.Phase, event.Tool, event.Iteration = task.Progress.Phase, task.Progress.Tool, task.Progress.Iteration
 	}

@@ -336,7 +336,20 @@ func (d *NativeLinux) Observe(ctx context.Context) (NativeView, error) {
 	if err := d.check(false); err != nil {
 		return NativeView{}, err
 	}
+	previousControls := d.controls
+	previous := map[string]string{}
+	for _, control := range previousControls {
+		previous[fmt.Sprintf("%p", control.object)] = control.info.Identity
+	}
+	// Keep the prior OS objects alive until comparison has finished, preventing
+	// allocator address reuse from manufacturing a matching evidence identity.
+	d.controls = nil
 	d.clear()
+	defer func() {
+		for _, control := range previousControls {
+			C.og_unref(unsafe.Pointer(control.object))
+		}
+	}()
 	C.og_ref(unsafe.Pointer(d.selected.object))
 	queue := []*C.AtspiAccessible{d.selected.object}
 	defer func() {
@@ -346,6 +359,7 @@ func (d *NativeLinux) Observe(ctx context.Context) (NativeView, error) {
 	}()
 	view := NativeView{Elements: []NativeElement{}}
 	digests := []string{}
+	identityKeys := []string{}
 	visited := 0
 	for len(queue) > 0 && visited < 400 {
 		if err := ctx.Err(); err != nil {
@@ -360,6 +374,7 @@ func (d *NativeLinux) Observe(ctx context.Context) (NativeView, error) {
 			C.og_ref(unsafe.Pointer(object))
 			d.controls[control.info.ID] = control
 			view.Elements = append(view.Elements, control.info)
+			identityKeys = append(identityKeys, fmt.Sprintf("%p", object))
 			digests = append(digests, control.fingerprint)
 		}
 		var e *C.GError
@@ -378,6 +393,13 @@ func (d *NativeLinux) Observe(ctx context.Context) (NativeView, error) {
 			}
 		}
 		C.og_unref(unsafe.Pointer(object))
+	}
+	identities := CarryControlIdentities(previous, identityKeys)
+	for i := range view.Elements {
+		view.Elements[i].Identity = identities[i]
+		control := d.controls[view.Elements[i].ID]
+		control.info.Identity = identities[i]
+		d.controls[view.Elements[i].ID] = control
 	}
 	d.sequence++
 	view.Observation = ControlObservation{ID: nativeID(), Target: d.selected.target.Identity, Sequence: d.sequence, CapturedAt: time.Now().UTC(), StateDigest: nativeHash(digests)}

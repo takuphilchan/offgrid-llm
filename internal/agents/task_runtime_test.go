@@ -172,9 +172,75 @@ func TestContextArchivesWholeExchangesAndSurvivesRestart(t *testing.T) {
 	if len(got.ContextArchive) != len(task.ContextArchive) {
 		t.Fatal("lost archived context")
 	}
+	aliasPage, _ := contextPage(task, "archive:1", 0)
+	if restoredPage, err := contextPage(got, "archive:1", 0); err != nil || restoredPage != aliasPage {
+		t.Fatal("task-local archive reference changed after restart", err)
+	}
 	task.Config.ContextWindow = 128
 	if _, err := r.prepareContext(task, nil); err == nil {
 		t.Fatal("oversized input accepted")
+	}
+}
+
+func TestContextPreservesLatestExchangeAndSteering(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	r := NewRunner(m, &runTestTools{}, nil)
+	defer r.Shutdown(context.Background())
+	cfg := taskConfig()
+	cfg.ContextWindow, cfg.MaxTokens = 4096, 512
+	task, err := r.Create("Original task", "model", "alice", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err = m.updateTask(task.ID, func(x *Task) error { x.Status = TaskRunning; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	exchange := func(id, text string) []api.ChatMessage {
+		return []api.ChatMessage{{Role: "assistant", ToolCalls: []api.ToolCall{{ID: id, Type: "function", Function: api.FunctionCall{Name: "read", Arguments: `{}`}}}}, {Role: "tool", ToolCallID: id, Content: text}}
+	}
+	old := exchange("previous", strings.Repeat("x", 9000))
+	latest := exchange("current", strings.Repeat("y", 3000))
+	task.Checkpoint.Messages = append(task.Checkpoint.Messages, old...)
+	task.Checkpoint.Messages = append(task.Checkpoint.Messages, api.ChatMessage{Role: "user", Content: "Do not submit any forms"})
+	task.Checkpoint.Messages = append(task.Checkpoint.Messages, latest...)
+	messages, err := r.prepareContext(task, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.ContextArchive) != 1 || task.ContextArchive[0].Messages[1].StringContent() != old[1].StringContent() {
+		t.Fatal("completed evidence not archived exactly")
+	}
+	if len(messages) != 6 || messages[2].StringContent() != "Do not submit any forms" || messages[5].StringContent() != latest[1].StringContent() || messages[5].Role != "tool" || messages[4].Role != "assistant" {
+		t.Fatal("current observation or instructions lost")
+	}
+	if messages[0].StringContent() != task.Checkpoint.Messages[0].StringContent() || !strings.Contains(messages[3].StringContent(), "archive:1") {
+		t.Fatal("archive index invalidated stable prompt prefix or disappeared")
+	}
+	// Incomplete effects cannot be discarded to make an oversized prompt fit.
+	task.Checkpoint.Messages = append(task.Checkpoint.Messages[:2], old[0])
+	task.Checkpoint.Messages[2].ToolCalls[0].Function.Arguments = `{"text":"` + strings.Repeat("x", 15000) + `"}`
+	task.Checkpoint.Messages = append(task.Checkpoint.Messages, latest...)
+	_, err = r.prepareContext(task, nil)
+	if err == nil || strings.Contains(strings.ToLower(err.Error()), "no tool was dispatched") {
+		t.Fatal("unsafe or misleading context failure", err)
+	}
+}
+
+func TestIncompleteContextGroupsAreNotArchived(t *testing.T) {
+	call := api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "one"}, {ID: "two"}}}
+	for _, group := range [][]api.ChatMessage{
+		{call},
+		{call, {Role: "tool", ToolCallID: "one"}},
+		{call, {Role: "tool", ToolCallID: "one"}, {Role: "tool", ToolCallID: "one"}},
+		{call, {Role: "user", Content: "correction"}},
+	} {
+		if completedContextGroup(group) {
+			t.Fatal("incomplete group considered complete")
+		}
+	}
+	if !completedContextGroup([]api.ChatMessage{call, {Role: "tool", ToolCallID: "one"}, {Role: "tool", ToolCallID: "two"}}) {
+		t.Fatal("complete group rejected")
 	}
 }
 

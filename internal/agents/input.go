@@ -46,22 +46,44 @@ func (r *Runner) ResolveComputerInput(id, actor, inputID string, config AgentCon
 		}
 		cp := task.Checkpoint
 		input := task.PendingInput
-		if inputID == "" || task.Status != TaskInput || input == nil || input.ID != inputID || input.Kind != "computer" || cp == nil || cp.ExecutingCall != "" || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID || config.ComputerSession == "" || config.ComputerDriver == "" || config.ComputerApprovalMode == "" {
+		if inputID == "" || task.Status != TaskInput || input == nil || input.ID != inputID || input.Kind != "computer" || cp == nil || cp.ExecutingCall != "" || config.ComputerSession == "" || config.ComputerDriver == "" || config.ComputerApprovalMode == "" {
+			return ErrRunConflict
+		}
+		initial := task.Config.RequestedComputerScope == "desktop" && input.Mode == "desktop" && input.CallID == "" && len(cp.Calls) == 0 && cp.Iteration == 0
+		if !initial && (len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID) {
+			return ErrRunConflict
+		}
+		if task.Config.RequestedComputerScope != config.RequestedComputerScope || (task.Config.RequestedComputerScope == "desktop" && config.ComputerScope != "desktop") {
 			return ErrRunConflict
 		}
 		if len(cp.Messages) == 0 || cp.Messages[0].Role != "system" {
 			return fmt.Errorf("invalid task checkpoint")
 		}
-		call := cp.Calls[0]
+		if task.Config.RequestedComputerApprovalMode != config.RequestedComputerApprovalMode || (task.Config.RequestedComputerApprovalMode != "" && task.Config.RequestedComputerApprovalMode != config.ComputerApprovalMode) {
+			return ErrRunConflict
+		}
+		toolName := ""
 		result, _ := json.Marshal(map[string]string{"status": "access_granted", "driver": config.ComputerDriver, "next": "This confirms access only: the original operation has NOT executed and no file contents or directory listing were returned. Inspect the selected target using the observation tool before any action. Use only the tools now provided."})
 		cp.Messages[0].Content = config.SystemPrompt
-		cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(result)})
+		if !initial {
+			call := cp.Calls[0]
+			toolName = call.Function.Name
+			cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(result)})
+		}
 		cp.Calls = nil
-		task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "input_resolved", ToolName: call.Function.Name, ToolResult: string(result), Timestamp: time.Now().UTC()})
+		cp.ProposalRepairs = 0
+		cp.NativeReadRepair = nil
+		cp.ProposalUnresolved = false
+		cp.ProposalTool = ""
+		cp.WorkflowEditPending = false
+		task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "input_resolved", ToolName: toolName, ToolResult: string(result), Timestamp: time.Now().UTC()})
 		config.ComputerStepOffset = len(task.Steps)
 		task.LastAccess = input
 		task.ComputerSessionExpired = false
 		task.Config, task.PendingInput, task.ResolvedInputID = config, nil, inputID
+		if err := initializeWorkflow(task); err != nil {
+			return err
+		}
 		task.Status, task.Error, task.ErrorCode = TaskPending, "", ""
 		return nil
 	})

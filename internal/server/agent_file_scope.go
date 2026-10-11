@@ -57,5 +57,8 @@ func (b *browserRunTools) hostFileAccess(ctx context.Context, task *agents.Task,
 	if task.ParentID != "" {
 		return &agents.ToolAuthorizationError{Code: "host_access_required", Message: "This file is on another execution device. A read-only subtask cannot obtain local computer access; the parent task must request it."}
 	}
+	if task.Config.ComputerSession != "" {
+		return &agents.ToolAuthorizationError{Code: "host_access_required", Message: "This path belongs to another execution device, not the service filesystem. No file operation was dispatched. Use the authorized computer tools; inspect and verify the current application before requesting another application's access."}
+	}
 	return &agents.InputRequired{Request: agents.InputRequest{Kind: "computer", Mode: "app", Target: target}}
 }

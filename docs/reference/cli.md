@@ -263,6 +263,19 @@ and [client contracts](../advanced/client-contracts.md).
 
 ## Optional commands
 
+`offgrid --json agent status RUN_ID` retains an optional `verification` object
+from the existing authenticated job API. `agent export RUN_ID` preserves the
+full evidence response. Execution `status` remains independent of check results;
+unknown verification versions must not be interpreted as success. These reads
+never resume or resubmit work. Existing authentication and exit codes are unchanged.
+
+Version-2 verification also preserves document generation, editor, content
+revision, snapshot and action bindings. A dispatched edit with a pending check
+is not verified text. Read failures retain operation-local `effects: "none"`
+inside `steps[].tool_result`; that does not undo earlier launches or input.
+Use explicit `agent resume` only for a resumable interrupted task. Genuine
+uncertain input still requires inspection, not another submission.
+
 [External agents](../guides/external-agents.md),
 [appliance planning](../setup/appliance.md), and [audit](../guides/audit.md) have
 separate guides. Audio needs optional installed components. LoRA registration is

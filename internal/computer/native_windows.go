@@ -38,13 +38,15 @@ type nativeControl struct {
 	value       *string
 }
 type NativeWindows struct {
-	automation *ole.IUnknown
-	targets    map[string]nativeSurface
-	controls   map[string]nativeControl
-	selected   *nativeSurface
-	view       NativeView
-	sequence   uint64
-	prepared   map[string]PreparedControlAction
+	desktop       TargetIdentity
+	automation    *ole.IUnknown
+	targets       map[string]nativeSurface
+	controls      map[string]nativeControl
+	selected      *nativeSurface
+	view          NativeView
+	sequence      uint64
+	prepared      map[string]PreparedControlAction
+	documentState *uiaDocumentState
 }
 
 var user32 = windows.NewLazySystemDLL("user32.dll")
@@ -52,6 +54,7 @@ var enumWindows = user32.NewProc("EnumWindows")
 var isWindowVisible = user32.NewProc("IsWindowVisible")
 var windowPID = user32.NewProc("GetWindowThreadProcessId")
 var windowText = user32.NewProc("GetWindowTextW")
+var windowClass = user32.NewProc("GetClassNameW")
 var foregroundWindow = user32.NewProc("GetForegroundWindow")
 var sendInput = user32.NewProc("SendInput")
 var inputDesktop = user32.NewProc("OpenInputDesktop")
@@ -119,6 +122,7 @@ func (driver *NativeWindows) clearControls() {
 	driver.prepared = map[string]PreparedControlAction{}
 }
 func (driver *NativeWindows) Close() {
+	driver.documentState = nil
 	driver.clearControls()
 	if driver.automation != nil {
 		driver.automation.Release()
@@ -224,6 +228,7 @@ func (driver *NativeWindows) Select(id string) (NativeTarget, error) {
 		return NativeTarget{}, ErrControlScope
 	}
 	driver.clearControls()
+	driver.documentState = nil
 	driver.selected = &surface
 	if err := driver.checkTarget(false); err != nil {
 		driver.selected = nil
@@ -375,11 +380,52 @@ func inspectControl(el *ole.IUnknown, pid uint32) (nativeControl, error) {
 	return nativeControl{pointer: el, info: info, runtimeID: rid, value: valuePresent, fingerprint: nativeHash([]any{rid, name, role, info.Writable, info.Invokable, info.Checkable, info.Checked, value})}, nil
 }
 func (driver *NativeWindows) Observe(ctx context.Context) (NativeView, error) {
+	// Chromium enables its accessibility tree asynchronously on first contact
+	// with UIA. A successful shell-only snapshot is not a ready page. Reacquire
+	// fresh controls until a document appears, bounded by both time and context.
+	// Never keep prepared input from a previous snapshot or relax target checks.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		view, err := driver.observeOnce(ctx)
+		if err != nil {
+			return NativeView{}, err
+		}
+		var class [128]uint16
+		windowClass.Call(driver.selected.hwnd, uintptr(unsafe.Pointer(&class[0])), uintptr(len(class)))
+		if !strings.HasPrefix(windows.UTF16ToString(class[:]), "Chrome_WidgetWin_") {
+			return view, nil
+		}
+		for _, control := range driver.controls {
+			kind, err := comInt(control.pointer, 21) // UIA_ControlTypePropertyId
+			if err == nil && kind == 50030 {         // Document, independent of UI locale
+				return view, nil
+			}
+		}
+		if !time.Now().Before(deadline) {
+			view.Limited = true // Do not represent a partial shell as complete.
+			driver.view = view
+			return view, nil
+		}
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return NativeView{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (driver *NativeWindows) observeOnce(ctx context.Context) (NativeView, error) {
 	if err := ctx.Err(); err != nil {
 		return NativeView{}, err
 	}
 	if err := driver.checkTarget(false); err != nil {
 		return NativeView{}, err
+	}
+	previous := map[string]string{}
+	for _, control := range driver.controls {
+		previous[control.runtimeID] = control.info.Identity
 	}
 	driver.clearControls()
 	var root, condition, array *ole.IUnknown
@@ -401,6 +447,7 @@ func (driver *NativeWindows) Observe(ctx context.Context) (NativeView, error) {
 	}
 	view := NativeView{Elements: []NativeElement{}, Limited: count > 400}
 	fingerprints := []string{}
+	identityKeys := []string{}
 	for i := int32(0); i < count && i < 400; i++ {
 		if err := ctx.Err(); err != nil {
 			return NativeView{}, err
@@ -414,16 +461,68 @@ func (driver *NativeWindows) Observe(ctx context.Context) (NativeView, error) {
 			el.Release()
 			continue
 		}
+		// Empty layout containers carry no usable information in this flat view,
+		// but can exhaust a small model's context before real page controls.
+		if control.info.Name == "" && (control.info.Text == nil || *control.info.Text == "") && !control.info.Writable && !control.info.Invokable && !control.info.Checkable {
+			el.Release()
+			continue
+		}
 		control.info.ID = nativeID()
 		driver.controls[control.info.ID] = control
 		view.Elements = append(view.Elements, control.info)
+		identityKeys = append(identityKeys, control.runtimeID)
 		fingerprints = append(fingerprints, control.fingerprint)
+	}
+	identities := CarryControlIdentities(previous, identityKeys)
+	for i := range view.Elements {
+		view.Elements[i].Identity = identities[i]
+		control := driver.controls[view.Elements[i].ID]
+		control.info.Identity = identities[i]
+		driver.controls[view.Elements[i].ID] = control
 	}
 	driver.sequence++
 	view.Observation = ControlObservation{ID: nativeID(), Target: driver.selected.target.Identity, Sequence: driver.sequence, CapturedAt: time.Now().UTC(), StateDigest: nativeHash(fingerprints)}
 	view = BoundNativeView(view)
 	driver.view = view
 	return view, nil
+}
+
+// RefreshObservation handles model latency without trusting stale controls.
+// Called before a NEW v3 preparation/readback, never to refresh an approval.
+func (driver *NativeWindows) RefreshObservation(ctx context.Context, binding ControlBinding, observation ControlObservation) (ControlObservation, error) {
+	if err := ctx.Err(); err != nil {
+		return ControlObservation{}, err
+	}
+	if err := driver.checkTarget(false); err != nil {
+		return ControlObservation{}, err
+	}
+	now := time.Now()
+	if binding.Validate() != nil || binding.Target != driver.selected.target.Identity || observation != driver.view.Observation || observation.CapturedAt.After(now) ||
+		observation.Validate(binding.Target, observation.CapturedAt) != nil {
+		return ControlObservation{}, ErrStaleObservation
+	}
+	if observation.Validate(binding.Target, now) == nil {
+		return observation, nil
+	}
+	old := driver.view
+	fresh, err := driver.observeOnce(ctx) // releases old COM handles and preparations
+	if err != nil {
+		return ControlObservation{}, err
+	}
+	ids, err := matchingReobservation(old, fresh, time.Now())
+	if err != nil {
+		return ControlObservation{}, err
+	}
+	controls := make(map[string]nativeControl, len(fresh.Elements))
+	for i := range fresh.Elements {
+		id := fresh.Elements[i].ID
+		control := driver.controls[id]
+		control.info.ID = ids[id]
+		controls[ids[id]] = control
+		fresh.Elements[i].ID = ids[id]
+	}
+	driver.controls, driver.view = controls, fresh
+	return fresh.Observation, nil
 }
 
 func (driver *NativeWindows) VerifyText(binding ControlBinding, element, expected string, observation ControlObservation) (bool, error) {
@@ -603,12 +702,14 @@ func (driver *NativeWindows) Dispatch(ctx context.Context, action PreparedContro
 				return result, ErrUncertain
 			}
 		}
-		verified, err := inspectControl(control.pointer, driver.selected.pid)
-		if err != nil || !verified.info.Checkable || verified.info.Checked == nil || *verified.info.Checked != *action.Operation.Checked {
+		if !awaitNativeState(ctx, func() bool {
+			verified, err := inspectControl(control.pointer, driver.selected.pid)
+			return driver.checkTarget(true) == nil && err == nil && verified.runtimeID == control.runtimeID && verified.info.Checkable && verified.info.Checked != nil && *verified.info.Checked == *action.Operation.Checked
+		}) {
 			return result, ErrUncertain
 		}
 		result.Outcome, result.Uncertain = "verified", false
-		result.EvidenceID = nativeHash(*verified.info.Checked)
+		result.EvidenceID = nativeHash(*action.Operation.Checked)
 		return result, nil
 	}
 	if action.Operation.Kind == "shortcut" {
@@ -651,13 +752,15 @@ func (driver *NativeWindows) Dispatch(ctx context.Context, action PreparedContro
 			return result, err
 		}
 		runtime.KeepAlive(text)
-		current, err := comString(p, 4)
-		if err != nil || current != *action.Operation.Text {
+		if !awaitNativeState(ctx, func() bool {
+			current, err := comString(p, 4)
+			return driver.checkTarget(true) == nil && driver.withinTarget(control.pointer) && err == nil && current == *action.Operation.Text
+		}) {
 			return result, ErrUncertain
 		}
 		result.Outcome = "verified"
 		result.Uncertain = false
-		result.EvidenceID = nativeHash(current)
+		result.EvidenceID = nativeHash(*action.Operation.Text)
 		return result, nil
 	}
 	p := pattern(control.pointer, 10000)
@@ -674,6 +777,28 @@ func (driver *NativeWindows) Dispatch(ctx context.Context, action PreparedContro
 	result.Outcome = "dispatched"
 	result.Uncertain = false
 	return result, nil
+}
+
+// UIA mutation acknowledgement can precede the provider's read-back update.
+// Poll only the observation: never re-dispatch input on delayed/uncertain state.
+func awaitNativeState(ctx context.Context, readBack func() bool) bool {
+	deadline := time.Now().Add(2 * time.Second)
+	for ctx.Err() == nil {
+		if readBack() {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		timer := time.NewTimer(25 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+	}
+	return false
 }
 
 // sendWindowsShortcut exposes only a fixed application-level vocabulary. The
@@ -716,24 +841,6 @@ func sendWindowsShortcut(name string) error {
 	return nil
 }
 
-// The prompt is local OS UI and never accepts a service/model-supplied boolean
-// as consent. UIA work remains on its MTA thread; dialogs use a separate thread.
-func NativeConfirm(message string) bool {
-	result := make(chan bool, 1)
-	go func() {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		text, err := windows.UTF16PtrFromString(message)
-		if err != nil {
-			result <- false
-			return
-		}
-		title, _ := windows.UTF16PtrFromString("OffGrid computer access")
-		value, _, _ := user32.NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), 0x00000004|0x00000020|0x00000100|0x00010000)
-		result <- value == 6
-	}()
-	return <-result
-}
 func (driver *NativeWindows) FocusSelected() error {
 	if err := driver.checkTarget(false); err != nil {
 		return err

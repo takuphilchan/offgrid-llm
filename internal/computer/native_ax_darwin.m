@@ -160,6 +160,7 @@ static NSDictionary *perform(NSDictionary *request){
         return targetValid(YES)?success(@YES):failure(@"computer_scope_violation");
     }
     if([kind isEqual:@"observe"]){
+        NSDictionary *previous=[[controls copy] autorelease];
         [controls removeAllObjects];[prepared removeAllObjects];
         NSMutableArray *queue=[NSMutableArray arrayWithObject:selected[@"window"]],*elements=[NSMutableArray array],*fingerprints=[NSMutableArray array];BOOL limited=NO;
         NSUInteger visited=0;
@@ -167,9 +168,14 @@ static NSDictionary *perform(NSDictionary *request){
             OGAXReference *reference=[[queue objectAtIndex:0] retain];[queue removeObjectAtIndex:0];visited++;
             NSDictionary *info=inspect(reference->element);
             if(info){NSString *key=identifier();NSMutableDictionary *entry=[info mutableCopy];entry[@"id"]=key;entry[@"control_identity"]=identifier();entry[@"ref"]=reference;controls[key]=entry;
+                NSString *stable=nil;NSUInteger matches=0;
+                for(NSDictionary *old in [previous allValues]){OGAXReference *oldRef=old[@"ref"];if(oldRef&&CFEqual(oldRef->element,reference->element)){stable=old[@"evidence_identity"];matches++;}}
+                if(matches==0)stable=identifier();if(matches>1)stable=nil;
+                if(stable)entry[@"evidence_identity"]=stable;
                 NSString *value=info[@"value"];BOOL truncated=value.length>1000;
                 NSMutableDictionary *visible=[@{@"id":key,@"name":info[@"name"],@"role":info[@"role"],@"writable":info[@"writable"],@"invokable":info[@"invokable"],@"checkable":info[@"checkable"]} mutableCopy];
                 if([info[@"checkable"] boolValue])visible[@"checked"]=info[@"checked"];
+                if(stable)visible[@"identity"]=stable;
                 if([info[@"readable"] boolValue]){visible[@"text"]=truncated?[value substringWithRange:[value rangeOfComposedCharacterSequencesForRange:NSMakeRange(0,1000)]]:value;visible[@"text_limited"]=@(truncated);}
                 [elements addObject:visible];[visible release];[fingerprints addObject:info[@"fingerprint"]];[entry release];}
             CFIndex count=0;if(AXUIElementGetAttributeValueCount(reference->element,kAXChildrenAttribute,&count)==kAXErrorSuccess&&count>0){
@@ -180,6 +186,8 @@ static NSDictionary *perform(NSDictionary *request){
             [reference release];
         }
         if(queue.count)limited=YES;
+        // Duplicate AX objects cannot prove which visible row was verified.
+        for(NSMutableDictionary *visible in elements){OGAXReference *ref=controls[visible[@"id"]][@"ref"];NSUInteger n=0;for(NSDictionary *other in elements){OGAXReference *otherRef=controls[other[@"id"]][@"ref"];if(ref&&otherRef&&CFEqual(ref->element,otherRef->element))n++;}if(n>1){[controls[visible[@"id"]] removeObjectForKey:@"evidence_identity"];[visible removeObjectForKey:@"identity"];}}
         [observation release];observation=[@{@"id":identifier(),@"target":selected[@"target"][@"identity"],@"sequence":@(++sequence),@"captured_at":timestamp(),@"state_digest":digest(fingerprints)} retain];
         return success(@{@"observation":observation,@"elements":elements,@"limited":@(limited)});
     }

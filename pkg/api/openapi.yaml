@@ -113,6 +113,7 @@ paths:
               required: [request_id, action]
               properties:
                 request_id: { type: string, minLength: 8, maxLength: 128 }
+                expectations: { type: array, maxItems: 12, items: { $ref: '#/components/schemas/OutcomeExpectation' }, description: Optional caller-authored outcomes; no access grant. Native workflows only. }
                 action: { type: string, enum: [install, repair] }
                 resolution_id: { type: string, description: Required for install. }
                 source_operation_id: { type: string, description: Required for exact-source repair. }
@@ -818,6 +819,8 @@ paths:
                 request_id: { type: string, minLength: 8, maxLength: 128 }
                 style: { type: string, enum: [react, cot, plan-execute] }
                 max_iterations: { type: integer, minimum: 1, maximum: 50 }
+                computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task], description: Proposed policy saved with the task, not host consent. An attached session must match. Omit for legacy local policy selection. }
+                computer_scope: { type: string, enum: [desktop, selected_window], description: Desktop tasks are saved awaiting a protocol-v3 task grant before inference. Selected-window scope preserves the limited v2 flow. Omitted fields retain legacy behavior. }
       responses:
         '202':
           description: Persisted task
@@ -1182,6 +1185,18 @@ paths:
   /api/v2/computer/pairing:
     post:
       operationId: createComputerPairing
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              description: Empty for legacy enrollment. Protocol 3 requires both IDs from the actor-owned pending task, whose saved policy and scope are validated before enrollment. Enrollment alone does not grant access.
+              properties:
+                protocol_version: { type: integer, enum: [3] }
+                run_id: { type: string }
+                input_id: { type: string }
       responses:
         '200':
           description: Administrator-only single-use enrollment code, valid for two minutes. Never cache or log.
@@ -1218,7 +1233,7 @@ paths:
                         approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task] }
                         target:
                           type: object
-                          description: Companion-issued native identity, present only for protocol-2 sessions.
+                          description: Companion-issued native identity. Protocol 2 binds one window; protocol 3 binds a task desktop, with actual targets separately bound at dispatch.
                           required: [id, os_session, process_generation, surface, driver]
                           properties:
                             id: { type: string }
@@ -1228,8 +1243,23 @@ paths:
                             driver: { type: string, enum: [windows-uia, macos-accessibility, linux-atspi] }
                         expires_at: { type: string, format: date-time }
                         remaining_actions: { type: integer }
-                        state: { type: string, enum: [ready, in_use, finished, exhausted] }
+                        state: { type: string, enum: [ready, awaiting_consent, in_use, finished, exhausted] }
                         run_id: { type: string }
+                        input_id: { type: string }
+                        desktop:
+                          type: object
+                          required: [workspace, binding]
+                          properties:
+                            workspace: { type: string }
+                            binding:
+                              type: object
+                              required: [actor, task, companion, session, target]
+                              properties:
+                                actor: { type: string }
+                                task: { type: string }
+                                companion: { type: string }
+                                session: { type: string }
+                                target: { type: object, additionalProperties: { type: string } }
   /api/v2/computer/sessions/stop:
     post:
       operationId: stopComputerSession
@@ -2042,9 +2072,24 @@ components:
         content: { type: string }
         tool_name: { type: string }
         tool_args: { type: string }
-        tool_result: { type: string }
+        tool_result: { type: string, description: 'Canonical tool output. Native read failures encode NativeReadFailure JSON; do not infer effects from arbitrary provider text.' }
         authorization: { type: string, description: Durable record of exact approval or the immutable automatic session policy used for this action. }
         timestamp: { type: string, format: date-time }
+    NativeReadFailure:
+      type: object
+      required: [status, code, message, effects, verified]
+      description: Service-authored operation-local failure; earlier mutations remain recorded and are never replayed.
+      properties:
+        status: { type: string, enum: [failed] }
+        code: { type: string }
+        message: { type: string }
+        effects: { type: string, enum: [none] }
+        verified: { type: boolean, enum: [false] }
+        recovery: { type: string }
+        readiness: { $ref: '#/components/schemas/NativeApplicationReadiness' }
+    NativeApplicationReadiness:
+      type: string
+      enum: [ready, starting, surface_unavailable, unsupported_identity, observation_unavailable]
     AgentProgress:
       type: object
       required: [phase, iteration, preview, truncated, started_at, updated_at]
@@ -2070,6 +2115,7 @@ components:
         approval_id: { type: string }
         executing_call: { type: string }
         snapshot_sha256: { type: string }
+        verification_state: { type: string, description: Assessment from the same committed snapshot; absent for legacy or unknown versions. }
         recorded_at: { type: string, format: date-time }
     AgentInputRequest:
       type: object
@@ -2078,7 +2124,7 @@ components:
         id: { type: string }
         call_id: { type: string }
         kind: { type: string, enum: [computer] }
-        mode: { type: string, enum: [app, browser] }
+        mode: { type: string, enum: [app, browser, desktop] }
         target: { type: string, description: Model-proposed label only; never a host identity or consent grant. }
         url: { type: string, description: Proposed HTTPS address for local review. }
         previous_session: { type: string, description: Revoked session identity; never reusable authority. }
@@ -2112,10 +2158,84 @@ components:
         measured_prompt_tokens: { type: integer, description: Last runtime-reported prompt usage }
         compactions: { type: integer }
         archived_messages: { type: integer }
+    OutcomeExpectation:
+      type: object
+      additionalProperties: false
+      required: [id, title, kind]
+      properties:
+        id: { type: string, maxLength: 64 }
+        title: { type: string, maxLength: 512 }
+        kind: { type: string, maxLength: 64, description: 'V1: application_open, control_text_equals, control_checked_equals. V2 additionally supports document_blank, document_text_equals and document_edit_matches. Other kinds remain unverified.' }
+        application_id: { type: string }
+        target_id: { type: string }
+        element: { type: string }
+        text: { type: string, maxLength: 16000, description: 'Exact text; server additionally enforces 4000 UTF-8 bytes for legacy control checks and 16000 UTF-8 bytes for document checks.' }
+        checked: { type: boolean }
+        document: { type: string, maxLength: 256, description: V2 observed document reference; never a window or title. }
+        snapshot: { type: string, maxLength: 256, description: V2 exact host snapshot reference. }
+        command: { type: string, maxLength: 256, description: V2 observed blank-creation command; no guessed future document. }
+        edit_mode: { type: string, enum: [insert_text, replace_selection, replace_value], description: V2 noninterchangeable edit semantics. }
+    OutcomeDocumentBinding:
+      type: object
+      additionalProperties: false
+      required: [id, generation, container, editor, revision, snapshot]
+      description: Service-authored v2 identity derived from canonical host evidence; never accepted as an input grant.
+      properties:
+        id: { type: string }
+        generation: { type: string }
+        container: { type: string }
+        editor: { type: string }
+        revision: { type: string }
+        snapshot: { type: string }
+        action_id: { type: string, description: Exactly one canonical native action. }
+        operation: { type: string, enum: [new_document, new_tab, insert_text, replace_selection, replace_value] }
+        preimage_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        expected_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+    OutcomeBinding:
+      type: object
+      additionalProperties: false
+      required: [session, target_sha256, observation, step]
+      description: Server result only. Creation binds its resulting document after dispatch, never from model arguments.
+      properties:
+        session: { type: string }
+        target_sha256: { type: string }
+        identity: { type: string }
+        observation: { type: string }
+        step: { type: integer, minimum: 1 }
+        document: { $ref: '#/components/schemas/OutcomeDocumentBinding' }
+    OutcomeCheck:
+      type: object
+      required: [expectation, provenance, revision, state]
+      properties:
+        expectation: { $ref: '#/components/schemas/OutcomeExpectation' }
+        provenance: { type: string, enum: [caller_explicit, model_proposed] }
+        revision: { type: integer }
+        state: { type: string, enum: [pending, verified, unavailable] }
+        reason: { type: string }
+        evidence_steps: { type: array, items: { type: integer } }
+        checked_at: { type: string, format: date-time }
+        binding: { $ref: '#/components/schemas/OutcomeBinding' }
+    WorkflowVerification:
+      type: object
+      description: Versioned check assessment, independent of execution status. Clients must treat unknown versions as unavailable, not certified.
+      required: [version, revision, state, checks, instruction_id, instruction_sha256]
+      properties:
+        version: { type: integer, description: Known versions are 1 and 2. Preserve unknown versions but do not certify or execute them. }
+        revision: { type: integer }
+        instruction_id: { type: string }
+        instruction_sha256: { type: string }
+        state: { type: string, enum: [pending, partial, unverified, checks_passed] }
+        checks: { type: array, maxItems: 12, items: { $ref: '#/components/schemas/OutcomeCheck' } }
+        history: { type: array, items: { type: object, additionalProperties: true } }
     AgentRunResponse:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        verification: { $ref: '#/components/schemas/WorkflowVerification' }
+        requested_computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task], description: User-selected policy from submission; not a computer access grant. }
+        requested_computer_scope: { type: string, enum: [desktop, selected_window] }
+        computer_scope: { type: string, enum: [desktop] }
+        outcome: { type: string, enum: [answer_only], description: The model answered without executing external tools. Absence makes no verification claim. }
         prompt: { type: string, description: Included in the owner-scoped job GET only, not the event stream. }
         model: { type: string }
         error_code: { type: string }
@@ -2190,6 +2310,8 @@ components:
       type: object
       required: [id, prompt, status, created_at]
       properties:
+        workflow: { $ref: '#/components/schemas/WorkflowVerification' }
+        outcome: { type: string, enum: [answer_only], description: A model answer without executed external work, not evidence that an application task completed. }
         deletable: { type: boolean, description: Whether this actor may remove this terminal run or interrupted record without recovery state; the server rechecks ownership and execution state at deletion time. }
         id: { type: string }
         parent_id: { type: string }

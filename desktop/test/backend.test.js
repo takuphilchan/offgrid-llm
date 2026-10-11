@@ -2,7 +2,14 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { once } = require('node:events');
-const { assessIdentity, inspectBackend, isTrustedPage, isTrustedSender, fingerprintUI } = require('../backend');
+const { assessIdentity, inspectBackend, isTrustedPage, isTrustedSender, fingerprintUI, workspaceChannelAllowed } = require('../backend');
+
+test('offline and recovery pages retain local Stop, never new host authority', () => {
+  for(const loading of [false,true]) {
+    for(const channel of ['computer-stop','computer-stop-access','computer-status']) assert.equal(workspaceChannelAllowed(channel,false,loading),true);
+    for(const channel of ['computer-desktop-enable','computer-desktop-start','computer-start','computer-targets','get-paths']) assert.equal(workspaceChannelAllowed(channel,false,loading),false);
+  }
+});
 
 const hash = 'a'.repeat(64);
 const identity = { product: 'offgrid', version: '0.4.3', api_version: 2, revision: 'abc', ui_build_id: hash, capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'], desktop_bridge: {status:'ready',schema_version:1,protocol:1,ui_build_id:hash} };

@@ -33,6 +33,9 @@ func TestNativeWorkerHost(t *testing.T) {
 	}
 	flag.CommandLine = flag.NewFlagSet("native-worker", flag.ContinueOnError)
 	os.Args = []string{os.Args[0], "--state", os.Getenv("OFFGRID_NATIVE_TEST_STATE")}
+	if os.Getenv("OFFGRID_NATIVE_TEST_PROTOCOL") == "3" {
+		os.Args = append(os.Args, "--protocol", "3", "--stop-control", "app")
+	}
 	if err := run(); err != nil {
 		t.Fatal(err)
 	}
@@ -173,8 +176,8 @@ func TestNativeWorkerPrivatePipeConsentAndRealEdit(t *testing.T) {
 		t.Fatal("owned native document not selectable")
 	}
 	binding := computer.ControlBinding{Actor: "fixture-owner", Task: "fixture-task", Companion: "fixture-companion", Session: "fixture-session", Target: target.Identity}
-	// Exercise actual OS Yes/No dialogs, never a production auto-approve flag.
-	// The harness sends Yes only to the worker child it owns, for the exact
+	// Exercise actual native consent dialogs, never a production auto-approve flag.
+	// The harness clicks Allow only in the worker child it owns, for the exact
 	// fixture document; no unrelated app or user's task is approved.
 	approve := func(expected string) <-chan error {
 		done := make(chan error, 1)
@@ -194,8 +197,12 @@ func TestNativeWorkerPrivatePipeConsentAndRealEdit(t *testing.T) {
 				}
 				label, _, _ := fixtureUser32.NewProc("GetDlgItem").Call(window, 0xffff)
 				var text [8192]uint16
-				fixtureUser32.NewProc("GetWindowTextW").Call(label, uintptr(unsafe.Pointer(&text[0])), 8192)
+				fixtureUser32.NewProc("SendMessageW").Call(label, 0x000d, 8192, uintptr(unsafe.Pointer(&text[0])))
 				content := windows.UTF16ToString(text[:])
+				heading, _, _ := fixtureUser32.NewProc("GetDlgItem").Call(window, 102)
+				var headingText [256]uint16
+				fixtureUser32.NewProc("GetWindowTextW").Call(heading, uintptr(unsafe.Pointer(&headingText[0])), 256)
+				content = windows.UTF16ToString(headingText[:]) + "\n" + content
 				if strings.Contains(content, expected) && strings.Contains(content, "OffGrid IPC owned document") {
 					dialog = window
 					return 0
@@ -218,7 +225,7 @@ func TestNativeWorkerPrivatePipeConsentAndRealEdit(t *testing.T) {
 		return done
 	}
 	consented := approve("Allow OffGrid to inspect")
-	call("select", map[string]any{"target": target.Identity.ID, "binding": binding}, &target)
+	call("select", map[string]any{"target": target.Identity.ID, "binding": binding, "approval_mode": "ask_every_time"}, &target)
 	if err := <-consented; err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +247,7 @@ func TestNativeWorkerPrivatePipeConsentAndRealEdit(t *testing.T) {
 	step := computer.BoundedStep{ID: "exact-edit", Binding: binding, Actions: []computer.PreparedControlAction{action}}
 	var grant computer.StepGrant
 	consented = approve("Approve these exact changes")
-	call("approve", map[string]any{"step": step}, &grant)
+	call("approve", map[string]any{"step": step, "automatic": false}, &grant)
 	if err := <-consented; err != nil {
 		t.Fatal(err)
 	}

@@ -115,7 +115,7 @@ func (j *NativeJournal) claim(ctx context.Context, binding ControlBinding, actio
 		return nil, ErrUncertain
 	}
 	var saved ControlResult
-	if json.Unmarshal(data, &saved) != nil || saved.ActionID != action.ID || saved.Outcome != state {
+	if DecodeControlMessage(data, &saved) != nil || saved.ActionID != action.ID || saved.Outcome != state || validateDocumentResult(binding, action, saved) != nil {
 		return nil, fmt.Errorf("computer_journal_corrupt")
 	}
 	return &saved, nil
@@ -160,7 +160,14 @@ func NewNativeSupervisor(journal *NativeJournal, consent LocalConsent, dispatch 
 		consent.ApprovalMode = ApprovalAskEveryTime
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &NativeSupervisor{journal: journal, consent: consent, dispatch: dispatch, grants: map[string]StepGrant{}, ctx: ctx, cancel: cancel, remaining: 100}
+	remaining := 100
+	if consent.Desktop != nil {
+		remaining = DesktopActionBudget
+		if !consent.permits(consent.Binding) {
+			cancel()
+		}
+	}
+	return &NativeSupervisor{journal: journal, consent: consent, dispatch: dispatch, grants: map[string]StepGrant{}, ctx: ctx, cancel: cancel, remaining: remaining}
 }
 
 // Revoke closes admission immediately, including while the provider or a local
@@ -183,7 +190,7 @@ func (s *NativeSupervisor) Approve(step BoundedStep, confirm func(BoundedStep) b
 	if err != nil {
 		return StepGrant{}, err
 	}
-	if s.ctx.Err() != nil || !s.consent.Active || s.consent.Binding != step.Binding || !now.Before(s.consent.ExpiresAt) {
+	if s.ctx.Err() != nil || !s.consent.Active || !s.consent.permits(step.Binding) || !now.Before(s.consent.ExpiresAt) {
 		return StepGrant{}, ErrControlScope
 	}
 	for id, grant := range s.grants {
@@ -247,7 +254,7 @@ func (s *NativeSupervisor) Execute(step BoundedStep, grantID string) ([]ControlR
 		}
 		s.remaining--
 		result, dispatchErr := s.dispatch(s.ctx, action)
-		if result.ActionID != action.ID || !validNativeOutcome(result.Outcome) {
+		if result.ActionID != action.ID || !validNativeOutcome(result.Outcome) || validateDocumentResult(step.Binding, action, result) != nil {
 			result = ControlResult{ActionID: action.ID, Outcome: "uncertain", Uncertain: true}
 			dispatchErr = ErrUncertain
 		}

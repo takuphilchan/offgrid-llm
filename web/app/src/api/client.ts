@@ -34,7 +34,7 @@ export type RunEvent = { id: string; run_id: string; sequence: number; type: str
 export type RAGStatus = components['schemas']['RAGStatus'];
 export type ComputerStatus = { available: boolean; emergency_stop: boolean; active_sessions: number };
 export type ComputerModelCheck = components['schemas']['ComputerModelCheck'];
-export type ComputerSession = { id: string; origin: string; driver?: 'browser' | 'windows-uia' | 'macos-accessibility' | 'linux-atspi'; approval_mode: 'ask_every_time' | 'scoped_changes' | 'full_task'; remaining_actions: number; expires_at?: string; state?: 'ready' | 'in_use' | 'finished' | 'exhausted'; run_id?: string };
+export type ComputerSession = { id: string; origin: string; driver?: 'browser' | 'windows-uia' | 'macos-accessibility' | 'linux-atspi'; approval_mode: 'ask_every_time' | 'scoped_changes' | 'full_task'; remaining_actions: number; expires_at?: string; state?: 'ready' | 'in_use' | 'finished' | 'exhausted' | 'awaiting_consent'; run_id?: string; input_id?:string; desktop?:{workspace:string;binding:Record<string,unknown>} };
 export type ExternalIntegration = components['schemas']['IntegrationStatus'];
 export type IntegrationSetup = components['schemas']['IntegrationSetup'];
 export type SystemConfig = { version: string; inference_slots: number; multi_user_mode: boolean; require_auth: boolean; guest_access: boolean; features: Record<string, boolean> };
@@ -227,12 +227,7 @@ export const api = {
     if (!Array.isArray(data.sessions) || data.sessions.some(s => !s || typeof s.id !== 'string' || typeof s.origin !== 'string' || !Number.isFinite(s.remaining_actions))) throw new APIError('Invalid browser session response. Check the service version.', 502);
     return data;
   },
-  checkComputerModel: (model: string, signal: AbortSignal, driver='browser') => request<ComputerModelCheck>('/api/v2/computer/model-check', { method: 'POST', body: JSON.stringify({model,driver}), signal }, 120_000),
-  computerPairing: () => request<{ code: string; expires_seconds: number }>('/api/v2/computer/pairing', { method: 'POST', body: '{}' }),
-  runAgent: (model: string, prompt: string, style: string, computerSession?: string) => request<AgentRun>('/v1/agents/run', {
-    method: 'POST', body: JSON.stringify({ model, prompt, style, computer_session: computerSession || undefined, max_iterations: 12, async: true })
-  }, computerSession ? 120_000 : 30_000),
-  agentRun: (id: string) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}`),
+  checkComputerModel: (model: string, signal: AbortSignal, driver='browser') => request<ComputerModelCheck>('/api/v2/computer/model-check', { method: 'POST', body: JSON.stringify({model,driver}), signal }, 600_000),
   job: (id: string, signal?: AbortSignal) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}`, { signal }),
   jobs: async (signal?: AbortSignal) => (await request<AgentTask[] | null>('/api/v2/jobs', { signal })) ?? [],
   deleteJob: (id: string) => request<{ success: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}`, {method: 'DELETE'}),
@@ -253,10 +248,10 @@ export const api = {
     } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
   }),
   jobAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'pause' | 'resume' | 'takeover' | 'steer' | 'reconnect' | 'reconcile', data: {approval_id?: string; call_id?: string; result?: string; request_id?: string; instruction?: string} = {}) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/${action}`, {method: 'POST', body: JSON.stringify(data)}),
-  submitJob: (prompt: string, model: string, request_id: string) => request<AgentRun>('/api/v2/jobs', {method: 'POST', body: JSON.stringify({prompt, model, request_id})}),
-  // Structured-tool and optional image preflights each have a 90-second bound.
-  resolveJobInput: (id: string, input_id: string, computer_session: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/input`, {method: 'POST', body: JSON.stringify({input_id, computer_session})}, 210_000),
-  deleteAgentRun: (id: string) => request<{ success: boolean }>(`/v1/agents/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  submitJob: (prompt: string, model: string, request_id: string, computer_approval_mode?: ComputerSession['approval_mode'],computer_scope?:'desktop'|'selected_window') => request<AgentRun>('/api/v2/jobs', {method: 'POST', body: JSON.stringify({prompt, model, request_id, computer_approval_mode,computer_scope})}),
+  // Default admission: 5 min, then tool check: 3 min, optional vision: 90 s.
+  // Do not abort a cold load using the ordinary short API request deadline.
+  resolveJobInput: (id: string, input_id: string, computer_session: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/input`, {method: 'POST', body: JSON.stringify({input_id, computer_session})}, 600_000),
   streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void | boolean, onHeartbeat: () => void, signal: AbortSignal) => {
     const replay = durableAgentEvents;
     const generation = agentReplayGeneration;
@@ -274,11 +269,6 @@ export const api = {
         if (agentCursors.size > 100) agentCursors.delete(agentCursors.keys().next().value!);
       }
     }, onHeartbeat);
-  },
-  agentAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'resume' | 'reconcile', data: { approval_id?: string; call_id?: string; result?: string } = {}) => request<AgentRun>(`/v1/agents/tasks/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: JSON.stringify({ ...data, async: true }) }),
-  agentTasks: async () => {
-    const result = await request<AgentTask[] | null>('/v1/agents/tasks');
-    return Array.isArray(result) ? result : [];
   },
   agentTools: async () => {
     const result = await request<{ tools: AgentTool[] | null; total: number; enabled_count: number }>('/v1/agents/tools?all=true');

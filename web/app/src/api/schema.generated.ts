@@ -1703,12 +1703,28 @@ export interface components {
             content?: string;
             tool_name?: string;
             tool_args?: string;
+            /** @description Canonical tool output. Native read failures encode NativeReadFailure JSON; do not infer effects from arbitrary provider text. */
             tool_result?: string;
             /** @description Durable record of exact approval or the immutable automatic session policy used for this action. */
             authorization?: string;
             /** Format: date-time */
             timestamp?: string;
         };
+        /** @description Service-authored operation-local failure; earlier mutations remain recorded and are never replayed. */
+        NativeReadFailure: {
+            /** @enum {string} */
+            status: "failed";
+            code: string;
+            message: string;
+            /** @enum {string} */
+            effects: "none";
+            /** @enum {boolean} */
+            verified: false;
+            recovery?: string;
+            readiness?: components["schemas"]["NativeApplicationReadiness"];
+        };
+        /** @enum {string} */
+        NativeApplicationReadiness: "ready" | "starting" | "surface_unavailable" | "unsupported_identity" | "observation_unavailable";
         AgentProgress: {
             /** @enum {string} */
             phase: "queued" | "loading" | "processing" | "generating" | "preparing_tool" | "tool" | "approval";
@@ -1734,6 +1750,8 @@ export interface components {
             approval_id?: string;
             executing_call?: string;
             snapshot_sha256: string;
+            /** @description Assessment from the same committed snapshot; absent for legacy or unknown versions. */
+            verification_state?: string;
             /** Format: date-time */
             recorded_at: string;
         };
@@ -1743,7 +1761,7 @@ export interface components {
             /** @enum {string} */
             kind: "computer";
             /** @enum {string} */
-            mode: "app" | "browser";
+            mode: "app" | "browser" | "desktop";
             /** @description Model-proposed label only; never a host identity or consent grant. */
             target: string;
             /** @description Proposed HTTPS address for local review. */
@@ -1776,7 +1794,96 @@ export interface components {
             compactions: number;
             archived_messages: number;
         };
+        OutcomeExpectation: {
+            id: string;
+            title: string;
+            /** @description V1: application_open, control_text_equals, control_checked_equals. V2 additionally supports document_blank, document_text_equals and document_edit_matches. Other kinds remain unverified. */
+            kind: string;
+            application_id?: string;
+            target_id?: string;
+            element?: string;
+            /** @description Exact text; server additionally enforces 4000 UTF-8 bytes for legacy control checks and 16000 UTF-8 bytes for document checks. */
+            text?: string;
+            checked?: boolean;
+            /** @description V2 observed document reference; never a window or title. */
+            document?: string;
+            /** @description V2 exact host snapshot reference. */
+            snapshot?: string;
+            /** @description V2 observed blank-creation command; no guessed future document. */
+            command?: string;
+            /**
+             * @description V2 noninterchangeable edit semantics.
+             * @enum {string}
+             */
+            edit_mode?: "insert_text" | "replace_selection" | "replace_value";
+        };
+        /** @description Service-authored v2 identity derived from canonical host evidence; never accepted as an input grant. */
+        OutcomeDocumentBinding: {
+            id: string;
+            generation: string;
+            container: string;
+            editor: string;
+            revision: string;
+            snapshot: string;
+            /** @description Exactly one canonical native action. */
+            action_id?: string;
+            /** @enum {string} */
+            operation?: "new_document" | "new_tab" | "insert_text" | "replace_selection" | "replace_value";
+            preimage_sha256?: string;
+            expected_sha256?: string;
+        };
+        /** @description Server result only. Creation binds its resulting document after dispatch, never from model arguments. */
+        OutcomeBinding: {
+            session: string;
+            target_sha256: string;
+            identity?: string;
+            observation: string;
+            step: number;
+            document?: components["schemas"]["OutcomeDocumentBinding"];
+        };
+        OutcomeCheck: {
+            expectation: components["schemas"]["OutcomeExpectation"];
+            /** @enum {string} */
+            provenance: "caller_explicit" | "model_proposed";
+            revision: number;
+            /** @enum {string} */
+            state: "pending" | "verified" | "unavailable";
+            reason?: string;
+            evidence_steps?: number[];
+            /** Format: date-time */
+            checked_at?: string;
+            binding?: components["schemas"]["OutcomeBinding"];
+        };
+        /** @description Versioned check assessment, independent of execution status. Clients must treat unknown versions as unavailable, not certified. */
+        WorkflowVerification: {
+            /** @description Known versions are 1 and 2. Preserve unknown versions but do not certify or execute them. */
+            version: number;
+            revision: number;
+            instruction_id: string;
+            instruction_sha256: string;
+            /** @enum {string} */
+            state: "pending" | "partial" | "unverified" | "checks_passed";
+            checks: components["schemas"]["OutcomeCheck"][];
+            history?: {
+                [key: string]: unknown;
+            }[];
+        };
         AgentRunResponse: {
+            verification?: components["schemas"]["WorkflowVerification"];
+            /**
+             * @description User-selected policy from submission; not a computer access grant.
+             * @enum {string}
+             */
+            requested_computer_approval_mode?: "ask_every_time" | "scoped_changes" | "full_task";
+            /** @enum {string} */
+            requested_computer_scope?: "desktop" | "selected_window";
+            /** @enum {string} */
+            computer_scope?: "desktop";
+            /**
+             * @description The model answered without executing external tools. Absence makes no verification claim.
+             * @enum {string}
+             */
+            outcome?: "answer_only";
             /** @description Included in the owner-scoped job GET only */
             prompt?: string;
             model?: string;
@@ -1837,6 +1944,12 @@ export interface components {
             steps: components["schemas"]["AgentStep"][];
         };
         AgentTask: {
+            workflow?: components["schemas"]["WorkflowVerification"];
+            /**
+             * @description A model answer without executed external work
+             * @enum {string}
+             */
+            outcome?: "answer_only";
             /** @description Whether this actor may remove this terminal run or interrupted record without recovery state; the server rechecks ownership and execution state at deletion time. */
             deletable?: boolean;
             id: string;
@@ -2080,6 +2193,8 @@ export interface operations {
             content: {
                 "application/json": {
                     request_id: string;
+                    /** @description Optional caller-authored outcomes; no access grant. Native workflows only. */
+                    expectations?: components["schemas"]["OutcomeExpectation"][];
                     /** @enum {string} */
                     action: "install" | "repair";
                     /** @description Required for install. */
@@ -3263,6 +3378,16 @@ export interface operations {
                     /** @enum {string} */
                     style?: "react" | "cot" | "plan-execute";
                     max_iterations?: number;
+                    /**
+                     * @description Proposed policy saved with the task
+                     * @enum {string}
+                     */
+                    computer_approval_mode?: "ask_every_time" | "scoped_changes" | "full_task";
+                    /**
+                     * @description Desktop tasks are saved awaiting a protocol-v3 task grant before inference. Selected-window scope preserves the limited v2 flow. Omitted fields retain legacy behavior.
+                     * @enum {string}
+                     */
+                    computer_scope?: "desktop" | "selected_window";
                 };
             };
         };
@@ -3894,7 +4019,16 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {integer} */
+                    protocol_version?: 3;
+                    run_id?: string;
+                    input_id?: string;
+                };
+            };
+        };
         responses: {
             /** @description Administrator-only single-use enrollment code, valid for two minutes. Never cache or log. */
             200: {
@@ -3934,7 +4068,7 @@ export interface operations {
                             driver?: "browser" | "windows-uia" | "macos-accessibility" | "linux-atspi";
                             /** @enum {string} */
                             approval_mode: "ask_every_time" | "scoped_changes" | "full_task";
-                            /** @description Companion-issued native identity, present only for protocol-2 sessions. */
+                            /** @description Companion-issued native identity. Protocol 2 binds one window; protocol 3 binds a task desktop, with actual targets separately bound at dispatch. */
                             target?: {
                                 id: string;
                                 os_session: string;
@@ -3947,8 +4081,21 @@ export interface operations {
                             expires_at: string;
                             remaining_actions: number;
                             /** @enum {string} */
-                            state?: "ready" | "in_use" | "finished" | "exhausted";
+                            state?: "ready" | "awaiting_consent" | "in_use" | "finished" | "exhausted";
                             run_id?: string;
+                            input_id?: string;
+                            desktop?: {
+                                workspace: string;
+                                binding: {
+                                    actor: string;
+                                    task: string;
+                                    companion: string;
+                                    session: string;
+                                    target: {
+                                        [key: string]: string;
+                                    };
+                                };
+                            };
                         }[];
                     };
                 };

@@ -70,7 +70,7 @@ type nativeProbeEngine struct {
 
 func (e *nativeProbeEngine) ChatCompletion(_ context.Context, request *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error) {
 	e.calls++
-	if len(request.Tools) != 7 || request.Tools[0].Function.Name != "computer_observe" {
+	if len(request.Tools) != 9 || request.Tools[0].Function.Name != "computer_observe" {
 		return nil, errors.New("browser tools leaked into native check")
 	}
 	name, args := "computer_observe", "{}"
@@ -200,7 +200,7 @@ func TestNativeRunnerRequiresDurableApprovalAndDoesNotClaimClickCompletion(t *te
 	s := &Server{browserHub: hub, agentManager: manager}
 	tools := &browserRunTools{RunTools: registry, server: s}
 	caller := func(_ context.Context, _ *agents.Task, messages []api.ChatMessage, available []api.Tool) (*api.ChatCompletionResponse, error) {
-		if len(available) != 7 || available[0].Function.Name != "computer_observe" {
+		if len(available) != 9 || available[0].Function.Name != "computer_observe" {
 			t.Fatal("native tools missing")
 		}
 		name, args := "computer_observe", "{}"

@@ -32,14 +32,28 @@ func (s *Server) checkComputerModel(ctx context.Context, model string) computerM
 }
 
 func (s *Server) checkComputerModelDriver(ctx context.Context, model, driver string) computerModelCheck {
-	result := computerModelCheck{Model: model, Code: "computer_model_check_unavailable", Message: "Could not check the model runtime. Wait for current inference to finish, then retry.", Retryable: true}
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
+	return s.checkComputerModelDriverWithBudget(ctx, model, driver, 3*time.Minute)
+}
+
+func (s *Server) checkComputerModelDriverWithBudget(ctx context.Context, model, driver string, probeBudget time.Duration) computerModelCheck {
+	result := computerModelCheck{Model: model, Code: "computer_model_check_unavailable", Message: "The model runtime could not complete its tool-call check. Check service health and retry this saved task; no computer action was executed by the check.", Retryable: true}
+	// Admission already has the configured model-load deadline (including queue
+	// wait). Cold loading must not consume the two-step inference check's budget.
 	release, err := s.acquireInference(ctx, model)
 	if err != nil {
+		result.Code = "computer_model_admission_unavailable"
+		result.Message = "The model could not become ready for its tool-call check. Check model loading and service health, then retry this saved task."
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, inference.ErrInferenceQueueFull) {
+			result.Message = "Timed out or reached capacity while waiting for the model to become ready. Current work was not interrupted. Retry this saved task when model loading or inference finishes."
+		}
+		if errors.Is(err, context.Canceled) {
+			result.Code, result.Message = "computer_model_check_cancelled", "The model check was cancelled before inference. This check did not execute a computer action."
+		}
 		return result
 	}
 	defer release()
+	ctx, cancel := context.WithTimeout(ctx, probeBudget)
+	defer cancel()
 	if runtime, ok := s.engine.(interface {
 		ToolRuntimeInfo(context.Context) (*inference.ToolRuntimeInfo, error)
 	}); ok {
@@ -50,6 +64,11 @@ func (s *Server) checkComputerModelDriver(ctx context.Context, model, driver str
 	}
 	err = probeComputerToolsDriver(ctx, s.engine, model, driver)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			result.Code, result.Message = "computer_model_check_timeout", "The model loaded, but its two-step tool-call check exceeded the time limit. Retry this saved task or choose a faster tool-calling model. The check did not execute a computer action."
+		} else if errors.Is(err, context.Canceled) {
+			result.Code, result.Message = "computer_model_check_cancelled", "The model check was cancelled. This check did not execute a computer action."
+		}
 		if errors.Is(err, errComputerToolCalling) {
 			result.Code, result.Retryable = "computer_tool_calling_unavailable", false
 			result.Message = "This model/runtime did not pass the browser tool-call check. No browser action was executed. Choose a model with verified tool calling, or configure and retest a compatible llama.cpp chat template. Changing reasoning style does not fix this."

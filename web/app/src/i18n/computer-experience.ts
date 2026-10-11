@@ -1,6 +1,7 @@
 import copy from './computer-experience.json';
 import type {LocaleCode} from './index';
 import {nativeAppText} from './native-app';
+import {documentActionLabel} from './document-workflow';
 export const computerExperience = (locale: LocaleCode) => copy[locale];
 const transferLabels:Record<LocaleCode,readonly [string,string]> = {
  en:['Download file','Attach selected file'], fr:['Télécharger le fichier','Joindre le fichier sélectionné'],
@@ -14,6 +15,8 @@ const captureLabels:Record<LocaleCode,string> = {
  ar:'فحص العرض الحالي',sw:'Kagua mwonekano wa sasa',sn:'Ongorora zvinoonekwa',nd:'Hlola okubonakalayo',zu:'Hlola okubonakalayo'
 };
 export function browserActionLabel(locale: LocaleCode, name: string) {
+ const document = documentActionLabel(locale, name);
+ if (document) return document;
  const native = ['computer_observe','computer_replace_text','computer_activate','computer_verify'].indexOf(name);
  if(native>=0)return nativeAppText(locale).actions[native];
  if(name==='computer_set_checked')return copy[locale].actions[6];

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
@@ -22,6 +23,7 @@ type probeEngine struct {
 	inference.Engine
 	mode     string
 	requests int
+	delay    time.Duration
 }
 
 func pairedBrowserForPreflight(t *testing.T) (*computer.BrowserHub, string, string) {
@@ -38,6 +40,13 @@ func pairedBrowserForPreflight(t *testing.T) (*computer.BrowserHub, string, stri
 	return hub, session.ID, token
 }
 func (e *probeEngine) ChatCompletion(ctx context.Context, request *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error) {
+	if e.delay > 0 {
+		select {
+		case <-time.After(e.delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -85,6 +94,64 @@ func (e *probeEngine) ChatCompletion(ctx context.Context, request *api.ChatCompl
 		}
 	}
 	return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message, FinishReason: finish}}}, nil
+}
+
+func TestComputerModelCheckAdmissionDoesNotConsumeProbeBudget(t *testing.T) {
+	gate := inference.NewLifecycleGate(1)
+	release, err := gate.AcquireWithContext(context.Background(), "model", 8192, func(context.Context, string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	engine := &probeEngine{mode: "good"}
+	s := &Server{config: &config.Config{MaxContextSize: 8192, ModelLoadTimeout: 2}, engine: engine, inferenceLifecycle: gate}
+	// The model's existing request lasts longer than the entire probe budget.
+	// Waiting must neither interrupt it nor expire a probe that has not started.
+	go func() { time.Sleep(200 * time.Millisecond); release() }()
+	result := s.checkComputerModelDriverWithBudget(context.Background(), "model", "browser", 100*time.Millisecond)
+	if !result.Passed || engine.requests != 2 {
+		t.Fatalf("cold/queued admission stole probe budget: %+v calls=%d", result, engine.requests)
+	}
+	if gate.Status().Active != 0 {
+		t.Fatal("probe leaked inference lease")
+	}
+}
+
+func TestComputerModelCheckReportsProbeDeadlineAndCancellation(t *testing.T) {
+	for _, phase := range []string{"probe", "admission"} {
+		t.Run(phase, func(t *testing.T) {
+			gate := inference.NewLifecycleGate(1)
+			release, err := gate.AcquireWithContext(context.Background(), "model", 8192, func(context.Context, string) error { return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer release()
+			engine := &probeEngine{mode: "good", delay: time.Second}
+			s := &Server{config: &config.Config{MaxContextSize: 8192}, engine: engine, inferenceLifecycle: gate}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			want := "computer_model_check_timeout"
+			if phase == "admission" {
+				cancel()
+				want = "computer_model_check_cancelled"
+			} else {
+				release()
+			}
+			result := s.checkComputerModelDriverWithBudget(ctx, "model", "browser", 20*time.Millisecond)
+			if result.Passed || !result.Retryable || result.Code != want {
+				t.Fatalf("wrong phase failure: %+v", result)
+			}
+			if strings.Contains(result.Message, "Wait for current inference") {
+				t.Fatal("probe failure blamed on other work")
+			}
+			if phase == "probe" && gate.Status().Active != 0 {
+				t.Fatal("failed probe leaked lease")
+			}
+			if phase == "admission" && gate.Status().Active != 1 {
+				t.Fatal("cancelled admission interrupted existing inference")
+			}
+		})
+	}
 }
 
 func TestComputerModelProbeRequiresActualTwoStepCalls(t *testing.T) {
@@ -154,6 +221,51 @@ func TestComputerSubmissionBlocksUnsupportedModelWithoutCreatingTask(t *testing.
 		}
 		if action, err := hub.Poll(token); err != nil || action != nil {
 			t.Fatal("preflight dispatched action", err)
+		}
+	}
+}
+
+func TestSavedTaskPreflightFailureIsRetryableWithoutDispatch(t *testing.T) {
+	s := taskFirstServer(t)
+	engine := &probeEngine{mode: "runtime"}
+	s.engine = engine
+	s.inferenceLifecycle = inference.NewLifecycleGate(1)
+	release, err := s.inferenceLifecycle.AcquireWithContext(context.Background(), "model", 8192, func(context.Context, string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	cfg := agents.DefaultAgentConfig()
+	cfg.TaskFirst, cfg.ContextWindow = true, 8192
+	task, err := s.agentRunner.Create("Read the browser", "model", "local-admin", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err = s.agentRunner.Continue(context.Background(), task.ID, task.Actor, "start", "", false)
+	if err != nil || task.PendingInput == nil {
+		t.Fatal("missing pending input", err)
+	}
+	var session, token string
+	s.browserHub, session, token = pairedBrowserForPreflight(t)
+	inputID := task.PendingInput.ID
+	for _, mode := range []string{"runtime", "prose"} {
+		engine.mode = mode
+		w := httptest.NewRecorder()
+		body := `{"input_id":"` + inputID + `","computer_session":"` + session + `"}`
+		s.handleJobInput(w, httptest.NewRequest("POST", "/api/v2/jobs/"+task.ID+"/input", strings.NewReader(body)), task.ID)
+		status := 503
+		if mode == "prose" {
+			status = 422
+		}
+		if w.Code != status {
+			t.Fatalf("%s: %d %s", mode, w.Code, w.Body.String())
+		}
+		saved, _ := s.agentManager.GetTask(task.ID)
+		if saved.Status != agents.TaskInput || saved.PendingInput.ID != inputID || saved.Config.ComputerSession != "" {
+			t.Fatal("failed preflight changed held task")
+		}
+		if action, err := s.browserHub.Poll(token); err != nil || action != nil {
+			t.Fatal("failed check dispatched", err)
 		}
 	}
 }

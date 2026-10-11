@@ -519,7 +519,11 @@ func NewWithConfig(cfg *config.Config) *Server {
 	server.agentRunner = agents.NewRunner(agentManager, &browserRunTools{RunTools: toolRegistry, server: server}, server.callAgentModel)
 	server.agentRunner.StreamCaller = server.streamAgentModel
 	server.agentRunner.ContextWindow = func(*agents.Task) int { return server.effectiveContextWindow() }
+	server.agentRunner.CountContext = server.countAgentContext
 	server.agentRunner.Observer = func(task *agents.Task) {
+		if task.Status == agents.TaskCompleted || task.Status == agents.TaskFailed || task.Status == agents.TaskCancelled {
+			server.browserHub.StopTask(task.Actor, task.ID)
+		}
 		if task.Status == agents.TaskInput && task.PendingInput != nil {
 			server.browserHub.StopSession(task.Actor, task.PendingInput.PreviousSession)
 		}
@@ -4875,8 +4879,9 @@ func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 		task.ContextArchive = nil
 		tasks = append(tasks, struct {
 			*agents.Task
-			Deletable bool `json:"deletable"`
-		}{task, deletable})
+			Deletable bool   `json:"deletable"`
+			Outcome   string `json:"outcome,omitempty"`
+		}{task, deletable, agents.TaskOutcome(task)})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tasks)

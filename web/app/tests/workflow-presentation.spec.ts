@@ -1,5 +1,25 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('document read recovery remains on the current canonical task without automatic replay', async ({ page }) => {
+  await fixture(page);
+  const id = 'run-' + 'd'.repeat(32);
+  const commands: string[] = [];
+  const task = {run_id:id,task_id:id,prompt:'Edit a new unsaved document',status:'interrupted',resumable:true,model:'fixture',steps:[{id:1,type:'error',tool_name:'computer_read_text',tool_result:JSON.stringify({status:'failed',code:'computer_document_changed',effects:'none',verified:false})}],verification:{version:2,revision:1,instruction_id:'initial',instruction_sha256:'a'.repeat(64),state:'pending',checks:[]}};
+  await page.route(`**/api/v2/jobs/${id}**`, async route => {
+    if(route.request().method() !== 'GET') commands.push(new URL(route.request().url()).pathname);
+    if(new URL(route.request().url()).pathname.endsWith('/events')) return route.fulfill({contentType:'text/event-stream',body:`data: ${JSON.stringify({...task,type:'snapshot'})}\n\n`});
+    return route.fulfill({json:task});
+  });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await expect(page.locator('.native-document-progress')).toContainText('failed without input');
+  await expect(page.getByRole('button',{name:'Record verified outcome',exact:true})).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Resume',exact:true})).toBeVisible();
+  expect(commands).toEqual([]);
+  await page.getByRole('button',{name:'Resume',exact:true}).click();
+  await expect.poll(()=>commands).toEqual([`/api/v2/jobs/${id}/resume`]);
+});
+
 async function fixture(page: Page) {
   const state = { enabled: false, docs: 0, failSettings: false, slowSettings: false, transfer: 'complete', polls: 0 };
   await page.addInitScript(() => {
@@ -8,8 +28,8 @@ async function fixture(page: Page) {
     localStorage.setItem('offgrid.onboarding.complete', 'true');
   });
   await page.route('**/health', r => r.fulfill({ json: { status: 'healthy' } }));
-  await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', version: 'test', api_version: 2 } }));
-  await page.route(/\/(?:v1|api\/v2\/computer)\//, async r => {
+  await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', version: 'test', api_version: 2, capabilities: ['task-first-agents-v2'] } }));
+  await page.route(/\/(?:v1\/|api\/v2\/(?:computer\/|jobs(?:\/|$)))/, async r => {
     const path = new URL(r.request().url()).pathname;
     if (state.slowSettings && ['/v1/rag/status', '/api/v2/computer/status'].includes(path)) await new Promise(resolve => setTimeout(resolve, 700));
     if (state.failSettings && ['/v1/rag/status', '/api/v2/computer/status'].includes(path)) return r.fulfill({ status: 503, body: 'Service unavailable' });
@@ -21,14 +41,14 @@ async function fixture(page: Page) {
       '/v1/documents': { documents: state.docs ? [{ id: 'doc', name: 'Refreshed document', source_retained: true, size: 10, chunk_count: 1 }] : [], count: state.docs },
       '/v1/rag/status': { enabled: state.enabled, embedding_model: 'bge-m3', stats: {} },
       '/v1/models/download/progress': state.transfer === 'missing' ? {} : { 'bge-m3.gguf': { file_name: 'bge-m3.gguf', model_id: 'bge-m3', enable_knowledge: true, status: state.transfer, percent: 100, bytes_done: 100, bytes_total: 100, speed: 0, started_at: 1 } },
-      '/v1/agents/tasks': [],
+      '/api/v2/jobs': [], '/v1/agents/tasks': [],
       '/v1/agents/tools': { tools: [{ name: 'calculator', description: 'Calculate', enabled: true, source: 'builtin' }], enabled_count: 1 },
       '/v1/agents/mcp': { servers: [] }, '/v1/integrations': { integrations: [] },
       '/api/v2/computer/status': { available: false }, '/v1/system/config': { version: 'test', inference_slots: 1 },
       '/v1/sessions': { sessions: [] }
     };
     if (path === '/v1/models/download/progress') state.polls++;
-    if (path === '/v1/agents/run' || path === '/v1/agents/tasks/example') return r.fulfill({ json: { run_id: 'example', status: 'completed', output: '## Report\n\n| Item | Value |\n| --- | --- |\n| Test | Passed |\n\n![tracker](https://example.com/track)', steps: [], resumable: false } });
+    if ((path === '/api/v2/jobs' && r.request().method() === 'POST') || path === '/api/v2/jobs/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') return r.fulfill({ json: { run_id: 'run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', status: 'completed', output: '## Report\n\n| Item | Value |\n| --- | --- |\n| Test | Passed |\n\n![tracker](https://example.com/track)', steps: [], resumable: false } });
     return r.fulfill({ json: data[path] ?? {} });
   });
   return state;
@@ -64,9 +84,9 @@ test('global refresh updates documents without reloading the workspace', async (
   await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Refreshed document' })).toBeVisible();
   await page.goto('/ui/#/agents');
-  await page.getByLabel('Task', { exact: true }).fill('Keep this draft');
+  await page.getByRole('textbox', { name: 'Task', exact: true }).fill('Keep this draft');
   await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(page.getByLabel('Task', { exact: true })).toHaveValue('Keep this draft');
+  await expect(page.getByRole('textbox', { name: 'Task', exact: true })).toHaveValue('Keep this draft');
 });
 
 test('missing progress unlocks recovery instead of preparing forever', async ({ page }) => {
@@ -87,15 +107,18 @@ test('settings distinguishes loading and failed requests from disabled features'
   await expect(page.getByRole('alert')).toBeVisible();
 });
 
-test('agent tabs support keyboard navigation and tool switches have names', async ({ page }) => {
+test('agent navigation supports keyboard links and tool switches have names', async ({ page }) => {
   await fixture(page);
   await page.goto('/ui/#/agents');
+  await expect(page.locator('.task-composer')).toBeVisible();
   await page.locator('#agent-workspace-tab').focus();
-  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Tab');
   await expect(page.locator('#agent-tools-tab')).toBeFocused();
-  await expect(page.locator('#agent-tools-tab')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#agent-tools-tab')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('checkbox', { name: 'calculator', exact: true })).toBeChecked();
-  await page.keyboard.press('End');
+  await page.locator('#agent-tools-tab').focus();
+  await page.keyboard.press('Tab');
   await expect(page.locator('#agent-connections-tab')).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   for (const link of await page.locator('.mobile-nav a').all()) await expect(link).toBeInViewport();
@@ -107,10 +130,10 @@ test('agent results render safe headings and tables rather than raw Markdown', a
   const remote: string[] = [];
   page.on('request', r => { if (r.url().includes('example.com')) remote.push(r.url()); });
   await page.goto('/ui/#/agents');
-  await page.getByLabel('Task', { exact: true }).fill('Make a report');
-  await page.getByRole('button', { name: 'Run task', exact: true }).click();
-  await expect(page.locator('.agent-answer h2')).toHaveText('Report');
-  await expect(page.locator('.agent-answer table')).toContainText('Passed');
+  await page.getByRole('textbox', { name: 'Task', exact: true }).fill('Make a report');
+  await page.getByRole('button', { name: 'Start task', exact: true }).click();
+  await expect(page.locator('.task-result h2')).toHaveText('Report');
+  await expect(page.locator('.task-result table')).toContainText('Passed');
   expect(remote).toEqual([]);
 });
 

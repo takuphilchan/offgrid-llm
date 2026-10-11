@@ -3,9 +3,18 @@ package inference
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+var ErrPromptCountUnavailable = errors.New("runtime prompt counting is unavailable")
+
+// PromptTokenCounter counts the complete templated request without generation.
+// Callers must hold the same model lifecycle lease used for inference.
+type PromptTokenCounter interface {
+	CountPromptTokens(context.Context, *api.ChatCompletionRequest) (int, error)
+}
 
 // TokenCallback is called for each token during streaming
 type TokenCallback func(token string) error

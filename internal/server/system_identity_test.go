@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,8 +12,58 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
 )
+
+func TestAgentContractSurvivesStorageFailure(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		root := t.TempDir()
+		if failed {
+			// Isolated, deterministic open failure: never touch installed state.
+			if err := os.Mkdir(filepath.Join(root, "agent-state.sqlite"), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		manager := agents.NewManagerWithPersistence(nil, nil, nil, root)
+		runner := agents.NewRunner(manager, agents.NewToolRegistry(), nil)
+		s := &Server{agentManager: manager, agentRunner: runner, browserHub: computer.NewBrowserHub()}
+		response := httptest.NewRecorder()
+		s.handleSystemIdentity(response, httptest.NewRequest("GET", "/api/v2/system", nil))
+		var identity SystemIdentity
+		if err := json.Unmarshal(response.Body.Bytes(), &identity); err != nil {
+			t.Fatal(err)
+		}
+		for _, contract := range []string{"task-first-agents-v2", "durable-agent-events-v2", "task-lifecycle-v2"} {
+			if !strings.Contains(response.Body.String(), `"`+contract+`"`) {
+				t.Fatalf("lost contract %s: %+v", contract, identity)
+			}
+		}
+		if strings.Contains(response.Body.String(), root) {
+			t.Fatal("storage path disclosed")
+		}
+		if !manager.ActivityReplaySupported() || manager.ActivityReplayAvailable() == failed {
+			t.Fatal("support and health conflated")
+		}
+		if failed {
+			if manager.StorageError() == nil {
+				t.Fatal("fixture did not fail closed")
+			}
+			if _, err := runner.Create("Never dispatch", "model", "actor", agents.DefaultAgentConfig()); !errors.Is(err, agents.ErrRunStorage) {
+				t.Fatalf("creation not blocked: %v", err)
+			}
+			read := httptest.NewRecorder()
+			s.handleJobSubmit(read, httptest.NewRequest("GET", "/api/v2/jobs", nil))
+			if read.Code != 503 {
+				t.Fatalf("storage read status: %d %s", read.Code, read.Body.String())
+			}
+		}
+	}
+	if agents.NewManager(nil, nil, nil).ActivityReplaySupported() {
+		t.Fatal("memory-only manager advertised durable replay")
+	}
+}
 
 func TestPublicSystemIdentityIsExactAndContainsNoPrivateState(t *testing.T) {
 	uiDir := t.TempDir()

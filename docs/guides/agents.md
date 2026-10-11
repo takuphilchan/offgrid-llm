@@ -17,12 +17,12 @@ details does not run a task or change its approval policy. See [MCP setup](mcp.m
 
 On matching task-first builds, open **Agents**, describe the outcome and choose
 **Start task**. The task is saved before execution. In the updated development
-renderer, model and voice settings sit beside the prompt (older builds use
+renderer, model, computer approval policy and voice settings sit beside the prompt (older builds use
 **Task settings**); application and browser setup are not prerequisites for
 submitting a task. A model with reliable structured tool calling is still required.
 
 When the model requests computer access, the saved task displays **Access needed**.
-Review the requested application/site and action-approval policy in the desktop
+Review the requested application/site and the saved action-approval policy in the desktop
 app. Locally approve the actual target; model-proposed names never grant access.
 The same task then continues, beginning with a fresh observation. Web users can
 choose **Continue in desktop** to open that saved task in the matching workspace.
@@ -269,6 +269,27 @@ SSE mode (`stream: true`) reports durable status and completed steps, followed
 by `done`, `approval_required`, or `error`. It does not emit model-token deltas.
 A disconnect leaves the run active: recover by ID instead of resubmitting it.
 
+### Invalid proposals
+
+Malformed computer-access proposals and stale/invalid computer actions rejected
+before dispatch can be corrected in the same task. OffGrid records rejected
+proposals as unexecuted and allows at most three consecutive automatic repairs.
+If these fail, the task pauses with an explanation; correct the instruction or
+review model compatibility, then explicitly resume. The repair count survives
+restart. Scope/policy denials and uncertain effects do not enter this repair
+loop, and old failed tasks are not automatically resumed.
+
+Returning instructions or asking you to paste tool JSON after a rejected
+proposal is not a successful repair. Those answers use the same bounded repair
+budget and cannot complete the task. Explicit resume refreshes the budget but
+does not erase the unresolved proposal. An explicit correction can change the
+requested outcome; uncertain dispatched actions still require reconciliation.
+
+When a model only returns text, the task is labelled **Answered**, with a notice
+that no external tool action was performed. This is appropriate for writing and
+question-answering, but it is not evidence that Chrome opened or a document
+changed. A selected model still needs reliable structured tool calling.
+
 ## Tools and MCP
 
 **Agents → Available tools** shows actual enabled tools and risk descriptors.
@@ -279,6 +300,15 @@ management settings are separate from the task composer.
 Supply a server URL, not an `npx` command in the URL field. Successful connection
 configuration is persisted. External tools are still privileged, even when
 served locally; inspect their capabilities and restrict what the service can access.
+
+In task-first runs, granting computer access adds the available computer tools
+without removing permitted MCP tools. Registry discovery applies the current
+actor policy and hides disabled/denied tools; execution checks that policy again.
+Local shell/script execution is excluded from task-first work even under another
+tool name. Computer policies do not authorize connected-service operations.
+The agent may research through MCP before observing an application, but it must
+observe before computer input and verify after completing computer work. A tool
+result from an external service cannot substitute for application verification.
 
 To remove an MCP server, open **Agents → Connections**, choose **Remove
 connection** beside its name, and confirm. This forgets the saved connection,
@@ -294,6 +324,22 @@ Computer use is unavailable unless a supported driver is configured. Do not
 interpret a page or status card as evidence of working desktop control.
 
 ## Validation boundary
+
+### Outcome checks and bounded completion repair
+
+New task-first native workflows retain declared outcomes across context
+compaction and reconnect. Completion with pending checks receives three
+corrective opportunities in the same saved task, then pauses with remaining
+checks intact. Only newly verified progress resets that budget; repeatedly
+invalidating and rechecking the same outcome does not. Viewing or reconnecting
+does not resume work. Use existing steering at a safe paused boundary to revise
+the request; earlier revisions remain recorded.
+
+Unsupported verification permits an explicitly unverified or partial result.
+Neither a successful click nor generated prose is proof of task completion.
+Uncertain mutations still require reconciliation and are never repeated by
+completion repair. Service restart invalidates host access, even when the task's
+evidence and repair count are restored.
 
 Regression tests cover run-ID approvals, duplicate/expired grants, denial,
 cancellation, process-restart recovery, storage failure before execution,

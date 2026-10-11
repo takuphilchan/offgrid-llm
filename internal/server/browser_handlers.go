@@ -1,7 +1,10 @@
 package server
 
 import (
+	"encoding/json"
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -20,12 +23,56 @@ func (s *Server) handleBrowserPairing(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Companion service unavailable", 503)
 		return
 	}
-	code, err := s.browserHub.PairCode(s.agentActor(r))
+	var request struct {
+		Run      string `json:"run_id"`
+		Input    string `json:"input_id"`
+		Protocol int    `json:"protocol_version"`
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil && err != io.EOF {
+			writeError(w, "Invalid pairing request", 400)
+			return
+		}
+		if decoder.Decode(new(any)) != io.EOF {
+			writeError(w, "Invalid pairing request", 400)
+			return
+		}
+	}
+	var code string
+	var err error
+	if request.Protocol == computer.DesktopProtocolVersion {
+		if s.agentManager == nil {
+			writeError(w, "Task unavailable", 409)
+			return
+		}
+		task, ok := s.agentManager.GetTask(request.Run)
+		if !ok || task.Actor != s.agentActor(r) || task.Status != agents.TaskInput || task.PendingInput == nil || task.PendingInput.ID != request.Input || task.PendingInput.Kind != "computer" || (task.PendingInput.Mode != "app" && task.PendingInput.Mode != "desktop") {
+			writeError(w, "Task access request changed", 409)
+			return
+		}
+		mode := computer.ApprovalMode(task.Config.RequestedComputerApprovalMode)
+		if !mode.Valid() || task.Config.RequestedComputerScope == "selected_window" {
+			writeError(w, "Choose a policy in a new task before requesting desktop access", 409)
+			return
+		}
+		code, err = s.browserHub.PairTaskCode(s.agentActor(r), request.Run, request.Input, s.workspaceID, mode)
+	} else if request.Run != "" || request.Input != "" || request.Protocol != 0 {
+		writeError(w, "Invalid pairing protocol", 400)
+		return
+	} else {
+		code, err = s.browserHub.PairCode(s.agentActor(r))
+	}
 	if err != nil {
 		writeError(w, "Pairing unavailable", 409)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"code": code, "expires_seconds": 120, "protocol_version": computer.ProtocolVersion})
+	protocol := computer.ProtocolVersion
+	if request.Protocol == computer.DesktopProtocolVersion {
+		protocol = computer.DesktopProtocolVersion
+	}
+	writeJSON(w, 200, map[string]any{"code": code, "expires_seconds": 120, "protocol_version": protocol})
 }
 func (s *Server) handleBrowserSessions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -55,7 +102,7 @@ func (s *Server) handleBrowserSessions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) browserTransport(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if path != "/api/v2/computer/companion/pair" && path != "/api/v2/computer/companion/poll" && path != "/api/v2/computer/companion/reply" && path != "/api/v2/computer/companion/heartbeat" && path != "/api/v2/computer/companion/capture" {
+		if path != "/api/v2/computer/companion/pair" && path != "/api/v2/computer/companion/poll" && path != "/api/v2/computer/companion/reply" && path != "/api/v2/computer/companion/heartbeat" && path != "/api/v2/computer/companion/capture" && path != "/api/v2/computer/companion/activate" && path != "/api/v2/computer/companion/revoke" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -79,14 +126,15 @@ func (s *Server) browserTransport(next http.Handler) http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if path == "/api/v2/computer/companion/pair" {
 			var req struct {
-				Code         string                   `json:"code"`
-				Origin       string                   `json:"origin"`
-				Protocol     int                      `json:"protocol_version"`
-				Title        string                   `json:"title"`
-				Target       *computer.TargetIdentity `json:"target"`
-				ApprovalMode computer.ApprovalMode    `json:"approval_mode"`
+				Code           string                   `json:"code"`
+				Origin         string                   `json:"origin"`
+				Protocol       int                      `json:"protocol_version"`
+				Title          string                   `json:"title"`
+				Target         *computer.TargetIdentity `json:"target"`
+				ApprovalMode   computer.ApprovalMode    `json:"approval_mode"`
+				NativeFeatures computer.NativeFeatures  `json:"native_features,omitempty"`
 			}
-			if decodeJSON(r, &req) != nil {
+			if decodeJSON(r, &req) != nil || req.NativeFeatures.Validate() != nil {
 				writeError(w, "Invalid pairing request", 400)
 				return
 			}
@@ -96,9 +144,11 @@ func (s *Server) browserTransport(next http.Handler) http.Handler {
 			var session *computer.BrowserSession
 			var token string
 			var err error
-			if req.Protocol == computer.ControlProtocolVersion && req.Target != nil && req.Origin == "" {
-				session, token, err = s.browserHub.PairNative(req.Code, req.Title, *req.Target, req.Protocol, req.ApprovalMode)
-			} else if req.Target == nil && req.Title == "" {
+			if req.Protocol == computer.DesktopProtocolVersion && req.Target != nil && req.Origin == "" && req.Title == "" {
+				session, token, err = s.browserHub.PairDesktopFeatures(req.Code, *req.Target, req.ApprovalMode, req.NativeFeatures)
+			} else if req.Protocol == computer.ControlProtocolVersion && req.Target != nil && req.Origin == "" {
+				session, token, err = s.browserHub.PairNativeFeatures(req.Code, req.Title, *req.Target, req.Protocol, req.ApprovalMode, req.NativeFeatures)
+			} else if req.Target == nil && req.Title == "" && req.NativeFeatures.Documents == 0 {
 				session, token, err = s.browserHub.Pair(req.Code, req.Origin, req.Protocol, req.ApprovalMode)
 			} else {
 				err = computer.ErrControlScope
@@ -111,6 +161,22 @@ func (s *Server) browserTransport(next http.Handler) http.Handler {
 			return
 		}
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if path == "/api/v2/computer/companion/revoke" {
+			if s.browserHub.RevokeCompanion(token) != nil {
+				writeError(w, "Session revoked or unavailable", 403)
+				return
+			}
+			writeJSON(w, 200, map[string]bool{"revoked": true})
+			return
+		}
+		if path == "/api/v2/computer/companion/activate" {
+			if s.browserHub.ActivateDesktop(token) != nil {
+				writeError(w, "Desktop consent unavailable", 403)
+				return
+			}
+			writeJSON(w, 200, map[string]bool{"active": true})
+			return
+		}
 		if path == "/api/v2/computer/companion/heartbeat" {
 			if s.browserHub.Heartbeat(token) != nil {
 				writeError(w, "Session revoked", 403)

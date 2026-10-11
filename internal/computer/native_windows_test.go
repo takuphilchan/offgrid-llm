@@ -145,6 +145,30 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 		generation, session, e := processGeneration(pid)
 		t.Fatalf("owned native target not found: visible=%d pid=%d generation=%s session=%s policy=%v", visible, pid, generation, session, e)
 	}
+	// V3 readiness validates the actual owned process image and can reuse its
+	// existing window. This fixture never launches or examines user documents.
+	desktop, err := NewDesktopController(driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureInfo, err := os.Stat(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desktop.apps = map[string]installedApplication{"owned-fixture": {NativeApplication: NativeApplication{ID: "owned-fixture", Name: "Owned native fixture"}, path: executable, identity: fixtureInfo}}
+	for attempt := 0; attempt < 2; attempt++ {
+		evidence, err := desktop.VerifyApplication(context.Background(), "owned-fixture")
+		if err != nil || !evidence.Verified || evidence.Target.ProcessGeneration != target.Identity.ProcessGeneration {
+			t.Fatal("v3 owned process readback", evidence, err)
+		}
+	}
+	// Rediscovery issues new target IDs. Reacquire the same owned surface for
+	// the existing v2 mutation/independent Win32 oracle checks below.
+	for _, surface := range driver.targets {
+		if surface.hwnd == uintptr(root) {
+			target = surface.target
+		}
+	}
 	focusSelected := func() error {
 		if err := driver.FocusSelected(); err == nil {
 			return nil
@@ -185,12 +209,33 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 	if field.ID == "" || check.ID == "" || check.Checked == nil || *check.Checked {
 		t.Fatalf("native edit not discovered: %d controls", len(view.Elements))
 	}
+	initialEvidenceIdentity := field.Identity
+	if initialEvidenceIdentity == "" {
+		t.Fatal("owned UIA control lacks evidence identity")
+	}
 	step, _, consent, _ := controlFixture()
 	step.Binding.Target = target.Identity
 	consent.Binding = step.Binding
 	consent.IssuedAt = time.Now().Add(-time.Second)
 	consent.ExpiresAt = time.Now().Add(time.Minute)
 	text := "Zimbabwe research — final (2026)"
+	// Simulate slow inference without sleeping. V2 still rejects old evidence;
+	// v3 must freshly inspect the owned fixture and retain only identical controls.
+	view.Observation.CapturedAt = time.Now().Add(-3 * time.Minute)
+	driver.view.Observation = view.Observation
+	if _, err := driver.Prepare(step.Binding, Operation{Kind: "replace_text", Element: field.ID, Text: &text}, view.Observation); err == nil {
+		t.Fatal("v2 accepted expired observation")
+	}
+	forged := view.Observation
+	forged.CapturedAt = time.Now()
+	if _, err := driver.RefreshObservation(context.Background(), step.Binding, forged); err != ErrStaleObservation {
+		t.Fatal("forged freshness accepted", err)
+	}
+	refreshed, err := driver.RefreshObservation(context.Background(), step.Binding, view.Observation)
+	if err != nil || refreshed.ID == view.Observation.ID || refreshed.Validate(step.Binding.Target, time.Now()) != nil {
+		t.Fatal("delayed owned view not revalidated", err)
+	}
+	view = driver.view
 	action, err := driver.Prepare(step.Binding, Operation{Kind: "replace_text", Element: field.ID, Text: &text}, view.Observation)
 	if err != nil {
 		t.Fatal(err)
@@ -221,6 +266,7 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 	if got := windows.UTF16ToString(buffer[:]); got != text {
 		t.Fatalf("independent Win32 oracle mismatch: %q", got)
 	}
+	oldInputID := field.ID
 	view, err = driver.Observe(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -228,6 +274,9 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 	for _, element := range view.Elements {
 		if element.Writable {
 			field = element
+			if field.ID == oldInputID || field.Identity != initialEvidenceIdentity {
+				t.Fatal("fresh input ID did not preserve owned OS evidence identity")
+			}
 			break
 		}
 	}
@@ -296,7 +345,13 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 			check = element
 		}
 	}
-	verified, err := driver.VerifyChecked(step.Binding, check.ID, true, view.Observation)
+	view.Observation.CapturedAt = time.Now().Add(-3 * time.Minute)
+	driver.view.Observation = view.Observation
+	refreshed, err = driver.RefreshObservation(context.Background(), step.Binding, view.Observation)
+	if err != nil {
+		t.Fatal("delayed checkbox readback", err)
+	}
+	verified, err := driver.VerifyChecked(step.Binding, check.ID, true, refreshed)
 	if err != nil || !verified {
 		t.Fatal("checkbox verification failed", err)
 	}
@@ -323,6 +378,11 @@ func TestNativeWindowsLiveUIA(t *testing.T) {
 	if _, err := driver.Dispatch(context.Background(), action); err != ErrStaleObservation {
 		t.Fatalf("stale native element accepted: %v", err)
 	}
+	view.Observation.CapturedAt = time.Now().Add(-3 * time.Minute)
+	driver.view.Observation = view.Observation
+	if _, err := driver.RefreshObservation(context.Background(), step.Binding, view.Observation); err != ErrStaleObservation {
+		t.Fatal("manual edit was silently remapped after slow inference", err)
+	}
 	supervisor.Stop()
 	if err := supervisor.Check(); err != ErrControlScope {
 		t.Fatal("scope not revoked")
@@ -334,7 +394,7 @@ func TestNativeWindowsLocalStopSurface(t *testing.T) {
 	if os.Getenv("OFFGRID_TEST_NATIVE_WINDOWS") != "1" {
 		t.Skip("opt-in owned native windows")
 	}
-	for _, input := range []string{"button", "shortcut", "close"} {
+	for _, input := range []string{"button", "shortcut", "close", "session-lock", "suspend"} {
 		t.Run(input, func(t *testing.T) {
 			stopped := make(chan struct{}, 1)
 			surface, err := StartNativeStopSurface(func() {
@@ -354,11 +414,52 @@ func TestNativeWindowsLocalStopSurface(t *testing.T) {
 				user32.NewProc("PostMessageW").Call(surface.window, 0x0312, 1, 0)
 			case "close":
 				user32.NewProc("PostMessageW").Call(surface.window, 0x0010, 0, 0)
+			case "session-lock":
+				user32.NewProc("PostMessageW").Call(surface.window, 0x02B1, 7, 0)
+			case "suspend":
+				user32.NewProc("PostMessageW").Call(surface.window, 0x0218, 4, 0)
 			}
 			select {
 			case <-stopped:
 			case <-time.After(time.Second):
 				t.Fatal("local stop did not revoke")
+			}
+		})
+	}
+}
+
+func TestNativeWindowsHiddenStopMonitor(t *testing.T) {
+	if os.Getenv("OFFGRID_TEST_NATIVE_WINDOWS") != "1" {
+		t.Skip("opt-in owned native monitor")
+	}
+	for _, event := range []struct {
+		name    string
+		message uint32
+		value   uintptr
+	}{
+		{"shortcut", 0x0312, 1}, {"session-lock", 0x02B1, 7}, {"suspend", 0x0218, 4},
+	} {
+		t.Run(event.name, func(t *testing.T) {
+			stopped := make(chan struct{}, 1)
+			surface, err := StartNativeStopMonitor(func() {
+				select {
+				case stopped <- struct{}{}:
+				default:
+				}
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer surface.Close()
+			visible, _, _ := user32.NewProc("IsWindowVisible").Call(surface.window)
+			if visible != 0 {
+				t.Fatal("desktop-owned monitor created another popup")
+			}
+			user32.NewProc("PostMessageW").Call(surface.window, uintptr(event.message), event.value, 0)
+			select {
+			case <-stopped:
+			case <-time.After(time.Second):
+				t.Fatal("hidden monitor did not revoke")
 			}
 		})
 	}

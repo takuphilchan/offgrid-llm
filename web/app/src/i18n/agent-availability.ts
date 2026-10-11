@@ -1,0 +1,14 @@
+import type { LocaleCode } from './index';
+
+// Independent speaker review remains part of locale qualification.
+export const agentAvailability: Record<LocaleCode, { unsupported: string; connection: string }> = {
+  en: {"unsupported":"Task workspace unavailable. Check or update the connected service. Retry checks status only; it does not rerun work.","connection":"Cannot check the service connection. Your current draft is kept. Retry checks status only; it does not rerun work."},
+  fr: {"unsupported":"Espace de tâches indisponible. Vérifiez ou mettez à jour le service connecté. Réessayer vérifie seulement l’état, sans relancer le travail.","connection":"Impossible de vérifier la connexion. Votre brouillon est conservé. Réessayer vérifie seulement l’état, sans relancer le travail."},
+  es: {"unsupported":"Espacio de tareas no disponible. Compruebe o actualice el servicio conectado. Reintentar solo comprueba el estado; no repite el trabajo.","connection":"No se puede comprobar la conexión. Se conserva su borrador. Reintentar solo comprueba el estado; no repite el trabajo."},
+  de: {"unsupported":"Aufgabenbereich nicht verfügbar. Prüfen oder aktualisieren Sie den verbundenen Dienst. Erneut versuchen prüft nur den Status und startet keine Arbeit neu.","connection":"Die Verbindung kann nicht geprüft werden. Ihr Entwurf bleibt erhalten. Erneut versuchen prüft nur den Status und startet keine Arbeit neu."},
+  ar: {"unsupported":"مساحة المهام غير متاحة. تحقق من الخدمة المتصلة أو حدّثها. إعادة المحاولة تتحقق من الحالة فقط ولا تعيد تنفيذ العمل.","connection":"تعذر التحقق من الاتصال بالخدمة. تبقى مسودتك الحالية محفوظة. إعادة المحاولة تتحقق من الحالة فقط ولا تعيد تنفيذ العمل."},
+  sw: {"unsupported":"Eneo la kazi halipatikani. Kagua au sasisha huduma iliyounganishwa. Jaribu tena hukagua hali tu; hairudii kazi.","connection":"Haiwezekani kukagua muunganisho. Rasimu yako inahifadhiwa. Jaribu tena hukagua hali tu; hairudii kazi."},
+  sn: {"unsupported":"Nzvimbo yemabasa haisi kuwanikwa. Tarisa kana kugadziridza sevhisi yakabatana. Kuedza zvakare kunongotarisa mamiriro; hakudzokorori basa.","connection":"Hatigoni kutarisa kubatana kwesevhisi. Zvauri kunyora zvinochengetwa. Kuedza zvakare kunongotarisa mamiriro; hakudzokorori basa."},
+  nd: {"unsupported":"Indawo yemisebenzi ayitholakali. Hlola kumbe uvuselele isevisi exhunyiweyo. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi.","connection":"Ukuxhumana lesevisi akuhlolweki. Okubhalayo kuyagcinwa. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi."},
+  zu: {"unsupported":"Indawo yemisebenzi ayitholakali. Hlola noma ubuyekeze isevisi exhunyiwe. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi.","connection":"Ukuxhumana nesevisi akuhlolweki. Okubhalayo kuyagcinwa. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi."},
+};

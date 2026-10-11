@@ -42,22 +42,36 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       });
     };
     position();
+    const firstFrame = requestAnimationFrame(position);
     const observer = new ResizeObserver(position);
     if (content.current) observer.observe(content.current);
     // Language/direction can change without changing the panel's dimensions.
     const direction = new MutationObserver(position);
     direction.observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
     window.addEventListener('resize', position);
-    window.addEventListener('scroll', position, true);
+    // Scrolls from the panel/content must not recalculate placement. Otherwise
+    // changing max-height/edges during wheel or keyboard scrolling can reset it.
+    const scroll = (event: Event) => {
+      if (event.target instanceof Node && panel.current?.contains(event.target)) return;
+      position();
+    };
+    window.addEventListener('scroll', scroll, true);
     const dismiss = () => panel.current?.hidePopover();
     window.addEventListener('hashchange', dismiss);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !panel.current?.matches(':popover-open')) return;
+      event.preventDefault(); panel.current.hidePopover(); button.current?.focus();
+    };
+    window.addEventListener('keydown', escape);
     window.visualViewport?.addEventListener('resize', position);
     window.visualViewport?.addEventListener('scroll', position);
     return () => {
+      cancelAnimationFrame(firstFrame);
       observer.disconnect(); direction.disconnect();
       window.removeEventListener('resize', position);
-      window.removeEventListener('scroll', position, true);
+      window.removeEventListener('scroll', scroll, true);
       window.removeEventListener('hashchange', dismiss);
+      window.removeEventListener('keydown', escape);
       window.visualViewport?.removeEventListener('resize', position);
       window.visualViewport?.removeEventListener('scroll', position);
     };
@@ -66,7 +80,16 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
   return <div className={`utility-popover ${className}`}>
     <button ref={button} type="button" className={triggerClassName} title={label} aria-label={label}
       popoverTarget={id} aria-expanded={open} aria-controls={id}>{trigger ?? label}</button>
-    <div ref={panel} id={id} className={`utility-popover-panel ${panelClassName}`} popover="auto" role="region" aria-label={label}
+    <div ref={panel} id={id} className={`utility-popover-panel ${panelClassName}`} popover="auto" role="region" aria-label={label} tabIndex={0}
+      onKeyDown={event => {
+        // Chromium/Electron do not consistently give a focused generic region
+        // native scroll keys. Only handle the region itself, never its controls.
+        if (event.target !== event.currentTarget) return;
+        const el = event.currentTarget, page = Math.max(40, el.clientHeight - 32);
+        const top = ({ Home: 0, End: el.scrollHeight, PageUp: el.scrollTop - page,
+          PageDown: el.scrollTop + page, ArrowUp: el.scrollTop - 40, ArrowDown: el.scrollTop + 40 } as Record<string, number>)[event.key];
+        if (top !== undefined) { event.preventDefault(); el.scrollTop = top; }
+      }}
       onBeforeToggle={event => setOpen(event.newState === 'open')}
       onClick={event => { if ((event.target as Element).closest('a[href]')) panel.current?.hidePopover(); }}
       onToggle={event => onOpenChange?.(event.newState === 'open')}>

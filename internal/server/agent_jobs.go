@@ -15,6 +15,18 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 )
 
+// Omitted additive fields must not alter the original idempotency payload.
+type jobSubmitRequest struct {
+	Prompt               string                      `json:"prompt"`
+	Model                string                      `json:"model"`
+	RequestID            string                      `json:"request_id"`
+	Style                string                      `json:"style,omitempty"`
+	MaxIterations        int                         `json:"max_iterations,omitempty"`
+	ComputerApprovalMode string                      `json:"computer_approval_mode,omitempty"`
+	ComputerScope        string                      `json:"computer_scope,omitempty"`
+	Expectations         []agents.OutcomeExpectation `json:"expectations,omitempty"`
+}
+
 func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Request-ID", uuid.NewString())
@@ -26,13 +38,7 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 		writeJobError(w, 405, "method_not_allowed", "Submit a task with POST.", false)
 		return
 	}
-	var req struct {
-		Prompt        string `json:"prompt"`
-		Model         string `json:"model"`
-		RequestID     string `json:"request_id"`
-		Style         string `json:"style,omitempty"`
-		MaxIterations int    `json:"max_iterations,omitempty"`
-	}
+	var req jobSubmitRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || strings.TrimSpace(req.Prompt) == "" || len(req.Prompt) > 32000 || req.Model == "" || len(req.RequestID) < 8 || len(req.RequestID) > 128 || strings.ContainsAny(req.RequestID, "\x00\r\n") {
@@ -41,6 +47,14 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.agentRunner == nil || s.registry == nil {
 		writeJobReadError(w, agents.ErrRunStorage)
+		return
+	}
+	if req.ComputerApprovalMode != "" && req.ComputerApprovalMode != "ask_every_time" && req.ComputerApprovalMode != "scoped_changes" && req.ComputerApprovalMode != "full_task" {
+		writeJobError(w, 400, "invalid_computer_policy", "Choose Ask every time, Approve scoped changes, or Full task access. This setting does not grant computer access.", false)
+		return
+	}
+	if req.ComputerScope != "" && ((req.ComputerScope != "desktop" && req.ComputerScope != "selected_window") || req.ComputerApprovalMode == "") {
+		writeJobError(w, 400, "invalid_computer_scope", "Desktop access requires an explicit task policy and matching local consent.", false)
 		return
 	}
 	if _, err := s.registry.GetChatModel(req.Model); err != nil {
@@ -52,6 +66,14 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256(encoded)
 	config := agents.DefaultAgentConfig()
 	config.TaskFirst = true
+	config.NativeWorkflowVersion = agents.WorkflowEvidenceVersion
+	if err := agents.ValidateExpectations(req.Expectations); err != nil {
+		writeJobError(w, 400, "invalid_expectations", err.Error(), false)
+		return
+	}
+	config.NativeExpectations = req.Expectations
+	config.RequestedComputerApprovalMode = req.ComputerApprovalMode
+	config.RequestedComputerScope = req.ComputerScope
 	config.ContextWindow = s.effectiveContextWindow()
 	if config.ContextWindow/4 < config.MaxTokens {
 		config.MaxTokens = config.ContextWindow / 4
@@ -82,7 +104,7 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 		writeJobReadError(w, err)
 		return
 	}
-	if created {
+	if created && task.Status != agents.TaskInput {
 		accepted := task
 		task, err = s.agentRunner.Continue(s.agentContext(r, true), task.ID, s.agentActor(r), "start", "", true)
 		if err != nil {
@@ -145,9 +167,22 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 		writeJobError(w, 409, "computer_session_unavailable", "Local computer access has expired. Connect again to continue this saved task.", true)
 		return
 	}
+	if task.Config.RequestedComputerApprovalMode != "" && task.Config.RequestedComputerApprovalMode != string(mode) {
+		writeJobError(w, 409, "computer_policy_mismatch", "This connection does not match the approval policy selected before starting this task. Connect with the saved policy; task permissions were not changed.", false)
+		return
+	}
+	desktop, scopeErr := s.browserHub.DesktopScope(actor, req.Session, id, req.InputID, s.workspaceID)
+	if scopeErr != nil || (task.Config.RequestedComputerScope == "desktop" && !desktop) || (task.Config.RequestedComputerScope == "selected_window" && desktop) {
+		writeJobError(w, 409, "computer_scope_mismatch", "This task requires a matching task-wide desktop grant, not a selected-window connection.", false)
+		return
+	}
 	check := s.checkComputerModelDriver(r.Context(), task.Model, driver)
 	if !check.Passed {
-		writeJSON(w, 422, computerCheckError(check))
+		status := http.StatusUnprocessableEntity
+		if check.Retryable {
+			status = http.StatusServiceUnavailable
+		}
+		writeJSON(w, status, computerCheckError(check))
 		return
 	}
 	if driver == "browser" && !s.computerVisionReady(task.Model) {
@@ -160,6 +195,9 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 	config.ComputerSession = req.Session
 	config.ComputerDriver = driver
 	config.ComputerApprovalMode = string(mode)
+	if desktop {
+		config.ComputerScope = "desktop"
+	}
 	config.ComputerVerification = "page-evidence-v1"
 	if nativeComputerDriver(driver) {
 		config.ComputerVerification = "native-evidence-v2"

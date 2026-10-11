@@ -1,5 +1,17 @@
 # Workspace ownership and offline recovery
 
+## Document-task recovery
+
+The current task view distinguishes dispatched document input from independent
+verification. Known workflow versions 1 and 2 retain their declared checks;
+unknown versions display verification unavailable. A service-classified failed
+native read shows that the read made no input, while preserving all earlier
+actions. **Resume** continues the same resumable job only after an explicit click;
+viewing details or reloading never resumes it. Genuine uncertain mutations keep
+the outcome-inspection form and cannot use read-only recovery. Existing uncertain
+history is not rewritten on upgrade. These UI contracts do not qualify a missing
+native document provider or claim that its edit succeeded.
+
 ## Recovering indexes created with placeholder embeddings
 
 Older default builds used hash-derived placeholder vectors. They are not semantic
@@ -73,6 +85,24 @@ Discard never removes the installed revision or unrelated user documents. Orphan
 data without a valid operation identity is not guessed away: preserve it for support.
 Back up **both** workspace and separate model storage when restoring these records;
 workspace backup alone does not contain weights, staging or publication journals.
+
+## Interrupted native reads
+
+New native read intents retain the service-authored capability identity and
+reviewed effects revision in the task transaction. Restart, cancellation or a
+lost read result cannot turn that operation into an uncertain edit. Restart
+still interrupts work and expires computer authority; viewing the task never
+reconnects or dispatches it. Explicit continuation and valid local access are
+required. Earlier launched applications and dispatched input remain recorded.
+
+Recoverable missing-target/readiness errors have a shared, persisted three-repair
+budget. Unrelated catalog queries cannot reset it. After exhaustion, inspect the
+actual application and explicitly continue the same task. Do not invent text for
+an outcome-confirmation field or repeat earlier input to make verification pass.
+Genuine uncertain mutations and old uncertain records without trusted read
+evidence retain their existing reconciliation boundary; upgrades do not rewrite
+or automatically retry them. Failed persistence cannot publish a successful read
+or authorize subsequent input.
 
 ## Single writer
 

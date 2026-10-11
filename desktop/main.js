@@ -3,7 +3,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
-const { isTrustedPage, isTrustedSender, fingerprintUI } = require('./backend');
+const { isTrustedPage, isTrustedSender, fingerprintUI, workspaceChannelAllowed } = require('./backend');
 const { DesktopRuntime } = require('./runtime');
 const { normalize: normalizePresentation, readCopy } = require('./presentation');
 const { ComputerRuntime, parseComputerLink } = require('./computer-runtime');
@@ -65,13 +65,27 @@ const computer = new ComputerRuntime({
     if(!response.ok) throw Error('service_unavailable'); return response.json();
   },
   verify: async root => { try { await verifyComputerPack(root); } catch { throw Error('pack_invalid'); } },
-  pairing: async service => {
+  pairing: async (service,request={}) => {
     if (!mainWindow || mainWindow.isDestroyed() || !isTrustedPage(mainWindow.webContents.getURL(),service,LOADING_URL)) throw Error('pairing_failed');
     // Use the authenticated desktop session without extracting cookies or
     // disclosing enrollment credentials to renderer storage/IPC arguments.
     const response=await mainWindow.webContents.session.fetch(service+'/api/v2/computer/pairing',{
-      method:'POST',credentials:'include',redirect:'error',headers:{'Content-Type':'application/json',Origin:service},body:'{}',signal:AbortSignal.timeout(10000)});
+      method:'POST',credentials:'include',redirect:'error',headers:{'Content-Type':'application/json',Origin:service},body:JSON.stringify(request),signal:AbortSignal.timeout(10000)});
     if(!response.ok) throw Error('pairing_failed');return response.json();
+  },
+  task: async (service,id) => {
+    if(!mainWindow||mainWindow.isDestroyed()||!isTrustedPage(mainWindow.webContents.getURL(),service,LOADING_URL))throw Error('computer_scope_violation');
+    const response=await mainWindow.webContents.session.fetch(service+'/api/v2/jobs/'+encodeURIComponent(id),{credentials:'include',redirect:'error',signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw Error('computer_scope_violation');return response.json();
+  },
+  principal: async service => {
+    if(!mainWindow||mainWindow.isDestroyed()||!isTrustedPage(mainWindow.webContents.getURL(),service,LOADING_URL))throw Error('computer_scope_violation');
+    const response=await mainWindow.webContents.session.fetch(service+'/v1/users/me',{credentials:'include',redirect:'error',signal:AbortSignal.timeout(5000)});
+    if(!response.ok)throw Error('computer_scope_violation');
+    const account=await response.json();
+    if(account.auth_required===false)return 'local-admin';
+    if(account.auth_required!==true||account.authenticated!==true||account.user?.role!=='admin')throw Error('computer_scope_violation');
+    return account.user.id;
   },
   confirm: async (origin, service, networkMode, approvalMode) => {
     const text=computerText();
@@ -216,6 +230,7 @@ async function createMainWindow() {
     if (!mainWindow.webContents.getURL().startsWith(LOADING_URL)) void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
   });
   mainWindow.webContents.on('render-process-gone', () => {
+    void computer.stop();
     runtime.publish({ state: 'error', reason: 'The workspace window stopped responding. Retry to reopen it; the service and saved work have not been stopped.' });
     void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
   });
@@ -269,8 +284,7 @@ function handleTrustedIPC(channel, handler, startupOnly = false) {
     if (!isTrustedSender(event, mainWindow?.webContents, runtime.url, LOADING_URL) ||
         (startupOnly && event.senderFrame.url !== LOADING_URL)) throw new Error('Untrusted desktop IPC sender');
     const loading = event.senderFrame.url === LOADING_URL;
-    if ((!loading && runtime.state.state !== 'ready' && !['get-backend-info','get-server-status'].includes(channel)) ||
-        (loading && (channel.startsWith('computer-') || ['get-paths','select-directory'].includes(channel)))) throw new Error('Desktop workspace access is not ready');
+    if (!workspaceChannelAllowed(channel, runtime.state.state === 'ready', loading)) throw new Error('Desktop workspace access is not ready');
     return handler(...args);
   });
 }
@@ -279,7 +293,7 @@ handleTrustedIPC('get-api-url', () => runtime.url);
 handleTrustedIPC('get-app-version', () => app.getVersion());
 handleTrustedIPC('get-server-status', () => runtime.state.state === 'ready');
 handleTrustedIPC('get-backend-info', () => runtime.snapshot());
-handleTrustedIPC('computer-status', () => ({...computer.state, installed:fs.existsSync(path.join(computerRoot,'manifest.json'))}));
+handleTrustedIPC('computer-status', () => ({...computer.state, active:!!computer.child||!!computer.pending, installed:fs.existsSync(path.join(computerRoot,'manifest.json'))}));
 handleTrustedIPC('computer-start', request => {
   const upload=request?.uploadGrant ? uploadGrants.get(request.uploadGrant) : undefined;
   if(request?.uploadGrant && !upload)throw Error('computer_upload_invalid');
@@ -290,6 +304,9 @@ handleTrustedIPC('computer-start', request => {
 handleTrustedIPC('computer-select-upload', () => selectComputerUpload());
 handleTrustedIPC('computer-targets', request => computer.discoverNative(request));
 handleTrustedIPC('computer-native-start', request => computer.startNative(request));
+handleTrustedIPC('computer-desktop-start', request => computer.startDesktop(request));
+handleTrustedIPC('computer-desktop-enable', request => computer.enableDesktopAccess(request));
+handleTrustedIPC('computer-desktop-access', () => computer.desktopAccessStatus());
 handleTrustedIPC('computer-launchable-apps', () => ({ state: 'selecting', targets: applicationLauncher.discover() }));
 handleTrustedIPC('computer-launch-app', request => applicationLauncher.launch(request?.id));
 handleTrustedIPC('computer-stop', () => computer.stop());
@@ -352,6 +369,12 @@ app.whenReady().then(async () => {
   if(app.isPackaged && !installerTest && !customHome) app.setAsDefaultProtocolClient('offgrid');
   powerMonitor.on('lock-screen',()=>void computer.stop());
   powerMonitor.on('suspend',()=>void computer.stop());
+  // Cookie removal/replacement includes logout and account changes. Do not let
+  // an old actor's host permission survive until a renderer happens to refresh.
+  mainWindow.webContents.session.cookies.on('changed',(_event,cookie)=>{
+    if(cookie.name==='session'&&(computer.desktopAccess||computer.pending))void computer.stop();
+  });
+  mainWindow.on('unresponsive', () => { void computer.stop(); });
   createTray();
   updateMenus();
   // A normal launch always reconnects to the authoritative local workspace.

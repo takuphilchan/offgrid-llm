@@ -23,7 +23,7 @@ func acquireNativeInputOwner() (func(), error) {
 	}
 	return func() { owner.Close() }, nil
 }
-func startNativeStopSurface(revoke func()) (interface{ Close() }, error) {
+func startNativeStopSurface(revoke func(), _ bool) (interface{ Close() }, error) {
 	worker, err := os.Executable()
 	if err != nil {
 		return nil, err

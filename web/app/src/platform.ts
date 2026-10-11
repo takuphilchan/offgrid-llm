@@ -3,11 +3,15 @@ export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offli
 
 export type DesktopBridge = {
   bridgeProtocol?: number;
+  desktopComputerProtocol?: number;
+  enableDesktopAccess?: (request:{workspace:string})=>Promise<{enabled:boolean;workspace?:string}>;
+  getDesktopAccess?: ()=>Promise<{enabled:boolean;workspace?:string}>;
+  startComputerDesktop?: (request:{workspace:string;runId:string;requestId:string}) => Promise<{state:string;target?:{id:string;origin:string;scope?:string};code?:string}>;
   discoverComputerApps?: (request:{workspace:string;requestId?:string}) => Promise<{state:string;targets?:{id:string;title:string;driver:string}[];code?:string}>;
   startComputerApp?: (request:{workspace:string;requestId?:string;target:string;approvalMode:'ask_every_time'|'scoped_changes'|'full_task'}) => Promise<{state:string;target?:{id:string;origin:string};code?:string}>;
   listComputerApplications?: () => Promise<{state:string;targets?:{id:string;title:string;driver:string}[];code?:string}>;
   launchComputerApplication?: (request:{id:string}) => Promise<{id:string;title:string;driver:string;code?:string}>;
-  getComputerStatus?: () => Promise<{state:string; code?:string; installed:boolean; targets?:{id:string;title:string;driver:string}[]; target?:{id:string;origin:string}}>;
+  getComputerStatus?: () => Promise<{state:string; active?:boolean; code?:string; installed:boolean; targets?:{id:string;title:string;driver:string}[]; target?:{id:string;origin:string}}>;
   startComputerBrowser?: (request:{origin:string;workspace:string;requestId?:string;networkMode?:'direct'|'trusted-vpn';uploadGrant?:string;approvalMode:'ask_every_time'|'scoped_changes'|'full_task'}) => Promise<{state:string;code?:string;target?:{id:string;origin:string}}>;
   selectComputerUpload?: () => Promise<{id:string;name:string;size:number;sha256:string}|null>;
   stopComputerBrowser?: () => Promise<{state:string;code?:string}>;

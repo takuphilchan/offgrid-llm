@@ -43,6 +43,27 @@ func TestAgentControlUsesExistingRunAndAuthenticatedRequest(t *testing.T) {
 	}
 }
 
+func TestAgentStatusPreservesAdditiveVerificationJSON(t *testing.T) {
+	t.Setenv("OFFGRID_API_KEY", "fixture-key")
+	for _, evidence := range []string{`{"version":1,"state":"partial","checks":[]}`, `{"version":2,"state":"pending","checks":[{"expectation":{"kind":"document_edit_matches","document":"tab","snapshot":"before","edit_mode":"insert_text","text":"café 日本語"},"binding":{"document":{"id":"tab","generation":"g","container":"c","editor":"e","revision":"r","snapshot":"before","action_id":"one-input"}}}]}`, `{"version":99,"future_field":"preserve"}`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "GET" || r.URL.Path != "/api/v2/jobs/run-fixture" || r.Header.Get("Authorization") != "Bearer fixture-key" {
+				t.Error("wrong authenticated route")
+			}
+			fmt.Fprintf(w, `{"run_id":"run-fixture","status":"completed","output":"answer","verification":%s}`, evidence)
+		}))
+		result, err := agentControl(server.URL, []string{"status", "run-fixture"})
+		server.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, _ := json.Marshal(result)
+		if string(result.Verification) != evidence || !bytes.Contains(encoded, []byte(evidence)) {
+			t.Fatal("verification lost", string(encoded))
+		}
+	}
+}
+
 func TestAgentStreamShowsLivePreviewOnceOnStderr(t *testing.T) {
 	var stream strings.Builder
 	for _, text := range []string{"Hel", "Hello", "Hello"} {

@@ -40,25 +40,13 @@ const readinessCopy:Record<LocaleCode,readonly [string,string]> = {
  zu:['Khetha iwindi ulixhume ukuze uqale umsebenzi.','Vula iseshini yesiphequluli ukuze uqale umsebenzi.']
 };
 
-const taskModeCopy:Record<LocaleCode,readonly [string,string,string]> = {
- en:['How should OffGrid work?','Agent only','Preview'],
- fr:['Comment OffGrid doit-il travailler ?','Agent uniquement','Aperçu'],
- de:['Wie soll OffGrid arbeiten?','Nur Agent','Vorschau'],
- es:['¿Cómo debe trabajar OffGrid?','Solo agente','Vista previa'],
- ar:['كيف يجب أن يعمل OffGrid؟','الوكيل فقط','معاينة'],
- sw:['OffGrid ifanye kazi vipi?','Wakala pekee','Hakiki'],
- sn:['OffGrid ishande sei?','Mumiririri chete','Ongororo'],
- nd:['I-OffGrid isebenze njani?','Umenzeli kuphela','Ukuhlola'],
- zu:['I-OffGrid isebenze kanjani?','Umenzeli kuphela','Ukubuka kuqala']
-};
-export function computerModeText(locale:LocaleCode){const [title,agent,preview]=taskModeCopy[locale];return {title,agent,preview};}
 
 const approvalCopy:Record<LocaleCode,readonly [string,string,string,string,string,string,string]> = {
  en:['Action approvals','Ask every time','Review every change before it runs.','Approve scoped changes','Automatically allow reversible work in the selected scope.','Full task access','Allow all available typed actions in scope. Credentials, payments, privilege changes, installation, permanent deletion, scripts, and uncertain retries stay blocked.'],
- fr:['Autorisations','Toujours demander','VÃ©rifier chaque modification avant exÃ©cution.','Approuver les changements limitÃ©s','Autoriser automatiquement les actions rÃ©versibles dans la portÃ©e choisie.','AccÃ¨s complet Ã  la tÃ¢che','Autoriser les actions typÃ©es disponibles. Les identifiants, paiements et actions systÃ¨me dangereuses restent bloquÃ©s.'],
- de:['Aktionsfreigaben','Immer fragen','Jede Ã„nderung vor der AusfÃ¼hrung prÃ¼fen.','Begrenzte Ã„nderungen erlauben','Umkehrbare Aktionen im gewÃ¤hlten Bereich automatisch zulassen.','Voller Aufgabenzugriff','Alle verfÃ¼gbaren typisierten Aktionen im Bereich erlauben; sensible und gefÃ¤hrliche Aktionen bleiben gesperrt.'],
- es:['Aprobaciones','Preguntar siempre','Revise cada cambio antes de ejecutarlo.','Aprobar cambios limitados','Permitir automÃ¡ticamente acciones reversibles dentro del Ã¡mbito elegido.','Acceso completo a la tarea','Permitir las acciones tipadas disponibles; credenciales, pagos y acciones peligrosas siguen bloqueados.'],
- ar:['Ù…ÙˆØ§ÙÙ‚Ø§Øª Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª','Ø§Ù„Ø³Ø¤Ø§Ù„ ÙÙŠ ÙƒÙ„ Ù…Ø±Ø©','Ù…Ø±Ø§Ø¬Ø¹Ø© ÙƒÙ„ ØªØºÙŠÙŠØ± Ù‚Ø¨Ù„ ØªÙ†ÙÙŠØ°Ù‡.','Ø§Ù„Ù…ÙˆØ§ÙÙ‚Ø© Ø¹Ù„Ù‰ Ø§Ù„ØªØºÙŠÙŠØ±Ø§Øª Ø§Ù„Ù…Ø­Ø¯ÙˆØ¯Ø©','Ø§Ù„Ø³Ù…Ø§Ø­ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ø¨Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ø§Ù„Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„ØªØ±Ø§Ø¬Ø¹ Ø¶Ù…Ù† Ø§Ù„Ù†Ø·Ø§Ù‚.','ÙˆØµÙˆÙ„ ÙƒØ§Ù…Ù„ Ù„Ù„Ù…Ù‡Ù…Ø©','Ø§Ù„Ø³Ù…Ø§Ø­ Ø¨Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ø§Ù„Ù…ØªØ§Ø­Ø© Ù…Ø¹ Ø¨Ù‚Ø§Ø¡ Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ø§Ù„Ø­Ø³Ø§Ø³Ø© Ù…Ø­Ø¸ÙˆØ±Ø©.'],
+ fr:['Autorisations','Toujours demander','Vérifier chaque modification avant exécution.','Approuver les changements limités','Autoriser automatiquement les actions réversibles dans la portée choisie.','Accès complet à la tâche','Autoriser les actions typées disponibles. Les identifiants, paiements et actions système dangereuses restent bloqués.'],
+ de:['Aktionsfreigaben','Immer fragen','Jede Änderung vor der Ausführung prüfen.','Begrenzte Änderungen erlauben','Umkehrbare Aktionen im gewählten Bereich automatisch zulassen.','Voller Aufgabenzugriff','Alle verfügbaren typisierten Aktionen im Bereich erlauben; sensible und gefährliche Aktionen bleiben gesperrt.'],
+ es:['Aprobaciones','Preguntar siempre','Revise cada cambio antes de ejecutarlo.','Aprobar cambios limitados','Permitir automáticamente acciones reversibles dentro del ámbito elegido.','Acceso completo a la tarea','Permitir las acciones tipadas disponibles; credenciales, pagos y acciones peligrosas siguen bloqueados.'],
+ ar:['موافقات الإجراءات','السؤال في كل مرة','مراجعة كل تغيير قبل تنفيذه.','الموافقة على التغييرات المحدودة','السماح تلقائياً بالإجراءات القابلة للتراجع ضمن النطاق.','وصول كامل للمهمة','السماح بالإجراءات المتاحة مع بقاء الإجراءات الحساسة محظورة.'],
  sw:['Idhini za vitendo','Uliza kila mara','Kagua kila badiliko kabla ya kutekelezwa.','Idhinisha mabadiliko yenye mipaka','Ruhusu vitendo vinavyoweza kutenduliwa ndani ya eneo lililochaguliwa.','Ufikiaji kamili wa kazi','Ruhusu vitendo vilivyowekewa aina; taarifa nyeti na vitendo hatari hubaki vimezuiwa.'],
  sn:['Mvumo yezviito','Bvunza nguva dzose','Ongorora shanduko yega yega isati yaitwa.','Bvumira shanduko dzine muganhu','Bvumira otomatiki zviito zvinogona kudzoserwa munzvimbo yakasarudzwa.','Mvumo yakazara yebasa','Bvumira zviito zvakatarwa; ruzivo rwakavanzika nezviito zvine ngozi zvinoramba zvakavharwa.'],
  nd:['Imvumo zezenzo','Buza isikhathi sonke','Hlola lonke utshintsho lungakenziwa.','Vumela izinguquko ezilinganiselweyo','Vumela izenzo ezibuyisekayo endaweni ekhethiweyo.','Ukufinyelela okupheleleyo','Vumela izenzo ezikhona; ulwazi oluyimfihlo lezenzo eziyingozi kuhlala kuvinjiwe.'],

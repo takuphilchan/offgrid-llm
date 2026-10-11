@@ -35,6 +35,7 @@ type NativeTarget struct {
 	Title    string         `json:"title"`
 }
 type NativeElement struct {
+	Identity    string  `json:"identity,omitempty"` // evidence only; never an input reference
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
 	Role        string  `json:"role"`

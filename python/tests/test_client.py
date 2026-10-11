@@ -34,6 +34,25 @@ def isolated_client_transport(monkeypatch):
 
 class TestClient:
     """Test Client class."""
+
+    @patch('offgrid.client.urlopen')
+    def test_agent_preserves_additive_verification(self, send):
+        client = Client(api_key="fixture-key")
+        for verification in ({"version": 1, "state": "partial", "checks": []},
+                             {"version": 2, "state": "pending", "checks": [{
+                                 "expectation": {"id": "edit", "kind": "document_edit_matches", "document": "tab", "snapshot": "before", "edit_mode": "insert_text", "text": "café 日本語"},
+                                 "binding": {"session": "host", "document": {"id": "tab", "generation": "g", "container": "c", "editor": "e", "revision": "r", "snapshot": "before", "action_id": "one-input"}},
+                                 "state": "pending"}]},
+                             {"version": 99, "future_field": "preserve"}):
+            snapshot = {"run_id": "run-fixture", "status": "completed",
+                        "output": "answer", "verification": verification}
+            response = MagicMock()
+            response.read.return_value = json.dumps(snapshot).encode()
+            send.return_value = response
+            assert client.agent.run("fixture", model="fixture") == snapshot
+            request = send.call_args[0][0]
+            assert request.get_header("Authorization") == "Bearer fixture-key"
+            assert request.full_url.endswith("/v1/agents/run")
     
     def test_client_init(self):
         """Test client initialization with defaults."""

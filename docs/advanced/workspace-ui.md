@@ -44,6 +44,28 @@ for example, keeps task work, tool administration, and MCP/external-agent
 connections in `#/agents/workspace`, `#/agents/tools`, and
 `#/agents/connections`. Browser history and reload must retain these views.
 
+Agents has one work renderer: `TaskWorkspace`. `AgentPage` selects that renderer
+or the separate `AgentManagement` panels; there is no legacy Task/Result page,
+pre-task mode picker, or duplicate execution follower. Old `#/agents/workspace`
+links remain aliases for current work, not an alternate implementation.
+
+System capability names describe configured API contracts, not storage health.
+Task storage failure must return a recoverable error and block execution, never
+remove the task-first contract or switch the UI. Clients connected to an older
+service that withdraws its flag retain the current draft and disable new task
+submission until status recovers. A cold unsupported service presents update/retry
+guidance and management navigation instead of mounting an obsolete task runner.
+Retry is read-only. Transient identity failure must not change the shell's
+actor/workspace key; a real actor or workspace change still isolates state.
+
+This retirement removes presentation-only setup, polling, unused client wrappers,
+copy, styles and an orphaned syntax theme. It does not delete task history,
+conversation data, model installations, legacy HTTP/SDK contracts, migration
+readers, companion protocol compatibility, or current approval/stop controls.
+`agent-availability.spec.ts` covers failure transitions in both browser and
+desktop-renderer fixtures; the installed application still needs a matching
+rebuilt renderer. UI removal does not repair an unhealthy task database.
+
 ## Visual system
 
 `components/WorkspacePresentation.tsx` owns reusable section headings, action

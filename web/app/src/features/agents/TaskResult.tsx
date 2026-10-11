@@ -4,6 +4,7 @@ import { useI18n } from '../../i18n';
 import { taskPresentation } from '../../i18n/task-presentation';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ScopedNotice } from '../../components/WorkspacePresentation';
+import { taskAccessText } from '../../i18n/task-access';
 
 type Artifact = NonNullable<AgentRun['artifacts']>[number];
 function ArtifactRow({ id, artifact }: { id: string; artifact: Artifact }) {
@@ -39,6 +40,7 @@ export function TaskResult({ run }: { run: AgentRun }) {
   const { locale, messages } = useI18n(), copy = taskPresentation(locale);
   if (!run.output && !run.artifacts?.length) return null;
   return <section className="task-result" aria-label={messages.agents.result}>
+    {run.outcome === 'answer_only' && <ScopedNotice kind="status">{taskAccessText(locale).answerOnly}</ScopedNotice>}
     {run.output && <><h3>{run.status === 'completed' ? copy.answer : messages.agents.result}</h3><div className="markdown-body"><MarkdownMessage content={run.output} /></div><p className="workspace-secondary">{copy.generated}</p></>}
     {!!run.artifacts?.length && <section className="task-artifacts" aria-label={copy.files}>
       <h3>{copy.files}</h3><p className="workspace-secondary">{copy.integrityHint}</p>

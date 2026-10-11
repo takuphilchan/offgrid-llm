@@ -101,4 +101,12 @@ function isTrustedSender(event, contents, serverURL, loadingURL) {
     isTrustedPage(event.senderFrame.url, serverURL, loadingURL));
 }
 
-module.exports = { assessIdentity, inspectBackend, isTrustedPage, isTrustedSender, fingerprintUI };
+// Caller must still validate the exact trusted sender. Offline recovery may
+// revoke/read local control, never start it or grant new access.
+function workspaceChannelAllowed(channel, ready, loading) {
+  if (['computer-stop','computer-stop-access','computer-status'].includes(channel)) return true;
+  if (loading) return !channel.startsWith('computer-') && !['get-paths','select-directory'].includes(channel);
+  return ready || ['get-backend-info','get-server-status'].includes(channel);
+}
+
+module.exports = { assessIdentity, inspectBackend, isTrustedPage, isTrustedSender, fingerprintUI, workspaceChannelAllowed };

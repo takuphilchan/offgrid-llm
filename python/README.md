@@ -565,6 +565,16 @@ except OffGridError as e:
 - [API Reference](https://github.com/takuphilchan/offgrid-llm/blob/main/docs/API.md)
 - [Issue Tracker](https://github.com/takuphilchan/offgrid-llm/issues)
 
+## Agent evidence compatibility
+
+Existing `client.agent.run(...)` dictionaries preserve additive `verification`
+fields returned by the authenticated service, including unknown versions.
+Execution status remains separate from check assessment. Version 1 carries
+declared checks, provenance, remaining work and evidence-step references; absent
+or unknown versions do not certify a result. No new runner or permission path is
+introduced. Native task-first execution and job exports use the service APIs;
+the legacy Python run method does not itself enable task-wide desktop access.
+
 ## License
 
 MIT License

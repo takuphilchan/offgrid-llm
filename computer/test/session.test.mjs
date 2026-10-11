@@ -42,9 +42,10 @@ test('runtime manifests reject tampering and wrong architecture',async()=>{
  const directory=await mkdtemp(join(tmpdir(),'offgrid-pack-test-'));
  try{
   await mkdir(join(directory,'browsers'));await writeFile(join(directory,'browsers','fixture'),'browser-fixture');
-  for(const file of ['managed.cjs','native-managed.cjs','session.mjs','native-session.mjs','approval-policy.mjs','browser.mjs','pack.cjs'])await writeFile(join(directory,file),'entry-fixture');
+  for(const file of ['managed.cjs','native-managed.cjs','session.mjs','native-session.mjs','desktop-session.mjs','approval-policy.mjs','browser.mjs','pack.cjs'])await writeFile(join(directory,file),'entry-fixture');
   await createManifest(directory,process.platform,process.arch,'1.62.1');await verifyPack(directory);
   await assert.rejects(verifyPack(directory,process.platform,'wrong'),/pack_invalid/);
+  await rm(join(directory,'desktop-session.mjs'));await assert.rejects(verifyPack(directory),/pack_invalid/);await writeFile(join(directory,'desktop-session.mjs'),'entry-fixture');
   await rm(join(directory,'approval-policy.mjs'));await assert.rejects(verifyPack(directory),/pack_invalid/);await writeFile(join(directory,'approval-policy.mjs'),'entry-fixture');
   await writeFile(join(directory,'managed.cjs'),'tampered');await assert.rejects(verifyPack(directory),/pack_invalid/);
  }finally{await rm(directory,{recursive:true});}

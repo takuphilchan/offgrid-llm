@@ -78,12 +78,12 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	identity := SystemIdentity{Product: "offgrid", Version: s.version, APIVersion: 2, Revision: BuildRevision, Capabilities: []string{"sessions-v1", "chat-streaming-v1", "durable-agent-runs-v1", "exclusive-workspace-v1", "offline-backup-v1"}}
 	identity.WorkspaceID = s.workspaceID
 	if s.browserHub != nil {
-		identity.Capabilities = append(identity.Capabilities, "native-computer-sessions-v2")
-		if s.agentRunner != nil && s.agentManager != nil && s.agentManager.ActivityReplayAvailable() {
-			identity.Capabilities = append(identity.Capabilities, "task-first-agents-v2")
+		identity.Capabilities = append(identity.Capabilities, "native-computer-sessions-v2", "native-document-negotiation-v1")
+		if s.agentRunner != nil && s.agentManager != nil && s.agentManager.ActivityReplaySupported() {
+			identity.Capabilities = append(identity.Capabilities, "task-first-agents-v2", "task-desktop-sessions-v3")
 		}
 	}
-	if s.agentManager != nil && s.agentManager.ActivityReplayAvailable() {
+	if s.agentManager != nil && s.agentManager.ActivityReplaySupported() {
 		identity.Capabilities = append(identity.Capabilities, "durable-agent-events-v2")
 		if s.agentRunner != nil {
 			identity.Capabilities = append(identity.Capabilities, "task-lifecycle-v2", "bounded-readonly-delegation-v1", "task-context-archive-v1")

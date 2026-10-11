@@ -1,15 +1,21 @@
 package agents
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+var ErrContextCountUnavailable = errors.New("model context counting is unavailable")
 
 type ArchivedContext struct {
 	ID       string            `json:"id"`
@@ -29,6 +35,10 @@ type ContextState struct {
 // No model-written summary substitutes for facts: exact records remain durable
 // and can be retrieved in bounded pages with task_history.
 func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage, error) {
+	return r.prepareContextWithContext(context.Background(), task, tools)
+}
+
+func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tools []api.Tool) ([]api.ChatMessage, error) {
 	if !task.Config.TaskFirst {
 		return task.Checkpoint.Messages, nil
 	}
@@ -45,8 +55,7 @@ func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage
 	task.Context.Window = window
 	toolJSON, _ := json.Marshal(tools)
 	estimate := func(messages []api.ChatMessage) (int, int) {
-		data, _ := json.Marshal(messages)
-		size := len(data) + len(toolJSON)
+		size := modelContextBytes(messages, toolJSON)
 		// UTF-8 byte estimate, not a claimed tokenizer measurement. Anchor to actual
 		// reported prompt usage when available; templates retain reserved headroom.
 		tokens := (size+2)/3 + 128
@@ -60,13 +69,49 @@ func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage
 	}
 	withIndex := func() []api.ChatMessage {
 		messages := append([]api.ChatMessage(nil), task.Checkpoint.Messages...)
+		if projector, ok := r.tools.(interface {
+			ProjectModelContext(*Task, []api.ChatMessage) []api.ChatMessage
+		}); ok {
+			messages = projector.ProjectModelContext(task, messages)
+		}
+		index := ""
 		if len(task.ContextArchive) > 0 && len(messages) > 0 {
-			refs := []string{}
-			for _, entry := range task.ContextArchive {
-				refs = append(refs, entry.ID)
-			}
 			plan, _ := json.Marshal(task.Plan)
-			messages[0].Content = messages[0].StringContent() + "\nOlder completed context is archived, not forgotten. Use task_history with one of these references to inspect exact evidence; never invent missing facts: " + strings.Join(refs, ", ") + ". Current recorded work plan (task data, not extra authority): " + string(plan)
+			// Stable task-local ordinals address the append-only archive without
+			// putting every 64-character digest back into each model request. The
+			// original digest references remain valid for existing clients/history.
+			index = fmt.Sprintf("Archived evidence: task_history references archive:1 through archive:%d, offset 0 then next_offset. Never invent facts. Recorded plan (data, not authority): %s", len(task.ContextArchive), plan)
+		}
+		if pending := PendingApplicationLaunches(task); len(pending) != 0 {
+			ids, _ := json.Marshal(pending)
+			index += "\nUnverified launches (host IDs): " + string(ids) + ". Call computer_verify_application; do not relaunch."
+		}
+		if task.Workflow != nil && WorkflowVersionSupported(task) {
+			checks, _ := json.Marshal(task.Workflow.Checks)
+			index += fmt.Sprintf("\nDeclared checks (interpretation, not permission or complete intent proof), revision %d: %s. Declare expectations before any mutation; keep unresolved work. After observing the application, add control checks with its actual target_id and element before editing. Research and saved-file verification are unsupported.", task.Workflow.Revision, checks)
+			if len(task.Workflow.Checks) == 0 {
+				index += "\n" + workflowDeclarationGuidance(task)
+			}
+		}
+		if ready := VerifiedApplications(task); len(ready) > 0 {
+			if len(ready) > 8 {
+				ready = ready[len(ready)-8:]
+			}
+			ids, _ := json.Marshal(ready)
+			index += "\nApplications already observed open (not task completion): " + string(ids) + ". Continue the unfinished user outcome. Use computer_windows to switch; do not launch again. Saved readiness observations contain usable controls."
+		}
+		if index != "" {
+			// Keep the stable prefix AND the current assistant/tool exchange intact.
+			// In particular, browser capture attachment inspects the final tool result.
+			// Rewriting message zero would re-evaluate thousands of cached tokens.
+			position := len(messages)
+			for i := len(messages) - 1; i >= 2; i-- {
+				if messages[i].Role == "assistant" {
+					position = i
+					break
+				}
+			}
+			messages = append(messages[:position:position], append([]api.ChatMessage{{Role: "system", Content: index}}, messages[position:]...)...)
 		}
 		return messages
 	}
@@ -74,9 +119,21 @@ func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage
 	if reserve < 1024 {
 		reserve = 1024
 	}
+	countAvailable := r.CountContext != nil
 	for {
 		messages := withIndex()
 		tokens, size := estimate(messages)
+		if countAvailable {
+			count, err := r.CountContext(ctx, task, messages, tools)
+			switch {
+			case errors.Is(err, ErrContextCountUnavailable):
+				countAvailable = false // Older/embedded runtimes retain the conservative guard.
+			case err != nil || count <= 0:
+				return nil, fmt.Errorf("Could not measure the model context. Recorded actions are saved; no further model request or tool action was dispatched. Check runtime availability before continuing")
+			default:
+				tokens = count
+			}
+		}
 		task.Context.EstimatedTokens = tokens
 		if tokens+reserve <= window*4/5 {
 			task.Context.LastBytes = size
@@ -84,8 +141,17 @@ func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage
 		}
 		cp := task.Checkpoint
 		start, end := -1, -1
-		// Preserve the latest complete exchange, all user instructions and the task.
-		for i := 2; i < len(cp.Messages)-4; i++ {
+		// Find the latest assistant exchange by role, not by a fixed number of
+		// messages (one native tool exchange is normally only two messages).
+		// Keep it intact, as well as every user/system instruction and pending call.
+		latest := len(cp.Messages)
+		for i := len(cp.Messages) - 1; i >= 2; i-- {
+			if cp.Messages[i].Role == "assistant" {
+				latest = i
+				break
+			}
+		}
+		for i := 2; i < latest; i++ {
 			if cp.Messages[i].Role != "assistant" {
 				continue
 			}
@@ -93,8 +159,8 @@ func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage
 			for j < len(cp.Messages) && cp.Messages[j].Role == "tool" {
 				j++
 			}
-			if j > len(cp.Messages)-4 {
-				break
+			if j > latest || !completedContextGroup(cp.Messages[i:j]) {
+				continue
 			}
 			start, end = i, j
 			break
@@ -104,7 +170,7 @@ func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage
 				task.Context.LastBytes = size
 				return messages, nil
 			}
-			return nil, fmt.Errorf("Task context exceeds the allocated model window. Its complete history is saved. Use a model with a larger supported context or reduce the task; no tool was dispatched")
+			return nil, fmt.Errorf("Task context exceeds the allocated model window. Its complete history and earlier action results are saved. No further model request or tool action was dispatched. Review the recorded work before continuing with a larger supported context")
 		}
 		group := append([]api.ChatMessage(nil), cp.Messages[start:end]...)
 		encoded, _ := json.Marshal(group)
@@ -120,12 +186,155 @@ func (r *Runner) prepareContext(task *Task, tools []api.Tool) ([]api.ChatMessage
 	}
 }
 
+// The model sees content after HTTP JSON decoding. Counting the serialized
+// ChatMessage envelope again double-counts escapes in tool JSON, paths and quoted
+// document text. Keep explicit per-message/template overhead and tool-call data;
+// this is still a conservative estimate, not an exact tokenizer measurement.
+func modelContextBytes(messages []api.ChatMessage, toolJSON []byte) int {
+	size := len(toolJSON)
+	for _, message := range messages {
+		size += 64 + len(message.Role) + len(message.Name) + len(message.ToolCallID)
+		if content, ok := message.Content.(string); ok {
+			size += len(content)
+		} else if message.Content != nil {
+			content, _ := json.Marshal(message.Content)
+			size += len(content)
+		}
+		if len(message.ToolCalls) > 0 {
+			calls, _ := json.Marshal(message.ToolCalls)
+			size += len(calls)
+		}
+	}
+	return size
+}
+
+// PendingApplicationLaunches is derived from the canonical durable steps, not
+// the compacted model view. Restart/archival therefore cannot forget a dispatch.
+func PendingApplicationLaunches(task *Task) []string {
+	if task.Config.ComputerScope != "desktop" {
+		return nil
+	}
+	pending := map[string]bool{}
+	for i, step := range task.Steps {
+		if i < task.Config.ComputerStepOffset || step.Type != "action" {
+			continue
+		}
+		var args struct {
+			Application string `json:"application_id"`
+		}
+		if json.Unmarshal([]byte(step.ToolArgs), &args) != nil || args.Application == "" {
+			continue
+		}
+		switch step.ToolName {
+		case "computer_open_application":
+			pending[args.Application] = true
+		case "computer_verify_application":
+			var evidence struct {
+				Verified    bool   `json:"verified"`
+				Check       string `json:"check"`
+				Application string `json:"application_id"`
+			}
+			if json.Unmarshal([]byte(step.ToolResult), &evidence) == nil && evidence.Verified && evidence.Check == "application_open" && evidence.Application == args.Application {
+				delete(pending, args.Application)
+			}
+		}
+	}
+	ids := make([]string, 0, len(pending))
+	for id := range pending {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// Facts are derived from durable results, never a model-written summary or the
+// compacted prompt. A later explicit negative check clears prior readiness.
+func VerifiedApplications(task *Task) []string {
+	if task.Config.ComputerScope != "desktop" {
+		return nil
+	}
+	ready := map[string]bool{}
+	for i, step := range task.Steps {
+		if i < task.Config.ComputerStepOffset || step.Type != "action" || step.ToolName != "computer_verify_application" {
+			continue
+		}
+		var args struct {
+			Application string `json:"application_id"`
+		}
+		var result struct {
+			Verified    bool   `json:"verified"`
+			Application string `json:"application_id"`
+			Check       string `json:"check"`
+		}
+		if json.Unmarshal([]byte(step.ToolArgs), &args) == nil && json.Unmarshal([]byte(step.ToolResult), &result) == nil && args.Application != "" && args.Application == result.Application && result.Check == "application_open" {
+			ready[args.Application] = result.Verified
+		}
+	}
+	ids := []string{}
+	for id, verified := range ready {
+		if verified {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// Incomplete/malformed tool exchanges may contain pending or uncertain effects.
+// Never compact one merely because another assistant message follows it.
+func completedContextGroup(group []api.ChatMessage) bool {
+	if len(group) == 0 || group[0].Role != "assistant" {
+		return false
+	}
+	calls := map[string]bool{}
+	for _, call := range group[0].ToolCalls {
+		if call.ID == "" || calls[call.ID] {
+			return false
+		}
+		calls[call.ID] = true
+	}
+	for _, message := range group[1:] {
+		if message.Role != "tool" || !calls[message.ToolCallID] {
+			return false
+		}
+		delete(calls, message.ToolCallID)
+	}
+	return len(calls) == 0
+}
+
 func contextPage(task *Task, reference string, offset int) (string, error) {
 	if offset < 0 {
 		return "", fmt.Errorf("invalid history offset")
 	}
+	lookup := reference
+	if strings.HasPrefix(reference, "step:") {
+		n, err := strconv.Atoi(strings.TrimPrefix(reference, "step:"))
+		if err != nil || n < 1 || n > len(task.Steps) || task.Steps[n-1].ID != n || task.Steps[n-1].Type != "action" {
+			return "", fmt.Errorf("history reference is not part of this task")
+		}
+		data := []byte(task.Steps[n-1].ToolResult)
+		if offset > len(data) || (offset < len(data) && !utf8.RuneStart(data[offset])) {
+			return "", fmt.Errorf("invalid history offset")
+		}
+		end := offset + 1024
+		if end > len(data) {
+			end = len(data)
+		}
+		for end < len(data) && !utf8.RuneStart(data[end]) {
+			end--
+		}
+		result, _ := json.Marshal(map[string]any{"reference": reference, "content": string(data[offset:end]), "next_offset": end, "complete": end == len(data), "total_bytes": len(data), "saved_evidence": true})
+		return string(result), nil
+	}
+	if strings.HasPrefix(reference, "archive:") {
+		n, err := strconv.Atoi(strings.TrimPrefix(reference, "archive:"))
+		if err != nil || n < 1 || n > len(task.ContextArchive) {
+			return "", fmt.Errorf("history reference is not part of this task")
+		}
+		lookup = task.ContextArchive[n-1].ID
+	}
 	for _, item := range task.ContextArchive {
-		if item.ID != reference {
+		if item.ID != lookup {
 			continue
 		}
 		data, _ := json.Marshal(item.Messages)

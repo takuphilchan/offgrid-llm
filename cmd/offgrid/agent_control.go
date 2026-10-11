@@ -18,6 +18,7 @@ import (
 )
 
 type agentRunSnapshot struct {
+	Verification    json.RawMessage      `json:"verification,omitempty"`
 	Evidence        json.RawMessage      `json:"-"`
 	Artifacts       json.RawMessage      `json:"artifacts,omitempty"`
 	Plan            []agents.PlanItem    `json:"plan,omitempty"`

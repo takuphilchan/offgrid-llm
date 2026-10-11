@@ -4,6 +4,15 @@ Use `--json` only with commands whose output contract you have checked.
 The global flag does not make every legacy command machine-readable.
 Service-aware commands share error handling; see [client contracts](../advanced/client-contracts.md).
 
+Agent snapshots preserve additive `verification` records. Versions 1 and 2 are
+known; do not discard unknown versions or interpret them as passed checks.
+Version 2 includes document, snapshot, revision and action identities under
+`checks[].binding.document`. `status: completed` and `state: checks_passed` are
+different claims. Failed native reads encode operation-local `effects: "none"`
+and optional `readiness` inside the JSON string `steps[].tool_result`; earlier
+actions may still have changed applications. Readiness values and typed evidence
+are defined in the [API contract](../../pkg/api/openapi.yaml).
+
 ## Useful commands
 
 | Command | Result to inspect |

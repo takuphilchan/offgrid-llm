@@ -143,6 +143,7 @@ async function fixture(
   );
   let state = "waiting_for_input",
     prompt = "";
+  let proposedPolicy: string | undefined;
   const submissions: any[] = [];
   const commands: {action: string; data: any}[] = [];
   let extra: Record<string, unknown> = {};
@@ -152,12 +153,12 @@ async function fixture(
     task_id: id,
     prompt,
     model,
+    requested_computer_approval_mode: proposedPolicy,
     status: state,
     steps: [],
     output: state === "completed" ? "Verified result from the saved task." : "",
     pending_approval: null,
     resumable: state === 'interrupted',
-    ...extra,
     pending_input:
       state === "waiting_for_input"
         ? {
@@ -168,6 +169,7 @@ async function fixture(
             target: "Notepad",
           }
         : null,
+    ...extra,
   });
   await page.route("**/health", (r) =>
     r.fulfill({ json: { status: "healthy" } }),
@@ -205,6 +207,7 @@ async function fixture(
       const body = route.request().postDataJSON();
       submissions.push(body);
       prompt = body.prompt;
+      proposedPolicy = body.computer_approval_mode;
       if (lost && submissions.length === 1) return route.abort("failed");
       return route.fulfill({ status: 202, json: snapshot() });
     } else if (path === `/api/v2/jobs/${id}/input`) {
@@ -472,7 +475,7 @@ test("desktop continues the same saved task with host-issued target and local po
     workspace: "workspace-test",
     requestId: "input-1",
     target: "opaque-target",
-    approvalMode: "scoped_changes",
+    approvalMode: "full_task",
   });
 });
 
@@ -494,6 +497,56 @@ test("task-first native failures do not prescribe browser repair", async ({
   const error = page.locator(".task-access [role=alert]");
   await expect(error).toBeVisible();
   await expect(error).not.toContainText(/browser|Unexpected native IPC/i);
+});
+
+test('native OS permission denial stays actionable in the current access panel', async ({page}) => {
+  const f=await fixture(page,{desktop:true});
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.evaluate(()=>{window.electron!.discoverComputerApps=async()=>{throw Error('computer_permission_denied')}});
+  await page.getByRole('button',{name:'Choose an application',exact:true}).click();
+  await expect(page.locator('.task-access [role=alert]')).toContainText('Allow accessibility access in your operating system settings');
+  expect(f.inputCount()).toBe(0);
+  expect(f.submissions).toEqual([]);
+});
+
+test('browser task access retains local consent, routing choices and recoverable network errors', async ({page}) => {
+  const f=await fixture(page,{desktop:true});
+  f.setState('waiting_for_input',{pending_input:{id:'input-1',call_id:'call-1',kind:'computer',mode:'browser',target:'Public reference',url:'https://example.com/article'}});
+  await page.addInitScript(()=>{
+    (window as any).browserStarts=[];
+    window.electron!.startComputerBrowser=async request=>{
+      (window as any).browserStarts.push(request);
+      if ((window as any).browserStarts.length===1) return {state:'idle',code:'consent_declined'};
+      throw Error('network_blocked');
+    };
+  });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.getByRole('combobox',{name:/^Action approvals/}).selectOption('full_task');
+  await page.getByText('Network settings',{exact:true}).first().click();
+  await page.getByRole('combobox',{name:'Network settings',exact:true}).selectOption('trusted-vpn');
+  await expect(page.locator('.task-access')).toContainText('Only enable this for a VPN you trust');
+  await expect(page.locator('.task-access')).toContainText('Credentials, payments');
+  await page.getByRole('button',{name:'Allow access and continue',exact:true}).click();
+  await expect(page.locator('.task-access [role=alert]')).toContainText('Permission was declined');
+  await page.getByRole('button',{name:'Allow access and continue',exact:true}).click();
+  await expect(page.locator('.task-access [role=alert]')).toContainText('select Trusted VPN routing');
+  await expect(page.locator('.task-access [role=alert]')).not.toContainText('Repair the matching desktop package');
+  expect(await page.evaluate(()=>(window as any).browserStarts)).toEqual([
+    {workspace:'workspace-test',requestId:'input-1',origin:'https://example.com/article',approvalMode:'full_task',networkMode:'trusted-vpn'},
+    {workspace:'workspace-test',requestId:'input-1',origin:'https://example.com/article',approvalMode:'full_task',networkMode:'trusted-vpn'}
+  ]);
+  expect(f.inputCount()).toBe(0);
+  expect(f.submissions).toEqual([]);
+});
+
+test('unrelated finished sessions never attach to a new saved task',async({page})=>{
+  const f=await fixture(page,{desktop:true});
+  await page.route('**/api/v2/computer/sessions',r=>r.fulfill({json:{sessions:[{id:'used',run_id:'other-task',state:'finished',origin:'Other task'}]}}));
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await expect(page.getByRole('button',{name:'Choose an application',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Allow access and continue',exact:true})).toHaveCount(0);
+  expect(f.inputCount()).toBe(0);
+  expect(await page.evaluate(()=>(window as any).hostRequest)).toBeUndefined();
 });
 
 test("lost acknowledgment preserves request identity across reload", async ({

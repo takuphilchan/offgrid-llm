@@ -3,6 +3,15 @@
 The desktop application is a secure Electron host for the same React UI and Go
 runtime used by the browser edition. It does not maintain a second frontend.
 
+The current task UI displays versioned outcome checks from the canonical job,
+including partial and unavailable verification. Saved-control discovery uses the
+same service implementation for UIA, Accessibility and AT-SPI observations; it
+does not enable additional capture/input or whole-desktop capabilities on those
+platforms. Matching newer hosts supply evidence-only control identities. Older
+hosts keep their existing permissions and report unavailable cross-observation
+checks. Full native workflows still require separate installed-platform evidence
+in the [reliability plan](../docs/advanced/product-reliability-plan.md).
+
 ## Development
 
 Build the UI first:
@@ -48,6 +57,43 @@ this declaration. Invalid declarations never fall back to that table.
 
 ## Packaging
 
+### Windows task access
+
+The current Agents composer proposes whole-desktop scope and an approval policy.
+Selecting **Full task access** requires one explicit local confirmation and remembers
+authorization only for the live desktop session, service/workspace and actor.
+Subsequent tasks get distinct bounded grants without another consent popup.
+Quit, lock/suspend, account/workspace change, or Stop/revocation clear it. Stored
+UI defaults and page reloads do not create permission. Older per-task and limited
+window clients remain compatible without broadening their grants.
+The policy row is the authorization entry point, not a checked default followed
+by a separate Enable button. It is checked only after the host confirms access;
+denial or revocation leaves it unchecked. The in-app Stop and narrower policy
+selection revoke it.
+
+Windows consent uses an owned native OffGrid dialog rather than the generic
+Yes/No MessageBox. The session confirmation starts at 440 × 330 logical pixels,
+clamped to the available work area. Scope, task limits, restricted-action summary
+and revocation remain visible; **Details** expands the full exclusions and workspace
+identity. Segoe UI typography and a single solid rounded keyboard-focus border
+replace stock-font/dotted button styling. Its monochrome action row stays visible
+while expanded details scroll, including on short/high-DPI screens. **Enable access / Cancel**
+are explicit; initial Enter, Escape, and closing the window deny access. Keyboard
+users can Tab to Enable access and activate it intentionally. The dialog follows
+the Windows app light/dark preference and system high-contrast colors (not the
+renderer theme override); native consent text remains English. A renderer or
+service message still cannot supply an approval flag. Rebuild the native worker
+and matching desktop package to deliver this UI; a container-only update cannot.
+
+Desktop-owned Windows workers no longer show an extra floating Stop window.
+The persistent app control, File menu and tray stop locally without waiting for
+the service; the independent native emergency shortcut remains registered.
+Renderer crash/unresponsiveness revokes control. Keep the worker, private
+companion transport, preload/main bridge and renderer packaged together—updating
+only the service container cannot change native consent/Stop behavior.
+
+### Build artifacts
+
 ```bash
 cd desktop
 npm ci --prefix ../computer --ignore-scripts
@@ -65,10 +111,12 @@ runtime and the prebuilt `web/dist` bundle, then creates:
 
 Packaging bundles pinned Playwright and its matching Chromium build. The first
 build downloads that browser; end users do not need Node, npm, or terminal
-pairing in the matching desktop application. In Agents, select browser assistance,
-choose the practice page or one permitted HTTPS page address, and approve the local
-consent prompt. Web users hand off to the matching installed desktop application;
-a container alone cannot supply a host browser runtime.
+pairing in the matching desktop application. In the current Agents composer,
+describe the task and choose its computer-access policy. Task-wide access on a
+supported host does not require choosing an application first. The optional
+selected-window/managed-browser flow remains a narrower access mode; it is not
+the retired setup page. Web users hand off to the matching installed desktop
+application; a container alone cannot supply a host runtime.
 
 Page addresses retain paths, queries and fragments within the selected site.
 For a trusted VPN using fake DNS, Network settings offers explicit trusted-VPN
@@ -143,6 +191,10 @@ xvfb-run -a node ../dev/scripts/test-packaged-browser.mjs dist/linux-unpacked/of
 
 CI also builds the React application and its generated API types before the
 Electron package, preventing stale or missing UI assets from shipping.
+The Windows job also runs `test-desktop-access.mjs` against that package: real
+preload/main access status, no consent from defaults, and keyboard scrolling at
+100%/200% Electron zoom. It uses a disposable fixture/profile and never enables
+control or submits a task.
 The Node tests exercise handshake/timeout/URL/IPC and lifecycle policy. CI also
 launches native unpacked Electron on Windows, Linux, macOS Intel and Apple Silicon
 against isolated fixture services and the bundled Go binary. On Windows, pass

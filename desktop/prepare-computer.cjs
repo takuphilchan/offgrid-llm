@@ -2,7 +2,7 @@
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
-const {createManifest}=require('../computer/pack.cjs');
+const {createManifest,runtimeFiles}=require('../computer/pack.cjs');
 
 module.exports=async function prepareComputer(context) {
   const platform=context.electronPlatformName;
@@ -16,7 +16,7 @@ module.exports=async function prepareComputer(context) {
   const target=path.join(root,`${{win32:'win',darwin:'mac',linux:'linux'}[platform]}-${arch}`);
   if (!target.startsWith(root+path.sep) || target===root) throw Error('Invalid build target');
   await fs.mkdir(target,{recursive:true});
-  for (const file of ['managed.cjs','native-managed.cjs','session.mjs','native-session.mjs','approval-policy.mjs','journal.mjs','network.mjs','native-worker.cjs','browser.mjs','demo.mjs','pack.cjs','package.json']) await fs.copyFile(path.join(source,file),path.join(target,file));
+  for (const file of runtimeFiles) await fs.copyFile(path.join(source,file),path.join(target,file));
   // Ship the real host worker with its pack digest, but do not advertise a
   // native driver until the coordinated service/UI and platform gates pass.
   // Cross-compilation is build-time only; users never install a Go toolchain.

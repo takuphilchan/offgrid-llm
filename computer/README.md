@@ -4,6 +4,131 @@ This is the implementation/developer reference. For normal setup and useful
 task examples, start with [Computer Tasks](../docs/guides/computer-tasks.md).
 Capabilities described here remain preview; the reliability plan owns evidence.
 
+## Workflow evidence and bounded discovery
+
+New task-first native runs declare at most 12 immutable outcome checks per user
+revision before mutations. Read-only discovery is allowed first. The service
+alone records provenance, bindings and assessments; a document or model cannot
+grant access, remove an unfinished check or turn its own output into proof.
+`application_open` proves a matching usable application surface;
+`control_text_equals` and `control_checked_equals` prove independent read-back
+of the specified control state. They do not verify research, saved files or
+external submissions. Unsupported kinds remain explicitly unverified.
+
+Native element `identity` is optional, evidence-only metadata. Windows uses UIA
+runtime identities, macOS retained AX object equality, and Linux retained AT-SPI
+object identities across consecutive captures. Missing/ambiguous identities,
+target replacement and reset cannot match by name, value or row. Input still
+requires the current observation and element ID. The service pins the full
+target digest and session at declaration. Old hosts remain usable with limited
+verification; no v2 window permission is upgraded.
+
+`computer_find_controls` searches the latest saved native observation by a
+case-insensitive literal Unicode name fragment, exact role and optional boolean
+properties. It preserves canonical order; it never chooses a control for input.
+`computer_inspect_control` pages stored text for one exact element. Query strings
+are limited to 256 UTF-8 bytes. Pages contain at most 16 controls and 4096 encoded
+bytes; text pages preserve UTF-8 boundaries. Continuations bind the entire saved
+view and query. `model_omitted` counts remaining matching controls in search and
+remaining text bytes in inspection. `source_limited`, `text_limited` and name/role
+limits describe what was omitted; paging cannot recover absent host content.
+
+These tools make no host calls, focus changes or freshness extensions. They
+recheck the owner, active session and latest target. Expired input observations
+may be read with `input_fresh: false` and `age_ms`; replaced targets, revoked
+sessions and unknown structures are rejected. Ordinary owner-only history stays
+available separately. Saved application text is untrusted input.
+
+## Task desktop authority (protocol 3, Windows x64 preview)
+
+The matching Windows desktop and service separate a **task grant** from
+individual execution targets. The default composer saves desktop scope and
+Full task access and holds each saved task before inference. Explicitly enabling
+Full access confirms consent once for the desktop session; Start offers it if
+needed. This in-memory permission is reused only for the same service, workspace
+and actor, never loaded from renderer preferences. Enrollment is bound to actor,
+workspace, run and pending input; it is not authority until the host binds a
+separate task grant. Navigation never
+opens the dialog or submits work. A failed/lost reply can attach that same grant
+without creating another job. Older window grants never become desktop grants.
+
+The private worker runs with `--protocol 3`. `desktop_identity` precedes consent;
+`grant_desktop` authorizes inventory and typed operations for at most 60 minutes
+or 500 mutations. The desktop is a synthetic authority target. Prepared actions
+bind a real process generation/surface separately. `applications`, `surfaces`,
+`prepare_lifecycle`, and `verify_application` extend the existing framed IPC.
+Launch/focus use the existing intent/result journal and local supervisor.
+There is no host-control listener, executable argument, or model path API.
+
+`enable_desktop` is private protocol-3 IPC with a `{service, workspace, actor}`
+permission request. Only the worker's affirmative local consent creates that
+permission. There is no `approved` flag. `grant_desktop` additionally binds the
+exact service when reusing consent. `release_desktop` revokes the finished task's
+supervisor and clears prepared actions/targets, retaining only session consent
+on the same signed-in desktop. The transport erases cached observation replies
+but keeps duplicate-action tombstones. The next task enrolls again with its own
+binding. Permission never survives worker restart, OS session loss or explicit Stop.
+
+Service tools are `computer_applications`, `computer_open_application`,
+`computer_windows`, `computer_focus_window`, and `computer_verify_application`,
+alongside structured control tools and independently authorized MCP tools.
+Opening Chrome needs a catalog ID, not a URL. A spawn is only `dispatched`;
+completion requires a separately observed surface with matching process image.
+Verification can reuse an existing process and never repeats a launch.
+
+Protocol-v3 Windows workers handle slow inference through `RefreshObservation`
+before a new control preparation or read-only verification. The proposed
+observation must exactly match the host's retained view. Once expired, the driver
+actually recaptures the full UIA view, requiring matching target, ordered runtime
+identities/state digest, all exposed values/capabilities and completeness. It
+retains model-visible element IDs only for this exact match and uses the new
+observation identity/time for preparation. Recapture clears old preparations;
+dispatch still revalidates process, foreground, control identity and precondition.
+Changed, incomplete, forged or foreign state fails closed. There is no general
+age extension, coordinate remapping, approval renewal or uncertain-action retry.
+V2 and adapters without this optional method keep strict freshness behavior.
+
+Windows Chromium observations allow up to two seconds for a cold UIA document
+tree to appear, with fresh snapshots and unchanged target validation. A timeout
+marks the snapshot limited. Empty, non-interactive layout containers are omitted
+from the flat model view. After text/checkbox changes, bounded read-back waits
+for asynchronous provider updates; the mutation itself is dispatched only once.
+Cancellation or missing confirmation remains uncertain, never an automatic retry.
+`OFFGRID_NATIVE_BROWSER_FIXTURE` opts into `TestNativeOwnedBrowserSearch` using an
+explicit installed Chrome executable, a disposable profile and a loopback search
+form. Its independent HTTP oracle checks the submitted query. No personal browser
+profile, public website, sandbox bypass or debugging port is used.
+
+Windows discovery reads per-user/machine App Paths (both registry views) and
+Start Menu shortcuts, with system Notepad as a built-in fallback. Only validated
+local GUI executables with zero launch arguments enter the catalog. Shell links
+are read through IShellLink without Resolve or script execution; command/installer
+registrations, console binaries and redirected paths are excluded. Packaged
+activation and shortcuts needing arguments require further typed adapters.
+Launcher stubs that redirect to a different executable (including some Store
+Notepad and LibreOffice builds), and unaddressable controls may fail readiness;
+do not claim those workflows completed. This is an extensible catalog, not
+arbitrary shortcut execution. Executable identity is checked at discovery and
+dispatch; source/publisher authenticity is not established by a file identity.
+Owned Win32 fixtures exercise UIA launch/readiness and independent native
+read-back of structured-control changes without touching user applications.
+Native visual fallback and direct host filesystem tools remain unavailable.
+macOS/Linux retain explicit v2 selected-window access until they have v3 host
+implementations and evidence; service capability alone does not promise one.
+
+Task termination revokes task authority, not separately enabled session consent.
+Desktop-owned Windows workers use `--stop-control app`: the existing app banner,
+File menu and tray stop through private IPC even offline, with no duplicate Stop
+popup. A hidden native message thread independently handles the emergency key
+and lock/logoff/disconnect/suspend notifications. Renderer loss or unresponsiveness
+also revokes locally. Standalone workers retain their visible stop surface.
+OS-session revocation persists even if the desktop later unlocks. Returning online never restores
+the grant. No stop claims to undo an already dispatched action. Matching packs
+are necessary; a container-only update cannot implement this host behavior.
+
+The selected-window and managed-browser sections below describe compatibility
+modes, not the normal protocol-v3 Windows flow.
+
 ## Native-control foundation (not native availability)
 
 The service no longer instantiates the legacy blanket-approved computer
@@ -47,13 +172,17 @@ remain **unqualified** until the full task/model/platform evaluation gates pass.
 ## Installed desktop: no terminal setup
 
 Updated desktop packages include the matching Playwright/Chromium runtime and
-native worker. In **Agents**, describe the task and choose **Start task**. When
-the saved task requests **Access needed**, select an existing application window
+native worker. On Windows x64 with protocol 3, choose the computer policy before
+**Start task**, approve the task-wide local consent once, and let the agent
+discover and open supported applications. The application picker is not part
+of this default flow. A tool-capable model is still required.
+
+For explicit selected-window compatibility sessions, when the saved task
+requests **Access needed**, select an existing application window
 or launch a catalogued Windows shortcut, macOS application, or Linux desktop
 entry. Local consent connects that actual target to the same saved task; no
 Node installation or copied pairing code is needed. Browser requests use a
-separate managed Chromium profile. A tool-capable model is still required.
-Before connecting, choose one
+separate managed Chromium profile. Before connecting, choose one
 session policy: **Ask every time**, **Approve scoped changes**, or **Full task
 access**. The default automatically permits only locally classified reversible
 work in the selected window. Full task access also permits consequential typed
@@ -353,6 +482,22 @@ No native worker implements screenshots, vision, whole-desktop input or general
 native file operations yet; pack manifests explicitly retain `qualified: false`.
 
 ### Building and validating the desktop integration
+
+The staged `document-session.mjs` transport is shared by selected-window and
+task-desktop sessions. It uses the same native worker, grants, journal and Stop
+path; it does not create another input authority. Document calls require the
+negotiated `native_documents:1` feature and surface-specific capabilities. Read
+pages are pinned to snapshot/revision; creation/edit results must carry matching
+host action evidence, not just a successful receipt. Old hosts continue their
+existing operations without receiving the new fields.
+
+The Windows document backend currently implements bounded UIA relationship
+discovery, exact tab selection and TextPattern/Unicode edits internally. It
+does **not** advertise the feature yet: reviewed creation profiles, public
+service integration and native acceptance remain open. No app/version or OS
+qualification follows from the transport/unit tests. macOS/Linux native document
+providers remain separate unfinished work; the Windows backend is not a fallback
+for those platforms.
 
 Install locked build dependencies with `npm ci --prefix computer --ignore-scripts`
 before building the desktop. `desktop/prepare-computer.cjs` assembles pinned

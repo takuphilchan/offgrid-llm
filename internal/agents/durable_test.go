@@ -117,10 +117,12 @@ func TestComputerTaskRepairsSafePreDispatchValidationFailure(t *testing.T) {
 			return runAnswer(api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{{Type: "function", Function: api.FunctionCall{Name: "computer_observe", Arguments: `{}`}}}}), nil
 		case 4:
 			return runAnswer(api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{{Type: "function", Function: api.FunctionCall{Name: "computer_replace_text", Arguments: `{"observation_id":"latest","element":"invented","text":"value"}`}}}}), nil
-		default:
+		case 6:
 			if got := messages[len(messages)-1].StringContent(); !strings.Contains(got, "Call the observation tool again") {
 				t.Fatalf("safe recovery was not returned to the model: %s", got)
 			}
+			return runAnswer(api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{{Type: "function", Function: api.FunctionCall{Name: "computer_observe", Arguments: `{}`}}}}), nil
+		default:
 			return runAnswer(api.ChatMessage{Role: "assistant", Content: "Stopped without changing the application."}), nil
 		}
 	}
@@ -136,7 +138,7 @@ func TestComputerTaskRepairsSafePreDispatchValidationFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.Status != TaskCompleted || tools.calls.Load() != 1 || len(task.Steps) != 2 || task.Steps[1].Type != "rejected" {
+	if task.Status != TaskCompleted || tools.calls.Load() != 2 || len(task.Steps) != 3 || task.Steps[1].Type != "rejected" || task.Checkpoint.ProposalUnresolved {
 		t.Fatalf("safe proposal was not repaired without dispatch: %+v calls=%d", task, tools.calls.Load())
 	}
 }

@@ -59,7 +59,7 @@ jobs:
         run: go test ./...
 
       - name: Race-test privacy, storage, and request lifecycle
-        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio
+        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/inference
 
       - name: Generate and build web UI
         working-directory: web/app
@@ -230,6 +230,7 @@ jobs:
             node ../dev/scripts/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
             node ../dev/scripts/test-packaged-browser.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
             node ../dev/scripts/test-desktop-theme.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+            node ../dev/scripts/test-desktop-access.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
           else
             arch=$(node -p process.arch)
             npx electron-builder --dir --mac "--$arch" --publish never

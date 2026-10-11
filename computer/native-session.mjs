@@ -6,6 +6,9 @@ import {createHash} from 'node:crypto';
 import {localService} from './session.mjs';
 import {DispatchJournal} from './journal.mjs';
 import {policyAllows, validActionClass, validApprovalMode} from './approval-policy.mjs';
+import featureContract from './native-features.cjs';
+import {DocumentSession,documentAction} from './document-session.mjs';
+const {requestedNativeFeatures,verifyNativeFeatures}=featureContract;
 
 const opaque = value => typeof value === 'string' && /^[a-zA-Z0-9:_-]{1,256}$/.test(value);
 const canonical = value => value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : `{${Object.keys(value).sort().map(k=>`${JSON.stringify(k)}:${canonical(value[k])}`).join(',')}}`;
@@ -13,15 +16,16 @@ const same = (a,b) => canonical(a) === canonical(b);
 const exact = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === fields.length && fields.every(k=>Object.hasOwn(value,k));
 
 export class NativeSession {
-  constructor({service, directory, worker, emit = () => {}, fetchRequest = fetch}) {
-    Object.assign(this, {service:localService(service),directory,worker,emit,fetchRequest});
+  constructor({service, directory, worker, emit = () => {}, fetchRequest = fetch, releaseWorker}) {
+    Object.assign(this, {service:localService(service),directory,worker,emit,fetchRequest,releaseWorker});
     this.abort = new AbortController(); this.token = ''; this.stopping = false;
+    this.documents = new DocumentSession(this);
   }
   async request(path, body) {
     const response = await this.fetchRequest(new URL(path,this.service), {method:body===undefined?'GET':'POST',redirect:'error',
       headers:{'Content-Type':'application/json',...(this.token?{Authorization:`Bearer ${this.token}`}:{})},
       ...(body===undefined?{}:{body:JSON.stringify(body)}), signal:AbortSignal.any([this.abort.signal,AbortSignal.timeout(20000)])});
-    if(!response.ok) throw Error('computer_connection_lost');
+    if(!response.ok) throw Error(this.releaseWorker && this.token && response.status===403 && /\/(poll|heartbeat)$/.test(path)?'computer_session_ended':'computer_connection_lost');
     return response.json();
   }
   companion(path,body={}) { return this.request(`/api/v2/computer/companion/${path}`,body); }
@@ -48,10 +52,12 @@ export class NativeSession {
       this.journal=new DispatchJournal(journalPath);
       await chmod(journalPath,0o600);
       this.checkActive();
-      const paired=await this.companion('pair',{code,protocol_version:2,target:this.target.identity,title:this.target.title,approval_mode:approvalMode});
+      const features=requestedNativeFeatures(identity,this.worker);
+      const paired=await this.companion('pair',{code,protocol_version:2,target:this.target.identity,title:this.target.title,approval_mode:approvalMode,...(Object.keys(features).length?{native_features:features}:{})});
       this.checkActive();
       if(!opaque(paired.session?.id) || !same(paired.session.target,this.target.identity) || paired.session.driver!==this.target.identity.driver || !/^[a-f0-9]{64}$/.test(paired.token)) throw Error('computer_protocol_invalid');
       this.session=paired.session.id; this.token=paired.token;
+      this.features=verifyNativeFeatures(features,paired.session.native_features);
       this.scope=canonical([this.service.origin,workspace,this.session,this.target.identity]);
       this.journal.discardPreviousSessionResults(this.scope);
       this.worker.once('stopped',()=>{ void this.stop().catch(()=>{}); });
@@ -67,6 +73,17 @@ export class NativeSession {
     const binding=action.binding;
     if(!exact(binding,['actor','task','companion','session','target']) || !opaque(binding.actor) || !opaque(binding.task) || binding.session!==this.session || binding.companion!==this.session || !same(binding.target,this.target.identity)) throw Error('computer_scope_violation');
     if(this.binding && !same(binding,this.binding)) throw Error('computer_scope_violation');
+    if(documentAction(action)) {
+      if(this.features?.native_documents!==1)throw Error('computer_document_unavailable');
+      if(!this.binding){
+        if(action.kind!=='computer_documents')throw Error('computer_observation_required');
+        const selected=await this.worker.request('select',{target:this.target.identity.id,binding,approval_mode:this.approvalMode});this.checkActive();
+        if(!same(selected.identity,this.target.identity))throw Error('computer_stale_target');
+        this.binding=structuredClone(binding);
+      }
+      return this.documents.execute(action);
+    }
+    this.documents.clear();
     if(action.kind==='computer_prepare') {
       if(!this.binding || !exact(action.arguments,['tool','arguments']) || !['computer_replace_text','computer_activate','computer_shortcut','computer_set_checked'].includes(action.arguments.tool) || !action.id.endsWith(':prepare'))throw Error('computer_invalid_action');
       const {tool,arguments:args}=action.arguments;
@@ -151,7 +168,7 @@ export class NativeSession {
             // These failures happen before input dispatch and do not invalidate
             // the selected target or transport. Keep the controller alive so one
             // bad model proposal is not misreported as a lost host connection.
-            if(['computer_invalid_action','computer_observation_required','computer_stale_observation','computer_approval_invalid','computer_prohibited_action'].includes(code)) continue;
+            if(['computer_invalid_action','computer_observation_required','computer_stale_observation','computer_approval_invalid','computer_prohibited_action','computer_target_not_selected','computer_application_not_ready','computer_document_changed','computer_document_unavailable','computer_document_incomplete','computer_document_range_invalid','computer_document_composition_unstable'].includes(code)) continue;
           }
           throw error;
         }
@@ -161,17 +178,21 @@ export class NativeSession {
         await this.companion('reply',reply);
       }
     } catch(error) {
-      if(!this.stopping) { this.failed=true; this.emit({state:'error',code:/^computer_[a-z_]+$/.test(error.message)?error.message:'computer_uncertain_outcome'}); }
+      if(!this.stopping && error.message!=='computer_session_ended') { this.failed=true; this.emit({state:'error',code:/^computer_[a-z_]+$/.test(error.message)?error.message:'computer_uncertain_outcome'}); }
     } finally { await this.stop().catch(()=>{}); }
   }
   stop() {
     if(this.closing) return this.closing;
     this.stopping=true; this.abort.abort(); clearInterval(this.heartbeat);
     this.closing=(async()=>{
-      await this.worker.stop();
+      if(this.releaseWorker) await this.releaseWorker(); else await this.worker.stop();
+      if(this.workerStopped)this.worker.removeListener('stopped',this.workerStopped);
+      // Local input is stopped first, including offline. Relinquish this exact
+      // enrollment where reachable so a declined dialog can be retried at once.
+      if(this.token) await this.fetchRequest(new URL('/api/v2/computer/companion/revoke',this.service),{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token}`},body:'{}',signal:AbortSignal.timeout(1000)}).catch(()=>{});
       // Keep tombstones; erase observation results only after dispatch stops.
       if(this.journal) { this.journal.db.exec('UPDATE dispatch SET reply=NULL'); this.journal.close(); this.journal=null; }
-      this.token='';this.view=null;this.preparation=null;if(!this.failed)this.emit({state:'stopped'});
+      this.token='';this.view=null;this.preparation=null;this.documents.clear();if(!this.failed)this.emit({state:'stopped'});
     })().catch(error=>{
       this.failed=true;this.closing=null;
       this.emit({state:'error',code:'computer_stop_unconfirmed'});

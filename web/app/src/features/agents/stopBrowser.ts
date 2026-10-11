@@ -10,6 +10,7 @@ export async function stopBrowserAssistance() {
  ]);
  const locallyStopped=managed && local.status==='fulfilled' && local.value?.state==='stopped';
  return {
+  locallyStopped,
   revoked:service.status==='fulfilled',
   error:managed && !locallyStopped?'stopUnconfirmed':service.status==='rejected'?(locallyStopped?'localStoppedDisconnected':'lost'):undefined,
  } as const;

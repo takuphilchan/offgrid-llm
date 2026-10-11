@@ -58,8 +58,9 @@ export function App() {
   const [refreshing, setRefreshing] = useState(false);
   const refreshLock = useRef(false);
   const accessRevision = useRef(0);
+  const lastIdentity = useRef<{ actor: string; workspace: string; taskFirst: boolean } | null>(null);
   useEffect(() => {
-    const expired = () => { accessRevision.current++; clearWorkspaceState(); setAgentReplayScope('signed-out'); setAccess('login'); setAuthUser(null); };
+    const expired = () => { accessRevision.current++; lastIdentity.current = null; clearWorkspaceState(); setAgentReplayScope('signed-out'); setAccess('login'); setAuthUser(null); };
     window.addEventListener('offgrid:unauthenticated', expired);
     return () => window.removeEventListener('offgrid:unauthenticated', expired);
   }, []);
@@ -69,8 +70,6 @@ export function App() {
     setLoadError('');
     const [healthResult, modelResult, userResult, identityResult] = await Promise.allSettled([api.health(), api.models(), api.currentUser(), api.systemIdentity()]);
     if (revision !== accessRevision.current) return;
-    setWorkspaceID(identityResult.status === 'fulfilled' ? identityResult.value.workspace_id ?? '' : '');
-    setTaskFirst(identityResult.status === 'fulfilled' && identityResult.value.capabilities?.includes('task-first-agents-v2') === true);
     setHealth(healthResult.status === 'fulfilled' ? 'ready' : 'offline');
     if (userResult.status === 'rejected') {
       if (userResult.reason instanceof APIError && userResult.reason.status === 401) { setAuthUser(null); setAccess('login'); }
@@ -86,7 +85,17 @@ export function App() {
     }
     if (revision !== accessRevision.current) return;
     setAuthRequired(enforced);
-    setAgentReplayScope(JSON.stringify([userResult.value.user?.id ?? (enforced ? 'guest' : 'local'), userResult.value.user?.role, enforced, identityResult.status === 'fulfilled' ? identityResult.value.workspace_id : null]));
+    const identityActor = JSON.stringify([userResult.value.user?.id ?? (enforced ? 'guest' : 'local'), userResult.value.user?.role, enforced]);
+    const previous = lastIdentity.current?.actor === identityActor ? lastIdentity.current : null;
+    const workspace = identityResult.status === 'fulfilled' ? identityResult.value.workspace_id ?? '' : previous?.workspace ?? '';
+    const supported = identityResult.status === 'fulfilled'
+      ? identityResult.value.capabilities?.includes('task-first-agents-v2') === true || (previous?.workspace === workspace && previous.taskFirst)
+      : previous?.taskFirst ?? false;
+    // Failed compatibility reads do not change actor/workspace identity or
+    // remount drafts. This is presentation state, never an access grant.
+    lastIdentity.current = { actor: identityActor, workspace, taskFirst: supported };
+    setWorkspaceID(workspace); setTaskFirst(supported);
+    setAgentReplayScope(JSON.stringify([identityActor, workspace]));
     setAuthUser(userResult.value.authenticated ? userResult.value.user : null);
     setGuest(userResult.value.guest === true);
     if (modelResult.status === 'fulfilled') {
@@ -161,13 +170,14 @@ export function App() {
   const logout = async () => {
     accessRevision.current++;
     try {
-      await api.logout(); clearWorkspaceState(); setAgentReplayScope('signed-out'); accessRevision.current++; setAccess('login'); setAuthUser(null);
+      if(window.electron?.stopComputerBrowser)await window.electron.stopComputerBrowser();
+      await api.logout(); lastIdentity.current = null; clearWorkspaceState(); setAgentReplayScope('signed-out'); accessRevision.current++; setAccess('login'); setAuthUser(null);
     } catch (reason) { setLoadError(reason instanceof Error ? reason.message : text.common.error); }
   };
 
   const admin = !authRequired || authUser?.role === 'admin';
   const actor = authUser?.id ?? (authRequired && guest ? 'guest' : 'local');
-  const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role, taskFirst]);
+  const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role]);
   return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst}><div className={`app-shell${collapsed ? ' navigation-collapsed' : ''}`}>
     <WorkspaceNavigation page={page} health={health} collapsed={collapsed} onToggle={toggleNavigation} />
 

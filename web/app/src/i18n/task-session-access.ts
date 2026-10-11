@@ -1,0 +1,13 @@
+import type {LocaleCode} from './index';
+const copy:Record<LocaleCode,readonly[string,string,string,string,string]>={
+ en:['Enable Full access','Revoke Full access','Full access enabled for this desktop session','Full access is not enabled','Enable once for this desktop session. It resets on quit, lock, account/workspace change or revocation.'],
+ fr:['Activer l’accès complet','Révoquer l’accès complet','Accès complet activé pour cette session','L’accès complet n’est pas activé','Activez-le une fois par session. Il expire à la fermeture, au verrouillage, au changement de compte ou d’espace, ou à sa révocation.'],
+ de:['Vollzugriff aktivieren','Vollzugriff widerrufen','Vollzugriff für diese Desktopsitzung aktiviert','Vollzugriff ist nicht aktiviert','Einmal pro Desktopsitzung aktivieren. Beenden, Sperren, Konto-/Arbeitsbereichswechsel oder Widerruf beendet den Zugriff.'],
+ es:['Activar acceso completo','Revocar acceso completo','Acceso completo activado para esta sesión','El acceso completo no está activado','Actívelo una vez por sesión. Se revoca al salir, bloquear, cambiar de cuenta o espacio, o revocarlo manualmente.'],
+ ar:['تفعيل الوصول الكامل','إلغاء الوصول الكامل','الوصول الكامل مفعّل لهذه الجلسة','الوصول الكامل غير مفعّل','فعّله مرة واحدة للجلسة. ينتهي عند الإغلاق أو القفل أو تغيير الحساب أو مساحة العمل أو إلغائه.'],
+ sw:['Washa ufikiaji kamili','Batilisha ufikiaji kamili','Ufikiaji kamili umewashwa kwa kipindi hiki','Ufikiaji kamili haujawashwa','Washa mara moja kwa kipindi hiki. Huisha ukifunga programu, ukifunga skrini, ukibadili akaunti au eneo la kazi, au ukibatilisha.'],
+ sn:['Bvumira mvumo yakazara','Bvisa mvumo yakazara','Mvumo yakazara yabvumirwa muchikamu chino','Mvumo yakazara haisati yabvumirwa','Bvumira kamwe muchikamu chino. Inopera pakuvhara, kukiya, kuchinja akaundi kana nzvimbo yebasa, kana kuibvisa.'],
+ nd:['Vumela ukufinyelela okupheleleyo','Susa ukufinyelela okupheleleyo','Ukufinyelela okupheleleyo kuvunyelwe kulesi sikhathi','Ukufinyelela okupheleleyo akuvunyelwanga','Vumela kanye kulesi sikhathi. Kuphela ekuvaleni, ekukhiyeni, ekutshintsheni i-akhawunti kumbe indawo yokusebenza, kumbe ekususeni imvumo.'],
+ zu:['Vumela ukufinyelela okugcwele','Hoxisa ukufinyelela okugcwele','Ukufinyelela okugcwele kuvunyelwe kulesi sikhathi','Ukufinyelela okugcwele akuvunyelwe','Vumela kanye kulesi sikhathi. Kuphela ekuvaleni, ekukhiyeni, ekushintsheni i-akhawunti noma indawo yokusebenza, noma ekuhoxiseni.'],
+};
+export function taskSessionAccessText(locale:LocaleCode){const[enable,revoke,ready,disabled,hint]=copy[locale];return{enable,revoke,ready,disabled,hint};}

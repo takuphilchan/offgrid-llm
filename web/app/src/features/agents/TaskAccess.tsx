@@ -18,13 +18,19 @@ import {
 import { computerExperience } from "../../i18n/computer-experience";
 import { stopOwnedComputer } from './TaskControls';
 import { draftKey, readDraft, writeDraft } from "../../lib/drafts";
+import { taskAccessText } from '../../i18n/task-access';
+import { TaskDesktopAccess } from './TaskDesktopAccess';
 
 type Target = { id: string; title: string; driver: string };
 type Policy = ComputerSession["approval_mode"];
 
 // Access is an interruption of an existing job, not another task builder. Host
 // IDs come only from the trusted picker; model-proposed labels are never IDs.
-export function TaskAccess({
+export function TaskAccess(props:{run:AgentRun;workspace:string;onResolved:()=>void;cancelSignal?:AbortSignal;initialConsentPending?:boolean}) {
+  if(props.run.pending_input?.mode==='desktop'||(props.run.pending_input?.mode==='app'&&props.run.requested_computer_approval_mode&&props.run.requested_computer_scope!=='selected_window'&&window.electron?.desktopComputerProtocol===3))return <TaskDesktopAccess {...props}/>;
+  return <WindowTaskAccess {...props}/>;
+}
+function WindowTaskAccess({
   run,
   workspace,
   onResolved,
@@ -50,7 +56,8 @@ export function TaskAccess({
     input.mode === "app"
       ? !!window.electron?.discoverComputerApps
       : !!window.electron?.startComputerBrowser;
-  const [mode, setMode] = useState<Policy>("scoped_changes");
+  const [legacyMode, setMode] = useState<Policy>("scoped_changes");
+  const mode = run.requested_computer_approval_mode ?? legacyMode;
   const [targets, setTargets] = useState<Target[]>([]),
     [target, setTarget] = useState("");
   const [launch, setLaunch] = useState(false);
@@ -101,13 +108,20 @@ export function TaskAccess({
     try {
       await work(current);
     } catch (reason) {
+      const code = reason instanceof Error ? reason.message : '';
+      const browserFailure = input.mode === 'browser' ? ({
+        network_blocked: experience.networkBlocked,
+        network_unavailable: experience.networkUnavailable,
+        consent_declined: experience.declined,
+        stop_unconfirmed: experience.stopUnconfirmed,
+      } as Record<string, string>)[code] : undefined;
       if (current() && mounted.current)
         setError(
           reason instanceof APIError
             ? reason.message
-            : nativeAppError(
+            : browserFailure ?? nativeAppError(
                 locale,
-                reason instanceof Error ? reason.message : "",
+                code,
                 input.mode === "app"
                   ? nativeAppFeedback(locale).unavailable
                   : experience.repair,
@@ -260,7 +274,11 @@ export function TaskAccess({
                   />
                 </label>
               )}
-              <label className="field">
+              {run.requested_computer_approval_mode ? <div className="field">
+                <span>{taskAccessText(locale).selected}</span>
+                <strong>{mode === 'full_task' ? policy.full : mode === 'scoped_changes' ? policy.scoped : policy.ask}</strong>
+                <small>{taskAccessText(locale).consent}</small>
+              </div> : <label className="field">
                 <span>{policy.title}</span>
                 <select
                   value={mode}
@@ -278,7 +296,7 @@ export function TaskAccess({
                       ? policy.scopedHelp
                       : policy.askHelp}
                 </small>
-              </label>
+              </label>}
               {targets.length > 0 && (
                 <label className="field">
                   <span>{copy.choose}</span>

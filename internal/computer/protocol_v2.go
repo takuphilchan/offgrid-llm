@@ -22,11 +22,14 @@ const MaxStepActions = 10
 const MaxIPCFrame = 1 << 20
 
 var (
-	ErrInvalidControl   = errors.New("computer_invalid_action")
-	ErrControlScope     = errors.New("computer_scope_violation")
-	ErrControlApproval  = errors.New("computer_approval_invalid")
-	ErrStaleObservation = errors.New("computer_stale_observation")
-	ErrProhibitedAction = errors.New("computer_prohibited_action")
+	ErrInvalidControl      = errors.New("computer_invalid_action")
+	ErrControlScope        = errors.New("computer_scope_violation")
+	ErrControlApproval     = errors.New("computer_approval_invalid")
+	ErrStaleObservation    = errors.New("computer_stale_observation")
+	ErrProhibitedAction    = errors.New("computer_prohibited_action")
+	ErrTargetNotSelected   = errors.New("computer_target_not_selected")
+	ErrApplicationNotReady = errors.New("computer_application_not_ready")
+	ErrDocumentChanged     = errors.New("computer_document_changed")
 )
 
 // TargetIdentity is issued by the host, never inferred from a window title,
@@ -90,16 +93,19 @@ func (binding ControlBinding) Validate() error {
 // Operation is a closed typed union. No executable strings, arbitrary key
 // chords, selectors, scripts, raw native calls or unrestricted paths exist here.
 type Operation struct {
-	Kind        string           `json:"kind"`
-	Element     string           `json:"element,omitempty"`
-	Text        *string          `json:"text,omitempty"`
-	Option      string           `json:"option,omitempty"`
-	Checked     *bool            `json:"checked,omitempty"`
-	Shortcut    string           `json:"shortcut,omitempty"`
-	Scroll      *ScrollOperation `json:"scroll,omitempty"`
-	Destination string           `json:"destination,omitempty"`
-	File        *FileOperation   `json:"file,omitempty"`
-	Point       *SurfacePoint    `json:"point,omitempty"`
+	Kind        string             `json:"kind"`
+	Element     string             `json:"element,omitempty"`
+	Text        *string            `json:"text,omitempty"`
+	Option      string             `json:"option,omitempty"`
+	Checked     *bool              `json:"checked,omitempty"`
+	Shortcut    string             `json:"shortcut,omitempty"`
+	Scroll      *ScrollOperation   `json:"scroll,omitempty"`
+	Destination string             `json:"destination,omitempty"`
+	File        *FileOperation     `json:"file,omitempty"`
+	Point       *SurfacePoint      `json:"point,omitempty"`
+	Application string             `json:"application,omitempty"` // v3 host catalog identity
+	Target      string             `json:"target,omitempty"`      // v3 discovered surface identity
+	Document    *DocumentOperation `json:"document,omitempty"`    // negotiated native_documents:1 only
 }
 type ScrollOperation struct {
 	X int `json:"x"`
@@ -122,6 +128,21 @@ type SurfacePoint struct {
 func (op Operation) Validate() error {
 	want := Operation{Kind: op.Kind}
 	switch op.Kind {
+	case "document":
+		if op.Document == nil || op.Document.Validate() != nil {
+			return ErrInvalidControl
+		}
+		want.Document = op.Document
+	case "open_application":
+		if !opaqueID(op.Application) {
+			return ErrInvalidControl
+		}
+		want.Application = op.Application
+	case "focus_surface":
+		if !opaqueID(op.Target) {
+			return ErrInvalidControl
+		}
+		want.Target = op.Target
 	case "observe", "capture", "focus":
 	case "activate":
 		if !opaqueID(op.Element) {
@@ -283,6 +304,7 @@ type LocalConsent struct {
 	IssuedAt     time.Time
 	ExpiresAt    time.Time
 	Active       bool
+	Desktop      *DesktopAuthority // host-only; never decoded from model arguments
 }
 
 func (grant StepGrant) Validate(step BoundedStep, consent LocalConsent, now time.Time) error {
@@ -290,7 +312,7 @@ func (grant StepGrant) Validate(step BoundedStep, consent LocalConsent, now time
 	if err != nil {
 		return err
 	}
-	if !consent.Active || !opaqueID(consent.ID) || grant.ConsentID != consent.ID || consent.Binding != step.Binding || grant.Binding != step.Binding {
+	if !consent.Active || !opaqueID(consent.ID) || grant.ConsentID != consent.ID || !consent.permits(step.Binding) || grant.Binding != step.Binding {
 		return ErrControlScope
 	}
 	if !opaqueID(grant.ID) || grant.StepDigest != digest || grant.IssuedAt.Before(consent.IssuedAt) || grant.IssuedAt.After(now) ||
@@ -379,10 +401,11 @@ type DriverAvailability struct {
 	ReasonCode                                 string
 }
 type ControlResult struct {
-	ActionID   string `json:"action_id"`
-	Outcome    string `json:"outcome"`
-	EvidenceID string `json:"evidence_id,omitempty"`
-	Uncertain  bool   `json:"uncertain"`
+	ActionID   string                  `json:"action_id"`
+	Outcome    string                  `json:"outcome"`
+	EvidenceID string                  `json:"evidence_id,omitempty"`
+	Uncertain  bool                    `json:"uncertain"`
+	Document   *DocumentActionEvidence `json:"document,omitempty"`
 }
 
 // Implementations may never obtain dispatch authority merely by implementing
