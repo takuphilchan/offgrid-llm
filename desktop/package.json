@@ -1,7 +1,7 @@
 {
   "name": "offgrid-llm-desktop",
   "desktopName": "com.offgrid.llm.desktop",
-  "version": "0.4.16",
+  "version": "0.4.17",
   "description": "OffGrid LLM Desktop - Local AI Platform",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
@@ -30,7 +30,14 @@
     "copyright": "Copyright © 2024-2026 OffGrid LLM Team",
     "beforePack": "./prepare-computer.cjs",
     "afterPack": "./verify-computer.cjs",
-    "protocols": [{ "name": "Open OffGrid tasks", "schemes": ["offgrid"] }],
+    "protocols": [
+      {
+        "name": "Open OffGrid tasks",
+        "schemes": [
+          "offgrid"
+        ]
+      }
+    ],
     "directories": {
       "buildResources": "assets",
       "output": "dist"
@@ -43,7 +50,13 @@
       "runtime.js",
       "computer-runtime.js",
       "application-launcher.js",
-      { "from": "../computer", "to": "computer-pack", "filter": ["pack.cjs"] },
+      {
+        "from": "../computer",
+        "to": "computer-pack",
+        "filter": [
+          "pack.cjs"
+        ]
+      },
       "presentation.js",
       "preload.js",
       "loading.html",
@@ -116,7 +129,9 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "mac": {
-      "signIgnore": ["/Contents/Resources/computer/browsers/"],
+      "signIgnore": [
+        "/Contents/Resources/computer/browsers/"
+      ],
       "extraResources": [
         {
           "from": "../build/macos/offgrid-amd64",
@@ -149,7 +164,18 @@
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "deb": {
-      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libuuid1", "libsecret-1-0", "libjson-glib-1.0-0"]
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libjson-glib-1.0-0"
+      ]
     },
     "dmg": {
       "title": "OffGrid LLM Desktop ${version}",
@@ -174,7 +200,17 @@
       ]
     },
     "win": {
-      "signExts": ["!chrome.exe", "!chrome_proxy.exe", "!chrome_pwa_launcher.exe", "!elevated_tracing_service.exe", "!elevation_service.exe", "!notification_helper.exe", "!setup.exe", "!ffmpeg-win64.exe", "!PrintDeps.exe"],
+      "signExts": [
+        "!chrome.exe",
+        "!chrome_proxy.exe",
+        "!chrome_pwa_launcher.exe",
+        "!elevated_tracing_service.exe",
+        "!elevation_service.exe",
+        "!notification_helper.exe",
+        "!setup.exe",
+        "!ffmpeg-win64.exe",
+        "!PrintDeps.exe"
+      ],
       "extraResources": [
         {
           "from": "../build/windows/offgrid.exe",

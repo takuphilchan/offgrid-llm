@@ -27,7 +27,7 @@ Then make an OffGrid server available at `127.0.0.1:11611`. It can be the local
 development binary or the Docker container. From the repository root:
 
 ```bash
-go build -trimpath -ldflags "-X main.Version=0.4.16" -o build/linux/offgrid ./cmd/offgrid
+go build -trimpath -ldflags "-X main.Version=0.4.17" -o build/linux/offgrid ./cmd/offgrid
 
 cd desktop
 npm ci
