@@ -10,7 +10,7 @@ import (
 )
 
 func TestInstalledApplicationPathValidation(t *testing.T) {
-	dir := t.TempDir()
+	dir := canonicalApplicationFixtureDir(t)
 	path := filepath.Join(dir, "ordinary.exe")
 	if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestInstalledApplicationPathValidation(t *testing.T) {
 }
 
 func TestInstalledApplicationPathRejectsRedirectedObjects(t *testing.T) {
-	dir := t.TempDir()
+	dir := canonicalApplicationFixtureDir(t)
 	real := filepath.Join(dir, "real")
 	if err := os.Mkdir(real, 0700); err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestInstalledApplicationPathRejectsRedirectedObjects(t *testing.T) {
 func TestInstalledApplicationPathRejectsJunction(t *testing.T) {
 	// Unlike symbolic links, a junction fixture needs no elevated privilege.
 	// Both paths belong to this test; no installed application is touched.
-	dir := t.TempDir()
+	dir := canonicalApplicationFixtureDir(t)
 	real, link := filepath.Join(dir, "real"), filepath.Join(dir, "redirect")
 	if err := os.Mkdir(real, 0700); err != nil {
 		t.Fatal(err)

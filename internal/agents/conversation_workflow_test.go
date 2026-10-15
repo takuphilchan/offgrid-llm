@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -123,6 +124,11 @@ func (p *partialWriteTools) ExecuteWithPolicy(ctx context.Context, name string, 
 }
 
 func TestPartialFilesystemEffectsAreNotRetried(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		// macOS's default /var/folders temp location is intentionally protected.
+		// Exercise post-effect failures in an allowed, disposable location instead.
+		t.Setenv("TMPDIR", "/tmp")
+	}
 	for _, afterDirectory := range []bool{true, false} {
 		m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
 		tools := &partialWriteTools{preEffectTestTools: &preEffectTestTools{NewToolRegistry()}, directory: t.TempDir(), afterDirectory: afterDirectory}
@@ -160,6 +166,9 @@ func TestPartialFilesystemEffectsAreNotRetried(t *testing.T) {
 }
 
 func TestWriteFailureAfterFilesystemEntryRemainsUnknown(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Setenv("TMPDIR", "/tmp")
+	}
 	// A directory at the destination deterministically fails WriteFile after
 	// the operation has entered the filesystem phase, on every supported OS.
 	destination := filepath.Join(t.TempDir(), "directory")

@@ -113,7 +113,7 @@ func TestPackageEntryRejectsUnboundedOrExecutableMetadata(t *testing.T) {
 		{"oversized", strings.Repeat(" ", 1024*1024+1), false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := canonicalApplicationFixtureDir(t)
 			if err := os.Mkdir(filepath.Join(root, "App"), 0700); err != nil {
 				t.Fatal(err)
 			}

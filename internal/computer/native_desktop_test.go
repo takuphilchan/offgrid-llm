@@ -59,13 +59,25 @@ func (d *desktopFixtureAdapter) FocusSelected() error { d.focus++; return nil }
 func (d *desktopFixtureAdapter) Observe(context.Context) (NativeView, error) {
 	return NativeView{Observation: ControlObservation{ID: "view", Target: d.selected.Identity, Sequence: 1, CapturedAt: time.Now(), StateDigest: strings.Repeat("a", 64)}}, nil
 }
+
+// Production discovery stores canonical paths. Mirror that contract for owned
+// fixtures: macOS temp roots are symlinked and Windows runners may use 8.3 names.
+func canonicalApplicationFixtureDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func desktopControllerFixture(t *testing.T) (*DesktopController, *desktopFixtureAdapter) {
 	t.Helper()
 	consent, _ := desktopConsentFixture()
 	d := &desktopFixtureAdapter{identity: consent.Binding.Target, paths: map[string]string{}}
 	c := &DesktopController{driver: d, provider: d, identity: d.identity, apps: map[string]installedApplication{}, targets: map[string]NativeTarget{}, prepared: map[string]PreparedControlAction{}}
 	for _, id := range []string{"chrome", "editor"} {
-		path := filepath.Join(t.TempDir(), id)
+		path := filepath.Join(canonicalApplicationFixtureDir(t), id)
 		if err := os.WriteFile(path, []byte("owned synthetic executable"), 0600); err != nil {
 			t.Fatal(err)
 		}
