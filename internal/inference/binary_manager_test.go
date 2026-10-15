@@ -8,6 +8,7 @@ import (
 )
 
 func TestBinaryManager_GetLlamaServer_Local(t *testing.T) {
+	t.Setenv("OFFGRID_ENABLE_GPU", "false")
 	// Create temp bin dir
 	tmpDir, err := os.MkdirTemp("", "offgrid_bin_test")
 	if err != nil {
@@ -74,5 +75,84 @@ func TestBinaryManagerHonorsExplicitPaths(t *testing.T) {
 	t.Setenv("OFFGRID_LLAMA_SERVER_PATH", filepath.Join(customBin, "missing-llama-server"))
 	if _, err := manager.GetLlamaServer(); err == nil {
 		t.Fatal("missing explicit llama-server path silently fell back to another binary")
+	}
+}
+
+func TestGPUDeviceListRequiresActualDevice(t *testing.T) {
+	for _, test := range []struct {
+		text, kind string
+		want       bool
+	}{
+		{"CUDA driver failure\nAvailable devices:\n  (none)\n", "nvidia", false},
+		{"Available devices:\n  CUDA0: NVIDIA fixture (8192 MiB, 7000 MiB free)\n", "nvidia", true},
+		{"Available devices:\n  CPU: processor\n", "nvidia", false},
+		{"CUDA0: NVIDIA fixture\n", "nvidia", false},
+		{"Available devices:\n  CUDA0: NVIDIA fixture\n", "amd", false},
+		{"Available devices:\n  HIP1: AMD fixture\n", "amd", true},
+		{"Available devices:\n  Vulkan0: fixture\n", "amd", true},
+	} {
+		if got := llamaDeviceListHasGPU(test.text, test.kind); got != test.want {
+			t.Fatalf("%q/%s: %v", test.text, test.kind, got)
+		}
+	}
+}
+
+func TestCachedCPURuntimeCannotShadowInstalledGPU(t *testing.T) {
+	manager := &BinaryManager{version: "b10516", binDir: t.TempDir(), hasNVIDIA: true}
+	for _, path := range []string{manager.localPath(), manager.versionedPath()} {
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("fixture, not executable"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	compatible := func(string) bool { return true }
+	device := func(path, kind string) bool { return path == manager.localPath() && kind == "nvidia" }
+	if got := manager.installedGPURuntime(compatible, device); got != manager.localPath() {
+		t.Fatal("cached CPU won GPU selection", got)
+	}
+	if got := manager.installedGPURuntime(compatible, func(string, string) bool { return false }); got != "" {
+		t.Fatal("CPU binary advertised as GPU", got)
+	}
+	t.Setenv("OFFGRID_ENABLE_GPU", "false")
+	if manager.gpuRequested() {
+		t.Fatal("CPU mode requested GPU")
+	}
+	manager.hasNVIDIA = false
+	manager.SetGPUEnabled(true)
+	t.Setenv("OFFGRID_ENABLE_GPU", "true")
+	if manager.gpuRequested() {
+		t.Fatal("no-device CPU fallback blocked")
+	}
+}
+
+func TestEffectiveGPUConfigurationOverridesEnvironment(t *testing.T) {
+	t.Setenv("OFFGRID_ENABLE_GPU", "false")
+	manager := &BinaryManager{hasNVIDIA: true}
+	manager.SetGPUEnabled(true)
+	if runtime.GOOS != "darwin" && !manager.gpuRequested() {
+		t.Fatal("configuration-file GPU opt-in was ignored")
+	}
+	t.Setenv("OFFGRID_ENABLE_GPU", "true")
+	manager.SetGPUEnabled(false)
+	if manager.gpuRequested() {
+		t.Fatal("explicit CPU selection was overridden by environment")
+	}
+}
+
+func TestModelCachePropagatesGPUPlacement(t *testing.T) {
+	t.Setenv("OFFGRID_ENABLE_GPU", "false")
+	for _, layers := range []int{0, 8} {
+		cache := NewModelCache(1, layers, t.TempDir())
+		cache.SetGPUEnabled(true)
+		if !cache.binManager.gpuEnabled.Load() {
+			t.Fatal("effective GPU placement was not propagated")
+		}
+		cache.SetGPUEnabled(false)
+		if got := cache.binManager.gpuEnabled.Load(); got != (layers > 0) {
+			t.Fatalf("layers %d: GPU selection = %v", layers, got)
+		}
+		cache.StopMonitor()
 	}
 }

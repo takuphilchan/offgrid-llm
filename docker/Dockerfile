@@ -66,7 +66,7 @@ COPY --from=ui-builder /build/web/dist/ /var/lib/offgrid/web/ui/
 # =============================================================================
 FROM alpine:3.24 AS llama-builder
 
-ARG LLAMA_CPP_COMMIT=e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
+ARG LLAMA_CPP_COMMIT=b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
 
 RUN apk add --no-cache \
     git \

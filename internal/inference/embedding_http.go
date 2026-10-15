@@ -103,7 +103,10 @@ func (e *httpEmbedding) Load(ctx context.Context, modelPath string, opts Embeddi
 	}
 	binary := opts.RuntimePath
 	if binary == "" {
-		binary, err = NewBinaryManager(binDir).GetLlamaServer()
+		manager := NewBinaryManager(binDir)
+		// Embedding placement is explicit, independent of the chat preference.
+		manager.SetGPUEnabled(opts.NumGPULayers > 0)
+		binary, err = manager.GetLlamaServer()
 		if err != nil {
 			return err
 		}

@@ -18,6 +18,18 @@ The release image runs as UID/GID 1000, drops Linux capabilities in Compose,
 uses an init process, includes a health check, and stores mutable state only in
 `/var/lib/offgrid/models` and `/var/lib/offgrid/data`.
 
+Both CPU and CUDA builds pin llama.cpp revision
+`b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9` (upstream `b10516`), matching the
+portable runtime contract. CPU installations do not need NVIDIA support. GPU
+installations require a CUDA runtime and device reservation; enabling a flag on
+a CPU-only image is not GPU support. Cached portable binaries must not shadow
+an installed compatible GPU runtime. `OFFGRID_ENABLE_GPU=false` retains explicit
+CPU operation; neither edition changes installed models or user data. The CUDA
+image includes a separate CPU-only worker at the same pinned revision, so CPU
+mode and device-free operation do not need a first-use runtime download. The
+effective configuration (including configuration-file values) controls runtime
+selection; embedding placement is independent of Chat's GPU preference.
+
 Start with [DOCKER_README.md](DOCKER_README.md) for commands or see the
 [complete deployment guide](../docs/setup/docker.md).
 

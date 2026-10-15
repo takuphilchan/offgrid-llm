@@ -20,7 +20,8 @@ services:
       OFFGRID_MODELS_DIR: /var/lib/offgrid/models
       OFFGRID_DATA_DIR: /var/lib/offgrid/data
       OFFGRID_BIN_DIR: /var/lib/offgrid/bin
-      OFFGRID_ENABLE_GPU: "true"
+      # Keep CPU operation available in the same image without replacing models.
+      OFFGRID_ENABLE_GPU: ${OFFGRID_ENABLE_GPU:-true}
       # 0 asks llama.cpp to fit GPU layers to the model, KV cache, and VRAM.
       OFFGRID_GPU_LAYERS: ${OFFGRID_GPU_LAYERS:-0}
       OFFGRID_MAX_CONTEXT: ${OFFGRID_MAX_CONTEXT:-4096}

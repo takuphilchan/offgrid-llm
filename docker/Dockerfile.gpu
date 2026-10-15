@@ -56,7 +56,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # =============================================================================
 FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS llama-builder
 
-ARG LLAMA_CPP_COMMIT=e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
+ARG LLAMA_CPP_COMMIT=b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
 ARG CUDA_ARCHITECTURES="75;80;86;89;90;120"
 ARG BUILD_JOBS=4
 
@@ -88,6 +88,23 @@ RUN mkdir llama.cpp && cd llama.cpp && \
         -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" && \
     cmake --build build --config Release --parallel "${BUILD_JOBS}" --target llama-server && \
     strip build/bin/llama-server
+
+# Ship a genuinely CPU-only worker too. Disabling GPU use, or running without
+# NVIDIA devices, must not require CUDA initialization or a first-use download.
+FROM llama-builder AS cpu-builder
+RUN cd /build/llama.cpp && \
+    cmake -B build-cpu \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DGGML_CUDA=OFF \
+        -DGGML_NATIVE=OFF \
+        -DLLAMA_BUILD_SERVER=ON \
+        -DLLAMA_BUILD_UI=OFF \
+        -DLLAMA_USE_PREBUILT_UI=OFF \
+        -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_BUILD_EXAMPLES=OFF && \
+    cmake --build build-cpu --config Release --parallel "${BUILD_JOBS}" --target llama-server && \
+    strip build-cpu/bin/llama-server
 
 # =============================================================================
 # Stage 4: Final runtime image with CUDA
@@ -128,6 +145,7 @@ RUN mkdir -p /var/lib/offgrid/models \
 # Copy binaries from builders
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
 COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgrid/bin/llama-server
+COPY --from=cpu-builder /build/llama.cpp/build-cpu/bin/llama-server /var/lib/offgrid/bin/llama-b10516/llama-server
 
 RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
 
@@ -135,6 +153,9 @@ RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
 # All other linked libraries must already be present in this final image.
 RUN ldd /var/lib/offgrid/bin/llama-server | \
     awk '/not found/ { print; if ($1 != "libcuda.so.1") missing = 1 } END { exit missing }'
+RUN /var/lib/offgrid/bin/llama-b10516/llama-server --version && \
+    ldd /var/lib/offgrid/bin/llama-b10516/llama-server | \
+    awk '/not found/ { print; missing = 1 } END { exit missing }'
 
 # Copy the exact UI built from this source revision.
 COPY --from=ui-builder --chown=1000:1000 /build/web/dist /var/lib/offgrid/web/ui

@@ -103,6 +103,7 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 	}
 
 	// Start process monitor
+	mc.binManager.SetGPUEnabled(mc.gpuEnabled)
 	go mc.monitorProcesses()
 
 	return mc
@@ -114,6 +115,7 @@ func (mc *ModelCache) SetGPUEnabled(enabled bool) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	mc.gpuEnabled = enabled || mc.gpuLayers > 0
+	mc.binManager.SetGPUEnabled(mc.gpuEnabled)
 }
 
 // NewModelCacheWithWarmer creates a model cache with mmap pre-warming support

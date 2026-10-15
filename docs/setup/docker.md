@@ -114,6 +114,15 @@ larger than the portable CPU image. It uses CUDA 12.8 and includes Blackwell
 must actually load before GPU use can be confirmed: check `docker logs` for
 CUDA and offloaded layers, and watch `nvidia-smi` during inference.
 
+The CUDA build also bundles a separate CPU-only worker at the same revision.
+To use CPU inference in that image, set `OFFGRID_ENABLE_GPU=false` and
+`OFFGRID_GPU_LAYERS=0`, then recreate the service. With no GPU device available,
+portable CPU operation remains available. An enabled, detected GPU requires a
+compatible GPU worker; a CPU-only binary is not advertised as acceleration.
+Remove an old explicit `OFFGRID_LLAMA_SERVER_PATH` pointing at a CPU worker when
+switching to automatic GPU runtime selection. Keep the same data/model volumes;
+do not launch a second service to change inference modes.
+
 For Hermes, set a real 65,536-token context and choose a model that can fit its
 weights **and** KV cache in available RAM/VRAM. On a machine with 8 GB VRAM,
 Phi-3.5 Mini's 64K KV cache may need partial CPU offload; a smaller-cache

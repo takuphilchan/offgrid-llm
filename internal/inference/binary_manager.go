@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,10 +20,11 @@ import (
 // checksum-pinned CPU/Metal release; GPU builds must be supplied explicitly or
 // obtained from the OffGrid GPU container.
 type BinaryManager struct {
-	version   string
-	binDir    string
-	hasNVIDIA bool
-	hasAMD    bool
+	version    string
+	binDir     string
+	hasNVIDIA  bool
+	hasAMD     bool
+	gpuEnabled atomic.Bool
 }
 
 func NewBinaryManager(binDir string) *BinaryManager {
@@ -30,6 +32,7 @@ func NewBinaryManager(binDir string) *BinaryManager {
 		binDir = configured
 	}
 	bm := &BinaryManager{version: "b10516", binDir: binDir}
+	bm.SetGPUEnabled(strings.EqualFold(os.Getenv("OFFGRID_ENABLE_GPU"), "true"))
 	bm.detectGPU()
 	return bm
 }
@@ -50,6 +53,10 @@ func (bm *BinaryManager) detectGPU() {
 }
 
 func (bm *BinaryManager) HasGPU() bool { return bm.hasNVIDIA || bm.hasAMD }
+
+// SetGPUEnabled applies the effective configuration, including values loaded
+// from a configuration file. The environment is only a constructor default.
+func (bm *BinaryManager) SetGPUEnabled(enabled bool) { bm.gpuEnabled.Store(enabled) }
 
 func (bm *BinaryManager) GPUType() string {
 	if bm.hasNVIDIA {
@@ -81,14 +88,24 @@ func regularFile(path string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-// GetLlamaServer prefers an explicit path, then the verified fallback, then
-// compatible user/packaged binaries. An old binary is never silently reused.
+// GetLlamaServer honors explicit paths. GPU requests prefer a compatible
+// installed GPU runtime; a cached CPU fallback must not shadow that runtime.
+// CPU/no-device requests retain the checksum-pinned portable fallback.
 func (bm *BinaryManager) GetLlamaServer() (string, error) {
 	if path := strings.TrimSpace(os.Getenv("OFFGRID_LLAMA_SERVER_PATH")); path != "" {
 		if !regularFile(path) {
 			return "", fmt.Errorf("OFFGRID_LLAMA_SERVER_PATH does not point to a regular file: %s", path)
 		}
+		if bm.gpuRequested() && !llamaServerHasGPUDevice(path, bm.GPUType()) {
+			return "", fmt.Errorf("explicit llama-server has no available %s device; supply a compatible GPU runtime or disable OFFGRID_ENABLE_GPU for CPU operation", bm.GPUType())
+		}
 		return path, nil
+	}
+	if bm.gpuRequested() {
+		if path := bm.installedGPURuntime(llamaServerSupportsRequiredFlags, llamaServerHasGPUDevice); path != "" {
+			return path, nil
+		}
+		return "", fmt.Errorf("no compatible GPU llama-server found; set OFFGRID_LLAMA_SERVER_PATH to a GPU build, use the OffGrid GPU container, or disable OFFGRID_ENABLE_GPU for CPU operation")
 	}
 	if path := bm.versionedPath(); regularFile(path) {
 		if llamaServerSupportsRequiredFlags(path) {
@@ -102,14 +119,79 @@ func (bm *BinaryManager) GetLlamaServer() (string, error) {
 	if path, err := exec.LookPath("llama-server"); err == nil && llamaServerSupportsRequiredFlags(path) {
 		return path, nil
 	}
-	if (bm.hasNVIDIA || bm.hasAMD) && strings.EqualFold(os.Getenv("OFFGRID_ENABLE_GPU"), "true") && runtime.GOOS != "darwin" {
-		return "", fmt.Errorf("no compatible GPU llama-server found; set OFFGRID_LLAMA_SERVER_PATH to a GPU build or use the OffGrid GPU container")
-	}
 	path := bm.versionedPath()
 	if err := bm.downloadBinary(path); err != nil {
 		return "", fmt.Errorf("download llama-server: %w", err)
 	}
 	return path, nil
+}
+
+func (bm *BinaryManager) gpuRequested() bool {
+	return (bm.hasNVIDIA || bm.hasAMD) && bm.gpuEnabled.Load() && runtime.GOOS != "darwin"
+}
+
+func (bm *BinaryManager) installedGPURuntime(compatible func(string) bool, device func(string, string) bool) string {
+	candidates := []string{bm.localPath(), bm.versionedPath()}
+	if path, err := exec.LookPath("llama-server"); err == nil {
+		candidates = append(candidates, path)
+	}
+	for _, path := range candidates {
+		if regularFile(path) && compatible(path) && device(path, bm.GPUType()) {
+			return path
+		}
+	}
+	return ""
+}
+
+func llamaServerHasGPUDevice(path, gpuType string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, path, "--list-devices")
+	configureBackgroundProcess(command)
+	output, err := command.CombinedOutput()
+	return err == nil && ctx.Err() == nil && llamaDeviceListHasGPU(string(output), gpuType)
+}
+
+// Read only the runtime's device-list section, never a driver error or help text
+// containing the word CUDA. CPU operation does not depend on this probe.
+func llamaDeviceListHasGPU(output, gpuType string) bool {
+	listing := false
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "Available devices:" {
+			listing = true
+			continue
+		}
+		if !listing {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 || !strings.HasSuffix(fields[0], ":") {
+			continue
+		}
+		name := strings.TrimSuffix(fields[0], ":")
+		prefixes := []string{"Vulkan"}
+		if gpuType == "nvidia" {
+			prefixes = append(prefixes, "CUDA")
+		}
+		if gpuType == "amd" {
+			prefixes = append(prefixes, "ROCm", "HIP")
+		}
+		for _, prefix := range prefixes {
+			index := strings.TrimPrefix(name, prefix)
+			if index == name || index == "" {
+				continue
+			}
+			valid := true
+			for _, digit := range index {
+				valid = valid && digit >= '0' && digit <= '9'
+			}
+			if valid {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func llamaServerSupportsRequiredFlags(binaryPath string) bool {

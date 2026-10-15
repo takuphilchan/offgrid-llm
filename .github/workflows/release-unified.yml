@@ -28,11 +28,10 @@ concurrency:
 
 env:
   GO_VERSION: '1.26.6'
-  # Linux and macOS bundles passed at this pinned revision in v0.3.1.
-  LLAMA_CPP_COMMIT: e9fa0781f1c25fc4fe8c86be1edc6970661ad6f0
-  # The v0.3.0 Windows bundle was built successfully from this exact revision.
-  # The older generic pin above failed on the Windows MSVC runner in v0.3.1.
-  LLAMA_CPP_WINDOWS_COMMIT: 718f7b4175bf8b6af6f5eac09fee10754b3ecddd
+  # Match the portable fallback and CPU/CUDA containers (b10516). Each native
+  # bundle still has to build and pass its release checks on its own runner.
+  LLAMA_CPP_COMMIT: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
+  LLAMA_CPP_WINDOWS_COMMIT: b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
 
 jobs:
   release-context:
