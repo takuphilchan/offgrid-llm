@@ -12,7 +12,7 @@ then select the Knowledge and tools it may use. **Use in Chat** selects the
 saved revision. You can also select it from Chat's **Agent** control. Selecting
 **No agent** returns future messages to ordinary Chat.
 
-Leave **Research agents** empty for one agent, or select up to four read-only
+Leave **Attached agents** empty for one agent, or select up to four read-only
 specialist profiles for bounded delegation. For example, a researcher can
 gather evidence, then a document specialist can draft from those findings.
 The parent agent receives the draft and performs any permitted document edit
@@ -20,6 +20,12 @@ and read-back itself. Child agents cannot control the desktop, change files,
 or obtain broader access. They share the parent's budget; local runtime capacity
 determines whether independent child work can actually run in parallel. Chat
 shows each handoff and links to the saved child work.
+
+Resource questions use the selected revision's effective attachments, not the
+agent's fictional persona or earlier conversation. Document names are an
+inventory, not evidence that every document was read. Content answers use
+retrieved excerpts; no relevant excerpt does not mean no documents are attached.
+Existing turns retain their pinned revision when you edit a profile.
 
 The **Tools** control narrows resources for the next turn. Configuration is not
 permission: computer use still requires host consent, and administrator-owned

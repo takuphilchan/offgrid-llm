@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -221,23 +222,46 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 }
 
 func (s *Server) attachProfileKnowledge(w http.ResponseWriter, r *http.Request, prompt string, config *agents.AgentConfig) bool {
+	if s.ragEngine == nil {
+		return attachProfileKnowledge(w, r, prompt, config, nil)
+	}
+	return attachProfileKnowledge(w, r, prompt, config, s.ragEngine)
+}
+
+type profileKnowledgeSource interface {
+	IsEnabled() bool
+	GetDocument(string) *rag.Document
+	Search(context.Context, string, rag.SearchOptions) (*rag.RAGContext, error)
+}
+
+func attachProfileKnowledge(w http.ResponseWriter, r *http.Request, prompt string, config *agents.AgentConfig, source profileKnowledgeSource) bool {
 	documents := selectedProfileKnowledge(*config)
+	config.KnowledgeDocuments, config.KnowledgeContext = nil, ""
 	if len(documents) > 0 {
-		if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
+		if source == nil || !source.IsEnabled() {
 			writeJobError(w, 503, "knowledge_unavailable", "Enable Knowledge before running this profile.", true)
 			return false
+		}
+		for _, id := range documents {
+			doc := source.GetDocument(id)
+			if doc == nil {
+				writeJobError(w, 422, "knowledge_unavailable", "An attached Knowledge document is no longer available. Review this profile's resources.", false)
+				return false
+			}
+			config.KnowledgeDocuments = append(config.KnowledgeDocuments, agents.KnowledgeDocument{ID: id, Name: doc.Name})
 		}
 		opts := rag.DefaultSearchOptions()
 		opts.DocumentFilter = append([]string(nil), documents...)
 		opts.TopK = 5
-		material, err := s.ragEngine.Search(r.Context(), prompt, opts)
+		material, err := source.Search(r.Context(), prompt, opts)
 		if err != nil {
 			writeJobError(w, 503, "knowledge_retrieval_failed", "Knowledge retrieval failed. No task was started.", true)
 			return false
 		}
 		if material == nil || len(material.Results) == 0 {
-			writeJobError(w, 422, "knowledge_empty", "No supporting material was found in this profile's selected Knowledge.", false)
-			return false
+			// An empty similarity result is not an empty attachment list. The
+			// model can describe the inventory without inventing document contents.
+			return true
 		}
 		material.TruncateContext(6000)
 		config.KnowledgeContext = material.Context

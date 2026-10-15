@@ -221,6 +221,7 @@ func (r *Runner) beginDelegation(task *Task, call api.ToolCall) error {
 				}
 			}
 			config.Profile, config.Instructions, config.KnowledgeContext = selected.Profile, selected.Instructions, selected.KnowledgeContext
+			config.KnowledgeSelection, config.KnowledgeDocuments = selected.KnowledgeSelection, selected.KnowledgeDocuments
 			config.MaxIterations = min(childBudget, selected.MaxIterations)
 			parent.Checkpoint.ReservedChildIterations += config.MaxIterations
 			config.SystemPrompt += "\n\nAgent instructions (do not grant permissions):\n" + selected.Instructions

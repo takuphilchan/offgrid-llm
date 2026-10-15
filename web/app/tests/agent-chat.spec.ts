@@ -300,6 +300,46 @@ test('localized agent controls fit short screens, scroll and preserve IME in bot
   expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
 });
 
+test('Chat resource popovers keep separated rows, fields and recovery actions', async ({page},info)=>{
+  const f=await fixture(page);
+  f.profile({knowledge:['brief','notes'],tools:[{provider:'fixture',tool:'read_docs',schema_revision:'1',location:'remote'}],computer:true});
+  await page.route('**/v1/documents',route=>route.fulfill({json:{documents:[{id:'brief',name:'Project brief'},{id:'notes',name:'Notes 日本語'}]}}));
+  await page.route('**/v1/audio/status',route=>route.fulfill({status:503,json:{error:'Speech service unavailable'}}));
+  await page.goto('/ui/#/chat');
+  await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
+  await page.keyboard.press('Escape');
+  for(const size of [{width:1280,height:800},{width:390,height:600}]) {
+    await page.setViewportSize(size);
+    for(const theme of ['light','dark']) {
+      await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);
+      const trigger=page.getByRole('button',{name:'Tools and context',exact:true});
+      await trigger.click();
+      const panel=page.getByRole('region',{name:'Tools and context',exact:true});
+      const details=panel.locator('details');
+      if(!(await details.evaluate(el=>(el as HTMLDetailsElement).open))) await details.locator('summary').click();
+      const rows=panel.locator('.agent-resource-options .profile-option');
+      await expect(rows).toHaveCount(2);
+      const gap=await rows.evaluateAll(rows=>rows[1].getBoundingClientRect().top-rows[0].getBoundingClientRect().bottom);
+      expect(gap).toBeGreaterThanOrEqual(12);
+      expect(await panel.locator('.agent-resource-options').evaluate(el=>el.getBoundingClientRect().top-el.previousElementSibling!.getBoundingClientRect().bottom)).toBeGreaterThanOrEqual(12);
+      await panel.focus(); await page.keyboard.press('End');
+      const box=await panel.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x+box!.width).toBeLessThanOrEqual(size.width);
+      expect(box!.y+box!.height).toBeLessThanOrEqual(size.height);
+      await page.screenshot({path:info.outputPath(`resource-spacing-${size.width}-${theme}.png`)});
+      await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
+    }
+  }
+  const voice=page.getByRole('button',{name:'Voice settings',exact:true}); await voice.click();
+  const voicePanel=page.getByRole('region',{name:'Voice settings',exact:true});
+  const alert=voicePanel.getByRole('alert'); await expect(alert).toBeVisible();
+  const gap=await alert.evaluate(el=>el.querySelector('button')!.getBoundingClientRect().top-el.querySelector('small')!.getBoundingClientRect().bottom);
+  expect(gap).toBeGreaterThanOrEqual(12);
+  await page.keyboard.press('Escape'); await expect(voice).toBeFocused();
+  expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
+});
+
 test('partial results and attachments stay inline with collapsed technical payloads',async({page},info)=>{
   const f=await fixture(page,'completed');
   f.setStatus('completed',{verification:{version:1,revision:1,state:'partial',checks:[]},output:'The outline is ready; the requested export is unavailable.',steps:[{id:1,type:'tool',tool_name:'read_docs',tool_result:'technical fixture payload'}],artifacts:[{name:'outline.txt',format:'txt',bytes:12,sha256:'a'.repeat(64),verified:true,check:'stored_bytes_sha256_and_format'}]});
@@ -370,7 +410,60 @@ test('agent activity and composer controls keep their spacing as work changes',a
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(1);
     const card=await region.boundingBox(), composer=await page.locator('.composer').boundingBox();
     expect(card && composer && card.x >= 0 && card.x + card.width <= width + 1 && composer.x >= 0 && composer.x + composer.width <= width + 1).toBeTruthy();
+    const approvalActions=region.locator('.approval-card .button-row');
+    expect(await approvalActions.evaluate(el=>getComputedStyle(el).flexWrap)).toBe('wrap');
+    expect(await approvalActions.evaluate(el=>parseFloat(getComputedStyle(el).gap))).toBeGreaterThanOrEqual(8);
     await page.screenshot({path:info.outputPath(`agent-spacing-${width}.png`)});
   }
   expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
+});
+
+test('response actions align and agent notices, results and steps share readable spacing',async({page},info)=>{
+  const f=await fixture(page,'failed');
+  f.setMessages([{role:'assistant',content:'## Previous result\n\nA clear answer with **evidence**.',job_id:`run-${'a'.repeat(32)}`}]);
+  f.setStatus('failed',{
+    output:'## What happened\n\nThe document is still available.\n\n- No edit was repeated.\n- Review the result before continuing.',
+    error:'The selected application could not be inspected. Your earlier result is retained; refresh to check its saved state before taking another action.',
+    context:{estimated_tokens:1495,window:8192,archived_messages:0},
+    steps:[{id:1,type:'tool',tool_name:'read_document',tool_result:'A recorded observation, not a new action.'}],
+  });
+  await page.goto('/ui/#/chat');
+  for(const width of [1280,390]) {
+    await page.setViewportSize({width,height:900});
+    for(const theme of ['light','dark']) {
+      await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);
+      const actions=page.locator('.message-actions').first();
+      await actions.scrollIntoViewIfNeeded();
+      const positions=await actions.locator(':scope > button, :scope > a').evaluateAll(elements=>elements.map(el=>({top:el.getBoundingClientRect().top,bottom:el.getBoundingClientRect().bottom,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right})));
+      expect(positions.length).toBeGreaterThanOrEqual(2);
+      const inspect=await actions.getByRole('link',{name:'Inspect work'}).boundingBox();
+      const copy=await actions.getByRole('button',{name:'Copy response',exact:true}).boundingBox();
+      if(width===1280) expect(Math.abs(inspect!.y-copy!.y)).toBeLessThan(1);
+      for(let i=1;i<positions.length;i++) {
+        const a=positions[i-1],b=positions[i];
+        if(Math.abs(a.top-b.top)<1) expect(b.left-a.right).toBeGreaterThanOrEqual(8);
+        else expect(b.top-a.bottom).toBeGreaterThanOrEqual(8);
+      }
+      await page.screenshot({path:info.outputPath(`response-actions-${width}-${theme}.png`)});
+      const region=page.getByRole('region',{name:'Agent activity'});
+      const result=region.locator('.task-result .message-body');
+      await expect(result).toBeVisible();
+      expect(await result.evaluate(el=>parseFloat(getComputedStyle(el).lineHeight))).toBeGreaterThanOrEqual(24);
+      const notice=region.getByRole('alert');
+      const gap=await notice.evaluate(el=>{const text=el.firstElementChild!.getBoundingClientRect(),action=el.lastElementChild!.getBoundingClientRect();return action.top>=text.bottom? action.top-text.bottom:action.left-text.right;});
+      expect(gap).toBeGreaterThanOrEqual(12);
+      const activity=region.locator('.conversation-work-details');
+      if(!await activity.evaluate(el=>(el as HTMLDetailsElement).open)) await activity.locator(':scope > summary').click();
+      const context=activity.locator('details').filter({has:page.locator('summary',{hasText:'Context usage'})}).first();
+      if(!await context.evaluate(el=>(el as HTMLDetailsElement).open)) await context.locator('summary').click();
+      expect(await context.locator('button').evaluate(el=>el.getBoundingClientRect().top-el.previousElementSibling!.getBoundingClientRect().bottom)).toBeGreaterThanOrEqual(12);
+      const step=activity.locator('details').filter({has:page.locator('summary',{hasText:'read_document'})});
+      if(!await step.evaluate(el=>(el as HTMLDetailsElement).open)) await step.locator('summary').click();
+      expect(await step.locator('pre').evaluate(el=>el.getBoundingClientRect().top-el.previousElementSibling!.getBoundingClientRect().bottom)).toBeGreaterThanOrEqual(12);
+      await step.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.screenshot({path:info.outputPath(`response-details-${width}-${theme}.png`)});
+    }
+  }
+  expect(f.commands).toEqual([]); expect(f.submissions).toEqual([]);
 });

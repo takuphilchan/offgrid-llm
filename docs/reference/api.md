@@ -699,6 +699,13 @@ tool identities and child-profile revisions. Later edits do not alter accepted
 work. An identical retry observes that same job even if the profile was archived
 after admission. Current tool authority is checked again before dispatch.
 
+Profile turns also pin a document-name inventory for the effective Knowledge
+selection and the attached agent names, roles and revisions. Model context keeps
+this inventory distinct from relevance-ranked excerpts and persona/history.
+An empty search result leaves the authorized inventory available but supplies no
+content evidence; missing documents, unavailable Knowledge and retrieval errors
+still reject admission. Plain Chat's existing retrieval contract is unchanged.
+
 `delegates` selects up to four direct child profiles owned by the same actor.
 Children cannot delegate or receive computer control. Their Knowledge and reviewed
 low-risk read tools must be subsets of the parent's selections. Child iteration

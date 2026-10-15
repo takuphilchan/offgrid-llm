@@ -51,6 +51,7 @@ type AgentConfig struct {
 	DelegateProfiles      map[string]AgentConfig             `json:"delegate_profiles,omitempty"`
 	Profile               *AgentProfile                      `json:"profile,omitempty"`
 	KnowledgeContext      string                             `json:"knowledge_context,omitempty"`
+	KnowledgeDocuments    []KnowledgeDocument                `json:"knowledge_documents,omitempty"`
 	ContextWindow         int                                `json:"context_window,omitempty"`
 	AllowedTools          []string                           `json:"allowed_tools,omitempty"`
 	AllowedCapabilities   map[string]capabilities.Descriptor `json:"allowed_capabilities,omitempty"`

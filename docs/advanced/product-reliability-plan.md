@@ -5135,3 +5135,67 @@ label fix. No new deployment, commit, push or publication is part of this audit.
   not a real-model, native-control, or other-platform qualification. No live
   container replacement, desktop installation, push, or release was performed
   for this follow-up; prepared local build artifacts remain unpublished.
+
+### Chat response and attachment regression follow-up — 2026-10-15
+
+- Fixed the extra top margin on **Inspect work**, aligned response actions,
+  and applied Chat Markdown typography to live agent results. Notices, nested
+  approval actions, access cards, activity disclosures, technical payloads and
+  composer resource popovers now have explicit spacing and wrapping rules.
+  Browser assertions measure action alignment and gaps at 1280px and 390px in
+  light/dark themes, including expanded steps and error/retry controls.
+- Read-only inspection of saved turns found missing attachment inventories, not
+  context overflow: one affected Knowledge turn used 1,495 of 8,192 estimated
+  tokens with zero compactions. Similarity excerpts represented only one of two
+  selected documents, while stale persona/history influenced resource answers.
+  Another saved turn had no attached child agents. Later profile edits do not
+  retroactively change those pinned turns.
+- Admission now records effective document names independently of retrieval
+  matches. Each inference receives current pinned document and child-agent
+  inventories after old conversation history; compaction and computer-context
+  replacement retain them. Empty matches permit inventory answers without
+  claiming document contents; missing documents and retrieval failures still
+  block admission. Child resources remain restricted, and all nine UI locales
+  use the generic **Attached agents** label instead of **Research agents**.
+- `go test ./...` and the local Go service build passed. Web build/type checking,
+  API-contract drift checks and desktop unit tests (**65/65**) passed. The full
+  isolated browser run passed **350 tests, 10 skipped**; final focused resource,
+  response and nested-approval spacing checks passed **3/3**. The additional
+  attachment-compaction regression passed after correcting its queued fixture
+  to the running state required for durable compaction writes.
+- Opt-in `TestProfileResourceAnswersInstalledModel` passed **15/15** checks using
+  installed `Qwen2.5-7B-Instruct-Q4_K_M`: three repetitions each of document
+  inventory, cited excerpt content, inventory without matching excerpts,
+  attached-agent names/roles, and empty attachments. Synthetic isolated state
+  was used; proposed tools were rejected before dispatch. Observed inference
+  calls took approximately 0.42–1.91 seconds, including warm-cache effects;
+  this is not a general latency or native-control qualification.
+- The WSL race run passed `internal/agents` but failed the existing server
+  concurrent-admission test with `SQLITE_BUSY`; a focused three-repeat run
+  reproduced it. The same focused check also failed on an isolated clean
+  archive of the existing HEAD, demonstrating that it predates this patch.
+  No race-detector data race was reported. The failure was subsequently fixed
+  by reserving the SQLite writer before reading the previous task snapshot;
+  independently committed conversation intents can no longer invalidate a
+  deferred read-to-write promotion. No inference or tool replay was added.
+  A controlled writer-contention regression fails on the old implementation
+  for both new and existing tasks and passes with the fix, including unchanged
+  snapshot event deduplication. The original concurrent-admission test passed
+  **10 consecutive race-enabled repetitions**. The final WSL race run passed
+  `internal/agents`, `internal/server`, `internal/storage`, and
+  `internal/sessions`; `go test ./...` also passed after this repair.
+- Documentation tests passed **6/6**, maintained-document checks found zero
+  problems, and strict validation of `agent-conversation-workflows` passed.
+  Its broader installed-model/native qualification task 7.3 remains open.
+- The authorized deployment follow-up found intermittent missing citations
+  (two of three content answers) despite correct facts. Removed competing
+  filename/numbered citation guidance and explicitly retained the excerpt's
+  supplied citation convention. Two subsequent complete installed-Qwen runs
+  passed **30/30** assertions, without dispatching tools. These are bounded
+  regression results, not a guarantee of model compliance on arbitrary inputs.
+- The updated service/UI was deployed by backing up and replacing the existing
+  container; the stopped predecessor and verified private workspace archive
+  were retained. Workspace identity, conversation names, job IDs/statuses,
+  models and speech configuration were compared across replacement. The
+  desktop bridge is unchanged; this update needs no native-host reinstall.
+  No Git push, release tag or publication is included in this follow-up.

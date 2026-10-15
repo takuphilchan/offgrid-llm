@@ -28,7 +28,7 @@
   .profile-resources details { margin-block-start: 1rem; }
   .profile-options { display: grid; gap: .8rem; max-height: 20rem; overflow: auto; padding: .5rem; margin-inline: -.5rem; }
   .profile-option { display: flex; align-items: start; gap: .65rem; font-size: .875rem; }
-  .profile-option input { flex: 0 0 auto; margin-block-start: .2rem; }
+  .profile-option input { flex: 0 0 auto; margin-block-start: .2rem; accent-color: var(--text); }
   .profile-option span { min-width: 0; overflow-wrap: anywhere; }
   .profile-option small { display: block; line-height: 1.5; margin-block-start: .2rem; }
   .profile-advanced > :not(summary) { margin-block-start: 1rem; }

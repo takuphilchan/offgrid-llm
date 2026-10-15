@@ -3,7 +3,7 @@
   .conversation-work > header { display: flex; align-items: center; justify-content: space-between; gap: .5rem 1rem; min-width: 0; flex-wrap: wrap; font-size: .875rem; }
   .conversation-work > header > div { min-width: 0; }
   .conversation-work > header > a { flex-shrink: 0; }
-  .conversation-work > .button-row { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
+  .conversation-work .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0; }
   .conversation-work > p { margin: 0; line-height: 1.5; }
   .conversation-work-delegates { display: grid; gap: .4rem; min-width: 0; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: .6rem; font-size: .85rem; }
   .conversation-work-delegates strong { font-weight: 600; }
@@ -12,11 +12,26 @@
   .conversation-work-delegates a { color: var(--text); text-underline-offset: .15rem; }
   .conversation-work-profile { display: block; margin-block-start: .3rem; color: var(--muted); }
   .conversation-work .task-result { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .conversation-work .task-result .message-body { white-space: normal; }
   .conversation-work .task-result:empty { display: none; }
   .conversation-work :is(.task-access, .approval-card, .task-artifacts, .workspace-notice) { min-width: 0; max-width: 100%; }
   .conversation-work-details { min-width: 0; margin: 0; font-size: .875rem; }
   .conversation-work-details > summary { color: var(--muted); }
   .conversation-work-details > :not(summary) { margin-block-start: .75rem; }
+  .conversation-work details > summary { padding-block: .375rem; line-height: 1.5; cursor: pointer; }
+  .conversation-work details > :not(summary) { margin-block-start: .75rem; }
+  .conversation-work-details > details { padding-block: .375rem; border-block-start: 1px solid var(--line); }
+  .conversation-work details :is(p, ol, ul, dl) { margin-block-end: 0; line-height: 1.6; }
+  .conversation-work details dd { margin-inline-start: 0; margin-block-end: .75rem; }
+  .conversation-work details dt { color: var(--muted); }
+  .conversation-work .approval-card { display: grid; gap: .75rem; margin: 0; padding: 1rem; border-radius: .6rem; }
+  .conversation-work .approval-card > :is(h3, p, pre, details) { margin: 0; }
+  .conversation-work .approval-card h3 { font-size: 1rem; line-height: 1.5; }
+  .conversation-work .approval-card .button-row { justify-content: flex-start; margin-block-start: .25rem; }
+  .conversation-work .task-access { gap: .75rem; padding: 1rem; }
+  .conversation-work .task-access > p { margin: 0; line-height: 1.6; }
+  .conversation-work-recovery > details { padding: .75rem; border: 1px solid var(--line); border-radius: .6rem; }
+  .conversation-work-details pre { padding: .75rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface-0); font: .75rem/1.6 var(--mono); }
   .conversation-work pre { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
   .conversation-work-recovery { min-width: 0; font-size: .875rem; line-height: 1.5; }
   .conversation-work-recovery p { margin-block: 0 .75rem; }
@@ -25,9 +40,12 @@
   :is(.chat-agent-selector, .chat-agent-tools) fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: .8rem; }
   :is(.chat-agent-selector, .chat-agent-tools) legend { font-weight: 600; margin-block-end: .75rem; }
   :is(.chat-agent-selector, .chat-agent-tools) p { font-size: .85rem; line-height: 1.5; color: var(--muted); }
+  .agent-resource-options { display: grid; gap: .75rem; margin-block-start: .75rem; }
+  :is(.chat-agent-selector, .chat-agent-tools) .profile-option { padding: .5rem; border-radius: var(--radius-sm); line-height: 1.5; }
+  :is(.chat-agent-selector, .chat-agent-tools) .profile-option:hover { background: var(--surface-2); }
   .chat-agent-model { display: grid; gap: .2rem; min-width: 0; max-width: min(100%, 15rem); font-size: .8rem; overflow-wrap: anywhere; }
   .chat-agent-model span { color: var(--muted); }
   :is(.chat-agent-selector, .chat-agent-tools) { min-width: 0; max-width: 100%; }
   :is(.chat-agent-selector, .chat-agent-tools) > button { max-width: 100%; text-align: start; white-space: normal; overflow-wrap: anywhere; }
-  .message-job-link { margin-block-start: .5rem; }
+  .message-actions > .message-job-link { margin: 0; }
 }

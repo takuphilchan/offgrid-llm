@@ -13,6 +13,11 @@
   .utility-popover { flex-shrink: 0; }
   .utility-popover-panel { position: fixed; inset: auto; margin: 0; overflow-y: auto; overflow-x: hidden; padding: 16px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--text); background: var(--surface-1); box-shadow: var(--shadow); overscroll-behavior: contain; touch-action: pan-y; scrollbar-gutter: stable; }
   .utility-popover-content { display: grid; gap: 14px; min-width: 0; overflow-wrap: anywhere; }
+  .utility-popover-content > p { margin: 0; line-height: 1.5; }
+  .utility-popover-content > [role="alert"], .utility-popover-content > .knowledge-readiness { display: grid; gap: 12px; line-height: 1.5; }
+  .utility-popover-content > :is([role="alert"], .knowledge-readiness) > button { justify-self: start; }
+  .utility-popover-panel .switch { max-width: none; min-height: 32px; }
+  .utility-popover-panel .switch > span { flex-shrink: 0; }
   .utility-popover-panel select { width: 100%; min-width: 0; }
   .utility-popover-panel small { color: var(--muted); }
   .model-info-banner { display: flex; gap: 12px; align-items: baseline; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); color: var(--muted); }
@@ -220,7 +225,7 @@
   .voice-button:disabled { opacity: .55; cursor: not-allowed; }
   .voice-error { max-width: 19rem; color: var(--muted); font-size: 11px; line-height: 1.35; }
   .field > .voice-input-control { justify-self: start; }
-  .message-actions { display: flex; align-items: start; gap: 8px; margin-block-start: 16px; }
+  .message-actions { display: flex; align-items: center; gap: 8px; margin-block-start: 16px; }
   .voice-speak-button { font-size: 11px; }
   .setup-inline, .setup-guidance { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 15px; color: var(--muted); background: var(--surface-1); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
   .setup-inline { margin-block-end: 14px; }
@@ -471,6 +476,7 @@
 .task-evidence details { font-size: .875rem; }
 .task-evidence details div { margin-block: .75rem; overflow-wrap: anywhere; }
 .task-evidence details p { margin-block: .25rem; }
+.conversation-work .task-evidence { margin: .75rem 0 0; padding: .75rem 0; }
 @media (max-width: 600px) { .task-evidence li { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) {
   .computer-activity { align-items: stretch; flex-direction: column; }

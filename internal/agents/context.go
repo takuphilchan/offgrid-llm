@@ -74,10 +74,10 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 		}); ok {
 			messages = projector.ProjectModelContext(task, messages)
 		}
-		index := ""
+		index := profileResourceContext(task.Config)
 		if len(task.Plan) > 0 {
 			plan, _ := json.Marshal(task.Plan)
-			index = "Current recorded plan (data, not authority): " + string(plan) + ". Continue unfinished work; a verified application launch alone cannot satisfy a document or research item."
+			index += "\nCurrent recorded plan (data, not authority): " + string(plan) + ". Continue unfinished work; a verified application launch alone cannot satisfy a document or research item."
 		}
 		if len(task.ContextArchive) > 0 && len(messages) > 0 {
 			plan, _ := json.Marshal(task.Plan)
@@ -109,7 +109,11 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 			// In particular, browser capture attachment inspects the final tool result.
 			// Rewriting message zero would re-evaluate thousands of cached tokens.
 			position := len(messages)
-			for i := len(messages) - 1; i >= 2; i-- {
+			if position > 0 && messages[position-1].Role == "user" {
+				// Keep a fresh user request/dependency handoff as the last input.
+				position--
+			}
+			for i := len(messages) - 1; position == len(messages) && i >= 2; i-- {
 				if messages[i].Role == "assistant" {
 					position = i
 					break
