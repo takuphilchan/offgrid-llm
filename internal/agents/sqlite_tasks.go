@@ -283,6 +283,14 @@ func putTaskTransaction(tx *sql.Tx, task *Task) error {
 	if err != nil {
 		return err
 	}
+	// Acquire the writer reservation before reading the previous snapshot.
+	// Conversation intents use independent connections: a deferred read followed
+	// by a concurrent commit cannot be promoted to a writer in WAL mode, even
+	// with busy_timeout. This no-op also reserves writes for a not-yet-created
+	// task, without changing its snapshot or generating an activity event.
+	if _, err = tx.Exec(`UPDATE agent_tasks SET id=id WHERE id=?`, task.ID); err != nil {
+		return err
+	}
 	var previous []byte
 	err = tx.QueryRow(`SELECT snapshot FROM agent_tasks WHERE id=?`, task.ID).Scan(&previous)
 	if err != nil && err != sql.ErrNoRows {
