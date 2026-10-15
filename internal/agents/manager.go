@@ -28,39 +28,42 @@ const (
 
 // Task represents an agent task
 type Task struct {
-	SchedulerReady         bool              `json:"scheduler_ready,omitempty"`
-	ParentID               string            `json:"parent_id,omitempty"`
-	ChildHistory           []ChildLink       `json:"children,omitempty"`
-	Delegation             *Delegation       `json:"delegation,omitempty"`
-	DependenciesAttached   bool              `json:"dependencies_attached,omitempty"`
-	Plan                   []PlanItem        `json:"plan,omitempty"`
-	Workflow               *WorkflowEvidence `json:"workflow,omitempty"`
-	Context                *ContextState     `json:"context,omitempty"`
-	ContextArchive         []ArchivedContext `json:"context_archive,omitempty"`
-	Instructions           []Instruction     `json:"instructions,omitempty"`
-	LastAccess             *InputRequest     `json:"last_access,omitempty"`
-	ID                     string            `json:"id"`
-	Prompt                 string            `json:"prompt"`
-	Status                 TaskStatus        `json:"status"`
-	Result                 string            `json:"result,omitempty"`
-	Error                  string            `json:"error,omitempty"`
-	ErrorCode              string            `json:"error_code,omitempty"`
-	Steps                  []Step            `json:"steps,omitempty"`
-	Config                 AgentConfig       `json:"config"`
-	CreatedAt              time.Time         `json:"created_at"`
-	StartedAt              *time.Time        `json:"started_at,omitempty"`
-	CompletedAt            *time.Time        `json:"completed_at,omitempty"`
-	DeletedAt              *time.Time        `json:"deleted_at,omitempty"`
-	Model                  string            `json:"model,omitempty"`
-	Actor                  string            `json:"actor,omitempty"`
-	ComputerSessionExpired bool              `json:"computer_session_expired,omitempty"`
-	PendingApproval        *Approval         `json:"pending_approval,omitempty"`
-	PendingInput           *InputRequest     `json:"pending_input,omitempty"`
-	ResolvedInputID        string            `json:"resolved_input_id,omitempty"`
-	RequestID              string            `json:"request_id,omitempty"`
-	RequestDigest          string            `json:"request_digest,omitempty"`
-	Checkpoint             *Checkpoint       `json:"checkpoint,omitempty"`
-	Progress               *RunProgress      `json:"progress,omitempty"`
+	Origin                 *ConversationOrigin `json:"origin,omitempty"`
+	AdmissionHeld          bool                `json:"admission_held,omitempty"`
+	SchedulerReady         bool                `json:"scheduler_ready,omitempty"`
+	ParentID               string              `json:"parent_id,omitempty"`
+	ChildHistory           []ChildLink         `json:"children,omitempty"`
+	Delegation             *Delegation         `json:"delegation,omitempty"`
+	DependenciesAttached   bool                `json:"dependencies_attached,omitempty"`
+	Plan                   []PlanItem          `json:"plan,omitempty"`
+	Workflow               *WorkflowEvidence   `json:"workflow,omitempty"`
+	Context                *ContextState       `json:"context,omitempty"`
+	ContextArchive         []ArchivedContext   `json:"context_archive,omitempty"`
+	Instructions           []Instruction       `json:"instructions,omitempty"`
+	PendingInstructions    []Instruction       `json:"pending_instructions,omitempty"`
+	LastAccess             *InputRequest       `json:"last_access,omitempty"`
+	ID                     string              `json:"id"`
+	Prompt                 string              `json:"prompt"`
+	Status                 TaskStatus          `json:"status"`
+	Result                 string              `json:"result,omitempty"`
+	Error                  string              `json:"error,omitempty"`
+	ErrorCode              string              `json:"error_code,omitempty"`
+	Steps                  []Step              `json:"steps,omitempty"`
+	Config                 AgentConfig         `json:"config"`
+	CreatedAt              time.Time           `json:"created_at"`
+	StartedAt              *time.Time          `json:"started_at,omitempty"`
+	CompletedAt            *time.Time          `json:"completed_at,omitempty"`
+	DeletedAt              *time.Time          `json:"deleted_at,omitempty"`
+	Model                  string              `json:"model,omitempty"`
+	Actor                  string              `json:"actor,omitempty"`
+	ComputerSessionExpired bool                `json:"computer_session_expired,omitempty"`
+	PendingApproval        *Approval           `json:"pending_approval,omitempty"`
+	PendingInput           *InputRequest       `json:"pending_input,omitempty"`
+	ResolvedInputID        string              `json:"resolved_input_id,omitempty"`
+	RequestID              string              `json:"request_id,omitempty"`
+	RequestDigest          string              `json:"request_digest,omitempty"`
+	Checkpoint             *Checkpoint         `json:"checkpoint,omitempty"`
+	Progress               *RunProgress        `json:"progress,omitempty"`
 	cancel                 context.CancelFunc
 }
 
@@ -170,7 +173,7 @@ func (m *Manager) CreateTask(id, prompt string, config *AgentConfig) (*Task, err
 
 func (m *Manager) StartTask(id string) error {
 	_, err := m.updateTask(id, func(task *Task) error {
-		if task.Status != TaskPending {
+		if task.Status != TaskPending || task.AdmissionHeld {
 			return ErrRunConflict
 		}
 		now := time.Now().UTC()

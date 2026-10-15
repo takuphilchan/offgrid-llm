@@ -18,11 +18,13 @@ import (
 )
 
 type taskSubmission struct {
-	Prompt        string `json:"prompt"`
-	Model         string `json:"model"`
-	RequestID     string `json:"request_id"`
-	Style         string `json:"style,omitempty"`
-	MaxIterations int    `json:"max_iterations,omitempty"`
+	Prompt          string `json:"prompt"`
+	Model           string `json:"model"`
+	RequestID       string `json:"request_id"`
+	Style           string `json:"style,omitempty"`
+	MaxIterations   int    `json:"max_iterations,omitempty"`
+	ProfileID       string `json:"profile_id,omitempty"`
+	ProfileRevision int    `json:"profile_revision,omitempty"`
 }
 
 func parseTaskSubmission(args []string) (taskSubmission, bool, error) {
@@ -51,6 +53,17 @@ func parseTaskSubmission(args []string) (taskSubmission, bool, error) {
 		switch arg {
 		case "--model":
 			req.Model = value
+		case "--profile":
+			if !validProfileID(value) {
+				return req, wait, usage("Invalid profile ID")
+			}
+			req.ProfileID = value
+		case "--profile-revision":
+			n, err := strconv.Atoi(value)
+			if err != nil || n < 1 {
+				return req, wait, usage("A positive profile revision is required")
+			}
+			req.ProfileRevision = n
 		case "--request-id":
 			req.RequestID = value
 		case "--style":
@@ -72,13 +85,18 @@ func parseTaskSubmission(args []string) (taskSubmission, bool, error) {
 		}
 	}
 	req.Prompt = strings.TrimSpace(strings.Join(prompt, " "))
-	if req.Prompt == "" || req.Model == "" || len(req.RequestID) < 8 || len(req.RequestID) > 128 {
-		return req, wait, usage("agent run <task> --model <installed model> [--request-id <id>] [--wait]")
+	if req.Prompt == "" || (req.Model == "" && req.ProfileID == "") || (req.ProfileID == "") != (req.ProfileRevision == 0) || len(req.RequestID) < 8 || len(req.RequestID) > 128 {
+		return req, wait, usage("agent run <task> (--model <installed model> | --profile ID --profile-revision N) [--request-id <id>] [--wait]")
 	}
 	return req, wait, nil
 }
 
 func submitTask(ctx context.Context, client *serviceclient.Client, req taskSubmission) (*agentRunSnapshot, error) {
+	if req.ProfileID != "" {
+		if err := client.RequireCapability(ctx, "agent-profiles-v1"); err != nil {
+			return nil, err
+		}
+	}
 	data, _ := json.Marshal(req)
 	response, err := client.Do(ctx, http.MethodPost, "/api/v2/jobs", "application/json", bytes.NewReader(data))
 	if err != nil {

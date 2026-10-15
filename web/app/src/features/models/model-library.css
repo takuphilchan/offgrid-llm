@@ -18,7 +18,7 @@
   .model-display .installed-model-main { display: block; text-align: start; width: fit-content; max-width: 100%; }
   .model-display .installed-model-main strong { white-space: normal; overflow-wrap: anywhere; font-size: 15px; }
   .installed-model .model-actions { flex-wrap: wrap; }
-  .model-section > .field { max-width: 560px; }
+  .model-section > .workspace-search-field { max-width: 560px; }
   .model-verification { grid-column: 1 / -1; grid-row: 2; display: grid; margin: 0 16px 16px; overflow-wrap: anywhere; }
   @media (max-width: 600px) {
     .installed-model .model-actions { padding: 0 16px 16px; }

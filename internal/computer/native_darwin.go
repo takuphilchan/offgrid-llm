@@ -22,8 +22,10 @@ import (
 // events or a personal browser session. Permission must already be granted to
 // the packaged companion identity; the driver never changes OS privacy settings.
 type NativeDarwin struct {
-	selected NativeTarget
-	observed ControlObservation
+	selected         NativeTarget
+	observed         ControlObservation
+	documents        *nativeDocumentState
+	documentSequence uint64
 }
 
 var _ NativeAdapter = (*NativeDarwin)(nil)
@@ -49,6 +51,16 @@ func axCall(kind string, args any, into any) error {
 	}
 	if envelope.Error != "" {
 		switch envelope.Error {
+		case "computer_document_unavailable":
+			return ErrDocumentUnavailable
+		case "computer_document_incomplete":
+			return ErrDocumentIncomplete
+		case "computer_document_changed":
+			return ErrDocumentChanged
+		case "computer_document_range_invalid":
+			return ErrDocumentRange
+		case "computer_document_composition_unstable":
+			return ErrDocumentComposition
 		case "computer_scope_violation":
 			return ErrControlScope
 		case "computer_approval_invalid":

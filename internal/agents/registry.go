@@ -2,6 +2,8 @@ package agents
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -751,6 +753,7 @@ func (r *ToolRegistry) capabilityLocked(name string) capabilities.Descriptor {
 		Source:    source,
 		Kind:      capabilities.Execute,
 		Risk:      capabilities.RiskHigh,
+		Location:  "service",
 	}
 	if tool, ok := r.tools[name]; ok {
 		descriptor.Description = tool.Function.Description
@@ -773,7 +776,23 @@ func (r *ToolRegistry) capabilityLocked(name string) capabilities.Descriptor {
 		}
 	} else if strings.HasPrefix(source, "mcp:") {
 		descriptor.Namespace = "mcp"
+		if config := r.mcpConfigs[strings.TrimPrefix(source, "mcp:")]; config.Command == "" {
+			descriptor.Location = "remote"
+		}
 	}
+	// Approval and profile identity covers schema, reviewed policy, provider
+	// and transport destination. Changing a schema must invalidate a saved
+	// grant even when the display name and model-facing description stay equal.
+	config := r.mcpConfigs[strings.TrimPrefix(source, "mcp:")]
+	identity, _ := json.Marshal(struct {
+		Descriptor capabilities.Descriptor
+		Tool       api.Tool
+		URL        string
+		Command    string
+		Args       []string
+	}{descriptor, r.tools[name], config.URL, config.Command, config.Args})
+	digest := sha256.Sum256(identity)
+	descriptor.Revision = hex.EncodeToString(digest[:])
 	return descriptor
 }
 

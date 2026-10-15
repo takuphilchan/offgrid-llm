@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
+import { installChatJob, openAgentChat, sendAgentMessage } from './fixtures/chat-job';
 
 // Stateful API-boundary journeys. No model downloads, user recordings, native
 // input or claims of model quality. Real-service storage tests run separately.
@@ -65,7 +66,14 @@ async function workspace(page: Page) {
 }
 const nav=async(page:Page,route:string)=>page.locator(`.primary-nav a[href="#/${route}"]`).click();
 async function send(page:Page,text:string) {await page.locator('.composer textarea').fill(text);await page.getByRole('button',{name:'Send',exact:true}).click();}
-async function start(page:Page) {await page.goto('/ui/#/agents/new');await page.getByRole('textbox',{name:'Task',exact:true}).fill('Prepare the journey result');await page.getByRole('button',{name:'Start task',exact:true}).click();}
+async function start(page:Page,state:Awaited<ReturnType<typeof workspace>>) {
+  await installChatJob(page,{workspace:'journey',model:'journey-model',snapshot:()=>state.run,onWrite:(path,data)=>state.writes.push({path,data}),submit:data=>{
+    state.run.prompt=data.content;
+    if(state.lost){state.lost=false;return 'lost';}
+    return state.run;
+  }});
+  await openAgentChat(page);await sendAgentMessage(page,'Prepare the journey result');
+}
 
 test('01 ready Chat saves a reply, survives navigation and saves a follow-up once',async({page})=>{
   const s=await workspace(page);await page.goto('/ui/#/chat');await send(page,'First question');
@@ -107,36 +115,36 @@ test('04 synthetic dictation is editable, chosen speech models persist and playb
   await page.getByText('Speak responses',{exact:true}).click();await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();await send(page,'Edited dictated draft.');
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(true);await page.getByRole('button',{name:'Stop reading',exact:true}).first().click();
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(false);expect(s.turns).toHaveLength(1);expect(await page.evaluate(()=>(window as any).trackStopped)).toBe(true);
-  await nav(page,'agents');await page.getByRole('button',{name:'Voice settings',exact:true}).click();await expect(page.getByLabel('Recognition model',{exact:true})).toHaveValue('asr@r1');
+  await nav(page,'agents');await nav(page,'chat');await page.getByRole('button',{name:'Voice settings',exact:true}).click();await expect(page.getByLabel('Recognition model',{exact:true})).toHaveValue('asr@r1');
 });
 test('05 ordinary task creates once and exposes saved output with an integrity-checked artifact',async({page})=>{
-  const s=await workspace(page);await start(page);await expect(page.getByRole('heading',{name:'Saved answer'})).toBeVisible();
+  const s=await workspace(page);await start(page,s);await expect(page.locator('.message.assistant')).toContainText(output.trim());
   const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'Download: result.txt'}).click();
   const stream=await(await downloaded).createReadStream();const chunks:Buffer[]=[];for await(const chunk of stream!)chunks.push(chunk);expect(Buffer.concat(chunks).toString()).toBe(output);
-  expect(s.writes.map(w=>w.path)).toEqual(['/api/v2/jobs']);
+  expect(s.writes.map(w=>w.path.split('/').pop())).toEqual(['sessions','generate']);
 });
 test('06 application access is scoped, followed by a separate exact-action confirmation',async({page})=>{
   const s=await workspace(page);Object.assign(s.run,{status:'waiting_for_input',pending_input:{id:'input-1',kind:'computer',mode:'app',target:'Editor'},pending_approval:{id:'approval-1',tool:'write_file',arguments:{path:'/selected/result.txt'},expires_at:'2099-01-01T00:00:00Z'}});
   await page.addInitScript(()=>Object.assign(window,{electron:{isDesktop:true,platform:'win32',getApiUrl:async()=>location.origin,getVersion:async()=>'journey',getServerStatus:async()=>true,getSystemTheme:async()=>'light',onThemeChange:()=>()=>{},getComputerStatus:async()=>({state:'idle',installed:true}),discoverComputerApps:async()=>({state:'selecting',targets:[{id:'opaque',title:'Editor',driver:'windows-uia'}]}),startComputerApp:async(request:unknown)=>{(window as any).grant=request;return{state:'ready',target:{id:'session',origin:'Editor'}};}}}));
   await page.addInitScript(()=>{(window as any).electron.stopComputerAccess=async()=>({state:'stopped'});});
-  await start(page);await page.getByRole('button',{name:'Choose an application',exact:true}).click();expect(s.writes).toHaveLength(1);
+  await start(page,s);await page.getByRole('button',{name:'Choose an application',exact:true}).click();expect(s.writes).toHaveLength(2);
   await page.getByRole('button',{name:'Allow access and continue'}).click();await expect(page.locator('.approval-card')).toContainText('/selected/result.txt');
-  await nav(page,'models');await nav(page,'agents');await page.getByRole('button',{name:'Approve exact call',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Saved answer'})).toBeVisible();expect(s.writes.map(w=>[w.path,w.data.approval_id??w.data.input_id])).toEqual([['/api/v2/jobs',undefined],[`/api/v2/jobs/${id}/input`,'input-1'],[`/api/v2/jobs/${id}/approve`,'approval-1']]);
+  await nav(page,'models');await nav(page,'chat');await page.getByRole('button',{name:'Approve exact call',exact:true}).click();
+  await expect(page.locator('.message.assistant')).toContainText(output.trim());expect(s.writes.map(w=>[w.path.split('/').pop(),w.data.approval_id??w.data.input_id])).toEqual([['sessions',undefined],['generate',undefined],['input','input-1'],['approve','approval-1']]);
   expect(await page.evaluate(()=>(window as any).grant)).toMatchObject({workspace:'journey',target:'opaque',requestId:'input-1'});
 });
 test('07 known active work returns to the same task for pause, steering and stop',async({page})=>{
-  const s=await workspace(page);s.run.status='running';await start(page);await nav(page,'models');
+  const s=await workspace(page);s.run.status='running';await start(page,s);await page.getByRole('link',{name:'Inspect work',exact:true}).click();await nav(page,'models');
   await page.getByRole('button',{name:'Known work',exact:true}).click();await page.getByRole('link',{name:'Prepare the journey result',exact:true}).click();
   await page.getByRole('button',{name:'Pause',exact:true}).click();await page.getByRole('textbox',{name:'Update instruction'}).fill('Use three sections');await page.getByRole('button',{name:'Save instruction'}).click();
   await page.getByRole('button',{name:'Resume',exact:true}).click();await page.getByRole('button',{name:'Stop',exact:true}).click();
-  expect(s.writes.map(w=>w.path.split('/').pop())).toEqual(['jobs','pause','steer','resume','cancel']);expect(s.run.instructions[0].text).toBe('Use three sections');
+  expect(s.writes.map(w=>w.path.split('/').pop())).toEqual(['sessions','generate','pause','steer','resume','cancel']);expect(s.run.instructions[0].text).toBe('Use three sections');
 });
 test('08 lost acceptance is recovered by saved identity without repeating uncertain effects',async({page})=>{
-  const s=await workspace(page);s.lost=true;Object.assign(s.run,{status:'uncertain',uncertain_call_id:'call',uncertain_call:{tool:'external_submission',arguments:{recipient:'Selected recipient'}}});await start(page);
-  await nav(page,'activity');await page.getByRole('button',{name:/^Prepare the journey result/}).click();await page.getByRole('link',{name:'Open task',exact:true}).click();
+  const s=await workspace(page);s.lost=true;Object.assign(s.run,{status:'uncertain',uncertain_call_id:'call',uncertain_call:{tool:'external_submission',arguments:{recipient:'Selected recipient'}}});await start(page,s);
+  await nav(page,'activity');await page.locator('.run-row').filter({hasText:'Prepare the journey result'}).click();await page.getByRole('link',{name:'Open task',exact:true}).click();
   await expect(page.locator('.approval-card')).toContainText('Outcome unknown');await expect(page.getByRole('button',{name:'Resume',exact:true})).toHaveCount(0);
-  await page.locator('.topbar').getByRole('button',{name:'Refresh',exact:true}).click();expect(s.writes.map(w=>w.path)).toEqual(['/api/v2/jobs']);
+  await page.locator('.topbar').getByRole('button',{name:'Refresh',exact:true}).click();expect(s.writes.map(w=>w.path.split('/').pop())).toEqual(['sessions','generate']);
 });
 test('09 discovery keeps meaningful variants in one review and transfers only the chosen file',async({page})=>{
   const s=await workspace(page);await page.route('**/v1/search?*',r=>r.fulfill({json:{results:[{id:'fixture/repo',name:'Fixture model',author:'fixture',size_bytes:12288}]}}));

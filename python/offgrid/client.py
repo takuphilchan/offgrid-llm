@@ -9,7 +9,7 @@ import time
 from typing import Dict, Iterator, List, Optional, Union
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, quote
 
 from .models import ModelManager
 from .kb import KnowledgeBase
@@ -67,7 +67,7 @@ class Sessions:
         Returns:
             Session object with messages, model_id, timestamps, etc.
         """
-        return self._client._request("GET", f"/v1/sessions/{name}")
+        return self._client._request("GET", f"/v1/sessions/{quote(name, safe='')}")
     
     def create(self, name: str, model_id: str = "") -> Dict:
         """
@@ -85,7 +85,7 @@ class Sessions:
             payload["model_id"] = model_id
         return self._client._request("POST", "/v1/sessions", payload)
     
-    def delete(self, name: str) -> bool:
+    def delete(self, name: str, *, work: Optional[str] = None) -> bool:
         """
         Delete a session.
         
@@ -95,7 +95,10 @@ class Sessions:
         Returns:
             True if deleted successfully
         """
-        response = self._client._request("DELETE", f"/v1/sessions/{name}")
+        if work not in (None, "retain", "stop"):
+            raise ValueError("work must be retain or stop")
+        suffix = f"?work={work}" if work else ""
+        response = self._client._request("DELETE", f"/v1/sessions/{quote(name, safe='')}{suffix}", retry=False)
         return response.get("success", True)
     
     def add_message(self, name: str, role: str, content: str) -> bool:
@@ -111,8 +114,44 @@ class Sessions:
             True if added successfully
         """
         payload = {"role": role, "content": content}
-        response = self._client._request("POST", f"/v1/sessions/{name}/messages", payload)
+        response = self._client._request("POST", f"/v1/sessions/{quote(name, safe='')}/messages", payload)
         return response.get("success", True)
+
+    def submit_agent_turn(self, name: str, content: str, *, request_id: str,
+                          profile_id: str, profile_revision: int,
+                          restrictions: Optional[Dict] = None,
+                          computer_approval_mode: Optional[str] = None,
+                          computer_scope: Optional[str] = None,
+                          max_tokens: Optional[int] = None,
+                          inference_profile: Optional[str] = None) -> Dict:
+        """Submit via held canonical admission, including ordinary agent answers.
+
+        The service saves the conversation/job association before dispatch.
+        Return value contains turn and job. Preserve request_id and exact input
+        after a lost acknowledgment. No local inference or automatic replay.
+        """
+        self._client._require_capability("agent-conversations-v1")
+        payload = {"content": content, "request_id": request_id,
+                   "agent": {"id": profile_id, "revision": profile_revision}}
+        for key, value in (("restrictions", restrictions),
+                           ("computer_approval_mode", computer_approval_mode),
+                           ("computer_scope", computer_scope), ("max_tokens", max_tokens),
+                           ("profile", inference_profile)):
+            if value is not None:
+                payload[key] = value
+        return self._client._request("POST", f"/v1/sessions/{quote(name, safe='')}/generate", payload, retry=False)
+
+    def turn(self, name: str) -> Dict:
+        """Read saved state; includes canonical job and recovery_required."""
+        return self._client._request("GET", f"/v1/sessions/{quote(name, safe='')}/turn")
+
+    def recover_agent_turn(self, name: str, turn_id: str) -> Dict:
+        """Attach saved output or finish linkage, never execute or resume work."""
+        return self._client._request("POST", f"/v1/sessions/{quote(name, safe='')}/turn/recover", {"id": turn_id}, retry=False)
+
+    def cancel_turn(self, name: str, turn_id: str) -> Dict:
+        """Request cancellation of this exact turn; unknown effects remain unknown."""
+        return self._client._request("POST", f"/v1/sessions/{quote(name, safe='')}/turn/cancel", {"id": turn_id}, retry=False)
     
     def chat_with_session(
         self,
@@ -247,6 +286,11 @@ class Client:
         # Cache for default model
         self._default_model = None
     
+    def _require_capability(self, capability: str) -> None:
+        identity = self._request("GET", "/api/v2/system", retry=False)
+        if identity.get("product") != "offgrid" or capability not in identity.get("capabilities", []):
+            raise OffGridError("This service does not support the requested agent workflow; no work was submitted.", code="upgrade_required")
+
     def _request(
         self,
         method: str,
@@ -265,7 +309,7 @@ class Client:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         
-        body = json.dumps(data).encode() if data else None
+        body = json.dumps(data).encode() if data is not None else None
         
         last_error = None
         retries = self.max_retries if retry else 1

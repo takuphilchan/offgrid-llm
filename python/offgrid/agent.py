@@ -21,6 +21,7 @@ Example:
 """
 
 from typing import Dict, List, Optional, TYPE_CHECKING
+from urllib.parse import quote
 
 if TYPE_CHECKING:
     from .client import Client
@@ -42,6 +43,38 @@ class Agent:
     def __init__(self, client: "Client"):
         self._client = client
         self.mcp = MCP(client)
+        self.profiles = AgentProfiles(client)
+
+    def submit(self, prompt: str, *, request_id: str, profile_id: str,
+               profile_revision: int, restrictions: Optional[Dict] = None) -> Dict:
+        """Admit one canonical job. Retrying requires the same ID and payload.
+
+        No default-model lookup, downloads, local execution or automatic retry.
+        Profile selection does not grant host access.
+        """
+        self._client._require_capability("agent-profiles-v1")
+        payload = {"prompt": prompt, "request_id": request_id,
+                   "profile_id": profile_id, "profile_revision": profile_revision}
+        if restrictions is not None:
+            payload["restrictions"] = restrictions
+        return self._client._request("POST", "/api/v2/jobs", payload, retry=False)
+
+    def job(self, job_id: str) -> Dict:
+        """Observe the saved job; never resume it."""
+        return self._client._request("GET", f"/api/v2/jobs/{quote(job_id, safe='')}")
+
+    def steer(self, job_id: str, instruction: str, *, request_id: str) -> Dict:
+        """Queue a running-task correction or revise paused work, without resume.
+
+        pending_instructions are accepted, not yet applied, and do not cancel
+        an already dispatched action. Retrying uses the same request identity.
+        """
+        return self._client._request("POST", f"/api/v2/jobs/{quote(job_id, safe='')}/steer",
+                                     {"request_id": request_id, "instruction": instruction}, retry=False)
+
+    def stop(self, job_id: str) -> Dict:
+        """Request cancellation; inspect returned status for unsettled effects."""
+        return self._client._request("POST", f"/api/v2/jobs/{quote(job_id, safe='')}/cancel", {}, retry=False)
     
     def run(
         self,
@@ -148,6 +181,39 @@ class Agent:
     def disable_tool(self, name: str) -> Dict:
         """Disable a tool by name."""
         return self.toggle_tool(name, enabled=False)
+
+
+class AgentProfiles:
+    """Owned versioned configuration through the authenticated service only."""
+
+    def __init__(self, client: "Client"):
+        self._client = client
+
+    def list(self, *, archived: bool = False) -> List[Dict]:
+        suffix = "?archived=true" if archived else ""
+        return self._client._request("GET", "/api/v2/agent-profiles" + suffix).get("profiles") or []
+
+    def get(self, profile_id: str, *, revision: Optional[int] = None) -> Dict:
+        suffix = f"?revision={revision}" if revision is not None else ""
+        return self._client._request("GET", f"/api/v2/agent-profiles/{quote(profile_id, safe='')}{suffix}")
+
+    def effective(self, profile_id: str, *, revision: int) -> Dict:
+        return self._client._request("GET", f"/api/v2/agent-profiles/{quote(profile_id, safe='')}/effective?revision={revision}")
+
+    def resources(self) -> Dict:
+        """Authorized references only. Connection use does not grant administration."""
+        return self._client._request("GET", "/api/v2/agent-profiles/resources")
+
+    def create(self, settings: Dict) -> Dict:
+        return self._client._request("POST", "/api/v2/agent-profiles", {"settings": settings}, retry=False)
+
+    def update(self, profile_id: str, settings: Dict, *, expected_revision: int) -> Dict:
+        return self._client._request("PUT", f"/api/v2/agent-profiles/{quote(profile_id, safe='')}",
+                                     {"expected_revision": expected_revision, "settings": settings}, retry=False)
+
+    def archive(self, profile_id: str, *, expected_revision: int) -> Dict:
+        return self._client._request("POST", f"/api/v2/agent-profiles/{quote(profile_id, safe='')}/archive",
+                                     {"expected_revision": expected_revision}, retry=False)
 
 
 class MCP:

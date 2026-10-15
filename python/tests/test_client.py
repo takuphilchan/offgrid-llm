@@ -328,6 +328,110 @@ class TestKnowledgeBase:
         assert results[0]["content"] == "Some relevant content"
 
 
+class TestAgentConversations:
+    @patch('offgrid.client.urlopen')
+    @pytest.mark.parametrize('status', ['running', 'waiting_for_input', 'waiting_for_approval', 'interrupted', 'uncertain', 'failed', 'completed'])
+    def test_submit_preserves_canonical_state_without_model_lookup(self, send, status):
+        client = Client(api_key='fixture-key')
+        saved = {'turn': {'id': 'turn-request-1', 'job_id': 'run-one'},
+                 'job': {'run_id': 'run-one', 'status': status, 'future_evidence': {'value': 1}}}
+        response = MagicMock()
+        response.read.return_value = json.dumps(saved).encode()
+        identity = MagicMock()
+        identity.read.return_value = b'{"product":"offgrid","capabilities":["agent-conversations-v1"]}'
+        send.side_effect = [identity, response]
+        selection = {'tools': [], 'knowledge': [], 'computer': False}
+        result = client.sessions.submit_agent_turn('café ? notes', 'Hello', request_id='turn-request-1',
+                                                  profile_id='profile-one', profile_revision=3,
+                                                  restrictions=selection)
+        assert result == saved
+        assert send.call_count == 2
+        request = send.call_args[0][0]
+        assert request.full_url.endswith('/v1/sessions/caf%C3%A9%20%3F%20notes/generate')
+        assert request.get_header('Authorization') == 'Bearer fixture-key'
+        assert json.loads(request.data) == {'content': 'Hello', 'request_id': 'turn-request-1',
+                                           'agent': {'id': 'profile-one', 'revision': 3},
+                                           'restrictions': selection}
+
+    @patch('offgrid.client.urlopen')
+    def test_profiles_revision_requests_and_read_only_inspection(self, send):
+        client = Client(api_key='fixture-key')
+        response = MagicMock()
+        response.read.return_value = b'{"profiles":[],"revision":3}'
+        send.return_value = response
+        settings = {'name': 'Research', 'model': 'installed', 'max_iterations': 8}
+        operations = [
+            (lambda: client.agent.profiles.list(), 'GET', '/api/v2/agent-profiles', None),
+            (lambda: client.agent.profiles.get('profile-one', revision=2), 'GET', '/api/v2/agent-profiles/profile-one?revision=2', None),
+            (lambda: client.agent.profiles.effective('profile-one', revision=2), 'GET', '/api/v2/agent-profiles/profile-one/effective?revision=2', None),
+            (lambda: client.agent.profiles.resources(), 'GET', '/api/v2/agent-profiles/resources', None),
+            (lambda: client.agent.profiles.create(settings), 'POST', '/api/v2/agent-profiles', {'settings': settings}),
+            (lambda: client.agent.profiles.update('profile-one', settings, expected_revision=2), 'PUT', '/api/v2/agent-profiles/profile-one', {'settings': settings, 'expected_revision': 2}),
+            (lambda: client.agent.profiles.archive('profile-one', expected_revision=3), 'POST', '/api/v2/agent-profiles/profile-one/archive', {'expected_revision': 3}),
+            (lambda: client.agent.job('run-one'), 'GET', '/api/v2/jobs/run-one', None),
+            (lambda: client.sessions.turn('chat'), 'GET', '/v1/sessions/chat/turn', None),
+            (lambda: client.sessions.recover_agent_turn('chat', 'turn-request-1'), 'POST', '/v1/sessions/chat/turn/recover', {'id': 'turn-request-1'}),
+            (lambda: client.agent.steer('run-one', 'Only summarize', request_id='correction-1'), 'POST', '/api/v2/jobs/run-one/steer', {'request_id': 'correction-1', 'instruction': 'Only summarize'}),
+            (lambda: client.agent.stop('run-one'), 'POST', '/api/v2/jobs/run-one/cancel', {}),
+            (lambda: client.sessions.cancel_turn('chat', 'turn-request-1'), 'POST', '/v1/sessions/chat/turn/cancel', {'id': 'turn-request-1'}),
+            (lambda: client.sessions.delete('chat', work='retain'), 'DELETE', '/v1/sessions/chat?work=retain', None),
+        ]
+        for call, method, path, body in operations:
+            send.reset_mock()
+            call()
+            assert send.call_count == 1
+            request = send.call_args[0][0]
+            assert request.method == method
+            assert request.full_url.endswith(path)
+            assert (json.loads(request.data) if request.data is not None else None) == body
+        with pytest.raises(ValueError):
+            client.sessions.delete('chat', work='discard-uncertain')
+
+    @patch('offgrid.client.urlopen')
+    @pytest.mark.parametrize('operation', ['submit', 'job', 'profile', 'recover', 'steer', 'stop'])
+    def test_lost_acknowledgment_does_not_retry_mutations(self, send, operation):
+        client = Client(max_retries=4, retry_delay=0)
+        send.side_effect = client_module.URLError('lost acknowledgment')
+        if operation in ('submit', 'job'):
+            identity = MagicMock()
+            identity.read.return_value = b'{"product":"offgrid","capabilities":["agent-conversations-v1","agent-profiles-v1"]}'
+            send.side_effect = [identity, client_module.URLError('lost acknowledgment')]
+        calls = {
+            'submit': lambda: client.sessions.submit_agent_turn('chat', 'Hello', request_id='turn-request-1', profile_id='profile-one', profile_revision=1),
+            'job': lambda: client.agent.submit('Hello', request_id='job-request-1', profile_id='profile-one', profile_revision=1),
+            'profile': lambda: client.agent.profiles.create({'name': 'A', 'model': 'installed', 'max_iterations': 5}),
+            'recover': lambda: client.sessions.recover_agent_turn('chat', 'turn-request-1'),
+            'steer': lambda: client.agent.steer('run-one', 'Stop editing', request_id='correction-1'),
+            'stop': lambda: client.agent.stop('run-one'),
+        }
+        with pytest.raises(OffGridError):
+            calls[operation]()
+        assert send.call_count == (2 if operation in ('submit', 'job') else 1)
+
+    @patch('offgrid.client.urlopen')
+    def test_old_service_cannot_silently_run_agent_turn_as_plain_chat(self, send):
+        response = MagicMock()
+        response.read.return_value = b'{"product":"offgrid","capabilities":[]}'
+        send.return_value = response
+        client = Client()
+        with pytest.raises(OffGridError) as error:
+            client.sessions.submit_agent_turn('chat', 'Hello', request_id='same-turn', profile_id='writer', profile_revision=1)
+        assert error.value.code == 'upgrade_required'
+        assert send.call_count == 1
+        assert send.call_args[0][0].method == 'GET'
+
+    @patch('offgrid.client.urlopen')
+    def test_old_service_cannot_ignore_pinned_profile_for_job(self, send):
+        response = MagicMock()
+        response.read.return_value = b'{"product":"offgrid","capabilities":[]}'
+        send.return_value = response
+        with pytest.raises(OffGridError) as error:
+            Client().agent.submit('Hello', request_id='same-job', profile_id='writer', profile_revision=1)
+        assert error.value.code == 'upgrade_required'
+        assert send.call_count == 1
+        assert send.call_args[0][0].method == 'GET'
+
+
 class TestOffGridError:
     """Test OffGridError exception."""
     

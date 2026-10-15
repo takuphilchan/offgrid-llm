@@ -4,13 +4,15 @@ package computer
 // be its descendant or explicitly referenced by the accessibility provider.
 // Names, child order, the focused control and text equality never make a link.
 type documentNode struct {
-	key, parent, group string
-	title              string
-	tab, selected      bool
-	selectable         bool
-	text, visible      bool
-	protected          bool
-	controls           []string
+	key, parent, group      string
+	title                   string
+	tab, selected           bool
+	selectable              bool
+	text, visible           bool
+	protected               bool
+	controls                []string
+	automationID, className string
+	invokable               bool
 }
 
 type documentTopology struct {
@@ -20,6 +22,23 @@ type documentTopology struct {
 }
 
 const maxDocumentTreeNodes = 1024
+
+func sameDocumentNodes(a, b []documentNode) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	byID := map[string]documentNode{}
+	for _, node := range a {
+		byID[node.key] = node
+	}
+	for _, node := range b {
+		old, ok := byID[node.key]
+		if !ok || old.parent != node.parent || old.group != node.group || old.tab != node.tab || old.selected != node.selected || old.selectable != node.selectable || old.text != node.text || old.visible != node.visible || old.protected != node.protected || old.automationID != node.automationID || old.className != node.className || old.invokable != node.invokable || nativeHash(old.controls) != nativeHash(node.controls) {
+			return false
+		}
+	}
+	return true
+}
 
 func resolveDocumentTopology(nodes []documentNode, complete bool) (documentTopology, error) {
 	if !complete || len(nodes) == 0 || len(nodes) > maxDocumentTreeNodes {

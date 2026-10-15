@@ -87,7 +87,7 @@ func TestDocumentRepairSchemasRemainTaskLocal(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := workflowConfig()
 			cfg.NativeWorkflowVersion = DocumentWorkflowEvidenceVersion
-			task := &Task{Config: cfg, Checkpoint: &Checkpoint{WorkflowEditPending: true}, Steps: []Step{{Type: "rejected", ToolName: name, ToolResult: `{"error":"workflow_control_expectation_required"}`}}}
+			task := &Task{Config: cfg, Checkpoint: &Checkpoint{WorkflowEditPending: true}, Steps: []Step{{Type: "rejected", ToolName: name, ToolArgs: `{"document":"doc"}`, ToolResult: `{"error":"workflow_control_expectation_required"}`}}}
 			found := false
 			for _, tool := range runtimeTools(task) {
 				if tool.Function.Name != "task_expectations" {

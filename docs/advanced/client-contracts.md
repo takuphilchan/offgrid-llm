@@ -52,6 +52,55 @@ Local file upload is bounded to 50 MiB and streamed rather than buffered wholesa
 Directory imports skip symlinks and unsupported extensions and stop on failure.
 This does not expand supported extraction formats or add OCR.
 
+### Profile and conversation SDK contracts (development)
+
+Python exposes `client.agent.profiles` for owned profile list/get/effective/
+resources/create/update/archive. Updates and archival require the expected
+revision. Profiles reference installed models and authorized tools; these calls
+never download models or change connection credentials.
+
+`client.sessions.submit_agent_turn(name, content, request_id=..., profile_id=...,
+profile_revision=...)` returns the service's `turn` and canonical `job`. Use
+`client.sessions.turn(name)` or `client.agent.job(id)` to observe work.
+`recover_agent_turn(name, turn_id)` repairs bookkeeping or attaches a saved
+answer without executing again. An interrupted job still needs explicit resume;
+uncertain effects still need inspection. These methods do not use the legacy
+SDK's client-side `chat_with_session` history-save sequence.
+
+`client.agent.steer(id, instruction, request_id=...)` distinguishes accepted
+`pending_instructions` from applied `instructions`. It does not cancel an action
+already sent. `stop(id)` requests cancellation; the returned status is the
+authority, not an assumption of rollback. Conversation deletion accepts
+`work="retain"` or `work="stop"` and propagates a pending-stop conflict.
+
+New mutation methods disable transport retries. After a lost acknowledgment,
+inspect saved state, then explicitly retry the identical ID/payload if needed.
+Never change the request ID to recover a missing result. Errors from unsupported
+servers propagate; there is no fallback executor or silently selected model.
+Generated web contracts and client methods use these same service endpoints.
+The current React Agents page manages profiles; Chat submits profile-enabled
+turns and observes the canonical job. Old job links open a secondary inspector,
+not a second execution path. Navigation, reload and final-result attachment do
+not approve, resume or replay work. Shared-shell computer controls remain present
+across navigation, and an unacknowledged Stop remains visibly unconfirmed.
+
+The service-backed CLI exposes `agent profiles`, pinned `agent run --profile`,
+and `session send/chat/turn/recover`. Interactive profile conversations queue
+corrections on their active job; they do not start a second job while awaiting
+access, approval or reconciliation. `/exit` detaches without stopping work.
+Both CLI and Python check the advertised capability before profile-enabled
+submission so older services cannot silently ignore agent fields and run plain
+Chat. Cross-client installed-package qualification remains separate from the
+HTTP, terminal and isolated browser contract tests.
+
+The opt-in cross-client regression uses actual CLI, Python SDK and headless
+Chromium against disposable authenticated handlers and fixture inference:
+`OFFGRID_CROSS_CLIENT_TESTS=1 go test ./internal/server -run
+TestAgentCrossClientIntegration -count=1 -v` (Go, Python and Playwright Chromium
+must already be installed). It checks one canonical identity, idempotent steering,
+cross-actor denial and cancellation across clients; it does not use port 11611 or
+qualify an installed model or native desktop.
+
 ## Backend identity and desktop attachment
 
 `GET /api/v2/system` is a public, uncached identity document. It contains product,
@@ -123,9 +172,11 @@ Unknown revisions are refused, not silently downgraded. Features live in the
 actor-owned session and do not extend its selected-window or desktop grant.
 
 Negotiation is not execution readiness: the provider must additionally expose
-the operation for the current, fully bound document. At this implementation stage
-the legacy adapters do not advertise document support and new document execution
-is not enabled. Protocol tests do not qualify UIA, AX or AT-SPI editing.
+the operation for the current, fully bound document. New task-first jobs use
+workflow-evidence v2; document schemas appear only for a negotiated actor-owned
+host and the current observation/read stage. Execution checks this again before
+queuing input. Legacy adapters still advertise no document feature. Service and
+synthetic-worker integration tests do not qualify UIA, AX or AT-SPI editing.
 
 ## Incomplete agent output
 

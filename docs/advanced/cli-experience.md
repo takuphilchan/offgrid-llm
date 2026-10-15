@@ -31,6 +31,16 @@ instructions. The agent workspace presents each prompt as a governed, durable
 task rather than implying conversational memory that the agent API does not
 provide.
 
+The reusable-profile path uses `session chat NAME --profile ID
+--profile-revision N`: its turns are linked to the same saved conversations and
+canonical jobs as React Chat. This is not a second terminal executor. The
+existing task-per-prompt `agent chat` remains compatible and is labelled
+separately. Profile commands require reviewed revisions, explicit recovery and
+service capability negotiation. Structured output retains pending access,
+uncertainty, evidence and canonical identities without granting access or
+replaying work. Interactive corrections use safe-boundary steering; `/exit`
+only detaches observation, whereas `/stop` requests canonical cancellation.
+
 Long operations must show a bounded status or progress indicator and conclude
 with an explicit result. Errors should state what failed and the next useful
 action. Avoid clearing the terminal on startup because it destroys user

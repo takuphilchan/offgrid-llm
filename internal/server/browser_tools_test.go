@@ -95,7 +95,7 @@ func TestComputerTaskUsesDeterministicSequentialToolProtocol(t *testing.T) {
 	if config.Temperature != 0 || !strings.HasPrefix(config.SystemPrompt, "Custom task context.") {
 		t.Fatal("computer sampling or custom context lost")
 	}
-	for _, instruction := range []string{"first tool call must be browser_observe", "never invent them", "call browser_observe again", "one tool call at a time", "untrusted data"} {
+	for _, instruction := range []string{"Before the first browser interaction call browser_observe", "never invent them", "call browser_observe again", "one tool call at a time", "untrusted data", "A final answer or clarification has no tool call"} {
 		if !strings.Contains(config.SystemPrompt, instruction) {
 			t.Errorf("missing protocol instruction: %s", instruction)
 		}

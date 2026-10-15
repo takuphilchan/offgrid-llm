@@ -483,7 +483,7 @@ native file operations yet; pack manifests explicitly retain `qualified: false`.
 
 ### Building and validating the desktop integration
 
-The staged `document-session.mjs` transport is shared by selected-window and
+The `document-session.mjs` transport is shared by selected-window and
 task-desktop sessions. It uses the same native worker, grants, journal and Stop
 path; it does not create another input authority. Document calls require the
 negotiated `native_documents:1` feature and surface-specific capabilities. Read
@@ -491,13 +491,20 @@ pages are pinned to snapshot/revision; creation/edit results must carry matching
 host action evidence, not just a successful receipt. Old hosts continue their
 existing operations without receiving the new fields.
 
-The Windows document backend currently implements bounded UIA relationship
-discovery, exact tab selection and TextPattern/Unicode edits internally. It
-does **not** advertise the feature yet: reviewed creation profiles, public
-service integration and native acceptance remain open. No app/version or OS
-qualification follows from the transport/unit tests. macOS/Linux native document
-providers remain separate unfinished work; the Windows backend is not a fallback
-for those platforms.
+The Windows backend now negotiates the feature and implements bounded UIA
+relationship discovery, exact tab selection, TextPattern/Unicode edits and an
+exact-version packaged Notepad creation profile. Service tools use the existing
+runner and journal. AX and AT-SPI document adapters retain native object
+identities and implement capability-checked range/text operations. AX input needs
+explicit composition evidence; generic AT-SPI composition remains unknown, so
+document edits are unavailable there. Unix and browser creation profiles remain
+unfinished. See the [operation/version table](../docs/guides/computer-tasks.md#document-support-and-qualification).
+
+No installed application is qualified by this implementation. Isolated Xvfb
+tests cover owned GTK document reads and legacy structured input, not the new
+document-edit sequence, real Wayland, macOS, or installed Notepad. The macOS
+provider has not yet been compiled against an Apple SDK. Missing support never
+falls back to Windows behavior, guessed shortcuts or another input method.
 
 Install locked build dependencies with `npm ci --prefix computer --ignore-scripts`
 before building the desktop. `desktop/prepare-computer.cjs` assembles pinned

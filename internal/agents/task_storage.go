@@ -107,6 +107,9 @@ func (m *Manager) loadTasks() {
 			task.Error = "Legacy approval has no resumable checkpoint. Review past actions before starting a new task."
 			changed = true
 		}
+		if recoverComputerReceipt(task) {
+			changed = true
+		}
 		if changed {
 			if err := m.saveTask(task); err != nil {
 				m.storageErr = err

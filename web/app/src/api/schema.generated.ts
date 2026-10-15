@@ -423,7 +423,7 @@ export interface paths {
         get: operations["getSession"];
         put?: never;
         post?: never;
-        /** @description Requires ownership or sessions:all; other users' conversations return 404. Returns 409 immediately while generation or another mutation is active; deletion never waits to erase a newly completed turn. */
+        /** @description Requires ownership or sessions:all; other users' conversations return 404. Linked agent work requires ownership. Active linked work requires an explicit retain or stop choice; stop waits for confirmed quiescence and never resolves uncertain effects. Canonical jobs and minimal deduplication records survive deletion. Plain generation still returns 409 while active. */
         delete: operations["deleteSession"];
         options?: never;
         head?: never;
@@ -441,7 +441,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Requires session ownership (or sessions:all) and chat permission. Requested knowledge additionally requires rag permission. With stream=true, sends SSE phase and delta events immediately, followed by done only after atomic persistence, or error without saving a partial exchange. Transport closure is not completion. Retrieval failures after SSE starts are error events. JSON generation returns 503 for unavailable retrieval and 422 for no evidence. */
+        /** @description Requires session ownership (or sessions:all) and chat permission. Requested knowledge additionally requires rag permission. Without agent, existing JSON or stream behavior is unchanged; stream=true sends phase/delta then persisted done or error. With agent, requires exact ownership, pins the profile and restrictions, and returns 202 JSON with one linked canonical job regardless of stream. A stable request_id is required; retry identical input to retrieve the same job. Agent selection grants no access. Observe job events through the turn events endpoint; reconnect never resumes work. */
         post: operations["generateSessionTurn"];
         delete?: never;
         options?: never;
@@ -478,7 +478,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description Authorized snapshot recovery. Replays the entire current partial output, followed by live deltas. A new attachment must replace its previous partial output, not append a replay. Slow/disconnected readers do not control execution. */
+        /** @description Observation only. Plain turns replay partial output and live deltas. Linked agent turns use the canonical jobs event protocol (snapshot/activity/done); inspect job_id to choose the protocol. Slow/disconnected readers do not control execution. Replayed snapshots replace previous state, never append duplicate output. */
         get: operations["followSessionTurn"];
         put?: never;
         post?: never;
@@ -668,6 +668,111 @@ export interface paths {
         post?: never;
         /** @description Owner-only removal of completed, failed or cancelled history. Active workers, pending approvals, interrupted and uncertain outcomes return 409. A durable scrubbed tombstone prevents event projections restoring history. Separate audit logs, backups and tool-created files are not erased. */
         delete: operations["deleteAgentRun"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentProfiles"];
+        put?: never;
+        post: operations["createAgentProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-profiles/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentProfileResources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentProfile"];
+        put: operations["updateAgentProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/turn/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Finish accepted linkage or attach an already saved canonical result. This operation does not resume inference, grant access or replay tools. */
+        post: operations["recoverSessionJobTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-profiles/{id}/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getEffectiveAgentProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-profiles/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["archiveAgentProfile"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1570,8 +1675,32 @@ export interface components {
         SessionMessage: components["schemas"]["ChatMessage"] & {
             /** Format: date-time */
             timestamp: string;
+            job_id?: string;
+            turn_id?: string;
+        };
+        AgentSelection: {
+            id: string;
+            revision: number;
+        };
+        /** @description May only narrow the pinned profile. Omitted fields inherit; explicit empty lists disable that resource category. Instructions cannot widen these restrictions. */
+        AgentResourceRestrictions: {
+            tools?: components["schemas"]["AgentToolReference"][];
+            knowledge?: string[];
+            computer?: boolean;
+        };
+        LinkedAgentTurn: {
+            turn: components["schemas"]["SessionTurn"];
+            job: components["schemas"]["AgentRunResponse"];
         };
         SessionTurn: {
+            agent?: components["schemas"]["AgentSelection"];
+            /** @description Canonical job identity; observing it never executes work. */
+            job_id?: string;
+            /**
+             * @description Durable conversation bookkeeping
+             * @enum {string}
+             */
+            job_admission?: "intent" | "linked";
             id: string;
             prompt: string;
             model: string;
@@ -1579,7 +1708,7 @@ export interface components {
             knowledge: boolean;
             max_tokens: number;
             /** @enum {string} */
-            status: "pending" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+            status: "pending" | "running" | "completed" | "failed" | "cancelled" | "interrupted" | "waiting_for_input" | "waiting_for_approval" | "waiting_for_children" | "uncertain";
             phase: string;
             output: string;
             error?: string;
@@ -1588,6 +1717,10 @@ export interface components {
         };
         ChatSession: {
             turn?: components["schemas"]["SessionTurn"];
+            jobs?: {
+                turn_id: string;
+                job_id: string;
+            }[];
             name: string;
             /** @description Authenticated owner assigned by the service. Absent for legacy/local sessions, which require sessions:all in authenticated mode. */
             readonly owner_id?: string;
@@ -1697,12 +1830,84 @@ export interface components {
             stream: boolean;
             system_prompt?: string;
         };
+        AgentCapabilityIdentity: {
+            name: string;
+            namespace: string;
+            source: string;
+            revision: string;
+            /** @enum {string} */
+            location: "service" | "host" | "remote";
+            kind: string;
+            risk: string;
+            description?: string;
+        };
+        AgentToolReference: {
+            provider: string;
+            tool: string;
+            schema_revision: string;
+            /** @enum {string} */
+            location: "service" | "host" | "remote";
+        };
+        AgentProfileSettings: {
+            name: string;
+            description?: string;
+            /** @description Behavior only; cannot override broker or host authority. String limits are enforced in UTF-8 bytes. */
+            instructions?: string;
+            model: string;
+            /** @description Authorized existing Knowledge document IDs. */
+            knowledge?: string[];
+            tools?: components["schemas"]["AgentToolReference"][];
+            /** @description Makes host access discoverable; does not grant it. */
+            computer?: boolean;
+            max_iterations: number;
+            /** @description Owned direct child-profile IDs; pinned at task admission */
+            delegates?: string[];
+        };
+        AgentProfileWrite: {
+            /** @description Omit or zero for creation; exact current revision required for edits. */
+            expected_revision?: number;
+            settings: components["schemas"]["AgentProfileSettings"];
+        };
+        AgentProfile: {
+            id: string;
+            workspace: string;
+            actor: string;
+            revision: number;
+            digest: string;
+            settings: components["schemas"]["AgentProfileSettings"];
+            archived: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AgentProfileValidation: {
+            /** @constant */
+            ready: false;
+            issues: components["schemas"]["EffectiveAgentProfile"]["issues"];
+        };
+        EffectiveAgentProfile: {
+            profile: components["schemas"]["AgentProfile"];
+            ready: boolean;
+            issues: {
+                kind: string;
+                reference: string;
+                code: string;
+                message: string;
+            }[];
+            capabilities: {
+                [key: string]: components["schemas"]["AgentCapabilityIdentity"];
+            };
+            children?: {
+                [key: string]: components["schemas"]["EffectiveAgentProfile"];
+            };
+        };
         AgentStep: {
             id?: number;
             type?: string;
             content?: string;
             tool_name?: string;
             tool_args?: string;
+            /** @description human_reported identifies a user reconciliation report */
+            provenance?: string;
             /** @description Canonical tool output. Native read failures encode NativeReadFailure JSON; do not infer effects from arbitrary provider text. */
             tool_result?: string;
             /** @description Durable record of exact approval or the immutable automatic session policy used for this action. */
@@ -1869,6 +2074,19 @@ export interface components {
             }[];
         };
         AgentRunResponse: {
+            origin?: {
+                workspace: string;
+                conversation: string;
+                turn_id: string;
+            };
+            /** @description Execution blocked until the conversation association is durable. Clients cannot release this hold. */
+            admission_held?: boolean;
+            profile?: {
+                id: string;
+                revision: number;
+                digest: string;
+                name: string;
+            };
             verification?: components["schemas"]["WorkflowVerification"];
             /**
              * @description User-selected policy from submission; not a computer access grant.
@@ -1902,17 +2120,14 @@ export interface components {
             }[];
             parent_id?: string;
             children?: components["schemas"]["TaskChild"][] | null;
-            /** @description Saved state permits a follow-up instruction. Completed child history does not block steering; active delegation and uncertain effects do. Rechecked at execution. */
+            /** @description Running parent work queues corrections for the next safe boundary; settled interrupted work applies them without resuming. Children */
             can_steer?: boolean;
             plan?: components["schemas"]["TaskPlanItem"][] | null;
             context?: components["schemas"]["TaskContext"] | null;
             last_access?: components["schemas"]["AgentInputRequest"] | null;
-            instructions?: {
-                request_id: string;
-                text: string;
-                /** Format: date-time */
-                at: string;
-            }[] | null;
+            instructions?: components["schemas"]["TaskInstruction"][] | null;
+            /** @description Durably accepted but not yet applied. Does not cancel an action already dispatched. Retained on pause/restart/uncertainty without implicit resume. */
+            pending_instructions?: components["schemas"]["TaskInstruction"][] | null;
             pending_input?: components["schemas"]["AgentInputRequest"] | null;
             /** @description Persisted activity cursor. Only advance it after applying the snapshot. */
             event_cursor?: string;
@@ -1942,6 +2157,12 @@ export interface components {
                 };
             };
             steps: components["schemas"]["AgentStep"][];
+        };
+        TaskInstruction: {
+            request_id: string;
+            text: string;
+            /** Format: date-time */
+            at: string;
         };
         AgentTask: {
             workflow?: components["schemas"]["WorkflowVerification"];
@@ -2875,7 +3096,10 @@ export interface operations {
     };
     deleteSession: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Retain linked jobs in the inspector or request stopping before deletion. */
+                work?: "retain" | "stop";
+            };
             header?: never;
             path: {
                 name: components["parameters"]["SessionName"];
@@ -2893,6 +3117,7 @@ export interface operations {
                     "application/json": {
                         success: boolean;
                         message?: string;
+                        work_retained?: boolean;
                     };
                 };
             };
@@ -2925,8 +3150,20 @@ export interface operations {
                      * @default false
                      */
                     durable?: boolean;
-                    /** @description Required for durable streaming. Reusing the current ID with identical input attaches to existing work; conflicting or superseded reuse returns 409. */
+                    /** @description Required for durable streaming or agent selection (8–128 characters for agent turns). Identical agent retries retrieve the canonical job; different payload or deleted-history reuse returns 409. */
                     request_id?: string;
+                    agent?: components["schemas"]["AgentSelection"];
+                    restrictions?: components["schemas"]["AgentResourceRestrictions"];
+                    /**
+                     * @description Optional on-demand desktop availability
+                     * @enum {string}
+                     */
+                    computer_scope?: "desktop";
+                    /**
+                     * @description Proposed action policy only; existing host consent remains required.
+                     * @enum {string}
+                     */
+                    computer_approval_mode?: "ask_every_time" | "scoped_changes" | "full_task";
                     /**
                      * @description Streaming chat context profile. Interactive uses min(OFFGRID_CHAT_CONTEXT
                      * @default interactive
@@ -2956,10 +3193,22 @@ export interface operations {
                     };
                 };
             };
+            /** @description Profile turn durably associated with its canonical job. Pending, interrupted and terminal retries never create a second job. */
+            202: {
+                headers: {
+                    /** @description Canonical jobs API URL. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkedAgentTurn"];
+                };
+            };
             400: components["responses"]["Error"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             422: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };
@@ -2983,6 +3232,9 @@ export interface operations {
                 content: {
                     "application/json": {
                         turn: components["schemas"]["SessionTurn"] | null;
+                        job?: components["schemas"]["AgentRunResponse"];
+                        /** @description Bookkeeping or saved-result attachment needs explicit recovery; never a request to rerun work. */
+                        recovery_required?: boolean;
                     };
                 };
             };
@@ -3342,6 +3594,239 @@ export interface operations {
             503: components["responses"]["Error"];
         };
     };
+    listAgentProfiles: {
+        parameters: {
+            query?: {
+                archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current actor-owned revisions in this workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        profiles: components["schemas"]["AgentProfile"][];
+                    };
+                };
+            };
+        };
+    };
+    createAgentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Immutable first revision; referenced resources were resolved without acquiring models or granting access */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProfile"];
+                };
+            };
+            /** @description Resources unavailable or outside actor authority */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProfileValidation"];
+                };
+            };
+        };
+    };
+    getAgentProfileResources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized tool references only; no connection credentials or transport configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tools: {
+                            [key: string]: components["schemas"]["AgentCapabilityIdentity"];
+                        };
+                        computer_permitted: boolean;
+                        /** @enum {string} */
+                        connection_scope: "workspace-admin";
+                    };
+                };
+            };
+        };
+    };
+    getAgentProfile: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned current or immutable historical revision, including archive status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProfile"];
+                };
+            };
+        };
+    };
+    updateAgentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description New immutable revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProfile"];
+                };
+            };
+            409: components["responses"]["Error"];
+        };
+    };
+    recoverSessionJobTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recovered conversation bookkeeping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkedAgentTurn"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            /** @description Resource validation failed without saving */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProfileValidation"];
+                };
+            };
+            503: components["responses"]["Error"];
+        };
+    };
+    getEffectiveAgentProfile: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current resource validation; readiness is not consent or native qualification */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveAgentProfile"];
+                };
+            };
+        };
+    };
+    archiveAgentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Removed from future selection; historical revisions and work are retained */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        /** @enum {boolean} */
+                        archived: true;
+                    };
+                };
+            };
+            409: components["responses"]["Error"];
+        };
+    };
     listDurableJobs: {
         parameters: {
             query?: never;
@@ -3373,7 +3858,11 @@ export interface operations {
             content: {
                 "application/json": {
                     prompt: string;
-                    model: string;
+                    model?: string;
+                    /** @description Actor-owned profile; requires an explicit immutable profile_revision. */
+                    profile_id?: string;
+                    profile_revision?: number;
+                    restrictions?: components["schemas"]["AgentResourceRestrictions"];
                     request_id: string;
                     /** @enum {string} */
                     style?: "react" | "cot" | "plan-execute";
@@ -3384,11 +3873,11 @@ export interface operations {
                      */
                     computer_approval_mode?: "ask_every_time" | "scoped_changes" | "full_task";
                     /**
-                     * @description Desktop tasks are saved awaiting a protocol-v3 task grant before inference. Selected-window scope preserves the limited v2 flow. Omitted fields retain legacy behavior.
+                     * @description Proposed scope
                      * @enum {string}
                      */
                     computer_scope?: "desktop" | "selected_window";
-                };
+                } | unknown | unknown;
             };
         };
         responses: {

@@ -32,7 +32,7 @@ async function fixture(page: Page, durable = false) {
       // EOF while running is a disconnection, not a completed run.
       return route.fulfill({contentType:'text/event-stream', body:`: heartbeat\r\ndata: ${JSON.stringify(snapshot())}\r\n\r\n`});
     } else if (path === '/api/v2/jobs/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cancel') {cancels++;status='cancelled';json=snapshot();}
-    else if (path === '/api/v2/jobs') json = creates ? [{id:'run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',prompt:'Do the task',status,created_at:started}] : [];
+    else if (path === '/api/v2/jobs') json = [{id:'run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',prompt:'Do the task',status,created_at:started}];
     else if (path === '/v1/agents/tools') json = {tools:[],enabled_count:0};
     else if (path === '/v1/agents/mcp') json = {servers:[]};
     else if (path === '/v1/integrations') json = {integrations:[]};
@@ -42,26 +42,24 @@ async function fixture(page: Page, durable = false) {
   return { creates:()=>creates,cancels:()=>cancels,streams:()=>streams,replayCursors, complete:()=>{status='completed';disconnect=false;}, tool:()=>{phase='tool';preview='';} };
 }
 
-test('agent preview appears before completion and reconnects without resubmitting', async ({page}) => {
+test('saved agent preview appears before completion and reconnects without resubmitting', async ({page}) => {
   const state = await fixture(page);
-  await page.goto('/ui/#/agents');
-  await page.getByRole('textbox',{name:'Task',exact:true}).fill('Do the task');
-  await page.getByRole('button',{name:'Start task',exact:true}).click();
+  await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toContainText('Live partial answer 日本語');
   await expect(page.locator('.agent-live-preview')).toContainText('not a completed answer');
   await expect(page.getByText('The connection is recovering.',{exact:false})).toBeVisible();
   await expect.poll(state.streams).toBeGreaterThan(1);
-  expect(state.creates()).toBe(1);
+  expect(state.creates()).toBe(0);
   await page.getByRole('checkbox',{name:'Live response preview'}).uncheck();
   await expect(page.locator('.agent-live-preview')).toHaveCount(0);
   expect(state.cancels()).toBe(0);
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
-  await page.getByRole('link',{name:'Chat',exact:true}).click();
-  await page.getByRole('link',{name:'Agents',exact:true}).click();
+  await page.goto('/ui/#/chat');
+  await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toContainText('Live partial answer 日本語');
-  expect(state.creates()).toBe(1);
+  expect(state.creates()).toBe(0);
   state.complete();
   await expect(page.locator('.task-result')).toContainText('Finished answer');
   await expect(page.locator('.agent-live-preview')).toHaveCount(0);
@@ -69,29 +67,25 @@ test('agent preview appears before completion and reconnects without resubmittin
 
 test('cancel retains a clearly incomplete preview without claiming completion', async ({page}) => {
   const state = await fixture(page);
-  await page.goto('/ui/#/agents');
-  await page.getByRole('textbox',{name:'Task',exact:true}).fill('Do the task');
-  await page.getByRole('button',{name:'Start task',exact:true}).click();
+  await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toBeVisible();
   await page.getByRole('button',{name:'Stop',exact:true}).click();
   await expect(page.locator('.agent-live-preview')).toContainText('Incomplete response');
-  expect(state.cancels()).toBe(1); expect(state.creates()).toBe(1);
+  expect(state.cancels()).toBe(1); expect(state.creates()).toBe(0);
   await expect(page.locator('.task-detail')).not.toContainText('Finished answer');
 });
 
 test('durable replay reconnects with the applied cursor and accepts snapshot recovery', async ({page}) => {
   const state = await fixture(page,true);
-  await page.goto('/ui/#/agents');
-  await page.getByRole('textbox',{name:'Task',exact:true}).fill('Do the task');
-  await page.getByRole('button',{name:'Start task',exact:true}).click();
+  await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toBeVisible();
   await expect.poll(()=>state.replayCursors.length).toBeGreaterThan(1);
   expect(state.replayCursors[0]).toBe('');
   expect(state.replayCursors[1]).toBe('10');
-  expect(state.creates()).toBe(1);
+  expect(state.creates()).toBe(0);
   state.complete();
   await expect(page.locator('.task-result')).toContainText('Finished answer');
-  expect(state.creates()).toBe(1);
+  expect(state.creates()).toBe(0);
 });

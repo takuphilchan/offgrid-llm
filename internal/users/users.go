@@ -206,6 +206,15 @@ func (s *UserStore) CreateUser(username, password string, role Role) (*User, str
 	return user, apiKey, nil
 }
 
+// ActorHasPermission snapshots current authority under the store lock, including
+// revocation. Durable workers must not retain mutable User pointers as grants.
+func (s *UserStore) ActorHasPermission(id string, permission Permission) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	user, ok := s.users[id]
+	return ok && !user.Disabled && user.HasPermission(permission)
+}
+
 // GetUser gets a user by ID
 func (s *UserStore) GetUser(id string) (*User, bool) {
 	s.mu.RLock()

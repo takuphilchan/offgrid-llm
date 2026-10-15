@@ -60,8 +60,42 @@ func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
 	if err := initializeWorkflow(t); err != nil {
 		return false, err
 	}
+	// Authority alone is not an external outcome. A direct conversational
+	// answer needs no invented application/check. Once an action or explicit
+	// expectation exists the ordinary evidence gate still applies.
+	if len(t.Workflow.Checks) == 0 && len(t.Config.NativeExpectations) == 0 && len(t.Plan) == 0 {
+		hasAction := false
+		for _, step := range t.Steps {
+			if step.Type == "action" || step.Type == "reconciled" || step.Type == "tool_error" {
+				hasAction = true
+				break
+			}
+		}
+		if !hasAction && t.Checkpoint.ExecutingCall == "" {
+			t.Workflow = nil
+			return false, nil
+		}
+	}
 	r.assessWorkflow(t)
-	if t.Workflow.State != "pending" {
+	remainingPlan := []string{}
+	for _, item := range t.Plan {
+		if item.State != "done" {
+			remainingPlan = append(remainingPlan, item.Title)
+		}
+	}
+	// The plan is advisory model interpretation. Do not make a stale plan
+	// checkbox a second user-facing outcome form once a substantive action has
+	// independent verification. A launch/blank document alone is readiness,
+	// however, and cannot close still-recorded work.
+	if len(remainingPlan) == 1 && t.Workflow.State == "checks_passed" {
+		for _, check := range t.Workflow.Checks {
+			if check.State == "verified" && (check.Expectation.Kind == "document_edit_matches" || check.Expectation.Kind == "control_text_equals" || check.Expectation.Kind == "control_checked_equals") {
+				remainingPlan = nil
+				break
+			}
+		}
+	}
+	if t.Workflow.State != "pending" && len(remainingPlan) == 0 {
 		return false, nil
 	}
 	remaining := []string{}
@@ -73,6 +107,10 @@ func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
 	sort.Strings(remaining)
 	data, _ := json.Marshal(remaining)
 	feedback := "Completion is not verified. Pending check IDs: " + string(data) + ". If no checks exist, use task_expectations first. Continue the same task from recorded evidence; do not repeat launches or uncertain actions. Unsupported checks must be reported as unverified, not claimed successful."
+	if len(remainingPlan) > 0 {
+		plan, _ := json.Marshal(remainingPlan)
+		feedback += " Your saved plan still contains unfinished work: " + string(plan) + ". Perform the requested work and update the plan with actual evidence before finishing. A verified app launch does not finish a document or research task."
+	}
 	t.Checkpoint.Messages = append(t.Checkpoint.Messages, api.ChatMessage{Role: "system", Content: feedback})
 	t.Steps = append(t.Steps, Step{ID: len(t.Steps) + 1, Type: "completion_rejected", Content: feedback, Timestamp: time.Now().UTC()})
 	if t.Checkpoint.CompletionRepairs >= 3 {

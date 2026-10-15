@@ -1,5 +1,24 @@
 # Workspace ownership and offline recovery
 
+## Profile-enabled conversation recovery (development)
+
+Agent-enabled Chat uses a durable admission record plus a canonical job. The
+session and job are separate stores: a held job cannot execute before its
+conversation link is saved. On restart, recovery finishes accepted bookkeeping
+but leaves interrupted work interrupted. Reloading or retrying the original
+request never grants access or resumes that work.
+
+If the canonical job completed but its answer was not saved in Chat, inspect
+`GET /v1/sessions/{name}/turn`. The `recovery_required` flag identifies a missing
+association or result attachment. The explicit `turn/recover` operation attaches
+the saved result without another model or tool call. Do not submit the same task
+under a new request identity to repair a missing conversation answer.
+
+Deleting visible conversation history retains the canonical jobs and minimal
+deduplication records. Back up the session directory and agent SQLite together;
+restoring only one store can leave recovery conflicts. Preserve those records
+and inspect them rather than automatically replaying an unmatched action.
+
 ## Document-task recovery
 
 The current task view distinguishes dispatched document input from independent

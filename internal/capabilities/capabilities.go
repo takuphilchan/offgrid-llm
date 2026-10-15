@@ -43,6 +43,7 @@ type Descriptor struct {
 	Namespace   string `json:"namespace"`
 	Source      string `json:"source"`
 	Revision    string `json:"revision,omitempty"`
+	Location    string `json:"location,omitempty"`
 	Kind        Kind   `json:"kind"`
 	Risk        Risk   `json:"risk"`
 	Description string `json:"description,omitempty"`

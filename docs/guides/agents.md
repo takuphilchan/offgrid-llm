@@ -4,6 +4,51 @@ OffGrid's built-in task runner uses a local chat model and enabled tools. The
 model must support structured tool calls; an installed model or successful
 health check alone does not prove it can complete a useful task.
 
+## Reusable agents in Chat
+
+On services advertising agent profiles and conversations, **Agents** is the
+profile library. Create an agent, choose an installed model and instructions,
+then select the Knowledge and tools it may use. **Use in Chat** selects the
+saved revision. You can also select it from Chat's **Agent** control. Selecting
+**No agent** returns future messages to ordinary Chat.
+
+Leave **Research agents** empty for one agent, or select up to four read-only
+specialist profiles for bounded delegation. For example, a researcher can
+gather evidence, then a document specialist can draft from those findings.
+The parent agent receives the draft and performs any permitted document edit
+and read-back itself. Child agents cannot control the desktop, change files,
+or obtain broader access. They share the parent's budget; local runtime capacity
+determines whether independent child work can actually run in parallel. Chat
+shows each handoff and links to the saved child work.
+
+The **Tools** control narrows resources for the next turn. Configuration is not
+permission: computer use still requires host consent, and administrator-owned
+connections and service filesystem tools do not become available to ordinary
+Chat users. Without administrative grants, pure calculator/time tools remain
+available. Profile instructions cannot override these restrictions.
+
+Chat shows concise activity, access requests and results inline. **Inspect work**
+opens the same job, not a copy. While supported work runs, **Send instruction**
+queues a correction for its next safe boundary; actions already sent are not
+cancelled. Reloading observes saved state and never submits again. If attaching
+the answer failed, **Attach saved result** repairs bookkeeping without rerunning
+inference or tools. An uncertain action is not replayed; a manual report remains
+a human observation rather than independent proof.
+
+Before asking you to report an uncertain computer outcome, the service checks
+its saved, authenticated action receipt. If that result survived, it is recovered
+without repeating the input and the task waits for explicit resume. If the host
+disconnected before any conclusive receipt arrived, the outcome remains unknown;
+do not repeat a submission just because the screen looks unchanged. Restart never
+restores expired computer permission.
+
+Profiles have immutable revisions. Save conflicts keep your draft; explicitly
+load the latest revision or save a new profile. Archive removes future selection
+without erasing historical work. Existing task links and the **Agent activity** inspector
+remain available. This source implementation still has locale, integrated
+client and native-platform qualification gates; do not infer deployment from
+these documented contracts.
+
 Hermes and OpenClaw are separate runtimes using OffGrid inference. Their own
 tool execution is **not** governed by this runner's approval broker. See
 [external agents](external-agents.md) for provider setup.
@@ -11,20 +56,34 @@ tool execution is **not** governed by this runner's approval broker. See
 ## Start and inspect work
 
 Available tools and Connections remain separate, labelled administration views.
-Their lists use the same headings and action controls as the rest of the workspace.
-Task drafts survive a visit to these views; testing a connection or opening tool
-details does not run a task or change its approval policy. See [MCP setup](mcp.md).
 
-On matching task-first builds, open **Agents**, describe the outcome and choose
-**Start task**. The task is saved before execution. In the updated development
-renderer, model, computer approval policy and voice settings sit beside the prompt (older builds use
-**Task settings**); application and browser setup are not prerequisites for
-submitting a task. A model with reliable structured tool calling is still required.
+For an application request, the agent searches the full installed catalog by
+name before launching. It must use the matching application, not a nearby entry
+from a shortened list. If the name is missing or ambiguous, it asks for
+clarification. A changed instruction or refreshed catalog requires a new lookup;
+no extra computer consent is introduced by this check.
+Their lists use the same headings and action controls as the rest of the workspace.
+Testing a connection or opening tool details does not run a task or change its
+approval policy. See [MCP setup](mcp.md).
+
+Start work in **Chat**. Select a saved profile with **Agent**, describe the
+outcome in the message, and send it. The linked job is saved before execution.
+**Agent activity** in Agents is history and a detailed inspector for that same
+job, not another task composer. Model choice, tool restrictions, computer access
+policy and voice controls live with the Chat composer. A model with reliable
+structured tool calling is still required.
+
+Available tools and remembered Full access are not instructions to act. A greeting
+or clarification can finish as an ordinary answer without an application launch,
+outcome declaration or access request. When real work is needed, the runner plans
+from each observed result. Verified outcomes permit a final answer; outstanding
+edits or unknown effects cannot be dismissed by prose. Profile instructions set
+behavior while versioned computer protocols and the broker retain these limits.
 
 When the model requests computer access, the saved task displays **Access needed**.
-Review the requested application/site and the saved action-approval policy in the desktop
-app. Locally approve the actual target; model-proposed names never grant access.
-The same task then continues, beginning with a fresh observation. Web users can
+Full access must be enabled explicitly in the desktop app; it can then be reused
+until the desktop session ends or the user revokes it. The task continues with a
+fresh observation. Model-proposed names never grant access. Web users can
 choose **Continue in desktop** to open that saved task in the matching workspace.
 The deep link carries only its ID, no credentials or executable actions. The
 desktop app and service must use compatible builds; a container update alone
@@ -50,15 +109,32 @@ or approvals. Dependencies run after their prerequisites. Inspect each child
 for findings, approvals or recovery; the parent waits for all children and cannot
 silently ignore a failed branch. After restart, explicitly resume the parent.
 
-For work across applications, OffGrid can verify the current target and request
-the next application's local consent in the **same task**. It releases the old
-session; it does not silently grant whole-desktop authority.
+For work across applications, OffGrid verifies each current target under the
+desktop task grant. The grant does not turn off action restrictions, and a
+separate host file or service grant is still needed when applicable.
 
 Legacy arbitrary workflow registration remains unavailable (`501
 durable_coordination_unavailable`). Do not confuse bounded read-only delegation
 with general recursive multi-agent or concurrent computer control. See the
 [architecture](../advanced/ARCHITECTURE.md#bounded-durable-coordination) and
 [reliability plan](../advanced/product-reliability-plan.md) for qualification limits.
+
+### Reusable profiles (development API)
+
+An owned profile saves instructions, an installed model, selected Knowledge,
+authorized tools and a bounded iteration budget. Each edit creates a revision;
+running work keeps its admitted revision. Missing models are reported, never
+downloaded automatically. Settings are restrictions, not permissions.
+
+Use one profile for single-agent work. A parent may also select up to four
+direct read-only child profiles, with their revisions pinned at submission.
+Children cannot control the desktop, delegate again, widen the parent's tools
+or speak independently. Their reserved iterations come out of the parent's
+budget. Existing unprofiled delegation retains the limits described above.
+
+The service API is available in this development change; the profile library,
+Chat selector and linked conversation experience are still being implemented.
+See [profile API contracts](../reference/api.md#agent-profiles-development-api).
 
 ### CLI tasks
 
@@ -213,7 +289,10 @@ offgrid agent reconcile RUN_ID CALL_ID "Verified the requested file exists with 
 offgrid agent resume RUN_ID
 ```
 
-Reconciliation appends this verified result to the conversation; it does not
+Reconciliation records your statement as **human-reported**, preserving the
+original call arguments and timestamp. It is not independent verification and
+does not mark unrelated outcomes as complete. Typing `done` cannot prove the
+requested document matches. Reconciliation does not
 execute the uncertain tool again. If you cannot determine the outcome, leave the
 run uncertain. Do not invent success or retry a destructive operation blindly.
 
@@ -223,6 +302,11 @@ outcome form. A read interrupted by service restart can be explicitly resumed;
 it is never automatically rerun on startup. Unknown failures of mutating or
 external tools remain conservative, including legacy records without reliable
 effect metadata.
+
+A known argument or protected service-path rejection before filesystem effects
+instead gets bounded corrective feedback. The runner allows up to three repair
+attempts, then pauses with the rejection reason. You should not have to fill in
+an unknown-outcome form for an operation proven not to have executed.
 
 Built-in filesystem tools access the service's filesystem, not automatically
 your desktop's files. A Windows drive request sent to a Linux container now

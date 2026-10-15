@@ -116,6 +116,8 @@ static NSDictionary *inspect(AXUIElementRef element){
     NSNumber *checked=checkable?@([rawValue boolValue]):@NO;
     return @{ @"name":name,@"role":role,@"writable":@(writable),@"invokable":@(invokable),@"checkable":@(checkable),@"checked":checked,@"readable":@(readable),@"value":value,@"fingerprint":digest(@[name,role,subrole,@(writable),@(invokable),@(checkable),checked,@(readable),value]) };
 }
+#include "native_documents_ax_darwin.h"
+
 static NSDictionary *perform(NSDictionary *request){
     NSString *kind=request[@"kind"];id args=request[@"args"];
     if(![kind isKindOfClass:[NSString class]])return failure(@"computer_invalid_action");
@@ -153,6 +155,7 @@ static NSDictionary *perform(NSDictionary *request){
         return success(selected[@"target"]);
     }
     if(!targetValid(NO))return failure(@"computer_scope_violation");
+    if([kind hasPrefix:@"document_"])return documentRequest(kind,args);
     if([kind isEqual:@"focus"]){
         NSRunningApplication *running=[NSRunningApplication runningApplicationWithProcessIdentifier:[selected[@"pid"] intValue]];
         [running activateWithOptions:NSApplicationActivateIgnoringOtherApps];
@@ -262,4 +265,4 @@ char *offgrid_ax_call(const char *request){
         } @catch(NSException *exception) {return strdup("{\"error\":\"computer_provider_unavailable\"}");}
     }
 }
-void offgrid_ax_close(void){[selected release];selected=nil;[observation release];observation=nil;[controls release];controls=nil;[prepared release];prepared=nil;[targets release];targets=nil;}
+void offgrid_ax_close(void){[documentObjects release];documentObjects=nil;[selected release];selected=nil;[observation release];observation=nil;[controls release];controls=nil;[prepared release];prepared=nil;[targets release];targets=nil;}

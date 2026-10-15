@@ -50,6 +50,7 @@ func testDesktopDurableChromeWorkflow(t *testing.T, repeatLaunch bool, appName s
 	if repeatLaunch && controlWorkflow {
 		sequence = append(sequence, sequence[2])
 	}
+	sequence = append(sequence[:2:2], append([]api.FunctionCall{{Name: applicationSearchTool}}, sequence[2:]...)...)
 	if controlWorkflow {
 		sequence = append(sequence,
 			api.FunctionCall{Name: "computer_observe", Arguments: `{}`},
@@ -63,11 +64,13 @@ func testDesktopDurableChromeWorkflow(t *testing.T, repeatLaunch bool, appName s
 			api.FunctionCall{Name: "computer_verify", Arguments: `{"observation_id":"after-submit","element":"search-field","text":"tourism"}`},
 			api.FunctionCall{Name: "computer_verify_application", Arguments: `{"application_id":"chrome"}`})
 	}
-	sequence = append([]api.FunctionCall{{Name: "task_expectations", Arguments: `{"expectations":[{"id":"open","title":"Application ready","kind":"application_open","application_id":"chrome"},{"id":"research","title":"Research","kind":"research"}]}`}}, sequence...)
+	declaration := api.FunctionCall{Name: "task_expectations", Arguments: `{"expectations":[{"id":"open","title":"Application ready","kind":"application_open","application_id":"chrome"}]}`}
+	sequence = append(sequence[:3:3], append([]api.FunctionCall{declaration}, sequence[3:]...)...)
+	sequence = append([]api.FunctionCall{{Name: "task_expectations", Arguments: `{"expectations":[{"id":"research","title":"Research","kind":"research"}]}`}}, sequence...)
 	modelCalls := 0
 	r := agents.NewRunner(s.agentManager, tools, func(_ context.Context, task *agents.Task, messages []api.ChatMessage, available []api.Tool) (*api.ChatCompletionResponse, error) {
 		names := availableNames(available)
-		if !names["mcp__docs__docs"] || !names["computer_open_application"] || names[computerAccessToolName] {
+		if !names["mcp__docs__docs"] || names[computerAccessToolName] {
 			t.Error("incorrect composition", names)
 		}
 		if task.Context.EstimatedTokens+task.Config.MaxTokens+512 > task.Context.Window {
@@ -88,6 +91,9 @@ func testDesktopDurableChromeWorkflow(t *testing.T, repeatLaunch bool, appName s
 		if modelCalls < len(sequence) {
 			m.Content = ""
 			m.ToolCalls = []api.ToolCall{{Type: "function", Function: sequence[modelCalls]}}
+			if m.ToolCalls[0].Function.Name == applicationSearchTool {
+				m.ToolCalls[0].Function.Arguments = latestApplicationQuery(task, appName)
+			}
 			m.ToolCalls[0].Function.Arguments = translateNativeReferences(m.ToolCalls[0].Function.Name, m.ToolCalls[0].Function.Arguments, nativeModelReferences(task))
 			reason = "tool_calls"
 		}
@@ -150,12 +156,12 @@ func testDesktopDurableChromeWorkflow(t *testing.T, repeatLaunch bool, appName s
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err = r.Continue(context.Background(), task.ID, "alice", "start", "", false)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	task, err = r.Continue(ctx, task.ID, "alice", "start", "", false)
 	if err != nil || task.Status != agents.TaskWaiting || task.PendingApproval.Tool != "mcp__docs__docs" || calls.Load() != 0 {
 		t.Fatalf("independent MCP approval lost: %+v %v", task, err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 	done := make(chan error, 1)
 	go func() {
 		launches := 0
@@ -306,8 +312,11 @@ func (b *desktopSchemaPressure) ToolsForTaskContext(ctx context.Context, task *a
 	return tools
 }
 
-func TestDesktopSubmitIsHeldAndRejectsV2Attachment(t *testing.T) {
+func TestDesktopSubmitPlansBeforeAccessAndRejectsV2Attachment(t *testing.T) {
 	s := taskFirstServer(t)
+	s.agentRunner = agents.NewRunner(s.agentManager, &browserRunTools{RunTools: agents.NewToolRegistry(), server: s}, func(context.Context, *agents.Task, []api.ChatMessage, []api.Tool) (*api.ChatCompletionResponse, error) {
+		return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{FinishReason: "tool_calls", Message: api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{{Function: api.FunctionCall{Name: computerAccessToolName, Arguments: `{"mode":"app","target":"Chrome","url":""}`}}}}}}}, nil
+	})
 	w := httptest.NewRecorder()
 	body := `{"prompt":"open chrome","model":"model","request_id":"desktop-request","computer_scope":"desktop","computer_approval_mode":"full_task"}`
 	s.handleJobSubmit(w, httptest.NewRequest("POST", "/api/v2/jobs", strings.NewReader(body)))
@@ -319,8 +328,13 @@ func TestDesktopSubmitIsHeldAndRejectsV2Attachment(t *testing.T) {
 	}
 	json.Unmarshal(w.Body.Bytes(), &response)
 	task, _ := s.agentManager.GetTask(response.ID)
-	if task.Status != agents.TaskInput || task.Checkpoint.Iteration != 0 || task.PendingInput.Mode != "desktop" {
-		t.Fatalf("inference began before access: %+v", task)
+	deadline := time.Now().Add(5 * time.Second)
+	for task.Status != agents.TaskInput && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+		task, _ = s.agentManager.GetTask(response.ID)
+	}
+	if task.Status != agents.TaskInput || task.Checkpoint.Iteration != 1 || task.PendingInput.Mode != "desktop" || task.Checkpoint.ExecutingCall != "" {
+		t.Fatalf("action planning did not stop at consent: %+v", task)
 	}
 	code, _ := s.browserHub.PairCode(task.Actor)
 	target := computer.TargetIdentity{ID: "window", OSSession: "os", ProcessGeneration: "process", Surface: "surface", Driver: "windows-uia"}

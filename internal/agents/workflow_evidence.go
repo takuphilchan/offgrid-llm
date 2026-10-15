@@ -18,8 +18,8 @@ import (
 
 const WorkflowEvidenceVersion = 1
 
-// Explicit opt-in for document-aware tasks. Existing v1 tasks and producers
-// keep their wire contract until the document provider is negotiated.
+// Document-aware task contract. Saved v1 tasks keep their wire contract;
+// selecting v2 does not authorize input or replace host feature negotiation.
 const DocumentWorkflowEvidenceVersion = 2
 
 func knownWorkflowVersion(version int) bool {
@@ -312,7 +312,17 @@ func reviseWorkflow(t *Task, instructionID, digest string) error {
 }
 
 func workflowMutation(name string, d capabilities.Descriptor) bool {
+	// Native outcome checks are tied to companion observations. A connected
+	// tool has its own broker approval and effect classification; forcing it
+	// through a native document/control declaration cannot provide evidence
+	// about its remote result and blocks legitimate research before launch.
+	if d.Namespace == "mcp" {
+		return false
+	}
 	// Explicitly reviewed native reads only; MCP annotations are not authority.
+	if capabilities.TrustedNativeRead(d) && d.Name == name {
+		return false
+	}
 	if d.Kind == capabilities.Computer {
 		switch name {
 		case "computer_applications", "computer_windows", "computer_observe", "computer_verify", "computer_verify_checked", "computer_verify_application", "computer_find_controls", "computer_inspect_control":
@@ -334,7 +344,7 @@ func workflowDeclarationGuidance(t *Task) string {
 	if t.Config.ComputerScope != "desktop" {
 		return "Call computer_observe for the selected window, then task_expectations with control_text_equals (target_id, element, text) or control_checked_equals (target_id, element, checked) BEFORE editing. Each item requires id, title, kind. Use observed IDs, never guesses. Declarations add checks, not permission; do not request unavailable application-launch tools."
 	}
-	return "Declare checks in stages: computer_applications -> task_expectations with application_open and its application_id -> computer_open_application -> computer_verify_application. Then add control_text_equals or control_checked_equals using the observed target_id and element BEFORE editing. Never invent window/control IDs or declare control checks before observing them. Each item requires id, title, kind; calls add checks, never replace them."
+	return "Declare checks in stages: computer_applications -> computer_find_applications with the requested name and catalog_step -> task_expectations with application_open and the unique matching application_id -> computer_open_application -> computer_verify_application. Ask if the name is missing or ambiguous. Then add control_text_equals or control_checked_equals using the observed target_id and element BEFORE editing. Never invent window/control IDs or declare control checks before observing them. Each item requires id, title, kind; calls add checks, never replace them."
 }
 
 func workflowTool() api.Tool {
@@ -365,7 +375,7 @@ func constrainWorkflowRepairTool(tool *api.Tool, task *Task) {
 		if s.Type != "rejected" || json.Unmarshal([]byte(s.ToolResult), &failure) != nil || failure.Code != "workflow_control_expectation_required" {
 			continue
 		}
-		if task.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion && constrainDocumentRepairTool(tool, s.ToolName) {
+		if task.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion && constrainDocumentRepairTool(tool, s.ToolName, s.ToolArgs) {
 			return
 		}
 		kind, value := "control_text_equals", "text"
@@ -379,6 +389,9 @@ func constrainWorkflowRepairTool(tool *api.Tool, task *Task) {
 		properties := item["properties"].(map[string]any)
 		properties["kind"] = map[string]any{"type": "string", "enum": []string{kind}}
 		delete(properties, "application_id")
+		for _, field := range []string{"document", "snapshot", "command", "edit_mode"} {
+			delete(properties, field)
+		}
 		if value == "text" {
 			delete(properties, "checked")
 		} else {

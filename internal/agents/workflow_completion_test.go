@@ -13,6 +13,34 @@ type assessedTestTools struct {
 	states map[string]string
 }
 
+func TestVerifiedLaunchCannotCompleteUnfinishedDocumentPlan(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	tools := &assessedTestTools{states: map[string]string{"open": "verified"}}
+	calls := 0
+	r := NewRunner(m, tools, func(context.Context, *Task, []api.ChatMessage, []api.Tool) (*api.ChatCompletionResponse, error) {
+		calls++
+		return runAnswer(api.ChatMessage{Role: "assistant", Content: "Done"}), nil
+	})
+	cfg := workflowConfig()
+	cfg.MaxIterations = 20
+	cfg.NativeExpectations = []OutcomeExpectation{{ID: "open", Title: "Open editor", Kind: "application_open", ApplicationID: "app"}}
+	task, err := r.Create("Open and write the requested document", "model", "alice", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.updateTask(task.ID, func(saved *Task) error {
+		saved.Plan = []PlanItem{{ID: "write", Title: "Write the requested document", State: "pending"}}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, err := r.Continue(context.Background(), task.ID, "alice", "start", "", false)
+	if err != nil || done.Status != TaskInterrupted || done.ErrorCode != "workflow_completion_repair_limit" || calls != 4 || tools.calls.Load() != 0 {
+		t.Fatalf("unfinished plan falsely completed: status=%s code=%s calls=%d err=%v", done.Status, done.ErrorCode, calls, err)
+	}
+}
+
 func TestWorkflowUncertainMutationNeverEntersCompletionRepair(t *testing.T) {
 	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
 	tools := &workflowTestTools{}

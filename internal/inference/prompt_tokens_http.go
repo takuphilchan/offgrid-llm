@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,7 +24,7 @@ func (e *LlamaHTTPEngine) CountPromptTokens(ctx context.Context, request *api.Ch
 	defer cancel()
 	copy := *request
 	copy.Model, copy.Stream, copy.StreamOptions = "", false, nil
-	body, err := json.Marshal(copy)
+	body, err := marshalLlamaRequest(&copy)
 	if err != nil {
 		return 0, err
 	}
@@ -33,6 +34,16 @@ func (e *LlamaHTTPEngine) CountPromptTokens(ctx context.Context, request *api.Ch
 	}
 	req.Header.Set("Content-Type", "application/json")
 	response, err := e.httpClient.Do(req)
+	// Counting is read-only, unlike generation or tool dispatch. A llama HTTP
+	// keep-alive peer can close a connection between sequential model turns;
+	// retry that specific transport loss once within the original deadline.
+	if (errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || promptCountConnectionReset(err)) && ctx.Err() == nil {
+		retry := req.Clone(ctx)
+		retry.Body, err = req.GetBody()
+		if err == nil {
+			response, err = e.httpClient.Do(retry)
+		}
+	}
 	if err != nil {
 		return 0, err
 	}

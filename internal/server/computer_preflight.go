@@ -82,6 +82,10 @@ func (s *Server) checkComputerModelDriverWithBudget(ctx context.Context, model, 
 		}
 		if nativeComputerDriver(driver) && errors.Is(err, errComputerToolCalling) {
 			result.Message = "The model/runtime did not pass the native application tool-call check. No application action was executed. Select a compatible tool-calling model and retry."
+			var detail *computerToolCheckError
+			if errors.As(err, &detail) {
+				result.Message = detail.reason + " No application action was executed. The check requires sequential tool calls using actual observation results, not simulated results."
+			}
 		}
 		return result
 	}
@@ -125,6 +129,18 @@ func probeComputerToolsDriver(ctx context.Context, engine inference.Engine, mode
 		}
 	}
 	for index, name := range names {
+		if nativeComputerDriver(driver) {
+			// Match the runner's observation-bound capability stages. Discovery
+			// and input requiring an observation cannot be offered before one
+			// exists. The second stage still tests opaque ID/text copying; their
+			// values are not constrained into the output grammar.
+			request.Tools = nil
+			for _, tool := range nativeComputerTools() {
+				if tool.Function.Name == "computer_observe" || (index == 1 && tool.Function.Name == "computer_replace_text") {
+					request.Tools = append(request.Tools, tool)
+				}
+			}
+		}
 		// Use the same structured streaming parser as the durable runner when possible.
 		var response *api.ChatCompletionResponse
 		var err error
@@ -140,7 +156,7 @@ func probeComputerToolsDriver(ctx context.Context, engine inference.Engine, mode
 			return err
 		}
 		if response == nil || len(response.Choices) != 1 || response.Choices[0].FinishReason != "tool_calls" {
-			return &computerToolCheckError{"The runtime did not return a complete structured browser tool call."}
+			return &computerToolCheckError{"The runtime did not return a complete structured computer tool call."}
 		}
 		message := response.Choices[0].Message
 		if len(message.ToolCalls) != 1 {
@@ -160,7 +176,7 @@ func probeComputerToolsDriver(ctx context.Context, engine inference.Engine, mode
 			if nativeComputerDriver(driver) {
 				result, _ = json.Marshal(map[string]any{"requested_text": expected, "observation": map[string]string{"id": "probe-" + expected}, "elements": []any{map[string]any{"id": "field-" + expected, "writable": true, "name": "Fixture field"}}})
 			}
-			request.Messages = append(request.Messages, message, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Content: string(result)})
+			request.Messages = append(request.Messages, message, api.ChatMessage{Role: "tool", Name: call.Function.Name, ToolCallID: call.ID, Content: string(result)})
 		} else {
 			var text string
 			if nativeComputerDriver(driver) {

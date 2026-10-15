@@ -27,6 +27,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -45,24 +46,37 @@ type linuxControl struct {
 	value                 *string
 }
 type NativeLinux struct {
-	targets  map[string]*linuxSurface
-	selected *linuxSurface
-	controls map[string]linuxControl
-	prepared map[string]PreparedControlAction
-	observed ControlObservation
-	sequence uint64
+	targets   map[string]*linuxSurface
+	selected  *linuxSurface
+	controls  map[string]linuxControl
+	prepared  map[string]PreparedControlAction
+	observed  ControlObservation
+	sequence  uint64
+	documents *linuxDocumentReferences
 }
 
 var _ NativeAdapter = (*NativeLinux)(nil)
+
+// libatspi owns process-global GLib caches. atspi_exit followed by atspi_init
+// in the same process can leave stale accessible proxies. A driver closes its
+// own references/grants; the worker process owns the library's lifetime.
+var nativeATSPIInit sync.Once
+var nativeATSPIInitError error
 
 func NewNativeLinux() (*NativeLinux, error) {
 	if os.Getuid() == 0 || os.Getenv("DBUS_SESSION_BUS_ADDRESS") == "" || (os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "") {
 		return nil, fmt.Errorf("computer_desktop_unavailable")
 	}
-	if C.atspi_init() != 0 {
-		return nil, fmt.Errorf("computer_permission_denied")
+	nativeATSPIInit.Do(func() {
+		if C.atspi_init() != 0 {
+			nativeATSPIInitError = fmt.Errorf("computer_permission_denied")
+			return
+		}
+		C.atspi_set_timeout(2000, 2000)
+	})
+	if nativeATSPIInitError != nil {
+		return nil, nativeATSPIInitError
 	}
-	C.atspi_set_timeout(2000, 2000)
 	return &NativeLinux{targets: map[string]*linuxSurface{}, controls: map[string]linuxControl{}, prepared: map[string]PreparedControlAction{}}, nil
 }
 func atspiError(err *C.GError) bool {
@@ -127,13 +141,13 @@ func (d *NativeLinux) clear() {
 	d.observed = ControlObservation{}
 }
 func (d *NativeLinux) Close() {
+	d.clearDocumentReferences()
 	d.clear()
 	for _, target := range d.targets {
 		C.og_unref(unsafe.Pointer(target.object))
 	}
 	d.targets = nil
 	d.selected = nil
-	C.atspi_exit()
 }
 func (d *NativeLinux) Targets() ([]NativeTarget, error) {
 	if d.selected != nil {

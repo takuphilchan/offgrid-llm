@@ -79,11 +79,18 @@ func taskResponse(task *agents.Task) map[string]any {
 	}
 	response := map[string]any{"task_id": task.ID, "run_id": task.ID, "status": task.Status, "output": task.Result, "steps": steps, "pending_approval": task.PendingApproval}
 	response["progress"] = task.Progress
+	if task.Origin != nil {
+		response["origin"], response["admission_held"] = task.Origin, task.AdmissionHeld
+	}
 	if task.Workflow != nil {
 		response["verification"] = task.Workflow
 	}
 	response["model"], response["pending_input"] = task.Model, task.PendingInput
+	if task.Config.Profile != nil {
+		response["profile"] = map[string]any{"id": task.Config.Profile.ID, "revision": task.Config.Profile.Revision, "digest": task.Config.Profile.Digest, "name": task.Config.Profile.Settings.Name}
+	}
 	response["instructions"] = task.Instructions
+	response["pending_instructions"] = task.PendingInstructions
 	response["last_access"] = task.LastAccess
 	response["plan"], response["context"] = task.Plan, task.Context
 	response["artifacts"] = taskArtifacts(task)
@@ -108,7 +115,7 @@ func taskResponse(task *agents.Task) map[string]any {
 		response["computer_session_expired"] = task.ComputerSessionExpired
 	}
 	response["started_at"] = task.StartedAt
-	response["resumable"] = !task.ComputerSessionExpired && task.Checkpoint != nil && task.Checkpoint.ExecutingCall == "" && (task.Status == agents.TaskInterrupted || task.Status == agents.TaskPending || task.Status == agents.TaskWaiting)
+	response["resumable"] = !task.AdmissionHeld && !task.ComputerSessionExpired && task.Checkpoint != nil && task.Checkpoint.ExecutingCall == "" && (task.Status == agents.TaskInterrupted || task.Status == agents.TaskPending || task.Status == agents.TaskWaiting)
 	if task.Error != "" {
 		response["error"] = task.Error
 	}

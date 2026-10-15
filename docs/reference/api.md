@@ -13,6 +13,49 @@ This page explains the main workflows and persistence semantics.
 
 ## Task-wide desktop access
 
+Computer sessions accept one tool call per model turn. A multi-call response
+is rejected in full with `computer_multiple_tool_calls`, `effects: "none"` and
+paired tool feedback before any call is queued, authorized or dispatched. The
+model can correct its next response within the shared three-repair budget;
+exhaustion interrupts the saved task rather than permanently failing it. A
+successful single call clears the sequencing repair only when it completes the
+first rejected dependency; unrelated catalog, plan and history reads do not
+reset its budget. Outstanding access, read-back and edit checks remain. Prose
+alone cannot resolve the repair. Earlier
+actions are not replayed; persisted legacy batches and uncertain actions remain
+blocked. Ordinary non-computer tool batching is unchanged.
+
+For sequential tool requests through the owned HTTP inference adapter, OffGrid
+uses a private schema-constrained single-step envelope rather than relying only
+on a runtime's `parallel_tool_calls: false` hint. It normalizes one complete,
+validated response into the existing tool-call contract. Partial JSON, duplicate
+keys, unknown tools, truncated generations and incomplete streams cannot
+dispatch input. Counting and generation use the same wire messages and schemas.
+The changing catalog stays near the current exchange to preserve the cached
+instruction/history prefix. Tool-enabled terminal text is delivered after this
+envelope finishes; ordinary text-only Chat retains token streaming.
+Completion and SSE projections preserve one unique call ID generated only after
+clean envelope validation. Native compatibility checks use the same transport
+and stage-relevant tools; a synthetic preflight pass is not native workflow
+qualification. Failed checks retain their service-authored reason.
+
+Desktop model discovery follows recorded progress: a catalog precedes launch,
+readiness precedes target operations, document inventory precedes creation
+checks, and independent read-back precedes document-edit checks. Check schemas
+include only observed references and supported operations. These projections
+are planning aids, not grants: service and host validation remain authoritative.
+Unchanged plans are not offered repeatedly without intervening action progress.
+Model history retrieval lists only unread omitted/archived pages. Document text
+paging starts without a guessed page reference; continuations require the exact
+returned snapshot, revision and next offset. A complete read is not offered for
+repeated paging; fresh inventory permits another independent read. Duplicate
+content/edit declarations for the same snapshot are not advertised again.
+Unchanged content checks are reused across fresh snapshots. After dispatched
+document input, fresh inventory and independent read-back take priority over
+further native planning. After a verified document stage, another creation/edit
+requires saved plan advancement; MCP tools remain composed throughout.
+Canonical APIs, saved history, grants and dispatch checks are unchanged.
+
 Native read failures carry operation-local `effects: "none"`, not a claim that
 the whole task made no changes. `computer_target_not_selected` and
 `computer_application_not_ready` permit bounded read recovery under the same
@@ -22,6 +65,8 @@ does. Recovery shares the persisted three-proposal-repair budget. Catalog reads
 and negative readiness checks cannot reset it; exhaustion interrupts the same
 task and requires explicit continuation. An earlier dispatched launch or input
 is never repeated by this recovery. Old uncertain records are not rewritten.
+If a launch proposal was rejected before dispatch, recovery explicitly permits
+the first authorized launch; it does not invent an earlier launch to prohibit it.
 Descriptors for reviewed native tools include `revision: "native-effects-v1"`;
 changed or absent revisions do not reuse a pending approval.
 
@@ -46,10 +91,10 @@ Check states are `pending`, `verified`, or `unavailable`; overall states are
 displayed as unavailable, never as verified. Absence is a legacy record, not a
 success claim.
 
-Version 2 adds document-aware persistence and verification. It is an explicit
-task contract, not an upgrade of saved v1 tasks. The current public task creator
-continues emitting v1 until document-capable host/tool integration is enabled;
-these persistence/evaluator types alone do not enable native document input.
+Version 2 adds document-aware persistence and verification. New task-first jobs
+select this contract; saved v1 tasks are not upgraded. Document tools additionally
+require an actor-owned host session negotiating `native_documents:1`. V2 alone
+does not enable native document input or change a legacy control-edit tool.
 Legacy records without a workflow retain version-0 behavior, v1 readers/writers
 remain supported, and unknown versions remain opaque and non-executable. V1
 records reject v2 fields even when null or inside historical revisions.
@@ -72,7 +117,15 @@ are both required for creation/edit verification. Read-back carries its own
 snapshot, full document binding, completeness, composition state, byte length
 and exact text digest. An input echo, truncated text, another tab with identical
 content, a replaced generation, stale revision or uncertain mutation cannot
-verify that action. Later input or contradictory observations clear the check.
+verify that action. Contradictory observations clear the check. Once independently
+verified, a creation/edit milestone may survive a later verified edit to the same
+document: the later action must match the earlier read's document generation,
+editor, revision, snapshot and preimage digest, and have its own independent
+read-back. The complete evidence chain is retained. An unknown input, changed
+tab, unmatched preimage or missing initial blankness read cannot extend it.
+An independently verified exact-text checkpoint can survive valid reads or
+edits of a different document on the same target. Affected-document input,
+target replacement and unknown or uncertain dispatch remain conservative.
 `document_text_equals` proves only the observed text, not who changed it or a
 particular action's completion. Evidence contains no full private preimage;
 this does not make saved task instructions or declared text non-sensitive.
@@ -327,18 +380,55 @@ attempted once; partial input, a lost result, or invalid result evidence cannot
 trigger fallback typing. Journal recovery validates the stored document identity
 and action evidence before acknowledging a completed result.
 
-The staged Windows backend uses numeric UI Automation roles, SelectionItem's
+The Windows backend uses numeric UI Automation roles, SelectionItem's
 selection container, and child-pane/ControllerFor relationships. It does not
 associate a tab with an editor by title, order or matching text. Complete
 inventory and text are rechecked before input. Unsupported relationships,
 indeterminate composition, or missing editable attributes remain unavailable.
-Reviewed blank-document creation profiles and public service/tool activation are
-still unfinished; this backend does not advertise `native_documents` yet.
+It now negotiates `native_documents:1`. A package-revision-bound Notepad profile
+adds observed WinUI creation semantics; its exact version and unverified native
+status are listed in the [computer guide](../guides/computer-tasks.md).
 
-These types alone do not advertise or enable document tools. Transport
-negotiation, platform implementations, UI/SDK integration and real application
-acceptance remain required. Existing `computer_replace_text` is not reinterpreted
-as insertion, and a successful application launch cannot verify a new document.
+AX and AT-SPI adapters also implement the negotiated document interface, retaining
+native object identities rather than matching titles. They expose operations
+only when the current surface provides their required evidence. AX writes require
+settable attributes and explicit marked-text state. AT-SPI currently reports
+unknown composition, so document input remains unavailable even where a complete
+read succeeds. Their reviewed creation profiles and browser blank-tab profiles
+are not implemented. macOS compilation and native operation checks remain
+unverified; Linux Xvfb read/fixture tests are not Wayland qualification.
+
+The service routes negotiated document tools through the same capability broker,
+host preparation, durable journal and result assessment as other computer tools.
+Schemas follow the current observed stage and preserve authorized MCP tools.
+Both discovery and dispatch check the negotiated feature. Unnegotiated/foreign
+sessions cannot enqueue document commands. Complete document requests allow the
+16,000-byte input even when JSON escaping expands its wire representation; old
+control requests retain their existing bound.
+
+| Tool | Arguments beyond the current `observation_id` | Availability |
+|---|---|---|
+| `computer_documents` | No arguments, including no observation ID | Negotiated host; read only |
+| `computer_create_document` | `command` | An observed reviewed creation command and declared blankness check |
+| `computer_select_document` | `document` | Observed selectable document |
+| `computer_read_text` | `document`; optional `page` with `snapshot`, `revision`, `start` | Active readable document |
+| `computer_select_text` | `document`, `snapshot`, `start`, `end` | Complete read and supported selection |
+| `computer_insert_text` | `document`, `snapshot`, `text` | Supported operation and collapsed caret |
+| `computer_replace_selection` | `document`, `snapshot`, `text` | Supported operation and nonempty selection |
+| `computer_replace_text` (document form) | `document`, `snapshot`, `text` | Explicit whole-value support |
+
+Unknown/duplicate fields, nulls, invalid Unicode and invalid ranges are rejected.
+`computer_document_unavailable`, `computer_document_incomplete`,
+`computer_document_range_invalid` and `computer_document_composition_unstable`
+have actionable pre-dispatch/read errors; a failure after input remains uncertain.
+Only actual mutating document operations consume the action budget.
+
+The legacy `computer_replace_text` control form keeps its meaning outside a
+document stage. A fresh generic observation returns to that control catalog;
+the model is never offered both argument shapes together. These service paths
+do not qualify UIA/AX/AT-SPI providers, and an application launch cannot verify a
+new document. Installed document workflows remain unavailable until their host
+provider and reviewed application profile are implemented and tested.
 
 ## Health and readiness
 
@@ -469,6 +559,58 @@ its owner or contents. Reading or modifying another user's conversation
 returns `404`. Missing authentication returns `401`; missing session permission
 returns `403`. Per-session HTTP mutations are serialized with generation.
 
+### Profile-enabled conversation turns (development API)
+
+`POST /v1/sessions/{name}/generate` also accepts an immutable agent selection:
+
+```json
+{"content":"Explain this briefly","request_id":"chat-turn-001","agent":{"id":"profile-id","revision":1},"restrictions":{"tools":[],"knowledge":[],"computer":false}}
+```
+
+With `agent`, the response is **202 JSON** containing `turn` and `job`, even
+when `stream` is true. `Location` identifies the canonical `/api/v2/jobs/{id}`.
+Without `agent`, existing JSON/SSE behavior above is unchanged. Agent-enabled
+admission requires conversation ownership, not merely `sessions:all`.
+Restrictions may only narrow the profile: omitted fields inherit; empty lists
+disable that resource category. Selecting a profile never grants desktop access.
+The legacy `profile` string is an inference preset, not an agent identifier.
+Computer-enabled profiles default to proposed desktop scope and Full task access
+unless explicitly restricted. This never acquires consent for a conversational
+answer and does not fall back to the legacy selected-window flow.
+
+Use one stable 8–128-character `request_id` for the submitted payload. Identical
+retries return the same job; a changed payload or deleted-history identity
+returns 409. The service pins the resolved model, instructions, resources and
+bounded conversation history before creating a held job. It links the session
+before releasing admission. Interrupted work is never resumed by retrying.
+
+`GET /v1/sessions/{name}/turn` observes saved state and includes `job` for linked
+work. Its `/events?id={turn-id}` endpoint uses the canonical job snapshot/activity
+SSE protocol for linked turns, not the plain Chat delta protocol. Disconnecting
+does not cancel the job. Job controls continue to use `/api/v2/jobs/{id}`.
+Completed exchanges carry `job_id`/`turn_id`; the session's `jobs` list retains
+historical links, including work that did not produce a completed answer.
+The job's `steer` command accepts a stable request ID and instruction while the
+parent runs. `pending_instructions` acknowledges durable receipt, not application
+or cancellation of dispatched input. At the next safe boundary, undispatched
+proposals are discarded and the correction enters `instructions`. Lost mutation
+acknowledgments keep the job uncertain and the correction pending. Restart does
+not apply queued instructions until explicit continuation.
+
+If `recovery_required` is true, explicitly call
+`POST /v1/sessions/{name}/turn/recover` with `{"id":"chat-turn-001"}`. This
+finishes accepted bookkeeping or attaches an already saved result exactly once;
+it does not run inference, approve, resume or repeat tools. The job remains the
+result authority if conversation persistence is unavailable.
+
+Deletion of linked active work requires `DELETE /v1/sessions/{name}?work=retain`
+or `?work=stop`. Retain leaves work in the canonical inspector; stop returns 409
+until the worker settles and refuses to erase uncertain recovery. Minimal
+request/digest/job records survive visible-history deletion to prevent replay;
+the redundant admission prompt/configuration is cleared after job binding.
+This API implementation does not by itself indicate completion of the profile
+library, Chat integration or native-platform qualification.
+
 ## Knowledge
 
 Knowledge endpoints live under `/v1/documents` and `/v1/rag`. RAG is optional:
@@ -510,7 +652,75 @@ available and reports `enabled: false`, `stats.storage_available: false`, and an
 actionable error. Repair disk/access/database problems and restart; retain a
 backup before any database recovery. Do not delete the database as a routine fix.
 
+## Agent profiles (development API)
+
+Profile endpoints use the authenticated actor and current workspace; callers
+cannot set ownership in the request. They configure the existing durable runner,
+not a separate execution engine. The profile library and linked Chat UI are still
+under implementation; these endpoints do not imply those interfaces are shipped.
+
+| Resource | Purpose |
+| --- | --- |
+| `GET/POST /api/v2/agent-profiles` | List active owned profiles or create revision 1 |
+| `GET/PUT /api/v2/agent-profiles/{id}` | Read or save an immutable revision |
+| `GET /api/v2/agent-profiles/{id}?revision=N` | Inspect an owned historical revision |
+| `POST /api/v2/agent-profiles/{id}/archive` | Archive using `expected_revision`; preserve historical work |
+| `GET /api/v2/agent-profiles/resources` | Authorized tool identities, locations and computer eligibility; no credentials |
+| `GET /api/v2/agent-profiles/{id}/effective` | Resource readiness, pinned identities and actionable issues |
+
+Create with `{"settings":{"name":"Research","model":"INSTALLED_MODEL_ID",
+"instructions":"Keep answers concise.","max_iterations":12}}`. An edit sends
+the complete `settings` and `expected_revision`. Conflicts return `409`; missing
+resources return `422` with `ready:false` and `issues` without inventing a saved
+revision. Foreign profiles return `404`. Include `archived=true` in listing to
+inspect archived profiles. See OpenAPI for limits and optional resource fields.
+
+Tools reference `provider`, `tool`, `schema_revision` and `location` from the
+authorized resources response. Knowledge references are document IDs. Legacy
+workspace-admin connections remain administrator-owned, not personal credentials.
+Instructions cannot confer access, install a model or change execution policy.
+Ordinary Chat actors can inspect and control their own profile jobs, but not
+legacy administrator tasks or another actor's work. They cannot attach computer
+sessions or reconnect host access. Calculator/time tools need no external grant;
+service filesystem, network and administrator-owned MCP tools remain restricted
+until an applicable actor-use grant exists. Discovery and dispatch recheck
+current actor authority, including disablement or role changes, independently
+of the pinned profile and an older action approval.
+
+The system identity advertises `agent-profiles-v1` and, when session coordination
+is wired, `agent-conversations-v1`. Clients must check the latter before sending
+additive profile fields to an older generation endpoint; never silently fall
+back to ordinary Chat if the selected contract is unsupported.
+
+Submit a profile job with `profile_id`, `profile_revision`, `prompt` and
+`request_id` at `/api/v2/jobs`. Its installed model is selected from the revision;
+an explicit conflicting model is rejected. Admission pins instructions, Knowledge,
+tool identities and child-profile revisions. Later edits do not alter accepted
+work. An identical retry observes that same job even if the profile was archived
+after admission. Current tool authority is checked again before dispatch.
+
+`delegates` selects up to four direct child profiles owned by the same actor.
+Children cannot delegate or receive computer control. Their Knowledge and reviewed
+low-risk read tools must be subsets of the parent's selections. Child iteration
+reservations count against the parent's total budget; they are not extra budgets.
+
 ## Durable jobs and computer access
+
+Desktop application discovery uses `computer_applications` followed by
+`computer_find_applications` with a non-empty `query` and the catalog's saved
+`catalog_step`. Lookup searches the full saved catalog, including omitted model
+context entries and OS-registered aliases. Results include `resolution` (`unique`,
+`ambiguous`, or `not_found`), `total_matches` and optional `next_offset`, with at
+most 16 entries per page. Exact display-name/alias matches outrank fragments;
+duplicate exact names remain ambiguous. IDs are host-issued, not executable paths.
+
+Application launch must match the latest unique lookup. An unrelated ID receives
+`computer_application_lookup_required` before dispatch, with bounded corrective
+feedback. Catalog refresh, host-session replacement/revocation, a failed newer
+lookup or a user correction invalidates the selection. Old saved tasks also need
+a fresh lookup before a new launch. Already-dispatched launches retain their
+verification/reconciliation boundary; this change never retries them. Name lookup
+checks selection consistency, not whether the model perfectly understood prose.
 
 First-party tasks use `/api/v2/jobs`, not a separate history or runner:
 
@@ -538,6 +748,29 @@ need authentication. Use a new request ID for new work. Reuse it only when
 retrying the identical submission. Actor-scoped identical retries return the
 original task; conflicting reuse returns `409`. A `202` acknowledges persistence,
 not completion. Follow the returned `run_id` and `Location`.
+
+Trusted built-in argument or path rejection before filesystem entry is recorded
+as a rejected proposal with `effects: "none"`. The model has at most three
+corrective attempts; unrelated reads cannot reset this budget. Exhaustion pauses
+with the specific rejection, not a manual unknown-outcome requirement. This does
+not cover failures after directory creation, partial writes, or remote/native
+dispatch: those retain conservative uncertainty and are never automatically
+repeated. Provider error text cannot declare its own call safe to retry.
+
+Successful, typed native mutation results are journaled in the canonical task
+before the authenticated companion reply is acknowledged. Recovery binds the
+receipt to the actor, task, session, call, arguments and pinned capability.
+If acknowledgment or checkpoint handoff is lost, a matching saved receipt becomes
+an action step with `provenance: "companion_receipt"`; the job stays interrupted
+with `computer_result_recovered` until explicit resume. This does not certify
+the whole task, renew desktop consent or dispatch the action again. Missing,
+conflicting, failed or uncertain receipts leave uncertainty unresolved. A screen
+that merely resembles success is not proof that an external submission occurred.
+
+Manual reconciliation preserves the original call arguments and records
+`steps[].provenance: "human_reported"`. It does not independently verify declared
+outcomes. The owning actor and step timestamp identify the report; entering
+`done` cannot verify all task checks. Resume remains explicit.
 
 Submissions can include `computer_approval_mode`: `ask_every_time`,
 `scoped_changes`, or `full_task`. It is part of the request payload identity and

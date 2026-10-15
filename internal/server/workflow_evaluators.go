@@ -36,7 +36,7 @@ func (b *browserRunTools) ValidateWorkflowEdit(t *agents.Task, name string, args
 	if !t.Config.TaskFirst || t.Config.NativeWorkflowVersion == 0 || !nativeComputerDriver(t.Config.ComputerDriver) {
 		return nil
 	}
-	if name == "computer_create_document" || name == "computer_insert_text" || name == "computer_replace_selection" || (name == "computer_replace_text" && t.Config.NativeWorkflowVersion == agents.DocumentWorkflowEvidenceVersion) {
+	if name == "computer_create_document" || name == "computer_insert_text" || name == "computer_replace_selection" || (name == "computer_replace_text" && computer.DocumentTool(name, args)) {
 		return validateDocumentWorkflowEdit(t, name, args)
 	}
 	kind := ""

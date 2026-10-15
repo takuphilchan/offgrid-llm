@@ -86,7 +86,10 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	if s.agentManager != nil && s.agentManager.ActivityReplaySupported() {
 		identity.Capabilities = append(identity.Capabilities, "durable-agent-events-v2")
 		if s.agentRunner != nil {
-			identity.Capabilities = append(identity.Capabilities, "task-lifecycle-v2", "bounded-readonly-delegation-v1", "task-context-archive-v1")
+			identity.Capabilities = append(identity.Capabilities, "task-lifecycle-v2", "bounded-readonly-delegation-v1", "task-context-archive-v1", "agent-profiles-v1")
+			if s.sessionHandlers != nil && s.sessionHandlers.agentServer == s {
+				identity.Capabilities = append(identity.Capabilities, "agent-conversations-v1")
+			}
 		}
 		if s.agentRunner != nil && s.artifactStore != nil {
 			identity.Capabilities = append(identity.Capabilities, "verified-workspace-artifacts-v1")

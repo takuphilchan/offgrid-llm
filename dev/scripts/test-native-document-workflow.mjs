@@ -49,7 +49,30 @@ export function testEvidence(events, expected) {
   if (events.some(e => e.Action === 'fail') || !record.some(e => e.Action === 'pass')) throw Error('native_test_failed');
   const pass = record.find(e => e.Action === 'pass');
   if (!Number.isFinite(pass.Elapsed) || pass.Elapsed < 0) throw Error('invalid_test_evidence');
-  return {test:expected,status:'passed',elapsed_seconds:pass.Elapsed};
+  return {test:expected,status:'passed',elapsed_seconds:pass.Elapsed,measurements:measurementEvidence(record)};
+}
+
+// Only a closed numeric record is retained. Provider output, titles, arguments,
+// private text and unknown labels must never become performance evidence.
+export function measurementEvidence(events) {
+  const stages=['discovery','readiness','observation','preparation','input','verification','model','total'];
+  const empty=()=>({version:1,stages:Object.fromEntries(stages.map(stage=>[stage,null])),model_calls:null,prompt_tokens:null});
+  const records=events.filter(e=>e.Action==='output'&&typeof e.Output==='string'&&e.Output.includes('OFFGRID_NATIVE_METRICS '));
+  if(!records.length)return empty();
+  if(records.length!==1)throw Error('ambiguous_measurement_evidence');
+  const raw=records[0].Output.split('OFFGRID_NATIVE_METRICS ')[1].trim();
+  if(raw.length>4096)throw Error('invalid_measurement_evidence');
+  let report;
+  try {report=JSON.parse(raw);} catch {throw Error('invalid_measurement_evidence');}
+  const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
+  if(!exact(report,['version','stages','model_calls','prompt_tokens'])||report.version!==1||!exact(report.stages,stages))throw Error('invalid_measurement_evidence');
+  for(const value of Object.values(report.stages)) {
+    if(value===null)continue;
+    if(!exact(value,['calls','milliseconds'])||!Number.isSafeInteger(value.calls)||value.calls<1||!Number.isFinite(value.milliseconds)||value.milliseconds<0)throw Error('invalid_measurement_evidence');
+  }
+  for(const key of ['model_calls','prompt_tokens'])if(report[key]!==null&&(!Number.isSafeInteger(report[key])||report[key]<0))throw Error('invalid_measurement_evidence');
+  if(report.prompt_tokens!==null&&report.model_calls===null)throw Error('invalid_measurement_evidence');
+  return report;
 }
 
 export function cleanEnvironment(env, directory, port) {

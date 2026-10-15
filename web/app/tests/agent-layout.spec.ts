@@ -46,12 +46,14 @@ async function fixture(page: Page) {
   };
 }
 
-test('current composer has no legacy setup wall and keeps Start visible', async ({ page }, info) => {
-  await fixture(page); await page.setViewportSize({width:1440,height:900}); await page.goto('/ui/#/agents/new');
-  await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeInViewport();
+test('agent activity is a secondary inspector without a duplicate composer', async ({ page }, info) => {
+  await fixture(page); await page.setViewportSize({width:1440,height:900}); await page.goto('/ui/#/agents/workspace');
+  await expect(page.getByRole('heading',{name:'Recent tasks'})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Chat',exact:true}).last()).toBeInViewport();
+  await expect(page.getByRole('button',{name:'Start task',exact:true})).toHaveCount(0);
   await expect(page.locator('.task-card, .result-card, .computer-mode-picker')).toHaveCount(0);
-  await expect(page.locator('.task-composer')).toBeVisible();
-  await page.screenshot({path:info.outputPath('current-composer.png')});
+  await expect(page.locator('.task-composer')).toHaveCount(0);
+  await page.screenshot({path:info.outputPath('activity-empty.png')});
 });
 
 for (const width of [390, 768, 1024, 1440]) {

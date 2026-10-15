@@ -22,6 +22,8 @@ var (
 
 // Message represents a single chat message
 type Message struct {
+	JobID     string    `json:"job_id,omitempty"`
+	TurnID    string    `json:"turn_id,omitempty"`
 	Role      string    `json:"role"` // "user" or "assistant"
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
@@ -29,14 +31,15 @@ type Message struct {
 
 // Session represents a conversation session
 type Session struct {
-	Name         string          `json:"name"`
-	OwnerID      string          `json:"owner_id,omitempty"`
-	ModelID      string          `json:"model_id"`
-	Messages     []Message       `json:"messages"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
-	Turn         *Turn           `json:"turn,omitempty"`
-	TurnRequests map[string]bool `json:"turn_requests,omitempty"`
+	Jobs         []ConversationJobLink `json:"jobs,omitempty"`
+	Name         string                `json:"name"`
+	OwnerID      string                `json:"owner_id,omitempty"`
+	ModelID      string                `json:"model_id"`
+	Messages     []Message             `json:"messages"`
+	CreatedAt    time.Time             `json:"created_at"`
+	UpdatedAt    time.Time             `json:"updated_at"`
+	Turn         *Turn                 `json:"turn,omitempty"`
+	TurnRequests map[string]bool       `json:"turn_requests,omitempty"`
 }
 
 // SessionMeta contains lightweight session metadata for fast listing
@@ -51,11 +54,15 @@ type SessionMeta struct {
 
 // SessionManager handles session persistence with metadata caching
 type SessionManager struct {
-	sessionsDir string
-	mutationMu  sync.Mutex
-	mu          sync.RWMutex
-	metaCache   map[string]*SessionMeta // Cache of session metadata keyed by name
-	cacheValid  bool                    // Whether the cache is valid
+	// Optional deterministic storage fault hook for isolated persistence tests.
+	// Production uses writeSessionFileAtomic; this is never a client setting.
+	writeSessionFile func(string, []byte) error
+	sessionsDir      string
+	mutationMu       sync.Mutex
+	fileMu           sync.RWMutex // Readers must not hold a Windows file handle across replacement.
+	mu               sync.RWMutex
+	metaCache        map[string]*SessionMeta // Cache of session metadata keyed by name
+	cacheValid       bool                    // Whether the cache is valid
 }
 
 // NewSessionManager creates a new session manager
@@ -93,8 +100,15 @@ func (sm *SessionManager) save(session *Session) error {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}
 
-	if err := writeSessionFileAtomic(filePath, data); err != nil {
-		return fmt.Errorf("failed to write session file: %w", err)
+	write := sm.writeSessionFile
+	if write == nil {
+		write = writeSessionFileAtomic
+	}
+	sm.fileMu.Lock()
+	writeErr := write(filePath, data)
+	sm.fileMu.Unlock()
+	if writeErr != nil {
+		return fmt.Errorf("failed to write session file: %w", writeErr)
 	}
 
 	// Update metadata cache
@@ -172,7 +186,9 @@ func (sm *SessionManager) Load(name string) (*Session, error) {
 		return nil, err
 	}
 
+	sm.fileMu.RLock()
 	data, err := os.ReadFile(filePath)
+	sm.fileMu.RUnlock()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrSessionNotFound

@@ -1,4 +1,4 @@
-import type { components } from './schema.generated';
+import type { components, operations } from './schema.generated';
 import { readSessionStream, type SessionEvent } from './session-stream';
 import { readAgentStream } from './agent-stream';
 import { workflowText } from '../i18n/workflow';
@@ -27,6 +27,14 @@ export type ToolApproval = components['schemas']['ToolApproval'];
 export type AgentStep = components['schemas']['AgentStep'];
 export type AgentTask = components['schemas']['AgentTask'];
 export type AgentRun = components['schemas']['AgentRunResponse'];
+export type AgentProfile = components['schemas']['AgentProfile'];
+export type AgentProfileSettings = components['schemas']['AgentProfileSettings'];
+export type EffectiveAgentProfile = components['schemas']['EffectiveAgentProfile'];
+export type AgentCapabilityIdentity = components['schemas']['AgentCapabilityIdentity'];
+export type AgentSelection = components['schemas']['AgentSelection'];
+export type AgentResourceRestrictions = components['schemas']['AgentResourceRestrictions'];
+export type LinkedAgentTurn = components['schemas']['LinkedAgentTurn'];
+export type AgentTurnRequest = NonNullable<operations['generateSessionTurn']['requestBody']>['content']['application/json'] & { agent: AgentSelection; request_id: string };
 export type AgentTool = { name: string; description: string; enabled: boolean; source: string; capability?: { name: string; namespace: string; source: string; kind: string; risk: string; description?: string } };
 export type MCPServer = { name: string; url?: string; transport: string; tools: number; status: string };
 export type RunSummary = { id: string; status: string; started_at: string; updated_at: string; event_count: number; deletable?: boolean; data?: Record<string, unknown> };
@@ -71,7 +79,11 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
     try {
       const parsed = JSON.parse(body);
       data = parsed;
-      const candidate = parsed.error?.message ?? parsed.error ?? parsed.message;
+      const issues = Array.isArray(parsed.issues) ? parsed.issues.map((issue: unknown) => {
+        if (!issue || typeof issue !== 'object' || !('message' in issue) || typeof issue.message !== 'string') return '';
+        return issue.message;
+      }).filter(Boolean).slice(0, 4).join(' ') : '';
+      const candidate = parsed.error?.message ?? parsed.error ?? parsed.message ?? (issues || undefined);
       if (typeof candidate === 'string') message = candidate;
     } catch { /* text response */ }
     if (response.status === 401 && !path.startsWith('/v1/auth/') && path !== '/v1/users/me') window.dispatchEvent(new Event('offgrid:unauthenticated'));
@@ -144,11 +156,29 @@ export const api = {
   createSession: (name: string, modelID: string, signal?: AbortSignal) => request<ChatSession>('/v1/sessions', {
     method: 'POST', signal, body: JSON.stringify({ name, model_id: modelID })
   }),
-  deleteSession: (name: string) => request<{ success: boolean }>(`/v1/sessions/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  deleteSession: (name: string, work?: 'retain' | 'stop') => request<{ success: boolean; work_retained?: boolean }>(`/v1/sessions/${encodeURIComponent(name)}${work ? `?work=${work}` : ''}`, { method: 'DELETE' }),
   generateSession: (name: string, content: string, modelID: string, useKnowledgeBase: boolean, signal?: AbortSignal) => request<{ session: ChatSession; message: SessionMessage }>(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
     method: 'POST', signal, body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase })
   }),
-  currentTurn: (name: string, signal?: AbortSignal) => request<{ turn: SessionTurn | null }>(`/v1/sessions/${encodeURIComponent(name)}/turn`, { signal }),
+  currentTurn: (name: string, signal?: AbortSignal) => request<{ turn: SessionTurn | null; job?: AgentRun; recovery_required?: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/turn`, { signal }),
+  submitAgentTurn: async (name: string, data: AgentTurnRequest, signal?: AbortSignal) => {
+    // An older generate endpoint may ignore additive fields. Never let a saved
+    // agent selection silently turn into an unrestricted/plain Chat request.
+    const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system', {signal});
+    if (!identity.capabilities?.includes('agent-conversations-v1')) throw new APIError('This service does not support agent conversations. Update the service before retrying.', 409);
+    return request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/generate`, { method: 'POST', signal, body: JSON.stringify(data) });
+  },
+  recoverAgentTurn: (name: string, id: string) => request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/turn/recover`, { method: 'POST', body: JSON.stringify({id}) }),
+  agentProfiles: async (signal?: AbortSignal) => {
+    const result = await request<{profiles: AgentProfile[] | null}>('/api/v2/agent-profiles', {signal});
+    return result.profiles ?? [];
+  },
+  agentProfile: (id: string, revision?: number, signal?: AbortSignal) => request<AgentProfile>(`/api/v2/agent-profiles/${encodeURIComponent(id)}${revision ? `?revision=${revision}` : ''}`, {signal}),
+  effectiveAgentProfile: (id: string, revision: number, signal?: AbortSignal) => request<EffectiveAgentProfile>(`/api/v2/agent-profiles/${encodeURIComponent(id)}/effective?revision=${revision}`, {signal}),
+  agentProfileResources: (signal?: AbortSignal) => request<{tools: Record<string, AgentCapabilityIdentity>; computer_permitted: boolean; connection_scope: 'workspace-admin'}>('/api/v2/agent-profiles/resources', {signal}),
+  createAgentProfile: (settings: AgentProfileSettings) => request<AgentProfile>('/api/v2/agent-profiles', {method:'POST',body:JSON.stringify({settings})}),
+  updateAgentProfile: (id: string, expected_revision: number, settings: AgentProfileSettings) => request<AgentProfile>(`/api/v2/agent-profiles/${encodeURIComponent(id)}`, {method:'PUT',body:JSON.stringify({expected_revision,settings})}),
+  archiveAgentProfile: (id: string, expected_revision: number) => request<{id:string; archived:true}>(`/api/v2/agent-profiles/${encodeURIComponent(id)}/archive`, {method:'POST',body:JSON.stringify({expected_revision})}),
   cancelTurn: (name: string, id: string) => request<{ success: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/turn/cancel`, { method: 'POST', body: JSON.stringify({ id }) }),
   followTurn: async (name: string, id: string, onEvent: (event: SessionEvent) => void, signal: AbortSignal) => {
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/turn/events?id=${encodeURIComponent(id)}`, { credentials: 'same-origin', signal });

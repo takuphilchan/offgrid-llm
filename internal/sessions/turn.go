@@ -10,6 +10,9 @@ var ErrTurnConflict = errors.New("conversation turn changed or is still active")
 // Turn is a recoverable generation snapshot, separate from completed context.
 // A final answer and its completed status are committed in the SAME session file.
 type Turn struct {
+	Agent        *AgentSelection `json:"agent,omitempty"`
+	JobID        string          `json:"job_id,omitempty"`
+	JobAdmission string          `json:"job_admission,omitempty"`
 	ID           string          `json:"id"`
 	RequestHash  string          `json:"request_hash"`
 	Prompt       string          `json:"prompt"`
@@ -25,7 +28,17 @@ type Turn struct {
 	Metrics      json.RawMessage `json:"metrics,omitempty"`
 }
 
-func (t *Turn) Active() bool { return t != nil && (t.Status == "running" || t.Status == "pending") }
+func (t *Turn) Active() bool {
+	if t == nil {
+		return false
+	}
+	// An unresolved linked job cannot be replaced by another turn merely
+	// because it needs access, was interrupted, or has uncertain effects.
+	if t.JobAdmission != "" {
+		return t.Status != "completed" && t.Status != "failed" && t.Status != "cancelled"
+	}
+	return t.Status == "running" || t.Status == "pending"
+}
 
 func (s *ScopedManager) BeginTurn(name string, turn *Turn) (*Turn, bool, error) {
 	s.manager.mutationMu.Lock()
@@ -66,7 +79,7 @@ func (s *ScopedManager) SaveTurn(name string, turn *Turn) error {
 	if err != nil {
 		return err
 	}
-	if session.Turn == nil || session.Turn.ID != turn.ID || !session.Turn.Active() {
+	if session.Turn == nil || session.Turn.ID != turn.ID || !session.Turn.Active() || session.Turn.JobAdmission != "" || turn.JobAdmission != "" {
 		return ErrTurnConflict
 	}
 	session.Turn = turn

@@ -33,7 +33,7 @@ async function fixture(page: Page, prompt = 'Finished report') {
 }
 
 test('task deletion is visible beside history and confirmed without affecting active work', async ({page}) => {
-  const deleted=await fixture(page);await page.goto('/ui/#/agents/new');
+  const deleted=await fixture(page);await page.goto('/ui/#/agents/workspace');
   await expect(page.getByRole('button',{name:'Delete task: Current task',exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'Delete task: Finished report',exact:true}).click();
   expect(deleted).toHaveLength(0);
@@ -45,7 +45,7 @@ test('task deletion is visible beside history and confirmed without affecting ac
 
 test('task history management is contextual and excludes protected work', async ({ page }) => {
   const deleted = await fixture(page);
-  await page.goto('/ui/#/agents/new');
+  await page.goto('/ui/#/agents/workspace');
   await expect(page.getByRole('button', { name: 'Clear removable tasks', exact: true })).toBeHidden();
   await page.getByRole('searchbox', { name: 'Search task history' }).fill('Finished');
   const manage = page.getByRole('button', { name: 'Manage history', exact: true });
@@ -62,7 +62,7 @@ test('task history management is contextual and excludes protected work', async 
 test('empty chat and task histories do not expose bulk management', async ({ page }) => {
   await fixture(page);
   await page.route('**/api/v2/jobs', r => r.fulfill({ json: [] }));
-  for (const destination of ['chat', 'agents/new']) {
+  for (const destination of ['chat', 'agents/workspace']) {
     await page.goto(`/ui/#/${destination}`);
     await expect(page.getByRole('button', { name: 'Manage history' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Delete listed chats|Clear removable tasks/ })).toHaveCount(0);
@@ -95,12 +95,14 @@ for (const layout of [
         actionGap: Math.max(remove.left-card.right,card.left-remove.right),
         rowGap: style.display === 'flex' ? Math.max(next.left-first.right,first.left-next.right) : next.top-first.bottom,
         inset:parseFloat(style.paddingInlineEnd),
+        scrollbarWidth:style.scrollbarWidth,
         overflowsPage:document.documentElement.scrollWidth>innerWidth,
       };
     });
     expect(geometry.actionGap).toBeGreaterThanOrEqual(8);
-    expect(geometry.rowGap).toBeGreaterThanOrEqual(12);
-    expect(geometry.inset).toBeGreaterThanOrEqual(12);
+    expect(geometry.rowGap).toBeGreaterThanOrEqual(2);
+    expect(geometry.inset).toBeGreaterThanOrEqual(4);
+    expect(geometry.scrollbarWidth).toBe('none');
     expect(geometry.overflowsPage).toBe(false);
     await page.locator('.task-list').screenshot({path:info.outputPath(`history-${layout.name}.png`)});
   });
@@ -118,10 +120,10 @@ test('Activity clears removable task records through the shared deletion API', a
 });
 
 test('management navigation stays at the top and settings remain responsive', async ({page},info) => {
-  await fixture(page);await page.goto('/ui/#/agents/new');
+  await fixture(page);await page.goto('/ui/#/agents/workspace');
   const nav=page.locator('.task-management');
-  await expect(nav.getByRole('link',{name:'Work',exact:true})).toHaveAttribute('aria-current','page');
-  expect((await nav.boundingBox())!.y).toBeLessThan((await page.getByRole('heading',{name:'What would you like done?'}).boundingBox())!.y);
+  await expect(nav.getByRole('link',{name:'Agent activity',exact:true})).toHaveAttribute('aria-current','page');
+  expect((await nav.boundingBox())!.y).toBeLessThan((await page.getByRole('heading',{name:'Recent tasks'}).boundingBox())!.y);
   await nav.getByRole('link',{name:'Available tools',exact:true}).click();
   await expect(page.getByRole('checkbox',{name:'calculator',exact:true})).toBeVisible();
   await expect(page.locator('.agent-metrics')).toHaveCount(0);

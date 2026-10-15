@@ -102,6 +102,7 @@ func TestPackageEntryRejectsUnboundedOrExecutableMetadata(t *testing.T) {
 		valid         bool
 	}{
 		{"valid", `<Package><Applications><Application Id="Editor" Executable="App\Editor.exe"/></Applications></Package>`, true},
+		{"missing-executable", `<Package><Applications><Application Id="Editor" Executable="App\Missing.exe"/></Applications></Package>`, false},
 		{"no-entry", `<Package><Applications><Application Id="Other" Executable="Editor.exe"/></Applications></Package>`, false},
 		{"duplicate", `<Package><Applications><Application Id="Editor" Executable="A.exe"/><Application Id="Editor" Executable="B.exe"/></Applications></Package>`, false},
 		{"traversal", `<Package><Applications><Application Id="Editor" Executable="..\outside.exe"/></Applications></Package>`, false},
@@ -113,6 +114,12 @@ func TestPackageEntryRejectsUnboundedOrExecutableMetadata(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
+			if err := os.Mkdir(filepath.Join(root, "App"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "App", "Editor.exe"), []byte("metadata fixture, not launched"), 0600); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(filepath.Join(root, "AppxManifest.xml"), []byte(test.content), 0600); err != nil {
 				t.Fatal(err)
 			}

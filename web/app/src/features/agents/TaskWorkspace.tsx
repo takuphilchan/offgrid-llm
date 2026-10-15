@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { APIError, api, type AgentTask, type Model } from "../../api/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, type AgentTask } from "../../api/client";
 import { useI18n } from "../../i18n";
 import { taskWorkspaceText } from "../../i18n/task-workspace";
 import { computerExperience } from "../../i18n/computer-experience";
-import {
-  clearSubmittedDraft,
-  draftKey,
-  readDraft,
-  useDraft,
-  writeDraft,
-} from "../../lib/drafts";
+import { useDraft } from "../../lib/drafts";
 import { useWorkspaceRefresh } from "../../lib/workspace-refresh";
-import { ModelSelect } from "../../components/ModelSelect";
 import {
   HistoryDeleteDialog,
   type HistoryItem,
@@ -31,20 +24,11 @@ import { DocumentProgress } from './DocumentProgress';
 import { TaskResult } from './TaskResult';
 import { TaskContinuation } from './TaskContinuation';
 import { taskStopText } from '../../i18n/task-presentation';
-import { VoiceInputButton } from "../../components/VoiceInputButton";
-import { VoiceSettings } from "../../components/VoiceSettings";
-import { EmptyState, ScopedNotice, SectionHeading } from '../../components/WorkspacePresentation';
+import { EmptyState, ScopedNotice } from '../../components/WorkspacePresentation';
 import { HistoryToolbar } from '../../components/HistoryToolbar';
 import { useWorkspaceState } from '../../lib/workspace-context';
-import { SetupLink } from '../../lib/setup-handoff';
-import { useDraftScope } from '../../lib/draft-scope';
 import { useWorkActions } from '../../lib/active-work';
-import { TaskAccessPolicy, taskComputerPolicy } from './TaskAccessPolicy';
 import { taskAccessText } from '../../i18n/task-access';
-import { taskDesktopText } from '../../i18n/task-desktop';
-import { grantTaskDesktop } from './TaskDesktopAccess';
-import {ensureDesktopSessionAccess} from './desktopSessionAccess';
-import {taskSessionAccessText} from '../../i18n/task-session-access';
 
 function taskFromLocation() {
   const part = window.location.hash.match(
@@ -55,36 +39,17 @@ function taskFromLocation() {
 export function TaskWorkspace({
   scope,
   workspace,
-  models,
-  model,
-  setModel,
-  available = true,
 }: {
   scope: string;
   workspace: string;
-  models: Model[];
-  model: string;
-  setModel: (value: string) => void;
-  available?: boolean;
 }) {
   const { locale, messages: text } = useI18n(),
     copy = taskWorkspaceText(locale),
     experience = computerExperience(locale);
-  const draft = useDraft(useDraftScope(), "agent-task");
-  const policyDraft = useDraft(useDraftScope(), 'agent-computer-policy');
-  const computerPolicy = taskComputerPolicy(policyDraft.value);
-  const scopeDraft=useDraft(useDraftScope(),'agent-computer-scope');
-  const computerScope=window.electron?.desktopComputerProtocol===3?(scopeDraft.value==='selected_window'?'selected_window':'desktop'):undefined;
-  const [consentTask,setConsentTask]=useState('');
   const work = useWorkActions();
   const selected = useDraft(`${scope}:workspace:${workspace}`, "agent-run");
-  const [id, setID] = useState(() =>
-    window.location.hash === "#/agents/new"
-      ? ""
-      : taskFromLocation() || selected.value,
-  );
+  const [id, setID] = useState(() => taskFromLocation() || (window.location.hash === '#/agents/workspace' ? selected.value : ''));
   const { run, connection, error: readError, refresh } = useTaskRun(id);
-  const refreshRun=useRef(refresh);refreshRun.current=refresh;
   // Only an explicit Stop aborts setup; navigation/reconnect never cancels work.
   const accessCancellation = useMemo(() => new AbortController(), [run?.pending_input?.id]);
   const [tasks, setTasks] = useState<AgentTask[]>([]),
@@ -100,7 +65,6 @@ export function TaskWorkspace({
   const [stopState, setStopState] = useState<'idle' | 'pending' | 'unconfirmed'>('idle');
   const [deleting, setDeleting] = useState<HistoryItem[] | null>(null);
   const lock = useRef(false),
-    editor = useRef<HTMLTextAreaElement>(null),
     heading = useRef<HTMLHeadingElement>(null);
   const generation = useRef(0);
   const currentID = useRef(id);
@@ -136,7 +100,7 @@ export function TaskWorkspace({
   useWorkspaceRefresh(refreshHistory);
   useEffect(() => {
     const change = () => {
-      if (window.location.hash === "#/agents/new") setID("");
+      if (window.location.hash === "#/agents/new" || window.location.hash === "#/agents/workspace") setID("");
       else if (taskFromLocation()) setID(taskFromLocation());
     };
     window.addEventListener("hashchange", change);
@@ -151,51 +115,10 @@ export function TaskWorkspace({
   }, [id]);
   const select = (next: string) => {
     setID(next);
-    window.location.hash = next ? `#/agents/task/${next}` : "#/agents/new";
+    window.location.hash = next ? `#/agents/task/${next}` : "#/agents/workspace";
     requestAnimationFrame(() =>
-      next ? heading.current?.focus() : editor.current?.focus(),
+      heading.current?.focus(),
     );
-  };
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!available || lock.current || !draft.value.trim() || !model) return;
-    lock.current = true;
-    setBusy(true);
-    setError("");
-    const submitted = draft.value,
-      prompt = submitted.trim();
-    const key = draftKey(`${scope}:workspace:${workspace}`, "agent-submission");
-    // A lost acknowledgment retries the same durable request, including reload.
-    let request: { prompt: string; model: string; id: string; computer_approval_mode?: typeof computerPolicy;computer_scope?:'desktop'|'selected_window' } | undefined;
-    try {
-      request = JSON.parse(readDraft(key));
-    } catch {}
-    // Preserve a pre-upgrade lost acknowledgment with its original payload.
-    // Only a deliberate policy edit changes that legacy intent.
-    if (!request || request.prompt !== prompt || request.model !== model || (request.computer_scope!==computerScope && scopeDraft.value!=='') || (request.computer_approval_mode !== computerPolicy && (request.computer_approval_mode !== undefined || policyDraft.value !== '')))
-      request = { prompt, model, id: crypto.randomUUID(), computer_approval_mode: computerPolicy,computer_scope:computerScope };
-    writeDraft(key, JSON.stringify(request));
-    try {
-      if(request.computer_scope==='desktop'&&request.computer_approval_mode==='full_task')await ensureDesktopSessionAccess(workspace);
-      const next = await api.submitJob(prompt, model, request.id, request.computer_approval_mode,request.computer_scope);
-      clearSubmittedDraft(draft.key, submitted);
-      clearSubmittedDraft(key, JSON.stringify(request));
-      select(next.run_id);
-      void refreshHistory();
-      if(next.pending_input?.mode==='desktop'&&next.requested_computer_scope==='desktop'&&window.electron?.desktopComputerProtocol===3){
-        setConsentTask(next.run_id);
-        await grantTaskDesktop(next,workspace);
-        await refreshRun.current();
-      }
-    } catch (e) {
-      if (e instanceof APIError && typeof e.data?.run_id === "string")
-        select(e.data.run_id);
-      setError(e instanceof Error ? e.message : text.common.error);
-    } finally {
-      lock.current = false;
-      setBusy(false);
-      setConsentTask('');
-    }
   };
   const act = async (
     action: TaskCommand,
@@ -248,10 +171,8 @@ export function TaskWorkspace({
     <div className="task-workspace">
       <AgentNavigation />
       <aside className="task-list" aria-label={text.agentRuntime.history}>
-        {(id || tasks.length > 0) && <button className="secondary-button" onClick={() => select("")}>
-          {copy.newTask}
-        </button>}
-        <HistoryToolbar query={query} onQuery={value => { setQuery(value); setLimit(20); }} searchLabel={text.history.searchTasks} count={tasks.length} refresh={() => void refreshHistory()} clearLabel={text.history.clearTasks} clearDisabled={!filtered.some(t => t.deletable)} clear={() => setDeleting(filtered.filter(t => t.deletable).map(t => ({ id: t.id, label: t.prompt })))} protection={text.history.protectedTasks} />
+        <a className="secondary-button task-chat-link" href="#/chat">{text.nav.chat}</a>
+        <HistoryToolbar query={query} onQuery={value => { setQuery(value); setLimit(20); }} searchLabel={text.history.searchTasks} title={text.agentRuntime.history} count={tasks.length} refresh={() => void refreshHistory()} clearLabel={text.history.clearTasks} clearDisabled={!filtered.some(t => t.deletable)} clear={() => setDeleting(filtered.filter(t => t.deletable).map(t => ({ id: t.id, label: t.prompt })))} protection={text.history.protectedTasks} />
         {historyError && <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refreshHistory()}>{text.common.retry}</button>}>{historyError}</ScopedNotice>}
         {!historyError && !tasks.length && (historyLoading ? <p role="status">{text.common.loading}</p> : <EmptyState title={text.agentRuntime.noTasks} />)}
         {!!tasks.length && !filtered.length && <EmptyState title={text.history.noMatches} />}
@@ -279,44 +200,13 @@ export function TaskWorkspace({
           </button>
         )}
       </aside>
-      <section className={id ? 'task-surface' : 'task-surface task-entry'} aria-label={text.agents.task}>
+      <section className={id ? 'task-surface' : 'task-surface task-activity-entry'} aria-label={text.agentRuntime.history}>
         {!id ? (
-          <form className="task-composer" onSubmit={submit}>
-            <SectionHeading title={copy.title} />
-            <div className="composer task-prompt">
-            <label className="composer-input">
-              <span className="sr-only">{text.agents.task}</span>
-              <textarea
-                ref={editor}
-                rows={6}
-                value={draft.value}
-                placeholder={text.agents.placeholder}
-                onChange={(e) => draft.setValue(e.target.value)}
-                aria-describedby="task-first-hint"
-              />
-              </label>
-            <div className="composer-context">
-              <ModelSelect models={models} value={model} onChange={setModel} />
-              <TaskAccessPolicy value={computerPolicy} onChange={policyDraft.setValue} disabled={busy || !available} scope={computerScope} onScopeChange={scopeDraft.setValue} workspace={workspace} />
-              <VoiceSettings />
-            </div>
-            <div className="composer-footer">
-              <p id="task-first-hint" className="composer-hint">{computerScope==='desktop'?(computerPolicy==='full_task'&&window.electron?.enableDesktopAccess?taskSessionAccessText(locale).hint:taskDesktopText(locale).hint):copy.hint}</p>
-              <div className="composer-actions">
-                <VoiceInputButton contextKey={draft.key} disabled={busy} onTranscript={value => draft.setValue(draft.value ? `${draft.value} ${value}` : value)} />
-                <button className="primary-button" disabled={!available || busy || !draft.value.trim() || !model}>
-                  {busy ? text.common.loading : copy.start}
-                </button>
-              </div>
-            </div>
-            </div>
-            {!model && (
-              <p role="status">
-                {copy.noModel} <SetupLink destination="models" draft={{ kind: 'task', id: '' }}>{text.nav.models}</SetupLink>
-              </p>
-            )}
-            {(draft.unsaved || policyDraft.unsaved) && <p role="alert">{text.recovery.draftWarning}</p>}
-          </form>
+          <div className="task-activity-empty">
+            <h2 tabIndex={-1} ref={heading}>{text.agentRuntime.history}</h2>
+            {!tasks.length && !historyLoading && <p>{text.agentRuntime.noTasks}</p>}
+            <a className="secondary-button" href="#/chat">{text.nav.chat}</a>
+          </div>
         ) : (
           <section className="task-detail" aria-labelledby="task-title">
             <header>
@@ -373,7 +263,7 @@ export function TaskWorkspace({
             {stopState !== 'idle' && <ScopedNotice kind={stopState === 'unconfirmed' ? 'error' : 'status'}>{taskStopText(locale)[stopState]}</ScopedNotice>}
             {run?.pending_input && run.status === "waiting_for_input" && (
               <TaskAccess
-                initialConsentPending={consentTask===run.run_id}
+                initialConsentPending={false}
                 key={run.pending_input.id}
                 run={run}
                 workspace={workspace}
@@ -418,7 +308,7 @@ export function TaskWorkspace({
             {run && <TaskEvidence key={`evidence:${run.run_id}`} run={run} />}
             {run && <TaskResult key={`result:${run.run_id}`} run={run} />}
             {run?.error && <p role="alert">{run.error}</p>}
-            {run && <TaskContinuation key={`continuation:${run.run_id}`} run={run} scope={`${scope}:workspace:${workspace}`} refresh={refresh} newDraftExists={!!draft.value.trim()} createDraft={value => { if (!draft.value.trim()) { draft.setValue(value || title); select(''); } }} />}
+            {run && <TaskContinuation key={`continuation:${run.run_id}`} run={run} scope={`${scope}:workspace:${workspace}`} refresh={refresh} />}
             {run && <TaskDetails key={`details:${run.run_id}`} run={run} onError={setError} childStatus={child => status(tasks.find(t => t.id === child)?.status ?? 'pending')} />}
             {!!run?.steps.length && (
               <details className="task-activity">

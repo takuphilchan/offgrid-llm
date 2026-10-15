@@ -101,6 +101,10 @@ and package revision, not just the product name or package family. Activation
 uses the OS registration with no supplied command or arguments. A package update
 invalidates an earlier prepared launch; refresh discovery before continuing.
 
+Windows validates each registered package path using its opened object's final
+path. This avoids requiring directory-list access to the protected WindowsApps
+parent while still rejecting path redirection. No folder permissions are changed.
+
 Readiness independently checks process identity, the signed-in desktop session
 and an observable application surface. Reusing an existing process is supported;
 that does **not** mean its current document is new or blank. Checks wait at most
@@ -118,7 +122,17 @@ work; catalog tests alone do not qualify them. See the
 
 Developers can run catalog-only validation using
 `OFFGRID_TEST_APPLICATION_DISCOVERY=1 go test -v ./internal/computer -run TestInstalledApplicationCatalogReadOnly`.
-It does not activate apps. Real package-activation tests are separate: use a
+It does not activate apps. To assert that a particular installed package is
+included, use the read-only test below in PowerShell (the package must already
+exist; this does not install or launch it):
+
+```powershell
+$env:OFFGRID_TEST_DISCOVERY_AUMID = 'Microsoft.WindowsNotepad_8wekyb3d8bbwe!App'
+try { go test -v ./internal/computer -run '^TestRegisteredPackageDiscoveryReadOnly$' -count=1 }
+finally { Remove-Item Env:OFFGRID_TEST_DISCOVERY_AUMID }
+```
+
+Real package-activation tests are separate: use a
 disposable signed-in `OffGridTest-*` Windows account, set
 `OFFGRID_NATIVE_ISOLATED_DESKTOP=1`, `OFFGRID_TEST_NATIVE_WINDOWS=1`, and
 `OFFGRID_TEST_NATIVE_PACKAGE_APPLICATION` to the exact OS-registered AUMID of the
@@ -207,8 +221,9 @@ insertion. Missing capabilities must be shown as unavailable.
 | --- | --- | --- | --- |
 | Registered application discovery/launch | Executable and packaged identities; native acceptance required | Not supplied by this document change | Not supplied by this document change |
 | Selected-window controls and supported whole-value replacement | Existing preview | Existing preview; Accessibility permission required | Existing preview; native build/session required |
-| Distinct document/tab inventory, creation and selection | Staged relationship-based inventory/selection backend; creation profiles and activation pending | Provider integration pending | Provider integration pending |
-| Exact document insertion and selection-only replacement | Staged TextPattern/Unicode input backend; not advertised or native-qualified | Provider integration pending | Provider integration pending |
+| Distinct document/tab inventory and selection | Negotiated UIA relationship-based preview | AXTabs/AXContents provider implemented; macOS build/native checks unverified | Retained AT-SPI objects; owned GTK inventory/read fixture passes on isolated Xvfb |
+| New blank document | Exact packaged Notepad profile below; native acceptance unverified | Reviewed creation profiles not implemented | Reviewed creation profiles not implemented |
+| Exact document insertion and selection-only replacement | TextPattern/Unicode input preview; native acceptance unverified | Settable AX range/text/value operations implemented; require explicit composition evidence; unverified on macOS | Text/EditableText operations implemented, but unavailable without a reviewed composition provider |
 | Document-aware verification and recovery display | Shared v2 contracts and current clients; requires matching provider | Same shared contracts, not platform qualification | Same shared contracts, not platform qualification |
 
 No installed editor/app-version range is currently qualified for the new
@@ -218,6 +233,22 @@ The Windows owned fixture, AppKit fixture and GTK fixture are test targets, not
 substitutes for those installed applications. macOS Intel and Apple Silicon,
 Linux X11 and Linux Wayland each need separate results. Passing compilation,
 contract tests or Xvfb checks does not qualify another desktop environment.
+
+The initial Windows creation profile is limited to AUMID
+`Microsoft.WindowsNotepad_8wekyb3d8bbwe!App`, package
+`Microsoft.WindowsNotepad_11.2607.14.0_x64__8wekyb3d8bbwe`. It requires the
+observed WinUI tab group, selected tab, content presenter and enabled AddButton
+in the expected relationship. A package update or different layout is not
+automatically compatible. Invocation is attempted once and must produce a
+distinct, independently observed blank document; it is not a successful result
+merely because the button accepted input. This implementation profile has not
+passed the installed Notepad test. Browser creation profiles are still missing.
+
+Negotiating the document protocol does not imply support for every operation.
+AX input requires explicit marked-text state plus the appropriate settable
+attributes. The generic AT-SPI provider reports composition as unknown and does
+not offer document edits or creation; a reviewed toolkit profile is still
+required. OffGrid does not interpret a missing composition API as safe to type.
 
 Document reads are limited to complete 64 KiB UTF-8 snapshots and revision-bound
 4 KiB pages. A single input is limited to 16,000 UTF-8 bytes. A truncated preview,
@@ -284,6 +315,12 @@ their exact baselines afterward. Test selection-only replacement separately:
 If a run says **Outcome unknown**, do not rerun its input to obtain a green
 status. Inspect the disposable target and preserve the recorded action. Missing
 provider support, verification failure and uncertain input are different results.
+
+If manual reconciliation is necessary, describe only what you actually observed.
+The saved report is labelled human-reported and retains the original action;
+it does not automatically verify other task checks. `Done` alone is not evidence
+that the requested text matches. Known pre-execution argument/path rejections
+use bounded repair instead of asking you to report an unknown mutation.
 
 Use a disposable document or draft, not valuable unsaved work.
 

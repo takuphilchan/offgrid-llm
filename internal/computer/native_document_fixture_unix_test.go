@@ -163,6 +163,40 @@ func runUnixDocumentFixture(t *testing.T, create func() (NativeAdapter, error)) 
 	if ready.Kind != "ready" || len(ready.Documents) != 2 || ready.Selected != 0 || ready.Documents[0].Text != "Synthetic lifecycle content" || ready.Documents[1].Text != "Untouched — café 日本語 12345" {
 		t.Fatal("unexpected baseline")
 	}
+	// The GTK fixture now exposes actual tab-to-editor ancestry. Exercise the
+	// production document reader against it, not only the private state oracle.
+	var originalDocument string
+	readDocument := func(expected string, count int) {
+		t.Helper()
+		if runtime.GOOS != "linux" {
+			return
+		}
+		provider, ok := driver.(NativeDocumentProvider)
+		if !ok {
+			t.Fatal("document provider missing")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		binding := ControlBinding{Actor: "fixture", Task: "fixture", Companion: "fixture", Session: "fixture", Target: target.Identity}
+		inv, snap, err := provider.ReadDocument(ctx, binding)
+		if err != nil || len(inv.Documents) != count || snap.Text != expected || !snap.Complete {
+			t.Fatalf("native document read: count=%d complete=%v error=%v", len(inv.Documents), snap.Complete, err)
+		}
+		if originalDocument == "" {
+			originalDocument = snap.Binding.Document
+		} else if count == 3 && expected == "" && snap.Binding.Document == originalDocument {
+			t.Fatal("new document reused old identity")
+		}
+		if snap.Composition != "unknown" {
+			t.Fatal("generic AT-SPI fabricated composition state")
+		}
+		for _, doc := range inv.Documents {
+			if doc.Capabilities.InsertText || doc.Capabilities.ReplaceSelection {
+				t.Fatal("unknown composition advertised input")
+			}
+		}
+	}
+	readDocument(ready.Documents[0].Text, 2)
 	send(map[string]any{"kind": "delay", "delay_ms": 200})
 	created := send(map[string]any{"kind": "new"})
 	if len(created.Documents) != 2 {
@@ -176,11 +210,13 @@ func runUnixDocumentFixture(t *testing.T, create func() (NativeAdapter, error)) 
 	if len(created.Documents) != 3 || created.Selected != 2 || created.Documents[2].ID == ready.Documents[0].ID || created.Documents[2].ID == ready.Documents[1].ID || created.Documents[2].Text != "" || created.Editor != ready.Editor {
 		t.Fatal("distinct blank tab in reused editor missing")
 	}
+	readDocument("", 3)
 	text := "OffGrid test — café 日本語 12345 😀 e\u0301 مرحبا"
 	edited := send(map[string]any{"kind": "text", "text": text})
 	if edited.Documents[2].Text != text {
 		t.Fatal("Unicode fixture oracle mismatch")
 	}
+	readDocument(text, 3)
 	for i := 0; i < 2; i++ {
 		if edited.Documents[i] != ready.Documents[i] {
 			t.Fatal("unrelated document changed")

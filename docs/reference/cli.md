@@ -7,6 +7,50 @@ Examples assume the executable is on `PATH`. In PowerShell, use
 
 ## Service connection
 
+### Reusable agents and saved conversations
+
+`offgrid agent profiles list|show|effective|resources` reads the connected
+service's actor-owned profiles and authorized resources. `create FILE`,
+`update ID REVISION FILE`, and `archive ID REVISION` manage them without running
+tools. FILE is a ProfileSettings JSON object (or `-` for stdin), for example:
+
+```json
+{"name":"Writer","model":"your-installed-model","instructions":"Keep answers concise.","max_iterations":10}
+```
+
+Use the exact ID and revision returned by the service:
+
+```sh
+offgrid agent run "Summarize the available notes" --profile PROFILE_ID --profile-revision 1 --request-id notes-request-001
+offgrid session create Notes --model your-installed-model
+offgrid session send Notes --profile PROFILE_ID --profile-revision 1 --request-id notes-turn-001 "Help me plan the outline"
+offgrid session chat Notes --profile PROFILE_ID --profile-revision 1
+offgrid session turn Notes
+offgrid agent status RUN_ID
+```
+
+Profile chat supports `/status`, `/pause`, `/stop`, `/resume`, `/recover` and
+`/exit`. A correction while steerable is queued on the same job, not submitted
+as another task. Access/approval/uncertain states do not automatically accept a
+new task. Exiting or losing the terminal does not cancel durable work; `/stop`
+is explicit. Existing `agent chat --model MODEL` remains a task-per-prompt
+compatibility client; `session chat` is the conversation-aware profile client.
+
+`--wait` on `agent run` or `session send` observes canonical job events. Without
+it, commands return the saved state. `--json` returns structured state without
+waiting or interactive consent; successful admission is not task completion.
+Inspect `status`, pending access/approval, `uncertain_call_id` and verification.
+Commands report transport/conflict failures rather than replaying mutations.
+Preserve the request ID and exact payload after a lost reply; inspect first.
+
+`session recover NAME REQUEST_ID` explicitly completes bookkeeping or attaches
+saved output, never repeats tools. Profile commands reject old services before
+submission; they never fall back to plain Chat or a local agent executor.
+Delete active conversations explicitly with `session delete NAME --work retain`
+to keep the job, or `--work stop` to require confirmed stopping first. Without a
+choice, active work prevents deletion. Profile revisions and permission checks
+remain server-owned; instructions or CLI flags cannot grant desktop access.
+
 For typed speech/language/embedding discovery and managed speech package operations,
 use `offgrid model help`. `model list|catalog --category asr|tts|language|embeddings`,
 `discover`, `preview`, `install`, `status`, `cancel`, `resume`, `repair`, `verify`,

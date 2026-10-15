@@ -4,11 +4,69 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 const maxProposalRepairs = 3
 const proposalRepairLimitCode = "tool_proposal_repair_limit"
+
+// A runner-only marker, not a tool identity. Do not replace an outstanding
+// access, read, expectation or edit repair with a weaker sequencing repair.
+const computerToolSequenceRepair = ":computer_tool_sequence"
+
+// Reject the entire model batch before queuing, authorization or dispatch.
+// Executing just the first call or serializing the proposed batch would accept
+// actions planned from observations the model has not actually received.
+func (r *Runner) rejectComputerToolBatch(task *Task, message api.ChatMessage) (*Task, error) {
+	cp := task.Checkpoint
+	message.ToolCalls = append([]api.ToolCall(nil), message.ToolCalls...)
+	for i := range message.ToolCalls {
+		call := &message.ToolCalls[i]
+		args, err := CanonicalArguments(json.RawMessage(call.Function.Arguments))
+		if err != nil {
+			return r.fail(task, "Model returned invalid tool arguments.")
+		}
+		call.ID, call.Type, call.Function.Arguments = "call-"+runID(), "function", string(args)
+	}
+	cp.Iteration++
+	cp.Messages = append(cp.Messages, message)
+	cp.ProposalRepairs++
+	cp.ProposalUnresolved = true
+	if cp.ProposalTool == "" {
+		cp.ProposalTool = computerToolSequenceRepair
+		cp.SequenceRepairTool = message.ToolCalls[0].Function.Name
+		cp.SequenceRepairCompleted = false
+	}
+	result := `{"error":"computer_multiple_tool_calls","effects":"none","verified":false,"message":"No calls in this response were executed. Return exactly ONE tool call, wait for its result, then plan the next step from that result. Earlier completed actions and outstanding checks remain in effect; do not repeat a launch or input that already ran."}`
+	for _, call := range message.ToolCalls {
+		cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: result})
+		task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "rejected", ToolName: call.Function.Name, ToolArgs: call.Function.Arguments, ToolResult: result, Timestamp: time.Now().UTC()})
+	}
+	// The batch never becomes executable checkpoint state, even on restart.
+	if err := r.persistProposalRepair(task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+func resolveComputerToolSequence(cp *Checkpoint, tool string) {
+	// Only completing the first rejected dependency repairs its sequence.
+	// Catalog/plan/history reads cannot erase a still-rejected launch or input.
+	if cp.ProposalTool != computerToolSequenceRepair {
+		return
+	}
+	if cp.SequenceRepairTool == tool {
+		cp.SequenceRepairCompleted = true
+	}
+	// Keep completed dependency progress across a stronger outstanding read
+	// repair. Its subsequent verification must not require launching again.
+	if cp.SequenceRepairCompleted && cp.NativeReadRepair == nil && !cp.WorkflowEditPending {
+		cp.ProposalRepairs, cp.ProposalUnresolved, cp.ProposalTool = 0, false, ""
+		cp.SequenceRepairTool = ""
+		cp.SequenceRepairCompleted = false
+	}
+}
 
 // A blocked relaunch of an already verified application is repaired by real
 // control progress, not another catalog query. Unverified/uncertain launches
@@ -27,7 +85,13 @@ func advancedVerifiedApplicationRepair(task *Task, tool string) bool {
 		var result struct {
 			Code string `json:"error"`
 		}
-		return json.Unmarshal([]byte(step.ToolResult), &result) == nil && result.Code == "computer_application_already_ready"
+		if json.Unmarshal([]byte(step.ToolResult), &result) != nil {
+			return false
+		}
+		if result.Code == "computer_multiple_tool_calls" {
+			continue
+		}
+		return result.Code == "computer_application_already_ready"
 	}
 	return false
 }
@@ -39,6 +103,14 @@ func proposalRecovery(task *Task, tool string, failure *ToolAuthorizationError) 
 		return ""
 	}
 	switch failure.Code {
+	case "computer_application_lookup_required":
+		if task.Config.ComputerSession != "" && task.Config.ComputerScope == "desktop" && tool == "computer_open_application" {
+			return "Search the latest full application catalog by the requested name using computer_find_applications. Use only its unique matching ID. Ask for clarification if missing or ambiguous; do not guess a substitute. This rejection happened before dispatch."
+		}
+	case "host_access_required":
+		if task.Config.TaskFirst && task.ParentID == "" && task.Config.ComputerSession != "" {
+			return "No service file operation was dispatched. This is a host path: inspect the native application and use its document tools. Desktop access grants no direct host filesystem API. Do not translate the path or substitute a service artifact."
+		}
 	case "workflow_control_expectation_required":
 		if usesWorkflow(task) && task.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion && (tool == "computer_create_document" || tool == "computer_insert_text" || tool == "computer_replace_selection" || tool == "computer_replace_text") {
 			return "Preserve existing checks. Before creation declare document_blank with target_id and the observed command. Before editing declare document_edit_matches with target_id, document, snapshot, edit_mode and exact requested text. Use computer_documents then computer_read_text when references changed. Never invent a future document or repeat dispatched input."
@@ -74,11 +146,17 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	cp := task.Checkpoint
 	cp.ProposalRepairs++
 	cp.ProposalUnresolved = true
+	if failure.Code == "host_access_required" || failure.Code == "tool_write_rejected" {
+		cp.PreEffectRepairs++
+	}
 	if failure.Code == "workflow_control_expectation_required" {
 		cp.WorkflowEditPending = true
 	}
 	if len(cp.Calls) > 0 {
 		cp.ProposalTool = cp.Calls[0].Function.Name
+		if failure.Code == "host_access_required" {
+			cp.PreEffectRepair, cp.PreEffectRepairTool = true, cp.ProposalTool
+		}
 	}
 	// Other calls in the same model batch may depend on this invalid proposal.
 	// Complete their tool-message pairs as not executed, never dispatch them.
@@ -96,11 +174,46 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	return r.persistProposalRepair(task)
 }
 
+// Known no-effects rejection can be repaired by the same service operation or
+// its typed host equivalent. Observation/catalog/calculator reads are not edit
+// progress. Provider-chosen tool names never qualify as native evidence.
+func resolvePreEffectRepair(cp *Checkpoint, tool string, descriptor capabilities.Descriptor) {
+	if !cp.PreEffectRepair {
+		return
+	}
+	original := cp.PreEffectRepairTool
+	if original == "" { // Checkpoints written before the explicit origin field.
+		original = cp.ProposalTool
+	}
+	repaired := tool == original && descriptor.Source == "builtin" && descriptor.Namespace == "tools"
+	if companionCapability(descriptor) {
+		switch original {
+		case "write_file":
+			repaired = tool == "computer_insert_text" || tool == "computer_replace_selection" || tool == "computer_replace_text"
+		case "read_file":
+			repaired = tool == "computer_read_text"
+		}
+	}
+	if !repaired {
+		return
+	}
+	cp.PreEffectRepair, cp.PreEffectRepairTool = false, ""
+	cp.PreEffectRepairs = 0
+	// A subsequent native expectation/read failure is a separate obligation.
+	// Its normal progress handler must resolve it; never clear it here.
+	if cp.ProposalTool == original && cp.NativeReadRepair == nil && !cp.WorkflowEditPending {
+		cp.ProposalRepairs, cp.ProposalUnresolved, cp.ProposalTool = 0, false, ""
+	}
+}
+
 // The model must repair its proposal itself, not return instructions or tool
 // JSON for the user and have that prose accepted as task completion. This is
 // only reached before dispatch with an already outstanding bounded repair.
 func (r *Runner) rejectUnrepairedCompletion(task *Task) error {
 	task.Checkpoint.ProposalRepairs++
+	if task.Checkpoint.PreEffectRepair {
+		task.Checkpoint.PreEffectRepairs++
+	}
 	feedback := "The previous tool proposal was rejected before dispatch and is still unresolved. Do not ask the user to submit tool JSON or perform the requested work manually. Correct the proposal yourself using the available tools and the previous error guidance. No rejected action was executed; do not claim completion."
 	if task.Checkpoint.NativeReadRepair != nil {
 		feedback = "The previous application read failed and is still unresolved. Inspect the actual application state with the available read tools. Earlier actions remain recorded: do not repeat a launch or input, invent successful verification, or claim completion."
@@ -112,9 +225,25 @@ func (r *Runner) rejectUnrepairedCompletion(task *Task) error {
 
 func (r *Runner) persistProposalRepair(task *Task) error {
 	setRunPhase(task, "repairing_tool", "")
-	if task.Checkpoint.ProposalRepairs > maxProposalRepairs {
+	if task.Checkpoint.ProposalRepairs > maxProposalRepairs || task.Checkpoint.PreEffectRepairs > maxProposalRepairs {
 		task.Status, task.ErrorCode = TaskInterrupted, proposalRepairLimitCode
 		task.Error = "Paused after three unsuccessful proposal repairs. No rejected action was executed. Review the task or choose a compatible model before explicitly continuing."
+		if task.Checkpoint.PreEffectRepair {
+			for i := len(task.Steps) - 1; i >= 0; i-- {
+				step := task.Steps[i]
+				if step.Type != "rejected" {
+					continue
+				}
+				var failure struct {
+					Code    string `json:"error"`
+					Message string `json:"message"`
+				}
+				if json.Unmarshal([]byte(step.ToolResult), &failure) == nil && (failure.Code == "host_access_required" || failure.Code == "tool_write_rejected") {
+					task.Error += " " + failure.Message
+					break
+				}
+			}
+		}
 		if task.Checkpoint.NativeReadRepair != nil {
 			task.Error = "Paused after three unsuccessful read-recovery attempts. The failed reads made no changes; earlier task actions remain recorded. Review application readiness before explicitly continuing."
 		}

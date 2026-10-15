@@ -27,6 +27,15 @@ static void store_document(void) {
 }
 static void load_document(void) {
     loading=TRUE;
+    // Keep the reused editor under the selected page's accessibility container.
+    // Its object identity is unchanged; the page/document identity is not.
+    GtkWidget *page=gtk_notebook_get_nth_page(GTK_NOTEBOOK(tabs),(gint)current);
+    if(gtk_widget_get_parent(editor)!=page){
+        g_object_ref(editor);GtkWidget *parent=gtk_widget_get_parent(editor);
+        if(parent)gtk_container_remove(GTK_CONTAINER(parent),editor);
+        gtk_box_pack_start(GTK_BOX(page),editor,TRUE,TRUE,0);g_object_unref(editor);
+        gtk_widget_show(editor);
+    }
     gtk_text_buffer_set_text(buffer,documents[current].text,-1);
     GtkTextIter start,end;
     gtk_text_buffer_get_iter_at_offset(buffer,&start,documents[current].start);
@@ -130,8 +139,8 @@ int main(int argc,char **argv) {
     GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);gtk_window_set_title(GTK_WINDOW(window),"OffGrid disposable document fixture");gtk_window_set_default_size(GTK_WINDOW(window),680,380);
     GtkWidget *box=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(box),16);gtk_container_add(GTK_CONTAINER(window),box);
     documents[0]=(Document){1,g_strdup("Synthetic lifecycle content"),0,0};documents[1]=(Document){2,g_strdup("Untouched — café 日本語 12345"),0,0};
-    tabs=gtk_notebook_new();add_tab();add_tab();gtk_box_pack_start(GTK_BOX(box),tabs,FALSE,FALSE,0);
-    editor=gtk_text_view_new();buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(editor));gtk_box_pack_start(GTK_BOX(box),editor,TRUE,TRUE,0);load_document();
+    tabs=gtk_notebook_new();add_tab();add_tab();gtk_box_pack_start(GTK_BOX(box),tabs,TRUE,TRUE,0);
+    editor=gtk_text_view_new();buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(editor));load_document();
     GtkWidget *button=gtk_button_new_with_label("New blank document");gtk_box_pack_start(GTK_BOX(box),button,FALSE,FALSE,0);
     focus_sink=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(focus_sink),"Owned focus-loss target");gtk_box_pack_start(GTK_BOX(box),focus_sink,FALSE,FALSE,0);
     g_signal_connect(tabs,"switch-page",G_CALLBACK(switched),NULL);g_signal_connect(button,"clicked",G_CALLBACK(request_creation),NULL);

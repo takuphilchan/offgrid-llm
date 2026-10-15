@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { workflow } from '../../i18n/workflow';
 import { LibraryNavigation, type LibraryView } from './LibraryNavigation';
 import { LegacyDownloadReview } from './LegacyDownloadReview';
+import { SearchField } from '../../components/SearchField';
 
 function fileName(path: string): string {
   return path.split('/').pop() ?? path;
@@ -165,7 +166,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
     })}
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed}>
       <div className="section-heading"><div><span className="eyebrow">{text.models.installed}</span><h2>{visibleModels.length} {text.models.available}</h2></div></div>
-      {!!categoryModels.length && <label className="field"><span>{modelLibrary(locale).filterInstalled}</span><input type="search" value={filter} onChange={event => setFilters(old => ({ ...old, [category]: event.target.value }))} /></label>}
+    {!!categoryModels.length && <SearchField className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={value => setFilters(old => ({ ...old, [category]: value }))} />}
       {visibleModels.length === 0 ? <div className="compact-empty">{categoryModels.length ? modelLibrary(locale).noMatches : text.models.empty}</div> : <div className="installed-models">{visibleModels.map(model => <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
         <ModelIdentity model={legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model])))} select={supportsChat(model) ? () => setSelected(model.id) : undefined} selected={selected === model.id} />
         {verifications[model.id] && <div className="verification model-verification" role="status"><strong>{verifications[model.id].file_name}</strong><span>{verifications[model.id].message}</span><span>{verifications[model.id].sha256}</span></div>}

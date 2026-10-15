@@ -71,6 +71,69 @@ smaller batches are not always faster; aggressive KV quantization affects qualit
 
 ## Verification
 
+### Document workflows
+
+Document-aware tasks use stage-relevant schemas: discovery first, creation or
+selection only when observed, and text editing only after an independent complete
+read. A generic observation exits the document stage. Authorized MCP tools remain
+available. Canonical bindings and digests stay in saved history rather than being
+repeated in the model's check summary; original instructions are not discarded.
+This reduces context overhead without increasing authority or the repair budget.
+
+Task-first tool selection also bounds general schemas to eight tools and 8192
+serialized bytes per request, after actor/profile authorization. Relevant names
+and descriptions rank first; `task_find_tools` can search other authorized tools
+in pages of eight. Stage-selected native tools and runtime recovery remain
+available, and the full request (including the private inference envelope) still
+must fit the effective model context. An oversized individual schema is reported,
+not silently rewritten. This is a presentation budget, not an execution grant.
+MCP results contribute at most a 2048-byte preview plus provenance metadata;
+exact saved output remains retrievable in 1024-byte history pages. These are
+deterministic bounds, not measured claims of improved model latency or accuracy.
+
+`TestDocumentWorkflowRunnerHostCreateEditReadback` runs the durable runner,
+service, authenticated hub, owned executor and journal through a synthetic
+create–edit–read-back sequence at an 8192-token allocation. It includes partial
+input and lost acknowledgments. This checks orchestration, not native app support
+or model accuracy. The opt-in `TestDocumentWorkflowInstalledModel` continues the
+same sequence from a 96-application catalog through launch, creation, editing and
+read-back with an already installed model via `OFFGRID_TEST_COMPLETION_URL`
+and `OFFGRID_TEST_CONTEXT_MODEL`. This explicit test endpoint is the owned
+runtime's literal-loopback completion URL, never a remote provider or URL
+credentials. It exercises the same sequential transport and wire token counter
+as service inference. It downloads nothing, cannot control the desktop, and refuses external
+tool execution. Three successful repetitions are required; a failure stops the
+run. Actual prompt usage must be reported and fit the allocation with reserves.
+
+Fixture instrumentation separates discovery, readiness, observation, preparation,
+input, verification, model and total duration. Unmeasured stages and unavailable
+actual token counts are null, not zero. Preparation includes its precondition
+read; verification includes provider postcondition checks and independent
+read-back; input measures only the attempted provider operation. Stage totals
+exclude unrelated work and need not sum to total elapsed time. Records contain
+only closed numeric fields, never text, application titles, IDs or arguments.
+Installed-app, real-model and platform results remain separate in the
+[reliability plan](product-reliability-plan.md).
+
+### General inference checks
+
+CPU and GPU operation are separate runtime choices. `OFFGRID_ENABLE_GPU=false`
+selects CPU operation. With GPU enabled and an available NVIDIA/AMD device, an
+installed compatible GPU runtime takes precedence over the pinned CPU fallback;
+`--list-devices` must report a usable matching backend. A GPU-requested setup
+with only a CPU runtime reports an actionable runtime error rather than silently
+claiming acceleration. Explicit runtime paths remain authoritative and must also
+provide a usable GPU backend when GPU operation is requested. No GPU runtime is
+downloaded automatically to repair that mismatch. Portable CPU operation remains
+available without a GPU. Container GPU use needs both a CUDA-capable image and
+the NVIDIA device reservation described in the [container guide](../setup/docker.md).
+Configuration-file GPU settings also reach the runtime selector. Embeddings
+honor their own explicit GPU layer setting rather than inheriting Chat's choice.
+Automatic layer fitting currently applies to NVIDIA; other supplied GPU
+backends require explicit layer placement and separate qualification. The CUDA
+container bundles both workers, including a CPU-only worker that does not load
+CUDA or download a runtime when CPU operation is selected.
+
 Chat reports first-text latency, context and throughput when the backend returns
 actual token usage. SSE timings are documented in [the API reference](../reference/api.md).
 Streaming improves time to visible output, not computation speed itself.

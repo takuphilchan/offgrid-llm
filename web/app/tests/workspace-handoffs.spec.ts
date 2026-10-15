@@ -57,14 +57,14 @@ test('Knowledge setup return does not silently turn retrieval on', async ({ page
 });
 
 test('reload drops the transient return link but not the existing draft', async ({ page }) => {
-  await fixture(page); await page.goto('/ui/#/agents/new');
-  await page.getByRole('textbox', { name: 'Task', exact: true }).fill('Retain my task');
-  await page.locator('.task-composer').getByRole('link', { name: 'Models', exact: true }).click();
+  await fixture(page); await page.goto('/ui/#/chat');
+  await page.locator('.composer textarea').fill('Retain my task');
+  await page.getByRole('button', { name: 'Choose a chat model', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toHaveCount(0);
-  await page.locator('.primary-nav a[href="#/agents"]').click();
-  await expect(page.getByRole('textbox', { name: 'Task', exact: true })).toHaveValue('Retain my task');
+  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await expect(page.locator('.composer textarea')).toHaveValue('Retain my task');
 });
 
 for (const change of ['workspace', 'actor', 'permission'] as const) test(`${change} change discards a private setup return`, async ({ page }) => {
@@ -102,10 +102,12 @@ test('legacy restoration is explicit, copy-only, one-time, and never submits or 
   await restore.click();
   await expect(page.locator('.composer textarea')).toHaveValue('Old private question');
   await page.locator('.primary-nav a[href="#/agents"]').click();
-  await expect(page.getByRole('textbox', { name: 'Task', exact: true })).toHaveValue('Old task draft');
+  await expect(page.locator('.task-composer')).toHaveCount(0);
+  expect(await page.evaluate(()=>localStorage.getItem('offgrid.draft.v1:alice:agent-task:'))).toBe('Old task draft');
   await page.reload();
   await expect(restore).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'Task', exact: true })).toHaveValue('Old task draft');
+  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await expect(page.locator('.composer textarea')).toHaveValue('Old private question');
   expect(await page.evaluate(() => [localStorage.getItem('offgrid.draft.v1:alice:chat:'), localStorage.getItem('offgrid.draft.v1:alice:agent-task:'), localStorage.getItem('offgrid.draft.v1:bob:chat:'), localStorage.getItem('offgrid.active-session:alice')])).toEqual(['Old private question', 'Old task draft', 'Another account', 'Never automatically select']);
   expect(state.writes).toEqual([]);
 });

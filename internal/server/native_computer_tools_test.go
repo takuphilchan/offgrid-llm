@@ -70,8 +70,11 @@ type nativeProbeEngine struct {
 
 func (e *nativeProbeEngine) ChatCompletion(_ context.Context, request *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error) {
 	e.calls++
-	if len(request.Tools) != 9 || request.Tools[0].Function.Name != "computer_observe" {
+	if len(request.Tools) != e.calls || request.Tools[0].Function.Name != "computer_observe" {
 		return nil, errors.New("browser tools leaked into native check")
+	}
+	if e.calls == 2 && request.Tools[1].Function.Name != "computer_replace_text" {
+		return nil, errors.New("native observed input stage missing")
 	}
 	name, args := "computer_observe", "{}"
 	if e.calls == 2 {

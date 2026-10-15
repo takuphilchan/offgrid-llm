@@ -29,6 +29,7 @@ const (
 
 // Step represents a single step in the agent's execution
 type Step struct {
+	Provenance    string        `json:"provenance,omitempty"`
 	ID            int           `json:"id"`
 	Type          string        `json:"type"` // "thought", "action", "observation", "answer"
 	Content       string        `json:"content"`
@@ -42,6 +43,14 @@ type Step struct {
 
 // AgentConfig configures agent behavior
 type AgentConfig struct {
+	ConversationContext   []api.ChatMessage                  `json:"conversation_context,omitempty"`
+	ConversationOmitted   int                                `json:"conversation_omitted,omitempty"`
+	ConversationProfile   string                             `json:"conversation_profile,omitempty"`
+	KnowledgeSelection    *[]string                          `json:"knowledge_selection,omitempty"`
+	RestrictComputer      bool                               `json:"restrict_computer,omitempty"`
+	DelegateProfiles      map[string]AgentConfig             `json:"delegate_profiles,omitempty"`
+	Profile               *AgentProfile                      `json:"profile,omitempty"`
+	KnowledgeContext      string                             `json:"knowledge_context,omitempty"`
 	ContextWindow         int                                `json:"context_window,omitempty"`
 	AllowedTools          []string                           `json:"allowed_tools,omitempty"`
 	AllowedCapabilities   map[string]capabilities.Descriptor `json:"allowed_capabilities,omitempty"`
@@ -54,17 +63,19 @@ type AgentConfig struct {
 	// Proposed by the user before submission; never a host consent grant.
 	RequestedComputerApprovalMode string        `json:"requested_computer_approval_mode,omitempty"`
 	RequestedComputerScope        string        `json:"requested_computer_scope,omitempty"`
+	ComputerAccessOnDemand        bool          `json:"computer_access_on_demand,omitempty"`
 	ComputerScope                 string        `json:"computer_scope,omitempty"`
 	ComputerApprovalMode          string        `json:"computer_approval_mode,omitempty"`
 	ComputerExpectedText          string        `json:"computer_expected_text,omitempty"`
 	ComputerVerification          string        `json:"computer_verification,omitempty"`
-	MaxIterations                 int           `json:"max_iterations"`   // Maximum reasoning steps
-	MaxTokens                     int           `json:"max_tokens"`       // Max tokens per LLM call
-	Temperature                   float64       `json:"temperature"`      // LLM temperature
-	TimeoutPerStep                time.Duration `json:"timeout_per_step"` // Timeout for each step
-	EnableMemory                  bool          `json:"enable_memory"`    // Use conversation memory
-	SystemPrompt                  string        `json:"system_prompt"`    // Custom system prompt
-	ReasoningStyle                string        `json:"reasoning_style"`  // "react", "cot", "plan-execute"
+	MaxIterations                 int           `json:"max_iterations"`         // Maximum reasoning steps
+	MaxTokens                     int           `json:"max_tokens"`             // Max tokens per LLM call
+	Temperature                   float64       `json:"temperature"`            // LLM temperature
+	TimeoutPerStep                time.Duration `json:"timeout_per_step"`       // Timeout for each step
+	EnableMemory                  bool          `json:"enable_memory"`          // Use conversation memory
+	SystemPrompt                  string        `json:"system_prompt"`          // Custom system prompt
+	Instructions                  string        `json:"instructions,omitempty"` // Profile behavior, never execution authority
+	ReasoningStyle                string        `json:"reasoning_style"`        // "react", "cot", "plan-execute"
 }
 
 // DefaultAgentConfig returns sensible defaults

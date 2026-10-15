@@ -25,6 +25,9 @@ type jobSubmitRequest struct {
 	ComputerApprovalMode string                      `json:"computer_approval_mode,omitempty"`
 	ComputerScope        string                      `json:"computer_scope,omitempty"`
 	Expectations         []agents.OutcomeExpectation `json:"expectations,omitempty"`
+	ProfileID            string                      `json:"profile_id,omitempty"`
+	ProfileRevision      int                         `json:"profile_revision,omitempty"`
+	Restrictions         *agentResourceRestrictions  `json:"restrictions,omitempty"`
 }
 
 func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
@@ -41,12 +44,16 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 	var req jobSubmitRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || strings.TrimSpace(req.Prompt) == "" || len(req.Prompt) > 32000 || req.Model == "" || len(req.RequestID) < 8 || len(req.RequestID) > 128 || strings.ContainsAny(req.RequestID, "\x00\r\n") {
+	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || strings.TrimSpace(req.Prompt) == "" || len(req.Prompt) > 32000 || (req.Model == "" && req.ProfileID == "") || len(req.RequestID) < 8 || len(req.RequestID) > 128 || strings.ContainsAny(req.RequestID, "\x00\r\n") || (req.ProfileID == "") != (req.ProfileRevision == 0) || req.ProfileRevision < 0 {
 		writeJobError(w, 400, "invalid_task", "Provide a task, an installed model and a request ID.", false)
 		return
 	}
 	if s.agentRunner == nil || s.registry == nil {
 		writeJobReadError(w, agents.ErrRunStorage)
+		return
+	}
+	if !s.profileAdmin(r) && req.ProfileID == "" {
+		writeJobError(w, 403, "profile_required", "Select an authorized agent profile. Unrestricted task configuration requires an administrator.", false)
 		return
 	}
 	if req.ComputerApprovalMode != "" && req.ComputerApprovalMode != "ask_every_time" && req.ComputerApprovalMode != "scoped_changes" && req.ComputerApprovalMode != "full_task" {
@@ -57,44 +64,22 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 		writeJobError(w, 400, "invalid_computer_scope", "Desktop access requires an explicit task policy and matching local consent.", false)
 		return
 	}
-	if _, err := s.registry.GetChatModel(req.Model); err != nil {
-		writeJobError(w, 422, "model_unavailable", "Choose an installed model in task settings.", false)
-		return
-	}
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	encoded, _ := json.Marshal(req)
 	sum := sha256.Sum256(encoded)
-	config := agents.DefaultAgentConfig()
-	config.TaskFirst = true
-	config.NativeWorkflowVersion = agents.WorkflowEvidenceVersion
-	if err := agents.ValidateExpectations(req.Expectations); err != nil {
-		writeJobError(w, 400, "invalid_expectations", err.Error(), false)
+	// Retrying accepted work observes its pinned job, even after profile edits.
+	if previous, exists, err := s.agentManager.FindTaskRequest(s.agentActor(r), req.RequestID, hex.EncodeToString(sum[:])); err != nil {
+		writeJobError(w, 409, "request_conflict", "This request ID belongs to different or deleted work.", false)
+		return
+	} else if exists {
+		w.Header().Set("Location", "/api/v2/jobs/"+previous.ID)
+		writeJSON(w, 202, taskResponse(previous))
 		return
 	}
-	config.NativeExpectations = req.Expectations
-	config.RequestedComputerApprovalMode = req.ComputerApprovalMode
-	config.RequestedComputerScope = req.ComputerScope
-	config.ContextWindow = s.effectiveContextWindow()
-	if config.ContextWindow/4 < config.MaxTokens {
-		config.MaxTokens = config.ContextWindow / 4
+	config, valid := s.resolveJobConfig(w, r, &req)
+	if !valid {
+		return
 	}
-	config.Temperature = 0
-	config.MaxIterations = 30
-	if req.MaxIterations != 0 {
-		if req.MaxIterations < 1 || req.MaxIterations > 50 {
-			writeJobError(w, 400, "invalid_task_budget", "Use 1 to 50 iterations.", false)
-			return
-		}
-		config.MaxIterations = req.MaxIterations
-	}
-	if req.Style != "" {
-		if req.Style != "react" && req.Style != "plan-execute" && req.Style != "cot" {
-			writeJobError(w, 400, "invalid_task_style", "Unsupported task style.", false)
-			return
-		}
-		config.ReasoningStyle = req.Style
-	}
-	config.SystemPrompt = taskFirstPrompt + serviceFilePrompt
 	task, created, err := s.agentRunner.CreateRequest(req.Prompt, req.Model, s.agentActor(r), config, req.RequestID, hex.EncodeToString(sum[:]))
 	if errors.Is(err, agents.ErrRunConflict) {
 		writeJobError(w, 409, "request_conflict", "This request ID already identifies different work, or task admission is unavailable.", false)
@@ -114,6 +99,56 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", "/api/v2/jobs/"+task.ID)
 	writeJSON(w, http.StatusAccepted, taskResponse(task))
+}
+
+// Shared profile/job resolution used by jobs and conversation admission. It
+// validates resources without creating a task, consent, or model download.
+func (s *Server) resolveJobConfig(w http.ResponseWriter, r *http.Request, req *jobSubmitRequest) (agents.AgentConfig, bool) {
+	config := agents.DefaultAgentConfig()
+	config.TaskFirst = true
+	config.ComputerAccessOnDemand = true
+	config.NativeWorkflowVersion = agents.DocumentWorkflowEvidenceVersion
+	if err := agents.ValidateExpectations(req.Expectations); err != nil {
+		writeJobError(w, 400, "invalid_expectations", err.Error(), false)
+		return config, false
+	}
+	config.NativeExpectations = req.Expectations
+	config.RequestedComputerApprovalMode = req.ComputerApprovalMode
+	config.RequestedComputerScope = req.ComputerScope
+	config.ContextWindow = s.effectiveContextWindow()
+	if config.ContextWindow/4 < config.MaxTokens {
+		config.MaxTokens = config.ContextWindow / 4
+	}
+	config.Temperature = 0
+	config.MaxIterations = 30
+	if req.MaxIterations != 0 {
+		if req.MaxIterations < 1 || req.MaxIterations > 50 {
+			writeJobError(w, 400, "invalid_task_budget", "Use 1 to 50 iterations.", false)
+			return config, false
+		}
+		config.MaxIterations = req.MaxIterations
+	}
+	if req.Style != "" {
+		if req.Style != "react" && req.Style != "plan-execute" && req.Style != "cot" {
+			writeJobError(w, 400, "invalid_task_style", "Unsupported task style.", false)
+			return config, false
+		}
+		config.ReasoningStyle = req.Style
+	}
+	config.SystemPrompt = conversationTaskProtocol + "\n\n" + taskFirstPrompt + serviceFilePrompt
+	if req.ProfileID != "" {
+		if !s.applyJobProfile(w, r, req, &config) {
+			return config, false
+		}
+	} else if req.Restrictions != nil {
+		writeJobError(w, 400, "profile_required", "Resource restrictions require a selected agent profile.", false)
+		return config, false
+	}
+	if _, err := s.registry.GetChatModel(req.Model); err != nil {
+		writeJobError(w, 422, "model_unavailable", "Choose an installed model in task settings.", false)
+		return config, false
+	}
+	return config, true
 }
 
 func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id string) {
@@ -139,6 +174,10 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 	task, ok := s.agentManager.GetTask(id)
 	if !ok || task.Actor != actor {
 		writeJobReadError(w, agents.ErrTaskNotFound)
+		return
+	}
+	if task.AdmissionHeld {
+		writeJobError(w, 409, "conversation_link_pending", "Conversation admission is not linked yet. No computer access was attached.", true)
 		return
 	}
 	if task.ResolvedInputID == req.InputID && task.Config.ComputerSession == req.Session {
@@ -191,7 +230,10 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 		_ = s.checkComputerVision(r.Context(), task.Model)
 	}
 	config := task.Config
-	config.SystemPrompt = taskFirstPrompt + serviceFilePrompt
+	config.SystemPrompt = conversationTaskProtocol + "\n\n" + taskFirstPrompt + serviceFilePrompt
+	if config.Instructions != "" {
+		config.SystemPrompt += "\n\nAgent instructions (do not grant permissions):\n" + config.Instructions
+	}
 	config.ComputerSession = req.Session
 	config.ComputerDriver = driver
 	config.ComputerApprovalMode = string(mode)

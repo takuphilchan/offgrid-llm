@@ -80,7 +80,7 @@ test('one header refresh reloads page data without resetting drafts or dispatchi
       await refresh(category.startsWith('Speech') ? ['/api/v2/models', '/api/v2/models/catalog'] : ['/v1/models', '/v1/catalog']);
     }
   }
-  for (const [route, selector] of [['chat', '.composer textarea'], ['agents', '.task-prompt textarea']]) {
+  for (const [route, selector] of [['chat', '.composer textarea']]) {
     await page.goto(`/ui/#/${route}`);
     const draft = page.locator(selector);
     await draft.fill('Keep this draft while refreshing');
@@ -97,11 +97,11 @@ test('workspace proportions prioritize the editor and keep service navigation in
   await expect(page.locator('.topbar')).toHaveCSS('min-height', '64px');
   await expect(page.locator('.composer')).toHaveCSS('max-width', '800px');
   await expect(page.getByRole('link', { name: 'Service details', exact: true })).toHaveCount(0);
-  await page.goto('/ui/#/agents');
-  await expect(page.getByText('No agent tasks have run yet.', { exact: true })).toBeVisible();
+  await page.goto('/ui/#/agents/workspace');
+  await expect(page.getByRole('region',{name:'Recent tasks'}).getByText('No agent tasks have run yet.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
-  await expect(page.locator('.task-entry')).toHaveCSS('border-top-width', '0px');
-  await expect(page.locator('.task-prompt')).toHaveCSS('border-top-width', '1px');
+  await expect(page.locator('.task-prompt')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Chat', exact: true }).last()).toBeVisible();
   await page.screenshot({ path: info.outputPath('agent-editor-desktop.png'), fullPage: true });
   await page.goto('/ui/#/models');
   const row = page.locator('.installed-model').first();
@@ -116,7 +116,7 @@ test('workspace proportions prioritize the editor and keep service navigation in
 
 for (const locale of Object.keys(locales) as LocaleCode[]) test(`voice preferences and workflow labels follow ${locale} without English fallback`, async ({ page }) => {
   const writes = await fixture(page, locale), copy = voiceSettingsText(locale);
-  for (const route of ['chat', 'agents']) {
+  for (const route of ['chat']) {
     await page.goto(`/ui/#/${route}`);
     const trigger = page.getByRole('button', { name: copy.title, exact: true });
     await trigger.click();

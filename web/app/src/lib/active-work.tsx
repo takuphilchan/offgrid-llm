@@ -13,7 +13,7 @@ export const useKnownWork = () => useContext(StateContext);
 export function useWorkActions() { const value = useContext(ActionsContext); if (!value) throw Error('Work coordinator required'); return value; }
 export const selectChatEvent = 'offgrid:select-known-chat';
 const terminal = (status: string) => ['completed', 'failed', 'cancelled'].includes(status);
-const taskView = () => /^#\/agents(?:\/(workspace|new|task\/[^/]+))?$/.test(window.location.hash);
+const taskView = () => /^#\/agents\/(workspace|new|task\/[^/]+)$/.test(window.location.hash);
 
 // Read-only references, not a second execution store. No prompts, transcripts,
 // permissions or audio are persisted here. Mounted views own their one follower;

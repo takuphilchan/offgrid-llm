@@ -3,6 +3,7 @@ package computer
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 type documentFeatureFixture struct {
@@ -57,9 +58,11 @@ func TestNativeDocumentNegotiationDoesNotExpandGrantOrRevealOtherActor(t *testin
 		if _, err = h.Execute(context.Background(), "alice", session.ID, "run", "call", "computer_open_application", []byte(`{}`)); err == nil {
 			t.Fatal("selected-window grant widened")
 		}
-		// Contract negotiation alone cannot activate tools without dispatch support.
-		if _, err = h.Execute(context.Background(), "alice", session.ID, "run", "call", "computer_documents", []byte(`{}`)); err == nil {
-			t.Fatal("unimplemented document tool advertised")
+		// No host reply means no read result, even with the negotiated contract.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		if _, err = h.Execute(ctx, "alice", session.ID, "run", "call", "computer_documents", []byte(`{}`)); err == nil {
+			t.Fatal("document result without a host reply")
 		}
+		cancel()
 	}
 }

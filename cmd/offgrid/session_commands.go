@@ -18,7 +18,12 @@ import (
 const sessionHelp = `Saved conversations on the connected OffGrid service:
   offgrid session list
   offgrid session show NAME
-  offgrid session delete NAME
+  offgrid session create NAME --model MODEL
+  offgrid session send NAME --profile ID --profile-revision N [--request-id ID] [--wait] MESSAGE
+  offgrid session chat NAME --profile ID --profile-revision N
+  offgrid session turn NAME
+  offgrid session recover NAME REQUEST_ID
+  offgrid session delete NAME [--work retain|stop]
   offgrid session export NAME [FILE]
   offgrid export-session NAME --format markdown|json|txt [--output FILE]
 
@@ -37,6 +42,9 @@ func runSessionCommand(ctx context.Context, args []string) error {
 	client, err := newCommandClient()
 	if err != nil {
 		return err
+	}
+	if args[0] == "chat" {
+		return conversationChat(ctx, client, args, os.Stdin, os.Stdout, output.JSONMode)
 	}
 	return sessionCommand(ctx, client, args, os.Stdout, output.JSONMode)
 }
@@ -63,6 +71,24 @@ func sessionCommand(ctx context.Context, client *serviceclient.Client, args []st
 		return usage("session command required")
 	}
 	switch args[0] {
+	case "send", "turn", "recover":
+		return conversationCommand(ctx, client, args, stdout, jsonMode)
+	case "create":
+		if len(args) != 4 || args[2] != "--model" || !validProfileID(args[1]) || args[3] == "" {
+			return usage("session create NAME --model MODEL")
+		}
+		var result sessions.Session
+		if err := client.JSON(ctx, http.MethodPost, "/v1/sessions", map[string]string{"name": args[1], "model_id": args[3]}, &result); err != nil {
+			return err
+		}
+		if result.Name != args[1] {
+			return fmt.Errorf("The service returned a different conversation identity")
+		}
+		if jsonMode {
+			return json.NewEncoder(stdout).Encode(result)
+		}
+		_, err := fmt.Fprintf(stdout, "Created conversation: %s\n", terminalSafe(result.Name))
+		return err
 	case "list", "ls":
 		if len(args) != 1 {
 			return usage("session list takes no arguments")
@@ -114,13 +140,20 @@ func sessionCommand(ctx context.Context, client *serviceclient.Client, args []st
 		_, err = fmt.Fprint(stdout, terminalSafe(exportSessionText(session)))
 		return err
 	case "delete", "del", "rm":
-		if len(args) != 2 || strings.TrimSpace(args[1]) == "" {
-			return usage("session delete requires NAME")
+		if (len(args) != 2 && len(args) != 4) || strings.TrimSpace(args[1]) == "" {
+			return usage("session delete requires NAME [--work retain|stop]")
+		}
+		path := "/v1/sessions/" + url.PathEscape(args[1])
+		if len(args) == 4 {
+			if args[2] != "--work" || (args[3] != "retain" && args[3] != "stop") {
+				return usage("Use --work retain or --work stop")
+			}
+			path += "?work=" + args[3]
 		}
 		var result struct {
 			Success *bool `json:"success"`
 		}
-		if err := client.JSON(ctx, http.MethodDelete, "/v1/sessions/"+url.PathEscape(args[1]), nil, &result); err != nil {
+		if err := client.JSON(ctx, http.MethodDelete, path, nil, &result); err != nil {
 			return err
 		}
 		if result.Success == nil || !*result.Success {

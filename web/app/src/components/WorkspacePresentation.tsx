@@ -1,4 +1,5 @@
-import { useId, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import { SearchField } from './SearchField';
 
 /** Presentation only: these components never fetch, submit, or own work. */
 export function ActionGroup({ children, label, className = '' }: { children: ReactNode; label?: string; className?: string }) {
@@ -18,6 +19,5 @@ export function ScopedNotice({ children, action, kind = 'status', className = ''
 }
 
 export function ListSearch({ label, value, onChange, className = '' }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
-  const id = useId();
-  return <label className={`workspace-list-search field ${className}`} htmlFor={id}><span>{label}</span><input id={id} type="search" value={value} onChange={event => onChange(event.target.value)} /></label>;
+  return <SearchField className={`workspace-list-search ${className}`} label={label} value={value} onChange={onChange} />;
 }

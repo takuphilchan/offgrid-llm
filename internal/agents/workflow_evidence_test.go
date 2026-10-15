@@ -48,6 +48,17 @@ func workflowConfig() AgentConfig {
 	return c
 }
 
+func TestConnectedToolUsesItsOwnPolicyBeforeNativeChecks(t *testing.T) {
+	remote := capabilities.Descriptor{Name: "mcp__docs__docs", Namespace: "mcp", Kind: capabilities.Execute}
+	if workflowMutation(remote.Name, remote) {
+		t.Fatal("connected research was gated on an unrelated desktop observation")
+	}
+	local := capabilities.Descriptor{Name: "computer_insert_text", Namespace: "computer", Kind: capabilities.Computer}
+	if !workflowMutation(local.Name, local) {
+		t.Fatal("native input lost its declared evidence gate")
+	}
+}
+
 func TestWorkflowDeclarationsCannotRemoveDowngradeOrClaimProvenance(t *testing.T) {
 	task := &Task{Prompt: "open and research", Config: workflowConfig(), Checkpoint: &Checkpoint{}}
 	if err := initializeWorkflow(task); err != nil {

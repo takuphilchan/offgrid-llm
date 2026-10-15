@@ -63,9 +63,53 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 	}
 	if task.Config.ComputerSession != "" {
 		if nativeComputerDriver(task.Config.ComputerDriver) {
-			tools = append(tools, nativeComputerTools()...)
+			nativeTools := nativeComputerTools()
+			documentsAvailable := b.documentToolsAvailable(task)
+			if documentsAvailable {
+				state, _ := documentState(task)
+				controlObserved := task.Config.ComputerScope != "desktop"
+				for i, step := range task.Steps {
+					if i >= task.Config.ComputerStepOffset && step.Type == "action" && step.ToolName == "computer_observe" {
+						controlObserved = true
+					}
+					if i >= task.Config.ComputerStepOffset && step.Type == "action" && (step.ToolName == "computer_open_application" || step.ToolName == "computer_focus_window") {
+						controlObserved = false
+					}
+				}
+				// The document and legacy whole-control shapes must not be offered
+				// under the same function name in one model request.
+				filtered := nativeTools[:0]
+				for _, tool := range nativeTools {
+					legacyReady := state.step == 0 && controlObserved
+					if task.Config.ComputerScope == "desktop" {
+						legacyReady = legacyReady && nativeDocumentControlFallback(task)
+					}
+					if legacyReady || tool.Function.Name == "computer_observe" {
+						filtered = append(filtered, tool)
+					}
+				}
+				nativeTools = append(filtered, stagedDocumentTools(task)...)
+			}
+			for _, tool := range nativeTools {
+				if task.Config.ComputerScope != "desktop" || desktopPlanningTool(task, tool.Function.Name) {
+					tools = append(tools, tool)
+				}
+			}
 			if task.Config.ComputerScope == "desktop" {
-				tools = append(tools, desktopComputerTools()...)
+				state, _ := documentState(task)
+				_, _, selected := desktopPlanningState(task)
+				for _, tool := range desktopComputerTools() {
+					// Inspect the newly selected editor before returning to its app
+					// catalog. This read establishes the available document/control
+					// operations; it neither executes input nor prevents later app
+					// switching once that observation (or unsupported result) exists.
+					if documentsAvailable && selected && state.step == 0 && !nativeDocumentControlFallback(task) && (tool.Function.Name == "computer_applications" || tool.Function.Name == applicationSearchTool) {
+						continue
+					}
+					if (!documentsAvailable || state.step == 0 || tool.Function.Name == "computer_windows") && desktopPlanningTool(task, tool.Function.Name) {
+						tools = append(tools, tool)
+					}
+				}
 			}
 		} else {
 			tools = append(tools, browserToolsForVision(b.server.registry != nil && b.server.computerVisionReady(task.Model))...)
@@ -78,6 +122,16 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 		if b.server.artifactStore != nil {
 			tools = append(tools, taskArtifactTool())
 		}
+	}
+	if task.Config.Profile != nil {
+		permitted := tools[:0]
+		for _, tool := range tools {
+			d, ok := b.Capability(tool.Function.Name)
+			if ok && b.server.profileActorCapabilityAllowed(task.Actor, d) {
+				permitted = append(permitted, tool)
+			}
+		}
+		tools = permitted
 	}
 	return tools
 }

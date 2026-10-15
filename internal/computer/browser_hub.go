@@ -70,10 +70,13 @@ type transientCapture struct {
 // intent; the companion independently checks local consent and records dispatch.
 // Restart invalidates all credentials and never resumes browser input.
 type BrowserHub struct {
-	mu       sync.Mutex
-	pairs    map[string]pairing
-	sessions map[string]*BrowserSession
-	captures map[string]transientCapture
+	// Configure before serving. Persist authenticated action results before
+	// acknowledging delivery; the callback must not re-enter this hub.
+	RecordReply func(actor, session, run string, action BrowserAction, reply BrowserReply) error
+	mu          sync.Mutex
+	pairs       map[string]pairing
+	sessions    map[string]*BrowserSession
+	captures    map[string]transientCapture
 }
 
 func NewBrowserHub() *BrowserHub {
@@ -423,6 +426,13 @@ func (h *BrowserHub) Reply(token string, reply BrowserReply) error {
 	if len(reply.Result) > 48<<10 || len(reply.Error) > 1024 {
 		return fmt.Errorf("computer result too large")
 	}
+	if h.RecordReply != nil && s.Driver != "browser" {
+		action := *s.pending
+		action.Arguments = append(json.RawMessage(nil), action.Arguments...)
+		if err := h.RecordReply(s.Actor, s.ID, s.run, action, reply); err != nil {
+			return err
+		}
+	}
 	select {
 	case s.replies <- reply:
 		return nil
@@ -435,7 +445,15 @@ func (h *BrowserHub) Execute(ctx context.Context, actor, id, run, call, kind str
 }
 
 func (h *BrowserHub) ExecuteAuthorized(ctx context.Context, actor, id, run, call, kind string, args json.RawMessage, authorization string) (string, error) {
-	if call == "" || run == "" || len(args) > 16<<10 {
+	document, documentErr := documentTransportAction(kind, args)
+	if documentErr != nil {
+		return "", documentErr
+	}
+	limit := 16 << 10
+	if document {
+		limit = (128 << 10) + 256
+	}
+	if call == "" || run == "" || len(args) > limit {
 		return "", ErrSession
 	}
 	h.mu.Lock()
@@ -450,12 +468,16 @@ func (h *BrowserHub) ExecuteAuthorized(ctx context.Context, actor, id, run, call
 	}
 	// Dispatch is restricted by the enrolled driver, not by the model's choice
 	// of tool name. Even internal callers cannot send native actions to v1.
-	if !sessionAllowsTool(s.Driver, kind) && !(s.Desktop != nil && desktopTool(kind)) {
+	if document && (s.NativeFeatures.Documents != NativeDocumentsVersion || s.Driver == "browser" || s.Target == nil) {
+		h.mu.Unlock()
+		return "", ErrDocumentUnavailable
+	}
+	if !document && !sessionAllowsTool(s.Driver, kind) && !(s.Desktop != nil && desktopTool(kind)) {
 		h.mu.Unlock()
 		return "", ErrControlScope
 	}
 	s.run = run
-	if kind != "computer_prepare" && (s.Desktop == nil || !desktopReadOnlyTool(kind)) {
+	if kind != "computer_prepare" && !((document || s.Desktop != nil) && desktopReadOnlyTool(kind)) {
 		s.Remaining--
 	}
 	actionID := run + ":" + call
@@ -488,6 +510,14 @@ func (h *BrowserHub) ExecuteAuthorized(ctx context.Context, actor, id, run, call
 					return "", ErrApplicationNotReady
 				case "computer_document_changed":
 					return "", ErrDocumentChanged
+				case "computer_document_unavailable":
+					return "", ErrDocumentUnavailable
+				case "computer_document_incomplete":
+					return "", ErrDocumentIncomplete
+				case "computer_document_range_invalid":
+					return "", ErrDocumentRange
+				case "computer_document_composition_unstable":
+					return "", ErrDocumentComposition
 				case "computer_stale_observation":
 					return "", fmt.Errorf("Selected application changed or its observation expired. Inspect it again before proposing new work: %w", ErrStaleObservation)
 				case "computer_invalid_action", "computer_observation_required":

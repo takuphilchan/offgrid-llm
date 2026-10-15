@@ -1,9 +1,11 @@
 package agents
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -17,10 +19,13 @@ type Instruction struct {
 	At        time.Time `json:"at"`
 }
 
-// CanSteerTask describes saved-state eligibility, not a grant. Steer also checks
-// that the worker has settled under the admission lock before accepting a change.
+// CanSteerTask describes saved-state eligibility, not a grant. Corrections to
+// running parent work are queued; they never cancel input already dispatched.
 func CanSteerTask(t *Task) bool {
-	return t != nil && t.DeletedAt == nil && len(t.Instructions) < 32 && t.Status == TaskInterrupted && t.Checkpoint != nil && t.Checkpoint.ExecutingCall == "" && t.Delegation == nil
+	if t == nil || t.AdmissionHeld || t.DeletedAt != nil || t.ParentID != "" || len(t.Instructions)+len(t.PendingInstructions) >= 32 || t.Checkpoint == nil || t.Delegation != nil {
+		return false
+	}
+	return t.Status == TaskRunning || (t.Status == TaskInterrupted && t.Checkpoint.ExecutingCall == "")
 }
 
 // Pause cancels further scheduling, not the truth about an in-flight effect.
@@ -99,9 +104,9 @@ func (r *Runner) stopChildrenLocked(parent *Task, cancelled bool) error {
 	return failure
 }
 
-// Steer accepts only an explicitly paused, settled run. Old proposed calls and
-// approvals cannot survive a changed user instruction. Request IDs prevent a
-// lost response from appending the same instruction twice.
+// Steer queues running-work corrections or applies them to a settled paused
+// checkpoint. Old proposals/approvals cannot survive an applied correction.
+// A queued correction does not claim to have prevented an in-flight action.
 func (r *Runner) Steer(id, actor, requestID, instruction string) (*Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -123,29 +128,99 @@ func (r *Runner) Steer(id, actor, requestID, instruction string) (*Task, error) 
 				return nil
 			}
 		}
-		if _, active := r.active[id]; active {
-			return ErrRunConflict
+		for _, previous := range t.PendingInstructions {
+			if previous.RequestID == requestID {
+				if previous.Digest != digest {
+					return ErrRunConflict
+				}
+				return nil
+			}
 		}
 		if !CanSteerTask(t) {
 			return ErrRunConflict
 		}
-		if err := reviseWorkflow(t, requestID, digest); err != nil {
+		entry := Instruction{requestID, digest, instruction, time.Now().UTC()}
+		if t.Status == TaskRunning {
+			t.PendingInstructions = append(t.PendingInstructions, entry)
+			return nil
+		}
+		if _, active := r.active[id]; active {
+			return ErrRunConflict
+		}
+		for _, pending := range t.PendingInstructions {
+			if err := applyInstruction(t, pending); err != nil {
+				return err
+			}
+		}
+		t.PendingInstructions = nil
+		if err := applyInstruction(t, entry); err != nil {
 			return err
 		}
-		abandonProposals(t, "Not executed: the user changed the task while paused.")
-		if t.Checkpoint.ProposalUnresolved || t.Checkpoint.ProposalRepairs > 0 {
-			t.Checkpoint.ProposalRepairs = 0
-			t.Checkpoint.NativeReadRepair = nil
-			// An explicit user correction can change the requested outcome.
-			t.Checkpoint.ProposalUnresolved = false
-			t.Checkpoint.ProposalTool = ""
-			t.Checkpoint.WorkflowEditPending = false
-		}
-		t.Checkpoint.Messages = append(t.Checkpoint.Messages, api.ChatMessage{Role: "user", Content: instruction})
-		t.Instructions = append(t.Instructions, Instruction{requestID, digest, instruction, time.Now().UTC()})
 		t.Error, t.ErrorCode = "Instruction saved. Resume this task to continue.", "task_paused"
 		return nil
 	})
+}
+
+func applyInstruction(t *Task, entry Instruction) error {
+	if err := reviseWorkflow(t, entry.RequestID, entry.Digest); err != nil {
+		return err
+	}
+	abandonProposals(t, "Not executed: the user changed the task before this proposal was dispatched.")
+	if t.Checkpoint.PreEffectRepair || t.Checkpoint.ProposalUnresolved || t.Checkpoint.ProposalRepairs > 0 {
+		t.Checkpoint.PreEffectRepair, t.Checkpoint.PreEffectRepairTool, t.Checkpoint.PreEffectRepairs = false, "", 0
+		t.Checkpoint.ProposalRepairs = 0
+		t.Checkpoint.NativeReadRepair = nil
+		// An explicit user correction can change the requested outcome.
+		t.Checkpoint.ProposalUnresolved = false
+		t.Checkpoint.ProposalTool = ""
+		t.Checkpoint.WorkflowEditPending = false
+	}
+	t.Checkpoint.Messages = append(t.Checkpoint.Messages, api.ChatMessage{Role: "user", Content: entry.Text})
+	t.Instructions = append(t.Instructions, entry)
+	return nil
+}
+
+var errSteeringPending = errors.New("a user correction reached the next safe boundary")
+
+// Only the running worker consumes its inbox. The same task transaction that
+// retires old proposals records application, so restart cannot apply it twice.
+func (r *Runner) applyPendingInstructions(task *Task) (bool, error) {
+	r.manager.mu.RLock()
+	current := r.manager.tasks[task.ID]
+	exists, pending := current != nil, current != nil && len(current.PendingInstructions) > 0
+	r.manager.mu.RUnlock()
+	if !exists {
+		return false, ErrTaskNotFound
+	}
+	if !pending || task.Delegation != nil {
+		return false, nil
+	}
+	updated, err := r.manager.updateTask(task.ID, func(saved *Task) error {
+		if saved.Status != TaskRunning {
+			return context.Canceled
+		}
+		if saved.Checkpoint == nil || saved.Checkpoint.ExecutingCall != "" || task.Checkpoint.ExecutingCall != "" {
+			return ErrRunConflict
+		}
+		next, err := copyTask(task)
+		if err != nil {
+			return err
+		}
+		for _, entry := range saved.PendingInstructions {
+			if err := applyInstruction(next, entry); err != nil {
+				return err
+			}
+		}
+		next.PendingInstructions = nil
+		*saved = *next
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	*task = *updated
+	r.observe(updated)
+	return true, nil
 }
 
 func abandonProposals(t *Task, reason string) {

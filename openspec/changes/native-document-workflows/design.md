@@ -33,6 +33,29 @@ The investigation and source inspection establish these integration points:
 
 ## Goals / Non-Goals
 
+### Follow-up: sequential execution and observed-stage planning
+
+The later Notepad regression had no dispatched launch: rejected multi-call
+proposals, unrelated catalog reads resetting repair, and recovery implying an
+earlier launch created a loop. Persist the first rejected dependency and clear
+sequencing repair only on its successful execution, subject to outstanding
+read/edit repair. Task-aware read recovery distinguishes rejection from dispatch.
+
+The owned HTTP adapter constrains sequential requests to one private JSON
+envelope and normalizes it into the existing tool contract only after clean
+completion. This avoids a runtime template treating `parallel_tool_calls=false`
+as advisory. Ordinary text-only inference remains unchanged; exact wire counting
+includes schemas. Keep the stable instruction/history prefix independent of the
+changing tool catalog to avoid repeated full prefill.
+
+Project action and expectation schemas from canonical observed stages, not app
+names or model families. Future document/command/snapshot checks are unavailable
+until inventory/read-back establishes their references. Metadata cannot simulate
+progress. Projection never changes canonical grants, evidence or authorization.
+The installed-model fixture must start before application discovery and proceed
+through one launch, one creation, one Unicode edit and independent read-back;
+it remains a synthetic host test, not installed-application qualification.
+
 Goals: implement the approved document workflow through the existing runner and
 native supervisor, with useful typed operations, bounded model work, defensible
 target matching and testable provider behavior. A host adapter remains an owned
@@ -306,6 +329,17 @@ local stop-dispatch keeps its one-second target with honest uncertainty when lat
 Do not advertise an overall speedup or production readiness from mocks.
 
 ## Risks / Trade-offs
+
+Document-stage model projections must not turn a fresh snapshot into a duplicate
+outcome. Reuse identical content checks across unchanged read-backs, retain
+independently verified read-only checkpoints through validated work on a separate
+document on the same target, and invalidate them for affected-document input,
+unknown dispatch or target replacement. After dispatch, offer fresh inventory
+and independent text reads before further native planning/input. After a verified
+document stage, another creation/edit requires saved plan advancement; this
+supports multi-document work without inviting repetition of a completed stage.
+These projections narrow model planning only: they do not expand authority,
+alter canonical schemas, replay actions or substitute for host verification.
 
 - Packaged and brokered processes can share hosts -> require exact registered
   application ownership; unsupported association is explicit, never title matching.

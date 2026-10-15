@@ -29,32 +29,39 @@ async function fixture(page: Page, desktop = false) {
 for (const desktop of [false, true]) {
   test(`current ${desktop?'desktop':'web'} renderer survives storage loss and identity refresh without losing drafts`, async ({page}) => {
     const state = await fixture(page, desktop);
-    await page.goto('/ui/#/agents/new');
-    const draft = page.getByRole('textbox',{name:'Task',exact:true});
+    await page.goto('/ui/#/chat');
+    const draft = page.locator('.composer textarea');
     await draft.fill('Keep this draft 日本語');
+    await page.goto('/ui/#/agents/workspace');
     state.storageFailed = true;
     // Older services drop their feature flag when the task store fails.
     state.supported = false;
     await page.locator('.topbar').getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(page.getByRole('alert').filter({hasText:'Task workspace unavailable'})).toBeVisible();
+    await page.goto('/ui/#/chat');
     await expect(draft).toHaveValue('Keep this draft 日本語');
-    await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
+    await page.goto('/ui/#/agents/workspace');
+    await expect(page.getByRole('button',{name:'Start task',exact:true})).toHaveCount(0);
     await expect(page.locator('.task-card, .result-card, .computer-mode-picker')).toHaveCount(0);
     state.identityFailed = true;
     await page.locator('.topbar').getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(page.getByRole('alert').filter({hasText:'Cannot check the service'})).toBeVisible();
+    await page.goto('/ui/#/chat');
     await expect(draft).toHaveValue('Keep this draft 日本語');
+    await page.goto('/ui/#/agents/workspace');
     await page.getByRole('link',{name:'Connections',exact:true}).click();
     await page.getByLabel('Connection name',{exact:true}).fill('Keep connection draft');
     await page.getByRole('link',{name:'Available tools',exact:true}).click();
     await expect(page.locator('#agent-tools-panel')).toBeVisible();
     await page.getByRole('link',{name:'Connections',exact:true}).click();
     await expect(page.getByLabel('Connection name',{exact:true})).toHaveValue('Keep connection draft');
-    await page.getByRole('link',{name:'Work',exact:true}).click();
+    await page.getByRole('link',{name:'Agent activity',exact:true}).click();
+    await page.goto('/ui/#/chat');
     await expect(draft).toHaveValue('Keep this draft 日本語');
+    await page.goto('/ui/#/agents/workspace');
     state.identityFailed=false;state.supported=true;state.storageFailed=false;
     await page.getByRole('alert').filter({hasText:'Cannot check the service'}).getByRole('button',{name:'Try again',exact:true}).click();
-    await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeEnabled();
+    await expect(page.getByRole('button',{name:'Start task',exact:true})).toHaveCount(0);
     expect(state.mutations).toEqual([]);
   });
 }
@@ -71,8 +78,8 @@ test('cold unsupported service shows recovery and management, never a legacy tas
   await page.getByRole('link',{name:'Connections',exact:true}).click();
   await expect(page.locator('.connector-panel')).toBeVisible();
   state.supported=true;
-  await page.getByRole('link',{name:'Work',exact:true}).click();
+  await page.getByRole('link',{name:'Agent activity',exact:true}).click();
   await page.locator('.topbar').getByRole('button',{name:'Refresh',exact:true}).click();
-  await expect(page.getByRole('textbox',{name:'Task',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Recent tasks'})).toBeVisible();
   expect(state.mutations).toEqual([]);
 });

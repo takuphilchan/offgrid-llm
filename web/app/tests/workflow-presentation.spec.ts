@@ -83,10 +83,10 @@ test('global refresh updates documents without reloading the workspace', async (
   state.docs = 1;
   await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Refreshed document' })).toBeVisible();
-  await page.goto('/ui/#/agents');
-  await page.getByRole('textbox', { name: 'Task', exact: true }).fill('Keep this draft');
+  await page.goto('/ui/#/chat');
+  await page.locator('.composer textarea').fill('Keep this draft');
   await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Task', exact: true })).toHaveValue('Keep this draft');
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep this draft');
 });
 
 test('missing progress unlocks recovery instead of preparing forever', async ({ page }) => {
@@ -110,7 +110,8 @@ test('settings distinguishes loading and failed requests from disabled features'
 test('agent navigation supports keyboard links and tool switches have names', async ({ page }) => {
   await fixture(page);
   await page.goto('/ui/#/agents');
-  await expect(page.locator('.task-composer')).toBeVisible();
+  await expect(page.locator('#agent-profiles-tab')).toBeVisible();
+  await expect(page.locator('.task-composer')).toHaveCount(0);
   await page.locator('#agent-workspace-tab').focus();
   await page.keyboard.press('Tab');
   await expect(page.locator('#agent-tools-tab')).toBeFocused();
@@ -129,9 +130,7 @@ test('agent results render safe headings and tables rather than raw Markdown', a
   await fixture(page);
   const remote: string[] = [];
   page.on('request', r => { if (r.url().includes('example.com')) remote.push(r.url()); });
-  await page.goto('/ui/#/agents');
-  await page.getByRole('textbox', { name: 'Task', exact: true }).fill('Make a report');
-  await page.getByRole('button', { name: 'Start task', exact: true }).click();
+  await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
   await expect(page.locator('.task-result h2')).toHaveText('Report');
   await expect(page.locator('.task-result table')).toContainText('Passed');
   expect(remote).toEqual([]);

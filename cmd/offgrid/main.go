@@ -1126,6 +1126,10 @@ func main() {
 			handleLoRA(os.Args[2:])
 			return
 		case "agent", "agents":
+			if len(os.Args) > 2 && os.Args[2] == "profiles" {
+				executeCommand(func(ctx context.Context) error { return runAgentProfiles(ctx, os.Args[3:]) })
+				return
+			}
 			if len(os.Args) > 2 && os.Args[2] == "run" {
 				executeCommand(func(ctx context.Context) error { return runTaskSubmit(ctx, os.Args[3:]) })
 				return

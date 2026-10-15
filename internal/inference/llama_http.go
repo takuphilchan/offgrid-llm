@@ -86,7 +86,7 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 	// Log the backend URL for debugging model switching
 	fmt.Printf("Sending request to backend: %s (Model: %s)\n", e.baseURL, req.Model)
 
-	reqBody, err := json.Marshal(reqCopy)
+	reqBody, err := marshalLlamaRequest(&reqCopy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
@@ -145,10 +145,22 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 
 		defer resp.Body.Close()
 		var chatResp api.ChatCompletionResponse
-		if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		var reader io.Reader = resp.Body
+		if singleStepRequest(req) {
+			reader = io.LimitReader(reader, 1<<20)
+		}
+		if err := json.NewDecoder(reader).Decode(&chatResp); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}
 
+		if singleStepRequest(req) {
+			if len(chatResp.Choices) != 1 {
+				return nil, fmt.Errorf("unexpected sequential model choices")
+			}
+			if err := decodeSingleStep(req, &chatResp.Choices[0]); err != nil {
+				return nil, err
+			}
+		}
 		return &chatResp, nil
 	}
 
@@ -190,7 +202,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 	// Log the backend URL for debugging model switching
 	fmt.Printf("Sending stream request to backend: %s (Model: %s)\n", e.baseURL, req.Model)
 
-	reqBody, err := json.Marshal(reqCopy)
+	reqBody, err := marshalLlamaRequest(&reqCopy)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
@@ -258,6 +270,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 		completed := false
+		sequential := singleStepStream{}
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -274,7 +287,11 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 			if !json.Valid([]byte(data)) {
 				return fmt.Errorf("invalid JSON in inference stream")
 			}
-			if err := callback(json.RawMessage(append([]byte(nil), data...))); err != nil {
+			deliver := callback
+			if singleStepRequest(req) {
+				deliver = sequential.add
+			}
+			if err := deliver(json.RawMessage(append([]byte(nil), data...))); err != nil {
 				return err
 			}
 		}
@@ -288,6 +305,9 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		}
 		if !completed {
 			return fmt.Errorf("inference stream interrupted: %w", io.ErrUnexpectedEOF)
+		}
+		if singleStepRequest(req) {
+			return sequential.emit(req, callback)
 		}
 
 		return nil

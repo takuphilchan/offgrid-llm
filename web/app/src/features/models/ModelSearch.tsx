@@ -7,6 +7,7 @@ import { formatBytes } from './model-format';
 import { LegacyDownloadReview } from './LegacyDownloadReview';
 import { modelAcquisition } from '../../i18n/model-acquisition';
 import { modelLibrary } from '../../i18n/model-library';
+import { SearchField } from '../../components/SearchField';
 
 type Props = {
   category?: ModelCategory;
@@ -65,9 +66,7 @@ export function ModelSearch({ category, models, progress, busy, download, cancel
     <div className="section-heading"><div><span className="eyebrow">Hugging Face</span><h2 id="model-search-title">{copy.title}</h2></div></div>
     <p className="model-search-hint">{copy.hint}</p>
     <form className="model-search-form" onSubmit={event => { event.preventDefault(); void search(); }}>
-      <label className="field" htmlFor="model-search-query"><span>{copy.query}</span>
-        <input id="model-search-query" type="search" maxLength={200} value={query} onChange={event => { request.current?.abort(); fileRequest.current?.abort(); setLoading(false); setFilesLoading(false); setQuery(event.target.value); }} placeholder={copy.query} />
-      </label>
+      <SearchField id="model-search-query" label={copy.query} value={query} maxLength={200} onChange={value => { request.current?.abort(); fileRequest.current?.abort(); setLoading(false); setFilesLoading(false); setQuery(value); }} />
       <button className="primary-button" disabled={loading || !query.trim()}>{loading ? text.common.loading : copy.search}</button>
     </form>
     {error && <div role="alert" className="inline-error">{error}</div>}

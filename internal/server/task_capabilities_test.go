@@ -90,7 +90,7 @@ func TestComposedDiscoveryAndProviderAuthorization(t *testing.T) {
 				desktop := *task
 				desktop.Config.ComputerScope = "desktop"
 				combined := availableNames(adapter.ToolsForTask(&desktop))
-				if !combined["mcp__docs__docs"] || !combined["computer_applications"] || !combined["computer_open_application"] || combined[computerAccessToolName] {
+				if !combined["mcp__docs__docs"] || !combined["computer_applications"] || combined["computer_open_application"] || combined[computerAccessToolName] {
 					t.Fatal("desktop replaced MCP or retained redundant access requests", combined)
 				}
 			}

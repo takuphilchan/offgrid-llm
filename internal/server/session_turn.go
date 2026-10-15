@@ -157,6 +157,9 @@ func (h *SessionHandlers) currentTurn(r *http.Request, name string) (*sessions.S
 	}
 	_, live := h.turnCancels[name]
 	h.turnMu.Unlock()
+	if session.Turn != nil && session.Turn.JobAdmission != "" {
+		return session, nil
+	}
 	if session.Turn.Active() && !live {
 		session.Turn.Status = "interrupted"
 		session.Turn.Error = "The worker stopped before saving completion. Review retained output before retrying."
@@ -171,6 +174,10 @@ func (h *SessionHandlers) handleTurn(w http.ResponseWriter, r *http.Request, nam
 	session, err := h.currentTurn(r, name)
 	if err != nil {
 		writeSessionError(w, err)
+		return
+	}
+	if session.Turn != nil && session.Turn.JobAdmission != "" && h.agentServer != nil {
+		h.agentServer.handleConversationJobTurn(w, r, name, action, session)
 		return
 	}
 	if action == "turn" && r.Method == "GET" {

@@ -73,14 +73,16 @@ test('native select options respect forced colors instead of locking the applica
   }
 });
 
-test('search, task and document controls share sizing and keyboard focus', async ({ page }) => {
+test('search, chat agent and document controls share sizing and keyboard focus', async ({ page }) => {
   await fixture(page);
   await page.goto('/ui/#/models');
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   const query = page.locator('#model-search-query');
+  const searchField = page.locator('.model-search-form .workspace-search-field');
   await expect(query).toBeVisible();
-  await expect(query).toHaveCSS('min-height', '40px');
-  await expect(query).toHaveCSS('border-radius', '8px');
+  await expect(query).toHaveAttribute('placeholder', 'Model name or publisher');
+  await expect(searchField).toHaveCSS('border-radius', '8px');
+  await expect(searchField).toHaveCSS('min-height', '40px');
   const search = page.locator('.model-search-form button');
   await expect(search).toBeDisabled();
   await expect(search).toHaveCSS('cursor', 'not-allowed');
@@ -89,11 +91,11 @@ test('search, task and document controls share sizing and keyboard focus', async
   await query.press('Tab');
   await expect(search).toBeFocused();
   await expect(search).toHaveCSS('outline-width', '2px');
-  const [inputBox, buttonBox] = await Promise.all([query.boundingBox(), search.boundingBox()]);
-  expect(inputBox!.height).toBe(buttonBox!.height);
-  await page.goto('/ui/#/agents');
-  await expect(page.locator('.task-composer select').first()).toHaveCSS('min-height', '40px');
-  await expect(page.locator('.task-composer textarea')).toHaveCSS('border-radius', '8px');
+  const [fieldBox, buttonBox] = await Promise.all([searchField.boundingBox(), search.boundingBox()]);
+  expect(Math.abs(fieldBox!.height - buttonBox!.height)).toBeLessThanOrEqual(2);
+  await page.goto('/ui/#/chat');
+  await expect(page.getByRole('button',{name:'Agent',exact:true})).toHaveCSS('min-height', '40px');
+  await expect(page.locator('.composer')).toHaveCSS('border-radius', '11px');
   await page.goto('/ui/#/knowledge');
   const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
   for (const control of controls) {
@@ -103,6 +105,25 @@ test('search, task and document controls share sizing and keyboard focus', async
     await expect(control).toBeFocused();
   }
   await expect(page.locator('.knowledge-workspace > button')).toHaveCount(0);
+});
+
+test('Knowledge and model searches use the compact accessible search surface', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/ui/#/knowledge');
+  const documents = page.getByRole('searchbox', { name: 'Search documents' });
+  await expect(documents).toHaveAttribute('placeholder', 'Search documents');
+  await expect(documents.locator('..')).toHaveClass(/workspace-search-field/);
+  await expect(documents.locator('..').locator('svg')).toBeVisible();
+  await documents.fill('absent');
+  await expect(page.getByText('A document with a long title for layout checks')).toHaveCount(0);
+
+  await page.goto('/ui/#/models');
+  const installed = page.getByRole('searchbox', { name: 'Filter installed models' });
+  await expect(installed).toHaveAttribute('placeholder', 'Filter installed models');
+  await expect(installed.locator('..')).toHaveClass(/workspace-search-field/);
+  await expect(installed.locator('..').locator('svg')).toBeVisible();
+  await installed.fill('absent');
+  await expect(page.getByText('test-model-with-a-long-name.Q4_K_M')).toHaveCount(0);
 });
 
 for (const theme of ['light', 'dark']) test(`workspace actions have consistent visible button boundaries in ${theme}`, async ({ page }, info) => {

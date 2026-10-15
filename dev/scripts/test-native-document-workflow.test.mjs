@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { options, isolatedEnvironment, requiredTest, testEvidence, cleanEnvironment } from './test-native-document-workflow.mjs';
+import { options, isolatedEnvironment, requiredTest, testEvidence, cleanEnvironment, measurementEvidence } from './test-native-document-workflow.mjs';
 
 const args=['--platform','windows','--suite','fixture','--repeat','3'];
 test('native harness accepts only a bounded closed CLI, never command strings or paths',()=>{
@@ -35,4 +35,14 @@ test('owned environment cannot inherit production workspace, auth, profile or na
   assert.match(env.OFFGRID_DATA_DIR,/owned[\\/]data$/);
   assert.equal(env.OFFGRID_DOCUMENT_TEST_NO_DOWNLOADS,'1');
   assert.equal(env.OFFGRID_DOCUMENT_TEST_SERVICE,'http://127.0.0.1:12345');
+});
+
+test('measurements distinguish missing data from zero and reject private or ambiguous fields',()=>{
+  const empty=measurementEvidence([]);
+  assert.equal(empty.stages.input,null);assert.equal(empty.prompt_tokens,null);
+  const valid={...empty,stages:{...empty.stages,input:{calls:1,milliseconds:0}},model_calls:10,prompt_tokens:1234};
+  const event=report=>({Action:'output',Output:`fixture_test.go:1: OFFGRID_NATIVE_METRICS ${JSON.stringify(report)}\n`});
+  assert.deepEqual(measurementEvidence([event(valid)]),valid);
+  for(const bad of [{...valid,private_text:'secret'},{...valid,stages:{...valid.stages,application:'private'}},{...valid,prompt_tokens:-1},{...valid,model_calls:null},{...valid,stages:{...valid.stages,input:{calls:1,milliseconds:-1}}}])assert.throws(()=>measurementEvidence([event(bad)]));
+  assert.throws(()=>measurementEvidence([event(valid),event(valid)]));
 });

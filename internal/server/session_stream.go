@@ -58,6 +58,10 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		writeSessionError(w, err)
 		return
 	}
+	if session.Turn != nil && session.Turn.JobAdmission != "" && session.Turn.Active() {
+		writeSessionError(w, sessions.ErrTurnConflict)
+		return
+	}
 	if model == "" {
 		model = session.ModelID
 	}

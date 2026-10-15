@@ -18,22 +18,27 @@ import (
 )
 
 type agentRunSnapshot struct {
-	Verification    json.RawMessage      `json:"verification,omitempty"`
-	Evidence        json.RawMessage      `json:"-"`
-	Artifacts       json.RawMessage      `json:"artifacts,omitempty"`
-	Plan            []agents.PlanItem    `json:"plan,omitempty"`
-	Context         *agents.ContextState `json:"context,omitempty"`
-	Children        []agents.ChildLink   `json:"children,omitempty"`
-	ParentID        string               `json:"parent_id,omitempty"`
-	RunID           string               `json:"run_id"`
-	Status          string               `json:"status"`
-	Output          string               `json:"output"`
-	Error           string               `json:"error,omitempty"`
-	Resumable       bool                 `json:"resumable"`
-	PendingApproval *agents.Approval     `json:"pending_approval"`
-	PendingInput    *agents.InputRequest `json:"pending_input,omitempty"`
-	UncertainCallID string               `json:"uncertain_call_id,omitempty"`
-	Progress        *agents.RunProgress  `json:"progress,omitempty"`
+	Profile             json.RawMessage      `json:"profile,omitempty"`
+	Origin              json.RawMessage      `json:"origin,omitempty"`
+	PendingInstructions []agents.Instruction `json:"pending_instructions,omitempty"`
+	CanSteer            bool                 `json:"can_steer,omitempty"`
+	Outcome             string               `json:"outcome,omitempty"`
+	Verification        json.RawMessage      `json:"verification,omitempty"`
+	Evidence            json.RawMessage      `json:"-"`
+	Artifacts           json.RawMessage      `json:"artifacts,omitempty"`
+	Plan                []agents.PlanItem    `json:"plan,omitempty"`
+	Context             *agents.ContextState `json:"context,omitempty"`
+	Children            []agents.ChildLink   `json:"children,omitempty"`
+	ParentID            string               `json:"parent_id,omitempty"`
+	RunID               string               `json:"run_id"`
+	Status              string               `json:"status"`
+	Output              string               `json:"output"`
+	Error               string               `json:"error,omitempty"`
+	Resumable           bool                 `json:"resumable"`
+	PendingApproval     *agents.Approval     `json:"pending_approval"`
+	PendingInput        *agents.InputRequest `json:"pending_input,omitempty"`
+	UncertainCallID     string               `json:"uncertain_call_id,omitempty"`
+	Progress            *agents.RunProgress  `json:"progress,omitempty"`
 }
 
 // Terminal output contains model/tool data, not terminal control instructions.
@@ -202,7 +207,10 @@ func renderAgentSnapshot(w io.Writer, snapshot agentRunSnapshot) {
 		fmt.Fprintf(w, "  offgrid agent resume %s\n", terminalSafe(snapshot.RunID))
 	}
 	if snapshot.UncertainCallID != "" {
-		fmt.Fprintln(w, "Inspect the tool's target first. Do not repeat the action blindly.")
-		fmt.Fprintf(w, "  offgrid agent reconcile %s %s \"verified outcome\"\n", terminalSafe(snapshot.RunID), terminalSafe(snapshot.UncertainCallID))
+		fmt.Fprintln(w, "Inspect the tool's target first. Do not repeat the action blindly. A report is human-observed evidence, not independent verification.")
+		fmt.Fprintf(w, "  offgrid agent reconcile %s %s \"what you observed\"\n", terminalSafe(snapshot.RunID), terminalSafe(snapshot.UncertainCallID))
+	}
+	if len(snapshot.PendingInstructions) > 0 {
+		fmt.Fprintln(w, "Instruction queued for the next safe boundary; dispatched actions are not cancelled.")
 	}
 }

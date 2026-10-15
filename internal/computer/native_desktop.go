@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -19,8 +18,24 @@ type DesktopProvider interface {
 }
 
 type NativeApplication struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Aliases []string `json:"aliases,omitempty"`
+}
+
+// Aliases come only from additional OS registrations for the same executable;
+// never derive them from model text or publish executable paths as aliases.
+func addApplicationAlias(app *NativeApplication, name string) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 256 || strings.ContainsAny(name, "\\/\x00\r\n") || strings.EqualFold(app.Name, name) || len(app.Aliases) >= 8 {
+		return
+	}
+	for _, alias := range app.Aliases {
+		if strings.EqualFold(alias, name) {
+			return
+		}
+	}
+	app.Aliases = append(app.Aliases, name)
 }
 
 type installedApplication struct {
@@ -38,19 +53,24 @@ type installedApplication struct {
 // It is owned by one native worker thread. Only NativeSupervisor dispatches its
 // prepared lifecycle operations, after durable intent and policy checks.
 type DesktopController struct {
-	driver      NativeAdapter
-	provider    DesktopProvider
-	identity    TargetIdentity
-	apps        map[string]installedApplication
-	targets     map[string]NativeTarget
-	observed    time.Time
-	selected    NativeTarget
-	selectedApp string
-	prepared    map[string]PreparedControlAction
-	launch      func(context.Context, installedApplication) error
-	discover    func() ([]installedApplication, error)
-	activations map[string]time.Time
+	driver       NativeAdapter
+	provider     DesktopProvider
+	identity     TargetIdentity
+	apps         map[string]installedApplication
+	targets      map[string]NativeTarget
+	observed     time.Time
+	selected     NativeTarget
+	selectedApp  string
+	prepared     map[string]PreparedControlAction
+	launch       func(context.Context, installedApplication) error
+	discover     func() ([]installedApplication, error)
+	activations  map[string]time.Time
+	measurements *NativeMeasurements
 }
+
+// SetMeasurements enables local, text-free fixture timing on the owning worker.
+// It does not publish metrics or change application permissions.
+func (c *DesktopController) SetMeasurements(m *NativeMeasurements) { c.measurements = m }
 
 func NewDesktopController(driver NativeAdapter) (*DesktopController, error) {
 	provider, ok := driver.(DesktopProvider)
@@ -86,6 +106,8 @@ func (c *DesktopController) Check() error {
 }
 
 func (c *DesktopController) Applications() ([]NativeApplication, error) {
+	started := time.Now()
+	defer func() { c.measurements.Add("discovery", time.Since(started)) }()
 	if err := c.Check(); err != nil {
 		return nil, err
 	}
@@ -116,7 +138,9 @@ func (c *DesktopController) Applications() ([]NativeApplication, error) {
 	apps := []NativeApplication{}
 	for _, app := range c.apps {
 		if checkInstalledApplication(app) == nil {
-			apps = append(apps, app.NativeApplication)
+			entry := app.NativeApplication
+			entry.Aliases = append([]string(nil), entry.Aliases...)
+			apps = append(apps, entry)
 		}
 	}
 	sort.Slice(apps, func(i, j int) bool {
@@ -161,11 +185,7 @@ func checkInstalledApplication(app installedApplication) error {
 	if err != nil || !info.Mode().IsRegular() || app.identity == nil || !os.SameFile(info, app.identity) || info.Size() != app.identity.Size() || !info.ModTime().Equal(app.identity.ModTime()) {
 		return ErrControlScope
 	}
-	resolved, err := filepath.EvalSymlinks(app.path)
-	if err != nil || !strings.EqualFold(filepath.Clean(resolved), filepath.Clean(app.path)) {
-		return ErrControlScope
-	}
-	return nil
+	return validateInstalledApplicationPath(app.path)
 }
 
 func (c *DesktopController) applicationFor(target NativeTarget) string {
@@ -372,6 +392,8 @@ type ApplicationEvidence struct {
 // VerifyApplication is bounded read-only readiness/read-back. It never launches
 // or focuses: retrying this check cannot repeat an uncertain mutation.
 func (c *DesktopController) VerifyApplication(ctx context.Context, id string) (ApplicationEvidence, error) {
+	started := time.Now()
+	defer func() { c.measurements.Add("readiness", time.Since(started)) }()
 	app, ok := c.apps[id]
 	if !ok {
 		return ApplicationEvidence{}, ErrInvalidControl

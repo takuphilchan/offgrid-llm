@@ -6,13 +6,48 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+func TestPromptTokensRetriesOnlyReadOnlyTransportEOFOnce(t *testing.T) {
+	for _, tc := range []struct{ alwaysDrop, reset bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+		var calls atomic.Int32
+		endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/chat/completions/input_tokens" {
+				t.Error("unexpected generation request")
+			}
+			n := calls.Add(1)
+			if tc.alwaysDrop || n == 1 {
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if tcp, ok := conn.(*net.TCPConn); ok && tc.reset {
+					_ = tcp.SetLinger(0)
+				}
+				conn.Close()
+				return
+			}
+			w.Write([]byte(`{"input_tokens":123}`))
+		}))
+		count, err := NewLlamaHTTPEngine(endpoint.URL).CountPromptTokens(context.Background(), &api.ChatCompletionRequest{Messages: []api.ChatMessage{{Role: "user", Content: "fixture"}}})
+		endpoint.Close()
+		if calls.Load() != 2 {
+			t.Fatal("unbounded/missing retry", tc, calls.Load(), err)
+		}
+		if tc.alwaysDrop && err == nil || !tc.alwaysDrop && (err != nil || count != 123) {
+			t.Fatal(count, err)
+		}
+	}
+}
 
 func TestPromptTokensCountsFullRequestWithoutGeneration(t *testing.T) {
 	parallel := false
@@ -24,8 +59,14 @@ func TestPromptTokensCountsFullRequestWithoutGeneration(t *testing.T) {
 		if r.URL.Path != "/v1/chat/completions/input_tokens" || r.Method != http.MethodPost {
 			t.Error("generation or unexpected endpoint", r.URL.Path)
 		}
+		var wire map[string]json.RawMessage
+		if json.NewDecoder(r.Body).Decode(&wire) != nil || wire["response_format"] == nil {
+			t.Fatal("single-step grammar absent")
+		}
+		delete(wire, "response_format")
+		data, _ := json.Marshal(wire)
 		var got api.ChatCompletionRequest
-		if json.NewDecoder(r.Body).Decode(&got) != nil || len(got.Tools) != 1 || got.Tools[0].Function.Description != request.Tools[0].Function.Description || got.Messages[0].StringContent() != request.Messages[0].StringContent() || got.ToolChoice != "auto" || got.ParallelToolCalls == nil || *got.ParallelToolCalls || got.Model != "" || got.Stream {
+		if json.Unmarshal(data, &got) != nil || len(got.Tools) != 0 || len(got.Messages) != 3 || !strings.Contains(got.Messages[2].StringContent(), request.Tools[0].Function.Description) || got.Messages[1].StringContent() != request.Messages[0].StringContent() || got.ToolChoice != nil || got.ParallelToolCalls == nil || *got.ParallelToolCalls || got.Model != "" || got.Stream {
 			t.Errorf("count request diverged: %+v", got)
 		}
 		w.Write([]byte(`{"input_tokens":1234,"object":"response.input_tokens"}`))

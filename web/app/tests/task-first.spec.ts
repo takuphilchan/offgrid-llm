@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { taskWorkspaceText } from "../src/i18n/task-workspace";
+import { installChatJob, openAgentChat, selectTaskAgent, sendAgentMessage } from './fixtures/chat-job';
 
 const id = "run-" + "a".repeat(32),
   model = "task-test-model";
@@ -18,6 +18,7 @@ test('unknown approval keeps exact arguments visible, including integers beyond 
 test('expiry changes approval to a read-only refresh without resuming or approving', async ({ page }) => {
   const f = await fixture(page), at = new Date('2026-10-08T10:00:00Z');
   await page.clock.install({ time: at });
+  await page.clock.pauseAt(at);
   f.setState('waiting_for_approval', { pending_approval: { id: 'expiring', tool: 'write_file', arguments: { path: '/allowed/draft.txt' }, expires_at: new Date(+at + 1500).toISOString() } });
   await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.locator('.approval-card').getByRole('button', { name: 'Approve exact call', exact: true })).toBeVisible();
@@ -60,14 +61,14 @@ test("task styles preserve the established monochrome layers in both themes", as
 }, testInfo) => {
   await fixture(page);
   for (const theme of ["light", "dark"]) {
-    await page.goto("/ui/#/agents/new");
+    await page.goto(`/ui/#/agents/task/${id}`);
     await page.evaluate(
       (theme) => localStorage.setItem("offgrid.theme", theme),
       theme,
     );
     await page.reload();
     await expect(
-      page.getByRole("heading", { name: "What would you like done?" }),
+      page.locator('.task-management'),
     ).toBeVisible();
     const palette = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
@@ -227,7 +228,7 @@ async function fixture(
       if (action === 'takeover') extra.computer_session_expired = true;
       if (action === 'resume') state = 'running';
       if (action === 'cancel') state = 'cancelled';
-      if (action === 'steer') extra.instructions = [{request_id: data.request_id, text: data.instruction, at: new Date().toISOString()}];
+      if (action === 'steer') extra[state === 'running' ? 'pending_instructions' : 'instructions'] = [{request_id: data.request_id, text: data.instruction, at: new Date().toISOString()}];
       return route.fulfill({status: 202, json: snapshot()});
     } else if (path === `/api/v2/jobs/${id}/export`) data = {...snapshot(), format: 'offgrid-task-evidence-v1'};
     else if (path === `/api/v2/jobs/${id}`) data = snapshot();
@@ -238,6 +239,11 @@ async function fixture(
       data = { available: false, active_sessions: 0, emergency_stop: false };
     return route.fulfill({ json: data });
   });
+  await installChatJob(page, {workspace:'workspace-test',model,snapshot,submit:body=>{
+    submissions.push(body); prompt=body.content; proposedPolicy=body.computer_approval_mode;
+    if(lost && submissions.length===1)return 'lost';
+    return snapshot();
+  }});
   return { submissions, commands, setState: (value: string, fields: Record<string, unknown> = {}) => {state = value; extra = fields;}, inputCount: () => inputCount };
 }
 
@@ -261,11 +267,8 @@ test('empty installed-app selection cannot launch, discover or grant access', as
 
 test('pause, steering, resume and evidence export use one saved job', async ({page}) => {
   const f = await fixture(page);
-  await page.goto('/ui/#/agents/new');
-  await page.getByRole('textbox', {name:'Task', exact:true}).fill('Prepare an outline.');
-  await page.getByRole('button', {name:'Start task',exact:true}).click();
-  await expect(page.getByRole('heading', {name:'Access needed'})).toBeVisible();
-  f.setState('running'); await page.reload();
+  f.setState('running');
+  await page.goto(`/ui/#/agents/task/${id}`);
   await page.getByRole('button', {name:'Pause',exact:true}).click();
   await page.getByRole('textbox',{name:'Update instruction'}).fill('Use three sections.');
   await page.getByRole('button',{name:'Save instruction'}).click();
@@ -278,7 +281,7 @@ test('pause, steering, resume and evidence export use one saved job', async ({pa
   const downloading=page.waitForEvent('download'); await page.getByRole('button',{name:'Export evidence'}).click();
   expect((await downloading).suggestedFilename()).toBe(`${id}.json`);
   expect(f.commands.map(command=>command.action)).toEqual(['pause','steer','resume','cancel']);
-  expect(f.submissions).toHaveLength(1);
+  expect(f.submissions).toHaveLength(0);
 });
 
 test('subtasks are linked evidence, not a second task composer', async ({page}) => {
@@ -289,6 +292,20 @@ test('subtasks are linked evidence, not a second task composer', async ({page}) 
   await expect(page.getByRole('link',{name:'Compare the two findings'})).toHaveAttribute('href',`#/agents/task/${child}`);
   await expect(page.getByRole('button',{name:'Pause',exact:true})).toBeVisible();
   expect(f.submissions).toHaveLength(0);
+});
+
+test('running corrections distinguish queued from applied without pause or replay', async ({page}) => {
+  const f = await fixture(page);
+  f.setState('running', {can_steer: true});
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.getByRole('textbox', {name: 'Update instruction'}).fill('Summarize instead of making another change.');
+  await page.getByRole('button', {name: 'Save instruction', exact: true}).click();
+  await expect(page.getByRole('status').filter({hasText: 'Instruction queued for the next safe step'})).toBeVisible();
+  await expect(page.getByText('Instruction applied.', {exact:true})).toHaveCount(0);
+  expect(f.commands.map(c => c.action)).toEqual(['steer']);
+  await page.reload();
+  await expect(page.getByRole('status').filter({hasText: 'Instruction queued for the next safe step'})).toBeVisible();
+  expect(f.commands.map(c => c.action)).toEqual(['steer']);
 });
 
 test('completed subtasks do not hide paused instruction updates; active delegation does', async ({page}) => {
@@ -365,9 +382,9 @@ test("task first: no setup wall; saved task hands off without a pairing code or 
   page,
 }, testInfo) => {
   const f = await fixture(page);
-  await page.goto("/ui/#/agents/new");
+  await openAgentChat(page);
   await expect(
-    page.getByRole("heading", { name: "What would you like done?" }),
+    page.locator('.composer textarea'),
   ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("task-composer.png"),
@@ -377,10 +394,7 @@ test("task first: no setup wall; saved task hands off without a pairing code or 
   await expect(page.getByRole("button", { name: "Pair browser" })).toHaveCount(
     0,
   );
-  await page
-    .getByRole("textbox", { name: "Task", exact: true })
-    .fill("Read the open Notepad document and summarize it.");
-  await page.getByRole("button", { name: "Start task", exact: true }).click();
+  await sendAgentMessage(page,"Read the open Notepad document and summarize it.");
   await expect(
     page.getByRole("heading", { name: "Access needed" }),
   ).toBeVisible();
@@ -396,9 +410,9 @@ test("task first: no setup wall; saved task hands off without a pairing code or 
     page.getByRole("heading", { name: "Access needed" }),
   ).toBeVisible();
   expect(f.submissions).toHaveLength(1);
-  await page.getByRole("button", { name: "New task", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "What would you like done?" }),
+    page.locator('.composer textarea'),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Access needed" }),
@@ -410,7 +424,7 @@ test("all nine interface locales keep the task-first composer usable, including 
 }) => {
   await fixture(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/ui/#/agents/new");
+  await openAgentChat(page);
   for (const locale of [
     "en",
     "fr",
@@ -428,14 +442,12 @@ test("all nine interface locales keep the task-first composer usable, including 
     );
     await page.reload();
     await expect(
-      page.getByRole("heading", { name: taskWorkspaceText(locale).title }),
+      page.locator('.composer textarea'),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", {
-        name: taskWorkspaceText(locale).start,
-        exact: true,
-      }),
+      page.locator('.composer-actions > button'),
     ).toBeVisible();
+    await expect(page.locator('.composer-actions > button')).toHaveAccessibleName(/\S/);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -453,11 +465,8 @@ test("desktop continues the same saved task with host-issued target and local po
   page,
 }) => {
   const f = await fixture(page, { desktop: true });
-  await page.goto("/ui/#/agents/new");
-  await page
-    .getByRole("textbox", { name: "Task", exact: true })
-    .fill("Read Notepad.");
-  await page.getByRole("button", { name: "Start task", exact: true }).click();
+  f.setState('waiting_for_input',{requested_computer_approval_mode:'full_task'});
+  await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByRole("button", { name: "Allow access and continue" })).toHaveCount(0);
   await page.getByRole("button", { name: "Choose an application", exact: true }).click();
   await expect(
@@ -469,7 +478,7 @@ test("desktop continues the same saved task with host-issued target and local po
   await expect(
     page.getByText("Verified result from the saved task."),
   ).toBeVisible();
-  expect(f.submissions).toHaveLength(1);
+  expect(f.submissions).toHaveLength(0);
   expect(f.inputCount()).toBe(1);
   expect(await page.evaluate(() => (window as any).hostRequest)).toEqual({
     workspace: "workspace-test",
@@ -483,16 +492,12 @@ test("task-first native failures do not prescribe browser repair", async ({
   page,
 }) => {
   await fixture(page, { desktop: true });
-  await page.goto("/ui/#/agents/new");
+  await page.goto(`/ui/#/agents/task/${id}`);
   await page.evaluate(() => {
     window.electron!.discoverComputerApps = async () => {
       throw new Error("Unexpected native IPC failure");
     };
   });
-  await page
-    .getByRole("textbox", { name: "Task", exact: true })
-    .fill("Read Notepad.");
-  await page.getByRole("button", { name: "Start task", exact: true }).click();
   await page.getByRole("button", { name: "Choose an application", exact: true }).click();
   const error = page.locator(".task-access [role=alert]");
   await expect(error).toBeVisible();
@@ -553,17 +558,15 @@ test("lost acknowledgment preserves request identity across reload", async ({
   page,
 }) => {
   const f = await fixture(page, { lost: true });
-  await page.goto("/ui/#/agents/new");
-  await page
-    .getByRole("textbox", { name: "Task", exact: true })
-    .fill("Read Notepad.");
-  await page.getByRole("button", { name: "Start task", exact: true }).click();
-  await expect(page.locator(".task-surface [role=alert]")).toBeVisible();
+  await openAgentChat(page);
+  await sendAgentMessage(page,"Read Notepad.");
+  await expect(page.getByRole('alert').first()).toBeVisible();
   await page.reload();
+  await selectTaskAgent(page);
   await expect(
-    page.getByRole("textbox", { name: "Task", exact: true }),
+    page.locator('.composer textarea'),
   ).toHaveValue("Read Notepad.", { timeout: 15000 });
-  await page.getByRole("button", { name: "Start task", exact: true }).click();
+  await page.locator('.composer-actions').getByRole("button", { name: "Send", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Access needed" }),
   ).toBeVisible();
@@ -576,16 +579,16 @@ test("task composer fits narrow screens and keeps the saved result out of a new 
 }) => {
   await fixture(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/ui/#/agents/new");
+  await openAgentChat(page);
   await page
-    .getByRole("textbox", { name: "Task", exact: true })
+    .locator('.composer textarea')
     .fill("日本語 — مرحبا — Zimbabwe");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBeTruthy();
-  await page.getByRole("button", { name: "Start task", exact: true }).click();
+  await page.locator('.composer-actions').getByRole("button", { name: "Send", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Access needed" }),
   ).toBeVisible();

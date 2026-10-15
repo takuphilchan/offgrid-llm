@@ -90,15 +90,15 @@ test('results and long file names fit a narrow screen in both themes', async ({ 
   }
 });
 
-test('unsupported continuation creates only an explicit new draft and preserves the old result', async ({ page }) => {
+test('unsupported continuation links to Chat without resubmitting or losing the old result', async ({ page }) => {
   const state = await fixture(page); await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByRole('region', { name: 'Next step' })).toContainText('does not change or rerun');
-  await page.getByRole('button', { name: 'Start a new task from this' }).click();
-  await expect(page).toHaveURL(/#\/agents\/new$/);
-  await expect(page.getByRole('textbox', { name: 'Task', exact: true })).toHaveValue(state.run.prompt);
+  await page.getByRole('region',{name:'Next step'}).getByRole('link', { name: 'Chat',exact:true }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await expect(page.locator('.composer textarea')).toHaveValue('');
   expect(state.writes).toEqual([]);
   await page.goto(`/ui/#/agents/task/${id}`);
-  await expect(page.getByRole('button', { name: 'Start a new task from this' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Start a new task from this' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Saved answer' })).toBeVisible();
 });
 

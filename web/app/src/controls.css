@@ -149,7 +149,7 @@
   .resource-actions button { flex-shrink: 0; }
   .knowledge-workspace > .error-banner { margin: 0; }
   .model-search-form { align-items: flex-end; }
-  .model-search-form .field { flex: 1 1 240px; }
+  .model-search-form .workspace-search-field { flex: 1 1 240px; }
   .model-search-form button { flex: 0 0 auto; }
   .model-search-files { gap: 8px; }
   .model-search-files > label { font-size: 13px; color: var(--muted); }
@@ -172,7 +172,7 @@
     .settings-actions { flex-direction: row; }
     .provider-grid { grid-template-columns: minmax(0, 1fr); }
     .model-search-form { flex-wrap: wrap; }
-    .model-search-form .field { flex-basis: 100%; }
+    .model-search-form .workspace-search-field { flex-basis: 100%; }
     .model-search-form button { width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {

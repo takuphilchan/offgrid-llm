@@ -162,11 +162,20 @@ func TestNativeLinuxRealATSPI(t *testing.T) {
 	if err != nil || len(results) != 1 || results[0].Outcome != "dispatched" {
 		t.Fatal(results, err)
 	}
-	if _, err = in.Write([]byte("status\n")); err != nil {
-		t.Fatal(err)
-	}
-	if read() != "SAVED" {
-		t.Fatal("bound shortcut did not reach owned GTK application")
+	// Input delivery and the fixture's stdin handler use separate event queues.
+	// Wait for the independent outcome, never resend the shortcut.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err = in.Write([]byte("status\n")); err != nil {
+			t.Fatal(err)
+		}
+		if read() == "SAVED" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("bound shortcut did not reach owned GTK application")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	view, err = driver.Observe(context.Background())
 	if err != nil {

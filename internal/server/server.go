@@ -510,17 +510,20 @@ func NewWithConfig(cfg *config.Config) *Server {
 		workspaceID:          workspaceID,
 	}
 	sessionHandlers.requireAuth = cfg.RequireAuth
+	sessionHandlers.agentServer = server
 	if err := server.loadDownloads(); err != nil {
 		server.startupErr = fmt.Errorf("recover downloads: %w", err)
 	}
 	sessionHandlers.streamer = server.streamSessionChat
 	sessionHandlers.runtimeContext = server.runtimeCtx
 	server.browserHub = computer.NewBrowserHub()
+	server.browserHub.RecordReply = server.recordComputerReply
 	server.agentRunner = agents.NewRunner(agentManager, &browserRunTools{RunTools: toolRegistry, server: server}, server.callAgentModel)
 	server.agentRunner.StreamCaller = server.streamAgentModel
 	server.agentRunner.ContextWindow = func(*agents.Task) int { return server.effectiveContextWindow() }
 	server.agentRunner.CountContext = server.countAgentContext
 	server.agentRunner.Observer = func(task *agents.Task) {
+		server.projectConversationTask(task)
 		if task.Status == agents.TaskCompleted || task.Status == agents.TaskFailed || task.Status == agents.TaskCancelled {
 			server.browserHub.StopTask(task.Actor, task.ID)
 		}
@@ -533,6 +536,9 @@ func NewWithConfig(cfg *config.Config) *Server {
 				log.Printf("Agent output artifact unavailable (result retained in task): %v", err)
 			}
 		}
+	}
+	if err := server.recoverConversationAdmissions(); err != nil {
+		server.startupErr = fmt.Errorf("recover agent conversation admissions: %w", err)
 	}
 	server.agentRunner.StartCoordinator(runtimeCtx)
 	sessionHandlers.SetCompleter(func(ctx context.Context, modelID string, messages []api.ChatMessage, useKnowledgeBase bool) (string, error) {
@@ -1030,8 +1036,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/agents/run", adminOnly(s.handleAgentRun))
 	mux.HandleFunc("/v1/agents/tasks", adminOnly(s.handleAgentTasks))
 	mux.HandleFunc("/v1/agents/tasks/", adminOnly(s.handleAgentTaskAction))
-	mux.HandleFunc("/api/v2/jobs/", adminOnly(s.handleJobRead))
-	mux.HandleFunc("/api/v2/jobs", adminOnly(s.handleJobSubmit))
+	mux.HandleFunc("/api/v2/jobs/", chatOnly(s.profileJobAccess(s.handleJobRead)))
+	mux.HandleFunc("/api/v2/jobs", chatOnly(s.handleJobSubmit))
+	mux.HandleFunc("/api/v2/agent-profiles", chatOnly(s.handleAgentProfiles))
+	mux.HandleFunc("/api/v2/agent-profiles/", chatOnly(s.handleAgentProfiles))
 	mux.HandleFunc("/v1/agents/workflows", adminOnly(s.handleAgentWorkflows))
 	mux.HandleFunc("/v1/agents/orchestrate", adminOnly(s.handleAgentOrchestrate))
 	mux.HandleFunc("/v1/runs", adminOnly(s.handleRuns))
@@ -4871,6 +4879,9 @@ func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	tasks := []any{}
 	for _, task := range s.agentManager.ListTasks() {
+		if !s.profileAdmin(r) && (task.Config.Profile == nil || task.Actor != s.agentActor(r)) {
+			continue
+		}
 		if task.Actor != "" && task.Actor != s.agentActor(r) {
 			continue
 		}

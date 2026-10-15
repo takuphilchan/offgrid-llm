@@ -46,6 +46,15 @@ func TestAccessProposalValidation(t *testing.T) {
 	}
 }
 
+func TestPreAccessPromptUsesTaskWideDesktopWorkflow(t *testing.T) {
+	if !strings.Contains(taskFirstPrompt, "task-wide desktop access") || !strings.Contains(taskFirstPrompt, "without another access request for each window") {
+		t.Fatal("pre-access guidance must describe the current desktop grant")
+	}
+	if strings.Contains(taskFirstPrompt, "releases the old session") || strings.Contains(taskFirstPrompt, "request the next access") {
+		t.Fatal("pre-access guidance must not restore the retired per-window workflow")
+	}
+}
+
 func TestAccessProposalRunnerRepairsChromeBeforeConsent(t *testing.T) {
 	s := taskFirstServer(t)
 	tools := &browserRunTools{RunTools: agents.NewToolRegistry(), server: s}

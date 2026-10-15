@@ -2,11 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 
 const runID = 'run-' + 'a'.repeat(32);
 
-async function workspace(page: Page) {
+async function workspace(page: Page, initialJob = false) {
   let actor = 'alice';
   const sessions: Record<string, any> = {};
   let generationStatus = 503;
-  let creates = 0;
+  let creates = initialJob ? 1 : 0;
   const actions: string[] = [];
   let runStatus = 'waiting_for_approval';
   const approval = { id: 'approval-1', run_id: 'run-1', call_id: 'call-1', actor, tool: 'write_file', arguments: { path: 'notes.txt', content: 'hello' }, expires_at: new Date(Date.now() + 600_000).toISOString() };
@@ -52,12 +52,12 @@ async function workspace(page: Page) {
   return { switchUser: (id: string) => { actor = id; }, creates: () => creates, actions, generationStatus: (status: number) => { generationStatus = status; } };
 }
 
-test('chat and agent drafts survive navigation and reload without leaking to another account', async ({ page }) => {
+test('chat draft survives navigation and reload without leaking to another account', async ({ page }) => {
   const state = await workspace(page);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Private Alice draft');
   await page.locator('.primary-nav a[href="#/agents"]').click();
-  await page.locator('.task-composer textarea').fill('Unsent agent task');
+  await expect(page.locator('.task-composer textarea')).toHaveCount(0);
   await page.locator('.primary-nav a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Private Alice draft');
   await page.reload();
@@ -66,10 +66,12 @@ test('chat and agent drafts survive navigation and reload without leaking to ano
   await page.reload();
   await expect(page.locator('.composer textarea')).toHaveValue('');
   await page.locator('.primary-nav a[href="#/agents"]').click();
-  await expect(page.locator('.task-composer textarea')).toHaveValue('');
+  await expect(page.locator('.task-composer textarea')).toHaveCount(0);
   state.switchUser('alice');
   await page.reload();
-  await expect(page.locator('.task-composer textarea')).toHaveValue('Unsent agent task');
+  await expect(page.locator('.task-composer textarea')).toHaveCount(0);
+  await page.goto('/ui/#/chat');
+  await expect(page.locator('.composer textarea')).toHaveValue('Private Alice draft');
 });
 
 test('failed chat send retains the draft in the created conversation', async ({ page }) => {
@@ -83,14 +85,12 @@ test('failed chat send retains the draft in the created conversation', async ({ 
   await expect(page.locator('.composer textarea')).toHaveValue('Question that must not disappear');
 });
 
-test('approval after reload continues the same run exactly once', async ({ page }) => {
-  const state = await workspace(page);
-  await page.goto('/ui/#/agents');
-  await page.locator('.task-composer textarea').fill('Write notes');
-  await page.getByRole('button', { name: 'Start task', exact: true }).click();
+test('approval after reload continues the same saved run exactly once', async ({ page }) => {
+  const state = await workspace(page, true);
+  await page.goto(`/ui/#/agents/task/${runID}`);
   await expect(page.locator('.approval-card')).toBeVisible();
   await page.locator('.primary-nav a[href="#/chat"]').click();
-  await page.locator('.primary-nav a[href="#/agents"]').click();
+  await page.goto(`/ui/#/agents/task/${runID}`);
   await page.reload();
   await expect(page.locator('.approval-card')).toContainText('notes.txt');
   await page.getByRole('button', { name: 'Approve exact call' }).dblclick();
@@ -100,10 +100,8 @@ test('approval after reload continues the same run exactly once', async ({ page 
 });
 
 test('denial reaches the server and stays denied after reload', async ({ page }) => {
-  const state = await workspace(page);
-  await page.goto('/ui/#/agents');
-  await page.locator('.task-composer textarea').fill('Write notes');
-  await page.getByRole('button', { name: 'Start task', exact: true }).click();
+  const state = await workspace(page, true);
+  await page.goto(`/ui/#/agents/task/${runID}`);
   await page.getByRole('button', { name: 'Deny', exact: true }).click();
   await expect(page.locator('.task-detail')).toContainText('Cancelled');
   await page.reload();

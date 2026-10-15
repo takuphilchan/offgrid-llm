@@ -79,10 +79,24 @@ func (s *ScopedManager) Create(name, modelID string) (*Session, error) {
 }
 
 func (s *ScopedManager) Delete(name string) error {
+	return s.deleteWithJobs(name, false)
+}
+
+// The service must first persist the explicit retain/confirmed-stop choice and
+// detach its durable admission ledger. Ordinary legacy deletion stays blocked.
+func (s *ScopedManager) DeleteRetainingJobs(name string) error {
+	return s.deleteWithJobs(name, true)
+}
+
+func (s *ScopedManager) deleteWithJobs(name string, retain bool) error {
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
-	if _, err := s.Load(name); err != nil {
+	session, err := s.Load(name)
+	if err != nil {
 		return err
+	}
+	if !retain && (len(session.Jobs) > 0 || session.Turn != nil && session.Turn.JobAdmission != "") {
+		return ErrTurnConflict
 	}
 	return s.manager.delete(name)
 }
@@ -93,6 +107,9 @@ func (s *ScopedManager) AddMessage(name, role, content string) error {
 	session, err := s.Load(name)
 	if err != nil {
 		return err
+	}
+	if session.Turn != nil && session.Turn.JobAdmission != "" && session.Turn.Active() {
+		return ErrTurnConflict
 	}
 	session.AddMessage(role, content)
 	return s.manager.save(session)
@@ -107,6 +124,9 @@ func (s *ScopedManager) AppendExchange(name, modelID, userContent, assistantCont
 	session, err := s.Load(name)
 	if err != nil {
 		return nil, err
+	}
+	if session.Turn != nil && session.Turn.JobAdmission != "" && session.Turn.Active() {
+		return nil, ErrTurnConflict
 	}
 	if modelID != "" {
 		session.ModelID = modelID

@@ -59,6 +59,31 @@ repeat text input or claim an earlier mutation was rolled back.
 - **THEN** the task pauses with its launch and diagnostic evidence preserved
 - **AND** further catalog reads do not reset the repair budget indefinitely
 
+#### Scenario: Launch rejected before dispatch
+
+- **WHEN** a multi-call launch proposal is rejected before any host mutation
+- **THEN** recovery distinguishes it from a dispatched launch and permits the first authorized launch from observed catalog identity
+- **AND** unrelated plan/catalog/history reads cannot resolve the rejected sequence or reset its repair budget
+
+### Requirement: Sequential planning follows observed stages
+
+The model projection SHALL offer native actions and outcome-check references only
+after their prerequisite observations. Sequential HTTP inference SHALL admit no
+more than one complete schema-constrained tool call per response. Projections
+MUST NOT broaden authority or replace canonical dispatch validation.
+
+#### Scenario: Future document declarations
+
+- **WHEN** no document inventory or independent read-back has been recorded
+- **THEN** model schemas do not offer checks requiring those future references
+- **AND** canonical validators still reject fabricated references
+
+#### Scenario: Truncated sequential stream
+
+- **WHEN** a sequential inference stream ends without a clean terminal response
+- **THEN** no partial envelope or proposed input is dispatched
+- **AND** ordinary text-only streaming retains its compatible contract
+
 #### Scenario: Read failure after earlier input
 
 - **WHEN** a read fails after a recorded input action

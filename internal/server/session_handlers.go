@@ -17,6 +17,9 @@ type SessionCompleter func(context.Context, string, []api.ChatMessage, bool) (st
 
 // SessionHandlers provides HTTP handlers for session management
 type SessionHandlers struct {
+	agentServer *Server
+	// Fault hook configured only by isolated admission tests, never by clients.
+	admissionFault func(string) error
 	manager        *sessions.SessionManager
 	completer      SessionCompleter
 	streamer       SessionStreamer
@@ -215,6 +218,9 @@ func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Req
 		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if h.agentServer != nil && h.agentServer.deleteAgentConversation(w, r, name) {
+		return
+	}
 
 	h.turnMu.Lock()
 	defer h.turnMu.Unlock()
@@ -285,22 +291,28 @@ func (h *SessionHandlers) HandleSessionAddMessage(w http.ResponseWriter, r *http
 // HandleSessionGenerate performs a model turn and persists the complete
 // exchange under the same session. Calls for one session are serialized so
 // concurrent browser tabs cannot lose messages.
+type sessionGenerateRequest struct {
+	Content              string                     `json:"content"`
+	ModelID              string                     `json:"model_id,omitempty"`
+	UseKnowledgeBase     bool                       `json:"use_knowledge_base,omitempty"`
+	Stream               bool                       `json:"stream,omitempty"`
+	Profile              string                     `json:"profile,omitempty"`
+	MaxTokens            int                        `json:"max_tokens,omitempty"`
+	Durable              bool                       `json:"durable,omitempty"`
+	RequestID            string                     `json:"request_id,omitempty"`
+	Agent                *sessions.AgentSelection   `json:"agent,omitempty"`
+	Restrictions         *agentResourceRestrictions `json:"restrictions,omitempty"`
+	ComputerApprovalMode string                     `json:"computer_approval_mode,omitempty"`
+	ComputerScope        string                     `json:"computer_scope,omitempty"`
+}
+
 func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.Request, name string) {
 	if r.Method != http.MethodPost {
 		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var req struct {
-		Content          string `json:"content"`
-		ModelID          string `json:"model_id,omitempty"`
-		UseKnowledgeBase bool   `json:"use_knowledge_base,omitempty"`
-		Stream           bool   `json:"stream,omitempty"`
-		Profile          string `json:"profile,omitempty"`
-		MaxTokens        int    `json:"max_tokens,omitempty"`
-		Durable          bool   `json:"durable,omitempty"`
-		RequestID        string `json:"request_id,omitempty"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req sessionGenerateRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -312,6 +324,18 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 
 	if err := authorizeChatAccess(r.Context(), h.requireAuth, req.UseKnowledgeBase); err != nil {
 		writeServiceError(w, err)
+		return
+	}
+	if req.Agent != nil {
+		if h.agentServer == nil {
+			writeError(w, "Agent conversations require a matching service", 503)
+			return
+		}
+		h.agentServer.submitConversationJob(w, r, name, req)
+		return
+	}
+	if req.Restrictions != nil || req.ComputerScope != "" || req.ComputerApprovalMode != "" {
+		writeError(w, "Select an agent before adding tools or computer access", 400)
 		return
 	}
 	if req.Stream {
@@ -343,6 +367,10 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 	session, err := h.scoped(r).Load(name)
 	if err != nil {
 		writeSessionError(w, err)
+		return
+	}
+	if session.Turn != nil && session.Turn.JobAdmission != "" && session.Turn.Active() {
+		writeSessionError(w, sessions.ErrTurnConflict)
 		return
 	}
 	modelID := req.ModelID
@@ -420,7 +448,7 @@ func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request)
 	}
 
 	// POST /v1/sessions/{name}/messages
-	if parts[1] == "turn" || parts[1] == "turn/events" || parts[1] == "turn/cancel" {
+	if parts[1] == "turn" || parts[1] == "turn/events" || parts[1] == "turn/cancel" || parts[1] == "turn/recover" {
 		h.handleTurn(w, r, sessionName, parts[1])
 		return
 	}

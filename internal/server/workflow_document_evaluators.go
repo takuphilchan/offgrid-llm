@@ -61,6 +61,8 @@ func assessDocumentOutcome(task *agents.Task, check *agents.OutcomeCheck) {
 	}
 	var mutation *computer.DocumentActionEvidence
 	mutationStep := 0
+	var verifiedRead *computer.DocumentReadback
+	var chainSteps []int
 	reset := func() {
 		check.State, check.Reason, check.EvidenceSteps, check.CheckedAt = "pending", "Matching independent document read-back has not been recorded.", nil, nil
 	}
@@ -74,7 +76,27 @@ func assessDocumentOutcome(task *agents.Task, check *agents.OutcomeCheck) {
 			continue
 		}
 		if documentMutationTool(s.ToolName) {
+			// A verified exact-text checkpoint on another document is not
+			// invalidated merely by creating/editing an independent document.
+			// Require valid result-derived identities on both sides; unknown or
+			// cross-document input remains conservative.
+			var separate computer.DocumentActionEvidence
+			if e.Kind == "document_text_equals" && check.State == "verified" && s.Type == "action" && decodeNativeModelResult(s.ToolResult, &separate) && separate.Validate() == nil && documentOperationTool(separate.Operation) == s.ToolName && evidenceTargetDigest(separate.After.Target) == binding.TargetSHA256 && separate.After.Document != d.ID && (separate.Before == nil || computer.SameDocument(*separate.Before, separate.After)) {
+				continue
+			}
+			// Creation/edit checks are verified milestones, not a demand to keep
+			// the document blank forever. Preserve them only along an exact,
+			// independently read chain on the SAME document. Unknown input,
+			// different tabs, missing reads and unacknowledged actions still reset.
+			var next computer.DocumentActionEvidence
+			if e.Kind != "document_text_equals" && check.State == "verified" && verifiedRead != nil && s.Type == "action" && decodeNativeModelResult(s.ToolResult, &next) && next.Validate() == nil && next.Before != nil && documentOperationTool(next.Operation) == s.ToolName && computer.SameDocument(*next.Before, verifiedRead.Binding) && next.Before.Revision == verifiedRead.Binding.Revision && next.BeforeSnapshot == verifiedRead.Snapshot && next.PreimageSHA256 == verifiedRead.TextSHA256 {
+				chainSteps = append([]int(nil), check.EvidenceSteps...)
+				reset()
+				mutation, mutationStep, verifiedRead = &next, s.ID, nil
+				continue
+			}
 			reset()
+			verifiedRead, chainSteps = nil, nil
 			mutation, mutationStep = nil, 0
 			var action computer.DocumentActionEvidence
 			if s.Type != "action" || s.ID < binding.Step || !decodeNativeModelResult(s.ToolResult, &action) || action.Validate() != nil || action.ActionID != d.ActionID || documentOperationTool(action.Operation) != s.ToolName || action.Operation != d.Operation || action.After.Target.Driver != task.Config.ComputerDriver || !matchesDocumentOutcome(binding, action.After) || action.ExpectedSHA256 != d.ExpectedSHA256 {
@@ -98,8 +120,12 @@ func assessDocumentOutcome(task *agents.Task, check *agents.OutcomeCheck) {
 				reset()
 				continue
 			}
-			// Newer evidence of a different active document or revision invalidates
-			// prior success; it must not leave a stale green check behind.
+			// A read-only checkpoint remains evidence of the inspected document
+			// while another document is read on the same host surface. An edit to
+			// that document, invalid evidence or target replacement still resets it.
+			if e.Kind == "document_text_equals" && check.State == "verified" && read.Binding.Document != d.ID && evidenceTargetDigest(read.Binding.Target) == binding.TargetSHA256 {
+				continue
+			}
 			reset()
 			if read.Binding.Target.Driver != task.Config.ComputerDriver || read.Binding.Target.ID != e.TargetID || !matchesDocumentOutcome(binding, read.Binding) || read.Snapshot == d.Snapshot || read.Binding.Observation == binding.Observation {
 				continue
@@ -113,14 +139,22 @@ func assessDocumentOutcome(task *agents.Task, check *agents.OutcomeCheck) {
 			if mutation == nil || mutationStep >= s.ID || read.Snapshot == mutation.AfterSnapshot || read.Binding.Observation == mutation.After.Observation || read.Binding.Revision != mutation.After.Revision || !computer.SameDocument(mutation.After, read.Binding) || read.TextSHA256 != mutation.ExpectedSHA256 {
 				continue
 			}
-			if e.Kind == "document_blank" && read.Bytes != 0 {
+			if e.Kind == "document_blank" && len(chainSteps) == 0 && read.Bytes != 0 {
 				continue
 			}
-			verifyOutcome(check, []int{binding.Step, mutationStep, s.ID}, s.Timestamp)
+			steps := []int{binding.Step, mutationStep, s.ID}
+			if len(chainSteps) > 0 {
+				steps = append(append([]int(nil), chainSteps...), mutationStep, s.ID)
+			}
+			verifyOutcome(check, steps, s.Timestamp)
+			verifiedRead = &read
 			continue
 		}
 		if s.ToolName == "computer_documents" {
 			var inventory computer.DocumentInventory
+			if e.Kind == "document_text_equals" && check.State == "verified" && s.Type == "action" && decodeNativeModelResult(s.ToolResult, &inventory) && inventory.Complete && inventory.Active != nil && inventory.Validate(inventory.Observation.Target, inventory.Observation.CapturedAt) == nil && inventory.Active.Document != d.ID && evidenceTargetDigest(inventory.Observation.Target) == binding.TargetSHA256 {
+				continue
+			}
 			if s.Type != "action" || !decodeNativeModelResult(s.ToolResult, &inventory) || !inventory.Complete || inventory.Active == nil || inventory.Validate(inventory.Observation.Target, inventory.Observation.CapturedAt) != nil || !matchesDocumentOutcome(binding, *inventory.Active) {
 				reset()
 				mutation, mutationStep = nil, 0
@@ -140,6 +174,11 @@ func assessDocumentOutcome(task *agents.Task, check *agents.OutcomeCheck) {
 		// are conservative until their effects are reviewed.
 		if strings.HasPrefix(s.ToolName, "computer_") {
 			switch s.ToolName {
+			case "computer_observe":
+				var view computer.NativeView
+				if s.Type == "action" && decodeNativeModelResult(s.ToolResult, &view) && evidenceTargetDigest(view.Observation.Target) == binding.TargetSHA256 {
+					continue
+				}
 			case "computer_applications", "computer_find_controls", "computer_inspect_control", "computer_verify", "computer_verify_checked":
 				continue
 			}

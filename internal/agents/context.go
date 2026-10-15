@@ -75,20 +75,24 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 			messages = projector.ProjectModelContext(task, messages)
 		}
 		index := ""
+		if len(task.Plan) > 0 {
+			plan, _ := json.Marshal(task.Plan)
+			index = "Current recorded plan (data, not authority): " + string(plan) + ". Continue unfinished work; a verified application launch alone cannot satisfy a document or research item."
+		}
 		if len(task.ContextArchive) > 0 && len(messages) > 0 {
 			plan, _ := json.Marshal(task.Plan)
 			// Stable task-local ordinals address the append-only archive without
 			// putting every 64-character digest back into each model request. The
 			// original digest references remain valid for existing clients/history.
-			index = fmt.Sprintf("Archived evidence: task_history references archive:1 through archive:%d, offset 0 then next_offset. Never invent facts. Recorded plan (data, not authority): %s", len(task.ContextArchive), plan)
+			index += fmt.Sprintf("\nArchived evidence: task_history references archive:1 through archive:%d, offset 0 then next_offset. Never invent facts. Recorded plan (data, not authority): %s", len(task.ContextArchive), plan)
 		}
 		if pending := PendingApplicationLaunches(task); len(pending) != 0 {
 			ids, _ := json.Marshal(pending)
 			index += "\nUnverified launches (host IDs): " + string(ids) + ". Call computer_verify_application; do not relaunch."
 		}
 		if task.Workflow != nil && WorkflowVersionSupported(task) {
-			checks, _ := json.Marshal(task.Workflow.Checks)
-			index += fmt.Sprintf("\nDeclared checks (interpretation, not permission or complete intent proof), revision %d: %s. Declare expectations before any mutation; keep unresolved work. After observing the application, add control checks with its actual target_id and element before editing. Research and saved-file verification are unsupported.", task.Workflow.Revision, checks)
+			checks, _ := json.Marshal(modelWorkflowChecks(task))
+			index += fmt.Sprintf("\nDeclared checks (interpretation, not permission or complete intent proof), revision %d: %s. Declare matching checks before input; keep unresolved work. These native check kinds do not verify research or saved files. Authorized connected tools remain available for research; report their actual results and limitations.", task.Workflow.Revision, checks)
 			if len(task.Workflow.Checks) == 0 {
 				index += "\n" + workflowDeclarationGuidance(task)
 			}

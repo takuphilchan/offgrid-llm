@@ -11,9 +11,9 @@ import (
 	ole "github.com/go-ole/go-ole"
 )
 
-func TestDocumentWindowsBackendIsNotAdvertisedBeforeWorkflowIntegration(t *testing.T) {
-	if features := ProviderNativeFeatures(&NativeWindows{}); features.Documents != 0 {
-		t.Fatal("partial backend became an advertised workflow", features)
+func TestDocumentWindowsBackendNegotiatesDocumentContract(t *testing.T) {
+	if features := ProviderNativeFeatures(&NativeWindows{}); features.Documents != NativeDocumentsVersion {
+		t.Fatal("document backend was not negotiated", features)
 	}
 }
 

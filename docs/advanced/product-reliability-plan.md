@@ -28,6 +28,622 @@ framework migration to solve local state and lifecycle problems.
 - Keep experimental capabilities visibly separate from supported workflows.
 - No automatic publishing: validate locally before a separately approved release.
 
+## Follow-up: conversational agents and profile persistence (2026-10-13)
+
+Development evidence for `agent-conversation-workflows`, not deployment or a
+claim that the new Chat/profile experience is complete:
+
+- Ordinary conversation with available desktop authority can return text with
+  zero tools, outcome checks or access requests. Existing declared outcomes and
+  uncertain actions still block unverified completion. Versioned desktop,
+  selected-window and managed-browser instructions allow answers/clarification
+  instead of requiring an unrelated tool call.
+- Trusted built-in argument/path rejection is classified before filesystem
+  effects and gets three repair attempts. An independent counter survives
+  unrelated reads and other repair-state resets. Injected directory creation
+  and partial writes retain uncertainty; neither resume nor reconciliation
+  replays the write.
+- Manual reconciliation retains original call arguments and a timestamp with
+  `human_reported` provenance. Runner and API fixtures verify that `done` does
+  not verify an unrelated application outcome or complete the task.
+- Owned immutable profile revisions support resource validation, optimistic
+  conflicts, archive/history, installed models and Knowledge references.
+  Tests cover cross-actor denial, upgrade/backup/restore, changed tool identities,
+  pinned parent/child revisions, delegation cycles/depth/count and aggregate
+  iteration reservations. Profile instructions cannot create authority.
+- Held-job and session-link primitives reject execution/steering/access before
+  linkage. Concurrent retries create one job; release itself does not execute.
+  Restart preserves the explicit-resume boundary. Final exchange attachment is
+  atomic/idempotent by turn/hash/job identity, including a disk-failure fixture.
+  These primitives are now wired into profile-enabled session generation: a
+  private admission outbox pins resolved inputs; the response returns one linked
+  canonical job. Plain Chat keeps its existing route behavior.
+- Added HTTP fault/restart checks at intent, turn, held-job, outbox binding,
+  conversation link and release boundaries. Concurrent identical submissions
+  return one job; concurrent conflicting payloads have one winner. Final-response
+  failures attach saved output once without inference replay. Event reconnect is
+  observation-only; anonymous/cross-owner read, event, recovery, cancel and delete
+  requests are denied.
+- Conversation deletion requires an explicit retain/stop choice for active
+  work. Slow cancellation is not acknowledged as settled. Synthetic lost
+  mutation acknowledgments retain uncertainty and canonical recovery after
+  conversation deletion, with exactly one recorded synthetic effect. No native
+  applications or personal documents are involved in these tests.
+- Running-parent corrections are durably queued, applied at a safe boundary and
+  distinguished from already dispatched actions. Tests cover inference,
+  authorization, final-answer races, recorded/unknown effects and explicit
+  restart continuation. The UI distinguishes queued from applied corrections;
+  reload does not resubmit. The existing expiry browser fixture now freezes its
+  fake clock during page load, removing dependence on loading within 1.5 seconds.
+  A further regression check verifies that discarding a proposal for newly queued
+  steering preserves its spent inference iteration, including the final allowed
+  iteration; corrections cannot replenish the parent/child budget.
+- Generated contracts and web/Python clients expose profiles and linked turns.
+  New Python mutations do not automatically retry a lost acknowledgment and do
+  not select/download a replacement model or use a client-local executor.
+- Authorized discovery now ranks bounded schemas, retains native/MCP composition,
+  reports oversized schemas, and rechecks actor/profile/child restrictions on
+  every search. Regression tests cover 90-tool catalogs, pagination, revoked and
+  changed identities, canceled discovery and zero execution during discovery.
+  An 8192-token fixture preserves user constraints through a large multilingual
+  MCP result, verifies provider/call/digest provenance, and reconstructs the exact
+  saved bytes through history pages without a second provider call. Separate
+  document fixtures reject service artifacts/files and remote exports as evidence
+  for the requested unsaved Notepad text. A verified OBS check permits a normal
+  final answer with no calculator or other unrelated dispatch. These deterministic
+  cases do not prove an installed model chooses the correct action.
+- Current React Agents now hosts the profile library/editor; Chat selects a
+  revision and observes the same canonical job inline. Existing task links remain
+  secondary inspectors. Tests cover CRUD, conflict preservation, removed models
+  and changed tools, unsaved navigation, linked steering/reload, final-result
+  attachment, approval/failure/uncertainty states and explicit old-service denial.
+  All nine locales now have explicit profile/conversation strings. Browser checks
+  exercise RTL, IME, keyboard focus and short-screen scrolling in both themes;
+  native-speaker translation review and assistive-device qualification are unverified.
+- Wiring Chat exposed the legacy admin-only job-route mismatch. Owned profile
+  jobs now have Chat-authorized lifecycle/read access; legacy jobs remain admin
+  only. Current actor checks reject non-admin service-filesystem/MCP/host tools
+  and recheck disablement/demotion before dispatch, including approved calls.
+  Pure calculator/time tools do not confer external resource access.
+
+Executed checks in this working tree:
+
+- Windows Go 1.26.6: `go test ./...` passed. Focused agent/server/session/
+  inference/computer/storage/capability suites also passed.
+- WSL Ubuntu Go 1.26.6: `go test -race ./internal/agents ./internal/sessions
+  ./internal/server ./internal/capabilities` passed. This is selected race
+  coverage, not the complete release matrix.
+- `npm.cmd --prefix web/app run api:generate`, `api:check` and `check` passed.
+- The isolated `task-access-intent.spec.ts` browser suite passed 12/12, including
+  greeting without consent and deferred task access without replay on reload.
+- The isolated `task-first.spec.ts` suite passed 23/23 after the clock-fixture fix,
+  including the new pending-correction assertion. An initial invocation from the
+  repository root missed the Playwright configuration; the recorded passing run
+  used `web/app` and its disposable Vite fixture, not the installed service.
+- New isolated `agent-profiles.spec.ts` + `agent-chat.spec.ts`: 19/19 passed.
+  Existing Chat streaming, task-first, control consistency, voice playback and
+  history suites: 63/63 passed. Light/dark and narrow profile screenshots were
+  captured; primary buttons were corrected after visual inspection. This is not
+  the complete UI acceptance matrix. Profile-job ownership/role-change Go tests
+  passed; the original event fixture was corrected to use a paused saved job
+  rather than subscribing indefinitely to never-started pending work.
+- Chat/profile + task-access fixtures passed 35/35: remembered access is reused once,
+  greeting/reload do not request control, and late consent after Stop cannot
+  start input. A transient capability loss no longer switches the profile home
+  back to task composition. Screenshots of inline attachments and short-screen
+  Arabic/English light/dark Tools were inspected; partial verification is shown
+  instead of an unqualified Completed label.
+- A further parent-only speech fixture passed: five minutes of child/tool activity
+  does not consume the final answer's TTS preparation timeout; no nested payload is
+  spoken, the parent answer is synthesized once, and reload does not replay it.
+- Built renderer + disposable service: the latest 351-test Playwright invocation
+  finished with **341 passed, 10 skipped** in 3.1 minutes, no failures. Skipped
+  scenarios require separately enabled model/restart fixtures, packaged-task
+  fixtures or explicit installed-UI checks; they are not counted as passing.
+  Evidence directory: `offgrid-web-qualification-CVCnpK` under the local temporary
+  directory. No installed service or port 11611 was used. Narrow partial-result
+  and short-screen Arabic/English Tools screenshots were inspected.
+- The complete CI race package list passed in WSL on rerun, as did the companion
+  command race suite. The first broad run reported a server-suite failure whose
+  detail was lost in truncated output; a fresh server-only run and the subsequent
+  full command passed. This is not a claim that the initial failure was diagnosed.
+- Desktop contract tests passed 65/65; companion tests passed 73/73. These use
+  isolated fixtures/controlled browser surfaces, not personal native applications.
+- CLI/service-client suites passed with reusable-profile CRUD, explicit revision
+  conflicts, pinned run submission, linked conversation send/inspection/recovery,
+  interactive safe-boundary steering and Stop, pending-access/uncertainty blocking,
+  explicit deletion choices, terminal-control sanitization and old-service
+  rejection. No local executor, native launch or model download is used by these
+  fixtures. Existing SSE rendering/cancellation tests run in the same suite.
+- Python 3.14.4 / pytest 9.0.2 in WSL: `python3 -m pytest tests/test_client.py`
+  from `python/` passed 36/36, including old-service guards before agent turn/job
+  submission and no mutation retry after a lost reply. Native Windows `python` was unavailable; it is not
+  counted as a Windows SDK qualification pass.
+- `OFFGRID_CROSS_CLIENT_TESTS=1 go test ./internal/server -run
+  TestAgentCrossClientIntegration -count=1 -v` passed in WSL with an actual
+  newly built CLI, Python SDK and headless Chromium. Python creates one linked
+  job, browser network requests inspect/steer it (same-ID correction retry is
+  idempotent), CLI observes/cancels it, and Python observes the same cancellation.
+  Separate browser identities verify cross-actor read/steer/cancel denial.
+  There is one model-fixture invocation and one canonical job. All stores and
+  credentials are disposable; UI rendering remains covered by the separate
+  current-renderer suite. This is not real inference or native-platform evidence.
+  An initial browser test used context-wide Alice headers while attempting Bob
+  fetch headers; it was corrected to use a separate Bob browser context.
+- OpenSpec strict validation, documentation-checker tests (6/6), maintained-doc
+  link checks and `git diff --check` passed; line-ending warnings are not failures.
+
+Application matching follow-up (2026-10-14): full catalog lookup now gates both
+model launch choices and dispatch. Exact display names and registered aliases
+outrank fragments without selecting the first duplicate name. Tests cover Settings
+at entry 61 of 95, localized names, ambiguity, missing apps, stale/revoked sessions,
+changed instructions, failed newer lookups and refusal to substitute Access.
+The service recomputes the result from saved catalog/lookup arguments instead of
+trusting an application ID in model output. Windows aliases come from additional
+OS registrations of the same executable; paths are never used as aliases.
+
+The first integrated fixture exposed an additional defect: the runner required
+a selected-window observation before permitting application lookup. The read-only
+lookup now runs before selection, and the durable MCP-plus-launch and complete
+multilingual document fixtures pass through that order. `go test ./internal/server
+./internal/computer ./internal/agents` passed after these fixes. These fixtures
+dispatch only to controlled in-memory hosts. No personal application was launched.
+An initial dispatch test changed a detached task snapshot rather than persisted
+state; it was corrected to use the manager's durable step API.
+New application outcome declarations are checked before persistence as well as
+before launch. A mismatched declaration receives bounded correction rather than
+freezing the wrong immutable outcome. `TestApplicationDeclarationRejectionDoesNotFreezeWrongOutcome`
+covers the three-repair limit with no saved check or native dispatch. The combined
+MCP fixture was updated to declare its research outcome before MCP approval and
+its application outcome after lookup. Its initial unbounded pre-approval wait
+was stopped after exposing that fixture-ordering error; startup now shares the
+fixture's 30-second deadline. The corrected focused suite passed.
+
+Frozen sanitized regression baseline for this change (2026-10-14):
+
+| Reported regression | Executable fixture and current result |
+| --- | --- |
+| Hello with desktop authority invents work | `TestConversationWithDesktopAuthorityNeedsNoOutcomeDeclaration`: one model answer, zero executed tools, access requests, approvals or outcome checks |
+| Verified OBS needs an unrelated calculator call to finish | `TestVerifiedOBSCanFinishWithoutUnrelatedTool`: a controlled trusted assessment of the OBS check permits one final answer and zero tool calls |
+| Settings is missing from the first 40 applications; Access is chosen instead | `TestApplicationSearchFindsOmittedNamesAndInvalidatesOldCatalog` and `TestApplicationMismatchRejectedByDispatchBeforeHostContact`: entry 61 resolves; unrelated identity rejected before host contact |
+| Unsaved multilingual Notepad is replaced by a service file/artifact | `TestServiceArtifactCannotFulfillUnsavedMultilingualNotepad`: artifact, built-in file and MCP export variants cannot fulfill native document checks |
+
+The frozen focused command using these five test names passed with `-count=1 -v`
+in the agents/server packages, as did the complete agents/server/computer suites.
+These are retrospective sanitized regression representations, not a replay of the
+user's personal applications or a claim that all five tests were run against an
+untouched historical binary. The before/after runner lookup failure above was
+observed directly during this implementation. The OBS assessment is synthetic;
+real-model and real-application completion remain separate acceptance gates.
+WSL race coverage for `internal/server`, `internal/agents` and `internal/computer`
+also passed after the application-matching repair.
+The subsequent complete `go test ./...` run passed. OpenSpec strict validation,
+the six documentation-checker tests, 133-file link check and whitespace check
+also passed. These checks do not replace the outstanding installed-model matrix.
+
+### Authenticated action receipt recovery — 2026-10-14
+
+The authenticated companion reply now reaches the existing canonical task store
+before acknowledgment. The receipt is pinned to actor/task/session/call,
+canonical arguments and the reviewed native capability revision. Only conclusive
+typed native results qualify; failed/uncertain replies remain unresolved. Recovery
+consumes the saved result once, records `companion_receipt` provenance and leaves
+the task interrupted for explicit resume. It does not grant access, replay input,
+mark all checks verified or infer exactly-once submission from a visible screen.
+Service restart can recover the receipt while still expiring desktop consent.
+
+Evidence: `TestComputerReceiptRecoversLostAcknowledgmentAfterRestart`,
+`TestComputerReceiptRejectsMismatchesAndDoesNotInferSuccess`,
+`TestComputerReceiptSurvivesWorkerSnapshotAndPause`,
+`TestComputerReceiptRequiresConclusiveTypedHostResult`, and
+`TestNativeReplyPersistsBeforeAcknowledgment`. The complete controlled-host
+document fixture includes `lost-service-ack`: actual synthetic input and host
+journal completion happen once, receipt persistence succeeds, then the transport
+handoff fails. The runner recovers the exact result without another dispatch or
+automatic continuation. The separate `lost-ack` and `partial-input` cases retain
+uncertainty because no conclusive receipt reached the service. This is not a
+claim that an offline/revoked host can be queried after consent ends.
+
+`go test ./internal/server ./internal/inference ./internal/agents
+./internal/computer -timeout=5m` passed after these changes; focused receipt,
+document and transport regressions also passed. Desktop unit tests: 65/65;
+companion unit tests: 73/73. Generated API drift, TypeScript and production UI
+build passed (the existing large-JavaScript-bundle warning remains).
+
+The first installed-model matrix exposed gaps hidden by deterministic callers:
+a direct greeting fell into legacy native completion validation; completed name
+lookup kept inviting lookup; verified app readiness prompted unnecessary tool
+discovery or premature completion of a larger task. The fixes separate the actual
+answer boundary from handoff validation, advance guidance from durable progress,
+keep original intent beside stage guidance, and omit redundant tool discovery
+only when all authorized optional schemas are already presented. No English app
+name routing or model-specific execution bypass was added. A read-only token
+count transport EOF retries once within the original deadline; generation and
+mutations do not inherit this retry. Frozen real-model results follow separately.
+
+Remaining: human locale/accessibility qualification, installed
+cross-client package qualification, and integrated
+model/desktop acceptance. The passing profile/Chat fixtures are not a completed
+program or installed-package qualification.
+No installed-model evaluation
+or real Windows/macOS/Linux native-app workflow is qualified by these fixtures.
+No container, desktop installation, commit or release was changed by this work.
+
+## Follow-up: rejected-launch loops and staged model execution (2026-10-12)
+
+The 2026-10-13 correlation repair fixes a service transport defect: complete,
+validated single-step calls lacked IDs in both completion and SSE responses,
+causing the native preflight to reject otherwise valid Qwen calls. Correlation
+IDs are now created only after clean envelope validation and retained through
+stream parsing. The installed Qwen2.5-7B-Instruct-Q4_K_M passed the synthetic
+two-step native preflight three times; this did not dispatch desktop input.
+
+The same installed model then completed three consecutive full runner/executor
+workflows against an in-memory document provider: one creation, one exact
+`OffGrid test — café 日本語 12345` insertion, independent read-back, unchanged
+pre-existing document, and completed task. Runs used 18/16/16 model calls and
+took approximately 64.0/52.8/50.4 seconds at the unchanged 8192-token allocation.
+These are synthetic workflow measurements, not a native Notepad or speed claim.
+Earlier unsuccessful repetitions exposed repeated baseline declarations and
+post-verification input proposals; they remain failures, not discarded passes.
+Stage schemas now reuse identical checks, prioritize fresh post-input reads,
+and require saved plan advancement before proposing more input after a verified
+document stage. Stage guidance follows the result it describes. MCP tools stay
+composed; canonical evidence and dispatch guards are not relaxed.
+
+Owned loopback probes returned responses with both the installed CPU-only
+worker and CUDA worker (about 2952 ms and 184 ms respectively for a three-token
+probe). CUDA device discovery reports RTX 5060. The captured runtime log did not
+provide explicit layer-offload evidence; these probes do not qualify hardware
+profiles or prove native application behavior. No personal desktop input,
+permission grant, model download or retry of a user's saved task was performed.
+Installed Windows Notepad, other application profiles, macOS and Linux native
+acceptance remain unverified and their OpenSpec gates remain unchecked.
+
+Authorized local testing deployment replaced the service with
+`offgrid-llm:preflight-correlation-cpu-gpu-20261013` (container `2c3a658f5307`)
+and installed the matching unsigned local 0.4.16 desktop package. The service
+reports revision `cd87033-worktree-preflight-correlation`; the current UI build
+and workspace identity are unchanged. Before replacement, an idle-state check
+and verified workspace backup completed; the private backup is
+`/home/phil/offgrid-agent-sequencing-backup-v9oEHqnt`. The stopped rollback
+container is `offgrid-before-agent-sequencing-1791870482`. Desktop application
+and state backup is `D:/offgrid-llm-backups/desktop-preflight-correlation-20261013`.
+One OffGrid service is running; models, history and failed tasks were preserved.
+
+The live service's authenticated API admission path returned
+`computer_tool_check_passed` for the installed Qwen model and Windows driver at
+8192 context tokens. Its worker is the installed CUDA binary. Windows Go tests,
+WSL server/agent/inference race checks, computer/desktop unit suites, strict
+OpenSpec validation, documentation and whitespace checks passed. Packaged
+Windows startup/recovery and current-access presentation passed in isolated
+profiles, including 2x zoom. Read-only installed-package verification matched
+all nine deployment files and the native pack; it submitted no tasks or grants.
+This is a local testing deployment, not a signed release or platform qualification.
+
+The 2026-10-13 follow-up retains both CPU and GPU operation. The deployed
+service was explicitly forced to CPU (`OFFGRID_ENABLE_GPU=false`, zero layers,
+and an explicit CPU worker path). Merely detecting the RTX 5060 does not undo
+that configuration. Runtime selection now accepts the effective configuration,
+including file-loaded settings, and cannot prefer a cached CPU worker over a
+validated installed GPU worker. Embedding workers retain independent placement.
+The CUDA image also includes a separate CPU-only worker at the same pinned
+llama.cpp revision. GPU compilation, device listing and successful accelerated
+inference are separate checks; none qualifies native application workflows.
+
+The later CPU synthetic model run reached launch verification and document
+read-back, but repeatedly declared text checks on the pre-existing document
+instead of creating the requested new one. Read schemas now expose only actual
+inventory identities and returned continuation pages; duplicate declared checks
+are removed from subsequent model schemas. The focused Windows inference,
+agent and server tests pass after the configuration fix. A complete real-model
+create/edit/read-back repetition and installed native-app acceptance are still
+unverified; the failed model attempt is not recorded as a pass.
+
+The later reported Notepad task recorded twenty steps without launching an
+application or editing a document. Its catalog included Notepad; this was a
+different regression from the earlier catalog omission. Rejected dependent tool
+batches were followed by successful catalog reads that incorrectly cleared the
+repair budget. Recovery also referred to a prior launch even though those launch
+proposals had never reached dispatch. The saved failed task remains untouched.
+
+- Dependent computer batches remain rejected before dispatch. Their first
+  dependency now stays unresolved across unrelated reads and metadata, with the
+  persisted three-repair ceiling. Fresh evidence, not a rejected proposal,
+  determines whether an initial launch or post-launch observation is needed.
+- Sequential local inference uses an owned, schema-constrained single-call
+  envelope. The pinned runtime's native template parser did not reliably enforce
+  `parallel_tool_calls=false`. Streaming must finish cleanly before any call is
+  emitted. Token counting uses the same wire contract. Ordinary typed Chat and
+  callers allowing parallel tools retain their existing transport.
+- Model schemas follow recorded catalog, launch, target, inventory and read-back
+  stages. Document mutations are offered only with a currently valid matching
+  declared check. These projections do not widen grants, infer requested text,
+  weaken host preconditions or replace canonical outcome evidence. MCP tools
+  remain composed with computer capabilities.
+- The follow-up model runs also exposed duplicate exact-history retrieval and
+  confusion between whole-control verification and document verification. Model
+  retrieval now lists omitted/archived evidence and unread page offsets only;
+  full canonical history stays available through existing APIs. Document-aware
+  instructions distinguish the two verification paths, and legacy verification
+  is offered only for a declared, bound control check. Tool-local JSON-pointer
+  references are independently rebased inside the private inference envelope,
+  without changing the original MCP schema identities.
+- Full Windows `go test ./...` passes after these changes. Scripted complete
+  runner/host/journal fixtures pass, including partial input and lost
+  acknowledgments. Installed-model repetitions are still being investigated:
+  initial runs exposed repeated metadata/readiness choices and a missing
+  observation operation in the synthetic host. Those failed runs are not
+  qualification passes. CPU-only generation measured roughly 1–3 minutes per
+  step; prompt counting took milliseconds. This is not an interactive performance
+  claim.
+- The synthetic model fixture cannot launch or edit real applications. It does
+  not qualify installed Notepad, other Windows applications, macOS or real
+  X11/Wayland. The native acceptance and hardware/pilot gates remain open.
+
+## Packaged application discovery and sequential-tool repair (2026-10-12)
+
+The reported Notepad attempt failed before application launch or document input.
+Its catalog omitted Notepad, then a multi-tool model response was permanently
+failed by the sequential-control guard. The measured prompt was 5,536 of 8,192
+tokens; the recorded failure was not context overflow.
+
+- Reproduced the catalog omission read-only against the current user's installed
+  package. AppModel returned its path, but `filepath.EvalSymlinks` failed with
+  access denied at the protected WindowsApps ancestor. The replacement validates
+  the opened object's normalized final DOS path, without changing filesystem
+  permissions. Package registration, revision, manifest and file-identity checks
+  remain enforced. Remote/device paths, alternate streams, missing files and
+  junction redirection are rejected. The same Notepad registration now appears
+  in the full **95-entry** installed catalog (44 packaged entries). This did not
+  launch, focus, select or edit an application.
+- Computer multi-call responses are rejected in full before queueing or dispatch,
+  with uniquely paired model feedback and the existing persisted three-repair
+  budget. A corrected single call can continue; exhaustion interrupts the task.
+  Earlier actions, pending read/expectation/access checks and uncertain-outcome
+  boundaries are preserved. Non-computer batching remains compatible. Tests
+  cover rejected-batch side effects, repeated proposals, false completion,
+  restart state, storage failure and stronger outstanding repair guards.
+- Windows `go test ./...`, the complete CI Linux race set plus host-command and
+  native-tagged packages, companion **73/73**, desktop **65/65**, API drift,
+  TypeScript and production UI build pass. The existing large-bundle warning
+  remains. Windows junction rejection passed; symbolic-link fixtures were
+  skipped because this account lacks symlink-creation privilege. No privilege
+  elevation or directory ACL changes were made.
+- This is not installed-app input qualification, model-accuracy evidence or a
+  completion claim for the wider document program. The failed saved task is
+  unchanged and was not rerun automatically.
+
+### Matching local replacement receipt
+
+- With explicit approval, replaced the existing service with
+  `offgrid-llm:notepad-repair-20261012`, container `7d7cc5257c96`, image digest
+  `sha256:7a519159c9904dd54872c635048c88d365da5f9932a5e81d170e703edaca521c`.
+  Exactly one container service is running, `/health` is healthy and restart
+  count is zero. The running binary matches the new staged build. The previous
+  service is stopped with restart disabled as
+  `offgrid-before-notepad-repair-1791800038`.
+- Private backup `/home/phil/offgrid-notepad-repair-backup-Rr5eijBH` contains the
+  stopped workspace archive, successful verification and SHA-256 receipt.
+  Workspace identity, task IDs/statuses, conversation names and installed model
+  IDs were compared before/after. Model volumes were retained, not copied over
+  or repaired. The reported failed task retains its original two steps.
+- Updated `C:\Users\phil\AppData\Local\Programs\OffGrid LLM Desktop` using the
+  rebuilt installer. All nine selected installed resources, including service
+  and native worker binaries, match the staged package; full computer-pack
+  integrity verification passes. Protected application/state/profile backup:
+  `D:\offgrid-llm-backups\desktop-notepad-repair-20261012`. Five desktop
+  connection/journal files were hash-checked unchanged after replacement.
+- Packaged startup/recovery passes (652/735 ms; `offgrid-desktop-startup-Olh8o8`),
+  as do access/zoom checks (`offgrid-desktop-access-GPHymF`) and the owned packaged
+  browser workflow (`offgrid-packaged-browser-umYMxN`). Installed read-only smoke
+  evidence is `offgrid-installed-notepad-repair-powBSr`; all evidence directories
+  are under the Windows temporary directory. The installed test submitted no
+  task, granted no desktop authority, and confirmed the same external workspace.
+- Service and desktop retain the current UI identity
+  `d586cd9823a7b87537c2ebea1a5cd944bbe067f430b5f3fbe90fd00da33d8795`.
+  This remains an unsigned local **0.4.16** testing build, not a new release.
+  No commit, push or publication was performed. Full installed Notepad
+  creation/input/read-back and other-platform qualification remain unverified.
+
+## Native document provider implementation and test deployment (2026-10-12)
+
+This pass adds native provider code and a local testing build. It does **not**
+finish the program: OpenSpec remains **21/32**. The earlier entries below are
+historical evidence, not the current deployment or capability state.
+
+- Windows now negotiates the document contract. Bounded RawView UIA discovery
+  includes template containers. An exact Notepad package/AUMID profile binds the
+  selected tab, content presenter and observed AddButton; package revision and
+  layout are revalidated before its single invocation. Creation succeeds only
+  after distinct blank-document evidence. Tests cover wrong versions, unrelated
+  apps, ambiguous controls, changed layouts and protected content. There has
+  been **no installed Notepad creation/input test**; this is not qualification.
+- AX/AT-SPI providers retain native references and separate document, editor,
+  generation and text revisions. Native range mapping and preimage checks guard
+  selection, insertion and replacement. Multi-call AT-SPI replacement never
+  retries/restores after deletion; it rechecks the document before insertion.
+  Missing marked-text evidence blocks edits. Generic AT-SPI composition remains
+  unknown; its document-edit path is consequently unavailable. Unix and browser
+  creation profiles are still missing, not merely awaiting tests. The AX code
+  has not been compiled or run on macOS.
+- The real owned GTK fixture exposed libatspi process-global shutdown/restart
+  cache failure and an Xvfb/WSLg environment mismatch. Initialization now lasts
+  for the owned worker process; closing an adapter still releases its references.
+  The isolated runner explicitly selects X11 and updates its private D-Bus
+  activation environment. Its legacy Save assertion polls for the independently
+  observed result after **one** shortcut, never resending it.
+- The final isolated Linux native suite passes with AT-SPI 2.60.4, GTK3, Xvfb
+  and an owned fixture. It verifies real document inventories/read-back across
+  tabs with a reused editor and Unicode, plus legacy control input/read-back,
+  checkbox and stale-observation tests. Evidence:
+  `/home/phil/ogn-kaE6JLgp/offgrid-native-linux.dC3CcX`. It does **not** test new
+  document edits through a stable composition provider, installed editors,
+  real Wayland or macOS. No personal applications/documents were controlled.
+- Windows `go test ./...`, companion **73/73**, desktop **65/65**, API drift,
+  TypeScript and production UI build pass. The existing large-chunk warning
+  remains. The complete CI race set plus the host command and Linux-native-tagged
+  computer/host packages pass in WSL, including the final provider refinements.
+- The new isolated service passes **21/21** workflow/layout/streaming/replay
+  browser tests (`offgrid-web-qualification-9HSQMT`). The matching Windows package
+  passes startup/recovery (`22YpQ2`: first window 930 ms, recovery 1086 ms), owned
+  packaged browser (`DAcpO4`), access UI (`JAu7Ns`), and theme/zoom/locales
+  (`CQZ33R`). These are disposable test profiles, not native application or
+  model-accuracy qualification. Six harness and six documentation unit tests pass.
+
+Remaining implementation includes reviewed Unix/browser creation semantics,
+usable Unix composition profiles, and complete native/model workflow harnesses.
+Installed Windows/another-editor/browser workflows, macOS Intel/Apple Silicon,
+real Linux X11/Wayland, model latency/completion, signing and release gates remain
+unverified. Do not mark 32/32 or describe these gaps as only testing.
+
+### Local replacement receipt
+
+The user authorized replacing the existing service and updating the desktop.
+Both operations completed; they are a testing deployment, not a new release.
+
+- Exactly one running service: `offgrid`, container `da9fe65955b7`, image
+  `offgrid-llm:document-providers-20261012`, image digest
+  `sha256:63e02da3fe384bda98a709945b90cf44240c893a039b18e2e9f61da305f7af78`.
+  `/health` reports healthy. The service binary hash matches the new build.
+  The previous container is stopped with restart disabled as
+  `offgrid-before-document-providers-1791793445`; it is not a second service.
+- After confirming no running work, inference or computer sessions, the stopped
+  service data was copied to the private directory
+  `/home/phil/offgrid-document-provider-backup-0silL2fp`. Its workspace archive
+  passed the workspace verifier and SHA-256 check. Existing model volumes were
+  retained without alteration; this operation did not make another model-weight
+  backup or download/replace a model.
+- The workspace identity, current UI build, all saved task IDs/statuses,
+  conversation names, language/speech model IDs and ASR/TTS availability match
+  their pre-replacement values. Uncertain/interrupted tasks were not resumed,
+  reconciled, removed or converted to a success.
+- The matching unsigned local **0.4.16** Windows package was installed in the
+  existing per-user directory. The previous application and desktop/profile
+  state are in the ACL-protected
+  `D:\offgrid-llm-backups\desktop-document-providers-20261012` directory.
+  All nine checked application/service/UI/companion files match the new package.
+  This is a working-tree build, not a signed or published release.
+- A fresh isolated profile launched the installed executable against the existing
+  external service and passed pack/UI integrity, current composer, protocol-v3,
+  policy popover, 200% zoom/scroll, Escape/focus and legacy-layout absence checks.
+  No task was submitted and no computer-control consent was granted. Evidence:
+  `offgrid-installed-document-providers-6nSbhV`. The temporary test app closed;
+  the external service remained healthy.
+- Final Windows computer/host tests, all twelve harness/docs unit tests,
+  125 maintained-document link checks, strict change validation and whitespace
+  checks pass. No commit, push, tag or publication was performed.
+
+## Native document service/workflow integration (2026-10-12)
+
+This continuation completes stage-relevant service integration and measurement
+infrastructure, not the complete native-document program. Installed native
+document workflows remain unavailable; their remaining work includes code as
+well as platform testing. The deployment described in later historical entries
+has not been replaced by this pass.
+
+OpenSpec is **21/32 complete** after tasks 6.3, 8.3, 9.2 and 9.5. The eleven open
+tasks remain 3.4, 4.1–4.4, 5.2–5.4, 8.2, 9.3 and 9.4. Review/check completion is
+not native workflow completion. In particular, missing reviewed creation
+semantics cannot be replaced with guessed shortcuts or title-based targeting.
+
+- New task-first jobs use workflow-evidence v2 without upgrading existing jobs.
+  Document tool discovery and execution both require an actor-owned negotiated
+  `native_documents:1` host. The service, authenticated hub, existing native
+  executor/supervisor and dispatch journal now connect end to end. Strict input
+  validation covers duplicate/unknown/null fields, exact Unicode, bounded escaped
+  payloads and unnegotiated/foreign sessions. Reads do not consume mutation budget.
+- Document schemas follow actual inventory, selection and read-back state.
+  Authorized MCP tools remain composed. A generic observation restores ordinary
+  control tools, including the original `computer_replace_text` shape. Only one
+  shape is offered at a time. Model check summaries omit redundant canonical
+  digests/bindings without deleting original instructions or saved history.
+- The full synthetic create–declare–edit–read-back test exposed an 8192-token
+  overflow and loss of verified blankness after the intended subsequent edit.
+  Both were fixed. Creation/edit milestones now survive only a continuous
+  independently verified same-document edit chain. Unknown input, another tab,
+  changed preimages/revisions, omitted initial verification or lost results
+  cannot extend that chain. Current-text predicates still check current state.
+- `TestDocumentWorkflowRunnerHostCreateEditReadback` passes all three cases:
+  normal completion, partial input and lost acknowledgment. Each attempts one
+  creation and one edit; uncertain outcomes stop rather than repeat input.
+  The test uses an in-memory provider behind the real runner/hub/journal, not
+  native applications. Existing persistence/restart/Stop and repair-budget
+  regressions also pass. This is more than the old declaration-only model
+  fixture, but does **not** complete the OS-backed sequences in task 8.2.
+- An opt-in installed-Qwen synthetic workflow was attempted through literal
+  loopback `/v1/chat/completions`. It failed before a document action because
+  inference did not return within the request/test deadlines. No successful
+  model run or usable latency result is claimed. The harness now stops after
+  the first failed repetition, records attempted model calls even on failure,
+  and leaves unavailable actual token counts null. No model was downloaded,
+  no desktop input occurred, and the user's saved task was not resumed.
+- Verification passed on Windows: `go test ./...`, all **73** companion tests,
+  all **65** desktop unit tests, API drift, TypeScript checking and production UI
+  build. The existing large-chunk build warning remains. The full CI race set
+  plus `cmd/offgrid-computer` passed in WSL with fresh private ext4 temporary
+  state (`/tmp` was full; no pre-existing files were removed). WSL Python 3.14.4
+  passed all **20** client tests. The six harness tests and six documentation
+  tests pass; the maintained-doc check covers 125 files. Strict change validation
+  and `git diff --check` pass. Native opt-in cases remain unrun, not passes.
+- A fresh isolated Windows service passed **21/21** requested workflow/layout/
+  streaming/replay checks (`offgrid-web-qualification-7MOjaG`). A separate
+  test-only desktop package was built at
+  `build/document-desktop-verification-20261012/win-unpacked`; it was not installed.
+  Startup/recovery, packaged browser, theme/200%-zoom and desktop access UI
+  checks all pass. Their temporary evidence suffixes are `iHON0y`, `lehSEs`,
+  `8NjE8q`, and `qriteX` respectively. Startup observed its first window at
+  1371 ms and recovery at 1561 ms; these are one fixture run, not latency
+  qualification or signing evidence. Package creation was retried from the
+  correct desktop working directory after its hook rejected the root invocation.
+- A separate isolated service run passed **24/24** typed-chat/voice UI checks
+  (`offgrid-web-qualification-7jmsFk`): streaming, cancellation, model selection,
+  synthetic microphone lifecycle, bounded speech prefetch, navigation and
+  keyboard/popover behavior. No microphone recording was made. Final Windows
+  `go test ./...` and WSL race reruns for agents, server, computer and the host
+  command also passed after the measurement and typed-error refinements.
+
+### Document measurement record
+
+The owned fixture collector and harness retain this closed numeric schema.
+No private text, titles, paths, target IDs, tool arguments or raw errors are
+accepted. Unknown/duplicate records are rejected. An absent metric is null,
+not a fabricated zero. Model repetition stops on failure; there is no automatic
+model download or substitution.
+
+| Results column | Meaning |
+|---|---|
+| Platform/profile, repetition, status | Harness identity and outcome; keep native, synthetic and installed-model runs separate |
+| Discovery calls/ms | Application catalog refresh and identity checks |
+| Readiness calls/ms | Bounded read-only application readiness |
+| Observation calls/ms | Independent document inventory/snapshot reads |
+| Preparation calls/ms | Preparation including fresh precondition reads |
+| Input calls/ms | The attempted provider operation, excluding subsequent verification |
+| Verification calls/ms | Postcondition polling and separate read-back |
+| Model calls/ms | Model request time; scripted calls are not inference time |
+| Actual prompt tokens | Sum of backend-reported usage, null if any usage is unavailable |
+| Total calls/ms | Whole fixture run; not the sum of potentially nested stages |
+
+The synthetic editor starts already selected, so discovery/readiness are null
+there. Separate controller fixtures exercise those timers. Actual installed
+profile timings, p95 claims, real-model completion percentages, soak and pilot
+gates remain unfulfilled. Instrumentation does not establish those results.
+
+### Acceptance reconciliation
+
+| Approved scenario | Current evidence / remaining work |
+|---|---|
+| Packaged Notepad opens and is recognized | Identity/activation contracts exist; isolated installed-app acceptance unverified |
+| Fresh blank document, exact multilingual edit, other tabs unchanged, no save | Synthetic full sequence passes; Windows creation profiles, AX/AT-SPI providers and real application sequence still required |
+| Reused editor, tab/focus/revision change and lost acknowledgment | Contract, journal, runner and synthetic fault tests pass; native provider fault coverage remains unverified |
+| Failed observation is not an invented mutation | Typed operation-local recovery and persistence/restart regressions pass |
+| Equivalent UIA/AX/AT-SPI workflows | Windows backend is staged, not advertised; AX/AT-SPI document providers are incomplete; no macOS/X11/Wayland qualification |
+
+No container replacement, desktop installation, commit, push or release occurred
+in this continuation. The user explicitly declined native testing against
+personal documents; no such tests were run. This evidence does not authorize
+checking off incomplete providers or claiming all remaining work is testing.
+
 ## Native document workflows: read recovery (2026-10-11)
 
 - Implemented a versioned native operation-effects table shared by the service,
@@ -4389,3 +5005,115 @@ Authorized matching local deployment of the MCP removal repair:
 - This local package is unsigned. These checks do not establish broader native
   or vision qualification, signing, independent security review, or soak/pilot
   completion. WSL and the VPN were not restarted or reconfigured.
+
+### Conversation-work UI and specialist handoff check — 2026-10-14
+
+- Chat now follows growing streamed/agent activity inside its own scroll pane,
+  without a second page scrollbar or stealing the user's deliberate scroll-up.
+  Chat and Agents history use the same compact, accessible search and overflow
+  control. The Work inspector no longer describes profile configuration as its
+  purpose. The pre-access agent guidance now describes task-wide desktop access,
+  not the retired per-window sequence.
+- A durable runner regression verifies a dependent researcher-to-document-draft
+  handoff with pinned child profiles; child work remains read-only, and the
+  parent owns any actual document editing and verification. This is a synthetic
+  runner fixture, not evidence of native OS or MCP-service completion.
+- Current checks: `go test ./...` passed; web type check/build and API contract
+  check passed; 65 desktop unit tests passed; focused current Chat/history
+  browser suite passed 30/30 and responsive/locale UI suite passed 33/33.
+  At this checkpoint the full isolated browser suite was **not green**: 313 passed, 43 failed,
+  10 skipped. Failures still exercise the removed Agents task composer and old
+  access picker; they must be migrated to the current Chat/profile workflow and
+  rerun. No broad-release or full-web qualification follows from the focused
+  passes. Native Windows/macOS/Linux workflow and real-model repetitions remain
+  unverified.
+
+### Search-surface inventory — 2026-10-15
+
+- Chat and task history, Agent Profiles, Knowledge documents, installed models
+  (legacy and package inventory), and both model-discovery forms now use the
+  same compact search field with a visible placeholder, persistent accessible
+  label, shared icon/focus surface, and no separate stacked caption. The quick
+  action palette retains its own combobox control so active-option keyboard
+  semantics and Escape dismissal remain intact.
+- `npm.cmd --prefix web/app run build` passed. Focused browser checks passed:
+  26/27 initially (one stale size assertion), then 10/10 for the corrected
+  control suite; model/control rerun passed 21 with six opt-in real-service
+  acquisition cases skipped. After consolidating duplicate search CSS, the
+  profile/history/control suite passed 24/24, including narrow and RTL layouts.
+  At this checkpoint, 43 full-suite failures from retired Agents-composer tests
+  remained unresolved. The later integrated rerun below supersedes that browser
+  status; these targeted checks alone did not close the release gate.
+- The existing local `offgrid` service was replaced with
+  `offgrid-llm:unified-search-preview-20261015`; one service remains running.
+  Workspace identity, task states, conversations, model inventory and speech
+  readiness matched before/after replacement. RTX 5060 enumeration and the CPU
+  runtime executable check passed. The verified backup is
+  `/home/phil/offgrid-unified-search-backup-NL4buAc6`; the previous container is
+  retained stopped as `offgrid-before-unified-search-1792020409`.
+- The local desktop 0.4.16 preview was reinstalled and nine installed package
+  files matched the staged package. Service and desktop UI identities both equal
+  `6789a4ad09f102719e076434d230eb11db80b2aabb211b930687b548b1c755ed`.
+  Application/state backups are retained in
+  `D:\offgrid-llm-backups\desktop-unified-search-20261015`. This local update is
+  not a published release or native workflow qualification.
+
+### Remaining-work audit and integrated browser rerun — 2026-10-15
+
+- Completed the current-renderer search inventory: Chat/task history, profiles,
+  Knowledge, installed model inventories and model discovery use `SearchField`.
+  Quick actions intentionally retains its accessible combobox and active-option
+  behavior. No second legacy search-field implementation was found.
+- Migrated retired task-composer tests to profile-enabled Chat and its canonical
+  work inspector using a shared test-only conversation/job fixture. Access,
+  uncertain-submission, navigation, legacy-link, voice, setup-return and history
+  assertions still check their behavior rather than restoring the removed page.
+  Profile/policy selections are session-memory choices: tests explicitly select
+  them again after reload instead of claiming they were persisted.
+- Narrow-screen testing found and fixed an unnamed Chat action button: its text
+  is visually hidden on small screens, so Send/Stop/Send instruction now retain
+  an explicit localized accessible name.
+- The built renderer and freshly built Go service passed the full isolated
+  browser suite twice: **348 passed, 10 skipped**, with four workers and with the
+  specified single worker. Disposable service logs are respectively under
+  `offgrid-web-qualification-JedT6A` and `offgrid-web-qualification-LHCKwA` in the
+  Windows temporary directory. The former 43 browser failures are resolved.
+- Seven skipped cases passed separately using the `modeltestfixtures` binary:
+  six acquisition scenarios (Whisper, Piper, Zipformer, Kokoro, explicit variant
+  selection and cancellation/resume/discard) and one real service restart case.
+  These use synthetic package bytes and disposable storage, not downloaded
+  production models or speech-quality qualification. The other three opt-ins
+  require explicit installed-task UI or seeded task-service fixtures and were
+  not enabled in this run.
+- Desktop unit tests passed **65/65**; companion tests passed **73/73**. Web type
+  checking and API-contract drift checks passed. Targeted Go packages
+  `internal/agents`, `internal/server`, `internal/computer`, `internal/sessions`
+  passed (cached). Documentation tests passed **6/6** and the maintained-doc
+  check found zero problems. `git diff --check` passed with line-ending warnings.
+
+Acceptance mapping for `agent-conversation-workflows` (contract evidence is not
+real-model or native-platform qualification):
+
+| Proposal acceptance | Recorded check coverage | Remaining evidence |
+| --- | --- | --- |
+| Greeting without unnecessary tools | `conversation_workflow_test.go`; `agent-chat.spec.ts` | Three installed-model repetitions |
+| Requested application and full catalog | `application_discovery_test.go`; verified-OBS runner test | Installed-model repetitions and real launch evidence |
+| Exact unsaved native document | `native_document_workflow_test.go` runner/host fixtures | Installed Notepad and other OS/application checks |
+| Pre-effect repair versus uncertain effects | `conversation_workflow_test.go`, `computer_receipt_test.go`, `agent_reconciliation_test.go` | Real-model recovery matrix |
+| Crash-safe turn/job linkage | `conversation_jobs_test.go`; Chat/lost-acceptance browser journeys | Broader installed/soak qualification |
+| Profiles, tools and accessible Chat | `agent-profiles.spec.ts`, `agent-chat.spec.ts`, workspace/voice/locale browser suites; desktop/companion contracts | Manual assistive-technology, usability and cross-platform installed evidence |
+
+The current change has no remaining failed browser gate. Its installed-model
+matrix (task 7.3) is still unverified; it is not satisfied by synthetic tools.
+The 11 unchecked native-document tasks include provider/harness acceptance as
+well as platform execution evidence and must not be summarized as only manual
+testing. The separate workspace-experience change still requires the manual
+screen-reader pass, baseline performance comparison, participant study and
+cross-platform installed checks. The voice-model foundation's remaining task
+checkboxes require a dedicated reconciliation against acquisition implementation
+and evidence; this UI audit does not silently certify them.
+
+The current built UI identity is
+`cf857bf6d98b57a8bba55e8759cf18a32661d4ced5ea52107d444ce2b4c6693e`.
+The earlier deployed search preview does not yet include the final mobile action
+label fix. No new deployment, commit, push or publication is part of this audit.

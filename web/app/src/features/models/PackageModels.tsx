@@ -16,6 +16,7 @@ import { packageCatalogDisplay, packageDisplay } from './model-display';
 import { modelLibrary } from '../../i18n/model-library';
 import type { LibraryView } from './LibraryNavigation';
 import { PackageOperation } from './PackageOperation';
+import { SearchField } from '../../components/SearchField';
 
 const packageOf = (operation: ModelOperation) => operation.target.kind === 'package' ? operation.target.package : undefined;
 
@@ -141,7 +142,7 @@ export function PackageModels({ category, view }: { category: ModelCategory; vie
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed} aria-busy={loading}>
       <div className="section-heading"><h2>{text.models.installed}</h2></div>
       {!loading && !inventoryError && !installed.length && <p className="compact-empty">{text.models.empty}</p>}
-      {!!installed.length && <label className="field"><span>{modelLibrary(locale).filterInstalled}</span><input type="search" value={filter} onChange={event => setFilter(event.target.value)} /></label>}
+      {!!installed.length && <SearchField className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={setFilter} />}
       {!!installed.length && !filtered.length && <p role="status">{modelLibrary(locale).noMatches}</p>}
       <div className="catalog-grid">{filtered.map(item => {
         const source = operations.find(o => o.state === 'complete' && !o.discarded && packageOf(o)?.id === item.id && packageOf(o)?.revision === item.revision);
@@ -168,7 +169,7 @@ export function PackageModels({ category, view }: { category: ModelCategory; vie
     {view === 'discover' && <><section className="model-section" aria-label="Hugging Face">
       <div className="section-heading"><h2>Hugging Face</h2></div>
       <form className="model-search-form" aria-busy={metadata.pending} onSubmit={event => { event.preventDefault(); if (!mutating && admin && query.trim()) void search(query.trim()); }}>
-        <label className="field"><span>{text.modelSearch.query}</span><input type="search" maxLength={200} value={query} onChange={event => { metadata.cancel(); setQuery(event.target.value); }} /></label>
+        <SearchField label={text.modelSearch.query} value={query} maxLength={200} onChange={value => { metadata.cancel(); setQuery(value); }} />
         <button className="primary-button" disabled={!admin || mutating || !query.trim()}>{text.modelSearch.search}</button>
       </form>
       {metadata.pending && <p role="status">{text.common.loading}</p>}

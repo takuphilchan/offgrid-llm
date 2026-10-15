@@ -18,6 +18,14 @@ type ToolFailure struct {
 	// The runner additionally requires the reviewed descriptor before using it.
 	Recovery  string
 	Readiness string
+	// BeforeEffects is set only by trusted local validation before entering
+	// the filesystem/provider. It is never decoded from a tool response.
+	BeforeEffects bool
+}
+
+func invalidWrite(message string, cause error) *ToolFailure {
+	return &ToolFailure{Code: "tool_write_rejected", Message: message, Cause: cause, BeforeEffects: true,
+		Recovery: "No file operation was executed. Correct the service-file arguments within the authorized location. Host application documents require native document tools; do not translate host paths into service paths."}
 }
 
 func (e *ToolFailure) Error() string { return e.Message }

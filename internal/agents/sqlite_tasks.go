@@ -70,6 +70,12 @@ func validateStoredTask(task *Task) error {
 	if err := validateTaskIdentityStatus(task); err != nil {
 		return err
 	}
+	if task.Origin != nil && (!task.Origin.valid() || task.RequestID == "" || task.RequestDigest == "" || task.ParentID != "") {
+		return fmt.Errorf("invalid conversation origin")
+	}
+	if task.AdmissionHeld && (task.Origin == nil || task.Status == TaskRunning || task.Checkpoint == nil || task.Checkpoint.Iteration != 0 || task.Checkpoint.ExecutingCall != "") {
+		return fmt.Errorf("invalid held conversation admission")
+	}
 	if err := validateWorkflowEvidence(task.Workflow); err != nil {
 		return err
 	}
@@ -118,7 +124,8 @@ func validateStoredTask(task *Task) error {
 			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
 		}
 		initialDesktop := input.Mode == "desktop" && input.CallID == "" && cp.Iteration == 0 && len(cp.Calls) == 0 && task.Config.RequestedComputerScope == "desktop" && task.Config.RequestedComputerApprovalMode != "" && task.ResolvedInputID == ""
-		if !initialDesktop && (input.CallID == "" || (input.Mode != "app" && input.Mode != "browser") || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID) {
+		onDemandDesktop := input.Mode == "desktop" && task.Config.ComputerAccessOnDemand && task.Config.RequestedComputerScope == "desktop" && task.Config.RequestedComputerApprovalMode != ""
+		if !initialDesktop && (input.CallID == "" || (input.Mode != "app" && input.Mode != "browser" && !onDemandDesktop) || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID) {
 			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
 		}
 	}

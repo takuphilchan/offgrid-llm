@@ -90,9 +90,14 @@ type preparedDocumentAction struct {
 // listener, grant authority or alternative journal. Dispatch must be installed
 // behind NativeSupervisor so a durable claim precedes every provider call.
 type NativeDocumentExecutor struct {
-	backend  NativeDocumentBackend
-	prepared map[string]preparedDocumentAction
+	backend      NativeDocumentBackend
+	prepared     map[string]preparedDocumentAction
+	measurements *NativeMeasurements
 }
+
+// SetMeasurements is called only on the owning worker before executing work.
+// Reports remain local unless an explicitly opted-in fixture collects them.
+func (e *NativeDocumentExecutor) SetMeasurements(m *NativeMeasurements) { e.measurements = m }
 
 func NewNativeDocumentExecutor(backend NativeDocumentBackend) *NativeDocumentExecutor {
 	return &NativeDocumentExecutor{backend: backend, prepared: map[string]preparedDocumentAction{}}
@@ -140,6 +145,16 @@ func (e *NativeDocumentExecutor) read(ctx context.Context, binding ControlBindin
 // Read always obtains a fresh native snapshot. It does not return the input
 // payload, the prepared preimage, or cached post-dispatch evidence as read-back.
 func (e *NativeDocumentExecutor) Read(ctx context.Context, binding ControlBinding) (DocumentInventory, DocumentSnapshot, error) {
+	return e.readMeasured(ctx, binding, "observation")
+}
+
+func (e *NativeDocumentExecutor) ReadVerification(ctx context.Context, binding ControlBinding) (DocumentInventory, DocumentSnapshot, error) {
+	return e.readMeasured(ctx, binding, "verification")
+}
+
+func (e *NativeDocumentExecutor) readMeasured(ctx context.Context, binding ControlBinding, stage string) (DocumentInventory, DocumentSnapshot, error) {
+	started := time.Now()
+	defer func() { e.measurements.Add(stage, time.Since(started)) }()
 	return e.read(ctx, binding)
 }
 
@@ -148,6 +163,8 @@ func (e *NativeDocumentExecutor) Read(ctx context.Context, binding ControlBindin
 // Caller references are usable only if the complete document set, generation,
 // text, selection, capabilities and revision still agree byte-for-byte.
 func (e *NativeDocumentExecutor) PrepareCurrent(ctx context.Context, binding ControlBinding, op DocumentOperation, before DocumentInventory, snapshot DocumentSnapshot) (PreparedControlAction, error) {
+	started := time.Now()
+	defer func() { e.measurements.Add("preparation", time.Since(started)) }()
 	if before.Observation.CapturedAt.After(time.Now()) || before.Validate(binding.Target, before.Observation.CapturedAt) != nil {
 		return PreparedControlAction{}, ErrStaleObservation
 	}
@@ -297,15 +314,19 @@ func (e *NativeDocumentExecutor) Dispatch(ctx context.Context, action PreparedCo
 	// Once a provider is entered a failure can be partial. No error message or
 	// elapsed timeout is treated as permission to type/create a second time.
 	result.Outcome, result.Uncertain = "uncertain", true
+	inputStarted := time.Now()
 	if prepared.text != nil {
 		err = e.backend.ApplyDocumentText(ctx, prepared.binding, *prepared.text)
 	} else {
 		err = e.backend.ApplyDocumentLifecycle(ctx, prepared.binding, inventory, op)
 	}
+	e.measurements.Add("input", time.Since(inputStarted))
 	if err != nil {
 		return result, ErrUncertain
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	verificationStarted := time.Now()
+	defer func() { e.measurements.Add("verification", time.Since(verificationStarted)) }()
+	deadline := verificationStarted.Add(2 * time.Second)
 	for ctx.Err() == nil {
 		afterInventory, after, readErr := e.read(ctx, prepared.binding)
 		if readErr == nil {

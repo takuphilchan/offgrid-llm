@@ -26,6 +26,15 @@ retain the previous toolbar layout.
 - A conversation generating in another client returns HTTP 409 immediately;
   deletion does not wait for generation to finish and then erase the new answer.
 
+Profile-enabled Chat turns in the development API retain links to their canonical
+jobs. Deleting a conversation does not delete those jobs. Active work requires an
+explicit choice: retain it for inspection, or stop it and wait for confirmed
+settlement before deletion. Unknown effects cannot be discarded as a successful
+stop; retain the job and inspect its target. Opening history never resumes work.
+Minimal request identities remain after deletion so a stale submission cannot
+recreate a deleted turn. This backend contract is not yet a claim that the new
+Chat deletion controls are available in every client.
+
 ## Agent tasks
 
 - Search all loaded task history by prompt or run ID; **Show more** reveals older

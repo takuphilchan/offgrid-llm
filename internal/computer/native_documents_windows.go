@@ -12,10 +12,10 @@ import (
 	ole "github.com/go-ole/go-ole"
 )
 
-// This backend is intentionally not an advertised NativeDocumentProvider yet:
-// reviewed creation profiles, the service workflow and installed-app evidence
-// must land together. Do not add DocumentContractVersion as a readiness shortcut.
-var _ NativeDocumentBackend = (*NativeWindows)(nil)
+// Contract availability is independent of per-surface support and qualification.
+var _ NativeDocumentProvider = (*NativeWindows)(nil)
+
+func (*NativeWindows) DocumentContractVersion() int { return NativeDocumentsVersion }
 
 type uiaDocumentState struct {
 	target TargetIdentity
@@ -29,6 +29,8 @@ type uiaDocumentIdentity struct {
 type uiaDocumentTree struct {
 	nodes    []documentNode
 	elements map[string]*ole.IUnknown
+	commands []DocumentCreationCommand
+	profile  bool
 }
 
 func (t *uiaDocumentTree) close() {
@@ -145,7 +147,7 @@ func (driver *NativeWindows) documentTree(ctx context.Context, binding ControlBi
 		return nil, ErrDocumentUnavailable
 	}
 	defer root.Release()
-	if err := comCall(driver.automation, 14, uintptr(unsafe.Pointer(&walker))); err != nil || walker == nil {
+	if err := comCall(driver.automation, 16, uintptr(unsafe.Pointer(&walker))); err != nil || walker == nil {
 		return nil, ErrDocumentUnavailable
 	}
 	defer walker.Release()
@@ -182,6 +184,16 @@ func (driver *NativeWindows) documentTree(ctx context.Context, binding ControlBi
 			return err
 		}
 		node := documentNode{key: key, parent: parent, protected: protected || password != 0, visible: offscreen == 0}
+		if !node.protected {
+			node.automationID, _ = comString(element, 29)
+			node.className, _ = comString(element, 30)
+			if enabled != 0 && node.visible && kind == 50000 {
+				if p := pattern(element, 10000); p != nil {
+					node.invokable = true
+					p.Release()
+				}
+			}
+		}
 		if kind == 50019 { // Numeric TabItem role, independent of locale/name.
 			node.tab, node.selectable = true, enabled != 0 && offscreen == 0 && !node.protected
 			node.title, err = comString(element, 23)
@@ -238,6 +250,14 @@ func (driver *NativeWindows) documentTree(ctx context.Context, binding ControlBi
 	if err := walk(root, "", 0, false); err != nil {
 		tree.close()
 		return nil, err
+	}
+	// TabView exposes selected content in a sibling ContentPresenter. Never
+	// synthesize that relationship for an unknown application or tab control.
+	if identity, e := driver.TargetApplication(driver.selected.target); e == nil && notepadDocumentProfile(identity.AUMID, identity.FullName) {
+		if nodes, commands, e := resolveWinUIDocumentProfile(tree.nodes, nativeHash(identity)); e == nil {
+			tree.nodes, tree.commands = nodes, commands
+			tree.profile = true
+		}
 	}
 	return tree, nil
 }
@@ -299,7 +319,7 @@ func (driver *NativeWindows) ReadDocument(ctx context.Context, binding ControlBi
 	next := &uiaDocumentState{target: state.target, docs: map[string]uiaDocumentIdentity{}}
 	driver.sequence++
 	observation := ControlObservation{ID: nativeID(), Target: binding.Target, Sequence: driver.sequence, CapturedAt: time.Now()}
-	inventory = DocumentInventory{Version: NativeDocumentsVersion, Observation: observation, Complete: true, Documents: []NativeDocument{}, Commands: []DocumentCreationCommand{}}
+	inventory = DocumentInventory{Version: NativeDocumentsVersion, Observation: observation, Complete: true, Documents: []NativeDocument{}, Commands: append([]DocumentCreationCommand{}, tree.commands...)}
 	for _, tab := range topology.tabs {
 		identity, exists := state.docs[tab.key]
 		if !exists {
@@ -333,7 +353,7 @@ func (driver *NativeWindows) ReadDocument(ctx context.Context, binding ControlBi
 		next.docs[tab.key] = identity
 		inventory.Documents = append(inventory.Documents, NativeDocument{ID: identity.id, Generation: identity.generation, Container: tab.key, Title: tab.title, Selected: tab.selected, Capabilities: caps})
 	}
-	inventory.Observation.StateDigest = nativeHash([]any{inventory.Documents, inventory.Active, DocumentTextDigest(text), selection, composition})
+	inventory.Observation.StateDigest = nativeHash([]any{inventory.Documents, inventory.Commands, inventory.Active, DocumentTextDigest(text), selection, composition})
 	if inventory.Validate(binding.Target, time.Now()) != nil || snapshot.Validate() != nil {
 		return DocumentInventory{}, DocumentSnapshot{}, ErrDocumentIncomplete
 	}
@@ -351,7 +371,7 @@ func sameDocumentTree(a, b []documentNode) bool {
 	}
 	for _, node := range b {
 		old, exists := byID[node.key]
-		if !exists || old.parent != node.parent || old.group != node.group || old.tab != node.tab || old.selected != node.selected || old.selectable != node.selectable || old.text != node.text || old.visible != node.visible || old.protected != node.protected || nativeHash(old.controls) != nativeHash(node.controls) {
+		if !exists || old.parent != node.parent || old.group != node.group || old.tab != node.tab || old.selected != node.selected || old.selectable != node.selectable || old.text != node.text || old.visible != node.visible || old.protected != node.protected || old.automationID != node.automationID || old.className != node.className || old.invokable != node.invokable || nativeHash(old.controls) != nativeHash(node.controls) {
 			return false
 		}
 	}
@@ -385,6 +405,17 @@ func (driver *NativeWindows) ApplyDocumentText(ctx context.Context, binding Cont
 		}
 		// Revalidate live selection and ancestry, not a full application tree
 		// for every 64-unit batch. This does not refresh the prepared identity.
+		if tree.profile {
+			current, e := driver.documentTree(ctx, binding)
+			if e != nil {
+				return e
+			}
+			defer current.close()
+			if !sameDocumentTree(tree.nodes, current.nodes) || nativeHash(tree.commands) != nativeHash(current.commands) {
+				return ErrDocumentChanged
+			}
+			return nil
+		}
 		return driver.checkDocumentRelation(editor, tree.elements[activeTab.key], activeTab, before.Binding.Editor)
 	})
 }
@@ -448,9 +479,7 @@ func (driver *NativeWindows) checkDocumentRelation(editor, tab *ole.IUnknown, ex
 }
 
 func (driver *NativeWindows) ApplyDocumentLifecycle(ctx context.Context, binding ControlBinding, before DocumentInventory, op DocumentOperation) error {
-	if op.Validate() != nil || op.Kind != "select_document" {
-		// Creation needs reviewed application/version command semantics.
-		// Never infer Ctrl+N, a plus icon or an English New caption.
+	if op.Validate() != nil || (op.Kind != "select_document" && op.Kind != "create_document") {
 		return ErrDocumentUnavailable
 	}
 	current, _, err := driver.ReadDocument(ctx, binding)
@@ -471,6 +500,35 @@ func (driver *NativeWindows) ApplyDocumentLifecycle(ctx context.Context, binding
 		return err
 	}
 	defer tree.close()
+	if op.Kind == "create_document" {
+		for _, command := range before.Commands {
+			if command.ID != op.Command {
+				continue
+			}
+			for _, live := range tree.commands {
+				if live != command {
+					continue
+				}
+				element := tree.elements[live.Element]
+				if element == nil || !driver.withinTarget(element) {
+					return ErrDocumentChanged
+				}
+				p := pattern(element, 10000)
+				if p == nil {
+					return ErrDocumentUnavailable
+				}
+				defer p.Release()
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if err := driver.checkTarget(true); err != nil {
+					return err
+				}
+				return comCall(p, 3) // Invoke once; executor waits read-only for a distinct blank document.
+			}
+		}
+		return ErrDocumentChanged
+	}
 	topology, err := resolveDocumentTopology(tree.nodes, true)
 	if err != nil || current.Active == nil || topology.active != current.Active.Container || topology.editor != current.Active.Editor || len(topology.tabs) != len(current.Documents) {
 		return ErrDocumentChanged

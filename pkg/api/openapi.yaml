@@ -492,7 +492,9 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
     delete:
       operationId: deleteSession
-      description: Requires ownership or sessions:all; other users' conversations return 404. Returns 409 immediately while generation or another mutation is active; deletion never waits to erase a newly completed turn.
+      description: Requires ownership or sessions:all; other users' conversations return 404. Linked agent work requires ownership. Active linked work requires an explicit retain or stop choice; stop waits for confirmed quiescence and never resolves uncertain effects. Canonical jobs and minimal deduplication records survive deletion. Plain generation still returns 409 while active.
+      parameters:
+        - { name: work, in: query, schema: { type: string, enum: [retain, stop] }, description: Retain linked jobs in the inspector or request stopping before deletion. }
       responses:
         '200':
           description: Conversation deleted
@@ -501,7 +503,7 @@ paths:
               schema:
                 type: object
                 required: [success]
-                properties: { success: { type: boolean }, message: { type: string } }
+                properties: { success: { type: boolean }, message: { type: string }, work_retained: { type: boolean } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
@@ -511,7 +513,7 @@ paths:
       - $ref: '#/components/parameters/SessionName'
     post:
       operationId: generateSessionTurn
-      description: Requires session ownership (or sessions:all) and chat permission. Requested knowledge additionally requires rag permission. With stream=true, sends SSE phase and delta events immediately, followed by done only after atomic persistence, or error without saving a partial exchange. Transport closure is not completion. Retrieval failures after SSE starts are error events. JSON generation returns 503 for unavailable retrieval and 422 for no evidence.
+      description: Requires session ownership (or sessions:all) and chat permission. Requested knowledge additionally requires rag permission. Without agent, existing JSON or stream behavior is unchanged; stream=true sends phase/delta then persisted done or error. With agent, requires exact ownership, pins the profile and restrictions, and returns 202 JSON with one linked canonical job regardless of stream. A stable request_id is required; retry identical input to retrieve the same job. Agent selection grants no access. Observe job events through the turn events endpoint; reconnect never resumes work.
       requestBody:
         required: true
         content:
@@ -525,7 +527,11 @@ paths:
                 use_knowledge_base: { type: boolean, default: false }
                 stream: { type: boolean, default: false }
                 durable: { type: boolean, default: false, description: Persist admission and run independently of the stream connection. Reconnect using the turn endpoints. }
-                request_id: { type: string, maxLength: 128, description: Required for durable streaming. Reusing the current ID with identical input attaches to existing work; conflicting or superseded reuse returns 409. }
+                request_id: { type: string, maxLength: 128, description: Required for durable streaming or agent selection (8–128 characters for agent turns). Identical agent retries retrieve the canonical job; different payload or deleted-history reuse returns 409. }
+                agent: { $ref: '#/components/schemas/AgentSelection' }
+                restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
+                computer_scope: { type: string, enum: [desktop], description: Optional on-demand desktop availability, not a grant. Requires an explicit approval policy. }
+                computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task], description: Proposed action policy only; existing host consent remains required. }
                 profile: { type: string, enum: [interactive, extended], default: interactive, description: Streaming chat context profile. Interactive uses min(OFFGRID_CHAT_CONTEXT, effective service context); extended uses the service context. History is not truncated. }
                 max_tokens: { type: integer, minimum: 1, maximum: 4096, default: 1024, description: Streaming response token budget. }
       responses:
@@ -543,6 +549,14 @@ paths:
                 properties:
                   session: { $ref: '#/components/schemas/ChatSession' }
                   message: { $ref: '#/components/schemas/SessionMessage' }
+        '202':
+          description: Profile turn durably associated with its canonical job. Pending, interrupted and terminal retries never create a second job.
+          headers:
+            Location: { schema: { type: string }, description: Canonical jobs API URL. }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LinkedAgentTurn' }
+        '409': { $ref: '#/components/responses/Error' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Error' }
@@ -567,6 +581,8 @@ paths:
                     anyOf:
                       - $ref: '#/components/schemas/SessionTurn'
                       - type: 'null'
+                  job: { $ref: '#/components/schemas/AgentRunResponse' }
+                  recovery_required: { type: boolean, description: Bookkeeping or saved-result attachment needs explicit recovery; never a request to rerun work. }
         '404': { $ref: '#/components/responses/Error' }
   /v1/sessions/{name}/turn/events:
     parameters:
@@ -574,7 +590,7 @@ paths:
       - { name: id, in: query, required: true, schema: { type: string } }
     get:
       operationId: followSessionTurn
-      description: Authorized snapshot recovery. Replays the entire current partial output, followed by live deltas. A new attachment must replace its previous partial output, not append a replay. Slow/disconnected readers do not control execution.
+      description: Observation only. Plain turns replay partial output and live deltas. Linked agent turns use the canonical jobs event protocol (snapshot/activity/done); inspect job_id to choose the protocol. Slow/disconnected readers do not control execution. Replayed snapshots replace previous state, never append duplicate output.
       responses:
         '200':
           description: Session phase/delta/done/error SSE stream
@@ -793,6 +809,150 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /api/v2/agent-profiles:
+    get:
+      operationId: listAgentProfiles
+      parameters:
+        - { in: query, name: archived, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Current actor-owned revisions in this workspace
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profiles]
+                properties:
+                  profiles: { type: array, items: { $ref: '#/components/schemas/AgentProfile' } }
+    post:
+      operationId: createAgentProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentProfileWrite' }
+      responses:
+        '201':
+          description: Immutable first revision; referenced resources were resolved without acquiring models or granting access
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentProfile' }
+        '422':
+          description: Resources unavailable or outside actor authority
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentProfileValidation' }
+  /api/v2/agent-profiles/resources:
+    get:
+      operationId: getAgentProfileResources
+      responses:
+        '200':
+          description: Authorized tool references only; no connection credentials or transport configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tools, computer_permitted, connection_scope]
+                properties:
+                  tools: { type: object, additionalProperties: { $ref: '#/components/schemas/AgentCapabilityIdentity' } }
+                  computer_permitted: { type: boolean }
+                  connection_scope: { type: string, enum: [workspace-admin] }
+  /api/v2/agent-profiles/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getAgentProfile
+      parameters:
+        - { in: query, name: revision, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Owned current or immutable historical revision, including archive status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentProfile' }
+    put:
+      operationId: updateAgentProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentProfileWrite' }
+      responses:
+        '200':
+          description: New immutable revision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentProfile' }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/turn/recover:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+    post:
+      operationId: recoverSessionJobTurn
+      description: Finish accepted linkage or attach an already saved canonical result. This operation does not resume inference, grant access or replay tools.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties: { id: { type: string } }
+      responses:
+        '200':
+          description: Recovered conversation bookkeeping
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LinkedAgentTurn' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+        '422':
+          description: Resource validation failed without saving
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentProfileValidation' }
+  /api/v2/agent-profiles/{id}/effective:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getEffectiveAgentProfile
+      parameters:
+        - { in: query, name: revision, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Current resource validation; readiness is not consent or native qualification
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EffectiveAgentProfile' }
+  /api/v2/agent-profiles/{id}/archive:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      operationId: archiveAgentProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision]
+              properties:
+                expected_revision: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Removed from future selection; historical revisions and work are retained
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, archived]
+                properties:
+                  id: { type: string }
+                  archived: { type: boolean, enum: [true] }
+        '409': { $ref: '#/components/responses/Error' }
   /api/v2/jobs:
     get:
       operationId: listDurableJobs
@@ -812,15 +972,21 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [prompt, model, request_id]
+              required: [prompt, request_id]
+              anyOf:
+                - required: [model]
+                - required: [profile_id, profile_revision]
               properties:
                 prompt: { type: string, minLength: 1, maxLength: 32000 }
                 model: { type: string }
+                profile_id: { type: string, description: Actor-owned profile; requires an explicit immutable profile_revision. }
+                profile_revision: { type: integer, minimum: 1 }
+                restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
                 request_id: { type: string, minLength: 8, maxLength: 128 }
                 style: { type: string, enum: [react, cot, plan-execute] }
                 max_iterations: { type: integer, minimum: 1, maximum: 50 }
                 computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task], description: Proposed policy saved with the task, not host consent. An attached session must match. Omit for legacy local policy selection. }
-                computer_scope: { type: string, enum: [desktop, selected_window], description: Desktop tasks are saved awaiting a protocol-v3 task grant before inference. Selected-window scope preserves the limited v2 flow. Omitted fields retain legacy behavior. }
+                computer_scope: { type: string, enum: [desktop, selected_window], description: Proposed scope, not consent. New tasks can answer without host access. Relevant host work requests a matching grant before actions; selected-window scope preserves the limited v2 boundary. }
       responses:
         '202':
           description: Persisted task
@@ -1932,18 +2098,44 @@ components:
         - $ref: '#/components/schemas/ChatMessage'
         - type: object
           required: [timestamp]
-          properties: { timestamp: { type: string, format: date-time } }
+          properties:
+            timestamp: { type: string, format: date-time }
+            job_id: { type: string }
+            turn_id: { type: string }
+    AgentSelection:
+      type: object
+      required: [id, revision]
+      properties:
+        id: { type: string }
+        revision: { type: integer, minimum: 1 }
+    AgentResourceRestrictions:
+      type: object
+      additionalProperties: false
+      description: May only narrow the pinned profile. Omitted fields inherit; explicit empty lists disable that resource category. Instructions cannot widen these restrictions.
+      properties:
+        tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentToolReference' } }
+        knowledge: { type: array, maxItems: 32, uniqueItems: true, items: { type: string } }
+        computer: { type: boolean }
+    LinkedAgentTurn:
+      type: object
+      required: [turn, job]
+      properties:
+        turn: { $ref: '#/components/schemas/SessionTurn' }
+        job: { $ref: '#/components/schemas/AgentRunResponse' }
     SessionTurn:
       type: object
       required: [id, prompt, model, profile, knowledge, max_tokens, status, phase, output]
       properties:
+        agent: { $ref: '#/components/schemas/AgentSelection' }
+        job_id: { type: string, description: Canonical job identity; observing it never executes work. }
+        job_admission: { type: string, enum: [intent, linked], description: Durable conversation bookkeeping, not execution or consent. }
         id: { type: string }
         prompt: { type: string }
         model: { type: string }
         profile: { type: string }
         knowledge: { type: boolean }
         max_tokens: { type: integer }
-        status: { type: string, enum: [pending, running, completed, failed, cancelled, interrupted] }
+        status: { type: string, enum: [pending, running, completed, failed, cancelled, interrupted, waiting_for_input, waiting_for_approval, waiting_for_children, uncertain] }
         phase: { type: string }
         output: { type: string }
         error: { type: string }
@@ -1954,6 +2146,14 @@ components:
       required: [name, model_id, messages, created_at, updated_at]
       properties:
         turn: { $ref: '#/components/schemas/SessionTurn' }
+        jobs:
+          type: array
+          items:
+            type: object
+            required: [turn_id, job_id]
+            properties:
+              turn_id: { type: string }
+              job_id: { type: string }
         name: { type: string }
         owner_id:
           type: string
@@ -2064,6 +2264,87 @@ components:
         async: { type: boolean, default: false }
         stream: { type: boolean, default: false, description: Streams run status and completed steps; disconnecting does not cancel execution. }
         system_prompt: { type: string }
+    AgentCapabilityIdentity:
+      type: object
+      required: [name, namespace, source, revision, location, kind, risk]
+      properties:
+        name: { type: string }
+        namespace: { type: string }
+        source: { type: string }
+        revision: { type: string }
+        location: { type: string, enum: [service, host, remote] }
+        kind: { type: string }
+        risk: { type: string }
+        description: { type: string }
+    AgentToolReference:
+      type: object
+      additionalProperties: false
+      required: [provider, tool, schema_revision, location]
+      properties:
+        provider: { type: string }
+        tool: { type: string }
+        schema_revision: { type: string }
+        location: { type: string, enum: [service, host, remote] }
+    AgentProfileSettings:
+      type: object
+      additionalProperties: false
+      required: [name, model, max_iterations]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        description: { type: string, maxLength: 512 }
+        instructions: { type: string, maxLength: 8192, description: Behavior only; cannot override broker or host authority. String limits are enforced in UTF-8 bytes. }
+        model: { type: string }
+        knowledge: { type: array, maxItems: 32, uniqueItems: true, items: { type: string }, description: Authorized existing Knowledge document IDs. }
+        tools:
+          type: array
+          maxItems: 128
+          items: { $ref: '#/components/schemas/AgentToolReference' }
+        computer: { type: boolean, description: Makes host access discoverable; does not grant it. }
+        max_iterations: { type: integer, minimum: 1, maximum: 50 }
+        delegates: { type: array, maxItems: 4, uniqueItems: true, items: { type: string }, description: Owned direct child-profile IDs; pinned at task admission, no nested delegation or desktop input. }
+    AgentProfileWrite:
+      type: object
+      additionalProperties: false
+      required: [settings]
+      properties:
+        expected_revision: { type: integer, minimum: 0, description: Omit or zero for creation; exact current revision required for edits. }
+        settings: { $ref: '#/components/schemas/AgentProfileSettings' }
+    AgentProfile:
+      type: object
+      required: [id, workspace, actor, revision, digest, settings, archived, created_at]
+      properties:
+        id: { type: string }
+        workspace: { type: string }
+        actor: { type: string }
+        revision: { type: integer, minimum: 1 }
+        digest: { type: string }
+        settings: { $ref: '#/components/schemas/AgentProfileSettings' }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+    AgentProfileValidation:
+      type: object
+      required: [ready, issues]
+      properties:
+        ready: { type: boolean, const: false }
+        issues: { $ref: '#/components/schemas/EffectiveAgentProfile/properties/issues' }
+    EffectiveAgentProfile:
+      type: object
+      required: [profile, ready, issues, capabilities]
+      properties:
+        profile: { $ref: '#/components/schemas/AgentProfile' }
+        ready: { type: boolean }
+        issues:
+          type: array
+          items:
+            type: object
+            required: [kind, reference, code, message]
+            properties:
+              kind: { type: string }
+              reference: { type: string }
+              code: { type: string }
+              message: { type: string }
+        capabilities: { type: object, additionalProperties: { $ref: '#/components/schemas/AgentCapabilityIdentity' } }
+        children: { type: object, additionalProperties: { $ref: '#/components/schemas/EffectiveAgentProfile' } }
     AgentStep:
       type: object
       properties:
@@ -2072,6 +2353,7 @@ components:
         content: { type: string }
         tool_name: { type: string }
         tool_args: { type: string }
+        provenance: { type: string, description: human_reported identifies a user reconciliation report, not independent tool verification. Legacy missing provenance makes no verification claim. }
         tool_result: { type: string, description: 'Canonical tool output. Native read failures encode NativeReadFailure JSON; do not infer effects from arbitrary provider text.' }
         authorization: { type: string, description: Durable record of exact approval or the immutable automatic session policy used for this action. }
         timestamp: { type: string, format: date-time }
@@ -2231,6 +2513,22 @@ components:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        origin:
+          type: object
+          required: [workspace, conversation, turn_id]
+          properties:
+            workspace: { type: string }
+            conversation: { type: string }
+            turn_id: { type: string }
+        admission_held: { type: boolean, description: Execution blocked until the conversation association is durable. Clients cannot release this hold. }
+        profile:
+          type: object
+          required: [id, revision, digest, name]
+          properties:
+            id: { type: string }
+            revision: { type: integer, minimum: 1 }
+            digest: { type: string }
+            name: { type: string }
         verification: { $ref: '#/components/schemas/WorkflowVerification' }
         requested_computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task], description: User-selected policy from submission; not a computer access grant. }
         requested_computer_scope: { type: string, enum: [desktop, selected_window] }
@@ -2255,7 +2553,7 @@ components:
               check: { type: string, enum: [stored_bytes_sha256_and_format] }
         parent_id: { type: string }
         children: { type: [array, 'null'], items: { $ref: '#/components/schemas/TaskChild' } }
-        can_steer: { type: boolean, description: Saved state permits a follow-up instruction. Completed child history does not block steering; active delegation and uncertain effects do. Rechecked at execution. }
+        can_steer: { type: boolean, description: Running parent work queues corrections for the next safe boundary; settled interrupted work applies them without resuming. Children, active delegation and uncertain outcomes cannot accept new instructions. Rechecked at admission. }
         plan: { type: [array, 'null'], items: { $ref: '#/components/schemas/TaskPlanItem' } }
         context:
           anyOf:
@@ -2267,13 +2565,11 @@ components:
             - { type: 'null' }
         instructions:
           type: [array, 'null']
-          items:
-            type: object
-            required: [request_id, text, at]
-            properties:
-              request_id: { type: string }
-              text: { type: string }
-              at: { type: string, format: date-time }
+          items: { $ref: '#/components/schemas/TaskInstruction' }
+        pending_instructions:
+          type: [array, 'null']
+          description: Durably accepted but not yet applied. Does not cancel an action already dispatched. Retained on pause/restart/uncertainty without implicit resume.
+          items: { $ref: '#/components/schemas/TaskInstruction' }
         pending_input:
           anyOf:
             - { $ref: '#/components/schemas/AgentInputRequest' }
@@ -2306,6 +2602,13 @@ components:
             tool: { type: string }
             arguments: { type: object, additionalProperties: true }
         steps: { type: array, items: { $ref: '#/components/schemas/AgentStep' } }
+    TaskInstruction:
+      type: object
+      required: [request_id, text, at]
+      properties:
+        request_id: { type: string }
+        text: { type: string }
+        at: { type: string, format: date-time }
     AgentTask:
       type: object
       required: [id, prompt, status, created_at]

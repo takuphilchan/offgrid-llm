@@ -36,7 +36,7 @@ func TestWorkflowOmissionKeepsSubmissionDigest(t *testing.T) {
 	if task.RequestDigest != hex.EncodeToString(sum[:]) {
 		t.Fatal("legacy hash changed")
 	}
-	if task.Config.NativeWorkflowVersion != 1 || task.Workflow != nil {
+	if task.Config.NativeWorkflowVersion != agents.DocumentWorkflowEvidenceVersion || task.Workflow != nil {
 		t.Fatal("evidence should activate only after native access is attached")
 	}
 }

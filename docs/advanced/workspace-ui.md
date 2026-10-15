@@ -39,20 +39,38 @@ uncertain operations, where their distinct purpose is needed.
 `lib/navigation.ts` is the shared destination list for desktop, mobile, and quick
 actions. Authentication, service refresh, and page identity stay in `App.tsx`.
 
-Complex features use a small second level of deep-linkable navigation. Agents,
-for example, keeps task work, tool administration, and MCP/external-agent
-connections in `#/agents/workspace`, `#/agents/tools`, and
+Agent-capable services expose reusable profiles at `#/agents` and
+`#/agents/profiles`. The editor selects an installed model, instructions,
+authorized tool references, Knowledge documents and optional bounded research
+profiles. Save pins an immutable revision; conflicts retain the draft instead
+of overwriting another editor. Missing resources stay visible for repair rather
+than silently changing providers or downloading models. Drafts survive navigation
+in actor/workspace-scoped memory. Unsaved reload/close warns before leaving.
+
+Chat selects a profile for future messages with a compact Agent control. Tools
+can narrow its resources without changing the saved profile. The selected model
+comes from that revision; editing the profile does not rewrite running work.
+Linked activity observes the same canonical job as its secondary work inspector.
+Ordinary typed Chat retains its streaming path. An older service cannot silently
+interpret a selected profile as plain Chat.
+
+Complex features use a small second level of deep-linkable navigation. Agents
+keeps profiles, agent activity/history, tool administration, and MCP/external-agent
+connections in `#/agents/profiles`, `#/agents/workspace`, `#/agents/tools`, and
 `#/agents/connections`. Browser history and reload must retain these views.
 
-Agents has one work renderer: `TaskWorkspace`. `AgentPage` selects that renderer
-or the separate `AgentManagement` panels; there is no legacy Task/Result page,
-pre-task mode picker, or duplicate execution follower. Old `#/agents/workspace`
-links remain aliases for current work, not an alternate implementation.
+Agents has one secondary work inspector: `TaskWorkspace`. It lists saved jobs and
+opens their detail, access, recovery, and evidence controls. It has no task
+composer: Chat is the only normal place to start work, including tool-enabled
+turns. `AgentPage` selects that inspector, profiles, or the separate
+`AgentManagement` panels; there is no legacy Task/Result page, pre-task mode
+picker, or duplicate execution follower. Old `#/agents/new` links show the
+activity view without restoring the removed composer.
 
 System capability names describe configured API contracts, not storage health.
 Task storage failure must return a recoverable error and block execution, never
 remove the task-first contract or switch the UI. Clients connected to an older
-service that withdraws its flag retain the current draft and disable new task
+service that withdraws its flag retain the Chat draft and block tool-enabled
 submission until status recovers. A cold unsupported service presents update/retry
 guidance and management navigation instead of mounting an obsolete task runner.
 Retry is read-only. Transient identity failure must not change the shell's

@@ -26,5 +26,6 @@ export function workspaceManagement(locale: LocaleCode) {
     zu: 'Amafolda ohlelo lwekhompyutha. Isevisi yangaphandle noma ikhonthenela isebenzisa indawo yayo yokugcina; lezi akuzona izindlela zendawo yayo yokusebenza.',
   };
   const serviceState: Record<LocaleCode, string> = { en: 'Connection', fr: 'Connexion', es: 'Conexión', de: 'Verbindung', ar: 'الاتصال', sw: 'Muunganisho', sn: 'Kubatanidzwa', nd: 'Uxhumano', zu: 'Uxhumano' };
-  return { documents, manageKnowledge, manageDocument, askKnowledge, retrievalScope, indexed, indexing, indexFailed, noDocuments, preferences, workspace, diagnostics, openTask: openTask[locale], desktopStorage: desktopStorage[locale], serviceState: serviceState[locale] };
+  const searchDocuments: Record<LocaleCode, string> = { en: 'Search documents', fr: 'Rechercher des documents', es: 'Buscar documentos', de: 'Dokumente suchen', ar: 'البحث في المستندات', sw: 'Tafuta hati', sn: 'Tsvaga magwaro', nd: 'Dinga amadokhumenti', zu: 'Sesha amadokhumenti' };
+  return { documents, manageKnowledge, manageDocument, askKnowledge, retrievalScope, indexed, indexing, indexFailed, noDocuments, preferences, workspace, diagnostics, searchDocuments: searchDocuments[locale], openTask: openTask[locale], desktopStorage: desktopStorage[locale], serviceState: serviceState[locale] };
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { installChatJob, openAgentChat } from './fixtures/chat-job';
 
 async function fixture(page: Page, content = 'Hello. This is a saved response.') {
   await page.addInitScript(() => {
@@ -402,17 +403,17 @@ for (const surface of ['chat', 'agents']) {
   test(`${surface} voice settings dismiss outside and with Escape, retaining selections`, async ({ page }, info) => {
     await microphoneFixture(page);
     if (surface === 'agents') {
-      await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', version: 'test', api_version: 2, capabilities: ['task-first-agents-v2'] } }));
+      await installChatJob(page,{workspace:'voice-agent',model:'model',snapshot:()=>({}),submit:()=>{throw Error('Voice preferences must not submit work');}});
       await page.route('**/api/v2/jobs*', route => route.fulfill({ json: [] }));
       await page.route('**/v1/agents/tasks', route => route.fulfill({ json: [] }));
       await page.route('**/v1/agents/tools', route => route.fulfill({ json: { tools: [], enabled_count: 0 } }));
       await page.route('**/v1/agents/mcp', route => route.fulfill({ json: { servers: [] } }));
-      await page.goto('/ui/#/agents/workspace');
+      await openAgentChat(page);
     }
     const button = page.getByRole('button', { name: 'Voice settings', exact: true });
     const panel = page.getByRole('region', { name: 'Voice settings', exact: true });
-    const editor = surface === 'chat' ? page.locator('.composer textarea') : page.getByRole('textbox', { name: 'Task', exact: true });
-    const outside = surface === 'chat' ? editor : page.getByRole('heading', { name: 'Agents', exact: true });
+    const editor = page.locator('.composer textarea');
+    const outside = editor;
     await expect(panel).toBeHidden();
     await button.click();
     await expect(button).toHaveAttribute('aria-expanded', 'true');

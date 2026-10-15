@@ -41,6 +41,11 @@ func installedNativeApplications() ([]installedApplication, error) {
 		}
 		key := strings.ToLower(path)
 		if seen[key] {
+			for i := range apps {
+				if strings.EqualFold(apps[i].path, path) {
+					addApplicationAlias(&apps[i].NativeApplication, name)
+				}
+			}
 			return
 		}
 		info, err := os.Lstat(path)
@@ -49,8 +54,9 @@ func installedNativeApplications() ([]installedApplication, error) {
 		}
 		app := installedApplication{NativeApplication: NativeApplication{ID: nativeID(), Name: name}, path: path, identity: info, kind: applicationExecutable, validateExecutableRegistration: validate}
 		if checkInstalledApplication(app) == nil {
-			for _, existing := range apps {
+			for i, existing := range apps {
 				if os.SameFile(existing.identity, info) {
+					addApplicationAlias(&apps[i].NativeApplication, name)
 					return
 				}
 			}

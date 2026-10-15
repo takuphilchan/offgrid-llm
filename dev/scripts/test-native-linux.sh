@@ -10,6 +10,11 @@ export OFFGRID_NATIVE_TEST_DIRECTORY="$native_test_dir"
 export XDG_RUNTIME_DIR="$native_test_dir/runtime"
 export XDG_CONFIG_HOME="$native_test_dir/config"
 export XDG_SESSION_TYPE=x11
+export GDK_BACKEND=x11
+unset WAYLAND_DISPLAY
+# dbus-run-session starts before this script. Do not let the accessibility
+# registry inherit WSLg/Wayland or another desktop's display from its launcher.
+dbus-update-activation-environment DISPLAY XDG_SESSION_TYPE GDK_BACKEND XDG_RUNTIME_DIR XDG_CONFIG_HOME
 mkdir -m 700 "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME"
 cc computer/native/linux/fixture.c -o "$native_test_dir/fixture" $(pkg-config --cflags --libs gtk+-3.0)
 cc computer/native/linux/document-fixture.c -o "$native_test_dir/owned-documents" $(pkg-config --cflags --libs gtk+-3.0 json-glib-1.0)

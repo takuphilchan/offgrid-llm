@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { installChatJob, openAgentChat, sendAgentMessage } from './fixtures/chat-job';
 
 async function fixture(page: Page) {
   const state = { role: 'admin', authRequired: true, failHistory: false, slowHistory: false, failStats: false, knowledge: false, deletes: [] as string[], calls: [] as string[] };
@@ -68,12 +69,12 @@ test('Stop still closes the local browser when the service is offline', async ({
 
 test('form approval cards show the observed option label and explicit checkbox state', async ({ page }) => {
  await fixture(page);
- await page.addInitScript(()=>localStorage.setItem('offgrid.draft.v1:alice%3Aworkspace%3Alegacy:agent-run:','browser-form'));
+ const formID = `run-${'f'.repeat(32)}`;
  let checked=false;
- await page.route('**/api/v2/jobs/browser-form',r=>r.fulfill({json:{run_id:'browser-form',task_id:'browser-form',status:'waiting_for_approval',output:'',computer_session:'paired',
+ await page.route(`**/api/v2/jobs/${formID}`,r=>r.fulfill({json:{run_id:formID,task_id:formID,status:'waiting_for_approval',output:'',computer_session:'paired',
   steps:[{id:'observe',tool_name:'browser_observe',tool_result:JSON.stringify({observation_id:'current',elements:[{id:'1',label:'Region',options:[{id:'2',label:'Zimbabwe — 2026'}]},{id:'2',label:'Include sources'}]})}],
   pending_approval:{id:'approval',tool:checked?'browser_set_checked':'browser_select',arguments:checked?{observation_id:'current',element:'2',checked:false}:{observation_id:'current',element:'1',option:'2'},expires_at:new Date(Date.now()+60000).toISOString()}}}));
- await page.goto('/ui/#/agents');
+ await page.goto(`/ui/#/agents/task/${formID}`);
  const card=page.locator('.browser-action-summary');
  await expect(card).toContainText('Select an option');await expect(card).toContainText('Region');await expect(card).toContainText('Zimbabwe — 2026');
  checked=true;await page.reload();
@@ -82,9 +83,9 @@ test('form approval cards show the observed option label and explicit checkbox s
 
 test('computer task history distinguishes automatic authorization from verification', async ({page})=>{
  await fixture(page);
- await page.addInitScript(()=>localStorage.setItem('offgrid.draft.v1:alice%3Aworkspace%3Alegacy:agent-run:','approval-audit'));
- await page.route('**/api/v2/jobs/approval-audit',r=>r.fulfill({json:{run_id:'approval-audit',task_id:'approval-audit',status:'completed',output:'Draft saved.',computer_session:'paired',computer_approval_mode:'scoped_changes',steps:[{id:1,tool_name:'browser_fill',tool_result:'{"verified":true}',authorization:'automatic:scoped_changes'}]}}));
- await page.goto('/ui/#/agents');
+ const auditID = `run-${'a'.repeat(32)}`;
+ await page.route(`**/api/v2/jobs/${auditID}`,r=>r.fulfill({json:{run_id:auditID,task_id:auditID,status:'completed',output:'Draft saved.',computer_session:'paired',computer_approval_mode:'scoped_changes',steps:[{id:1,tool_name:'browser_fill',tool_result:'{"verified":true}',authorization:'automatic:scoped_changes'}]}}));
+ await page.goto(`/ui/#/agents/task/${auditID}`);
  const timeline=page.locator('.browser-task-timeline');
  await page.locator('.task-activity > summary').click();
  await expect(timeline).toContainText('Automatically approved · Approve scoped changes');
@@ -138,7 +139,10 @@ test('member UI does not call administrator endpoints or offer privileged action
 test('anonymous local workspace remains usable when authentication is explicitly disabled', async ({ page }) => {
   await fixture(page);
   await page.route('**/v1/users/me', r => r.fulfill({ json: { authenticated: false, guest: true, auth_required: false, user: null } }));
-  await page.goto('/ui/#/agents'); await expect(page.getByRole('button', { name: 'Start task', exact: true })).toBeVisible();
+  await page.goto('/ui/#/agents/workspace');
+  await expect(page.getByRole('heading', { name: 'Recent tasks' })).toBeVisible();
+  await page.goto('/ui/#/chat');
+  await expect(page.locator('.composer textarea')).toBeVisible();
 });
 
 test('history loading, failure and successful recovery stay distinct', async ({ page }) => {
@@ -203,9 +207,10 @@ test('late provider setup cannot overwrite instructions for a newly selected mod
   await page.goto('/ui/#/agents/connections');
   await page.locator('.provider-card button').click();
   await expect.poll(() => requested).toBe(true);
-  await page.getByRole('link', { name: 'Work', exact: true }).click();
+  await page.locator('.primary-nav a[href="#/chat"]').click();
   await page.getByRole('combobox', { name: 'Model', exact: true }).selectOption('model-b');
   release();
+  await page.locator('.primary-nav a[href="#/agents"]').click();
   await page.getByRole('link', { name: 'Connections', exact: true }).click();
   await expect(page.locator('.provider-card')).toContainText('model-b');
   await expect(page.locator('.provider-setup')).toHaveCount(0);
@@ -215,32 +220,32 @@ test('obsolete verification settings cannot enter new job submissions',async({pa
   const obsolete='offgrid.draft.v1:alice%3Aworkspace%3Alegacy:computer-expected-text:';
   await page.addInitScript(key=>localStorage.setItem(key,'Do not use this legacy assertion'),obsolete);
   let submitted:any;
-  await page.route('**/api/v2/jobs',r=>{
-    if(r.request().method()==='GET')return r.fulfill({json:[]});
+  await installChatJob(page,{workspace:'legacy',model:'model-a',snapshot:()=>({}),submit:()=>{throw Error('Rejected request must not be admitted');}});
+  await page.route('**/v1/sessions/*/generate',r=>{
     submitted=r.request().postDataJSON();return r.fulfill({status:422,json:{error:'Synthetic model not ready'}});
   });
-  await page.goto('/ui/#/agents/new');await page.getByRole('textbox',{name:'Task',exact:true}).fill('Keep this task draft');
+  await openAgentChat(page);
   await expect(page.locator('#computer-expected-text, .computer-mode-picker')).toHaveCount(0);
-  await page.getByRole('button',{name:'Start task',exact:true}).click();
+  await sendAgentMessage(page,'Keep this task draft');
   await expect(page.getByRole('alert')).toContainText('Synthetic model not ready');
   expect(submitted).not.toHaveProperty('computer_expected_text');
   expect(submitted).not.toHaveProperty('computer_session');
-  await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveValue('Keep this task draft');
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep this task draft');
 });
 
 test('missing saved task shows recovery without replaying work or losing a separate draft',async({page})=>{
   await fixture(page);
+  const missing = `run-${'f'.repeat(32)}`;
   await page.addInitScript(()=>{
-    localStorage.setItem('offgrid.draft.v1:alice%3Aworkspace%3Alegacy:agent-run:','missing-run');
-    localStorage.setItem(`offgrid.draft.v2:${encodeURIComponent(JSON.stringify(['alice','legacy']))}:agent-task:`,'Keep my research draft');
+    localStorage.setItem(`offgrid.draft.v2:${encodeURIComponent(JSON.stringify(['alice','legacy']))}:chat:`,'Keep my research draft');
   });
   let calls=0;
-  await page.route('**/api/v2/jobs/missing-run',r=>{calls++;return r.fulfill({status:404,json:{error:'Saved task not found'}})});
-  await page.goto('/ui/#/agents');
+  await page.route(`**/api/v2/jobs/${missing}`,r=>{calls++;return r.fulfill({status:404,json:{error:'Saved task not found'}})});
+  await page.goto(`/ui/#/agents/task/${missing}`);
   await expect(page.getByRole('alert')).toContainText('Saved task not found');
-  await page.getByRole('button',{name:'New task',exact:true}).click();
-  await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveValue('Keep my research draft');
+  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep my research draft');
   const before=calls;await page.reload();
-  await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveValue('Keep my research draft');
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep my research draft');
   expect(calls).toBe(before);
 });

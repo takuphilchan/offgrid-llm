@@ -69,7 +69,7 @@ func (d *documentWorker) read(ctx context.Context, binding computer.ControlBindi
 	if page != nil && (page.Validate() != nil || page.Snapshot != d.snapshot.ID || page.Revision != d.snapshot.Binding.Revision) {
 		return computer.DocumentReadback{}, computer.ErrStaleObservation
 	}
-	inventory, current, err := d.executor.Read(ctx, binding)
+	inventory, current, err := d.executor.ReadVerification(ctx, binding)
 	if err != nil {
 		return computer.DocumentReadback{}, err
 	}

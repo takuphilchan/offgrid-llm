@@ -181,7 +181,7 @@ export function App() {
   return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst}><div className={`app-shell${collapsed ? ' navigation-collapsed' : ''}`}>
     <WorkspaceNavigation page={page} health={health} collapsed={collapsed} onToggle={toggleNavigation} />
 
-    <main className="workspace">
+    <main className={`workspace${page === 'chat' ? ' chat-page' : ''}`}>
       <WorkspaceHeader title={text[page].title} shortcut={commandShortcut} refreshing={refreshing}
         onCommands={() => setShowCommands(true)} onRefresh={() => void refreshCurrentWorkspace()}
         theme={theme.choice} onThemeChange={theme.setChoice} username={authUser?.username} onLogout={() => void logout()} />

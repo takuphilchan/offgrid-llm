@@ -14,6 +14,31 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
+func TestDocumentMetadataProjectionKeepsIntentNotExecutionBindings(t *testing.T) {
+	text := "café 日本語"
+	check := agents.OutcomeCheck{Expectation: agents.OutcomeExpectation{ID: "edit", Kind: "document_edit_matches", Text: &text, Snapshot: "observed-snapshot"}, State: "pending", Binding: &agents.OutcomeBinding{Session: "private-binding", TargetSHA256: strings.Repeat("a", 64)}}
+	raw, _ := json.Marshal(map[string]any{"saved": true, "revision": 1, "checks": []agents.OutcomeCheck{check}})
+	message := api.ChatMessage{Role: "tool", Name: "task_expectations", Content: string(raw)}
+	task := &agents.Task{Config: agents.AgentConfig{TaskFirst: true, ComputerDriver: "windows-uia", NativeWorkflowVersion: 2}}
+	got := (&browserRunTools{}).ProjectModelContext(task, []api.ChatMessage{message})[0].StringContent()
+	if !strings.Contains(got, text) || !strings.Contains(got, "observed-snapshot") || !strings.Contains(got, "pending") || strings.Contains(got, "private-binding") || message.StringContent() != string(raw) {
+		t.Fatal("metadata projection lost intent or changed canonical evidence", got)
+	}
+}
+
+func TestNativeStageGuidanceFollowsResultWithoutChangingCanonicalHistory(t *testing.T) {
+	task, _, _, _ := documentGuardFixture("insert_text")
+	task.Config.ComputerScope = "desktop"
+	messages := []api.ChatMessage{{Role: "system", Content: "User instructions"}, {Role: "assistant", Content: "Inspect editor"}, {Role: "tool", Name: "computer_read_text", ToolCallID: "read-call", Content: task.Steps[1].ToolResult}}
+	projected := (&browserRunTools{}).ProjectModelContext(task, messages)
+	if len(projected) != len(messages)+1 || projected[len(projected)-1].Role != "system" || !strings.Contains(projected[len(projected)-1].StringContent(), "Current observed desktop stage:") || projected[len(projected)-2].ToolCallID != "read-call" {
+		t.Fatal("stage guidance precedes its evidence", projected)
+	}
+	if messages[len(messages)-1].StringContent() != task.Steps[1].ToolResult {
+		t.Fatal("canonical read evidence mutated")
+	}
+}
+
 func TestDesktopModelContextBoundsLongURLsAndResolvesExactReferences(t *testing.T) {
 	view := desktopContextFixture(computer.TargetIdentity{ID: "surface", OSSession: "os", ProcessGeneration: "generation", Surface: "window", Driver: "windows-uia"}, "Any application")
 	view.Elements = nil

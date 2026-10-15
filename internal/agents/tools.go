@@ -290,6 +290,9 @@ func BuiltInExecutor() ToolExecutor {
 		var params map[string]interface{}
 		if len(args) > 0 {
 			if err := json.Unmarshal(args, &params); err != nil {
+				if name == "write_file" {
+					return "", invalidWrite("Provide a JSON object with string path and content fields.", err)
+				}
 				return "", fmt.Errorf("invalid arguments: %w", err)
 			}
 		}
@@ -304,8 +307,10 @@ func BuiltInExecutor() ToolExecutor {
 			return executeReadFile(path)
 
 		case "write_file":
-			path, _ := params["path"].(string)
-			content, _ := params["content"].(string)
+			path, content, err := writeArguments(params)
+			if err != nil {
+				return "", err
+			}
 			return executeWriteFile(path, content)
 
 		case "list_files":
@@ -358,9 +363,11 @@ func NewSandboxedExecutor(sandbox Sandbox) ToolExecutor {
 			return string(content), nil
 
 		case "write_file":
-			path, _ := params["path"].(string)
-			content, _ := params["content"].(string)
-			err := sandbox.WriteFile(path, []byte(content))
+			path, content, err := writeArguments(params)
+			if err != nil {
+				return "", err
+			}
+			err = sandbox.WriteFile(path, []byte(content))
 			if err != nil {
 				return "", err
 			}
@@ -375,6 +382,15 @@ func NewSandboxedExecutor(sandbox Sandbox) ToolExecutor {
 			return BuiltInExecutor()(ctx, name, args)
 		}
 	}
+}
+
+func writeArguments(params map[string]interface{}) (string, string, error) {
+	path, pathOK := params["path"].(string)
+	content, contentOK := params["content"].(string)
+	if !pathOK || !contentOK || len(params) != 2 || strings.TrimSpace(path) == "" || strings.ContainsRune(path, 0) {
+		return "", "", invalidWrite("Provide exactly path and content as strings. Missing or non-text content is not an empty-file request.", nil)
+	}
+	return path, content, nil
 }
 
 func executeCalculator(expr string) (string, error) {
@@ -521,33 +537,39 @@ func executeReadFile(path string) (string, error) {
 }
 
 func executeWriteFile(path, content string) (string, error) {
+	return executeWriteFileWith(path, content, os.MkdirAll, os.WriteFile)
+}
+
+// Function arguments provide an isolated fault-injection boundary. Production
+// always uses the standard filesystem operations, never model-selected hooks.
+func executeWriteFileWith(path, content string, mkdir func(string, os.FileMode) error, write func(string, []byte, os.FileMode) error) (string, error) {
 	if path == "" {
-		return "", fmt.Errorf("path is required")
+		return "", invalidWrite("path is required", nil)
 	}
 
 	// Security: validate path is safe
 	if err := validateSafePath(path); err != nil {
-		return "", err
+		return "", invalidWrite(err.Error(), err)
 	}
 
 	// Get absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return "", fmt.Errorf("invalid path: %w", err)
+		return "", invalidWrite("invalid path", err)
 	}
 
 	// Re-validate absolute path
 	if err := validateSafePath(absPath); err != nil {
-		return "", err
+		return "", invalidWrite(err.Error(), err)
 	}
 
 	// Create directory if needed
 	dir := filepath.Dir(absPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := mkdir(dir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
+	if err := write(absPath, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 

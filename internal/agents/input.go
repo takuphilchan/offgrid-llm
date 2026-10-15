@@ -41,6 +41,9 @@ func (r *Runner) ResolveComputerInput(id, actor, inputID string, config AgentCon
 		if task.Actor != actor {
 			return ErrTaskNotFound
 		}
+		if task.AdmissionHeld {
+			return ErrRunConflict
+		}
 		if inputID != "" && task.ResolvedInputID == inputID && task.Config.ComputerSession == config.ComputerSession {
 			return nil
 		}

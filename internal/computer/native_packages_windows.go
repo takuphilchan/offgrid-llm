@@ -148,8 +148,7 @@ func packageInstallPath(fullName string) (string, error) {
 		return "", ErrControlScope
 	}
 	path := windows.UTF16ToString(buffer)
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil || !strings.EqualFold(filepath.Clean(path), filepath.Clean(resolved)) || len(filepath.VolumeName(path)) != 2 {
+	if validateInstalledApplicationPath(path) != nil {
 		return "", ErrControlScope
 	}
 	return filepath.Clean(path), nil
@@ -168,8 +167,7 @@ type packageManifest struct {
 // no directly verifiable GUI executable and are omitted, never shell-launched.
 func packageEntry(root, entry string) (string, string, error) {
 	manifestPath := filepath.Join(root, "AppxManifest.xml")
-	resolved, err := filepath.EvalSymlinks(manifestPath)
-	if err != nil || !strings.EqualFold(manifestPath, resolved) {
+	if validateInstalledApplicationPath(manifestPath) != nil {
 		return "", "", ErrControlScope
 	}
 	f, err := os.Open(manifestPath)
@@ -206,6 +204,9 @@ func packageEntry(root, entry string) (string, string, error) {
 	path, err = registeredApplicationPath(path)
 	if err != nil {
 		return "", "", err
+	}
+	if validateInstalledApplicationPath(path) != nil {
+		return "", "", ErrControlScope
 	}
 	sum := sha256.Sum256(data)
 	return path, hex.EncodeToString(sum[:]), nil

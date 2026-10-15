@@ -20,11 +20,12 @@ func NativeOperationEffect(name, revision string) (NativeEffect, bool) {
 	}
 	switch name {
 	case "computer_observe", "computer_verify", "computer_verify_checked",
-		"computer_applications", "computer_windows", "computer_verify_application",
-		"computer_find_controls", "computer_inspect_control":
+		"computer_applications", "computer_find_applications", "computer_windows", "computer_verify_application",
+		"computer_find_controls", "computer_inspect_control", "computer_documents", "computer_read_text":
 		return NativeRead, true
 	case "computer_open_application", "computer_focus_window", "computer_replace_text",
-		"computer_activate", "computer_set_checked", "computer_shortcut":
+		"computer_activate", "computer_set_checked", "computer_shortcut",
+		"computer_create_document", "computer_select_document", "computer_select_text", "computer_insert_text", "computer_replace_selection":
 		return NativeChange, true
 	}
 	return "", false

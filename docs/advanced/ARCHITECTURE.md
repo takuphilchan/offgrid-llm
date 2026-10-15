@@ -9,6 +9,20 @@ a failed result write cannot trigger another input. A later independent read is
 required to verify the edit. Rejected declarations cannot partially update other
 checks. This does not upgrade legacy tasks or enable unsupported host providers.
 
+Independently verified document milestones carry forward only through a
+continuous verified edit chain on the same document/generation/editor. Each
+link binds its preimage to the previous read and supplies a fresh read-back;
+unknown or contradictory input breaks the chain. This permits proving that a
+document was created blank and then edited without pretending it stayed blank.
+Current-value text checks still assess current state, not historical milestones.
+
+The model sees stage-relevant document schemas and a compact projection of check
+intent, status and evidence-step references. The authoritative task retains full
+bindings, digests and history. Projection is not authorization: the service and
+host independently recheck negotiated capabilities, scope and preconditions.
+MCP tools remain composed; an unsupported document provider cannot be enabled
+merely by using workflow-evidence v2.
+
 OffGrid is a local-first application, not a collection of independently
 deployed microservices. One Go process owns the HTTP API, model lifecycle,
 durable state, and optional subsystems. The browser, Electron application, CLI,
@@ -183,6 +197,59 @@ states. Migration saves a verified prior-schema SQLite backup plus digest/count
 manifest before activation; it does not dual-write. Task input waits survive a
 restart, while connected host sessions and grants expire.
 
+### Versioned agent profiles
+
+Actor/workspace-owned profile headers and immutable revisions live in additive
+tables in `agent-state.sqlite`. A compare-and-swap revision update and snapshot
+insert share one transaction. Admission resolves installed resources and pins
+the entire configuration, including child revisions, into the existing job.
+Behavior instructions are separate from broker/host authority. Capability
+identity binds provider, tool schema, execution location and policy; dispatch
+compares current authority with the pinned restriction.
+
+Profile delegation permits at most four direct children, no recursion or desktop
+authority, and only reviewed low-risk reads selected by both parent and child.
+Child models may differ if already installed. Child iteration reservations are
+deducted from the parent's total while retaining a parent synthesis iteration.
+The same scheduler, task store and result collection are used; no second agent
+framework or independent child speech loop is introduced.
+
+A queued steering correction does not refund an inference iteration already
+spent. The runner commits that consumed budget while discarding a superseded
+pre-dispatch proposal, then applies the correction at the next safe boundary.
+
+Conversation linking is enforced at the persistence boundary: a held job
+cannot start, resume or accept steering until its separate session association
+is durable. Release is service-internal bookkeeping, not execution or consent.
+Session final-response attachment is idempotent by turn/hash/job identity.
+The HTTP coordinator releases only linked jobs and projects their saved results
+into Chat. Deletion requires explicit stop or retention of active work. A failed
+final conversation write leaves the result in the canonical job; explicit repair
+attaches it without inference or tool replay.
+
+### Bounded authorized tool discovery
+
+Before relevance ranking, the runner applies the current actor/provider filters,
+pinned profile restrictions and child capability subset. `task_find_tools`
+searches only that intersection and returns up to eight descriptors per page,
+including provider, revision, execution location and reviewed policy. Search is
+advisory metadata, not authorization; dispatch still rechecks the current identity.
+The latest search prioritizes matching schemas without accumulating grants.
+
+Each model request includes at most eight general tool schemas within an 8192-byte
+schema allowance. Runtime recovery and stage-selected native tools remain separate
+so a large MCP catalog cannot displace required verification. The complete request
+still passes the model context guard. Oversized schemas are reported as unavailable
+for presentation, never truncated into a different argument contract. Small
+models are not guaranteed to understand arbitrary provider schemas.
+
+MCP result previews are capped at 2048 UTF-8 bytes and wrapped with the dispatch
+capability, call/step identity, digest and exact-history reference. Provider text
+cannot supply trusted verification fields. Full results remain canonical task
+evidence; `task_history` reads bounded saved pages without calling the provider
+again. Artifact integrity remains distinct from independent native-document
+verification.
+
 ### Bounded durable coordination
 
 The old `WorkflowEngine` and `Orchestrator` are not the production coordination
@@ -190,7 +257,7 @@ boundary: they retain in-memory workflow results and use `RunImmediate` rather
 than durable, actor-scoped child jobs. The server no longer wires that orchestrator
 as an executable API. Do not re-enable it or reuse its raw executor as a shortcut.
 
-The root model can call `delegate_tasks` before acquiring computer access. It
+For legacy unprofiled work, the root model can call `delegate_tasks` before acquiring computer access. It
 creates 1–4 read-only child jobs per group, at most eight per task, one level deep.
 Each child has ten model iterations, the parent's model/context allocation and
 an explicit subset of enabled tools. Capability descriptors are pinned; a tool
@@ -209,7 +276,7 @@ subtasks with their individual approval/recovery controls.
 
 This is bounded delegation, **not** arbitrary workflow registration, recursive
 agent teams, autonomous child computer control or concurrent file writers.
-Reusable workflow templates, multi-model scheduling and graph-wide adjustable
+Reusable workflow templates, model-aware scheduling and graph-wide adjustable
 token/wall-time budgets are not implemented. The legacy workflow API stays retired.
 
 `task_plan` stores model-reported progress with recorded step references. It is
