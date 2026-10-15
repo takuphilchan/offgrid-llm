@@ -25,10 +25,11 @@ const server=createServer(async(req,res)=>{
    res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.woff':'font/woff','.woff2':'font/woff2','.svg':'image/svg+xml'})[extname(file)]||'application/octet-stream');res.end(await readFile(file));return;
   }
   const data={
-   '/api/v2/system':{product:'offgrid',version,api_version:2,workspace_id:'access-fixture',ui_build_id:manifest.ui_build_id,desktop_bridge:{status:'ready',...manifest},capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2','task-desktop-sessions-v3']},
+   '/api/v2/system':{product:'offgrid',version,api_version:2,workspace_id:'access-fixture',ui_build_id:manifest.ui_build_id,desktop_bridge:{status:'ready',...manifest},capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2','task-desktop-sessions-v3','agent-profiles-v1','agent-conversations-v1']},
    '/health':{status:'healthy'},'/v1/users/me':{authenticated:false,auth_required:false,user:null},
    '/v1/models':{data:[{id:'test-model',type:'chat'}]},'/api/v2/jobs':[],
    '/v1/sessions':{sessions:[]},'/api/v2/computer/sessions':{sessions:[]},'/v1/agents/tasks':[],
+   '/api/v2/agent-profiles':{profiles:[{id:'access-agent',revision:1,settings:{name:'Access fixture',model:'test-model',computer:true,tools:[],knowledge:[],delegates:[],max_iterations:10}}]},
   };
   res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data[pathname]||{}));
  }catch{res.writeHead(500);res.end('{}');}
@@ -41,7 +42,10 @@ try{
  app=await electron.launch({executablePath:binary,env,timeout:30000});
  const page=await app.firstWindow();page.setDefaultTimeout(10000);
  await page.waitForURL(/\/ui\//);await page.evaluate(()=>localStorage.setItem('offgrid.onboarding.complete','true'));
- await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/agents/new`);await page.reload();
+ await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/chat`);await page.reload();
+ await page.getByRole('button',{name:'Agent',exact:true}).click();
+ await page.getByRole('radio',{name:/Access fixture/}).check();
+ await page.keyboard.press('Escape');
  assert.equal((await page.evaluate(()=>window.electron.getDesktopAccess())).enabled,false);
  for(const zoom of [1,2]){
   await app.evaluate(({BrowserWindow},zoom)=>{const win=BrowserWindow.getAllWindows()[0];win.setSize(960,600);win.webContents.setZoomFactor(zoom);win.webContents.setBackgroundThrottling(false);},zoom);
