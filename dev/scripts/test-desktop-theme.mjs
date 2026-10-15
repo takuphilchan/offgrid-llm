@@ -29,11 +29,13 @@ const server = createServer(async (request, response) => {
       response.end(await readFile(file)); return;
     }
     const data = {
-      '/api/v2/system': {product:'offgrid',version,api_version:2,workspace_id:'packaged-theme-fixture',ui_build_id:uiBuild,desktop_bridge:{status:'ready',schema_version:1,protocol:1,ui_build_id:uiBuild},capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2']},
+      '/api/v2/system': {product:'offgrid',version,api_version:2,workspace_id:'packaged-theme-fixture',ui_build_id:uiBuild,desktop_bridge:{status:'ready',schema_version:1,protocol:1,ui_build_id:uiBuild},capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2','agent-profiles-v1']},
       '/health': {status:'healthy'}, '/v1/users/me': {authenticated:false,auth_required:false,user:null},
       '/v1/models': {data:[{id:'theme-fixture',type:'chat'}]}, '/v1/sessions': {sessions:[]},
       '/v1/agents/tasks': [], '/v1/agents/tools': {tools:[],enabled_count:0},
       '/api/v2/jobs': [],
+      '/api/v2/agent-profiles': {profiles:[]},
+      '/api/v2/agent-profiles/resources': {tools:{},computer_permitted:false,connection_scope:'workspace-admin'},
       '/v1/agents/mcp': {servers:[]}, '/v1/integrations': {integrations:[]},
       '/api/v2/computer/sessions': {sessions:[]}
     };
@@ -107,16 +109,19 @@ try {
     const window = BrowserWindow.getAllWindows()[0];
     window.setSize(1280, 900); window.webContents.setZoomFactor(2);
   });
-  for (const route of ['chat','agents','models','knowledge','activity','settings']) {
+  for (const route of ['chat','agents','agents/workspace','models','knowledge','activity','settings']) {
     console.log(`Checking 200% zoom on ${route}`);
     await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/${route}`);
     // Hash navigation completes before React commits the new route. Wait for
     // its heading so a generic locator cannot focus the previous page's button.
-    await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents',models:'Models',knowledge:'Knowledge',activity:'Activity',settings:'Settings'}[route]);
+    await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents','agents/workspace':'Agents',models:'Models',knowledge:'Knowledge',activity:'Activity',settings:'Settings'}[route]);
     await expect(page.locator('.page-content')).toBeVisible();
     // Empty Activity intentionally has no page-level action: its refresh belongs
     // to the shared header. Exercise the remaining diagnostics disclosure.
-    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.getByRole('textbox',{name:'Task',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
+    // Agents configures profiles; the legacy work link now opens an inspector,
+    // not a second composer. Keep both routes in packaged zoom coverage.
+    if (route.startsWith('agents')) await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveCount(0);
+    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.getByRole('searchbox',{name:'Search agents',exact:true}) : route === 'agents/workspace' ? page.getByRole('region',{name:'Recent tasks',exact:true}).getByRole('link',{name:'Chat',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
     await expect(target).toBeVisible(); await expect(target).toBeEnabled(); await target.focus(); await target.scrollIntoViewIfNeeded();
     await expect(target).toBeFocused();
     await page.evaluate(() => document.fonts.ready);
@@ -126,7 +131,7 @@ try {
       return {zoom:window.webContents.getZoomFactor(),image:(await window.webContents.capturePage()).toPNG().toString('base64')};
     });
     assert.equal(capture.zoom,2);
-    await writeFile(join(evidence,`zoom-200-${route}.png`),Buffer.from(capture.image,'base64'));
+    await writeFile(join(evidence,`zoom-200-${route.replaceAll('/','-')}.png`),Buffer.from(capture.image,'base64'));
   }
   await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
   await app.close(); app = null;

@@ -5117,3 +5117,21 @@ The current built UI identity is
 `cf857bf6d98b57a8bba55e8759cf18a32661d4ced5ea52107d444ce2b4c6693e`.
 The earlier deployed search preview does not yet include the final mobile action
 label fix. No new deployment, commit, push or publication is part of this audit.
+
+### Packaged presentation follow-up — 2026-10-15
+
+- The isolated Windows packaged theme check exposed a stale harness assumption:
+  its fixture omitted `agent-profiles-v1` and still expected the retired Task
+  composer. Updated the fixture to advertise profiles and exercise the profile
+  search plus the secondary activity inspector, with an explicit assertion that
+  neither route restores the old composer.
+- `node dev/scripts/test-desktop-theme.mjs
+  "build/release-0.4.17-local/desktop/win-unpacked/OffGrid LLM Desktop.exe"`
+  passed: light/dark/system native and renderer appearance, nine readable locale
+  options, 200% zoom on seven routes, and saved appearance after restart.
+  Screenshots and isolated profile evidence are in
+  `C:\Users\phil\AppData\Local\Temp\offgrid-desktop-theme-Vsv4QK`.
+- This is packaged Electron presentation evidence against a local HTTP fixture,
+  not a real-model, native-control, or other-platform qualification. No live
+  container replacement, desktop installation, push, or release was performed
+  for this follow-up; prepared local build artifacts remain unpublished.
