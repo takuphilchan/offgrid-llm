@@ -76,7 +76,7 @@ try{
  await page.reload();
  // Navigate through the hydrated application. A same-document goto/reload
  // during initial React mounting can race its initial hash selection.
- await page.getByRole('navigation',{name:'Primary'}).getByRole('link',{name:'Agents',exact:true}).click();
+ await page.getByRole('navigation',{name:'Primary navigation',exact:true}).getByRole('link',{name:'Agents',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Agents',exact:true})).toBeVisible();
  // Test-only native-dialog interception validates the scope before granting it.
  await app.evaluate(({dialog})=>{
