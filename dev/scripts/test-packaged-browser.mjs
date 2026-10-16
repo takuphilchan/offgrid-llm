@@ -70,12 +70,15 @@ const env={...process.env,OFFGRID_DESKTOP_HOME:directory,OFFGRID_PORT:String(ser
 let app;const timeout=setTimeout(()=>failed(Error('Packaged browser task timed out')),60000);
 try{
  app=await electron.launch({executablePath:binary,env,timeout:30000});
+ if(process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(960,720));
  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.waitForURL(/\/ui\//,{timeout:15000});
  console.log('Packaged workspace connected');
  await page.evaluate(()=>{localStorage.setItem('offgrid.locale','en');localStorage.setItem('offgrid.onboarding.complete','true');});
  await page.reload();
  // Navigate through the hydrated application. A same-document goto/reload
  // during initial React mounting can race its initial hash selection.
+ await expect(page.locator('.topbar')).toBeVisible();
+ if(await page.evaluate(()=>matchMedia('(max-width: 1023px)').matches)) await page.locator('.navigation-trigger').click();
  await page.getByRole('navigation',{name:'Primary navigation',exact:true}).getByRole('link',{name:'Agents',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Agents',exact:true})).toBeVisible();
  // Test-only native-dialog interception validates the scope before granting it.
