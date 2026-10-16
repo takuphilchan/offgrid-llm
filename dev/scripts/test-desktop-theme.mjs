@@ -58,6 +58,7 @@ deadline.unref();
 async function launch() {
   console.log('Launching isolated packaged theme check');
   app = await electron.launch({executablePath:binary,env,timeout:30000});
+  if (process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(960,720));
   app.context().setDefaultTimeout(15000);
   app.context().setDefaultNavigationTimeout(15000);
   const page = await app.firstWindow();
@@ -78,6 +79,8 @@ try {
     const effective = await app.evaluate(({nativeTheme}) => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
     await expect(page.locator('html')).toHaveAttribute('data-theme', effective);
     const language = page.locator('.locale-picker select');
+    const drawer = await page.evaluate(() => matchMedia('(max-width: 1023px)').matches);
+    if (drawer) await page.locator('.navigation-trigger').click();
     await page.locator('.workspace-options > button').click();
     await expect(language.locator('option')).toHaveCount(9);
     for (const option of await language.locator('option').all()) {
@@ -102,6 +105,10 @@ try {
     // Native popup dismissal can consume Escape before the parent popover.
     if (await language.isVisible()) await page.locator('.workspace-options > button').click();
     await expect(language).toBeHidden();
+    if (drawer) {
+      await page.locator('.sidebar-toggle').click();
+      await expect(page.locator('.sidebar')).toBeHidden();
+    }
   }
   // Hidden packaged fixtures may not produce the compositor frame awaited by
   // Playwright screenshots. Capture through Electron, as in the zoom checks.
