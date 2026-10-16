@@ -32,7 +32,7 @@ test('installed task workspace loads existing history without legacy setup clutt
   if (inspectable) {
     await page.goto(`/ui/#/agents/task/${inspectable.id}`);
     await expect(page.getByRole('heading', {name: inspectable.prompt, exact: true})).toBeVisible();
-    await expect(page.locator('.task-state')).toBeVisible();
+    await expect(page.locator('.work-status')).toBeVisible();
   }
   expect(errors).toEqual([]);
 });

@@ -1,11 +1,12 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { api, type AudioStatus } from '../api/client';
 import { useVoicePreferences } from '../lib/voice-preferences';
 import { UtilityPopover } from './UtilityPopover';
 import { useI18n } from '../i18n';
 import { voiceSettingsText } from '../i18n/voice-settings';
+import { Icon } from './Icon';
 
-export function VoiceSettings() {
+export function VoiceSettings({ children, compact = false }: { children?: ReactNode; compact?: boolean }) {
   const id = useId();
   const { locale, messages } = useI18n(), copy = voiceSettingsText(locale);
   const { preferences, setPreferences } = useVoicePreferences();
@@ -23,9 +24,10 @@ export function VoiceSettings() {
     finally { if (!controller.signal.aborted) setLoading(false); }
   };
   const tts = status?.profiles?.find(p => preferences.tts ? `${p.id}@${p.revision}` === preferences.tts : p.available && p.capabilities.includes('speech_synthesis'));
-  return <UtilityPopover label={copy.title} className="voice-settings" panelClassName="voice-settings-panel" onOpenChange={expanded => {
+  return <UtilityPopover label={copy.title} trigger={compact ? <Icon name="speaker" size={18} /> : undefined} triggerClassName={compact ? 'icon-button' : 'text-button'} className="voice-settings" panelClassName="voice-settings-panel" onOpenChange={expanded => {
       if (expanded) void refresh(); else request.current?.abort();
     }}>
+      {children}
       {(['asr', 'tts'] as const).map(kind => {
         const profiles = status?.profiles?.filter(p => p.capabilities.includes(kind === 'asr' ? 'transcription' : 'speech_synthesis')) ?? [];
         const selected = profiles.find(p => `${p.id}@${p.revision}` === preferences[kind]);

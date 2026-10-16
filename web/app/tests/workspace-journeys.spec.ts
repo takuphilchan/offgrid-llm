@@ -1,3 +1,4 @@
+import { openSettings } from './helpers/workspace-actions';
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { installChatJob, openAgentChat, sendAgentMessage } from './fixtures/chat-job';
@@ -64,7 +65,7 @@ async function workspace(page: Page) {
   });
   return state;
 }
-const nav=async(page:Page,route:string)=>page.locator(`.primary-nav a[href="#/${route}"]`).click();
+const nav=async(page:Page,route:string)=>route==='settings'?openSettings(page):page.locator(`.sidebar a[href="#/${route}"]`).click();
 async function send(page:Page,text:string) {await page.locator('.composer textarea').fill(text);await page.getByRole('button',{name:'Send',exact:true}).click();}
 async function start(page:Page,state:Awaited<ReturnType<typeof workspace>>) {
   await installChatJob(page,{workspace:'journey',model:'journey-model',snapshot:()=>state.run,onWrite:(path,data)=>state.writes.push({path,data}),submit:data=>{
@@ -112,7 +113,8 @@ test('04 synthetic dictation is editable, chosen speech models persist and playb
   await page.getByLabel('Recognition model',{exact:true}).selectOption('asr@r1');await page.getByLabel('Speech model',{exact:true}).selectOption('tts@r1');await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Use microphone',exact:true}).click();await page.locator('.voice-input-control[data-capture-phase="recording"] button').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Dictated draft.');expect(s.turns).toEqual([]);
-  await page.getByText('Speak responses',{exact:true}).click();await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();await send(page,'Edited dictated draft.');
+  await page.getByRole('button',{name:'Voice settings',exact:true}).click();
+  await page.getByRole('checkbox',{name:'Speak responses',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();await page.keyboard.press('Escape');await send(page,'Edited dictated draft.');
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(true);await page.getByRole('button',{name:'Stop reading',exact:true}).first().click();
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(false);expect(s.turns).toHaveLength(1);expect(await page.evaluate(()=>(window as any).trackStopped)).toBe(true);
   await nav(page,'agents');await nav(page,'chat');await page.getByRole('button',{name:'Voice settings',exact:true}).click();await expect(page.getByLabel('Recognition model',{exact:true})).toHaveValue('asr@r1');
@@ -142,9 +144,9 @@ test('07 known active work returns to the same task for pause, steering and stop
 });
 test('08 lost acceptance is recovered by saved identity without repeating uncertain effects',async({page})=>{
   const s=await workspace(page);s.lost=true;Object.assign(s.run,{status:'uncertain',uncertain_call_id:'call',uncertain_call:{tool:'external_submission',arguments:{recipient:'Selected recipient'}}});await start(page,s);
-  await nav(page,'activity');await page.locator('.run-row').filter({hasText:'Prepare the journey result'}).click();await page.getByRole('link',{name:'Open task',exact:true}).click();
-  await expect(page.locator('.approval-card')).toContainText('Outcome unknown');await expect(page.getByRole('button',{name:'Resume',exact:true})).toHaveCount(0);
-  await page.locator('.topbar').getByRole('button',{name:'Refresh',exact:true}).click();expect(s.writes.map(w=>w.path.split('/').pop())).toEqual(['sessions','generate']);
+  await nav(page,'activity');await page.locator('.task-list-item').filter({hasText:'Prepare the journey result'}).click();
+  await expect(page.locator('.work-status')).toContainText('Outcome unknown');await expect(page.getByRole('button',{name:'Resume',exact:true})).toHaveCount(0);
+  await refreshWorkspace(page);expect(s.writes.map(w=>w.path.split('/').pop())).toEqual(['sessions','generate']);
 });
 test('09 discovery keeps meaningful variants in one review and transfers only the chosen file',async({page})=>{
   const s=await workspace(page);await page.route('**/v1/search?*',r=>r.fulfill({json:{results:[{id:'fixture/repo',name:'Fixture model',author:'fixture',size_bytes:12288}]}}));
@@ -172,8 +174,9 @@ test('11 document import, source inspection, disabled indexing and explicit dele
 });
 test('12 Activity opens canonical work; history deletion and preferences preserve an unrelated draft',async({page})=>{
   const s=await workspace(page);s.run.prompt='Completed journey';await page.goto('/ui/#/chat');await page.locator('.composer textarea').fill('Keep my private draft');await nav(page,'activity');
-  await page.getByRole('button',{name:/^Completed journey/}).click();await page.getByRole('link',{name:'Open task',exact:true}).click();await expect(page).toHaveURL(new RegExp(id));await nav(page,'agents');
-  await page.getByRole('button',{name:'Delete task: Completed journey',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
+  await page.getByRole('button',{name:/^Completed journey/}).click();await expect(page).toHaveURL(new RegExp(id));await nav(page,'activity');
+  await page.getByRole('button',{name:'Manage history: Completed journey',exact:true}).click();await page.getByRole('button',{name:'Delete task',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
   await nav(page,'settings');await page.getByRole('button',{name:'Dark',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await nav(page,'chat');await expect(page.locator('.composer textarea')).toHaveValue('Keep my private draft');
   expect(s.run.prompt).toBe('');expect(s.writes.map(w=>w.path)).toEqual([`/api/v2/jobs/${id}`]);
 });
+import { refreshWorkspace } from './helpers/workspace-actions';

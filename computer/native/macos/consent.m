@@ -52,8 +52,8 @@ static NSData *readExact(NSFileHandle *input,NSUInteger count){NSMutableData *re
                         if(stopped)return;
                         NSAlert *alert=[NSAlert new];alert.messageText=@"OffGrid computer access";alert.informativeText=@"Approve only the exact scope or changes shown below.";
                         [alert addButtonWithTitle:@"Deny"];[alert addButtonWithTitle:@"Approve"];
-                        NSScrollView *scroll=[[NSScrollView alloc]initWithFrame:NSMakeRect(0,0,540,280)];scroll.hasVerticalScroller=YES;
-                        NSTextView *text=[[NSTextView alloc]initWithFrame:NSMakeRect(0,0,520,280)];text.string=request[@"text"];text.editable=NO;text.selectable=YES;text.font=[NSFont systemFontOfSize:14];text.verticallyResizable=YES;text.autoresizingMask=NSViewWidthSizable;scroll.documentView=text;alert.accessoryView=scroll;
+                        NSScrollView *scroll=[[NSScrollView alloc]initWithFrame:NSMakeRect(0,0,440,240)];scroll.hasVerticalScroller=YES;scroll.autohidesScrollers=YES;
+                        NSTextView *text=[[NSTextView alloc]initWithFrame:NSMakeRect(0,0,420,240)];text.string=request[@"text"];text.editable=NO;text.selectable=YES;text.font=[NSFont systemFontOfSize:14];text.textContainerInset=NSMakeSize(8,12);text.textContainer.widthTracksTextView=YES;text.verticallyResizable=YES;text.autoresizingMask=NSViewWidthSizable;scroll.documentView=text;alert.accessoryView=scroll;
                         [NSApp activateIgnoringOtherApps:YES];BOOL allowed=[alert runModal]==NSAlertSecondButtonReturn;
                         if(!stopped)sendMessage(@{@"kind":@"consent",@"id":request[@"id"],@"allowed":@(allowed)});
                     });

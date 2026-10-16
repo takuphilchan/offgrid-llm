@@ -103,7 +103,11 @@ try {
     if (await language.isVisible()) await page.locator('.workspace-options > button').click();
     await expect(language).toBeHidden();
   }
-  await page.screenshot({path:join(evidence,'dark-controls.png')});
+  // Hidden packaged fixtures may not produce the compositor frame awaited by
+  // Playwright screenshots. Capture through Electron, as in the zoom checks.
+  const darkControls = await app.evaluate(async ({BrowserWindow}) =>
+    (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'));
+  await writeFile(join(evidence,'dark-controls.png'),Buffer.from(darkControls,'base64'));
   // Real Chromium browser zoom, not CSS zoom or viewport-only simulation.
   await app.evaluate(({BrowserWindow}) => {
     const window = BrowserWindow.getAllWindows()[0];
@@ -114,7 +118,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/${route}`);
     // Hash navigation completes before React commits the new route. Wait for
     // its heading so a generic locator cannot focus the previous page's button.
-    await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents','agents/workspace':'Agents',models:'Models',knowledge:'Knowledge',activity:'Activity',settings:'Settings'}[route]);
+    await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents','agents/workspace':'Activity',models:'Models',knowledge:'Knowledge',activity:'Activity',settings:'Settings'}[route]);
     await expect(page.locator('.page-content')).toBeVisible();
     // Empty Activity intentionally has no page-level action: its refresh belongs
     // to the shared header. Exercise the remaining diagnostics disclosure.

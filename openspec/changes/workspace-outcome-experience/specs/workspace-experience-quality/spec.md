@@ -4,8 +4,26 @@ Set observable visual and behavioral quality gates for the shared web and deskto
 
 ## ADDED Requirements
 
+### Requirement: Authoritative presentation foundations
+The shared renderer SHALL use one monochrome token source, bundled IBM Plex fonts and consistent product mark. Controls SHALL preserve explicit boundaries and usable target sizes. OffGrid-owned desktop startup and consent surfaces SHALL follow the same hierarchy without moving local authorization into the service renderer.
+
+#### Scenario: Presentation changes across editions
+- **WHEN** the same workflow is opened in browser and desktop
+- **THEN** shared controls, typography and responsive organization agree
+- **AND** native consent, OS permissions, stopping and authentication remain independently enforced
+
 ### Requirement: Consistent visual hierarchy
 Main pages SHALL retain the monochrome palette, visible action-button boundaries and shared typography, spacing, field and focus rules. One primary action SHALL dominate each active task region. Secondary maintenance SHALL use deliberate grouping rather than repeated nested cards or equal-weight controls.
+
+#### Scenario: Scaled desktop composition
+- **WHEN** the workspace has less content space because of display scaling, zoom or expanded navigation
+- **THEN** work inspection uses the available content region rather than reserving a second history column
+- **AND** readable text, visible keyboard focus and reachable 40px desktop/44px touch actions are retained without changing user zoom
+
+#### Scenario: Distinct action priority
+- **WHEN** primary, secondary and utility actions appear together
+- **THEN** shared geometry and accessible names remain consistent but utilities do not compete visually with the primary action
+- **AND** navigation selection is visually distinguishable from keyboard focus
 
 #### Scenario: Compare main surfaces
 - **WHEN** Chat, Agents, Models, Knowledge, Activity and Settings are rendered in equivalent states

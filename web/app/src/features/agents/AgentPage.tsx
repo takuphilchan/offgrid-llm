@@ -5,13 +5,11 @@ import { interaction } from '../../i18n/interaction';
 import { agentAvailability } from '../../i18n/agent-availability';
 import { useWorkspace } from '../../lib/workspace-context';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
-import { TaskWorkspace } from './TaskWorkspace';
 import { AgentNavigation } from './AgentNavigation';
 import { AgentManagement } from './AgentManagement';
 import { AgentProfiles } from './AgentProfiles';
 import { agentProfilesText } from '../../i18n/agent-profiles';
-import { useTaskRun } from './useTaskRun';
-import { ConversationWork } from '../chat/ConversationWork';
+import { ScopedNotice } from '../../components/WorkspacePresentation';
 
 type AgentView = 'home' | 'workspace' | 'profiles' | 'tools' | 'connections';
 function viewFromLocation(): AgentView {
@@ -19,19 +17,11 @@ function viewFromLocation(): AgentView {
   return candidate === 'tools' || candidate === 'connections' || candidate === 'profiles' ? candidate : candidate ? 'workspace' : 'home';
 }
 
-function ProfileWorkInspector({ id }: { id: string }) {
-  const { run, refresh, error, connection } = useTaskRun(id);
-  const { messages } = useI18n();
-  return <><AgentNavigation /><h2>{run?.prompt ?? messages.agents.task}</h2>{run
-    ? <ConversationWork run={run} refresh={refresh} readError={error} connection={connection} outputSaved={false} recoveryNeeded={false} recover={async () => {}} />
-    : <p role={error ? 'alert' : 'status'}>{error || messages.common.loading}</p>}</>;
-}
-
-export function AgentPage({ scope, models, model, setModel }: { scope: string; models: Model[]; model: string; setModel: (model: string) => void }) {
+export function AgentPage({ models, model }: { models: Model[]; model: string }) {
   const { admin } = useWorkspace();
   const { locale, messages } = useI18n();
   const copy = agentAvailability[locale];
-  const [identity, setIdentity] = useState<{ workspace: string; supported: boolean; available: boolean; profiles: boolean } | null>(null);
+  const [identity, setIdentity] = useState<{ workspace: string; profiles: boolean } | null>(null);
   const [identityError, setIdentityError] = useState(false);
   const [view, setView] = useState(viewFromLocation);
   const request = useRef(0);
@@ -41,12 +31,10 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
       const next = await api.systemIdentity();
       if (revision !== request.current) return;
       const workspace = next.workspace_id ?? 'legacy';
-      const available = next.capabilities?.includes('task-first-agents-v2') === true;
       // Compatibility is not health. Older services withdraw their capability
       // on storage failure; keep the current draft, never switch renderers.
-      setIdentity(current => ({ workspace, available,
-        profiles: next.capabilities?.includes('agent-profiles-v1') === true || (current?.workspace === workspace && current.profiles) === true,
-        supported: available || (current?.workspace === workspace && current.supported) }));
+      setIdentity(current => ({ workspace,
+        profiles: next.capabilities?.includes('agent-profiles-v1') === true || (current?.workspace === workspace && current.profiles) === true }));
       setIdentityError(false);
     } catch {
       if (revision === request.current) setIdentityError(true);
@@ -63,21 +51,9 @@ export function AgentPage({ scope, models, model, setModel }: { scope: string; m
     return () => { request.current++; clearInterval(timer); };
   }, [admin]);
   useWorkspaceRefresh(refresh);
-  if (view === 'profiles' || (view === 'home' && identity?.profiles)) return <><AgentNavigation view="profiles" />{identity?.profiles
+  if (view === 'profiles' || view === 'home' || view === 'workspace') return <><AgentNavigation view="profiles" />{identity?.profiles
     ? <AgentProfiles key={identity.workspace} models={models} />
-    : <p role="status">{identityError ? copy.connection : identity ? agentProfilesText[locale].unsupported : messages.common.loading}</p>}</>;
-  if (!admin && window.location.hash.startsWith('#/agents/task/')) return <ProfileWorkInspector key={window.location.hash} id={window.location.hash.split('/')[3] ?? ''} />;
+    : identityError || identity ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refresh()}>{messages.common.retry}</button>}>{identityError ? copy.connection : agentProfilesText[locale].unsupported}</ScopedNotice> : <p role="status">{messages.common.loading}</p>}</>;
   if (!admin) return <><AgentNavigation /><p className="permission-notice" role="status">{interaction[locale].adminOnly}</p></>;
-  if (view === 'tools' || view === 'connections') return <AgentManagement model={model} view={view} />;
-  const unavailable = identityError || (identity !== null && !identity.available);
-  return <>
-    {(!identity?.supported) && <AgentNavigation />}
-    {unavailable && <div className="inline-error" role="alert">
-      <p>{identityError ? copy.connection : copy.unsupported}</p>
-      <button type="button" className="secondary-button" onClick={() => void refresh()}>{messages.common.retry}</button>
-    </div>}
-    {identity?.supported
-      ? <TaskWorkspace key={identity.workspace} scope={scope} workspace={identity.workspace} />
-      : !unavailable && <p role="status">{messages.common.loading}</p>}
-  </>;
+  return <AgentManagement model={model} view={view} />;
 }

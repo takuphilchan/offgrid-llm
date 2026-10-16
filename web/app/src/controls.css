@@ -4,16 +4,16 @@
   :root {
     --control-height: 40px;
     --control-radius: 8px;
-    --control-font-size: 13px;
+    --control-font-size: 14px;
     --control-gap: 8px;
   }
 
-  :where(.primary-button, .secondary-button, .text-button, .danger-button,
+  :where(.primary-button, .secondary-button, .text-button, .danger-button, .utility-button,
     .new-chat-button, .resource-actions button, .model-actions button,
     .composer button, .voice-button, .message-copy, .inline-error button, .error-banner button) {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: var(--control-justify, center);
     gap: var(--control-gap);
     min-height: var(--control-height);
     max-width: 100%;
@@ -41,6 +41,13 @@
   /* Legacy text-button call sites use the same visible secondary control.
      Workspace actions must not depend on hover to reveal their boundary. */
   .message-copy { opacity: 1; }
+  .utility-button { color: var(--muted); background: transparent; border-color: transparent; padding-inline: 10px; }
+  .utility-button:hover:not(:disabled) { color: var(--text); background: var(--surface-2); border-color: var(--line); }
+  .utility-button:focus-visible { color: var(--text); }
+  .history-item-actions { flex: none; }
+  .history-item-menu { opacity: .65; }
+  :is(.history-row, .task-history-row):hover .history-item-menu, .history-item-menu:focus-visible { opacity: 1; }
+  .history-item-actions p { margin: 8px 0 0; }
   .message-heading, .message-actions { flex-wrap: wrap; }
   .message-actions { max-width: 100%; }
   .known-work-list :is(button, a) { justify-content: flex-start; text-align: start; }
@@ -55,7 +62,7 @@
   /* Selection belongs in the final control layer too: generic secondary-button
      styling must not hide the current library view or category. */
   .model-library-tabs [aria-selected='true'] {
-    color: var(--on-accent); background: var(--accent-strong); border-color: var(--accent-strong);
+    color: var(--text); background: var(--surface-2); border-color: var(--line-strong);
   }
   .model-category-picker button[aria-pressed='true'] {
     color: var(--text); background: var(--surface-2); border-color: var(--text); font-weight: 600;
@@ -94,7 +101,7 @@
   :where(input, textarea, select)[aria-invalid='true'] { border-color: var(--red); }
   :where(button, input, textarea, select, a):focus-visible {
     outline: 2px solid var(--text);
-    outline-offset: 2px;
+    outline-offset: -2px;
     box-shadow: none;
   }
   .field, .connector-panel form label {
@@ -107,6 +114,13 @@
   .history-search input { min-height: 38px; padding: 8px 0; border: 0; border-radius: 0; background: transparent; }
   .history-search:focus-within { outline: 2px solid var(--text); outline-offset: -2px; }
   .history-search input:focus-visible, .command-search input:focus-visible { outline: none; }
+  .workspace-search-field { padding-inline-end: 4px; }
+  .workspace-search-field input::-webkit-search-cancel-button { display: none; }
+  .workspace-search-field .search-clear { width: 40px; height: 40px; min-width: 40px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+  .workspace-search-field .search-clear:hover { background: var(--surface-2); color: var(--text); }
+  .message-actions :is(button, a), .response-details > button { background: transparent; border-color: var(--line); color: var(--muted); padding-inline: 12px; font-size: 13px; }
+  .navigation-trigger { display: none; }
+  @media (max-width: 1023px) { .navigation-trigger { display: inline-flex; } }
   dialog.command-palette {
     --palette-top: min(72px, 8dvh);
     width: min(620px, calc(100vw - 32px)); margin: var(--palette-top) auto auto;
@@ -131,8 +145,6 @@
   .model-select { min-width: 0; }
   .model-select > span { flex-shrink: 0; }
   .chat-toolbar .model-select select { width: min(280px, 100%); }
-  .chat-toolbar .history-toggle { display: none; }
-  @media (max-width: 900px) { .chat-toolbar .history-toggle { display: inline-flex; } }
 
   .action-group, .settings-actions, .resource-actions, .model-actions, .catalog-actions,
   .connector-panel form > div {
@@ -177,5 +189,12 @@
   }
   @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
+  }
+  @media (pointer: coarse) {
+    :where(.primary-button, .secondary-button, .utility-button, .text-button, .danger-button, .nav-link, .history-open, .new-chat-button) { min-height: 44px; }
+    .icon-button { min-width: 44px; min-height: 44px; }
+  }
+  @media (max-width: 420px) {
+    .navigation-trigger { width: 44px; min-width: 44px; min-height: 44px; padding: 8px; justify-content: center; }
   }
 }

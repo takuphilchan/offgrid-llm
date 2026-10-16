@@ -1,3 +1,4 @@
+import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { workspaceShell } from '../src/i18n/workspace-shell';
 import { locales, type LocaleCode } from '../src/i18n';
@@ -42,14 +43,14 @@ test('compact shell preserves a draft across navigation layout, preferences, and
   await expect(page.locator('.topbar h1')).toHaveText('Chat');
   await expect(page.locator('.workspace-kicker')).toHaveCount(0);
   expect((await page.locator('.topbar').boundingBox())!.height).toBeLessThanOrEqual(74);
-  await page.getByRole('button', { name: 'Collapse navigation' }).click();
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '72px');
-  for (const name of ['Chat', 'Agents', 'Knowledge', 'Models', 'Activity', 'Settings']) {
-    await expect(page.locator('.primary-nav').getByRole('link', { name, exact: true })).toBeVisible();
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
+  for (const name of ['Chat', 'Agents', 'Knowledge', 'Models', 'Activity']) {
+    await expect(page.locator('.sidebar').getByRole('link', { name, exact: true })).toBeVisible();
   }
-  await expect(page.locator('.primary-nav').getByRole('link', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.sidebar').getByRole('link', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
   const options = page.getByRole('button', { name: 'Workspace options', exact: true });
   await options.click();
+  await expect(page.locator('.workspace-options-panel').getByRole('link',{name:'Settings',exact:true})).toBeVisible();
   await expect.poll(() => page.locator('.workspace-options-panel select').evaluateAll(fields =>
     fields[0].getBoundingClientRect().width - fields[1].getBoundingClientRect().width)).toBe(0);
   await expect(page.getByLabel('Language', { exact: true })).toHaveCSS('border-width', '1px');
@@ -59,16 +60,17 @@ test('compact shell preserves a draft across navigation layout, preferences, and
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   await page.keyboard.press('Escape');
   const before = state.reads;
-  await page.locator('.topbar button[aria-busy]').click();
+  await page.locator('.workspace-options > button').click();
+  await page.locator('.workspace-options-panel button[aria-busy]').click();
+  await page.keyboard.press('Escape');
   await expect.poll(() => state.reads).toBeGreaterThan(before);
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   expect(state.writes).toEqual([]);
   await page.screenshot({ path: info.outputPath('shell-collapsed-light.png') });
   await page.reload();
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '72px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
-  await page.locator('.sidebar-toggle').click();
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '228px');
+  await expect(page.locator('.navigation-trigger')).toBeHidden();
 });
 
 test('workspace and voice utilities share keyboard and outside dismissal without competing panels', async ({ page }) => {
@@ -89,7 +91,8 @@ test('workspace and voice utilities share keyboard and outside dismissal without
   await expect(page.getByRole('region', { name: 'Voice settings', exact: true })).toBeHidden();
   await expect(panel).toBeVisible();
   await expect(page.getByRole('link', { name: 'Service details', exact: true })).toHaveCount(0);
-  await page.locator('.primary-nav').getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await openSettings(page);
   await expect(page).toHaveURL(/#\/settings$/); await expect(panel).toBeHidden();
 });
 
@@ -105,8 +108,8 @@ test('workspace preferences still synchronize through the desktop presentation b
 
 test('every locale fits the compact mobile shell and options in light and dark', async ({ page }, info) => {
   await fixture(page);
-  await page.getByRole('button', { name: 'Collapse navigation' }).click();
   await page.setViewportSize({ width: 320, height: 480 });
+  await page.locator('.navigation-trigger').click();
   for (const theme of ['light', 'dark']) {
     for (const locale of Object.keys(locales) as LocaleCode[]) {
       const trigger = page.locator('.workspace-options > button');
@@ -119,9 +122,9 @@ test('every locale fits the compact mobile shell and options in light and dark',
         const box = await panel.boundingBox();
         return !!box && box.x >= 0 && box.x + box.width <= 320 && box.y >= 0 && box.y + box.height <= 480;
       }).toBe(true);
-      await expect(page.locator('.mobile-nav a')).toHaveCount(6);
-      for (const link of await page.locator('.mobile-nav a').all()) await expect(link).toBeInViewport();
-      await expect(page.locator('.sidebar')).toBeHidden();
+      await expect(page.locator('.mobile-nav')).toHaveCount(0);
+      await expect(page.locator('.sidebar')).toBeVisible();
+      for (const link of await page.locator('.sidebar .nav-link').all()) await expect(link).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (locale === 'ar') await page.screenshot({ path: info.outputPath(`shell-mobile-rtl-${theme}.png`) });
       await page.keyboard.press('Escape');
@@ -133,9 +136,8 @@ test('every locale fits the compact mobile shell and options in light and dark',
 test('expanded navigation remains usable in a short desktop viewport', async ({ page }, info) => {
   await fixture(page);
   await page.setViewportSize({ width: 1100, height: 480 });
-  await page.locator('.primary-nav').getByRole('link', { name: 'Settings', exact: true }).click();
+  await openSettings(page);
   await expect(page).toHaveURL(/#\/settings$/);
-  await page.locator('.sidebar-toggle').scrollIntoViewIfNeeded();
-  await expect(page.locator('.sidebar-toggle')).toBeInViewport();
+  await expect(page.locator('.sidebar-foot')).toBeInViewport();
   await page.screenshot({ path: info.outputPath('shell-expanded-desktop.png') });
 });

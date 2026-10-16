@@ -20,17 +20,18 @@ selected chat model, locale, theme, and onboarding. API access remains in
 `web/app/src/api/client.ts`; feature components should not duplicate fetch and
 error-decoding logic.
 
-The compact shared header shows the page title, quick actions, refresh, and
-**Workspace options** (the settings icon). Workspace options contains language,
-appearance, and signed-in account controls. Settings is the single destination
-for service, workspace and diagnostic details; the sidebar footer reports
-connection status without another service-details button. The desktop sidebar
-can be collapsed with its navigation button; `offgrid.sidebar.collapsed` stores
-only this presentation choice. Icon-only links retain accessible names and
-current-page indication. Mobile keeps all six destinations regardless of that
-preference. These controls do not grant permissions or restart active work.
+The shared header shows the page title, quick actions and relevant work status.
+One 248px sidebar combines navigation with contextual Chat history and an early
+New chat action. It can collapse to a labelled 64px icon rail without disposing
+the composer. History scrolls independently; row actions use labelled menus with
+the existing deletion confirmation. The footer has one **Workspace options**
+menu containing Settings, refresh, language, appearance and account controls,
+with connection status below it. Below 1024px a labelled navigation button opens
+the expanded sidebar as a drawer; Escape/outside click closes it and restores
+focus. All six destinations remain available.
+These controls do not grant permissions or restart active work.
 
-The header Refresh control reloads the current page's data without remounting its
+The Workspace options Refresh control reloads the current page's data without remounting its
 editor or clearing drafts. Normal lists do not repeat it in each section heading.
 Scoped recovery controls remain beside failed reads, expired approvals and
 uncertain operations, where their distinct purpose is needed.
@@ -51,19 +52,27 @@ Chat selects a profile for future messages with a compact Agent control. Tools
 can narrow its resources without changing the saved profile. The selected model
 comes from that revision; editing the profile does not rewrite running work.
 Linked activity observes the same canonical job as its secondary work inspector.
+Activity owns the task list and full-width canonical inspector; it does not keep
+a second task-history pane alongside the result. Old `#/agents/workspace` and
+`#/agents/task/<id>` links remain observation-only aliases. `ConversationWork`
+is shared between Chat and the inspector; lifecycle actions, approval expiry,
+manual observation/reconciliation, evidence and steering retain their existing
+contracts. Optional previews and technical steps live inside Activity details.
+Legacy run events and runtime statistics remain available under Diagnostics.
+Member inspection does not enumerate administrator-only job history.
 Ordinary typed Chat retains its streaming path. An older service cannot silently
 interpret a selected profile as plain Chat.
 
 Complex features use a small second level of deep-linkable navigation. Agents
-keeps profiles, agent activity/history, tool administration, and MCP/external-agent
-connections in `#/agents/profiles`, `#/agents/workspace`, `#/agents/tools`, and
-`#/agents/connections`. Browser history and reload must retain these views.
+keeps profiles, tool administration, and MCP/external-agent connections in
+`#/agents/profiles`, `#/agents/tools`, and `#/agents/connections`.
+Browser history and reload must retain these views.
 
-Agents has one secondary work inspector: `TaskWorkspace`. It lists saved jobs and
+Activity owns one work inspector: `TaskWorkspace`. It lists saved jobs and
 opens their detail, access, recovery, and evidence controls. It has no task
 composer: Chat is the only normal place to start work, including tool-enabled
-turns. `AgentPage` selects that inspector, profiles, or the separate
-`AgentManagement` panels; there is no legacy Task/Result page, pre-task mode
+turns. `AgentPage` selects profiles or the separate `AgentManagement` panels;
+there is no legacy Task/Result page, pre-task mode
 picker, or duplicate execution follower. Old `#/agents/new` links show the
 activity view without restoring the removed composer.
 
@@ -89,13 +98,13 @@ rebuilt renderer. UI removal does not repair an unhealthy task database.
 `components/WorkspacePresentation.tsx` owns reusable section headings, action
 groups, list search, empty states and scoped notices. These are presentation-only:
 features retain request cancellation, draft state, deletion eligibility and
-authorization. Chat, task-first Agents and Activity use them; corresponding layout
+authorization. Chat, Agents and Activity use them; corresponding layout
 lives in `components/workspace-presentation.css`. Empty, loading and failed reads
 must remain distinct. Controls continue to use the final `controls.css` layer.
 
-`styles.css` retains the existing feature layout while `workspace.css` owns the
-current tokens, typography, component treatment, and feature responsive
-overrides. `components/shell/workspace-shell.css` exclusively owns shared shell
+`tokens.css` owns the semantic palette, typography and spacing tokens.
+`styles.css` retains feature layout while `workspace.css` owns component treatment
+and feature responsive overrides. `components/shell/workspace-shell.css` owns shared shell
 layout, including header/sidebar size variables used by Chat. New visual work
 must use the semantic custom properties in the
 workspace layer instead of introducing literal feature colors.
@@ -106,7 +115,7 @@ precedence once. Feature CSS must not establish layer order accidentally through
 module import order (especially mobile overlays and lazy-loaded routes).
 It owns button/field geometry and interaction states; feature rules must not
 redefine those values. Default actions and fields use a 40px minimum height,
-8px radius, 13px text and 8px action spacing. Text can wrap and controls can
+8px radius, 14px text and 8px action spacing. Text can wrap and controls can
 grow; do not set fixed heights that clip translated labels.
 
 - Use `primary-button` for the main action, `secondary-button` for alternatives,
@@ -137,15 +146,12 @@ details** in that saved answer's action footer, beside Copy and Read aloud.
 The details popover follows the same outside-click/Escape contract as other
 utilities. Metrics are never presented as belonging to an older or in-flight
 answer; incomplete output warnings remain visible.
-Playback opt-in, microphone and Send/Stop stay in the composer footer.
-Reading text is limited to a 760px column, with 16px/1.7 body typography and
-an 800px compound composer. The 64px desktop header and 24px vertical page
-spacing leave room for work while preserving the 40px control contract.
-Task-first Agents uses the same editor/control/footer grammar, with a labelled
-prompt, selected model, voice settings and Start task. It does not require an
-execution mode or app selection before describing work. The new-task editor is
-not nested inside another bordered card, and an empty history does not offer a
-redundant New task action. Chat and Agents share the voice
+Playback opt-in is inside Voice settings; enabled speech and active playback
+remain visible. Microphone and Send/Stop sit beside the compact configuration
+row. Transcript and composer share an 800px reading width and 16px body text.
+Scrolling upward suspends follow-latest; the explicit Latest button resumes it.
+The page itself does not compete with the transcript for scrolling.
+Agents configures profiles; it has no separate task composer. Chat owns the voice
 settings popover: clicking outside or pressing Escape dismisses it without
 resetting model selections. Escape returns keyboard focus to its trigger; the
 panel stays within the viewport in narrow and RTL layouts.
@@ -220,7 +226,7 @@ must never be selected as chat fallbacks.
   models use a compact status, not a disabled action. Installation and active
   knowledge retrieval are separate states; setup observes only the selected
   embedding model's activation work.
-- The toolbar Refresh updates the mounted page through `useWorkspaceRefresh`.
+- Workspace options Refresh updates the mounted page through `useWorkspaceRefresh`.
   It must not remount the workspace, erase drafts, or resubmit running work.
   Failed optional status requests remain unknown, not disabled or healthy.
 - Models separates Installed (local filtering) from Discover (online search and
@@ -306,11 +312,12 @@ or computer-session record is restored. **Keep separate** dismisses the offer fo
 that account/workspace without deleting anything. Drafts remain unencrypted browser
 data; this is scope isolation, not a new secret store.
 
-- Application access distinguishes discovery from consent: **Choose an
-  application** lists windows; **Allow access and continue** attaches only the
-  selected, locally consented target to the existing task. An empty installed-app
-  picker cannot launch or grant access. Neither discovery nor opening an app
-  submits another task.
+- Application access distinguishes discovery from consent. Whole-desktop access
+  uses trusted local consent; explicitly enabled session access can cover later
+  tasks until revoked or the session ends. Restricted compatibility sessions may
+  still select a window. Neither discovery nor inspection grants authority or
+  submits another task. Native consent and service enforcement remain independent
+  of renderer presentation.
 - Chat distinguishes a pending Knowledge check from a failed check or disabled
   retrieval. Setup and retry appear next to the Knowledge control rather than as
   a permanent unavailable warning in ordinary chat. A previously selected
@@ -323,11 +330,10 @@ data; this is scope isolation, not a new secret store.
   pointer hover does not pull the scroll position. Search exposes combobox semantics
   and the Esc control is clickable. Small-height, narrow, RTL and dark/light layouts
   are covered in `tests/palette-layout.spec.ts`.
-- Agent work is task-first: compact runtime facts, a prompt-led composer, secondary
-  model/style settings, and more width for results. At roomy desktop sizes composer
-  and result panels align; narrow layouts stack without shifting controls as output
-  grows. Selected history has a visible state. Execution steps are expandable after
-  completion, while live output and approvals retain their existing recovery rules.
+- Agent work starts in Chat using a reusable profile configured in Agents. Activity
+  provides a full-width inspector for the same canonical job, not a second
+  composer. Answers and artifacts lead; optional execution details are expandable,
+  while actionable approvals and failures retain their existing recovery rules.
 
 - History panels separate the heading/actions, search, guidance, and results with
   a shared vertical rhythm. Loading and failed reads are not empty histories.
@@ -388,7 +394,7 @@ retain authentication, cancellation, the current 128 KiB service limit and
 digest/size checks. All formats download as attachments, not embedded active
 content. Errors stay with the affected file. A supported correction targets the
 same task with its existing request ID; unsupported continuation explicitly
-creates a new local draft without submitting or overwriting another draft.
+links back to Chat without resubmitting or overwriting another draft.
 
 This redesign is incremental, but new screens must not extend the legacy visual
 language. When materially changing a feature, move its styles into the

@@ -13,8 +13,9 @@ import { KnowledgePage } from './features/knowledge/KnowledgePage';
 import { ModelsPage } from './features/models/ModelsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { useI18n } from './i18n';
-import { WorkspaceHeader } from './components/shell/WorkspaceHeader';
-import { WorkspaceNavigation, MobileNavigation } from './components/shell/WorkspaceNavigation';
+import { WorkspaceHeader, WorkspaceOptions } from './components/shell/WorkspaceHeader';
+import { WorkspaceNavigation } from './components/shell/WorkspaceNavigation';
+import { SidebarContext } from './components/shell/SidebarSlot';
 import { navigationGroups, pageFromLocation, type Page, type ServiceHealth as Health } from './lib/navigation';
 import { useTheme } from './theme';
 import { readPreference, writePreference } from './lib/preferences';
@@ -35,8 +36,25 @@ class PageBoundary extends Component<{ children: ReactNode; message: string; ret
 
 export function App() {
   const { messages: text, locale } = useI18n();
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigationWasOpen = useRef(false);
+  navigationWasOpen.current = navigationOpen;
+  const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 1023px)').matches);
+  const [historyTarget, setHistoryTarget] = useState<HTMLDivElement | null>(null);
+  const [actionTarget, setActionTarget] = useState<HTMLDivElement | null>(null);
   const [collapsed, setCollapsed] = useState(() => readPreference('offgrid.sidebar.collapsed') === 'true');
-  const toggleNavigation = () => setCollapsed(current => { writePreference('offgrid.sidebar.collapsed', String(!current)); return !current; });
+  const toggleSidebar = () => setCollapsed(value => { writePreference('offgrid.sidebar.collapsed', String(!value)); return !value; });
+  const closeNavigation = useCallback(() => {
+    setNavigationOpen(false);
+    // Restore after React removes inert; focusing during drawer cleanup is too early.
+    if (navigationWasOpen.current && matchMedia('(max-width: 1023px)').matches) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.navigation-trigger')?.focus());
+  }, []);
+  useEffect(() => {
+    const media = matchMedia('(max-width: 1023px)');
+    const changed = () => { setNarrow(media.matches); setNavigationOpen(false); };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
   const theme = useTheme();
   useEffect(() => {
     if (window.electron?.setPresentation) void window.electron.setPresentation({ locale, theme: theme.choice }).catch(() => console.warn('Desktop appearance preferences could not be saved.'));
@@ -164,7 +182,7 @@ export function App() {
   ];
   const commandShortcut = navigator.userAgent.includes('Mac') ? '⌘ K' : 'Ctrl K';
 
-  if (access === 'checking') return <div className="boot-screen"><div className="orb"><div /></div><span>{loadError || text.status.checking}</span>{loadError && <button onClick={() => void refreshBase()}>{text.common.retry}</button>}</div>;
+  if (access === 'checking') return <div className="boot-screen"><div className="orb"><Icon name="models" size={28} /></div><span>{loadError || text.status.checking}</span>{loadError && <button className="secondary-button" onClick={() => void refreshBase()}>{text.common.retry}</button>}</div>;
   if (access === 'login') return <LoginPage onAuthenticated={user => { setAuthUser(user); setAccess('ready'); void refreshBase(); }} />;
 
   const logout = async () => {
@@ -178,13 +196,12 @@ export function App() {
   const admin = !authRequired || authUser?.role === 'admin';
   const actor = authUser?.id ?? (authRequired && guest ? 'guest' : 'local');
   const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role]);
-  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst}><div className={`app-shell${collapsed ? ' navigation-collapsed' : ''}`}>
-    <WorkspaceNavigation page={page} health={health} collapsed={collapsed} onToggle={toggleNavigation} />
+  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst}><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
+    <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} footer={<WorkspaceOptions refreshing={refreshing} onRefresh={() => void refreshCurrentWorkspace()} theme={theme.choice} onThemeChange={theme.setChoice} username={authUser?.username} onLogout={() => void logout()} />} />
+    {narrow && navigationOpen && <button className="navigation-scrim" tabIndex={-1} aria-label={text.models.cancel} onClick={closeNavigation} />}
 
-    <main className={`workspace${page === 'chat' ? ' chat-page' : ''}`}>
-      <WorkspaceHeader title={text[page].title} shortcut={commandShortcut} refreshing={refreshing}
-        onCommands={() => setShowCommands(true)} onRefresh={() => void refreshCurrentWorkspace()}
-        theme={theme.choice} onThemeChange={theme.setChoice} username={authUser?.username} onLogout={() => void logout()} />
+    <main className={`workspace${page === 'chat' ? ' chat-page' : ''}`} inert={narrow && navigationOpen}>
+      <WorkspaceHeader title={text[page].title} shortcut={commandShortcut} onCommands={() => setShowCommands(true)} navigationOpen={navigationOpen} onNavigation={() => setNavigationOpen(true)} />
       {admin && <ComputerActivity key={authUser?.id ?? 'local'} />}
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
       <section className="page-content">
@@ -193,18 +210,17 @@ export function App() {
         <PageBoundary key={`${page}:${workspaceScope}`} message={text.common.error} retry={text.common.retry}>
           {page === 'chat' && <ChatPage scope={actor} models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'knowledge' && <KnowledgePage models={models} onModelsChanged={refreshBase} onOpenModels={() => { window.location.hash = '#/models'; }} />}
-          {page === 'agents' && <AgentPage scope={actor} models={models} model={model} setModel={setModel} />}
+          {page === 'agents' && <AgentPage models={models} model={model} />}
           {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} onboardingPending={onboardingPending} />}
-          {page === 'activity' && <ActivityPage health={health} />}
+          {page === 'activity' && <ActivityPage health={health} taskFirst={taskFirst} />}
           {page === 'settings' && <SettingsPage health={health} themeChoice={theme.choice} onThemeChange={theme.setChoice} onShowOnboarding={() => setShowOnboarding(true)} />}
         </PageBoundary>
         </SetupHandoffProvider>
       </section>
     </main>
-    <MobileNavigation page={page} />
     {showCommands && !showOnboarding && <CommandPalette actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
     {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} pending={onboardingPending} onAction={() => continueSetup(chatModels.length > 0 ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
-  </div></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
+  </div></SidebarContext.Provider></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
 function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClose }: {
@@ -234,7 +250,7 @@ function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClos
   const action = !pending ? text.onboarding.close : health !== 'ready' ? text.onboarding.retryService : chatModelCount > 0 ? text.onboarding.startChat : text.onboarding.chooseModel;
   return <dialog ref={dialog} className="onboarding" aria-labelledby="onboarding-title" onKeyDown={containFocus} onCancel={event => { event.preventDefault(); onClose(); }}>
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
-    <div className="onboarding-mark"><span /></div><span className="eyebrow">{text.privateWorkspace}</span>
+    <div className="onboarding-mark"><Icon name="models" size={28} /></div><span className="eyebrow">{text.privateWorkspace}</span>
     <h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p>
     <div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div><div><span aria-hidden="true" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div>
     {pending && <p className="onboarding-next">{chatModelCount > 0 ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</p>}

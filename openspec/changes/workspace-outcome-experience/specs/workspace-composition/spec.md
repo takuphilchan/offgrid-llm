@@ -4,8 +4,29 @@ Let people start ordinary conversations and governed tasks without navigating se
 
 ## ADDED Requirements
 
+### Requirement: Combined contextual navigation
+Chat SHALL use one 248px application/history sidebar with an explicit compact-collapse control and existing state/controllers. Below 1024px the same sidebar SHALL be a dismissible modal drawer with focus restoration. Navigation and the consolidated workspace/settings footer SHALL remain reachable independently of history scrolling. New chat SHALL precede contextual history; history row actions SHALL be available through labelled keyboard/touch-accessible controls without permanent delete-icon clutter.
+
+#### Scenario: Collapse navigation during work
+- **WHEN** the user collapses and expands navigation with a draft or running task
+- **THEN** selection, draft and canonical work identity remain unchanged
+- **AND** navigation remains labelled and usable without submitting, cancelling or replaying work
+
+#### Scenario: Browse history in a narrow workspace
+- **WHEN** a user opens navigation, selects a conversation and closes the drawer
+- **THEN** the same saved conversation is selected without submitting, approving or replaying work
+- **AND** Escape and outside click dismiss the drawer without losing the draft
+
+### Requirement: Progressive controls and intentional following
+Chat SHALL keep agent/model, tools, access status and submission controls discoverable while disclosing detailed preferences progressively. Scrolling away from the latest output SHALL suspend following and expose an explicit Latest action.
+
+#### Scenario: Read earlier output during streaming
+- **WHEN** the user scrolls upward while output or activity expands
+- **THEN** their reading position is preserved until they return to the bottom or choose Latest
+- **AND** navigation and submission controls remain reachable without an additional page scrollbar
+
 ### Requirement: Prompt-led entry
-Chat and Agents SHALL each present one labelled prompt editor and one primary submit action. A ready workspace SHALL NOT require a separate configuration or execution-mode screen before ordinary submission. Secondary controls SHALL remain discoverable without competing with the prompt.
+Chat SHALL present one labelled prompt editor and one primary submit action for ordinary and agent-enabled conversations. Agents SHALL configure reusable profiles and expose canonical work inspection, not duplicate task entry. A ready workspace SHALL NOT require a separate configuration or execution-mode screen before ordinary submission. Secondary controls SHALL remain discoverable without competing with the prompt.
 
 #### Scenario: Ready workspace
 - **WHEN** a user opens a new conversation or task with a compatible selected model

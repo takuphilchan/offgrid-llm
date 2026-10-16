@@ -262,7 +262,9 @@ test('profile and tool choices do not leak into another workspace or actor',asyn
     await page.getByRole('button',{name:'Agent',exact:true}).click();
     await page.getByRole('radio',{name:/Writer Write with evidence/}).check(); await page.keyboard.press('Escape');
     f.identity(workspace,actor);
-    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
+    await page.getByRole('region', { name: 'Workspace options', exact: true }).getByRole('button',{name:'Refresh',exact:true}).click();
+    await page.keyboard.press('Escape');
     await expect(page.getByRole('button',{name:'Agent',exact:true})).toContainText('No agent');
     await expect(page.getByRole('button',{name:'Tools and context',exact:true})).toHaveCount(0);
   }
@@ -362,6 +364,7 @@ test('speech waits for the parent response and never narrates child activity or 
   const f=await fixture(page);const speech:any[]=[];
   await page.route('**/v1/audio/speech',route=>{speech.push(route.request().postDataJSON());return route.fulfill({status:503,json:{error:{message:'Fixture playback unavailable'}}});});
   await page.goto('/ui/#/chat');
+  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
   await page.getByRole('checkbox',{name:'Speak responses',exact:true}).focus();
   await page.keyboard.press('Space');
   await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();
@@ -384,12 +387,12 @@ test('speech waits for the parent response and never narrates child activity or 
 test('Activity keeps saved work but never offers a second task composer', async ({page}) => {
   const f=await fixture(page,'completed');
   await page.goto('/ui/#/agents/workspace');
-  await expect(page.locator('#agent-workspace-tab')).toHaveAttribute('aria-current','page');
+  await expect(page.locator('.primary-nav a[href="#/activity"]')).toHaveAttribute('aria-current','page');
   await expect(page.locator('.task-composer')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Start task',exact:true})).toHaveCount(0);
   await expect(page.getByRole('link',{name:'Chat',exact:true}).first()).toBeVisible();
   await page.locator('.task-list-item').filter({hasText:'Prepare an outline.'}).click();
-  await expect(page.locator('.task-detail')).toContainText('A saved, verified outline.');
+  await expect(page.locator('.task-surface')).toContainText('A saved, verified outline.');
   await page.goto('/ui/#/agents/new');
   await expect(page.locator('.task-composer')).toHaveCount(0);
   expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);

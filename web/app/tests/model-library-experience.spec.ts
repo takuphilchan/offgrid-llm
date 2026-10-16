@@ -82,7 +82,7 @@ test('navigation keeps the reviewed intent without online re-search and tabs sup
   await expect(page.getByRole('tab', { name: 'Discover models', exact: true })).toBeFocused();
   await page.getByRole('searchbox').fill('speech'); await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'publisher/speech', exact: true })).toBeVisible();
-  await page.locator('.primary-nav a[href="#/chat"]').click(); await page.locator('.primary-nav a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/models"]').click();
   await expect(page.getByRole('searchbox')).toHaveValue('speech');
   await expect(page.getByRole('heading', { name: 'publisher/speech', exact: true })).toBeVisible();
   expect(state.searches).toEqual(['speech']); expect(state.mutations).toEqual([]);
@@ -152,11 +152,11 @@ test('failed operations retain the exact model and safe recovery across library 
   await expect(card.getByRole('button', { name: 'Resume', exact: true })).toBeEnabled();
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   await expect(card).toBeVisible();
-  await page.locator('.primary-nav a[href="#/chat"]').click(); await page.locator('.primary-nav a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/models"]').click();
   await expect(card).toContainText('Retained data: 2 KB'); expect(state.mutations).toEqual([]);
   failRead = true;
   await page.getByRole('tab', { name: 'Installed', exact: true }).click();
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.getByRole('alert')).toContainText('Operation status offline');
   await expect(page.getByRole('region', { name: 'Installed', exact: true })).toContainText('Matching runtime is unavailable');
   await expect(card).toContainText('Fixture: transfer was interrupted');
@@ -173,7 +173,8 @@ test('legacy verification remains attached to its model after navigating away an
   await expect(page.locator('.installed-model')).toContainText('Fixture integrity evidence');
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   await expect(page.getByText('Fixture integrity evidence')).toHaveCount(0);
-  await page.locator('.primary-nav a[href="#/chat"]').click(); await page.locator('.primary-nav a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/models"]').click();
   await page.getByRole('tab', { name: 'Installed', exact: true }).click();
   await expect(page.locator('.installed-model')).toContainText('Fixture integrity evidence'); expect(checks).toBe(1);
 });
+import { refreshWorkspace } from './helpers/workspace-actions';

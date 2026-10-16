@@ -13,7 +13,7 @@ export function HistoryToolbar({ query, onQuery, searchLabel, title, count, busy
   if (!count && !query) return null;
   return <div className="workspace-history-toolbar">
     <span className="history-toolbar-title">{title}</span>
-    {count > 0 && <UtilityPopover label={workspaceExperience[locale].manageHistory} trigger={<Icon name="menu" size={17} />} triggerClassName="icon-button history-manage" className="history-tools" align="end">
+    {count > 0 && <UtilityPopover label={workspaceExperience[locale].manageHistory} trigger={<Icon name="more" size={17} />} triggerClassName="utility-button icon-button history-manage" className="history-tools" align="end">
       <button type="button" className="secondary-button" disabled={busy} onClick={refresh}>{messages.common.refresh}</button>
       <button type="button" className="secondary-button" disabled={busy || clearDisabled} onClick={clear}>{clearLabel}</button>
       {protection && <p className="workspace-secondary">{protection}</p>}

@@ -13,6 +13,8 @@ import { useKnownWork } from '../../lib/active-work';
 import { WorkLinks } from '../../components/WorkLinks';
 import { knownWorkText } from '../../i18n/known-work';
 import { workspaceManagement } from '../../i18n/workspace-management';
+import { SearchField } from '../../components/SearchField';
+import { TaskWorkspace, taskFromLocation } from '../agents/TaskWorkspace';
 
 type Health = 'checking' | 'ready' | 'offline';
 type RuntimeStats = {
@@ -20,12 +22,30 @@ type RuntimeStats = {
   inference?: { aggregate?: { total_requests?: number } };
 };
 
-export function ActivityPage({ health }: { health: Health }) {
+export function ActivityPage({ health, taskFirst = false }: { health: Health; taskFirst?: boolean }) {
+  const { scope, workspace, admin } = useWorkspace();
+  const { locale } = useI18n();
+  const [inspecting, setInspecting] = useState(() => !!taskFromLocation());
+  const [diagnostics, setDiagnostics] = useWorkspaceState('activity.diagnostics', false);
+  useEffect(() => {
+    const changed = () => setInspecting(!!taskFromLocation());
+    window.addEventListener('hashchange', changed);
+    return () => window.removeEventListener('hashchange', changed);
+  }, []);
+  if (!taskFirst && !inspecting) return <LegacyActivity health={health} />;
+  return <div className="stack activity-page">
+    <TaskWorkspace scope={scope} workspace={workspace} />
+    {!inspecting && admin && <details className="activity-diagnostics activity-archive" open={diagnostics} onToggle={event => setDiagnostics(event.currentTarget.open)}><summary>{workspaceManagement(locale).diagnostics}</summary>{diagnostics && <LegacyActivity health={health} />}</details>}
+  </div>;
+}
+
+function LegacyActivity({ health }: { health: Health }) {
   const { messages: text, locale } = useI18n();
   const { admin } = useWorkspace();
   const known = useKnownWork(), management = workspaceManagement(locale);
   const [stats, setStats] = useState<RuntimeStats | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [query, setQuery] = useWorkspaceState('activity.query', '');
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [selected, setSelected] = useWorkspaceState('activity.selected', '');
   const [error, setError] = useState('');
@@ -71,7 +91,7 @@ export function ActivityPage({ health }: { health: Health }) {
   const server = stats?.server;
   const aggregate = stats?.inference?.aggregate;
   const current = known.entries.filter(entry => entry.kind === 'chat' || !runs.some(run => run.id === entry.id));
-  const ordered = [...runs].sort((a, b) => {
+  const ordered = runs.filter(run => `${run.data?.prompt ?? run.id} ${run.status}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale))).sort((a, b) => {
     const active = (run: RunSummary) => !['completed', 'failed', 'cancelled'].includes(run.status);
     return Number(active(b)) - Number(active(a)) || Date.parse(b.updated_at) - Date.parse(a.updated_at);
   });
@@ -93,6 +113,8 @@ export function ActivityPage({ health }: { health: Health }) {
       <SectionHeading title={text.activity.runs} actions={admin && runs.length > 0 && <div className="task-history-actions">
         <button className="secondary-button" disabled={loading || !runs.some(run => run.deletable)} onClick={() => setDeleting(runs.filter(run => run.deletable).map(run => ({id:run.id,label:String(run.data?.prompt ?? run.id)})))}>{text.history.clearTasks}</button>
       </div>} />
+      {admin && runs.length > 0 && <SearchField label={text.history.searchTasks} value={query} onChange={setQuery} />}
+      {admin && runs.length > 0 && !ordered.length && <EmptyState title={text.history.noMatches} />}
       {!admin && <p className="permission-notice">{interaction[locale].adminOnly}</p>}{!admin ? null : loading && runs.length === 0 ? <p role="status">{text.common.loading}</p> : error && runs.length === 0 ? null : runs.length === 0 ? <EmptyState title={text.activity.noRuns} /> : <div className="run-layout">
       <div className="run-list">{ordered.map(run => <div key={run.id} className="activity-history-row"><button className={selected === run.id ? 'run-row selected' : 'run-row'} aria-pressed={selected === run.id} onClick={() => void inspect(run)}><i className={run.status} /><span><strong>{String(run.data?.prompt ?? run.id)}</strong><small>{statusLabel(run.status)} · {new Date(run.updated_at).toLocaleString(locale)}</small></span></button><button className="icon-button task-delete" disabled={!run.deletable} aria-label={`${text.history.deleteTask}: ${String(run.data?.prompt ?? run.id)}`} title={run.deletable ? text.history.deleteTask : text.history.protectedTasks} onClick={() => setDeleting([{id:run.id,label:String(run.data?.prompt ?? run.id)}])}><Icon name="trash" size={16}/></button></div>)}</div>
       <div className="event-list" aria-busy={loadingEvents}>{eventError ? <p role="alert">{eventError}</p> : loadingEvents ? <p role="status">{text.common.loading}</p> : events.length === 0 ? <p>{selected ? interaction[locale].noEvents : text.activity.selectRun}</p> : events.map(event => <article key={event.id}><i /><div><strong className="event-label">{eventLabel(event.type)}</strong><small>#{event.sequence} · {new Date(event.time).toLocaleTimeString(locale)}</small>{typeof event.data?.output === 'string' && <div className="message-body agent-answer"><MarkdownMessage content={event.data.output} /></div>}{event.data && <details><summary>{presentation[locale].details}</summary><pre>{JSON.stringify({ type: event.type, ...event.data }, null, 2)}</pre></details>}</div></article>)}</div>

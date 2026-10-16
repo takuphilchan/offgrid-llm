@@ -1,3 +1,4 @@
+import { openActivityArchive } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 
 test('document read recovery remains on the current canonical task without automatic replay', async ({ page }) => {
@@ -81,11 +82,11 @@ test('global refresh updates documents without reloading the workspace', async (
   await page.goto('/ui/#/knowledge');
   await expect(page.locator('.knowledge-setup')).toBeVisible();
   state.docs = 1;
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.getByRole('heading', { name: 'Refreshed document' })).toBeVisible();
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Keep this draft');
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.locator('.composer textarea')).toHaveValue('Keep this draft');
 });
 
@@ -112,7 +113,7 @@ test('agent navigation supports keyboard links and tool switches have names', as
   await page.goto('/ui/#/agents');
   await expect(page.locator('#agent-profiles-tab')).toBeVisible();
   await expect(page.locator('.task-composer')).toHaveCount(0);
-  await page.locator('#agent-workspace-tab').focus();
+  await page.locator('#agent-profiles-tab').focus();
   await page.keyboard.press('Tab');
   await expect(page.locator('#agent-tools-tab')).toBeFocused();
   await page.keyboard.press('Enter');
@@ -122,8 +123,9 @@ test('agent navigation supports keyboard links and tool switches have names', as
   await page.keyboard.press('Tab');
   await expect(page.locator('#agent-connections-tab')).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const link of await page.locator('.mobile-nav a').all()) await expect(link).toBeInViewport();
-  expect(await page.locator('.mobile-nav').evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
+  await page.locator('.navigation-trigger').click();
+  for (const link of await page.locator('.sidebar .nav-link').all()) await expect(link).toBeInViewport();
+  expect(await page.locator('.sidebar').evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
 });
 
 test('agent results render safe headings and tables rather than raw Markdown', async ({ page }) => {
@@ -151,6 +153,7 @@ test('Activity presents results with optional technical details', async ({ page 
   await page.route('**/v1/runs', r => r.fulfill({ json: { runs: [{ id: 'report', status: 'completed', updated_at: '2026-09-19T10:00:00Z', event_count: 1, data: { prompt: 'Prepare report' } }] } }));
   await page.route('**/v1/runs/report/events', r => r.fulfill({ json: { events: [{ id: 'e1', type: 'agent.finished', sequence: 1, time: '2026-09-19T10:00:00Z', data: { output: '## Findings\n\nUseful result', diagnostic: 'raw payload' } }] } }));
   await page.goto('/ui/#/activity');
+  await openActivityArchive(page);
   await page.getByRole('button', { name: /^Prepare report/ }).click();
   await expect(page.locator('.event-label')).toHaveText('Completed');
   await expect(page.locator('.event-list h2')).toHaveText('Findings');
@@ -158,3 +161,4 @@ test('Activity presents results with optional technical details', async ({ page 
   await page.getByText('Technical details', { exact: true }).click();
   await expect(page.locator('.event-list pre')).toContainText('raw payload');
 });
+import { refreshWorkspace } from './helpers/workspace-actions';

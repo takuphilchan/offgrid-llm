@@ -13,7 +13,7 @@
   .profile-list-item[aria-current="true"] { background: var(--surface-2); border-color: var(--line-strong); }
   .profile-list-item span { color: var(--muted); font-size: .85rem; }
   .profile-list-item :is(strong, span) { overflow-wrap: anywhere; }
-  .profile-editor { display: grid; gap: 1.25rem; padding: clamp(1rem, 2.5vw, 1.75rem); background: var(--surface-1); border: 1px solid var(--line); border-radius: 1rem; }
+  .profile-editor { display: grid; gap: 1.5rem; padding: clamp(1rem, 2.5vw, 1.5rem); background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-lg); }
   .profile-editor header { display: flex; gap: .75rem; align-items: baseline; flex-wrap: wrap; }
   .profile-editor h3 { margin: 0; font-size: 1.1rem; }
   .profile-editor :is(small, .profile-hint) { color: var(--muted); }
@@ -23,8 +23,8 @@
   .profile-fields textarea { resize: vertical; min-height: 8rem; }
   .profile-fields .profile-hint { margin: 0; }
   .profile-fields .model-select { max-width: none; }
-  .profile-resources { min-width: 0; padding: 1rem; margin: 0; border: 1px solid var(--line); border-radius: .6rem; }
-  .profile-resources legend { padding-inline: .4rem; font-size: .875rem; font-weight: 600; }
+  .profile-resources { min-width: 0; padding: 1rem 0 0; margin: 0; border: 0; border-block-start: 1px solid var(--line); }
+  .profile-resources legend { padding-inline: 0 .5rem; font-size: .875rem; font-weight: 600; }
   .profile-resources details { margin-block-start: 1rem; }
   .profile-options { display: grid; gap: .8rem; max-height: 20rem; overflow: auto; padding: .5rem; margin-inline: -.5rem; }
   .profile-option { display: flex; align-items: start; gap: .65rem; font-size: .875rem; }

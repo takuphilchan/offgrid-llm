@@ -1,4 +1,7 @@
 import { Icon } from './Icon';
+import { useRef } from 'react';
+import { useI18n } from '../i18n';
+import { workspaceRefinement } from '../i18n/workspace-refinement';
 
 /** Shared compact search surface; the visible placeholder never replaces its accessible label. */
 export function SearchField({ label, value, onChange, className = '', id, maxLength, disabled }: {
@@ -10,9 +13,11 @@ export function SearchField({ label, value, onChange, className = '', id, maxLen
   maxLength?: number;
   disabled?: boolean;
 }) {
-  return <label className={`history-search workspace-search-field ${className}`}>
+  const input = useRef<HTMLInputElement>(null);
+  const { locale } = useI18n();
+  return <div className={`history-search workspace-search-field ${className}`}>
     <Icon name="search" size={16} />
-    <span className="sr-only">{label}</span>
-    <input id={id} type="search" value={value} placeholder={label} maxLength={maxLength} disabled={disabled} onChange={event => onChange(event.target.value)} />
-  </label>;
+    <input ref={input} id={id} aria-label={label} type="search" value={value} placeholder={label} maxLength={maxLength} disabled={disabled} onChange={event => onChange(event.target.value)} />
+    {value && <button type="button" className="search-clear icon-button" aria-label={workspaceRefinement[locale].clear} disabled={disabled} onClick={() => { onChange(''); input.current?.focus(); }}><Icon name="close" size={16} /></button>}
+  </div>;
 }

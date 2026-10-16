@@ -1,3 +1,4 @@
+import { openWorkDetails } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 
 async function fixture(page: Page, durable = false) {
@@ -45,18 +46,21 @@ async function fixture(page: Page, durable = false) {
 test('saved agent preview appears before completion and reconnects without resubmitting', async ({page}) => {
   const state = await fixture(page);
   await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  await openWorkDetails(page);
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toContainText('Live partial answer 日本語');
   await expect(page.locator('.agent-live-preview')).toContainText('not a completed answer');
-  await expect(page.getByText('The connection is recovering.',{exact:false})).toBeVisible();
+  await expect(page.locator('.conversation-work > p').filter({hasText:'The connection is recovering.'})).toBeVisible();
   await expect.poll(state.streams).toBeGreaterThan(1);
   expect(state.creates()).toBe(0);
   await page.getByRole('checkbox',{name:'Live response preview'}).uncheck();
   await expect(page.locator('.agent-live-preview')).toHaveCount(0);
   expect(state.cancels()).toBe(0);
+  await openWorkDetails(page);
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await page.goto('/ui/#/chat');
   await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  await openWorkDetails(page);
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toContainText('Live partial answer 日本語');
   expect(state.creates()).toBe(0);
@@ -68,17 +72,19 @@ test('saved agent preview appears before completion and reconnects without resub
 test('cancel retains a clearly incomplete preview without claiming completion', async ({page}) => {
   const state = await fixture(page);
   await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  await openWorkDetails(page);
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toBeVisible();
   await page.getByRole('button',{name:'Stop',exact:true}).click();
   await expect(page.locator('.agent-live-preview')).toContainText('Incomplete response');
   expect(state.cancels()).toBe(1); expect(state.creates()).toBe(0);
-  await expect(page.locator('.task-detail')).not.toContainText('Finished answer');
+  await expect(page.locator('.task-surface')).not.toContainText('Finished answer');
 });
 
 test('durable replay reconnects with the applied cursor and accepts snapshot recovery', async ({page}) => {
   const state = await fixture(page,true);
   await page.goto('/ui/#/agents/task/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  await openWorkDetails(page);
   await page.getByRole('checkbox',{name:'Live response preview'}).check();
   await expect(page.locator('.agent-live-preview')).toBeVisible();
   await expect.poll(()=>state.replayCursors.length).toBeGreaterThan(1);

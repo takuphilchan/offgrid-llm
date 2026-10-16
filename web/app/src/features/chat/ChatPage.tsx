@@ -1,8 +1,9 @@
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
-import { useFocusScope } from '../../lib/focus-scope';
+import { SidebarContext, SidebarSlot } from '../../components/shell/SidebarSlot';
 import { interaction } from '../../i18n/interaction';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { workspaceRefinement } from '../../i18n/workspace-refinement';
 import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessage, type ChatSession, type Model, type SessionTurn } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
@@ -23,6 +24,7 @@ import { EmptyState, ScopedNotice } from '../../components/WorkspacePresentation
 import { UtilityPopover } from '../../components/UtilityPopover';
 import { workspaceExperience } from '../../i18n/workspace-experience';
 import { HistoryToolbar } from '../../components/HistoryToolbar';
+import { HistoryItemActions } from '../../components/HistoryItemActions';
 import { SetupLink, useSetupHandoff } from '../../lib/setup-handoff';
 import { useDraftScope } from '../../lib/draft-scope';
 import { missingConversationText } from '../../i18n/draft-recovery';
@@ -67,6 +69,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   onOpenModels: () => void;
 }) {
   const { messages: text, locale } = useI18n();
+  const sidebar = useContext(SidebarContext);
+  const refinement = workspaceRefinement[locale];
+  const [showLatest, setShowLatest] = useState(false);
   const voiceCopy = voiceText(locale);
   const feedback = operationFeedback(locale);
   const experience = workspaceExperience[locale];
@@ -146,7 +151,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const [historyQuery, setHistoryQuery] = useWorkspaceState('chat.historyQuery', '');
   const [historyLimit, setHistoryLimit] = useWorkspaceState('chat.historyLimit', 20);
   const [historyNotice, setHistoryNotice] = useState('');
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState('');
   const controller = useRef<AbortController | null>(null);
   const conversationPane = useRef<HTMLDivElement | null>(null);
@@ -158,8 +162,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const mounted = useRef(true);
   const selectionRevision = useRef(0);
   const historyRevision = useRef(0);
-  const historyPanel = useRef<HTMLElement>(null);
-  useFocusScope(historyPanel, historyOpen && !deleteItems, () => setHistoryOpen(false));
   const permissions = useWorkspace();
   useEffect(() => {
     if (handoff.requestedKnowledge && permissions.knowledge) { setKnowledge(true); handoff.consumeKnowledge(); }
@@ -267,7 +269,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     setStreamed(''); setInterrupted(false); setMetrics(undefined); setLimited(false);
     if (session?.model_id && models.some(item => item.id === session.model_id)) setModel(session.model_id);
     writeDraft(sessionKey, name);
-    setHistoryOpen(false);
+    sidebar.close();
     if (session) void api.currentTurn(session.name).then(({ turn }) => {
       if (!mounted.current || revision !== selectionRevision.current) return;
       if (turn?.id) void recoverTurn(session, turn, revision);
@@ -295,7 +297,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       // A late startup/retry must never replace a newer selection or its draft.
       if (selection === selectionRevision.current) {
         const selected = next.find(item => item.name === preferred);
-        if (preferred && !selected) {
+        if (window.location.hash === '#/chat/new') {
+          activate(undefined); window.history.replaceState(null, '', '#/chat');
+        } else if (preferred && !selected) {
           // Never silently bind a returning draft to the first unrelated chat.
           activate(undefined); setActiveName(preferred); writeDraft(sessionKey, preferred);
           setMissingSession(true); setError(missingConversationText[locale]);
@@ -325,7 +329,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   });
   const followConversation = () => {
     const pane = conversationPane.current;
-    if (pane && followOutput.current) pane.scrollTop = pane.scrollHeight;
+    // Explicit Latest also wins over a still-running native keyboard scroll.
+    // The scroll handler corrects drift only when no fresh user intent exists.
+    if (pane && followOutput.current) pane.scrollTo({ top: pane.scrollHeight, behavior: 'instant' });
   };
   useLayoutEffect(followConversation, [conversation, busy, streamed, phase, linkedRun?.event_cursor, linkedRun?.status, error]);
   useEffect(() => {
@@ -508,27 +514,24 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const linkedOutputSaved = !!linkedTurn && conversation.some(message => 'turn_id' in message && message.turn_id === linkedTurn.id && message.role === 'assistant');
   return <div className="chat-workspace">
     {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="chats" remove={name => api.deleteSession(name, deleteWork || undefined)} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} options={locked => <><label>{jobCopy.deleteChoice}<select disabled={locked} value={deleteWork} onChange={event => setDeleteWork(event.target.value as '' | 'retain' | 'stop')}><option value="">{jobCopy.preserveActive}</option><option value="retain">{jobCopy.retain}</option><option value="stop">{jobCopy.stop}</option></select></label><p>{jobCopy.deleteHint}</p></>} />}
-    {historyOpen && <button className="history-scrim" onClick={() => setHistoryOpen(false)} aria-label={text.chat.closeHistory} />}
-    <aside ref={historyPanel} role={historyOpen && !deleteItems ? 'dialog' : undefined} aria-modal={(historyOpen && !deleteItems) || undefined} id="conversation-history" className={historyOpen ? 'conversation-history open' : 'conversation-history'} aria-label={text.chat.conversations}>
-      <button className="history-close icon-button" onClick={() => setHistoryOpen(false)} aria-label={text.chat.closeHistory}><Icon name="close" size={18} /></button>
-      <button className="new-chat-button" disabled={busy} onClick={startNew}><Icon name="plus" size={16} />{text.chat.newChat}</button>
+    <SidebarSlot action><button className="new-chat-button" title={text.chat.newChat} aria-label={text.chat.newChat} disabled={busy} onClick={() => { sidebar.close(); startNew(); }}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></button></SidebarSlot>
+    <SidebarSlot><section id="conversation-history" className="conversation-history" aria-label={text.chat.conversations}>
       <HistoryToolbar query={historyQuery} onQuery={value => { setHistoryQuery(value); setHistoryLimit(20); }} searchLabel={text.history.searchChats} title={text.chat.conversations} count={sessions.length} busy={busy || loading} refresh={() => void loadSessions()} clearLabel={text.history.clearChats} clearDisabled={!filteredSessions.length} clear={() => setDeleteItems(filteredSessions.map(session => ({ id: session.name, label: visibleSessionName(session.name) })))} />
       {historyNotice && <p className="history-notice" role="status">{historyNotice}</p>}
       {loading ? <div className="history-empty" role="status">{text.common.loading}</div> : sessions.length === 0 ? <EmptyState className="history-empty" title={text.chat.noConversations} /> : <div className="history-list">
         {filteredSessions.length === 0 && <div className="history-empty">{text.history.noMatches}</div>}
         {filteredSessions.slice(0, historyLimit).map(session => <div className={activeName === session.name ? 'history-row active' : 'history-row'} key={session.name}>
-          <button className="history-open" disabled={busy} onClick={() => selectSession(session)} title={visibleSessionName(session.name)}><strong>{visibleSessionName(session.name)}</strong><small>{session.messages.length} · {new Date(session.updated_at).toLocaleDateString(locale)}</small></button>
-          <button className="history-delete" disabled={busy} aria-label={`${text.chat.deleteConversation}: ${visibleSessionName(session.name)}`} title={text.chat.deleteConversation} onClick={() => setDeleteItems([{ id: session.name, label: visibleSessionName(session.name) }])}><Icon name="trash" size={16} /></button>
+          <button className="history-open" disabled={busy} aria-current={activeName === session.name ? 'true' : undefined} onClick={() => { sidebar.close(); selectSession(session); }} title={`${visibleSessionName(session.name)} · ${new Date(session.updated_at).toLocaleDateString(locale)}`}><strong>{visibleSessionName(session.name)}</strong></button>
+          <HistoryItemActions title={visibleSessionName(session.name)} label={text.chat.deleteConversation} disabled={busy} onDelete={() => setDeleteItems([{ id: session.name, label: visibleSessionName(session.name) }])} />
         </div>)}
         {filteredSessions.length > historyLimit && <button className="secondary-button history-more" onClick={() => setHistoryLimit(limit => limit + 20)}>{text.history.showMore} ({filteredSessions.length - historyLimit})</button>}
       </div>}
-    </aside>
+    </section></SidebarSlot>
     <div className="chat-layout">
-      <div className="chat-toolbar"><button className="history-toggle secondary-button" onClick={() => setHistoryOpen(true)} aria-label={text.chat.showHistory} aria-expanded={historyOpen} aria-controls="conversation-history"><Icon name="menu" size={19} />{text.chat.conversations}</button></div>
       {(!model || onboardingPending) && <div className="setup-inline" role="status"><span>{model ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</span>{!model && <button className="secondary-button" onClick={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }}>{text.onboarding.chooseModel}</button>}</div>}
-      <div ref={conversationPane} className="conversation" onWheel={event => { userScrollUntil.current = performance.now() + 1200; if (event.deltaY < 0) followOutput.current = false; }} onTouchStart={() => { userScrollUntil.current = performance.now() + 1200; }} onKeyDown={event => { if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) userScrollUntil.current = performance.now() + 1200; }} onScroll={event => { if (performance.now() > userScrollUntil.current) return; const el = event.currentTarget; followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
+<div ref={conversationPane} className="conversation" tabIndex={0} onWheel={event => { userScrollUntil.current = performance.now() + 1200; if (event.deltaY < 0) followOutput.current = false; }} onTouchStart={() => { userScrollUntil.current = performance.now() + 1200; }} onKeyDown={event => { if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) userScrollUntil.current = performance.now() + 1200; }} onScroll={event => { const el = event.currentTarget; const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100; if (performance.now() <= userScrollUntil.current) followOutput.current = atBottom; else if (followOutput.current && !atBottom) followConversation(); setShowLatest(!atBottom && !followOutput.current); }}>
         <div ref={conversationContent} className="conversation-content">
-        {conversation.length === 0 && !loading && <div className="empty-chat"><div className="orb"><div /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
+        {conversation.length === 0 && !loading && <div className="empty-chat"><div className="orb"><Icon name="models" size={28} /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
         {conversation.map((message, index) => {
           const content = messageText(message.content);
           const messageKey = `${index}-${'timestamp' in message ? message.timestamp : content.slice(0, 24)}`;
@@ -560,12 +563,13 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         {unsaved && <div className="inline-error" role="alert">{text.recovery.draftWarning}</div>}
         </div>
       </div>
+      {showLatest && <button type="button" className="secondary-button chat-latest" onClick={() => { userScrollUntil.current = 0; followOutput.current = true; const pane = conversationPane.current; pane?.focus({ preventScroll: true }); setShowLatest(false); requestAnimationFrame(() => { pane?.scrollTo({ top: pane.scrollHeight, behavior: 'instant' }); }); }}>{refinement.latest}</button>}
       <div className="composer">
         <div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small>{text.chat.enterHint}</small></div>
         <div className="composer-context">
           <AgentSelector value={agent} onChange={value => { setAgent(value); setAgentResources({ profile: value ? `${value.id}:${value.revision}` : '', restrictions: {} }); }} disabled={busy} />
           {agent ? <><div className="chat-agent-model"><span>{text.chat.model}</span>{agent.settings.model}</div><AgentTools profile={agent} restrictions={restrictions} onChange={value => setAgentResources({ profile: agentKey, restrictions: value })} disabled={busy} />{agent.settings.computer && restrictions.computer !== false && <TaskAccessPolicy value={computerPolicy} onChange={setComputerPolicy} disabled={busy} scope="desktop" workspace={permissions.workspace} />}</> : <ModelSelect models={models} value={model} onChange={setModel} />}
-          <UtilityPopover label={experience.context} trigger={<>{experience.context}{!agent && knowledge && <span className="composer-choice">{experience.knowledgeOn}</span>}</>} className="composer-context-menu">
+          <UtilityPopover label={experience.context} trigger={<><Icon name="settings" size={18} />{!agent && knowledge && <span className="composer-choice">{experience.knowledgeOn}</span>}</>} triggerClassName={!agent && knowledge ? 'secondary-button' : 'icon-button'} className="composer-context-menu">
             {!agent && <label className="switch"><input type="checkbox" checked={knowledge} disabled={busy || (!knowledge && knowledgeState !== 'ready')} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label>}
             {!agent && permissions.knowledge && knowledgeState !== 'ready' && <div className="knowledge-readiness">
               {knowledgeState === 'checking' ? <span role="status">{feedback.checkingKnowledge}</span>
@@ -576,13 +580,13 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
             <label className="field">{text.chatStreaming.responseLimit}<select value={maxTokens} disabled={busy} onChange={event => updatePreferences({ ...preferences, maxTokens: Number(event.target.value) })}>{[256, 1024, 4096].map(count => <option value={count} key={count}>{count.toLocaleString(locale)}</option>)}</select></label>
             <p>{text.chatStreaming.profileHint}</p>
           </UtilityPopover>
-          <VoiceSettings />
+          <VoiceSettings compact><label className="switch"><input type="checkbox" checked={speakResponses} disabled={checkingSpeech || (busy && !speakResponses)} onChange={event => void toggleSpeech(event.target.checked)} /><span />{voiceCopy.speakResponses}</label></VoiceSettings>
         </div>
         {!agent && knowledge && knowledgeState !== 'ready' && <ScopedNotice action={<button className="secondary-button" onClick={() => void refreshKnowledge()}>{feedback.retryKnowledge}</button>}>{knowledgeState === 'checking' ? feedback.checkingKnowledge : knowledgeState === 'failed' ? feedback.knowledgeCheckFailed : interaction[locale].knowledgeUnavailable}</ScopedNotice>}
         {!agent && knowledge && <p className="composer-retrieval-scope">{workspaceManagement(locale).retrievalScope}</p>}
         <div className="composer-footer">
       <div className="composer-voice-toolbar chat-speech-controls">
-        <label className="switch"><input type="checkbox" checked={speakResponses} disabled={checkingSpeech || (busy && !speakResponses)} onChange={event => void toggleSpeech(event.target.checked)} /><span />{voiceCopy.speakResponses}</label>
+        {speakResponses && <small>{voiceCopy.speakResponses}</small>}
         {speechState !== 'idle' && <button type="button" className="text-button" onClick={stopSpeech}>{voiceCopy.stopSpeaking}</button>}
         {speechState !== 'idle' && <small role="status">{speechState === 'waiting' ? voiceCopy.speechWaiting : speechState === 'preparing' ? voiceCopy.preparingHint : busy ? voiceCopy.provisionalSpeech : voiceCopy.speak}</small>}
         {speechError && <small role="alert">{speechError} <a className="secondary-button" href="#/models">{text.nav.models}</a></small>}

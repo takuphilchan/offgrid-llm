@@ -89,9 +89,10 @@ test('agents page exposes runtime tools, durable tasks, MCP, and computer status
   await page.route('**/api/v2/computer/status', route => route.fulfill({ json: { available: false, emergency_stop: false, active_sessions: 0 } }));
   await page.route('**/v1/integrations?*', route => route.fulfill({ json: { provider: 'offgrid', base_url: 'http://127.0.0.1:11611/v1', integrations: [{ id: 'hermes', provider_id: 'offgrid', plugin_id: 'offgrid', name: 'Hermes Agent', description: 'Private OffGrid inference', transport: 'openai-chat-completions', documentation_url: 'https://example.com', minimum_context: 64000, recommended_context: 65536, requires_tools: true, capabilities: ['chat', 'tools'], ready: false, status: 'needs_configuration', model_id: 'chat-model', context_window: 8192, warnings: ['A larger context window is recommended.'] }] } }));
 
-  await page.goto('/ui/#/agents');
+  await page.goto('/ui/#/activity');
   await expect(page.getByText('Summarize the report')).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agents-workspace.png'), fullPage: true });
+  await page.locator('.primary-nav').getByRole('link', { name: 'Agents', exact: true }).click();
   await page.getByRole('link', { name: 'Available tools', exact: true }).click();
   await expect(page.getByText('1/1 enabled').first()).toBeVisible();
   await expect(page.locator('.agent-metrics')).toHaveCount(0);

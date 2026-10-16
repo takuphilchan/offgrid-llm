@@ -4,16 +4,16 @@ Web and desktop share these controls. Deletion always requires confirmation and
 applies to the listed items captured when the confirmation opens, not new items
 created in another tab afterwards. Nothing is deleted just by opening the dialog.
 
-In the updated development renderer, Chat and task-first Agents group bulk actions
-under **Manage history** beside history search. Empty histories show a next-step
-message without disabled bulk controls; a failed read still offers Retry. Trash
-buttons remain visible on individual rows. Manage history explains protected task
-states; these restrictions have not changed. Older compatible agent clients may
-retain the previous toolbar layout.
+Chat keeps conversation history in the shared sidebar; Activity lists saved agent
+work. Both group bulk actions under **Manage history** beside history search.
+Individual rows have a labelled action menu containing Delete. Empty histories
+show a next-step message without disabled bulk controls; a failed read still
+offers Retry. Manage history explains protected task states; these restrictions
+have not changed. Older compatible clients may retain the previous toolbar layout.
 
 ## Conversations
 
-- Use the visible trash button beside a conversation to delete it.
+- Open a conversation's row action menu and choose Delete to review its removal.
 - Search conversations by title. **Delete listed chats** removes the conversations
   matching that search; clear the search first to remove all listed conversations.
 - The first twenty matching conversations are rendered; **Show more** reveals
@@ -26,14 +26,13 @@ retain the previous toolbar layout.
 - A conversation generating in another client returns HTTP 409 immediately;
   deletion does not wait for generation to finish and then erase the new answer.
 
-Profile-enabled Chat turns in the development API retain links to their canonical
+Profile-enabled Chat turns retain links to their canonical
 jobs. Deleting a conversation does not delete those jobs. Active work requires an
 explicit choice: retain it for inspection, or stop it and wait for confirmed
 settlement before deletion. Unknown effects cannot be discarded as a successful
 stop; retain the job and inspect its target. Opening history never resumes work.
 Minimal request identities remain after deletion so a stale submission cannot
-recreate a deleted turn. This backend contract is not yet a claim that the new
-Chat deletion controls are available in every client.
+recreate a deleted turn. Older clients may not expose these retention choices.
 
 ## Agent tasks
 
@@ -49,10 +48,10 @@ Chat deletion controls are available in every client.
   Pending, running, approval-waiting, resumable interrupted and uncertain runs are protected.
   Stop active work explicitly; inspect/reconcile unknown tool outcomes first.
   A worker still settling cancellation can briefly return 409: refresh and retry.
-- **Reuse task** copies a prompt into an empty draft; it never executes it or
-  overwrites an unsent draft. **Copy result** copies the selected saved output.
+- Open work in Activity to inspect its result and recovery controls. Start new
+  work in Chat; inspecting history never executes it. Copy copies saved output.
 - Removing a selected run clears its result and saved selection. It does not clear
-  an independent task draft. Removed runs also disappear from Activity after reload.
+  an independent Chat draft. Removed runs also disappear from Activity after reload.
 
 Bulk operations report partial failure honestly and keep only failed items in
 the dialog for retry. Successful items are not sent again. Normal ownership and

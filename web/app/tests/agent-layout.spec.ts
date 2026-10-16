@@ -61,14 +61,14 @@ for (const width of [390, 768, 1024, 1440]) {
     const state=await fixture(page);state.complete();await page.setViewportSize({width,height:900});
     await page.goto('/ui/#/agents/task/run-cccccccccccccccccccccccccccccccc');
     await expect(page.locator('.task-result')).toContainText('Completed report');
-    await expect(page.locator('.task-activity')).not.toHaveAttribute('open','');
-    await expect(page.locator('.task-activity article')).toHaveCount(100);
+    await expect(page.locator('.conversation-work-details')).not.toHaveAttribute('open','');
+    await expect(page.locator('.conversation-work-details > details').filter({has:page.locator('pre')})).toHaveCount(100);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
-    await page.locator('.task-activity > summary').click();
-    await expect(page.locator('.task-activity')).toHaveAttribute('open','');
+    await page.locator('.conversation-work-details > summary').click();
+    await expect(page.locator('.conversation-work-details')).toHaveAttribute('open','');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
-    await page.locator('.task-detail header').getByRole('button',{name:'Copy result',exact:true}).focus();
-    await expect(page.locator('.task-detail header').getByRole('button',{name:'Copy result',exact:true})).toBeInViewport();
+    await page.locator('.task-inspector-toolbar').getByRole('button',{name:'Copy result',exact:true}).focus();
+    await expect(page.locator('.task-inspector-toolbar').getByRole('button',{name:'Copy result',exact:true})).toBeInViewport();
     await page.screenshot({path:test.info().outputPath(`current-result-${width}.png`)});
   });
 }
@@ -91,5 +91,5 @@ test('large approval payload stays behind details with Stop reachable',async({pa
   // Unknown tool effects retain exact arguments, not an inferred safe summary.
   await expect(page.locator('.approval-card pre')).toContainText('review this carefully');
   await page.getByRole('button',{name:'Stop',exact:true}).click();
-  await expect(page.locator('.task-state')).toContainText('Cancelled');
+  await expect(page.locator('.work-status')).toContainText('Cancelled');
 });

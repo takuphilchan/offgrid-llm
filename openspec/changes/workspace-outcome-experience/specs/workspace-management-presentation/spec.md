@@ -4,6 +4,14 @@ Make documents, work history and preferences useful to ordinary users while reta
 
 ## ADDED Requirements
 
+### Requirement: Consistent search and profile organization
+Search fields SHALL share an icon, accessible name, localized placeholder and conditional clear action. Agent profile editors SHALL group identity/instructions, model, tools and collaboration settings with advanced configuration subordinate, without altering execution semantics.
+
+#### Scenario: Filter and clear a collection
+- **WHEN** a user enters and clears a search by keyboard
+- **THEN** the same collection updates with truthful empty/loading treatment and focus remains on the search field
+- **AND** filtering or profile inspection does not execute work or change access
+
 ### Requirement: Document-first Knowledge
 Knowledge SHALL foreground document identity, meaningful readiness and source inspection, with Add document as its primary entry action. Index internals, embedding configuration, reindexing and disabling Knowledge SHALL move to named management surfaces. Missing setup SHALL retain an actionable contextual path.
 
@@ -22,6 +30,16 @@ Moving from Knowledge to Chat SHALL preserve drafts and disclose the actual retr
 
 ### Requirement: Work-first Activity
 Activity SHALL foreground current and recent permitted work with meaningful status and links to the canonical work view when identity is known. Runtime counters and raw payloads SHALL be secondary. It SHALL NOT create a second editable task or broaden existing administrator-only access.
+
+#### Scenario: Existing agent task link
+- **WHEN** a user follows an existing agent task or history route
+- **THEN** Activity presents the same authorized canonical inspection or work list without a second permanent history sidebar
+- **AND** non-administrator access remains limited to existing authorized task inspection, not administrative history or profile management
+
+#### Scenario: Return from inspection
+- **WHEN** a user returns from a selected task to Activity
+- **THEN** scoped filters and list position remain available
+- **AND** legacy run events remain readable without pretending they are editable canonical tasks
 
 #### Scenario: Open a history item
 - **WHEN** Activity identifies an existing task

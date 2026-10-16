@@ -33,12 +33,12 @@ async function fixture(page: Page) {
 
 test('saved answer and files precede collapsed logs without turning generation into verification', async ({ page }) => {
   const state = await fixture(page); await page.goto(`/ui/#/agents/task/${id}`);
-  await expect(page.getByRole('heading', { name: 'Saved answer' })).toBeVisible();
-  await expect(page.locator('.task-result')).toContainText('Generated content is not independent verification');
+  await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
+  await expect(page.locator('.work-inspector')).toContainText('Generated content is not independent verification');
   await expect(page.locator('.task-artifact')).toContainText('File integrity checked');
   await expect(page.locator('.task-artifacts')).toContainText('not factual correctness');
   await expect(page.getByText('Private execution detail', { exact: true })).not.toBeVisible();
-  expect(await page.locator('.task-result').evaluate(node => !!(node.compareDocumentPosition(document.querySelector('.task-activity')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  expect(await page.locator('.task-result').evaluate(node => !!(node.compareDocumentPosition(document.querySelector('.conversation-work-details')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   const downloading = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download: summary.csv' }).click();
   expect((await downloading).suggestedFilename()).toBe('summary.csv');
@@ -51,7 +51,7 @@ for (const status of [403, 404, 503]) test(`artifact ${status} remains an in-con
   let downloads = 0; page.on('download', () => downloads++);
   await page.getByRole('button', { name: 'Download: summary.csv' }).click();
   await expect(page.locator('.task-artifact').getByRole('alert')).toContainText('File unavailable');
-  await expect(page.getByRole('heading', { name: 'Saved answer' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
   expect(downloads).toBe(0); expect(state.writes).toEqual([]);
 });
 
@@ -84,7 +84,7 @@ test('results and long file names fit a narrow screen in both themes', async ({ 
   await page.setViewportSize({ width: 320, height: 640 });
   for (const theme of ['light', 'dark']) {
     await page.goto(`/ui/#/agents/task/${id}`); await page.evaluate(theme => localStorage.setItem('offgrid.theme', theme), theme); await page.reload();
-    await expect(page.getByRole('heading', { name: 'Saved answer' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     await page.screenshot({ path: info.outputPath(`result-${theme}.png`), fullPage: true });
   }
@@ -99,7 +99,7 @@ test('unsupported continuation links to Chat without resubmitting or losing the 
   expect(state.writes).toEqual([]);
   await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByRole('button', { name: 'Start a new task from this' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Saved answer' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
 });
 
 test('lost steering acknowledgment reconciles the accepted instruction without another submission', async ({ page }) => {

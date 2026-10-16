@@ -63,7 +63,7 @@ test('reload drops the transient return link but not the existing draft', async 
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toHaveCount(0);
-  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Retain my task');
 });
 
@@ -75,7 +75,7 @@ for (const change of ['workspace', 'actor', 'permission'] as const) test(`${chan
   if (change === 'workspace') state.workspace = 'workspace-b';
   else if (change === 'actor') state.actor = 'bob';
   else state.role = 'guest';
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toHaveCount(0);
   expect(state.writes).toEqual([]);
 });
@@ -101,12 +101,12 @@ test('legacy restoration is explicit, copy-only, one-time, and never submits or 
   await expect(page.getByText('Old private question', { exact: true })).toHaveCount(0);
   await restore.click();
   await expect(page.locator('.composer textarea')).toHaveValue('Old private question');
-  await page.locator('.primary-nav a[href="#/agents"]').click();
+  await page.locator('.sidebar a[href="#/agents"]').click();
   await expect(page.locator('.task-composer')).toHaveCount(0);
   expect(await page.evaluate(()=>localStorage.getItem('offgrid.draft.v1:alice:agent-task:'))).toBe('Old task draft');
   await page.reload();
   await expect(restore).toHaveCount(0);
-  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Old private question');
   expect(await page.evaluate(() => [localStorage.getItem('offgrid.draft.v1:alice:chat:'), localStorage.getItem('offgrid.draft.v1:alice:agent-task:'), localStorage.getItem('offgrid.draft.v1:bob:chat:'), localStorage.getItem('offgrid.active-session:alice')])).toEqual(['Old private question', 'Old task draft', 'Another account', 'Never automatically select']);
   expect(state.writes).toEqual([]);
@@ -160,11 +160,11 @@ for (const change of ['actor', 'workspace'] as const) test(`${change} isolates d
   await page.getByRole('button', { name: 'Keep separate', exact: true }).click();
   await page.locator('.composer textarea').fill('Only in workspace A for Alice');
   state[change] = change === 'actor' ? 'bob' : 'workspace-b';
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.locator('.composer textarea')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Restore previous drafts here' })).toBeVisible();
   state[change] = change === 'actor' ? 'alice' : 'workspace-a';
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.locator('.composer textarea')).toHaveValue('Only in workspace A for Alice');
   await expect(page.getByRole('button', { name: 'Restore previous drafts here' })).toHaveCount(0);
   expect(state.writes).toEqual([]);
@@ -177,8 +177,8 @@ test('unidentified service keeps session-memory drafts without loading or persis
   await expect(page.getByRole('button', { name: 'Restore previous drafts here' })).toHaveCount(0);
   await expect(page.locator('.composer textarea')).toHaveValue('');
   await page.locator('.composer textarea').fill('Memory only');
-  await page.locator('.primary-nav a[href="#/models"]').click();
-  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Memory only');
   expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('offgrid.draft.memory:')))).toEqual([]);
   await page.reload(); await expect(page.locator('.composer textarea')).toHaveValue('');
@@ -201,3 +201,4 @@ test('a removed conversation on setup return retains its draft and does not sele
   await expect(page.locator('.history-row.active')).toHaveCount(0);
   expect(state.writes).toEqual([]);
 });
+import { refreshWorkspace } from './helpers/workspace-actions';

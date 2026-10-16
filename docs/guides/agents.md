@@ -50,7 +50,7 @@ restores expired computer permission.
 
 Profiles have immutable revisions. Save conflicts keep your draft; explicitly
 load the latest revision or save a new profile. Archive removes future selection
-without erasing historical work. Existing task links and the **Agent activity** inspector
+without erasing historical work. Existing task links and the **Activity** inspector
 remain available. This source implementation still has locale, integrated
 client and native-platform qualification gates; do not infer deployment from
 these documented contracts.
@@ -74,7 +74,7 @@ approval policy. See [MCP setup](mcp.md).
 
 Start work in **Chat**. Select a saved profile with **Agent**, describe the
 outcome in the message, and send it. The linked job is saved before execution.
-**Agent activity** in Agents is history and a detailed inspector for that same
+**Activity** provides history and a detailed inspector for that same
 job, not another task composer. Model choice, tool restrictions, computer access
 policy and voice controls live with the Chat composer. A model with reliable
 structured tool calling is still required.

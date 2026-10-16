@@ -16,7 +16,8 @@ test('saved conversations survive reload and can be deleted', async ({ page, req
   await page.reload();
   await expect(page.locator('.history-row.active', { hasText: name })).toBeVisible();
 
-  const deleteButton = page.locator('.history-row', { hasText: name }).locator('.history-delete');
+  await row.locator('.history-item-menu').click();
+  const deleteButton = page.getByRole('button', { name: 'Delete conversation', exact: true });
   await deleteButton.click();
   await expect(page.getByRole('dialog')).toContainText(name);
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm delete', exact: true }).click();

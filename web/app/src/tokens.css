@@ -1,0 +1,56 @@
+/* Authoritative shared renderer palette and type/spacing foundations. */
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-family: 'IBM Plex Sans Variable', 'IBM Plex Sans Arabic', sans-serif;
+    font-size: 16px;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --surface-0: #101011;
+    --surface-1: #181819;
+    --surface-2: #222223;
+    --surface-3: #303031;
+    --line: rgba(255, 255, 255, .11);
+    --line-strong: rgba(255, 255, 255, .22);
+    --text: #f5f5f4;
+    --muted: #b9b9b7;
+    --faint: #989896;
+    --accent: #f5f5f4;
+    --accent-strong: #ffffff;
+    --accent-soft: rgba(255, 255, 255, .075);
+    --on-accent: #111112;
+    --green: #d9d9d7;
+    --red: #eababa;
+    --amber: #cfcfcd;
+    --radius-sm: 7px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --shadow: 0 14px 42px rgba(0, 0, 0, .2);
+    --scrim: rgba(0, 0, 0, .6);
+  }
+
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --surface-0: #f7f7f6;
+    --surface-1: #ffffff;
+    --surface-2: #efefed;
+    --surface-3: #e2e2e0;
+    --line: rgba(0, 0, 0, .1);
+    --line-strong: rgba(0, 0, 0, .2);
+    --text: #171717;
+    --muted: #535351;
+    --faint: #696967;
+    --accent: #171717;
+    --accent-strong: #171717;
+    --accent-soft: rgba(0, 0, 0, .06);
+    --on-accent: #ffffff;
+    --green: #30302f;
+    --red: #833d3d;
+    --amber: #5e5e5b;
+    --shadow: 0 14px 42px rgba(0, 0, 0, .08);
+    --scrim: rgba(0, 0, 0, .45);
+  }
+
+  :root[lang='ar'] { font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans Variable', sans-serif; }
+  :root { --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; font-synthesis: none; text-rendering: optimizeLegibility; }
+  body { font: inherit; }
+}

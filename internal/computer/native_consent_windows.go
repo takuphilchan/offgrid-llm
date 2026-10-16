@@ -269,7 +269,7 @@ func (d *nativeConsent) setFonts(dpi int32) {
 		d.fonts = append(d.fonts, f)
 		return f
 	}
-	regular, title, button := font(14, "Segoe UI"), font(20, "Segoe UI Semibold"), font(13, "Segoe UI Semibold")
+	regular, title, button := font(14, "Segoe UI"), font(20, "Segoe UI Semibold"), font(14, "Segoe UI Semibold")
 	for _, item := range [][2]uintptr{{d.heading, title}, {d.body, regular}, {d.cancel, button}, {d.allow, button}, {d.disclosure, button}} {
 		if item[0] != 0 {
 			user32.NewProc("SendMessageW").Call(item[0], 0x0030, item[1], 1)
@@ -346,11 +346,11 @@ func (d *nativeConsent) layout() {
 	bodyTop := d.px(18) + headingHeight + d.px(12)
 	move(d.body, margin, bodyTop, width, r.Bottom-bodyTop-footer)
 	if d.disclosure != 0 {
-		move(d.disclosure, margin, r.Bottom-d.px(56), d.px(92), d.px(36))
+		move(d.disclosure, margin, r.Bottom-d.px(56), d.px(92), d.px(40))
 	}
 	buttonWidth := min(d.px(112), (width-gap)/2)
-	move(d.allow, margin+width-buttonWidth, r.Bottom-d.px(56), buttonWidth, d.px(36))
-	move(d.cancel, margin+width-buttonWidth-gap-d.px(80), r.Bottom-d.px(56), d.px(80), d.px(36))
+	move(d.allow, margin+width-buttonWidth, r.Bottom-d.px(56), buttonWidth, d.px(40))
+	move(d.cancel, margin+width-buttonWidth-gap-d.px(80), r.Bottom-d.px(56), d.px(80), d.px(40))
 	// EDIT always retains keyboard scrolling, but do not show an unnecessary
 	// native scrollbar on a short confirmation whose entire summary fits.
 	var bodyRect = consentRect{Right: width - d.px(22)}

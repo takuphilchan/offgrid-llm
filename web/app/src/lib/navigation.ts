@@ -9,6 +9,7 @@ export const navigationGroups: { label: 'work' | 'library' | 'system'; items: Pa
 ];
 
 export function pageFromLocation(): Page {
+  if (/^#\/agents\/(?:workspace|new|task\/[^/]+)$/.test(window.location.hash)) return 'activity';
   const candidate = window.location.hash.replace(/^#\/?/, '').split('/')[0];
   return pages.includes(candidate as Page) ? candidate as Page : 'chat';
 }

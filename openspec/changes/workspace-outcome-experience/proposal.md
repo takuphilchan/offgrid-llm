@@ -6,7 +6,7 @@ The completed state/recovery and shell slices make OffGrid more consistent, but 
 
 ## What Changes
 
-- Compose Chat and task entry around one prompt and one primary action, with context, model and voice controls grouped nearby. Keep visible button boundaries; reduce competing actions through placement and progressive disclosure, not link-like styling or hidden safety controls.
+- Compose ordinary and agent-enabled Chat around one prompt and one primary action. Agents owns reusable profiles, not a second task composer. Keep visible button boundaries; reduce competing actions through placement and progressive disclosure, not link-like styling or hidden safety controls.
 - Keep accepted work discoverable across navigation with a compact, actor/workspace-scoped active-work surface. Reuse existing session-turn and job snapshots/events, drafts, request IDs and lifecycle actions; never start a second task to resume a view.
 - Scope local drafts to actor and workspace. As confirmed by the owner, offer one explicit restoration of legacy account-only drafts into the chosen workspace; preserve originals and never overwrite a newer draft or automatically restore private text.
 - Present agent results, existing artifacts, evidence and supported follow-up ahead of execution details. Put exact access/approval requests in the work context, preserving consequential confirmations and uncertain-outcome handling.
@@ -23,7 +23,24 @@ This is one cross-cutting renderer interaction change, delivered in reviewable f
 
 Exclude new model/runtime adapters, universal native control, Talk mode, new project/collection APIs, a database migration, new document editors or artifact generators, backend authorization changes, and a new UI/router/state framework. Do not invent document-scoped retrieval, verification, streaming replay or agent-steering support that the service does not expose. Model latency, hardware qualification and release readiness remain separate evidence. No deployment, model download, user recording, commit, push or release is authorized by this proposal.
 
+### Approved refinement (2026-10-15)
+
+Replace the two Chat sidebars with one 280px contextual sidebar and a navigation drawer below 1024px. Simplify header and composer controls, consolidate visual token ownership, and refine result/activity, collection, settings and trusted desktop presentation. Preserve the implemented profile/Chat architecture and current state/authority boundaries. This refinement authorizes implementation and checks only, not deployment, installation, Git publication or release. Historical checked tasks remain evidence of their earlier scope, not completion of the refinement. References below to task-first/legacy presentation describe the earlier implementation; the refinement must not restore retired task entry.
+
 ## Capabilities
+
+### Approved composition-first follow-up
+
+The owner approved implementation of the subsequent review plan. Replace the
+280px fixed composition with a 248px collapsible sidebar, compact contextual
+history and one workspace/settings footer. Make Activity the canonical inspection
+presentation while preserving agent-task/history aliases and their existing role
+checks. Reuse work controllers and the Chat work presentation; no execution,
+storage or public API redesign. Distinguish primary, secondary, utility and
+navigation treatments instead of equal-weight boxes. Complete the remaining page
+and trusted desktop presentation with integrated visual/behavioral checks. This
+supersedes conflicting geometry in the earlier refinement, not its historical
+evidence. No deployment, installation or publication is included.
 
 ### New Capabilities
 

@@ -5199,3 +5199,178 @@ label fix. No new deployment, commit, push or publication is part of this audit.
   models and speech configuration were compared across replacement. The
   desktop bridge is unchanged; this update needs no native-host reinstall.
   No Git push, release tag or publication is included in this follow-up.
+
+### Calmer workspace implementation evidence — 2026-10-15
+
+- Continued `workspace-outcome-experience` against source HEAD `29d6860`, with
+  the approved profile/Chat architecture retained. One contextual 280px sidebar
+  replaces the second Chat sidebar; below 1024px the same content is a drawer.
+  Search clearing, compact composer preferences, follow-latest recovery, aligned
+  response actions and quieter activity/settings/profile surfaces are implemented.
+  Shared palette/type/spacing tokens now live in `web/app/src/tokens.css`;
+  retired history-drawer CSS was removed. No public API or storage migration.
+- The renderer checks use disposable service state and API/media fixtures, not
+  the user's container or native applications. Full run: **354 passed, 10
+  skipped**. Coverage includes history, draft isolation, canonical work links,
+  approval/recovery, voice, IME, RTL/nine locales, short windows, zoom and nested
+  popover/dialog focus. Added explicit short-window visibility checks for voice
+  and Send/Stop, and drawer focus/Latest regressions. Navigation cannot submit work.
+- New six-page light/dark captures cover 1440×900, 1280×720, 390×844 and 320×480.
+  Existing comparison fixtures additionally capture empty/populated/running/
+  blocked/error/completed presentations; targeted suites exercise streaming and
+  loading states. Representative screenshots were inspected and clipped composer
+  actions, a redundant Activity minimum height and focus theft were corrected.
+  Repeated checks also exposed native keyboard scrolling continuing after Latest.
+  Following now corrects non-user scroll movement while fresh scroll intent still
+  suspends it; the rapid keyboard-scroll/Latest regression passed **20/20** runs.
+  Local artifacts: `build/workspace-outcome-experience/refinement-evidence/` and
+  `refinement-final.log` in its parent directory. These are generated local
+  evidence, not checked-in product assets or installed-platform certification.
+- Measured 1,000-conversation filtering feedback p95 was 34–58.8 ms in successive
+  runs (250 ms fixture gate). Route measurements include local transport and
+  varied with concurrent tests; no cold/warm regression comparison or inference
+  speed claim follows from these numbers. Final production assets: CSS 94.40 kB
+  (18.10 kB gzip), JS 869.20 kB (270.91 kB gzip). Vite still reports the existing
+  large-chunk warning; this pass does not claim a bundle-size optimization.
+- TypeScript, production build, API-contract check, `go test ./...`, companion
+  checks and desktop unit tests (**65/65**) passed. Documentation tests (**6/6**),
+  maintained-document link checks and strict change validation passed. Native
+  consent presentation changes preserve authorization and IPC boundaries. No
+  opt-in native input tests were enabled. Race/Python/model-qualification suites
+  were not rerun for this presentation-only change; earlier evidence is not a
+  fresh full-CI claim.
+- Remaining qualification is explicit: no new controlled pre-change image set,
+  exhaustive human review of every state/viewport, manual screen-reader study,
+  participant usability study, or matching installed Windows/macOS/Linux consent
+  and desktop verification. macOS/Linux native presentation edits were not built
+  on those platforms. Task 10.5 and the existing 6.2/6.3/7.2/8.4 gates remain open;
+  implementation checkmarks do not certify those gates. No deployment, desktop
+  replacement, commit, push or publication occurred in this pass.
+
+### Calmer workspace local deployment evidence — 2026-10-15
+
+- On the user's subsequent deployment approval, built the service, current UI,
+  Windows runtime and packaged Windows desktop from the same working tree.
+  Local image `offgrid-llm:calm-workspace-20261015` retains the existing CPU,
+  CUDA and speech runtimes; this is a local 0.4.17 build, not a new publication.
+  Installed desktop and service report UI fingerprint
+  `156211ec5f6e860169377ca292d5482d434eba1dbe8d8787a5e2e7fd8a57bb74`.
+- Backed up and verified the stopped service workspace before replacing the
+  container. Preserved both named volumes, workspace identity, conversation
+  names, job IDs/statuses, model inventory and speech selections. Retained the
+  stopped predecessor and a private WSL backup. No saved task was resumed.
+- Gracefully quit the old desktop, verified private data/settings backups and
+  staged package hashes, then replaced the installation while retaining its
+  uninstall integration and complete rollback directory. Installed-package
+  connection checks confirm an external service, matching 0.4.17 versions and
+  declared bridge compatibility. Closing the isolated desktop check leaves the
+  container running. Evidence is in `build/calm-workspace-deploy-20261015/`;
+  desktop backups are under `build/desktop-backups/before-calm-workspace-20261015/`.
+- Packaged Windows startup/recovery, access-dialog layout at 100%/200%, native
+  light/dark/system theme synchronization, nine locale options, persistence and
+  all page routes at 200% zoom passed with isolated profiles and HTTP fixtures.
+  The startup fixture temporarily tampers with package metadata, so access
+  verification was rerun after it restored the manifest. Replaced the theme
+  harness's timed-out hidden-window Playwright screenshot with Electron capture,
+  matching its existing zoom capture method; the complete rerun passed.
+- Initial post-start GPU device enumeration failed, causing the replacement
+  script to stop the new service. After review, restarted that same new container:
+  repeat CUDA enumeration passed, and a bounded Qwen completion returned `ready`
+  with automatic NVIDIA offload and approximately 4.6 GiB GPU memory in use.
+  The CPU worker version check also passed; a fresh CPU inference benchmark was
+  not performed. Exactly one OffGrid service is running on loopback port 11611.
+- These are local Windows deployment and presentation checks, not native-input
+  workflow qualification or macOS/Linux verification. The previously listed
+  usability/platform gates remain open. No commit, push, tag or release occurred.
+
+### Composition-first workspace implementation evidence — 2026-10-16
+
+- Continued the approved `workspace-outcome-experience` refinement from HEAD
+  `29d6860`, preserving the prior uncommitted presentation changes. Captured
+  populated Chat, running/reconnecting work and blocked access before editing
+  at 1440×820 and 1120×820 in
+  `build/workspace-outcome-experience/composition-before/`. These are controlled
+  API fixtures, not evidence of native task execution.
+- Implemented the 248px sidebar/64px collapsed rail, early New chat, compact
+  contextual history and overflow actions, consolidated workspace footer, and
+  concise running/attention status. Activity now owns the canonical full-width
+  inspector, sharing `ConversationWork` with Chat. Old agent task links resolve
+  to that same work; Agents retains profiles, tools and connections. Removed
+  duplicate inspector/presentation branches without reviving the task composer.
+  Administrative history/steering remain permission-gated; child status is not
+  fabricated as waiting when it is unavailable. No API or storage migration.
+- Final isolated renderer run: **358 passed, 10 skipped** in
+  `composition-release-check.log`. The ten skips require separately opted-in
+  model acquisition/restart, installed UI or real-task fixture environments;
+  they are not qualification passes. Tests cover route aliases, drawer/collapse,
+  draft retention, history confirmation, single canonical work, approvals,
+  uncertain recovery, streaming/Latest, speech, all nine locales, RTL, keyboard,
+  IME, short windows and 200% zoom. Navigation-only fixtures assert zero writes.
+- Captured all six pages in light/dark at 1440×900, 1280×720, 390×844 and 320×480
+  in `composition-release-check/`, plus the representative populated/running/
+  blocked comparisons. Reviewed all 48 six-page responsive/theme captures;
+  corrected narrow header wrapping and noninteractive heading focus styling.
+  Automated overflow/action-visibility checks pass. This completes the automated
+  integration and fixture-review scope of 11.7 and 10.5, not exhaustive human
+  review of every operational state or the separate usability/platform gates.
+- Filtering 1,000 fixture conversations measured **34.3ms p95**, below the 250ms
+  local-feedback gate. This is not a cold/warm regression study or inference
+  benchmark. Production assets: CSS **96.16kB / 18.40kB gzip**, JavaScript
+  **868.13kB / 271.28kB gzip**. The existing large-chunk build warning remains.
+- TypeScript/production build, API-contract check, fresh Go service build,
+  desktop unit tests (**65/65**), documentation unit checks (**6/6**), maintained
+  links and strict OpenSpec validation passed. Logs use the `composition-`
+  prefix in `build/workspace-outcome-experience/`. This presentation pass did
+  not rerun Go all/race, Python, companion or real-model qualification suites;
+  prior evidence is not a fresh full-CI claim.
+- Windows packaged-theme fixture passed with an isolated profile: native theme
+  synchronization, nine language options, preference persistence and all page
+  routes at 200% zoom. Evidence:
+  `C:/Users/phil/AppData/Local/Temp/offgrid-desktop-theme-nPdZR7`.
+  It used the existing `desktop-calm-workspace-20261015/win-unpacked` host and
+  current renderer fixtures, not a newly installed desktop package. No native
+  input, live service changes, personal-document actions or consent grants ran.
+- Manual screen-reader and participant studies, full timing comparison, matching
+  installed desktop/access-dialog qualification and macOS/Linux checks remain
+  unverified (6.2, 6.3, 7.2, 8.4). No deployment, installation replacement,
+  commit, push or release was performed for this implementation request.
+
+### Composition workspace local replacement — 2026-10-16
+
+- On subsequent explicit deployment approval, rebuilt the Linux service,
+  Windows runtime/native companion and Windows desktop from the current source.
+  Local image `offgrid-llm:composition-workspace-20261016` preserves the prior
+  CPU/CUDA/speech runtime layers; version remains 0.4.17, not a new publication.
+  Service and installed desktop share UI build
+  `342480b5bf5019c7ebb9b1345755d661964bc969dcb635dceb5de0c5216b68c1`.
+- Confirmed idle inference, no computer sessions or active download operations,
+  and no executing tasks before replacement. Quit the desktop normally. Verified
+  a stopped-workspace archive and retained the stopped predecessor container
+  `offgrid-before-composition-workspace-1792127335`. Private service backup:
+  `/home/phil/offgrid-composition-workspace-backup-zdbvUTis` in Ubuntu WSL.
+  Both persistent volumes, loopback binding, GPU device, environment and restart
+  policy were preserved; no saved task was resumed or reconciled.
+- Hash-verified desktop data/settings backups and staged package files before
+  replacing the application. Backup:
+  `build/desktop-backups/before-composition-workspace-20261016/`. The intact old
+  installation remains at
+  `C:/Users/phil/AppData/Local/Programs/OffGrid LLM Desktop.rollback-composition-workspace-20261016`.
+  Uninstall integration and existing model directories were preserved.
+- Newly packaged Windows startup/recovery, light/dark/system appearance,
+  nine locale options, preference persistence, page routes at 200% zoom, and
+  access-panel checks at 100%/200% passed with isolated profiles. No consent
+  was granted and no native input task ran. The replaced installation then
+  passed a read-only connection check against the deployed service, including
+  matching UI identity, external-service ownership and the 248px shared sidebar.
+- Verified unchanged workspace identity, saved job IDs/statuses, conversation
+  names, model inventories and speech selections. Exactly one service container
+  is running: `93828310f1df`, on `127.0.0.1:11611`. Closing the isolated desktop
+  check left it running. A bounded installed-Qwen completion returned `ready`;
+  the RTX 5060 reported 4666 MiB in use. CPU worker version check passed; this
+  does not constitute a fresh CPU inference benchmark.
+- Build/replacement/test logs are in `build/composition-deploy-20261016/`.
+  The initial Docker base-ID syntax and Electron output-argument errors occurred
+  before activation and were corrected. No live data was affected by them.
+  The updated desktop was reopened. This local Windows testing deployment does
+  not close manual usability, screen-reader or macOS/Linux qualification gates.
+  No commit, push, tag or release publication was performed.

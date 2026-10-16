@@ -54,7 +54,8 @@ test('one header refresh reloads page data without resetting drafts or dispatchi
   const reads: string[] = [];
   page.on('request', request => { if (request.method() === 'GET') reads.push(new URL(request.url()).pathname); });
   const refresh = async (paths: string[]) => {
-    const button = page.getByRole('button', { name: 'Refresh', exact: true });
+    await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
+    const button = page.locator('.workspace-options-panel').getByRole('button', { name: 'Refresh', exact: true });
     await expect(button).toHaveCount(1);
     await expect(button).toBeEnabled();
     const start = reads.length;
@@ -62,10 +63,11 @@ test('one header refresh reloads page data without resetting drafts or dispatchi
     await expect.poll(() => paths.every(path => reads.slice(start).includes(path))).toBe(true);
     await expect(button).toBeEnabled();
     await expect(page.locator('.page-failure')).toHaveCount(0);
+    await page.keyboard.press('Escape');
   };
   for (const [route, paths] of [
     ['knowledge', ['/v1/documents', '/v1/rag/status']],
-    ['activity', ['/v1/runs']],
+    ['activity', ['/api/v2/jobs']],
     ['agents/tools', ['/v1/agents/tools']],
     ['agents/connections', ['/v1/agents/mcp']],
   ] as const) {
@@ -94,7 +96,7 @@ test('workspace proportions prioritize the editor and keep service navigation in
   await page.setViewportSize({ width: 1440, height: 900 });
   const writes = await fixture(page);
   await page.goto('/ui/#/chat');
-  await expect(page.locator('.topbar')).toHaveCSS('min-height', '64px');
+  await expect(page.locator('.topbar')).toHaveCSS('min-height', '60px');
   await expect(page.locator('.composer')).toHaveCSS('max-width', '800px');
   await expect(page.getByRole('link', { name: 'Service details', exact: true })).toHaveCount(0);
   await page.goto('/ui/#/agents/workspace');

@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 async function fixture(page: Page) {
   const date = new Date().toISOString();
   let chats = ['Keep this', 'Delete 日本語', 'Delete second'].map(name => ({ name, model_id: 'model', messages: [{role:'user',content:'Saved text'}], created_at: date, updated_at: date }));
-  let tasks = Array.from({ length: 25 }, (_, i) => ({ id: `task-${i}`, prompt: `Task ${String(i).padStart(2,'0')}`, status: i === 0 ? 'running' : i === 1 ? 'uncertain' : 'completed', deletable: i > 1, created_at: date }));
+  let tasks = Array.from({ length: 25 }, (_, i) => ({ id: `run-${String(i).padStart(32,'0')}`, prompt: `Task ${String(i).padStart(2,'0')}`, status: i === 0 ? 'running' : i === 1 ? 'uncertain' : 'completed', deletable: i > 1, created_at: date }));
   const calls: string[] = [];
   let failing = '';
   await page.addInitScript(() => { localStorage.setItem('offgrid.locale','en'); localStorage.setItem('offgrid.onboarding.complete','true'); });
@@ -42,14 +42,16 @@ test('chat deletion is visible, confirmed, searchable and survives reload', asyn
   const row = page.locator('.history-row', {hasText:'Delete 日本語'});
   await row.locator('.history-open').click();
   await page.locator('.composer textarea').fill('draft to remove with the chat');
-  const button = row.getByRole('button',{name:'Delete conversation: Delete 日本語',exact:true});
+  const menu = row.locator('.history-item-menu');
+  await menu.click();
+  const button = page.getByRole('button',{name:'Delete conversation',exact:true});
   expect(await button.evaluate(e => getComputedStyle(e).color)).not.toBe('rgba(0, 0, 0, 0)');
   await button.click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.locator('dialog.history-delete-dialog');
   await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
   await page.keyboard.press('Escape');
   expect(state.calls).toEqual([]);
-  await button.click();
+  await menu.click(); await button.click();
   await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();
   await expect(row).toHaveCount(0);
   await expect(page.locator('.composer textarea')).toHaveValue('');
@@ -66,13 +68,13 @@ test('Chat and Agent history use compact accessible search without a visible lis
   await page.goto('/ui/#/chat');
   const chatSearch=page.getByRole('searchbox',{name:'Search conversations'});
   await expect(chatSearch).toHaveAttribute('placeholder','Search conversations');
-  await expect(page.getByRole('button',{name:'Manage history'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Manage history',exact:true})).toBeVisible();
   expect(await page.locator('.workspace-history-toolbar').evaluate(el=>el.getBoundingClientRect().height)).toBeLessThan(90);
   await page.screenshot({path:info.outputPath('chat-history.png')});
-  await page.goto('/ui/#/agents');
+  await page.goto('/ui/#/activity');
   const agentSearch=page.getByRole('searchbox',{name:'Search task history'});
   await expect(agentSearch).toHaveAttribute('placeholder','Search task history');
-  expect(await page.locator('.task-list ul').evaluate(el=>getComputedStyle(el).scrollbarWidth)).toBe('none');
+  expect(await page.locator('.task-list ul').evaluate(el=>el.scrollHeight<=el.clientHeight)).toBe(true);
   await page.screenshot({path:info.outputPath('agent-history.png')});
 });
 
@@ -83,7 +85,7 @@ test('bulk chat deletion only removes confirmed matches and retries failures, no
   await page.getByRole('searchbox',{name:'Search conversations'}).fill('Delete');
   await page.getByRole('button', {name:'Manage history',exact:true}).click();
   await page.getByRole('button',{name:'Delete listed chats',exact:true}).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.locator('dialog.history-delete-dialog');
   await expect(dialog).toContainText('Delete 2 listed conversations');
   await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();
   await expect(dialog.getByRole('alert')).toContainText('1 items could not be deleted');
@@ -97,27 +99,29 @@ test('bulk chat deletion only removes confirmed matches and retries failures, no
 
 test('agent activity browses older tasks and deletes selected output without affecting active work', async ({page}) => {
   const state = await fixture(page);
-  await page.goto('/ui/#/agents');
+  await page.goto('/ui/#/activity');
   const history = page.locator('.task-list');
   await expect(history.locator('li')).toHaveCount(20);
   await history.getByRole('button',{name:'Show more',exact:false}).click();
   await expect(history.locator('li')).toHaveCount(25);
   const row = history.locator('li',{hasText:'Task 24'});
   await row.locator('.task-list-item').click();
-  await expect(page.locator('.task-surface')).toContainText('Result for task-24');
+  await expect(page.locator('.task-surface')).toContainText('Result for run-00000000000000000000000000000024');
   await expect(page.getByRole('button',{name:'Start a new task from this',exact:true})).toHaveCount(0);
   await expect(page.locator('.task-surface').getByRole('link',{name:'Chat',exact:true})).toBeVisible();
-  await row.locator('.task-list-item').click();
-  await row.locator('.task-delete').click();
+  await page.locator('.task-inspector-toolbar .history-item-menu').click();
+  await page.getByRole('button',{name:'Delete task',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
-  await expect(page.locator('.task-surface')).not.toContainText('Result for task-24');
-  await expect(history.locator('li',{hasText:'Task 00'}).locator('.task-delete')).toBeDisabled();
+  await expect(page.locator('.task-surface')).toHaveCount(0);
+  await history.locator('li',{hasText:'Task 00'}).locator('.history-item-menu').click();
+  await expect(page.getByRole('button',{name:'Delete task',exact:true})).toBeDisabled();
+  await page.keyboard.press('Escape');
   await history.getByRole('button',{name:'Manage history',exact:true}).click();
   await history.getByRole('button',{name:'Clear removable tasks',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
   await expect(history.locator('li')).toHaveCount(2);
-  expect(state.tasks().map(item=>item.id)).toEqual(['task-0','task-1']);
-  expect(state.calls).not.toContain('task-0'); expect(state.calls).not.toContain('task-1');
+  expect(state.tasks().map(item=>item.id)).toEqual(['run-00000000000000000000000000000000','run-00000000000000000000000000000001']);
+  expect(state.calls).not.toContain('run-00000000000000000000000000000000'); expect(state.calls).not.toContain('run-00000000000000000000000000000001');
   await page.reload();
   await expect(history.locator('li')).toHaveCount(2);
 });
@@ -153,16 +157,16 @@ test('mobile history confirmation fits and search does not erase the composer dr
   await fixture(page);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Keep my unsent text');
-  await page.getByRole('button',{name:'Show conversations',exact:true}).click();
+  await page.getByRole('button',{name:'Primary navigation',exact:true}).click();
   await page.getByRole('searchbox',{name:'Search conversations'}).fill('Delete');
   await page.getByRole('button', {name:'Manage history',exact:true}).click();
   await page.getByRole('button',{name:'Delete listed chats',exact:true}).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.locator('dialog.history-delete-dialog');
   await expect(dialog).toBeInViewport();
   expect(await dialog.evaluate(e => e.scrollWidth - e.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('mobile-history-dialog.png') });
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
-  await page.locator('#conversation-history').getByRole('button',{name:'Close conversations',exact:true}).click();
+  await page.locator('.sidebar-toggle').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Keep my unsent text');
 });
 
@@ -180,11 +184,14 @@ test('unrecoverable interrupted history can be deleted while active and uncertai
     deleted.push(new URL(r.request().url()).pathname.split('/').at(-1)!);
     legacy = false; return r.fulfill({ json: { success: true } });
   });
-  await page.goto('/ui/#/agents');
+  await page.goto('/ui/#/activity');
   const history = page.locator('.task-list');
-  await expect(history.locator('li', { hasText: 'Legacy task without checkpoint' }).locator('.task-delete')).toBeEnabled();
-  await expect(history.locator('li', { hasText: 'Active task' }).locator('.task-delete')).toBeDisabled();
-  await expect(history.locator('li', { hasText: 'Outcome unknown' }).locator('.task-delete')).toBeDisabled();
+  for (const title of ['Legacy task without checkpoint', 'Active task', 'Outcome unknown']) {
+    await history.locator('li', {hasText:title}).locator('.history-item-menu').click();
+    const remove=page.getByRole('button',{name:'Delete task',exact:true});
+    if (title.startsWith('Legacy')) await expect(remove).toBeEnabled(); else await expect(remove).toBeDisabled();
+    await page.keyboard.press('Escape');
+  }
   await history.getByRole('button', { name: 'Manage history', exact: true }).click();
   await history.getByRole('button', { name: 'Clear removable tasks' }).click();
   const dialog = page.getByRole('dialog');

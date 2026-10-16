@@ -83,12 +83,14 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   await expect(query).toHaveAttribute('placeholder', 'Model name or publisher');
   await expect(searchField).toHaveCSS('border-radius', '8px');
   await expect(searchField).toHaveCSS('min-height', '40px');
-  const search = page.locator('.model-search-form button');
+  const search = page.locator('.model-search-form > button');
   await expect(search).toBeDisabled();
   await expect(search).toHaveCSS('cursor', 'not-allowed');
   await query.fill('BGE');
   await expect(search).toBeEnabled();
   await query.press('Tab');
+  await expect(page.getByRole('button', { name: 'Clear search' })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(search).toBeFocused();
   await expect(search).toHaveCSS('outline-width', '2px');
   const [fieldBox, buttonBox] = await Promise.all([searchField.boundingBox(), search.boundingBox()]);

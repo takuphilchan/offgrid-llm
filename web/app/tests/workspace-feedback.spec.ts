@@ -1,3 +1,4 @@
+import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { locales } from '../src/i18n';
 import { operationFeedback } from '../src/i18n/operation-feedback';
@@ -54,7 +55,7 @@ test('search retry preserves the failed query and survives unrelated inventory p
   await expect(page.getByRole('alert')).toContainText('Search temporarily offline');
   const before = state.inventory;
   await expect.poll(() => state.inventory).toBeGreaterThan(before);
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.getByRole('button', { name: 'Retry search' })).toBeVisible();
   await page.getByRole('button', { name: 'Retry search' }).click();
   await expect(page.getByRole('heading', { name: 'fixture/recovered' })).toBeVisible();
@@ -189,7 +190,7 @@ test('superseded Knowledge reads cannot replace readiness; selected Knowledge is
   await page.goto('/ui/#/chat');
   await expect.poll(() => pending.length).toBeGreaterThan(0);
   mode = 'ready';
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   const knowledge = page.getByRole('checkbox', { name: 'Use knowledge base' });
   await expect(knowledge).toBeEnabled(); await knowledge.focus(); await page.keyboard.press('Space');
@@ -197,7 +198,7 @@ test('superseded Knowledge reads cannot replace readiness; selected Knowledge is
   await expect(knowledge).toBeChecked();
   await expect(page.getByRole('link', { name: 'Set up Knowledge' })).toHaveCount(0);
   mode = 'unavailable';
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.locator('.composer > [role="status"]')).toBeVisible();
   await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Set up Knowledge' })).toBeVisible();
@@ -233,7 +234,7 @@ test('Settings groups preferences and service identity without claiming desktop 
   await page.getByText('Diagnostics', { exact: true }).click();
   await expect(page.getByText('C:\\desktop-only\\models', { exact: true })).toBeVisible();
   await expect(page.locator('.desktop-local-paths')).toContainText('not its workspace paths');
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   expect(state.writes).toEqual([]);
 });
 
@@ -246,10 +247,11 @@ for (const locale of ['en', 'ar'] as const) for (const theme of ['light', 'dark'
     await expect(page.getByText(copy.chat.emptyBody, { exact: true })).toBeVisible();
     await expect(page.locator('.sidebar-foot')).not.toContainText('100%');
     await expect(page.getByRole('link', { name: copy.common.serviceDetails, exact: true })).toHaveCount(0);
-    await page.locator('.primary-nav').getByRole('link', { name: copy.nav.settings, exact: true }).click();
+    await openSettings(page);
     await expect(page.locator('.settings-page').getByText(new URL(page.url()).origin, { exact: true })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`service-${locale}-${theme}.png`), fullPage: true });
   });
 }
+import { refreshWorkspace } from './helpers/workspace-actions';

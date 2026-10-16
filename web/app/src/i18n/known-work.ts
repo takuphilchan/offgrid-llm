@@ -1,4 +1,9 @@
 import type { LocaleCode } from './index';
+export const attentionWorkText: Record<LocaleCode, string> = {
+  en: 'Needs attention', fr: 'À vérifier', es: 'Requiere atención', de: 'Prüfung nötig',
+  ar: 'يحتاج إلى انتباه', sw: 'Inahitaji uangalizi', sn: 'Zvinoda kutariswa',
+  nd: 'Kudinga ukunakwa', zu: 'Kudinga ukunakwa',
+};
 export const unavailableTurnText: Record<LocaleCode, string> = {
   en: 'This service cannot recover the previous turn. Saved messages and your draft are retained. Check status before starting new work; nothing was resent.',
   fr: 'Ce service ne peut pas récupérer le tour précédent. Messages et brouillon conservés. Vérifiez l’état avant un nouveau travail ; rien n’a été renvoyé.',

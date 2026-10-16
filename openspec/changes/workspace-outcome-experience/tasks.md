@@ -1,5 +1,29 @@
 # Tasks
 
+## 11. Approved composition-first refinement
+
+- [x] 11.1 Freeze the current three representative fixtures and source/build identity; capture populated Chat, running work and blocked access before changing presentation, using disposable state.
+- [x] 11.2 Implement the 248px collapsible shared shell, early New chat, compact contextual history/action menus and consolidated workspace footer. Preserve drawer/focus/scoped state and verify navigation/history tests.
+- [x] 11.3 Consolidate Activity inspection and agent route aliases around canonical work presentation without broadening permissions or introducing duplicate followers. Preserve legacy read-only events, filters, deletion, steering, recovery and stopping; verify task/continuity/result tests.
+- [x] 11.4 Apply explicit action hierarchy, restrained type/surfaces and progressive Chat composition at existing component owners. Review the three representative after fixtures and verify streaming, Latest, IME, notices, voice and aligned actions.
+- [x] 11.5 Migrate profiles, integrations, Models, Knowledge and Settings to the shared hierarchy; remove superseded presentation rules only after consumer migration. Verify corresponding library/profile/role fixtures.
+- [x] 11.6 Refine OffGrid-owned desktop startup/recovery/access dimensions and hierarchy while retaining native authority and IPC; run desktop presentation checks and record unavailable installed-platform evidence explicitly.
+- [x] 11.7 Run API contracts, TypeScript/build, full isolated renderer, desktop and documentation checks; capture/review the six-page responsive/theme matrix and measure local feedback. Record actual evidence and remaining human/platform gates in the reliability plan.
+
+Group 11.7 automated checks and all 48 responsive/theme captures were completed and reviewed on 2026-10-16, with representative populated/running/blocked comparisons. This is fixture review, not exhaustive human review of every operational state. Remaining usability/platform qualification is recorded in the reliability plan. No deployment or publication is included.
+
+Historical checks below describe earlier scope, not completion of group 11.
+
+## 10. Approved calmer-workspace refinement (2026-10-15)
+
+Historical groups below record earlier work; this group tracks the newly approved scope. No deployment, installation or Git publication is included.
+
+- [x] 10.1 Implement one 280px shell/history sidebar, contextual slot and sub-1024px drawer, simplified header and footer settings. Preserve controller identity, navigation without mutation, drawer focus and scoped state. Verify shell, history, continuity and new refinement fixtures.
+- [x] 10.2 Consolidate visual tokens, product mark, action/search/notice grammar and progressive Chat composer. Preserve scroll following/manual reading, add Latest, and retain aligned response actions. Verify control, search, streaming, voice and agent Chat fixtures.
+- [x] 10.3 Refine profile editing, model/document lists, Activity, Settings and result/activity hierarchy. Preserve capabilities, approval/recovery semantics and canonical work links. Verify profile, library, Knowledge, work-results and recovery fixtures.
+- [x] 10.4 Refine trusted desktop startup/recovery/access presentation without changing consent or IPC. Run desktop presentation/unit checks; distinguish available tests from unrun installed-platform checks.
+- [x] 10.5 Capture/review the six-page visual/state matrix, responsive/locale/accessibility fixtures and performance measurements; run `npm.cmd --prefix web/app run api:check`, `npm.cmd --prefix web/app run check`, `npm.cmd --prefix web/app run build`, the full isolated renderer wrapper, `npm.cmd --prefix desktop test` and documentation checks. Update workspace guidance and reliability evidence. Manual screen-reader, participant and unavailable installed-platform checks remain tracked separately in 6.2, 7.2 and 8.4.
+
 Implementation order follows `design.md`. Preserve the completed shell/recovery slices and unrelated work. Each feature group owns its regression tests and documentation; later integration does not substitute for those checks.
 
 For the commands below, rebuild after source changes:

@@ -34,12 +34,15 @@ async function fixture(page: Page, prompt = 'Finished report') {
 
 test('task deletion is visible beside history and confirmed without affecting active work', async ({page}) => {
   const deleted=await fixture(page);await page.goto('/ui/#/agents/workspace');
-  await expect(page.getByRole('button',{name:'Delete task: Current task',exact:true})).toBeDisabled();
-  await page.getByRole('button',{name:'Delete task: Finished report',exact:true}).click();
+  await page.getByRole('button',{name:'Manage history: Current task',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Delete task',exact:true})).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Manage history: Finished report',exact:true}).click();
+  await page.getByRole('button',{name:'Delete task',exact:true}).click();
   expect(deleted).toHaveLength(0);
   await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Delete task: Finished report',exact:true})).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'Delete task: Current task',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Manage history: Finished report',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Manage history: Current task',exact:true})).toBeVisible();
   expect(deleted).toHaveLength(1);
 });
 
@@ -83,12 +86,12 @@ for (const layout of [
     await page.addInitScript(({theme,locale})=>{
       localStorage.setItem('offgrid.theme',theme);localStorage.setItem('offgrid.locale',locale);
     },layout);
-    await page.goto(`/ui/#/agents/task/${done}`);
-    await expect(page.locator('.task-list-item[aria-current="true"]')).toBeVisible();
+    await page.goto('/ui/#/activity');
+    await expect(page.locator('.task-list-item').first()).toBeVisible();
     const geometry = await page.locator('.task-list ul').evaluate(list => {
       const rows = [...list.querySelectorAll('li')];
       const card = rows[0].querySelector('.task-list-item')!.getBoundingClientRect();
-      const remove = rows[0].querySelector('.task-delete')!.getBoundingClientRect();
+      const remove = rows[0].querySelector('.history-item-menu')!.getBoundingClientRect();
       const first = rows[0].getBoundingClientRect(), next = rows[1].getBoundingClientRect();
       const style = getComputedStyle(list);
       return {
@@ -102,7 +105,7 @@ for (const layout of [
     expect(geometry.actionGap).toBeGreaterThanOrEqual(8);
     expect(geometry.rowGap).toBeGreaterThanOrEqual(2);
     expect(geometry.inset).toBeGreaterThanOrEqual(4);
-    expect(geometry.scrollbarWidth).toBe('none');
+    expect(await page.locator('.task-list ul').evaluate(el => el.scrollHeight <= el.clientHeight)).toBe(true);
     expect(geometry.overflowsPage).toBe(false);
     await page.locator('.task-list').screenshot({path:info.outputPath(`history-${layout.name}.png`)});
   });
@@ -110,21 +113,23 @@ for (const layout of [
 
 test('Activity clears removable task records through the shared deletion API', async ({page}) => {
   const deleted=await fixture(page);await page.goto('/ui/#/activity');
+  await page.getByRole('button',{name:'Manage history',exact:true}).click();
   await page.getByRole('button',{name:'Clear removable tasks',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('Finished report');
   await expect(page.getByRole('dialog')).not.toContainText('Current task');
   await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Delete task: Finished report',exact:true})).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'Delete task: Current task',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Manage history: Finished report',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Manage history: Current task',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Delete task',exact:true})).toBeDisabled();
+  await page.keyboard.press('Escape');
   expect(deleted).toHaveLength(1);
 });
 
 test('management navigation stays at the top and settings remain responsive', async ({page},info) => {
-  await fixture(page);await page.goto('/ui/#/agents/workspace');
+  await fixture(page);await page.goto('/ui/#/agents/tools');
   const nav=page.locator('.task-management');
-  await expect(nav.getByRole('link',{name:'Agent activity',exact:true})).toHaveAttribute('aria-current','page');
-  expect((await nav.boundingBox())!.y).toBeLessThan((await page.getByRole('heading',{name:'Recent tasks'}).boundingBox())!.y);
-  await nav.getByRole('link',{name:'Available tools',exact:true}).click();
+  await expect(nav.getByRole('link',{name:'Available tools',exact:true})).toHaveAttribute('aria-current','page');
+  await expect(nav.getByRole('link',{name:'Agent activity',exact:true})).toHaveCount(0);
   await expect(page.getByRole('checkbox',{name:'calculator',exact:true})).toBeVisible();
   await expect(page.locator('.agent-metrics')).toHaveCount(0);
   await page.screenshot({path:info.outputPath('tools.png'),fullPage:true});

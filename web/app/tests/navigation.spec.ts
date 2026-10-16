@@ -1,3 +1,4 @@
+import { openSettings } from './helpers/workspace-actions';
 import { expect, test } from '@playwright/test';
 
 const routes = ['chat', 'knowledge', 'agents', 'models', 'activity', 'settings'] as const;
@@ -19,8 +20,8 @@ test('all application routes render and survive browser history', async ({ page 
   await expect(page.locator('.app-shell')).toBeVisible();
 
   for (const route of routes) {
-    const link = page.locator(`.primary-nav a[href="#/${route}"]`);
-    await link.click();
+    const link = page.locator(`.sidebar a[href="#/${route}"]`);
+    if (route === 'settings') await openSettings(page); else await link.click();
     await expect(page).toHaveURL(new RegExp(`#/${route}$`));
     await page.waitForTimeout(100);
     expect(browserErrors, browserErrors.join('\n\n')).toEqual([]);
@@ -32,12 +33,12 @@ test('all application routes render and survive browser history', async ({ page 
 
   await page.goBack();
   await expect(page).toHaveURL(/#\/activity$/);
-  await expect(page.locator('.primary-nav a[href="#/activity"]')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.sidebar a[href="#/activity"]')).toHaveAttribute('aria-current', 'page');
 
   await page.goForward();
   await expect(page).toHaveURL(/#\/settings$/);
   await page.reload();
-  await expect(page.locator('.primary-nav a[href="#/settings"]')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.sidebar a[href="#/settings"]')).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.page-failure')).toHaveCount(0);
 
   expect(browserErrors, browserErrors.join('\n\n')).toEqual([]);

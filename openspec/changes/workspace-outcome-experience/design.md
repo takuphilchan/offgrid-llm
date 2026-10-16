@@ -30,7 +30,7 @@ Observed in the source and current fixture screenshots:
 Retain the six primary destinations and established routes. Share the pattern **start / current work / result / details**, but let collections such as Models and Knowledge use lists rather than copying a chat layout.
 
 - **Chat:** conversation plus composer; model/context/voice adjacent to input; optional response details subordinate. A compact context button reveals Knowledge readiness and response settings. Show active choices without requiring the menu to be opened. Preserve ordinary conversation follow-up.
-- **Agents:** new-task prompt and current-task detail, not a permanent configuration/result split. Access and approval appear only when the bound task requests them. Put results and artifacts ahead of logs. Keep Pause, Take over and Stop contextual and reachable. Existing supported steering becomes the visible follow-up area; unsupported steering explains what an explicit new task would do.
+- **Agents:** reusable profile configuration and canonical work inspection. New work and supported steering belong in Chat; do not restore a separate task composer. Access and approval remain bound to the canonical task. Put results and artifacts ahead of logs and keep lifecycle controls reachable.
 - **Models:** Installed and Discover views, one category selector and one search for the current intent. Discover puts curated suggestions and public search in one result area, clearly labelling origin. A distinct operations surface remains reachable while browsing either view.
 - **Knowledge:** document list, readiness, source inspection and Add document; embedding/index controls under Manage Knowledge. An optional Ask with Knowledge handoff states that the current backend searches the knowledge base, not an invented single-document scope.
 - **Activity:** current/recent work and outcomes first; diagnostics secondary. Link known run IDs to the canonical task route; unrecognized/legacy run types remain read-only event views.
@@ -136,7 +136,43 @@ All automated journeys must pass with zero duplicate submissions, cross-scope le
 - Controls become monotonous after consistency work -> vary hierarchy and placement while preserving proper buttons and the user's palette.
 - UI tests pass but first-time users remain confused -> require observed complete journeys and keep human/installed gates unchecked until supplied.
 
+### Approved shared-shell refinement (2026-10-15)
+
+Use one 248px navigation/history sidebar, with a compact 64px collapsed rail and navigation/account footer outside independently scrolling history. Below 1024px the same content becomes a modal drawer with outside-click/Escape dismissal and focus restoration. Portal existing history presentation into a shell slot without introducing another session controller or mounting a duplicate Chat page. Preserve scope disposal and exact work identities. Collapse changes presentation only; it neither disposes Chat nor changes execution permissions.
+
+Keep the reading measure and composer around 800px. Show agent/model, Tools, access, microphone and Send/Stop; detailed response/voice configuration belongs in labelled popovers with active choices visible. Retain manual scroll-up and offer Latest to resume following. Use one activity disclosure, with requests and safe recovery always visible. Adopt a single monochrome token source, IBM Plex, 14px controls and 16px reading text, 40px desktop/44px touch targets, and 4/8/12/16/24/32px spacing. Use the product logo consistently. Refine all six pages and local desktop presentation without changing IPC or consent authority. The remaining manual/platform gates stay unverified until performed.
+
 ## Migration Plan
+
+### Composition-first implementation
+
+New chat precedes destinations; contextual history uses one-line titles and
+accessible row-action popovers rather than permanent delete icons/counts. One
+workspace menu includes Settings and existing appearance/account controls.
+The header summarizes only actual running/attention states, not every historical
+record as active work. Preserve bounded discovery and its limitations.
+
+Agents configures profiles/tools/connections. Activity owns work browsing and
+inspection. Agent-task and workspace aliases retain canonical identities and
+administrator/non-administrator boundaries; inspect is a read operation. A
+selected task replaces the list in the content region rather than keeping a
+second fixed-width history sidebar. Return restores scoped filtering/selection.
+Reuse ConversationWork with explicit inspector presentation, preserving requests,
+steering, uncertainty, evidence and stop semantics. Legacy runs remain read-only
+event inspection; do not equate legacy runs with canonical jobs by guessing IDs.
+
+Controls have primary, secondary, utility and navigation variants with 40px
+desktop/44px touch targets. Utilities remain buttons with clear affordances, not
+unlabelled links. Typography remains 16px reading/14px controls/12-13px metadata.
+Simplify nested surfaces at their owning feature styles; do not add an override
+theme. Shared search and action groups retain focus/RTL/locale behavior.
+
+Capture current fixtures before mutation, then review populated Chat, running
+agent work and blocked access before propagating the hierarchy across all six
+pages. Validate light/dark, short/narrow windows, zoom and scaled layouts; do not
+alter OS scale. One integrated pass uses internal gates, not partial deployments.
+Use existing isolated UI and packaged desktop fixtures; never run native input
+against personal documents. Human and unavailable OS qualification stays open.
 
 Deliver in order: freeze baseline and shared primitives; composer/history; work continuity/results; model-library presentation; Knowledge/Activity/Settings; integrated qualification. Each feature slice includes its own tests and user documentation before proceeding.
 

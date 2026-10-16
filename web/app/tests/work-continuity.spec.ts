@@ -1,3 +1,5 @@
+import { openActivityArchive } from './helpers/workspace-actions';
+import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 const id = 'run-' + 'a'.repeat(32);
 async function fixture(page: Page, count = 1) {
@@ -30,7 +32,7 @@ test('known task opens its canonical identity from another page without writes',
   await page.getByRole('link', { name: 'Keep the same task' }).click();
   await expect(page).toHaveURL(new RegExp(`#\/agents\/task\/${id}$`));
   await expect(page.locator('#task-title')).toHaveText('Keep the same task');
-  await page.locator('.primary-nav a[href="#/settings"]').click();
+  await openSettings(page);
   await page.getByRole('button', { name: 'Known work', exact: true }).click();
   await page.getByRole('link', { name: 'Keep the same task' }).click();
   await expect(page.locator('#task-title')).toHaveText('Keep the same task');
@@ -43,7 +45,7 @@ test('work list bounds its metadata and makes overflow explicit', async ({ page 
   const trigger = page.getByRole('button', { name: 'Known work', exact: true });
   await expect(trigger).toContainText('16+'); await trigger.click();
   await expect(page.locator('.known-work-list li')).toHaveCount(16);
-  await expect(page.getByRole('region', { name: 'Known work' }).getByRole('link', { name: 'Recent tasks' })).toHaveAttribute('href', '#/agents');
+  await expect(page.getByRole('region', { name: 'Known work' }).getByRole('link', { name: 'Recent tasks' })).toHaveAttribute('href', '#/activity');
 });
 
 test('Activity links only known job identities and keeps history when diagnostics fail', async ({ page }) => {
@@ -55,11 +57,12 @@ test('Activity links only known job identities and keeps history when diagnostic
   ] } }));
   await page.route('**/v1/runs/*/events', r => r.fulfill({ json: { events: [] } }));
   await page.goto('/ui/#/activity');
+  await openActivityArchive(page);
   await expect(page.locator('.run-row').first()).toContainText('Legacy import');
   await page.getByRole('button', { name: /^Legacy import/ }).click();
   await expect(page.getByRole('link', { name: 'Open task', exact: true })).toHaveCount(0);
   await expect(page.getByText('Counters unavailable')).toBeHidden();
-  await page.getByText('Diagnostics', { exact: true }).click();
+  await page.locator('.activity-archive .activity-diagnostics > summary').click();
   await expect(page.getByRole('alert')).toContainText('Counters unavailable');
   await page.getByRole('button', { name: /^Same saved job/ }).click();
   await page.getByRole('link', { name: 'Open task', exact: true }).click();
@@ -80,7 +83,7 @@ for (const field of ['actor', 'workspace', 'role'] as const) test(`${field} chan
   const state = await fixture(page); await page.goto('/ui/#/models');
   await expect(page.getByRole('button', { name: 'Known work', exact: true })).toBeVisible();
   state[field] = field === 'role' ? 'user' : 'another';
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await expect(page.getByRole('button', { name: 'Known work', exact: true })).toHaveCount(0);
   await expect(page.getByText('Keep the same task', { exact: true })).toHaveCount(0);
   expect(state.writes).toEqual([]);
@@ -89,9 +92,9 @@ for (const field of ['actor', 'workspace', 'role'] as const) test(`${field} chan
 test('known chat selection returns to that conversation without scanning other turns or speaking', async ({ page }) => {
   const state = await fixture(page); await page.goto('/ui/#/chat');
   await expect(page.locator('.message.assistant')).toContainText('First conversation');
-  await page.getByRole('button', { name: /^Second conversation 1/ }).click();
+  await page.getByRole('button', { name: 'Second conversation', exact: true }).click();
   await expect(page.locator('.message.assistant')).toContainText('Second conversation');
-  await page.locator('.primary-nav a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/models"]').click();
   await page.getByRole('button', { name: 'Known work', exact: true }).click();
   await page.getByRole('region', { name: 'Known work' }).getByRole('button', { name: 'First conversation', exact: true }).click();
   await expect(page.locator('.message.assistant')).toContainText('First conversation');
@@ -106,10 +109,10 @@ test('terminal task followers stop polling and logout removes private work', asy
   await expect(page.locator('#task-title')).toHaveText('Keep the same task');
   const reads = state.reads.filter(path => path === `/api/v2/jobs/${id}`).length;
   await page.clock.fastForward(15_000);
-  await expect(page.locator('.task-state')).toContainText('Completed');
+  await expect(page.locator('.work-status')).toContainText('Completed');
   expect(state.reads.filter(path => path === `/api/v2/jobs/${id}`).length).toBe(reads);
-  await page.locator('.primary-nav a[href="#/chat"]').click();
-  await expect(page.getByRole('button', { name: 'Known work', exact: true })).toBeVisible();
+  await page.locator('.sidebar a[href="#/chat"]').click();
+  await expect(page.getByRole('button', { name: 'Known work', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Known work', exact: true })).toHaveCount(0);
@@ -147,7 +150,7 @@ async function durableChat(page: Page) {
 
 test('leaving a live turn detaches reads and returning reconciles saved work without cancellation or replay', async ({ page }) => {
   const { base, state } = await durableChat(page);
-  await page.locator('.primary-nav a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/models"]').click();
   state.completed = true;
   await page.getByRole('button', { name: 'Known work', exact: true }).click();
   await page.getByRole('region', { name: 'Known work' }).getByRole('button', { name: 'First conversation', exact: true }).click();
@@ -185,7 +188,7 @@ test('lost acknowledgment checks the accepted turn and never resubmits the promp
 
 test('unsupported turn recovery retains the draft and explicitly prevents uncertain resubmission', async ({ page }) => {
   const { base, state } = await durableChat(page);
-  await page.locator('.primary-nav a[href="#/models"]').click(); state.recoverable = false;
+  await page.locator('.sidebar a[href="#/models"]').click(); state.recoverable = false;
   await page.getByRole('button', { name: 'Known work', exact: true }).click();
   await page.getByRole('region', { name: 'Known work' }).getByRole('button', { name: 'First conversation', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('cannot recover the previous turn');
@@ -224,3 +227,4 @@ test('removed task loses its controls and stops following without mutation', asy
   await page.clock.fastForward(15_000); expect(reads).toBe(1);
   expect(state.writes).toEqual([]);
 });
+import { refreshWorkspace } from './helpers/workspace-actions';

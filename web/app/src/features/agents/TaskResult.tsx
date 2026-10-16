@@ -36,11 +36,11 @@ function ArtifactRow({ id, artifact }: { id: string; artifact: Artifact }) {
   </li>;
 }
 
-export function TaskResult({ run, compact = false, hideOutput = false }: { run: AgentRun; compact?: boolean; hideOutput?: boolean }) {
+export function TaskResult({ run, compact = false, hideOutput = false, explainOutcome = false }: { run: AgentRun; compact?: boolean; hideOutput?: boolean; explainOutcome?: boolean }) {
   const { locale, messages } = useI18n(), copy = taskPresentation(locale);
   if (!run.output && !run.artifacts?.length) return null;
   return <section className="task-result" aria-label={messages.agents.result}>
-    {!compact && run.outcome === 'answer_only' && <ScopedNotice kind="status">{taskAccessText(locale).answerOnly}</ScopedNotice>}
+    {(!compact || explainOutcome) && run.outcome === 'answer_only' && <p className="workspace-secondary">{taskAccessText(locale).answerOnly}</p>}
     {run.output && !hideOutput && <>{!compact && <h3>{run.status === 'completed' ? copy.answer : messages.agents.result}</h3>}<div className="message-body markdown-body"><MarkdownMessage content={run.output} /></div>{!compact && <p className="workspace-secondary">{copy.generated}</p>}</>}
     {!!run.artifacts?.length && <section className="task-artifacts" aria-label={copy.files}>
       <h3>{copy.files}</h3><p className="workspace-secondary">{copy.integrityHint}</p>

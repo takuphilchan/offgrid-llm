@@ -1,3 +1,4 @@
+import { openActivityArchive } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { installChatJob, openAgentChat, sendAgentMessage } from './fixtures/chat-job';
 
@@ -38,7 +39,7 @@ test('agent selections from another workspace are never fetched', async ({ page 
  const state = await fixture(page);
  await page.route('**/api/v2/system', r => r.fulfill({json:{product:'offgrid', api_version:2, workspace_id:'new-workspace',capabilities:['task-first-agents-v2']}}));
  await page.addInitScript(() => localStorage.setItem('offgrid.draft.v1:alice%3Aworkspace%3Aold-workspace:agent-run:', 'old-run'));
- await page.goto('/ui/#/agents');
+ await page.goto('/ui/#/activity');
  await expect(page.locator('.task-list li')).toHaveCount(3);
  expect(state.calls).not.toContain('/v1/agents/tasks/old-run');
 });
@@ -87,13 +88,13 @@ test('computer task history distinguishes automatic authorization from verificat
  await page.route(`**/api/v2/jobs/${auditID}`,r=>r.fulfill({json:{run_id:auditID,task_id:auditID,status:'completed',output:'Draft saved.',computer_session:'paired',computer_approval_mode:'scoped_changes',steps:[{id:1,tool_name:'browser_fill',tool_result:'{"verified":true}',authorization:'automatic:scoped_changes'}]}}));
  await page.goto(`/ui/#/agents/task/${auditID}`);
  const timeline=page.locator('.browser-task-timeline');
- await page.locator('.task-activity > summary').click();
+ await page.locator('.conversation-work-details > summary').click();
  await expect(timeline).toContainText('Automatically approved · Approve scoped changes');
  await expect(timeline).not.toContainText('Verified · scoped changes');
 });
 
 test('current task history keeps search and rows separated on desktop and mobile', async ({page}, info) => {
-  await fixture(page);await page.goto('/ui/#/agents');
+  await fixture(page);await page.goto('/ui/#/activity');
   await expect(page.locator('.task-list li')).toHaveCount(3);
   for (const width of [1440,390]) {
     await page.setViewportSize({width,height:900});
@@ -118,17 +119,17 @@ test('command palette contains focus, handles Escape outside input and ignores c
 
 test('mobile conversation drawer contains focus and Escape restores its trigger', async ({ page }) => {
   await fixture(page); await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/ui/#/chat');
-  const trigger = page.getByRole('button', { name: 'Show conversations', exact: true });
+  const trigger = page.getByRole('button', { name: 'Primary navigation', exact: true });
   await trigger.click();
   await expect(page.locator('#conversation-history')).toBeVisible();
-  await expect(page.locator('#conversation-history .history-close')).toBeFocused();
-  for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); const focus = await page.evaluate(() => ({ inside: !!document.activeElement?.closest('#conversation-history'), element: document.activeElement?.outerHTML.slice(0, 1000) })); expect(focus.inside, `Tab ${i + 1}: ${focus.element}`).toBe(true); }
+  await expect(page.locator('.sidebar-toggle')).toBeFocused();
+  for (let i = 0; i < 12; i++) { await page.keyboard.press('Tab'); const focus = await page.evaluate(() => ({ inside: !!document.activeElement?.closest('.sidebar'), element: document.activeElement?.outerHTML.slice(0, 1000) })); expect(focus.inside, `Tab ${i + 1}: ${focus.element}`).toBe(true); }
   await page.keyboard.press('Escape'); await expect(page.locator('#conversation-history')).not.toBeVisible(); await expect(trigger).toBeFocused();
 });
 
 test('member UI does not call administrator endpoints or offer privileged actions', async ({ page }) => {
   const state = await fixture(page); state.role = 'user';
-  await page.goto('/ui/#/agents'); await expect(page.getByText('Administrator access required')).toBeVisible();
+  await page.goto('/ui/#/agents/tools'); await expect(page.getByText('Administrator access required')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start task', exact: true })).toHaveCount(0);
   await page.goto('/ui/#/settings'); await expect(page.locator('.settings-page')).toContainText('Administrator access required');
   await page.goto('/ui/#/models'); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await expect(page.locator('.catalog-card .primary-button')).toBeDisabled();
@@ -147,34 +148,34 @@ test('anonymous local workspace remains usable when authentication is explicitly
 
 test('history loading, failure and successful recovery stay distinct', async ({ page }) => {
   const state = await fixture(page); state.slowHistory = true; state.failHistory = true;
-  await page.goto('/ui/#/agents'); await expect(page.locator('.task-list')).toContainText('Loading…');
+  await page.goto('/ui/#/activity'); await expect(page.locator('.task-list')).toContainText('Loading…');
   await expect(page.locator('.task-list')).not.toContainText('No agent tasks');
   await expect(page.locator('.task-list')).toContainText('Fixture unavailable');
   state.failHistory = false; state.slowHistory = false;
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh' }).click();
+  await refreshWorkspace(page);
   await expect(page.locator('.task-list')).toContainText('Task one'); await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('statistics failure does not hide available run history', async ({ page }) => {
   const state = await fixture(page); state.failStats = true;
-  await page.goto('/ui/#/activity'); await page.getByRole('button', { name: /^Saved run/ }).click();
+  await page.goto('/ui/#/activity'); await openActivityArchive(page); await page.getByRole('button', { name: /^Saved run/ }).click();
   await expect(page.locator('.event-list')).toContainText('No events recorded');
 });
 
 test('connector drafts and selected Activity survive navigation without refetching online searches', async ({ page }) => {
   await fixture(page); await page.goto('/ui/#/agents/connections');
   await page.locator('.connector-panel input').nth(0).fill('Private connector'); await page.locator('.connector-panel input').nth(1).fill('http://localhost:3000/mcp');
-  await page.locator('.primary-nav a[href="#/models"]').click(); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
-  await page.locator('.primary-nav a[href="#/agents"]').click(); await page.getByRole('link', { name: 'Connections', exact: true }).click();
+  await page.locator('.sidebar a[href="#/models"]').click(); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
+  await page.locator('.sidebar a[href="#/agents"]').click(); await page.getByRole('link', { name: 'Connections', exact: true }).click();
   await expect(page.locator('.connector-panel input').nth(0)).toHaveValue('Private connector');
-  await page.locator('.primary-nav a[href="#/models"]').click(); await expect(page.getByLabel('Model name or publisher', { exact: true })).toHaveValue('Research model');
-  await page.locator('.primary-nav a[href="#/activity"]').click(); await page.getByRole('button', { name: /^Saved run/ }).click();
-  await page.locator('.primary-nav a[href="#/models"]').click(); await page.locator('.primary-nav a[href="#/activity"]').click();
+  await page.locator('.sidebar a[href="#/models"]').click(); await expect(page.getByLabel('Model name or publisher', { exact: true })).toHaveValue('Research model');
+  await page.locator('.sidebar a[href="#/activity"]').click(); await openActivityArchive(page); await page.getByRole('button', { name: /^Saved run/ }).click();
+  await page.locator('.sidebar a[href="#/models"]').click(); await page.locator('.sidebar a[href="#/activity"]').click();
   await expect(page.locator('.run-row.selected')).toContainText('Saved run');
 });
 
 test('bulk deletion can stop after the in-flight item without deleting remaining entries', async ({ page }) => {
-  const state = await fixture(page); await page.goto('/ui/#/agents');
+  const state = await fixture(page); await page.goto('/ui/#/activity');
   await page.getByRole('button', { name: 'Manage history', exact: true }).click();
   await page.getByRole('button', { name: 'Clear removable tasks' }).click();
   const dialog = page.getByRole('dialog'); await dialog.getByRole('button', { name: 'Confirm delete' }).click();
@@ -189,7 +190,7 @@ test('bulk deletion can stop after the in-flight item without deleting remaining
 test('unknown index status is never presented as ready and unavailable knowledge cannot be enabled in chat', async ({ page }) => {
   await fixture(page); await page.goto('/ui/#/knowledge');
   await expect(page.locator('.resource-card')).toContainText('Status unavailable');
-  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click();
   await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).toBeDisabled();
 });
@@ -207,10 +208,10 @@ test('late provider setup cannot overwrite instructions for a newly selected mod
   await page.goto('/ui/#/agents/connections');
   await page.locator('.provider-card button').click();
   await expect.poll(() => requested).toBe(true);
-  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click();
   await page.getByRole('combobox', { name: 'Model', exact: true }).selectOption('model-b');
   release();
-  await page.locator('.primary-nav a[href="#/agents"]').click();
+  await page.locator('.sidebar a[href="#/agents"]').click();
   await page.getByRole('link', { name: 'Connections', exact: true }).click();
   await expect(page.locator('.provider-card')).toContainText('model-b');
   await expect(page.locator('.provider-setup')).toHaveCount(0);
@@ -243,9 +244,10 @@ test('missing saved task shows recovery without replaying work or losing a separ
   await page.route(`**/api/v2/jobs/${missing}`,r=>{calls++;return r.fulfill({status:404,json:{error:'Saved task not found'}})});
   await page.goto(`/ui/#/agents/task/${missing}`);
   await expect(page.getByRole('alert')).toContainText('Saved task not found');
-  await page.locator('.primary-nav a[href="#/chat"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Keep my research draft');
   const before=calls;await page.reload();
   await expect(page.locator('.composer textarea')).toHaveValue('Keep my research draft');
   expect(calls).toBe(before);
 });
+import { refreshWorkspace } from './helpers/workspace-actions';

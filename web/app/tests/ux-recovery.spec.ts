@@ -1,3 +1,4 @@
+import { openActivityArchive } from './helpers/workspace-actions';
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 const embedding = {id:'bge-m3',name:'BGE M3',type:'embedding',description:'Fixture',parameters:'567M',size_bytes:1000,min_ram_gb:2,repo:'fixture/bge',file:'bge.gguf',quant:'Q4_K_M'};
@@ -10,7 +11,7 @@ async function workspace(page:Page, override:(path:string,route:Route)=>Promise<
 test('onboarding contains keyboard focus and Escape restores the workspace',async({page})=>{
  await workspace(page,undefined,true);await page.goto('/ui/');const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();
  for(let i=0;i<8;i++){await page.keyboard.press('Tab');expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);}
- await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await page.locator('.primary-nav a[href="#/models"]').click();await expect(page.locator('.models-workspace')).toBeVisible();
+ await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await page.locator('.sidebar a[href="#/models"]').click();await expect(page.locator('.models-workspace')).toBeVisible();
 });
 
 test('Activity ignores a late response for the previous selected task',async({page})=>{
@@ -18,7 +19,7 @@ test('Activity ignores a late response for the previous selected task',async({pa
   if(path==='/v1/runs')return{runs:['A','B'].map(id=>({id,status:'completed',updated_at:new Date().toISOString(),event_count:1,data:{prompt:'Task '+id}}))};
   if(path.endsWith('/events')){const id=path.includes('/A/')?'A':'B';await new Promise(r=>setTimeout(r,id==='A'?700:50));return{events:[{id,type:id+'-result',sequence:1,time:new Date().toISOString()}]};}
  });
- await page.goto('/ui/#/activity');await page.getByRole('button',{name:/^Task A/}).click();await page.getByRole('button',{name:/^Task B/}).click();
+ await page.goto('/ui/#/activity');await openActivityArchive(page);await page.getByRole('button',{name:/^Task A/}).click();await page.getByRole('button',{name:/^Task B/}).click();
   await expect(page.locator('.event-list')).toContainText('B result');await page.waitForTimeout(850);
   await expect(page.locator('.run-row.selected')).toContainText('Task B');await expect(page.locator('.event-list')).not.toContainText('A result');
 });
@@ -42,7 +43,7 @@ test('knowledge activation survives leaving its setup page',async({page})=>{
   if(path==='/v1/models/download/progress')return submitted?{'bge-m3.gguf':{file_name:'bge-m3.gguf',enable_knowledge:true,status:complete?'complete':'downloading',bytes_done:100,bytes_total:1000,percent:10,speed:0,started_at:1}}:{};
  });
  await page.goto('/ui/#/knowledge');await page.getByRole('button',{name:'Install and enable'}).click();await expect(page.locator('.knowledge-setup')).toContainText('10.0%');
- await page.locator('.primary-nav a[href="#/models"]').click();await page.locator('.primary-nav a[href="#/knowledge"]').click();await expect(page.locator('.knowledge-setup-controls .primary-button')).toBeDisabled();
+ await page.locator('.sidebar a[href="#/models"]').click();await page.locator('.sidebar a[href="#/knowledge"]').click();await expect(page.locator('.knowledge-setup-controls .primary-button')).toBeDisabled();
  complete=true;await page.getByRole('button',{name:'Manage Knowledge',exact:true}).click();await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
 });
 
@@ -81,6 +82,6 @@ test('an active chat reconnects after navigation without submitting new work',as
   if(path.endsWith('/turn/cancel')){expect(route.request().postDataJSON()).toEqual({id:turn.id});cancellations++;return{success:true};}
  });
  await page.addInitScript(()=>{const original=window.fetch.bind(window);(window as any).attachments=0;window.fetch=async(input,init)=>{if(!String(input).includes('/turn/events'))return original(input,init);(window as any).attachments++;return new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('data: {"type":"delta","delta":"Retained partial"}\n\n'));init?.signal?.addEventListener('abort',()=>c.error(new DOMException('aborted','AbortError')),{once:true});}}),{headers:{'content-type':'text/event-stream'}});};});
- await page.goto('/ui/#/chat');await expect(page.locator('.streaming-response')).toContainText('Retained partial');await page.locator('.primary-nav a[href="#/models"]').click();expect(cancellations).toBe(0);
- await page.locator('.primary-nav a[href="#/chat"]').click();await expect(page.locator('.streaming-response')).toContainText('Retained partial');expect(await page.evaluate(()=>(window as any).attachments)).toBe(2);await page.locator('.composer-actions').getByRole('button', { name: 'Stop', exact: true }).click();await expect.poll(()=>cancellations).toBe(1);
+ await page.goto('/ui/#/chat');await expect(page.locator('.streaming-response')).toContainText('Retained partial');await page.locator('.sidebar a[href="#/models"]').click();expect(cancellations).toBe(0);
+ await page.locator('.sidebar a[href="#/chat"]').click();await expect(page.locator('.streaming-response')).toContainText('Retained partial');expect(await page.evaluate(()=>(window as any).attachments)).toBe(2);await page.locator('.composer-actions').getByRole('button', { name: 'Stop', exact: true }).click();await expect.poll(()=>cancellations).toBe(1);
 });

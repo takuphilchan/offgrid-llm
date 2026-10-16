@@ -34,11 +34,12 @@ test('uncertain effects remain explicit and cannot be resumed without reconcilia
   const f = await fixture(page);
   f.setState('uncertain', { uncertain_call_id: 'call-uncertain', uncertain_call: { tool: 'external_submission', arguments: { recipient: 'Chosen recipient' } } });
   await page.goto(`/ui/#/agents/task/${id}`);
-  await expect(page.locator('.approval-card')).toContainText('Outcome unknown');
+  await expect(page.locator('.work-status')).toContainText('Outcome unknown');
+  await page.getByText('Report what you observed', { exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
-  const reconcile = page.getByRole('button', { name: 'Record verified outcome', exact: true });
+  const reconcile = page.getByRole('button', { name: 'Record observation', exact: true });
   await expect(reconcile).toBeDisabled();
-  await page.getByRole('textbox', { name: 'Record verified outcome' }).fill('Inspected acknowledgment: submitted once.');
+  await page.getByRole('textbox', { name: 'Report what you observed' }).fill('Inspected acknowledgment: submitted once.');
   await reconcile.click();
   expect(f.commands.map(c => [c.action, c.data.call_id])).toEqual([['reconcile', 'call-uncertain']]);
 });
@@ -52,7 +53,7 @@ test('stop responds immediately and labels a failed acknowledgment without claim
   await expect(page.getByRole('status').filter({ hasText: 'Stop requested' })).toBeVisible();
   await expect.poll(() => !!release).toBeTruthy(); await release!();
   await expect(page.getByRole('alert').filter({ hasText: 'Stopping is not confirmed' })).toBeVisible();
-  await expect(page.locator('.task-state')).toContainText('Running');
+  await expect(page.locator('.work-status')).toContainText('Running');
   expect(f.commands).toEqual([]);
 });
 
@@ -68,7 +69,7 @@ test("task styles preserve the established monochrome layers in both themes", as
     );
     await page.reload();
     await expect(
-      page.locator('.task-management'),
+      page.locator('.task-surface'),
     ).toBeVisible();
     const palette = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
@@ -76,10 +77,10 @@ test("task styles preserve the established monochrome layers in both themes", as
         accent: style.getPropertyValue("--accent").trim(),
         // Assert the rendered color: production minification can shorten
         // #ffffff to #fff without changing the established palette.
-        surface: getComputedStyle(document.querySelector(".task-management")!)
+        surface: getComputedStyle(document.querySelector(".workspace")!)
           .backgroundColor,
         font: style.fontFamily,
-        link: getComputedStyle(document.querySelector(".task-management a")!)
+        link: getComputedStyle(document.querySelector(".task-inspector-toolbar a")!)
           .color,
         text: style.getPropertyValue("--text").trim(),
       };
@@ -88,7 +89,7 @@ test("task styles preserve the established monochrome layers in both themes", as
     expect(palette.surface).toBe(theme === "light" ? "rgb(255, 255, 255)" : "rgb(24, 24, 25)");
     expect(palette.font).toContain("IBM Plex Sans");
     expect(palette.link).toBe(
-      theme === "light" ? "rgb(23, 23, 23)" : "rgb(245, 245, 244)",
+      theme === "light" ? "rgb(83, 83, 81)" : "rgb(185, 185, 183)",
     );
     await page.screenshot({
       path: testInfo.outputPath(`task-${theme}.png`),
@@ -257,7 +258,7 @@ test('empty installed-app selection cannot launch, discover or grant access', as
     host.discoverComputerApps = async () => { throw Error('must not discover'); };
   });
   // Refresh the task snapshot to render the newly exposed fixture capability.
-  await page.locator('.topbar').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refreshWorkspace(page);
   await page.getByRole('button', { name: 'Open an application', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Launch selected application', exact: true })).toBeDisabled();
   await expect(page.getByText(/No launchable applications were found/)).toBeVisible();
@@ -277,6 +278,7 @@ test('pause, steering, resume and evidence export use one saved job', async ({pa
   await page.getByRole('button',{name:'Resume',exact:true}).click();
   await expect(page.getByRole('button',{name:'Pause',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Stop',exact:true}).click();
+  await page.locator('.conversation-work-details > summary').click();
   await page.getByText('Context usage',{exact:true}).click();
   const downloading=page.waitForEvent('download'); await page.getByRole('button',{name:'Export evidence'}).click();
   expect((await downloading).suggestedFilename()).toBe(`${id}.json`);
@@ -598,3 +600,4 @@ test("task composer fits narrow screens and keeps the saved result out of a new 
     ),
   ).toBeTruthy();
 });
+import { refreshWorkspace } from './helpers/workspace-actions';

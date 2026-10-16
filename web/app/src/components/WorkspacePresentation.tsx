@@ -14,8 +14,8 @@ export function EmptyState({ title, description, action, className = '' }: { tit
   return <div className={`workspace-empty ${className}`}><p>{title}</p>{description && <p className="workspace-secondary">{description}</p>}{action && <ActionGroup>{action}</ActionGroup>}</div>;
 }
 
-export function ScopedNotice({ children, action, kind = 'status', className = '' }: { children: ReactNode; action?: ReactNode; kind?: 'status' | 'error'; className?: string }) {
-  return <div className={`workspace-notice ${kind === 'error' ? 'inline-error' : ''} ${className}`} role={kind === 'error' ? 'alert' : 'status'}><div>{children}</div>{action && <ActionGroup>{action}</ActionGroup>}</div>;
+export function ScopedNotice({ children, action, title, kind = 'status', className = '' }: { children: ReactNode; action?: ReactNode; title?: ReactNode; kind?: 'status' | 'error'; className?: string }) {
+  return <div className={`workspace-notice ${kind === 'error' ? 'inline-error' : ''} ${className}`} role={kind === 'error' ? 'alert' : 'status'}><div>{title && <strong className="notice-title">{title}</strong>}{children}</div>{action && <ActionGroup>{action}</ActionGroup>}</div>;
 }
 
 export function ListSearch({ label, value, onChange, className = '' }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {

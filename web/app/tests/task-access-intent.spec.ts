@@ -235,8 +235,8 @@ test('a deliberate policy change after failed submission has a different request
 test('answer-only history and result never claim completed application work', async ({ page }) => {
   await setup(page, { answer: true });
   await page.goto(`/ui/#/agents/task/${id}`);
-  await expect(page.locator('.task-state')).toContainText('Answered');
-  await expect(page.locator('.task-list-item')).toContainText('Answered');
+  await expect(page.locator('.work-status')).toContainText('Answered');
+  await expect(page.locator('.task-list')).toHaveCount(0);
   await expect(page.locator('.task-result')).toContainText('No external tool action was performed');
   await expect(page.locator('.task-result')).toContainText('Please open Chrome yourself.');
 });
@@ -247,7 +247,7 @@ test('retired task-composer links lead to Chat without creating or replaying a j
   await expect(page.locator('.task-composer')).toHaveCount(0);
   await expect(page.getByRole('button', {name:'Start task',exact:true})).toHaveCount(0);
   await page.reload();
-  await page.getByRole('complementary',{name:'Recent tasks'}).getByRole('link',{name:'Chat',exact:true}).click();
+  await page.locator('.primary-nav').getByRole('link',{name:'Chat',exact:true}).click();
   await expect(page.locator('.composer textarea')).toBeVisible();
   expect(submissions).toEqual([]);
 });

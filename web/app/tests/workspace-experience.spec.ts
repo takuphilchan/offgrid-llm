@@ -1,3 +1,4 @@
+import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 
 const now = '2026-09-15T12:00:00Z';
@@ -98,7 +99,7 @@ test('denied browser storage does not blank the workspace or discard its draft',
   const composer = page.locator('.composer textarea');
   await composer.fill('Keep this unsent text');
   await expect(page.locator('.chat-workspace [role="alert"]')).toBeVisible();
-  await page.locator('.sidebar').getByRole('link', { name: 'Settings', exact: true }).click();
+  await openSettings(page);
   await page.getByRole('button', { name: 'Light', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.locator('.sidebar').getByRole('link', { name: 'Chat', exact: true }).click();
@@ -133,7 +134,7 @@ test('appearance choice survives reload and changes the whole shell', async ({ p
   await page.goto('/ui/#/settings');
   await page.getByRole('button', { name: 'Light', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('.sidebar')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('.sidebar')).toHaveCSS('background-color', 'rgb(247, 247, 246)');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
@@ -194,9 +195,9 @@ test('conversation history remains accessible at narrow desktop width', async ({
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
   await page.setViewportSize({ width: 800, height: 700 });
   await page.goto('/ui/#/chat');
-  await page.getByRole('button', { name: 'Show conversations' }).click();
+  await page.getByRole('button', { name: 'Primary navigation' }).click();
   await expect(page.locator('.conversation-history')).toBeVisible();
-  await page.getByRole('button', { name: 'Close conversations' }).last().click();
+  await page.locator('.sidebar-toggle').click();
   await expect(page.locator('.conversation-history')).toBeHidden();
 });
 

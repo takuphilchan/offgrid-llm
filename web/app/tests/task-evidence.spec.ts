@@ -1,3 +1,4 @@
+import { openWorkDetails } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { taskEvidenceText } from '../src/i18n/task-evidence';
 import { documentWorkflowText } from '../src/i18n/document-workflow';
@@ -28,12 +29,13 @@ async function fixture(page: Page, evidence: unknown, locale = 'en', status = 'c
   await r.fulfill({json:data});
  });
  await page.goto(`/ui/#/agents/task/${id}`);
- await expect(page.locator('.task-detail')).toBeVisible().catch(() => expect(page.locator('.task-result')).toBeVisible());
+ await expect(page.locator('.task-surface')).toBeVisible().catch(() => expect(page.locator('.task-result')).toBeVisible());
  return commands;
 }
 
 test('partial checks preserve provenance; reload and details never replay work', async ({page}) => {
  const commands=await fixture(page, verification);
+ await openWorkDetails(page);
  const panel=page.getByRole('region',{name:'Outcome checks'});
  await expect(panel).toContainText('Partially verified');
  await expect(panel).toContainText('Model interpretation');
@@ -42,12 +44,13 @@ test('partial checks preserve provenance; reload and details never replay work',
  await expect(panel).toContainText('No independent research verifier.');
  await expect(panel.locator('time')).toHaveAttribute('datetime','2026-10-11T02:03:04Z');
  await expect(panel.locator('time')).toBeVisible();
- await page.reload();await expect(panel).toBeVisible();expect(commands).toEqual([]);
+ await page.reload();await openWorkDetails(page);await expect(panel).toBeVisible();expect(commands).toEqual([]);
 });
 
 for(const locale of ['en','fr','es','ar','sw','sn','nd','zu','de'] as const) test(`evidence is readable on narrow screens in ${locale}`,async({page})=>{
  await page.setViewportSize({width:390,height:720});
  await fixture(page,verification,locale);
+ await openWorkDetails(page);
  const panel=page.getByRole('region',{name:taskEvidenceText(locale).title});await expect(panel).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
  if(locale==='ar') await expect(page.locator('html')).toHaveAttribute('dir','rtl');
@@ -96,6 +99,7 @@ test('a trusted interrupted read has no mutation reconciliation and resumes the 
 test('uncertain input stays uncertain even if output claims no effects',async({page})=>{
  const commands=await fixture(page,documentVerification,'en','uncertain',{uncertain_call_id:'call',uncertain_call:{tool:'computer_insert_text',arguments:'{}'},steps:[{id:4,type:'error',tool_name:'computer_insert_text',tool_result:JSON.stringify({code:'computer_document_changed',effects:'none',verified:false})}]});
  await expect(page.locator('.native-document-progress')).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Record verified outcome',exact:true})).toBeVisible();
+ await page.getByText('Report what you observed', {exact:true}).first().click();
+ await expect(page.getByRole('button',{name:'Record observation',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Resume',exact:true})).toHaveCount(0);expect(commands).toEqual([]);
 });

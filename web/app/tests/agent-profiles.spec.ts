@@ -53,7 +53,7 @@ test('a temporary capability withdrawal cannot restore task composition over the
   const f=await fixture(page);await page.goto('/ui/#/agents');
   await page.getByRole('button',{name:/Researcher/}).click();
   await page.getByRole('textbox',{name:'Instructions',exact:true}).fill('Keep this draft.');
-  f.withdraw();await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  f.withdraw();await page.getByRole('button',{name:'Workspace options',exact:true}).click();await page.locator('.workspace-options-panel button[aria-busy]').click();await page.keyboard.press('Escape');
   await expect(page.getByRole('heading',{name:'Agent profiles',exact:true})).toBeVisible();
   await expect(page.getByRole('textbox',{name:'Instructions',exact:true})).toHaveValue('Keep this draft.');
   await expect(page.getByRole('button',{name:'Start task',exact:true})).toHaveCount(0);

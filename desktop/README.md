@@ -59,7 +59,7 @@ this declaration. Invalid declarations never fall back to that table.
 
 ### Windows task access
 
-The current Agents composer proposes whole-desktop scope and an approval policy.
+Chat's computer-access control proposes whole-desktop scope and an approval policy.
 Selecting **Full task access** requires one explicit local confirmation and remembers
 authorization only for the live desktop session, service/workspace and actor.
 Subsequent tasks get distinct bounded grants without another consent popup.
@@ -111,7 +111,7 @@ runtime and the prebuilt `web/dist` bundle, then creates:
 
 Packaging bundles pinned Playwright and its matching Chromium build. The first
 build downloads that browser; end users do not need Node, npm, or terminal
-pairing in the matching desktop application. In the current Agents composer,
+pairing in the matching desktop application. In Chat,
 describe the task and choose its computer-access policy. Task-wide access on a
 supported host does not require choosing an application first. The optional
 selected-window/managed-browser flow remains a narrower access mode; it is not
