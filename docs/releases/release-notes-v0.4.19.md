@@ -29,7 +29,8 @@ volumes are not migrated by this release.
 - OpenClaw setup preserves existing OffGrid model entries when adding another
   model. Its provider discovers installed chat models and reported contexts
   from the running service instead of relying on a baked-in model name or
-  invented context size.
+  invented context size. The newly selected model becomes OffGrid's preferred
+  OpenClaw model without changing OpenClaw's global default.
 
 ## Verification and limits
 

@@ -128,9 +128,10 @@ plugin, checks that it loaded, dry-runs the config patch, and saves only the
 `models.providers.offgrid` settings. Pass `--yes` for an explicitly approved
 unattended install. The installer retains existing entries in OpenClaw's
 `models.providers.offgrid.models` array when adding a selected model; it stops
-if that array cannot be read safely. It does not replace OpenClaw's other
-providers or default model. OffGrid selects the chosen model explicitly for
-`openclaw run` and `openclaw test`. The provider plugin discovers installed
+if that array cannot be read safely. It places the chosen model first in the
+OffGrid provider list for OffGrid CLI use, but does not replace OpenClaw's other
+providers or global default model. OffGrid selects the chosen model explicitly
+for `openclaw run` and `openclaw test`. The provider plugin discovers installed
 chat models and their reported context from OffGrid's live `/v1/models` catalog;
 newly installed models can appear on catalog refresh without a hardcoded model
 name. Existing OpenClaw selections are not changed automatically. Rerun

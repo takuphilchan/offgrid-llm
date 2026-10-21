@@ -21,14 +21,23 @@ func TestMergeOpenClawModelsPreservesExistingEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	models, ok := provider["models"].([]json.RawMessage)
-	if !ok || len(models) != 2 || !strings.Contains(string(models[0]), `"custom":{"keep":true}`) || !strings.Contains(string(models[0]), `"contextWindow":32768`) {
+	if !ok || len(models) != 2 || !strings.Contains(string(models[1]), `"custom":{"keep":true}`) || !strings.Contains(string(models[1]), `"contextWindow":32768`) {
 		t.Fatalf("existing model was not preserved: %#v", provider["models"])
 	}
 	var added struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(models[1], &added); err != nil || added.ID != "llama" {
-		t.Fatalf("selected model not added: %s, %v", models[1], err)
+	if err := json.Unmarshal(models[0], &added); err != nil || added.ID != "llama" {
+		t.Fatalf("selected model not preferred: %s, %v", models[0], err)
+	}
+	provider = map[string]any{"models": []any{map[string]any{"id": "llama", "contextWindow": float64(32768), "maxTokens": float64(4096)}}}
+	llama := json.RawMessage(`{"id":"llama","contextWindow":32768,"maxTokens":4096,"custom":{"keep":true}}`)
+	if err := mergeOpenClawModels(provider, []json.RawMessage{qwen, llama}, catalog); err != nil {
+		t.Fatal(err)
+	}
+	models = provider["models"].([]json.RawMessage)
+	if len(models) != 2 || !strings.Contains(string(models[0]), `"id":"llama"`) || !strings.Contains(string(models[0]), `"custom":{"keep":true}`) || !strings.Contains(string(models[1]), `"id":"qwen"`) {
+		t.Fatalf("existing selected model was not preferred intact: %#v", models)
 	}
 	provider = map[string]any{"models": []any{map[string]any{"id": "qwen", "contextWindow": float64(32768), "maxTokens": float64(4096)}}}
 	if err := mergeOpenClawModels(provider, []json.RawMessage{qwen}, catalog); err != nil {
@@ -76,7 +85,10 @@ func TestReadOpenClawModelsDistinguishesUnsetFromFailure(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			runIntegrationProcess = func(command *exec.Cmd) error {
-				if got := command.Args[1:]; len(got) != 4 || got[0] != "config" || got[1] != "get" || got[2] != "models.providers.offgrid.models" || got[3] != "--json" {
+				if got := command.Args[1:]; len(got) == 3 && got[0] == "config" && got[1] == "get" && got[2] == "agents.defaults.model.primary" {
+					_, _ = io.WriteString(command.Stdout, "Config path is valid but unset: agents.defaults.model.primary")
+					return errors.New("exit status 1")
+				} else if len(got) != 4 || got[0] != "config" || got[1] != "get" || got[2] != "models.providers.offgrid.models" || got[3] != "--json" {
 					t.Fatalf("unexpected OpenClaw command: %v", got)
 				}
 				_, _ = io.WriteString(command.Stdout, test.stdout)
@@ -92,6 +104,25 @@ func TestReadOpenClawModelsDistinguishesUnsetFromFailure(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPreferredOpenClawModelUsesConfiguredPrimary(t *testing.T) {
+	original := runIntegrationProcess
+	t.Cleanup(func() { runIntegrationProcess = original })
+	runIntegrationProcess = func(command *exec.Cmd) error {
+		switch command.Args[3] {
+		case "models.providers.offgrid.models":
+			_, _ = io.WriteString(command.Stdout, `[{"id":"qwen"},{"id":"llama"}]`)
+		case "agents.defaults.model.primary":
+			_, _ = io.WriteString(command.Stdout, "offgrid/llama\n")
+		default:
+			t.Fatalf("unexpected OpenClaw command: %v", command.Args)
+		}
+		return nil
+	}
+	if selected, err := preferredOpenClawModel("openclaw"); err != nil || selected != "llama" {
+		t.Fatalf("selected model = %q, error = %v", selected, err)
 	}
 }
 

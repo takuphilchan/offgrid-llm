@@ -47,6 +47,14 @@ func preferredOpenClawModel(executable string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	primary, err := readOpenClawPrimary(executable)
+	if err != nil {
+		return "", err
+	}
+	selected := strings.TrimPrefix(primary, "offgrid/")
+	if selected == primary {
+		selected = ""
+	}
 	for _, entry := range models {
 		var model struct {
 			ID string `json:"id"`
@@ -54,9 +62,33 @@ func preferredOpenClawModel(executable string) (string, error) {
 		if err := json.Unmarshal(entry, &model); err != nil || strings.TrimSpace(model.ID) == "" {
 			return "", fmt.Errorf("OpenClaw has an invalid OffGrid model entry")
 		}
-		return model.ID, nil
+		if selected == "" {
+			selected = model.ID
+		}
+		if model.ID == selected {
+			return selected, nil
+		}
+	}
+	if selected != "" {
+		return "", fmt.Errorf("OpenClaw's selected OffGrid model %q is missing from its provider catalog; rerun offgrid openclaw install --model %s", selected, selected)
 	}
 	return "", nil
+}
+
+func readOpenClawPrimary(executable string) (string, error) {
+	command, err := openClawCommand(executable, []string{"config", "get", "agents.defaults.model.primary"})
+	if err != nil {
+		return "", err
+	}
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	if err := runIntegrationProcess(command); err != nil {
+		if strings.Contains(stdout.String()+stderr.String(), "Config path is valid but unset: agents.defaults.model.primary") {
+			return "", nil
+		}
+		return "", fmt.Errorf("read OpenClaw primary model: %w", err)
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }
 
 func mergeOpenClawModels(provider map[string]any, existing []json.RawMessage, catalog []api.Model) error {
@@ -134,14 +166,32 @@ func mergeOpenClawModels(provider map[string]any, existing []json.RawMessage, ca
 			existing[index] = updated
 		}
 	}
+	// The first provider entry is OffGrid CLI's preference when OpenClaw has no
+	// authored OffGrid primary. Keep every entry and custom field, but put the
+	// explicitly installed model first without changing OpenClaw's global default.
+	ordered := make([]json.RawMessage, 0, len(existing)+1)
+	var selected json.RawMessage
+	for _, entry := range existing {
+		var saved struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(entry, &saved); err != nil {
+			return err
+		}
+		if saved.ID == modelID {
+			selected = entry
+		} else {
+			ordered = append(ordered, entry)
+		}
+	}
 	if !seen[modelID] {
-		encoded, err := json.Marshal(model)
+		var err error
+		selected, err = json.Marshal(model)
 		if err != nil {
 			return err
 		}
-		existing = append(existing, encoded)
 	}
-	provider["models"] = existing
+	provider["models"] = append([]json.RawMessage{selected}, ordered...)
 	return nil
 }
 
