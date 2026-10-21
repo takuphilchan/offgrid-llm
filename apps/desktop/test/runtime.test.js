@@ -84,10 +84,18 @@ test('missing runtime immediately provides repair guidance without spawning', as
   assert.equal(calls.spawn.length, 0);
 });
 
-test('child exit is visible; shutdown cannot spawn after a pending probe', async () => {
-  const one = fixture(async () => ({ state: 'offline' }));
+test('child exit is visible; shutdown cannot spawn after a pending probe', { timeout: 3000 }, async () => {
+  let signalSpawn;
+  const spawned = new Promise(resolve => { signalSpawn = resolve; });
+  const one = fixture(async () => ({ state: 'offline' }), {
+    timeoutMs: 1000,
+    spawn: () => {
+      queueMicrotask(signalSpawn);
+      return one.child;
+    }
+  });
   const pending = one.runtime.connect();
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await spawned;
   one.child.emit('exit', 1);
   assert.equal((await pending).state, 'error');
   let release;
