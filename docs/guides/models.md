@@ -30,7 +30,7 @@ Quantization trades weight size against accuracy; a smaller quantization is not
 automatically suitable for tool calling. Start with a modest context and check
 actual runtime allocation/offload. See [performance](../advanced/PERFORMANCE.md)
 and [CPU support](../advanced/cpu-support.md). Hardware recommendations must stay
-within the [recorded qualification profiles](../advanced/product-reliability-plan.md).
+within the [recorded qualification profiles](../quality/README.md).
 
 ## Download into the correct workspace
 

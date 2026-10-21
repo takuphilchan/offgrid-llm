@@ -11,12 +11,10 @@ offgrid-*
 
 # Build outputs
 dist/
-desktop/dist/
-desktop/node_modules/
 node_modules/
 *.tsbuildinfo
-web/app/vite.config.js
-web/app/vite.config.d.ts
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
 playwright-report/
 test-results/
 
@@ -36,6 +34,11 @@ coverage.html
 go.work
 go.work.sum
 .gomodcache/
+/.gocache/
+.pytest_cache/
+# The SDK's build tree is generated, unlike maintained scripts/build source.
+sdk/python/build/
+/_work/
 
 # IDE
 .vscode/
@@ -62,8 +65,7 @@ data/
 Thumbs.db
 
 # Build artifacts
-build/
-dist/
+/build/
 *.dmg
 *.pkg
 *.deb
@@ -86,19 +88,16 @@ docs/PAPER_README.md
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
 lib/
 lib64/
 # Application source libraries are not Python environment artifacts.
-!web/app/src/lib/
-!web/app/src/lib/**
+!apps/web/src/lib/
+!apps/web/src/lib/**
 parts/
 sdist/
 var/

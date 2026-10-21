@@ -72,7 +72,7 @@ If you need to force a specific CPU variant:
 ```bash
 **Standard Installation:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
 ## Troubleshooting

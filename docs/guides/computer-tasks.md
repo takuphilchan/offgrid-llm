@@ -65,7 +65,7 @@ tool set. This composition does not yet add tools to ordinary Chat turns.
 | Managed browser | Separate bundled Chromium session, constrained navigation, structured controls, and governed transfers | No personal profile import; cross-origin/authentication workflows remain limited |
 | Native vision | Not implemented as general native control in this checkout | Do not infer availability from a vision model or browser screenshot feature |
 
-Native workers exist for Windows UI Automation, macOS Accessibility, and Linux AT-SPI. Linux X11 shortcuts and Wayland portal input are not interchangeable; general Wayland capture/input remains unfinished. All native profiles still need the recorded workflow qualification gates. See the [driver documentation](../../computer/README.md) and [reliability evidence](../advanced/product-reliability-plan.md).
+Native workers exist for Windows UI Automation, macOS Accessibility, and Linux AT-SPI. Linux X11 shortcuts and Wayland portal input are not interchangeable; general Wayland capture/input remains unfinished. All native profiles still need the recorded workflow qualification gates. See the [driver documentation](../../apps/computer/README.md) and [quality evidence](../quality/README.md).
 
 ## Approve changes at the right level
 
@@ -118,7 +118,7 @@ is no executable-basename or Notepad-specific mapping to another process. Packag
 support does not expand a selected-window grant or add desktop launching on macOS
 or Linux. Native document/tab creation and range-based editing remain separate
 work; catalog tests alone do not qualify them. See the
-[profile limitations](../../computer/README.md#task-desktop-authority-protocol-3-windows-x64-preview).
+[profile limitations](../../apps/computer/README.md#task-desktop-authority-protocol-3-windows-x64-preview).
 
 Developers can run catalog-only validation using
 `OFFGRID_TEST_APPLICATION_DISCOVERY=1 go test -v ./internal/computer -run TestInstalledApplicationCatalogReadOnly`.
@@ -167,9 +167,9 @@ The test selects only the exact unreaped child process discovered by the native
 provider, validates its generation and session on every observation, and refuses
 missing native permissions rather than reporting a successful native run.
 
-For Linux, install the development dependencies listed in `computer/README.md`
+For Linux, install the development dependencies listed in `apps/computer/README.md`
 on a disposable test machine, then run
-`OFFGRID_NATIVE_ISOLATED_DESKTOP=1 xvfb-run -a dbus-run-session -- bash dev/scripts/test-native-linux.sh`.
+`OFFGRID_NATIVE_ISOLATED_DESKTOP=1 xvfb-run -a dbus-run-session -- bash scripts/test/test-native-linux.sh`.
 The runner builds both GTK fixtures into its private temporary directory and
 uses a separate configuration, X11 display and session bus. Xvfb validates neither
 real Wayland portal permissions nor installed-application compatibility.
@@ -177,7 +177,7 @@ real Wayland portal permissions nor installed-application compatibility.
 For macOS, sign into a disposable `OffGridTest-*` account with Xcode command-line
 tools and Go installed. Grant Accessibility to the test host through System
 Settings, then run
-`OFFGRID_NATIVE_ISOLATED_DESKTOP=1 bash dev/scripts/test-native-macos.sh`.
+`OFFGRID_NATIVE_ISOLATED_DESKTOP=1 bash scripts/test/test-native-macos.sh`.
 The runner does not alter TCC or request privilege elevation. Permission or
 provider failures are failures, not passing skips. Intel and Apple Silicon must
 be tested separately. These fixture checks are not installed-editor, provider
@@ -269,13 +269,13 @@ On Windows, set `OFFGRID_NATIVE_ISOLATED_DESKTOP=1` and
 `OFFGRID_TEST_NATIVE_WINDOWS=1` **in that isolated account**, then run:
 
 ```powershell
-node dev/scripts/test-native-document-workflow.mjs --platform windows --suite fixture --repeat 3
+node scripts/test/test-native-document-workflow.mjs --platform windows --suite fixture --repeat 3
 ```
 
 On macOS, use the same isolated-account and Accessibility setup described above:
 
 ```sh
-OFFGRID_NATIVE_ISOLATED_DESKTOP=1 node dev/scripts/test-native-document-workflow.mjs --platform macos --suite fixture --repeat 3
+OFFGRID_NATIVE_ISOLATED_DESKTOP=1 node scripts/test/test-native-document-workflow.mjs --platform macos --suite fixture --repeat 3
 ```
 
 On Linux, use the isolated account with a private X11 display/session bus and
@@ -283,7 +283,7 @@ the GTK/AT-SPI development dependencies. Start a window manager within that
 disposable display, then run:
 
 ```sh
-OFFGRID_NATIVE_ISOLATED_DESKTOP=1 node dev/scripts/test-native-document-workflow.mjs --platform linux --suite fixture --repeat 3
+OFFGRID_NATIVE_ISOLATED_DESKTOP=1 node scripts/test/test-native-document-workflow.mjs --platform linux --suite fixture --repeat 3
 ```
 
 `fixture` runs the owned native fixture checks only. The runner also accepts
@@ -291,6 +291,12 @@ OFFGRID_NATIVE_ISOLATED_DESKTOP=1 node dev/scripts/test-native-document-workflow
 these require their full provider/installed-model test entry points. Until those
 are implemented, the runner reports `required_native_test_missing` **before
 input**. An empty Go test match or skipped permission check is never a pass.
+Even when those entry points exist, the installed/model suite must emit one
+closed, redacted workflow record asserting distinct creation, exact Unicode
+read-back, unchanged other documents, no save, verified blank browser tab and
+single dispatch. Each suite must cover at least two application families.
+A Go pass event without that record is insufficient; the record itself is a
+test-oracle report, not independent human or platform qualification.
 Do not describe this as full workflow verification. Wayland is never routed
 through an X11 shortcut fallback.
 
@@ -372,6 +378,6 @@ If the result is **Outcome unknown**, inspect the affected target before reconci
   Retry the same saved task after loading, or choose a faster tool-calling model;
   do not submit a duplicate task. Cancellation leaves the access request pending.
 - **Stale observation or changed window:** inspect again; do not bypass target or focus validation.
-- **VPN fake DNS blocked:** Direct mode rejects reserved addresses. Explicit **Trusted VPN routing** supports its documented fake-DNS case while retaining selected-origin/TLS restrictions; it is not unrestricted proxy support. See [network limits](../../computer/README.md).
+- **VPN fake DNS blocked:** Direct mode rejects reserved addresses. Explicit **Trusted VPN routing** supports its documented fake-DNS case while retaining selected-origin/TLS restrictions; it is not unrestricted proxy support. See [network limits](../../apps/computer/README.md).
 
-For internal protocol and native-worker development, use [computer/README.md](../../computer/README.md). Do not interpret developer pairing commands as the normal user setup flow.
+For internal protocol and native-worker development, use [apps/computer/README.md](../../apps/computer/README.md). Do not interpret developer pairing commands as the normal user setup flow.

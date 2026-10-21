@@ -76,11 +76,13 @@ docker compose -f docker-compose.gpu.yml up -d
 ```
 
 Release tags use `<version>-gpu`, and the stable GPU tag is `latest-gpu`.
-Automatic GPU offload is enabled by this profile. For a Hermes trial, set
-`OFFGRID_MAX_CONTEXT=65536 OFFGRID_ADAPTIVE_CONTEXT=false` and select a
-long-context model that fits available memory; a 64K context can consume far
-more memory than the GGUF file size suggests. Check `docker logs` for CUDA
-offload and `nvidia-smi` during an actual response.
+Automatic GPU offload is enabled by this profile. Its 65,536-token adaptive
+ceiling can choose a smaller tier from model metadata and visible memory. For a
+Hermes trial, select a long-context model and keep
+`OFFGRID_ADAPTIVE_CONTEXT=true`; fixed mode is only for an allocation measured
+on that exact machine. A 64K context can consume far more memory than the GGUF
+file size suggests. Check `docker logs` for CUDA offload and `nvidia-smi` during
+an actual response.
 
 ## Production
 

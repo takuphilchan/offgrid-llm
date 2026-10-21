@@ -26,9 +26,9 @@ rm -f "$ROOT_DIR"/*.log
 
 # Remove Python artifacts
 echo "Removing Python artifacts..."
-rm -rf "$ROOT_DIR/python/dist"
-rm -rf "$ROOT_DIR/python/build"
-rm -rf "$ROOT_DIR/python/"*.egg-info
+rm -rf "$ROOT_DIR/sdk/python/dist"
+rm -rf "$ROOT_DIR/sdk/python/build"
+rm -rf "$ROOT_DIR/sdk/python/"*.egg-info
 find "$ROOT_DIR" -type d -name "__pycache__" -exec rm -rf {} +
 
 # Remove Node modules (optional, but good for deep clean)
@@ -37,14 +37,14 @@ if [ -d "$ROOT_DIR/node_modules" ]; then
     rm -rf "$ROOT_DIR/node_modules"
 fi
 
-if [ -d "$ROOT_DIR/desktop/node_modules" ]; then
+if [ -d "$ROOT_DIR/apps/desktop/node_modules" ]; then
     echo "Removing desktop node_modules..."
-    rm -rf "$ROOT_DIR/desktop/node_modules"
+    rm -rf "$ROOT_DIR/apps/desktop/node_modules"
 fi
 
-if [ -d "$ROOT_DIR/desktop/dist" ]; then
+if [ -d "$ROOT_DIR/apps/desktop/dist" ]; then
     echo "Removing desktop dist..."
-    rm -rf "$ROOT_DIR/desktop/dist"
+    rm -rf "$ROOT_DIR/apps/desktop/dist"
 fi
 
 # Remove coverage files

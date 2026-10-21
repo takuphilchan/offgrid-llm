@@ -1,0 +1,247 @@
+[
+  {
+    "path": "cmd/offgrid/hermes.go",
+    "owner": "CLI maintainers",
+    "responsibility": "Existing CLI implementation for hermes; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 808
+  },
+  {
+    "path": "cmd/offgrid/openclaw.go",
+    "owner": "CLI maintainers",
+    "responsibility": "Existing CLI implementation for openclaw; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 670
+  },
+  {
+    "path": "install.sh",
+    "owner": "Installer maintainers",
+    "responsibility": "Existing Installer implementation for install; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 653
+  },
+  {
+    "path": "internal/agents/agent.go",
+    "owner": "Agent maintainers",
+    "responsibility": "Existing agents implementation for agent; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 1070
+  },
+  {
+    "path": "internal/agents/coordination.go",
+    "owner": "Agent maintainers",
+    "responsibility": "Existing agents implementation for coordination; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 623
+  },
+  {
+    "path": "internal/agents/durable.go",
+    "owner": "Agent maintainers",
+    "responsibility": "Existing agents implementation for durable; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 1012
+  },
+  {
+    "path": "internal/agents/manager.go",
+    "owner": "Agent maintainers",
+    "responsibility": "Existing agents implementation for manager; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 666
+  },
+  {
+    "path": "internal/agents/orchestration.go",
+    "owner": "Agent maintainers",
+    "responsibility": "Existing agents implementation for orchestration; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 668
+  },
+  {
+    "path": "internal/agents/registry.go",
+    "owner": "Agent maintainers",
+    "responsibility": "Existing agents implementation for registry; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 890
+  },
+  {
+    "path": "internal/agents/tools.go",
+    "owner": "Agent maintainers",
+    "responsibility": "Existing agents implementation for tools; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 791
+  },
+  {
+    "path": "internal/audio/audio.go",
+    "owner": "Audio maintainers",
+    "responsibility": "Existing audio implementation for audio; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 686
+  },
+  {
+    "path": "internal/audio/download.go",
+    "owner": "Audio maintainers",
+    "responsibility": "Existing audio implementation for download; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 1094
+  },
+  {
+    "path": "internal/audit/logger.go",
+    "owner": "Security and audit maintainers",
+    "responsibility": "Existing audit implementation for logger; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 637
+  },
+  {
+    "path": "internal/computer/native_linux.go",
+    "owner": "Computer-use maintainers",
+    "responsibility": "Existing computer implementation for native linux; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 676
+  },
+  {
+    "path": "internal/computer/native_windows.go",
+    "owner": "Computer-use maintainers",
+    "responsibility": "Existing computer implementation for native windows; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 876
+  },
+  {
+    "path": "internal/docs/embedded.go",
+    "owner": "Documentation maintainers",
+    "responsibility": "Existing docs implementation for embedded; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 686
+  },
+  {
+    "path": "internal/inference/model_cache.go",
+    "owner": "Inference maintainers",
+    "responsibility": "Existing inference implementation for model cache; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 1341
+  },
+  {
+    "path": "internal/inference/provider_scheduler.go",
+    "owner": "Inference maintainers",
+    "responsibility": "Existing inference implementation for provider scheduler; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 904
+  },
+  {
+    "path": "internal/integrity/verifier.go",
+    "owner": "Integrity maintainers",
+    "responsibility": "Existing integrity implementation for verifier; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 604
+  },
+  {
+    "path": "internal/mcp/marketplace.go",
+    "owner": "Integration maintainers",
+    "responsibility": "Existing mcp implementation for marketplace; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 671
+  },
+  {
+    "path": "internal/metrics/metrics.go",
+    "owner": "Observability maintainers",
+    "responsibility": "Existing metrics implementation for metrics; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 652
+  },
+  {
+    "path": "internal/models/catalog.go",
+    "owner": "Model-management maintainers",
+    "responsibility": "Existing models implementation for catalog; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 634
+  },
+  {
+    "path": "internal/models/huggingface.go",
+    "owner": "Model-management maintainers",
+    "responsibility": "Existing models implementation for huggingface; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 1089
+  },
+  {
+    "path": "internal/models/package_resolution.go",
+    "owner": "Model-management maintainers",
+    "responsibility": "Existing models implementation for package resolution; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 635
+  },
+  {
+    "path": "internal/models/usb_exporter.go",
+    "owner": "Model-management maintainers",
+    "responsibility": "Existing models implementation for usb exporter; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 689
+  },
+  {
+    "path": "internal/p2p/secure_transfer.go",
+    "owner": "Networking maintainers",
+    "responsibility": "Existing p2p implementation for secure transfer; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 663
+  },
+  {
+    "path": "internal/rag/engine.go",
+    "owner": "Knowledge maintainers",
+    "responsibility": "Existing rag implementation for engine; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 944
+  },
+  {
+    "path": "internal/rag/parser.go",
+    "owner": "Knowledge maintainers",
+    "responsibility": "Existing rag implementation for parser; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 954
+  },
+  {
+    "path": "internal/rag/sqlite_store.go",
+    "owner": "Knowledge maintainers",
+    "responsibility": "Existing rag implementation for sqlite store; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 713
+  },
+  {
+    "path": "internal/server/computer_tools.go",
+    "owner": "Service maintainers",
+    "responsibility": "Existing server implementation for computer tools; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 614
+  },
+  {
+    "path": "internal/server/native_expectation_stages.go",
+    "owner": "Service maintainers",
+    "responsibility": "Existing server implementation for native expectation stages; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 696
+  },
+  {
+    "path": "internal/server/rag_handlers.go",
+    "owner": "Service maintainers",
+    "responsibility": "Existing server implementation for rag handlers; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 642
+  },
+  {
+    "path": "internal/users/users.go",
+    "owner": "Identity maintainers",
+    "responsibility": "Existing users implementation for users; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 845
+  },
+  {
+    "path": "internal/websocket/websocket.go",
+    "owner": "Transport maintainers",
+    "responsibility": "Existing websocket implementation for websocket; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 648
+  },
+  {
+    "path": "sdk/python/offgrid/client.py",
+    "owner": "SDK maintainers",
+    "responsibility": "Existing SDK implementation for client; no-growth baseline pending focused extraction.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 765
+  }
+]

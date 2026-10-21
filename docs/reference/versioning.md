@@ -10,12 +10,12 @@ their npm lockfiles.
 2. Run:
 
    ```bash
-   ./scripts/update-version.sh
+   ./scripts/maintenance/update-version.sh
    ```
 
-3. Review changes to `VERSION`, `desktop/package.json`,
-   `desktop/package-lock.json`, `web/app/package.json`, and
-   `web/app/package-lock.json`, along with the advertised P2P and MCP client
+3. Review changes to `VERSION`, `apps/desktop/package.json`,
+   `apps/desktop/package-lock.json`, `apps/web/package.json`, and
+   `apps/web/package-lock.json`, along with the advertised P2P and MCP client
    versions in `internal/p2p/discovery.go` and `internal/agents/mcp_sdk.go`.
 4. Run the checks in the root README before creating a release.
 

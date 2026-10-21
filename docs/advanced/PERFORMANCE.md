@@ -18,13 +18,23 @@ Extended uses the service context. Profile changes wait for active inference
 and may reload the model. No history is silently removed: use Extended or a
 new conversation if a prompt exceeds its context.
 
-External agents and `/v1/chat/completions` retain the service context. Set
-`OFFGRID_MAX_CONTEXT=65536`, `OFFGRID_CHAT_CONTEXT=8192`,
-`OFFGRID_ADAPTIVE_CONTEXT=false` and `OFFGRID_MAX_MODELS=1` to separate
-interactive chat from a deliberately configured 65K agent service. Only choose
-65K if your model and memory support it. Disabling adaptation does not create
-memory. Health's `inference.context_window` shows the admitted profile; public
-model discovery describes the context allocated to public agent API requests.
+External agents and `/v1/chat/completions` use a per-model service context. The
+default `OFFGRID_MAX_CONTEXT=65536` is an operator ceiling, not a promise that
+every model receives 65K. With `OFFGRID_ADAPTIVE_CONTEXT=true` (the default),
+OffGrid intersects that ceiling with bounded GGUF metadata, the startup RAM/VRAM
+snapshot, KV cache type, inference slots, and current power/pressure policy, then
+rounds down to a stable tier. Unknown evidence remains at a conservative tier.
+`OFFGRID_CHAT_CONTEXT=8192` keeps ordinary interactive chat smaller; Extended
+uses the admitted model tier. Set `OFFGRID_MAX_MODELS=1` on constrained systems.
+
+Tasks pin their admitted tier. A later power or pressure change affects new work,
+not a running task; a different tier waits for active inference to drain and may
+reload the model. Set `OFFGRID_ADAPTIVE_CONTEXT=false` only when you deliberately
+want a fixed allocation and have measured that it fits. Fixed mode still respects
+a known trained model limit and does not create memory. Health's
+`inference.context_window` is the currently loaded allocation, while
+`config.max_context` is the ceiling. Public model discovery and Hermes/OpenClaw
+setup report the selected model's planned allocation.
 
 ## NVIDIA GPU containers
 
@@ -113,7 +123,7 @@ read-back; input measures only the attempted provider operation. Stage totals
 exclude unrelated work and need not sum to total elapsed time. Records contain
 only closed numeric fields, never text, application titles, IDs or arguments.
 Installed-app, real-model and platform results remain separate in the
-[reliability plan](product-reliability-plan.md).
+[quality evidence](../quality/README.md).
 
 ### General inference checks
 

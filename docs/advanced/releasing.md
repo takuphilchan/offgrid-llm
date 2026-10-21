@@ -8,7 +8,7 @@ or invent a new version just to rerun packaging.
 1. Update the CLI and Electron versions, release notes, and expected asset list
    in `.github/scripts/finalize-release.sh` when the package matrix changes.
 2. Run `go test ./...`, the web/desktop checks, and
-   `node dev/scripts/test-finalize-release.mjs`. CI also runs `actionlint` on
+   `node scripts/release/test-finalize-release.mjs`. CI also runs `actionlint` on
    every active workflow.
 3. Push the source tag `vX.Y.Z`. The tag starts `release-unified.yml`, which
    builds desktop and CLI assets and calls the reusable `docker-publish.yml`

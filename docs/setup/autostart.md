@@ -24,7 +24,11 @@ For Compose, run commands in the deployment directory with the same project and 
 
 ## Existing Linux systemd installations
 
-The repository's `scripts/install.sh` can install an `offgrid@.service` template. First inspect the unit that actually exists; do not assume every installation used this script:
+The canonical root `install.sh` can install an `offgrid@.service` template when
+`AUTOSTART=yes`, `AUTOSTART=no`, or `AUTOSTART=ask` is selected. The existing
+legacy raw URL uses `ask` by default. The source template is
+[`installers/systemd/offgrid@.service`](../../installers/systemd/offgrid@.service).
+First inspect the unit that actually exists; do not assume every installation used this script:
 
 ```bash
 systemctl list-unit-files 'offgrid*' 'llama-server*'
@@ -53,4 +57,4 @@ curl --max-time 5 http://127.0.0.1:11611/api/v2/system
 
 On Windows use `curl.exe`. Check version, workspace identity, models, and saved history. If desktop reports a mismatch, update the separately managed service rather than starting a second workspace. With WSL, confirm reachability from Windows and WSL; do not automatically restart WSL or alter a required VPN.
 
-For a custom service account, use [deployment](../advanced/DEPLOYMENT.md) and [workspace recovery](../advanced/workspace-recovery.md). Never let two supervisors own the same writable data directory.
+For a custom service account, use [deployment](../operations/deployment.md) and [workspace recovery](../advanced/workspace-recovery.md). Never let two supervisors own the same writable data directory.

@@ -65,7 +65,7 @@ and the connected service's runtime before retrying.
 | Kokoro / streaming Zipformer | Package acquisition is supported; the executable sherpa-onnx adapter is not implemented |
 
 Search results and downloadable packages are not promises of execution support
-or model quality. The [reliability plan](../advanced/product-reliability-plan.md)
+or model quality. The [quality evidence](../quality/README.md)
 owns measured qualification evidence.
 
 **Automatic** uses an available profile. An explicit selection that is removed

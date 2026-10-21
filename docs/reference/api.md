@@ -25,6 +25,48 @@ alone cannot resolve the repair. Earlier
 actions are not replayed; persisted legacy batches and uncertain actions remain
 blocked. Ordinary non-computer tool batching is unchanged.
 
+A missing initial target observation produces a durable
+`computer_observation_required` rejection before dispatch, rather than a terminal
+task failure. Its activity record includes the proposed tool identity, reason and
+operation-local `effects: "none"`, but not rejected arguments or assistant prose.
+The runner provides bounded corrective feedback using the existing shared repair
+budget and charges each attempt to task iterations. Observation alone does not
+complete the rejected operation; unrelated reads and a claimed final answer cannot
+erase it. Exhaustion pauses the same saved task. Failed persistence stops recovery;
+uncertain dispatched input still requires reconciliation, not another attempt.
+
+The service-owned `task_save_artifact` capability does not require a desktop
+observation or native-document expectation merely because desktop access is
+attached. Its owner/profile, format, authorization and independent storage
+read-back checks still apply. Artifact-only work with verified service receipts
+needs no invented native check; an artifact cannot satisfy an outstanding native
+expectation, unfinished plan or earlier application action. This does not grant
+host filesystem access or certify the factual accuracy of artifact content.
+
+Artifact arguments advertise format-specific filenames (`text` → `.txt`,
+`markdown` → `.md`, `json` → `.json`, `csv` → `.csv`) and nonempty content.
+The service still enforces UTF-8 byte limits (120 filename bytes, 131072 content
+bytes), safe basenames, JSON/CSV parsing and prohibited CSV formulas. A rejected
+argument reports a specific field-level reason without echoing private content.
+`invalid_task_artifact` is eligible for bounded correction only before dispatch;
+it saves no artifact. Unrelated reads and a final prose claim cannot clear this
+repair. A storage failure after dispatch is not eligible for automatic retry.
+
+Runtime rejection of the generated tool grammar interrupts the saved job with
+`invalid_tool_grammar`, not a model-decision repair loop. Its fixed diagnostic
+exposes no raw schema or private runtime response. Earlier work remains saved;
+unknown effects still take precedence and require reconciliation. Refresh does
+not replay work. Resume is explicit after the service/runtime fault is corrected.
+
+A model-requested computer access operation must inspect its current target
+before artifact saving is offered. Persisted proposals pass the same check at
+authorization (`task_artifact_work_pending`). Artifact-only completion cannot
+erase this pending inspection. This does not apply merely because a desktop
+grant is preattached; an explicit subsequent user correction can supersede the
+old proposed operation without erasing earlier effects. Target inspection and
+storage receipts are necessary mechanical checks, not proof that research is
+complete or that cited sources substantiate every claim.
+
 For sequential tool requests through the owned HTTP inference adapter, OffGrid
 uses a private schema-constrained single-step envelope rather than relying only
 on a runtime's `parallel_tool_calls: false` hint. It normalizes one complete,
@@ -39,9 +81,36 @@ clean envelope validation. Native compatibility checks use the same transport
 and stage-relevant tools; a synthetic preflight pass is not native workflow
 qualification. Failed checks retain their service-authored reason.
 
+The existing native tool-call transport remains available to non-sequential
+requests; it does not become a prose-to-tool fallback. Tool-enabled agent
+responses from either transport pass a shared complete-decision gate before
+dispatch. It checks terminal metadata, offered tool identity, unambiguous JSON
+and the offered argument schema using local references only. It never downloads
+schema references or logs rejected argument values. Invalid decisions produce
+bounded, persisted pre-effect feedback and consume task iterations; repeated
+failures pause the saved task. Operational/provider errors and persistence
+failures do not acquire this retry classification. Existing complete computer
+batch rejection still uses the runner's paired-feedback recovery path.
+Earlier effects, permissions and unresolved outcome checks are unchanged.
+
+Concurrent identical synthetic tool checks share only their in-flight work.
+Cancelling one caller does not cancel remaining observers; cancellation of the
+last observer cancels the shared check. Completed results are not cached, and
+later tasks check the current runtime again. Sharing this synthetic fixture does
+not share user prompts, grant access or dispatch computer tools. Separate vision
+checks keep their own lifecycle.
+
+Model-check responses optionally include `timings.admission_ms` (queue/model
+readiness) and `timings.probe_ms` (runtime metadata plus synthetic generation).
+These measure the shared tool check, not one observer's waiting time or the
+separate vision check. Completed operational failures retain these timings in
+the error envelope; a caller cancelled before completion has no completed timing
+measurement. The probe deadline starts after admission. Busy/cancelled checks are
+operational failures, not proof that a model is incompatible.
+
 Desktop model discovery follows recorded progress: a catalog precedes launch,
-readiness precedes target operations, document inventory precedes creation
-checks, and independent read-back precedes document-edit checks. Check schemas
+readiness precedes target operations, document inventory precedes creation,
+and independent read-back precedes document edits. Check schemas
 include only observed references and supported operations. These projections
 are planning aids, not grants: service and host validation remain authoritative.
 Unchanged plans are not offered repeatedly without intervening action progress.
@@ -99,6 +168,40 @@ Legacy records without a workflow retain version-0 behavior, v1 readers/writers
 remain supported, and unknown versions remain opaque and non-executable. V1
 records reject v2 fields even when null or inside historical revisions.
 
+New jobs additionally pin the service-owned `native_action_contract_version:1`
+in their configuration. For this contract, a validated typed application launch,
+document creation/edit, or control text/checkbox edit supplies the mechanical
+predicate. The runner binds and persists it with the pending invocation **before**
+authorization or dispatch; the model does not need a separate `task_expectations`
+call to unlock that action. This is not inferred permission, automatic execution,
+or proof that the typed action satisfies the entire user request. Existing caller
+checks remain immutable. Saved jobs without this flag keep their explicit-check
+behavior; unknown action-contract versions cannot execute.
+
+`OutcomeCheck.action_derived_call_id` and `AgentStep.call_id` are optional,
+service-authored identities. A derived check is assessed from the matching
+successful invocation and a later independent read, never from a saved success
+flag, input echo or earlier read. Once verified, it records a historical action
+milestone: later navigation does not require a search field to retain its old
+query or a new document to remain blank. Explicit checks retain their existing
+current-state semantics. Pending or uncertain actions are not historical proof,
+and further input must wait for the required action read-back.
+
+The new contract also persists bounded semantic read-progress accounting. Fresh
+observation IDs/timestamps and metadata changes are not progress. Three unchanged
+reads produce corrective feedback; five pause with `computer_no_progress`.
+Changed target/content/evidence or an applied user correction establish progress.
+This consumes the original iteration budget and never forces or repeats input.
+An explicitly configured budget may still be too small for a multi-stage workflow;
+the runner does not silently expand it.
+
+A trusted `computer_documents` unsupported-capability response is a nonterminal,
+no-effects result (`status:unavailable`, `capability:native_documents`,
+`supported:false`, `code:computer_document_unavailable`, `effects:none`). It
+permits fresh inspection of controls on that same target, not blind input or a
+permission bypass. Incomplete, stale, revoked or uncertain results do not qualify.
+Changed application/process/surface identity invalidates this fallback evidence.
+
 The v2 predicates are `document_blank`, `document_text_equals` and
 `document_edit_matches`. Blankness declarations name an observed creation
 `command`, never a guessed future document. Text predicates name observed
@@ -117,7 +220,7 @@ are both required for creation/edit verification. Read-back carries its own
 snapshot, full document binding, completeness, composition state, byte length
 and exact text digest. An input echo, truncated text, another tab with identical
 content, a replaced generation, stale revision or uncertain mutation cannot
-verify that action. Contradictory observations clear the check. Once independently
+verify that action. For legacy and explicit checks, contradictory observations clear the check. Once independently
 verified, a creation/edit milestone may survive a later verified edit to the same
 document: the later action must match the earlier read's document generation,
 editor, revision, snapshot and preimage digest, and have its own independent
@@ -146,6 +249,15 @@ compatibility; trusted read failures contain the documented JSON inside it.
 CLI/Python projections retain v2 and unknown-version results without interpreting
 them as success. Public submission still requires a supported negotiated task
 contract; exposing response types does not enable an absent native provider.
+The public Python client in `sdk/python` uses this same authenticated HTTP
+contract; the separate `runtimes/python` service workers are not an SDK API.
+
+A locally qualified MLX or Transformers text model can also be pinned to a
+text-only agent profile and run through the canonical job path. Such a job has
+no tools, collaborators, or computer access; selecting a tool-enabled profile
+requires a separately qualified tool-calling model. Native models are not
+enabled by merely importing their files, and a stale or absent runtime never
+falls back silently to llama.cpp.
 
 `POST /api/v2/jobs` accepts optional `expectations` (at most 12) with stable ID,
 title, kind and predicate-specific arguments. Their provenance is
@@ -153,7 +265,7 @@ title, kind and predicate-specific arguments. Their provenance is
 The model cannot submit bindings, provenance or successful assessments. These
 records activate only on new task-first native workflows and grant no access.
 
-`task_expectations` accepts staged additive declarations: `application_open`
+For legacy jobs and explicit additional checks, `task_expectations` accepts staged additive declarations: `application_open`
 requires an `application_id` from discovery; control checks require an observed
 `target_id`, `element`, and `text` or `checked`. Invalid declarations return
 `invalid_task_expectations` with field-specific feedback and no dispatch. These
@@ -179,7 +291,7 @@ The native tools `computer_find_controls` and `computer_inspect_control` query
 only the current task's latest canonical observation. They check live ownership,
 session and target on authorization and execution, resolve exact short aliases,
 and make no companion calls. Stale capture age is explicit; querying never
-refreshes input authority. See [bounded discovery](../../computer/README.md#workflow-evidence-and-bounded-discovery)
+refreshes input authority. See [bounded discovery](../../apps/computer/README.md#workflow-evidence-and-bounded-discovery)
 for filters, byte limits and pagination. A revoked session cannot use discovery;
 separately authorized task history retains its existing read-only semantics.
 
@@ -258,7 +370,7 @@ The companion-only `activate` and `revoke` routes under
 `/api/v2/computer/companion/` require the enrolled bearer token, reject browser
 origins, and are not general user APIs. Existing protocol-1/2 transports remain
 limited; no automatic desktop downgrade is allowed. See the generated OpenAPI
-contract and [host protocol reference](../../computer/README.md).
+contract and [host protocol reference](../../apps/computer/README.md).
 
 ## Model packages (development contract)
 
@@ -533,7 +645,14 @@ session before retrying. There is no automatic replay or reconnect/resume of a
 partially generated chat turn. Stop aborts the request, including queue waits.
 
 `interactive` allocates the smaller of `OFFGRID_CHAT_CONTEXT` (default 8192) and
-the effective service context. `extended` uses the effective service context.
+the selected model's admitted service context. `extended` uses that admitted
+model context. In adaptive mode, `OFFGRID_MAX_CONTEXT` (default 65536) is a
+ceiling intersected with known GGUF trained context, a conservative local memory
+estimate, cache/slot settings, and power/pressure policy. Unknown evidence stays
+on a conservative tier. The allocation is pinned when task work is admitted;
+resource changes do not resize active KV state. `/v1/models` and integration
+setup advertise the same per-model planned allocation. Health distinguishes the
+configured ceiling from `inference.context_window`, the loaded allocation.
 Profile changes are exclusive runtime switches and may reload the model. They
 do not lower `/v1/chat/completions` context or the Hermes/OpenClaw configuration.
 `max_tokens` accepts 1–4096, defaults to 1024, and bounds the response, not history.
@@ -710,6 +829,13 @@ still reject admission. Plain Chat's existing retrieval contract is unchanged.
 Children cannot delegate or receive computer control. Their Knowledge and reviewed
 low-risk read tools must be subsets of the parent's selections. Child iteration
 reservations count against the parent's total budget; they are not extra budgets.
+The delegation schema exposes only the effective child tool intersection. A
+Knowledge-only child must submit an empty `tools` array and receives its retrieved
+excerpts as bounded context. When a prompt explicitly names two attached
+specialists, admission requires one complete delegation graph with the requested
+dependency edges before the parent can answer. A completed dependent artifact is
+forwarded with its headings, citations and stated length preserved; a parent
+summary that drops those requirements is not a verified completion.
 
 ## Durable jobs and computer access
 
@@ -855,6 +981,15 @@ browser vision checking has its own 90-second bound. Current web clients allow
 ten minutes for model checking and saved-job access attachment; deployments with
 longer custom model-load limits need a corresponding client/proxy deadline.
 These checks use synthetic observations and never dispatch computer actions.
+For a saved task awaiting computer access, the harness reserves the check's
+maximum 384 output tokens and three minutes against that task's durable local
+inference budget before the check starts. An installed optional vision check
+reserves another 128 tokens and 90 seconds when it runs. Stop cancels a check
+in flight; interrupted or repeated checks do not regain their reservation.
+If the remaining root budget cannot cover a required check, attachment stops
+before model inference or computer input. An optional vision check can be
+skipped while structured controls remain available. Standalone legacy checks
+made before a job exists retain their own independent time/output limits.
 
 Transient saved-job attachment failures return `503` with `retryable: true` and
 retain the same pending input; incompatible tool output returns `422`.
@@ -940,7 +1075,7 @@ data from issue reports.
 After editing `pkg/api/openapi.yaml`:
 
 ```bash
-cd web/app
+cd apps/web
 npm run api:generate
 npm run api:check
 npm run check

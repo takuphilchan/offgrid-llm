@@ -117,5 +117,5 @@ audit records, or external tool data.
 | Another service owns storage | Stop the legitimate owner for maintenance; do not delete its lock file |
 
 For network deployment and backup/rollback, follow
-[deployment](../advanced/DEPLOYMENT.md). For remaining multi-user qualification,
-see the [reliability plan](../advanced/product-reliability-plan.md).
+[deployment](../operations/deployment.md). For remaining multi-user qualification,
+see the [quality evidence](../quality/README.md).

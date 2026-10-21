@@ -46,4 +46,4 @@ The repository retains explicit mock and alternate build-tag implementations for
 
 The default adapter is [llama_stub.go](../../internal/inference/llama_stub.go), despite its legacy filename; it forwards to the native HTTP engine. [server.go](../../internal/server/server.go) composes the configured engine. Build the ordinary service using the [build guide](BUILDING.md); old `make build-llama` instructions are not the current setup path.
 
-Use the pinned runtime revisions in release build configuration for repeatable builds. Custom upstream builds need their own tests. Consult the [reliability plan](product-reliability-plan.md) for measured profiles and remaining evidence rather than assuming upstream model support qualifies an OffGrid workflow.
+Use the pinned runtime revisions in release build configuration for repeatable builds. Custom upstream builds need their own tests. Consult the [quality evidence](../quality/README.md) for measured profiles and remaining evidence rather than assuming upstream model support qualifies an OffGrid workflow.

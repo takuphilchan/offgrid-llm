@@ -1455,7 +1455,7 @@ paths:
   /api/v2/computer/model-check:
     post:
       operationId: checkComputerModel
-      description: Administrator-only, bounded two-step tool-call smoke check for the selected driver. Executes no computer actions. Not a qualification certificate. Computer-task submission repeats the check against the current runtime.
+      description: Administrator-only, bounded two-step tool-call smoke check for the selected driver. Executes no computer actions. Not a qualification certificate. Concurrent identical tool checks share only in-flight work with independent cancellation; later calls repeat the check against the current runtime. Vision checks remain separate.
       requestBody:
         required: true
         content:
@@ -1474,6 +1474,14 @@ paths:
               schema: { $ref: '#/components/schemas/ComputerModelCheck' }
         '503':
           description: Runtime unavailable or check timed out; retryable, not proof of incompatibility.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      timings: { $ref: '#/components/schemas/ComputerModelCheckTimings' }
 components:
   securitySchemes:
     sessionCookie:
@@ -1501,6 +1509,13 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    ComputerModelCheckTimings:
+      type: object
+      description: Milliseconds for the shared synthetic tool check, not an individual observer's wait. Admission includes queue/model readiness; probe includes runtime metadata and synthetic generation. Excludes separate vision checks. Absent for a caller that cancels before the shared result completes.
+      required: [admission_ms, probe_ms]
+      properties:
+        admission_ms: { type: integer, format: int64, minimum: 0 }
+        probe_ms: { type: integer, format: int64, minimum: 0 }
     ComputerModelCheck:
       type: object
       required: [model, passed, code, message, retryable]
@@ -1510,6 +1525,7 @@ components:
         code: { type: string }
         message: { type: string }
         retryable: { type: boolean }
+        timings: { $ref: '#/components/schemas/ComputerModelCheckTimings' }
         vision:
           type: object
           required: [installed, passed, code, message, retryable]
@@ -1674,19 +1690,20 @@ components:
         id: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{0,95}$' }
         revision: { type: string, description: Immutable revision, not main/master/latest. }
         name: { type: string, maxLength: 200 }
-        architecture: { type: string, enum: [whisper, piper, zipformer-streaming, kokoro, qwen3-asr, qwen3-tts] }
+        architecture: { type: string, enum: [whisper, piper, zipformer-streaming, kokoro, qwen3-asr, qwen3-tts, mlx-text, transformers-text] }
+        model_family: { type: string, description: Pinned family identity required for text packages. }
         runtime:
           type: object
           additionalProperties: false
           required: [adapter, revision]
           properties:
-            adapter: { type: string, enum: [whisper.cpp, piper, sherpa-onnx, qwen3-asr, qwen3-tts] }
+            adapter: { type: string, enum: [whisper.cpp, piper, sherpa-onnx, qwen3-asr, qwen3-tts, mlx-lm, transformers] }
             revision: { type: string }
         capabilities:
           type: array
-          items: { type: string, enum: [transcription, streaming_recognition, speech_synthesis, incremental_synthesis] }
+          items: { type: string, enum: [chat, transcription, streaming_recognition, speech_synthesis, incremental_synthesis] }
         languages: { type: array, minItems: 1, maxItems: 256, items: { type: string } }
-        sample_rates: { type: array, minItems: 1, maxItems: 16, items: { type: integer, minimum: 8000, maximum: 192000 } }
+        sample_rates: { type: array, maxItems: 16, description: Nonempty for speech packages; empty for text packages., items: { type: integer, minimum: 8000, maximum: 192000 } }
         license: { type: string, maxLength: 256 }
         voices:
           type: array
@@ -1709,6 +1726,16 @@ components:
               id: { type: string }
               memory_bytes: { type: integer, format: int64 }
               evidence: { type: string, description: Reference only, never self-certified qualification. }
+        engine: { type: string, enum: [llama_cpp, mlx, transformers] }
+        format: { type: string, enum: [gguf, mlx_safetensors, safetensors] }
+        backend: { type: string }
+        runner_revision: { type: string }
+        adapter_revision: { type: string }
+        modalities: { type: array, items: { type: string } }
+        tool_calling: { type: string, enum: [qualified, unqualified, unsupported] }
+        context_length: { type: integer, minimum: 0 }
+        template_digest: { type: string }
+        preprocessing: { type: array, items: { type: string } }
         artifacts:
           type: array
           minItems: 1
@@ -1760,6 +1787,7 @@ components:
         runtime_compatible: { type: boolean }
         smoke_tested: { type: boolean }
         qualified: { type: boolean }
+        runtime_ready: { type: boolean }
         issue: { type: string }
     ModelProvenance:
       type: object
@@ -1823,6 +1851,9 @@ components:
         kind: { type: string, enum: [legacy_file, package] }
         category: { $ref: '#/components/schemas/ModelCategory' }
         capabilities: { type: array, items: { type: string } }
+        engine: { type: string, enum: [llama_cpp, mlx, transformers] }
+        format: { type: string, enum: [gguf, mlx_safetensors, safetensors] }
+        backend: { type: string }
         readiness: { $ref: '#/components/schemas/ModelReadiness' }
         provenance: { $ref: '#/components/schemas/ModelProvenance' }
         package: { $ref: '#/components/schemas/ModelPackageState' }
@@ -1935,6 +1966,14 @@ components:
         capability_status:
           type: object
           additionalProperties: { type: string, enum: [declared, tested, unsupported, unknown] }
+        engine: { type: string, enum: [llama_cpp, mlx, transformers] }
+        format: { type: string, enum: [gguf, mlx_safetensors, safetensors] }
+        backend: { type: string }
+        runner_revision: { type: string }
+        adapter_revision: { type: string }
+        runtime_ready: { type: boolean }
+        smoke_tested: { type: boolean }
+        qualified: { type: boolean }
     IntegrationStatus:
       type: object
       required: [id, provider_id, plugin_id, name, description, transport, documentation_url, minimum_context, recommended_context, requires_tools, capabilities, ready, status, context_window, warnings]
@@ -2349,6 +2388,7 @@ components:
       type: object
       properties:
         id: { type: integer }
+        call_id: { type: string, readOnly: true, description: Runner-assigned invocation identity on canonical successful action records. Not supplied by the model. }
         type: { type: string }
         content: { type: string }
         tool_name: { type: string }
@@ -2489,6 +2529,7 @@ components:
       type: object
       required: [expectation, provenance, revision, state]
       properties:
+        action_derived_call_id: { type: string, maxLength: 128, readOnly: true, description: Service-authored typed-action identity. Independent verification establishes a historical action milestone; not permission or proof that the entire request is complete. }
         expectation: { $ref: '#/components/schemas/OutcomeExpectation' }
         provenance: { type: string, enum: [caller_explicit, model_proposed] }
         revision: { type: integer }

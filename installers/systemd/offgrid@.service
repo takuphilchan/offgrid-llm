@@ -1,0 +1,15 @@
+[Unit]
+Description=OffGrid LLM API Server for %i
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i
+Environment="HOME=/home/%i"
+ExecStart=/usr/local/bin/offgrid serve
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

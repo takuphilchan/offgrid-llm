@@ -29,6 +29,6 @@ Model inference uses the configured local runtime. Installing software/models, s
 
 ## Evidence and limits
 
-The [reliability plan](../advanced/product-reliability-plan.md) records test evidence and remaining gates. Keep results scoped to their actual OS, hardware, model, driver, and workload. Do not convert unit tests, fixture success, or a published package into a universal quality claim.
+The [quality evidence index](../quality/README.md) links capability-specific tests and remaining gates; [production readiness](../quality/production-readiness.md) owns release criteria. Keep implemented source, automatic test results, and real-hardware qualification distinct, scoped to their actual OS, hardware, model, driver, and workload. Do not convert unit tests, fixture success, or a published package into a universal quality claim.
 
 For exact command syntax use the installed CLI help and [CLI reference](../reference/cli.md). For protocol details use the [API reference](../reference/api.md) and [OpenAPI contract](../../pkg/api/openapi.yaml).

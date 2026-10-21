@@ -7,8 +7,8 @@
 # =============================================================================
 FROM node:22-alpine AS ui-builder
 
-WORKDIR /build/web/app
-COPY web/app/package.json web/app/package-lock.json ./
+WORKDIR /build/apps/web
+COPY apps/web/package.json apps/web/package-lock.json ./
 RUN set -eu; \
     for attempt in 1 2 3; do \
         npm ci && exit 0; \
@@ -16,8 +16,8 @@ RUN set -eu; \
         echo "npm dependency download failed (attempt $attempt/3); retrying..." >&2; \
         sleep $((attempt * 5)); \
     done
-COPY web/app/ ./
-COPY desktop/compatibility.cjs /build/desktop/compatibility.cjs
+COPY apps/web/ ./
+COPY apps/desktop/compatibility.cjs /build/apps/desktop/compatibility.cjs
 RUN npm run build
 
 # =============================================================================
@@ -59,7 +59,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # =============================================================================
 FROM alpine:3.24 AS application-artifacts
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
-COPY --from=ui-builder /build/web/dist/ /var/lib/offgrid/web/ui/
+COPY --from=ui-builder /build/apps/web/dist/ /var/lib/offgrid/web/ui/
 
 # =============================================================================
 # Stage 3: Build llama.cpp server
@@ -138,7 +138,7 @@ COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgr
 RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
 
 # Copy the exact UI built from this source revision.
-COPY --from=ui-builder --chown=offgrid:offgrid /build/web/dist /var/lib/offgrid/web/ui
+COPY --from=ui-builder --chown=offgrid:offgrid /build/apps/web/dist /var/lib/offgrid/web/ui
 
 # Switch to non-root user
 USER offgrid

@@ -123,7 +123,7 @@ Legacy arbitrary workflow registration remains unavailable (`501
 durable_coordination_unavailable`). Do not confuse bounded read-only delegation
 with general recursive multi-agent or concurrent computer control. See the
 [architecture](../advanced/ARCHITECTURE.md#bounded-durable-coordination) and
-[reliability plan](../advanced/product-reliability-plan.md) for qualification limits.
+[quality evidence](../quality/README.md) for qualification limits.
 
 ### Reusable profiles (development API)
 
@@ -438,4 +438,4 @@ in those tests use controlled fixtures. They do not certify model reasoning,
 external MCP servers, or real Hermes/OpenClaw tasks on every machine.
 
 See the [API contract](../reference/api.md) and
-[delivery plan](../advanced/product-reliability-plan.md) for remaining work.
+[roadmap](../ROADMAP.md) for remaining work and [quality evidence](../quality/README.md) for recorded checks.

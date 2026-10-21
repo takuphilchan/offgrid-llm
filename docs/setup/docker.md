@@ -4,6 +4,12 @@ OffGrid publishes a portable CPU image for Linux AMD64 and ARM64. The image
 contains the server, CLI, web UI, and llama.cpp runtime; downloaded models and
 application state live in persistent Docker volumes.
 
+Current published images run GGUF models through llama.cpp. The experimental
+MLX/Transformers provider protocol and offline text-package metadata in the
+source tree do not add Python, PyTorch, MLX, or runnable safetensors inference
+to these images. Do not select those packages for Chat until a matching local
+runner and model have been qualified on the target hardware.
+
 ## Quick start
 
 This example creates a **new** container/workspace. For an existing installation,
@@ -129,10 +135,15 @@ Phi-3.5 Mini's 64K KV cache may need partial CPU offload; a smaller-cache
 long-context model is preferable. Example Compose overrides:
 
 ```bash
-OFFGRID_MAX_CONTEXT=65536 OFFGRID_ADAPTIVE_CONTEXT=false \
+OFFGRID_MAX_CONTEXT=65536 OFFGRID_ADAPTIVE_CONTEXT=true \
   OFFGRID_KV_CACHE_TYPE=q4_0 \
   docker compose -f docker-compose.gpu.yml up -d
 ```
+
+Adaptive mode treats 65,536 as a ceiling and can select a smaller stable tier
+from the model's GGUF metadata and the container's visible RAM/VRAM. Use fixed
+mode only after measuring the exact model/context combination. Existing
+containers with an explicit 8,192 ceiling remain at 8K when upgraded.
 
 Do not run the CPU and GPU profiles on the same host port simultaneously.
 Compose creates project-scoped volumes, while the `docker run` example above

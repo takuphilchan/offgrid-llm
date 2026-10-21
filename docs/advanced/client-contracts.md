@@ -135,7 +135,7 @@ supporting an older protocol requires retained tests. The renderer build emits
 its declaration, and packaging verifies the copied UI. Keep declarations and
 tests aligned when changing desktop IPC; do not derive protocols from semver.
 
-Legacy metadata absence is accepted only by `desktop/legacy-compatibility.json`:
+Legacy metadata absence is accepted only by `apps/desktop/legacy-compatibility.json`:
 service 0.4.14 or 0.4.15 with renderer fingerprint
 `a7336324e4ea09e8a9f5e25aabf2a53c2f9cb39b81eb990a081ba9a84e66f617`.
 This is the reviewed workspace-refresh renderer, not every 0.4.14 build. Its

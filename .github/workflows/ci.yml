@@ -14,6 +14,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  python-sdk:
+    name: Python SDK and worker protocol (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install isolated test and build tools
+        run: python -m pip install pytest setuptools wheel
+      - name: Test client and worker protocol without a live service
+        env:
+          PYTHONPATH: sdk/python
+        run: python -m pytest -q sdk/python/tests/test_client.py runtimes/python/tests
+      - name: Build and verify public client wheel
+        shell: bash
+        run: |
+          mkdir -p build/python-ci/wheels
+          python -m pip wheel --no-deps --no-build-isolation --wheel-dir build/python-ci/wheels sdk/python
+          python scripts/test/check-python-package.py build/python-ci/wheels/offgrid-*.whl
+      - name: Compile Python sources
+        run: python -m compileall -q sdk/python runtimes/python
+
   test:
     name: Go, contract, UI, and desktop
     runs-on: ubuntu-latest
@@ -34,9 +64,9 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: |
-            web/app/package-lock.json
-            desktop/package-lock.json
-            computer/package-lock.json
+            apps/web/package-lock.json
+            apps/desktop/package-lock.json
+            apps/computer/package-lock.json
 
       - name: Validate release automation
         run: |
@@ -44,16 +74,43 @@ jobs:
           # workflow syntax here and lint the new standalone script directly.
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= .github/workflows/*.yml
           shellcheck .github/scripts/finalize-release.sh .github/scripts/resolve-release-context.sh .github/scripts/verify-release-containers.sh
-          node dev/scripts/test-finalize-release.mjs
-          node dev/scripts/test-release-asset-access.mjs
-          node dev/scripts/test-release-context.mjs
-          node dev/scripts/test-release-ci.mjs
-          node dev/scripts/test-release-containers.mjs
+          node scripts/release/test-finalize-release.mjs
+          node scripts/release/test-release-asset-access.mjs
+          node scripts/release/test-release-context.mjs
+          node scripts/release/test-release-ci.mjs
+          node scripts/release/test-release-containers.mjs
 
       - name: Check maintained documentation
         run: |
-          node --test dev/scripts/check-docs.test.mjs
-          node dev/scripts/check-docs.mjs
+          node --test scripts/maintenance/check-docs.test.mjs
+          node --test scripts/maintenance/check-community-templates.test.mjs
+          node scripts/maintenance/check-docs.mjs
+
+      - name: Check frozen provider-workflow scoring contract
+        run: node --test scripts/test/score-provider-workflows.test.mjs
+
+      - name: Check repository generated-output boundaries
+        run: |
+          node --test scripts/maintenance/check-repository-hygiene.test.mjs
+          node scripts/maintenance/check-repository-hygiene.mjs
+
+      - name: Check maintained application source paths
+        run: |
+          node --test scripts/maintenance/check-application-layout.test.mjs
+          node scripts/maintenance/check-application-layout.mjs
+
+      - name: Check maintained developer and Python source paths
+        run: |
+          node --test scripts/maintenance/check-developer-layout.test.mjs
+          node scripts/maintenance/check-developer-layout.mjs
+
+      - name: Check handwritten source-size ratchet
+        run: |
+          node --test scripts/maintenance/check-source-size.test.mjs
+          node scripts/maintenance/check-source-size.mjs
+
+      - name: Check Unix installer entry points without installation
+        run: bash scripts/maintenance/test-installer-entrypoints.sh
 
       - name: Test Go packages
         run: go test ./...
@@ -62,7 +119,7 @@ jobs:
         run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/inference
 
       - name: Generate and build web UI
-        working-directory: web/app
+        working-directory: apps/web
         run: |
           npm ci
           npm run api:check
@@ -72,7 +129,7 @@ jobs:
       - name: Build runtime for integration and desktop packaging
         run: |
           mkdir -p build/linux
-          version=$(node -p "require('./desktop/package.json').version")
+          version=$(node -p "require('./apps/desktop/package.json').version")
           go build -trimpath -ldflags "-X main.Version=v$version" -o build/linux/offgrid ./cmd/offgrid
 
       - name: Run browser integration tests
@@ -84,7 +141,7 @@ jobs:
           OFFGRID_PORT=11611 \
           OFFGRID_MODELS_DIR=/tmp/offgrid-ci/models \
           OFFGRID_DATA_DIR=/tmp/offgrid-ci/data \
-          OFFGRID_UI_DIR="$PWD/web/dist" \
+          OFFGRID_UI_DIR="$PWD/apps/web/dist" \
           ./build/linux/offgrid serve >/tmp/offgrid-ci/server.log 2>&1 &
           server_pid=$!
           trap 'kill -TERM "$server_pid" 2>/dev/null || true' EXIT
@@ -98,15 +155,15 @@ jobs:
             fi
             sleep 1
           done
-          cd web/app
+          cd apps/web
           npx playwright install --with-deps chromium
           OFFGRID_E2E_URL=http://127.0.0.1:11611 npm run test:e2e -- --reporter=line,github
 
       - name: Test real-service speech acquisition and restart recovery
         run: |
           go build -tags modeltestfixtures -o build/linux/offgrid-model-fixtures ./cmd/offgrid
-          node dev/scripts/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-acquisition.spec.ts --workers=1
-          node dev/scripts/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-restart.spec.ts --workers=1
+          node scripts/test/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-acquisition.spec.ts --workers=1
+          node scripts/test/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-restart.spec.ts --workers=1
 
       - name: Preserve failed browser diagnostics
         if: failure() && steps.browser-tests.outcome == 'failure'
@@ -115,13 +172,13 @@ jobs:
           name: browser-failure-diagnostics
           # This service uses isolated CI data, never a user's workspace.
           path: |
-            web/app/test-results/
+            apps/web/test-results/
             /tmp/offgrid-ci/server.log
           if-no-files-found: warn
           retention-days: 7
 
       - name: Validate Electron package
-        working-directory: desktop
+        working-directory: apps/desktop
         run: |
           sudo apt-get update
           sudo apt-get install -y libatspi2.0-dev libgtk-3-dev libjson-glib-dev at-spi2-core dbus-x11 xvfb xauth openbox
@@ -135,10 +192,10 @@ jobs:
       - name: Test real Linux AT-SPI controls in an isolated desktop
         env:
           OFFGRID_NATIVE_ISOLATED_DESKTOP: '1'
-        run: xvfb-run -a dbus-run-session -- bash dev/scripts/test-native-linux.sh
+        run: xvfb-run -a dbus-run-session -- bash scripts/test/test-native-linux.sh
 
       - name: Test browser companion contracts
-        working-directory: computer
+        working-directory: apps/computer
         run: |
           npx playwright install --with-deps chromium
           npm test
@@ -147,11 +204,11 @@ jobs:
         run: |
           # An unpacked archive does not have a root-owned setuid sandbox helper.
           # Configure this isolated CI package without disabling Chromium sandboxing.
-          sudo chown root:root desktop/dist/linux-unpacked/chrome-sandbox
-          sudo chmod 4755 desktop/dist/linux-unpacked/chrome-sandbox
-          xvfb-run -a node dev/scripts/test-desktop-startup.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
-          xvfb-run -a node dev/scripts/test-packaged-browser.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
-          xvfb-run -a node dev/scripts/test-desktop-theme.mjs desktop/dist/linux-unpacked/offgrid-llm-desktop
+          sudo chown root:root apps/desktop/dist/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 apps/desktop/dist/linux-unpacked/chrome-sandbox
+          xvfb-run -a node scripts/test/test-desktop-startup.mjs apps/desktop/dist/linux-unpacked/offgrid-llm-desktop
+          xvfb-run -a node scripts/test/test-packaged-browser.mjs apps/desktop/dist/linux-unpacked/offgrid-llm-desktop
+          xvfb-run -a node scripts/test/test-desktop-theme.mjs apps/desktop/dist/linux-unpacked/offgrid-llm-desktop
 
       - name: Preserve desktop startup diagnostics
         if: failure()
@@ -195,17 +252,17 @@ jobs:
           OFFGRID_TEST_NATIVE_WINDOWS: '1'
         run: go test -p 1 -v -timeout 90s ./internal/computer ./cmd/offgrid-computer -run TestNative -count=1
       - name: Test desktop compatibility and IPC trust policy
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npm test
 
       - name: Build the shared renderer and matching native runtime
         shell: bash
         run: |
-          cd web/app
+          cd apps/web
           npm ci
           npm run build
           cd ../..
-          version=$(node -p "require('./desktop/package.json').version")
+          version=$(node -p "require('./apps/desktop/package.json').version")
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             mkdir -p build/windows
             go build -trimpath -ldflags "-X main.Version=v$version" -o build/windows/offgrid.exe ./cmd/offgrid
@@ -222,28 +279,28 @@ jobs:
           # This is an isolated functional test, not signing qualification.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
-          cd desktop
+          cd apps/desktop
           npm ci --prefix ../computer --ignore-scripts
           npm ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             npx electron-builder --dir --win --x64 --publish never
-            node ../dev/scripts/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
-            node ../dev/scripts/test-packaged-browser.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
-            node ../dev/scripts/test-desktop-theme.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
-            node ../dev/scripts/test-desktop-access.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+            node ../../scripts/test/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+            node ../../scripts/test/test-packaged-browser.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+            node ../../scripts/test/test-desktop-theme.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+            node ../../scripts/test/test-desktop-access.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
           else
             arch=$(node -p process.arch)
             npx electron-builder --dir --mac "--$arch" --publish never
             package_dir=mac
             if [[ "$arch" == arm64 ]]; then package_dir=mac-arm64; fi
-            node ../dev/scripts/test-desktop-startup.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
-            node ../dev/scripts/test-packaged-browser.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
-            node ../dev/scripts/test-desktop-theme.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
+            node ../../scripts/test/test-desktop-startup.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
+            node ../../scripts/test/test-packaged-browser.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
+            node ../../scripts/test/test-desktop-theme.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
           fi
 
       - name: Build isolated Windows installer test package
         if: runner.os == 'Windows'
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npx electron-builder --config installer-test.cjs --win nsis --x64 --publish never
 
       - name: Test Windows installation, reinstall and uninstall
@@ -251,9 +308,9 @@ jobs:
         # Native wizard capture uses Windows PowerShell's System.Drawing bridge.
         shell: powershell
         run: |
-          ./dev/scripts/test-windows-installer-probe.ps1
-          $version = (Get-Content desktop/package.json | ConvertFrom-Json).version
-          ./dev/scripts/test-windows-installer.ps1 -InstallerPath "build/windows-installer-smoke/OffGrid Desktop Install Test-Setup-$version.exe"
+          ./scripts/release/test-windows-installer-probe.ps1
+          $version = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
+          ./scripts/release/test-windows-installer.ps1 -InstallerPath "build/windows-installer-smoke/OffGrid Desktop Install Test-Setup-$version.exe"
 
       - name: Locate desktop diagnostics
         if: failure()

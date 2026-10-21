@@ -18,6 +18,14 @@ REPO="takuphilchan/offgrid-llm"
 GITHUB_URL="https://github.com/${REPO}"
 INSTALL_DIR="/usr/local/bin"
 VERSION="${VERSION:-latest}"
+LEGACY_INSTALL="${OFFGRID_INSTALL_LEGACY:-no}"
+# The root URL keeps its existing no-service default. The published legacy URL
+# supplies its former default through OFFGRID_INSTALL_LEGACY.
+if [ "$LEGACY_INSTALL" = "yes" ]; then
+    AUTOSTART="${AUTOSTART:-ask}"
+else
+    AUTOSTART="${AUTOSTART:-none}"
+fi
 
 # Colors (disable if not a terminal)
 if [ -t 1 ]; then
@@ -110,6 +118,25 @@ detect_cpu_features() {
     fi
 }
 
+detect_gpu_variant() {
+    local os="$1"
+    if [ "$os" = "linux" ]; then
+        if command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
+            echo "vulkan"
+        elif command -v nvidia-smi >/dev/null 2>&1; then
+            echo "vulkan"
+        elif [ -d /sys/class/drm ] && ls /sys/class/drm/card*/device/vendor 2>/dev/null | xargs cat | grep -q '0x1002'; then
+            echo "vulkan"
+        else
+            echo "cpu"
+        fi
+    elif [ "$os" = "darwin" ] && [ "$(uname -m)" = "arm64" ]; then
+        echo "metal"
+    else
+        echo "cpu"
+    fi
+}
+
 get_latest_version() {
     local version
     version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -151,30 +178,43 @@ download_cli_bundle() {
     local version="$3"
     local cpu_features="$4"
     local tmp_dir="$5"
+    local variant="${6:-cpu}"
     
-    local variant="cpu"
     local bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
     local ext=".tar.gz"
     [ "$os" = "windows" ] && ext=".zip"
     
     local download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
     
+    local downloaded="no"
     if download_with_progress "$download_url" "${tmp_dir}/bundle${ext}" "Downloading OffGrid..."; then
+        downloaded="yes"
         spin_done "Downloaded OffGrid"
     else
-        # Fallback to AVX2
-        if [ "$cpu_features" = "avx512" ]; then
+        # Keep the legacy GPU -> CPU fallback before feature fallback.
+        if [ "$variant" != "cpu" ]; then
+            rm -f "${tmp_dir}/bundle${ext}"
+            variant="cpu"
+            bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
+            download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
+            if download_with_progress "$download_url" "${tmp_dir}/bundle${ext}" "Trying CPU build..."; then
+                downloaded="yes"
+                spin_done "Downloaded (CPU)"
+            fi
+        fi
+        # Fallback to AVX2 for unavailable AVX-512 release assets.
+        if [ "$downloaded" = "no" ] && [ "$cpu_features" = "avx512" ]; then
+            rm -f "${tmp_dir}/bundle${ext}"
+            variant="cpu"
             cpu_features="avx2"
             bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
             download_url="${GITHUB_URL}/releases/download/${version}/${bundle_name}${ext}"
-            
             if download_with_progress "$download_url" "${tmp_dir}/bundle${ext}" "Trying AVX2 build..."; then
+                downloaded="yes"
                 spin_done "Downloaded (AVX2)"
-            else
-                spin_fail "Download failed"
-                return 1
             fi
-        else
+        fi
+        if [ "$downloaded" = "no" ]; then
             spin_fail "Download failed"
             return 1
         fi
@@ -182,16 +222,46 @@ download_cli_bundle() {
     
     # Extract
     spin "Extracting..."
-    cd "$tmp_dir"
+    cd "$tmp_dir" || return 1
     if [ "$os" = "windows" ]; then
-        unzip -q "bundle${ext}" 2>/dev/null
+        if ! unzip -q "bundle${ext}" 2>/dev/null; then
+            spin_fail "Extraction failed"
+            return 1
+        fi
     else
-        tar -xzf "bundle${ext}" 2>/dev/null
+        if ! tar -xzf "bundle${ext}" 2>/dev/null; then
+            spin_fail "Extraction failed"
+            return 1
+        fi
     fi
     spin_done "Extracted bundle"
     cd - >/dev/null
     
     echo "$bundle_name"
+}
+
+verify_legacy_checksums() {
+    local bundle_dir="$1"
+    [ "$LEGACY_INSTALL" = "yes" ] || return 0
+    if [ ! -f "$bundle_dir/checksums.sha256" ]; then
+        warn "Checksums file not found, skipping verification"
+        return 0
+    fi
+    if command -v sha256sum >/dev/null 2>&1; then
+        (cd "$bundle_dir" && sha256sum -c checksums.sha256 >/dev/null) || {
+            error "Checksum verification failed"
+            return 1
+        }
+    elif command -v shasum >/dev/null 2>&1; then
+        (cd "$bundle_dir" && shasum -a 256 -c checksums.sha256 >/dev/null) || {
+            error "Checksum verification failed"
+            return 1
+        }
+    else
+        error "No SHA-256 checksum verifier is available"
+        return 1
+    fi
+    ok "Checksums verified"
 }
 
 download_desktop_app() {
@@ -235,6 +305,24 @@ download_desktop_app() {
 # Installation Functions
 # ═══════════════════════════════════════════════════════════════
 stop_running_processes() {
+    if [ "$LEGACY_INSTALL" = "yes" ]; then
+        # The published installer targeted exact binary names, not every
+        # process whose command line mentions OffGrid (including this wrapper).
+        local name i
+        for name in llama-server offgrid; do
+            if pgrep -x "$name" >/dev/null 2>&1; then
+                pkill -TERM -x "$name" 2>/dev/null || true
+                for i in {1..10}; do
+                    pgrep -x "$name" >/dev/null 2>&1 || break
+                    sleep 0.5
+                done
+                if pgrep -x "$name" >/dev/null 2>&1; then
+                    pkill -9 -x "$name" 2>/dev/null || true
+                fi
+            fi
+        done
+        return 0
+    fi
     pkill -TERM -f "offgrid serve" 2>/dev/null || true
     pkill -TERM -x "llama-server" 2>/dev/null || true
     sleep 0.5
@@ -251,6 +339,11 @@ install_cli() {
     
     local use_sudo=""
     [ "$os" != "windows" ] && [ ! -w "$INSTALL_DIR" ] && use_sudo="sudo"
+
+    if [ "$LEGACY_INSTALL" = "yes" ] && command -v systemctl >/dev/null 2>&1 && \
+       systemctl is-active --quiet "offgrid@${USER}.service" 2>/dev/null; then
+        $use_sudo systemctl stop "offgrid@${USER}.service"
+    fi
     
     stop_running_processes
     
@@ -264,6 +357,70 @@ install_cli() {
     else
         spin_fail "Failed to install CLI"
         return 1
+    fi
+}
+
+setup_legacy_systemd() {
+    local os="$1"
+    [ "$os" = "linux" ] || return 0
+    [ "$AUTOSTART" != "none" ] || return 0
+    if ! command -v systemctl >/dev/null 2>&1; then
+        warn "systemd not available; start OffGrid manually"
+        return 0
+    fi
+
+    local use_sudo=""
+    [ "$(id -u)" -ne 0 ] && use_sudo="sudo"
+    $use_sudo tee /etc/systemd/system/offgrid@.service >/dev/null <<'UNIT' || return 1
+[Unit]
+Description=OffGrid LLM API Server for %i
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i
+Environment="HOME=/home/%i"
+ExecStart=/usr/local/bin/offgrid serve
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    $use_sudo systemctl daemon-reload || { error "systemd reload failed"; return 1; }
+    $use_sudo mkdir -p /etc/offgrid || return 1
+    printf '%s\n' 42382 | $use_sudo tee /etc/offgrid/llama-port >/dev/null || return 1
+
+    local enable_service="no"
+    local start_service="no"
+    case "$AUTOSTART" in
+        yes) enable_service="yes"; start_service="yes" ;;
+        no) ;;
+        ask)
+            local reply="Y"
+            read -t 30 -p "Enable auto-start on boot? [Y/n] " -n 1 -r reply 2>/dev/null || reply="Y"
+            printf '\n' >&2
+            [[ "$reply" =~ ^[Nn]$ ]] || enable_service="yes"
+            reply="Y"
+            read -t 30 -p "Start services now? [Y/n] " -n 1 -r reply 2>/dev/null || reply="Y"
+            printf '\n' >&2
+            [[ "$reply" =~ ^[Nn]$ ]] || start_service="yes"
+            ;;
+        *) error "AUTOSTART must be yes, no, or ask"; return 1 ;;
+    esac
+    if [ "$enable_service" = "yes" ]; then
+        $use_sudo systemctl enable "offgrid@${USER}.service" || {
+            error "Could not enable offgrid@${USER}.service"
+            return 1
+        }
+    fi
+    if [ "$start_service" = "yes" ]; then
+        $use_sudo systemctl start "offgrid@${USER}.service" || {
+            error "Could not start offgrid@${USER}.service"
+            return 1
+        }
+        ok "Service started: offgrid@${USER}.service"
     fi
 }
 
@@ -361,7 +518,7 @@ install_audio() {
         cp -r "$bundle_dir/audio/piper/"* "$AUDIO_DIR/piper/" 2>/dev/null || true
         chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
         spin_done "Piper ready (Text-to-Speech)"
-    elif [ "$(uname -s)" = "Linux" ]; then
+    elif [ "$LEGACY_INSTALL" != "yes" ] && [ "$(uname -s)" = "Linux" ]; then
         download_piper "$AUDIO_DIR/piper"
     fi
 }
@@ -396,6 +553,10 @@ download_piper() {
 # Main Installation Flow
 # ═══════════════════════════════════════════════════════════════
 main() {
+    case "$AUTOSTART" in
+        none|yes|no|ask) ;;
+        *) error "AUTOSTART must be yes, no, or ask"; return 1 ;;
+    esac
     print_banner
     
     # Detect system
@@ -423,7 +584,9 @@ main() {
     section "Downloading"
     
     # Download CLI bundle
-    local bundle_name=$(download_cli_bundle "$os" "$arch" "$VERSION" "$cpu_features" "$tmp_dir")
+    local variant="cpu"
+    [ "$LEGACY_INSTALL" = "yes" ] && variant="$(detect_gpu_variant "$os")"
+    local bundle_name=$(download_cli_bundle "$os" "$arch" "$VERSION" "$cpu_features" "$tmp_dir" "$variant")
     
     if [ -z "$bundle_name" ]; then
         error "Failed to download"
@@ -431,16 +594,23 @@ main() {
     fi
     
     local bundle_dir="$tmp_dir/$bundle_name"
+    verify_legacy_checksums "$bundle_dir"
     
     # Download Desktop app
-    local app_path=$(download_desktop_app "$os" "$arch" "$VERSION" "$tmp_dir")
+    local app_path=""
+    if [ "$LEGACY_INSTALL" != "yes" ]; then
+        app_path=$(download_desktop_app "$os" "$arch" "$VERSION" "$tmp_dir")
+    fi
     
     section "Installing"
     
     install_cli "$bundle_dir" "$os"
     install_webui "$bundle_dir"
     install_audio "$bundle_dir"
-    install_desktop "$app_path" "$os"
+    if [ "$LEGACY_INSTALL" != "yes" ]; then
+        install_desktop "$app_path" "$os"
+    fi
+    setup_legacy_systemd "$os"
     
     # Done
     local install_end=$(date +%s)
@@ -466,6 +636,18 @@ main() {
     
     echo "" >&2
 }
+
+# Help is safe for local and streamed compatibility checks.
+case "${1:-}" in
+    --help|-h)
+        printf '%s\n' 'OffGrid installer' \
+            'Usage: bash install.sh [--help]' \
+            'VERSION=vX.Y.Z selects a release (default: latest).' \
+            'AUTOSTART=yes|no|ask controls offgrid@USER.service when selected.' \
+            'NONINTERACTIVE=yes is reserved for noninteractive installation.'
+        exit 0
+        ;;
+esac
 
 # Run main
 main "$@"

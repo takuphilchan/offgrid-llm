@@ -13,11 +13,11 @@ remain authoritative; change proposals belong in [OpenSpec](../../openspec/READM
 | API/CLI contracts | `docs/reference/` |
 | Architecture, operations, qualification | `docs/advanced/` |
 | Historical release facts | `docs/releases/` |
-| Contributor commands | [Contributing](../../dev/CONTRIBUTING.md) |
+| Contributor commands | [Contributing](../../CONTRIBUTING.md) |
 
 Use lowercase-kebab filenames for new guides. Preserve established filenames
 and exact Git casing when linking: for example,
-[ARCHITECTURE.md](../advanced/ARCHITECTURE.md). Windows may accept a wrong-case
+[Architecture overview](../architecture/overview.md). Windows may accept a wrong-case
 link that fails on Linux or GitHub.
 
 Templates are optional starting points, not required section counts:
@@ -54,8 +54,8 @@ monochrome UI. Do not alter product colors to make documentation attractive.
 From the repository root with Node.js 22:
 
 ```sh
-node --test dev/scripts/check-docs.test.mjs
-node dev/scripts/check-docs.mjs
+node --test scripts/maintenance/check-docs.test.mjs
+node scripts/maintenance/check-docs.mjs
 git diff --check
 ```
 

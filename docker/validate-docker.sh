@@ -24,7 +24,7 @@ required_files=(
   docker/docker-compose.dev.yml
   docker/docker-compose.gpu.yml
   docker/docker-compose.prod.yml
-  web/app/package.json
+  apps/web/package.json
   cmd/offgrid/main.go
 )
 

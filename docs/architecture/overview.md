@@ -1,0 +1,333 @@
+# Architecture
+
+Document-aware task checks (workflow v2) bind declarations before preparation.
+Creation names an observed command, not an invented future tab. Text edits name
+the exact document/snapshot, operation and input. Only a recorded successful host
+action supplies the resulting document, action identity, preimage and expected
+digests. Assessment copies these fields into the same durable task transaction;
+a failed result write cannot trigger another input. A later independent read is
+required to verify the edit. Rejected declarations cannot partially update other
+checks. This does not upgrade legacy tasks or enable unsupported host providers.
+
+Independently verified document milestones carry forward only through a
+continuous verified edit chain on the same document/generation/editor. Each
+link binds its preimage to the previous read and supplies a fresh read-back;
+unknown or contradictory input breaks the chain. This permits proving that a
+document was created blank and then edited without pretending it stayed blank.
+Current-value text checks still assess current state, not historical milestones.
+
+The model sees stage-relevant document schemas and a compact projection of check
+intent, status and evidence-step references. The authoritative task retains full
+bindings, digests and history. Projection is not authorization: the service and
+host independently recheck negotiated capabilities, scope and preconditions.
+MCP tools remain composed; an unsupported document provider cannot be enabled
+merely by using workflow-evidence v2.
+
+OffGrid is a local-first application, not a collection of independently
+deployed microservices. One Go process owns the HTTP API, model lifecycle,
+durable state, and optional subsystems. The browser, Electron application, CLI,
+and external agents are clients of that same runtime.
+
+## Product boundaries
+
+```text
+Browser UI ────────┐
+Electron UI ───────┼── HTTP / WebSocket ── OffGrid runtime ── llama-server
+CLI ───────────────┤                           │
+External clients ──┘                           ├── model files
+                                               └── application data
+```
+
+- `cmd/offgrid` owns the executable entry, OS adapters and the shared
+  `app.New`/`Run` startup path. `internal/cli` owns migrated command logic and typed results;
+  the root still routes unmigrated compatibility commands.
+- `internal/app` constructs and releases the concrete runtime graph. Its
+  cleanup stack releases owned resources after the HTTP/agent transport drains.
+  `internal/server/server.go` owns `Server`, `Handler`, `Serve` and transport
+  draining. Its tests use explicit disposable dependencies, not a second
+  concrete graph constructor.
+  `router.go` owns ordered route registration and the outer middleware chain;
+  `middleware.go` and `exposure.go` own their enforcement mechanics. Handlers
+  live in capability-named files in the same package. A route edit must review
+  its permission/rate wrapper, registration order and the frozen route test.
+  `server.HTTPConfig` and typed `server.Dependencies` provide a side-effect-free transport constructor;
+  `Handler()` and `Serve(ctx)` retain the same router and listener behavior.
+  `internal/app` is the production graph constructor. A borrowed dependency is not a new grant:
+  route permission wrappers, auth middleware, local IPC and desktop consent
+  remain enforced at their existing boundaries.
+- `internal/inference` manages one loopback-only `llama-server` process and
+  normalizes its responses.
+- `internal/models` owns the catalog, registry, resumable downloads, integrity
+  checks, and model-file operations.
+- `internal/sessions` owns durable conversation data.
+- `internal/rag`, `internal/agents`, `internal/mcp`, `internal/audio`, and
+  `internal/p2p` are capability modules. They must remain optional and report
+  unavailable states instead of preventing the core runtime from starting.
+- `pkg/api/openapi.yaml` is the checked-in contract for stable product APIs.
+- `apps/web` is the React source; `apps/web/dist` is its generated static bundle.
+- `apps/desktop` is a thin Electron host for the same served React application.
+
+## Request and inference lifecycle
+
+For a non-streaming chat request:
+
+1. HTTP middleware applies request IDs, authentication, authorization, rate
+   limits, and observability.
+2. A transport handler validates the request and calls the shared chat service.
+3. The service verifies the requested model and acquires the inference gate.
+4. The runtime starts or switches the loopback `llama-server` process and waits
+   for readiness on `127.0.0.1`.
+5. Optional RAG context is added only when requested and available.
+6. The response is normalized to the public API type and metrics are recorded.
+7. A session request atomically appends the user and assistant messages only
+   after generation succeeds.
+
+Failed or cancelled generation never writes half of a conversation turn.
+Internal runtime errors are logged server-side; API clients receive a stable,
+user-facing error message.
+
+## State ownership
+
+Native tool effects use the reviewed `native-effects-v1` operation table in
+`internal/capabilities`. The service authors descriptors with that revision;
+the durable runner checks provider, namespace, kind and revision before saving
+a read-only intent marker. The native transport uses the same operation table
+for desktop action-budget accounting. MCP names, annotations and low-risk labels
+cannot establish read-only execution. A failed native read does not require a
+human mutation outcome, and does not undo an earlier launch or edit. Unknown
+operations/revisions and legacy intents without saved evidence retain conservative
+uncertainty handling. Descriptor revisions also invalidate mismatched approvals;
+they never broaden an existing grant.
+
+OffGrid uses two authoritative roots:
+
+```text
+OFFGRID_MODELS_DIR/
+  *.gguf
+  model projectors
+
+OFFGRID_DATA_DIR/
+  sessions/
+  rag/
+  users and quotas
+  runs and artifacts
+  audio/
+  audit/
+  tools and other service state
+```
+
+Native defaults are under `~/.offgrid-llm`; container defaults are mounted at
+`/var/lib/offgrid`. Startup migrates recognized legacy files by copying them
+without overwriting newer data. The legacy source is retained for recovery.
+
+State writes that represent a complete object use temporary files plus atomic
+rename. Components must not invent another top-level persistence location.
+
+## Browser and desktop UI
+
+The browser and Electron editions intentionally use one React application.
+Electron starts the bundled OffGrid runtime when required, waits for its health
+endpoint, and loads `http://127.0.0.1:<port>/ui/`. If a separately managed local
+server already exists, Electron connects to it without starting a second one.
+
+This keeps navigation, authentication, model actions, translations, responsive
+layouts, and session persistence identical. Desktop-only capabilities are
+exposed through a small context-isolated preload bridge; Node integration is
+disabled and untrusted navigation is opened outside the application window.
+
+## API contract and generation
+
+The stable contract lives in `pkg/api/openapi.yaml` and is served at
+`GET /openapi.yaml`. React types are generated into
+`apps/web/src/api/schema.generated.ts`.
+
+```bash
+cd apps/web
+npm run api:generate
+npm run api:check
+```
+
+`api:check` is run in CI. Change the OpenAPI document and implementation in the
+same review, regenerate the client types, and add a handler or browser test for
+new behavior. Experimental endpoints may exist before they enter this stable
+contract, but documentation must label them as experimental.
+
+## Process ownership and shutdown
+
+The server owns a root context. Background workers, streaming handlers,
+downloads, RAG, metrics, P2P, and agent runs derive from it. Shutdown cancels
+that context, stops owned child processes, and waits for component cleanup.
+
+Agent sandboxes are lazy: starting OffGrid does not create idle Python
+containers. A sandbox is created only when a governed tool call actually needs
+one, and the owner is responsible for stopping it.
+
+## Framework policy
+
+The runtime remains framework-light. A wholesale migration to a microservice
+framework would add service discovery, RPC, and generated-handler conventions
+that do not match a single-device, long-lived inference process. Maintainability
+comes from explicit package boundaries, a transport-neutral service layer,
+OpenAPI generation, deterministic build scripts, and integration tests.
+
+If a future hosted control plane is split from the local runtime, a framework
+such as Go-Zero can be evaluated for that independently deployed boundary. It
+should not dictate the local engine architecture.
+
+## Agent task architecture
+
+The interactive workflow is task-first: save an outcome, run the tool loop,
+request missing access as a durable interruption, then continue the same job.
+The model does not grant itself access and the renderer does not own execution.
+
+| Responsibility | Implementation boundary |
+| --- | --- |
+| Admission, tool loop, checkpoints, exact approvals | `internal/agents/durable.go` |
+| Saved input interruption and idempotent resolution | `internal/agents/input.go` |
+| Pause, takeover, steering and recovery | `internal/agents/control.go` |
+| Exact context archival and recorded plans | `context.go`, `runtime_tools.go` |
+| Bounded durable child graph and scheduling | `coordination.go` |
+| Snapshots, ordered activity, schema backup/migration | `sqlite_tasks.go`, `task_activity.go`, `input_migration.go` |
+| HTTP task commands | `internal/server/agent_jobs.go`, `job_commands.go` |
+| Private artifacts, parsing, read-back and owner downloads | `internal/server/task_artifacts.go` |
+| Model request for an environment | `internal/server/agent_access.go` |
+| Actual computer authorization and dispatch | `computer_tools.go`, `internal/computer`, local companion |
+| Draft/history and commands | `TaskWorkspace.tsx` |
+| Read-only snapshot/stream recovery | `useTaskRun.ts` |
+| Contextual host consent and saved-task continuation | `TaskAccess.tsx` |
+
+`POST /api/v2/jobs` stores an actor-scoped request ID and payload digest before
+returning acceptance. Identical retries reuse the task; changed payloads return
+409. Deletion removes content but retains minimal request identity in the
+tombstone, preventing an old retry from resurrecting deleted work.
+`request_computer_access` is a typed model tool that *interrupts before dispatch*.
+Only `/api/v2/jobs/{id}/input`, after host consent, actor/driver checks and model
+preflight, can attach a session and consume that pending call. Tools are selected
+again after resolution. The first computer action must observe; no previous
+planning step counts as a computer observation. Session permissions are immutable.
+
+This separates three lifetimes: durable task history, model execution, and
+ephemeral host authority. Schema 4 gates older binaries against the new task
+states. Migration saves a verified prior-schema SQLite backup plus digest/count
+manifest before activation; it does not dual-write. Task input waits survive a
+restart, while connected host sessions and grants expire.
+
+### Versioned agent profiles
+
+Actor/workspace-owned profile headers and immutable revisions live in additive
+tables in `agent-state.sqlite`. A compare-and-swap revision update and snapshot
+insert share one transaction. Admission resolves installed resources and pins
+the entire configuration, including child revisions, into the existing job.
+Behavior instructions are separate from broker/host authority. Capability
+identity binds provider, tool schema, execution location and policy; dispatch
+compares current authority with the pinned restriction.
+
+Profile delegation permits at most four direct children, no recursion or desktop
+authority, and only reviewed low-risk reads selected by both parent and child.
+Child models may differ if already installed. Child iteration reservations are
+deducted from the parent's total while retaining a parent synthesis iteration.
+The same scheduler, task store and result collection are used; no second agent
+framework or independent child speech loop is introduced.
+
+A queued steering correction does not refund an inference iteration already
+spent. The runner commits that consumed budget while discarding a superseded
+pre-dispatch proposal, then applies the correction at the next safe boundary.
+
+Conversation linking is enforced at the persistence boundary: a held job
+cannot start, resume or accept steering until its separate session association
+is durable. Release is service-internal bookkeeping, not execution or consent.
+Session final-response attachment is idempotent by turn/hash/job identity.
+The HTTP coordinator releases only linked jobs and projects their saved results
+into Chat. Deletion requires explicit stop or retention of active work. A failed
+final conversation write leaves the result in the canonical job; explicit repair
+attaches it without inference or tool replay.
+
+### Bounded authorized tool discovery
+
+Before relevance ranking, the runner applies the current actor/provider filters,
+pinned profile restrictions and child capability subset. `task_find_tools`
+searches only that intersection and returns up to eight descriptors per page,
+including provider, revision, execution location and reviewed policy. Search is
+advisory metadata, not authorization; dispatch still rechecks the current identity.
+The latest search prioritizes matching schemas without accumulating grants.
+
+Each model request includes at most eight general tool schemas within an 8192-byte
+schema allowance. Runtime recovery and stage-selected native tools remain separate
+so a large MCP catalog cannot displace required verification. The complete request
+still passes the model context guard. Oversized schemas are reported as unavailable
+for presentation, never truncated into a different argument contract. Small
+models are not guaranteed to understand arbitrary provider schemas.
+
+MCP result previews are capped at 2048 UTF-8 bytes and wrapped with the dispatch
+capability, call/step identity, digest and exact-history reference. Provider text
+cannot supply trusted verification fields. Full results remain canonical task
+evidence; `task_history` reads bounded saved pages without calling the provider
+again. Artifact integrity remains distinct from independent native-document
+verification.
+
+### Bounded durable coordination
+
+The old `WorkflowEngine` and `Orchestrator` are not the production coordination
+boundary: they retain in-memory workflow results and use `RunImmediate` rather
+than durable, actor-scoped child jobs. The server no longer wires that orchestrator
+as an executable API. Do not re-enable it or reuse its raw executor as a shortcut.
+
+For legacy unprofiled work, the root model can call `delegate_tasks` before acquiring computer access. It
+creates 1–4 read-only child jobs per group, at most eight per task, one level deep.
+Each child has ten model iterations, the parent's model/context allocation and
+an explicit subset of enabled tools. Capability descriptors are pinned; a tool
+replacement cannot widen the child grant. No child receives computer authority,
+write tools, shell, further delegation, or its parent's exact-call approvals.
+
+Parent, children, dependency edges and events are committed in one SQLite
+transaction. Waiting parents release their runner slot. Ready children pass
+through the same runner and inference admission as interactive tasks; there is
+no second planner backend. Dependency results are bounded, marked as untrusted
+excerpts and linked to full child jobs. Cycles and unknown dependencies fail
+validation. The parent only synthesizes after all children complete; a failed
+branch cannot silently become a successful parent. Pause/stop cascade, uncertain
+calls never replay, and restart requires explicit parent resume. The UI links
+subtasks with their individual approval/recovery controls.
+
+This is bounded delegation, **not** arbitrary workflow registration, recursive
+agent teams, autonomous child computer control or concurrent file writers.
+Reusable workflow templates, model-aware scheduling and graph-wide adjustable
+token/wall-time budgets are not implemented. The legacy workflow API stays retired.
+
+`task_plan` stores model-reported progress with recorded step references. It is
+not an outcome oracle. `context.go` archives whole completed call/result groups
+without dropping user instructions. The model can retrieve exact archived
+records through owner-task `task_history` pages. Byte estimates are explicitly
+labelled estimates, anchored to runtime-reported prompt usage when available;
+they are not a tokenizer or a guarantee that every template will fit. Oversize
+uncompressible input fails before another tool action. Archives persist with
+digest validation and are excluded from public snapshots/exports.
+
+For computer tasks, a verified current application can hand off to a newly
+consented target in the same job. The previous session is revoked, approvals are
+not transferred, and fresh observation is mandatory. Workspace artifact writes
+are bounded typed operations: the service rereads, hashes and parses text,
+Markdown, JSON and CSV outputs. CSV formula-like values are rejected. A committed
+task reference and current ownership are required for download; digest knowledge
+alone grants nothing. These checks establish byte/format integrity, not factual
+quality, a saved Office document, or semantic completion of every requested task.
+
+Prefer single-agent execution. Qualify delegation benefits with identical task
+evaluations rather than assuming extra agents improve quality.
+Relevant primary references are [Anthropic's orchestrator/worker experience](https://www.anthropic.com/engineering/multi-agent-research-system),
+including its limits on tightly coupled work, and [the separation of harness and execution environment](https://www.anthropic.com/engineering/managed-agents).
+These inform the design; they do not qualify OffGrid models or justify a cloud
+dependency. There is no universal September-2026 architecture that makes an
+unreliable local model or unverified driver reliable merely by adding agents.
+
+## Capability maturity
+
+- **Core:** inference, CLI, OpenAI-compatible APIs, sessions, web/desktop
+  UI, model download/resume/verify, and authentication for network use.
+- **Optional:** RAG, MCP, governed agents, and audio when their local
+  dependencies are configured.
+- **Experimental:** computer use, P2P sharing, LoRA workflows, and advanced
+  orchestration. These require additional platform and security validation.
+
+Readiness is a product contract: the UI and API must disable or explain an
+unavailable capability instead of presenting a control that silently fails.

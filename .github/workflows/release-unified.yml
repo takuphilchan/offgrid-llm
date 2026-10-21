@@ -155,9 +155,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: web/app/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
       - name: Install and build UI
-        working-directory: web/app
+        working-directory: apps/web
         run: |
           npm ci
           npm run api:check
@@ -167,7 +167,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: web-ui
-          path: web/dist
+          path: apps/web/dist
           if-no-files-found: error
           retention-days: 7
 
@@ -266,7 +266,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: web-ui
-          path: web/dist
+          path: apps/web/dist
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -674,9 +674,9 @@ jobs:
           fi
           
           # Copy the generated web UI to bundle
-          if [ -d "web/dist" ]; then
+          if [ -d "apps/web/dist" ]; then
             mkdir -p "$BUNDLE_NAME/web/ui"
-            cp -r web/dist/* "$BUNDLE_NAME/web/ui/"
+            cp -r apps/web/dist/* "$BUNDLE_NAME/web/ui/"
           fi
           
           # Create README
@@ -831,7 +831,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: web-ui
-          path: web/dist
+          path: apps/web/dist
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -923,7 +923,7 @@ jobs:
 
       - name: Install desktop dependencies
         if: steps.existing.outputs.skip != 'true'
-        working-directory: desktop
+        working-directory: apps/desktop
         run: |
           npm ci --prefix ../computer --ignore-scripts
           npm ci
@@ -935,7 +935,7 @@ jobs:
           # Remove electron-builder cache that might have old DMG settings
           rm -rf ~/Library/Caches/electron-builder
           rm -rf ~/.cache/electron-builder
-          rm -rf desktop/node_modules/dmg-builder/.cache
+          rm -rf apps/desktop/node_modules/dmg-builder/.cache
           echo "Electron-builder cache cleaned"
 
       - name: Prepare architecture-specific binaries (macOS)
@@ -950,7 +950,7 @@ jobs:
 
       - name: Build desktop app
         if: steps.existing.outputs.skip != 'true'
-        working-directory: desktop
+        working-directory: apps/desktop
         run: |
           echo "Building desktop app for ${{ matrix.os }}..."
           npm run ${{ matrix.build_script }}
@@ -959,7 +959,7 @@ jobs:
           
       - name: List build output
         if: steps.existing.outputs.skip != 'true'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         run: |
           if [ -d "dist" ]; then
@@ -971,7 +971,7 @@ jobs:
           
       - name: Verify build artifacts exist
         if: steps.existing.outputs.skip != 'true'
-        working-directory: desktop/dist
+        working-directory: apps/desktop/dist
         shell: bash
         run: |
           echo "Checking for build artifacts..."
@@ -1004,14 +1004,14 @@ jobs:
         id: artifacts
         if: steps.existing.outputs.skip != 'true'
         shell: bash
-        working-directory: desktop/dist
+        working-directory: apps/desktop/dist
         run: |
           if [ "${{ matrix.os }}" = "linux" ]; then
             # Upload all Linux artifacts (AppImage and .deb)
             for file in *.AppImage *.deb; do
               if [ -f "$file" ]; then
                 echo "Found: $file"
-                echo "$file" >> ../../artifacts-list.txt
+                echo "$file" >> ../../../artifacts-list.txt
               fi
             done
           elif [ "${{ matrix.os }}" = "macos" ]; then
@@ -1019,7 +1019,7 @@ jobs:
             for file in *.zip; do
               if [ -f "$file" ]; then
                 echo "Found: $file"
-                echo "$file" >> ../../artifacts-list.txt
+                echo "$file" >> ../../../artifacts-list.txt
               fi
             done
           else
@@ -1027,7 +1027,7 @@ jobs:
             for file in *.exe; do
               if [ -f "$file" ]; then
                 echo "Found: $file"
-                echo "$file" >> ../../artifacts-list.txt
+                echo "$file" >> ../../../artifacts-list.txt
               fi
             done
           fi
@@ -1037,13 +1037,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os }}
-          path: desktop/dist/*
+          path: apps/desktop/dist/*
           retention-days: 7
 
       - name: Upload to release
         if: steps.existing.outputs.skip != 'true'
         shell: bash
-        working-directory: desktop/dist
+        working-directory: apps/desktop/dist
         run: |
           set -euo pipefail
           version="${{ steps.version.outputs.version }}"

@@ -10,7 +10,7 @@ The stable HTTP contract is `pkg/api/openapi.yaml`. Generate and verify the
 React types with:
 
 ```bash
-cd web/app
+cd apps/web
 npm run api:generate
 npm run api:check
 ```

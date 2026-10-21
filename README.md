@@ -9,7 +9,7 @@ The project is being hardened from a prototype into a dependable local tool.
 Core paths are tested; optional subsystems are exposed according to their
 actual readiness rather than being presented as universally available.
 
-Development is tracked against the [production-readiness gates](docs/advanced/production-readiness.md).
+Development is tracked against the [production-readiness gates](docs/quality/production-readiness.md).
 See [client contracts](docs/advanced/client-contracts.md) for the new CLI error
 behavior, desktop compatibility checks, and their current coverage limits.
 
@@ -20,7 +20,17 @@ New here? Start with the [quickstart](docs/setup/quickstart.md), choose an
 For dictation and spoken answers, see [voice setup and troubleshooting](docs/guides/voice.md),
 including which speech models need separately installed runtimes.
 
-For development changes, see the [OpenSpec workflow](openspec/README.md).
+For development changes, see [Contributing](CONTRIBUTING.md) and the
+[OpenSpec workflow](openspec/README.md).
+For help and responsible disclosure, see [Support](SUPPORT.md) and
+[Security](SECURITY.md).
+
+## Community
+
+Join the [OffGrid LLM Discord community](https://discord.gg/fc7EqyqHf) to ask
+questions, get installation help, share workflows and demos, compare local
+models, and help shape the project. Bugs and reproducible technical problems
+should still be reported through [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues).
 
 ## Run with Docker
 
@@ -79,7 +89,7 @@ inference runtime.
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm
 
-cd web/app
+cd apps/web
 npm ci
 npm run api:check
 npm run build
@@ -131,7 +141,7 @@ For desktop development, start an OffGrid server first (a local binary or the
 Docker container), then run:
 
 ```bash
-cd desktop
+cd apps/desktop
 npm ci
 npm run dev
 ```
@@ -212,11 +222,11 @@ legacy source is retained so migration is recoverable.
 ## Development checks
 
 ```bash
-node --test dev/scripts/check-docs.test.mjs
-node dev/scripts/check-docs.mjs
+node --test scripts/maintenance/check-docs.test.mjs
+node scripts/maintenance/check-docs.mjs
 go test ./...
 
-cd web/app
+cd apps/web
 npm run api:check
 npm run check
 npm run build
@@ -224,9 +234,9 @@ cd ../..
 go build -o bin/offgrid ./cmd/offgrid
 # Runs the built UI against a real service with disposable data and a random port.
 # Use bin/offgrid.exe on Windows. Install Playwright's Chromium once beforehand.
-node dev/scripts/test-web-workspace.mjs bin/offgrid
+node scripts/test/test-web-workspace.mjs bin/offgrid
 
-cd desktop
+cd apps/desktop
 node --check main.js
 node --check preload.js
 ```
@@ -240,13 +250,14 @@ use the isolated wrapper above for the full suite.
 
 ## Documentation
 
-- [Architecture](docs/advanced/ARCHITECTURE.md)
+- [Documentation index](docs/README.md): current architecture, operations, contributing and quality entry points
+- [Architecture](docs/architecture/overview.md)
 - [CLI experience](docs/advanced/cli-experience.md)
 - [Workspace UI](docs/advanced/workspace-ui.md)
 - [Managing chat and agent history](docs/guides/history-management.md)
 - [Workspace ownership, backup, and recovery](docs/advanced/workspace-recovery.md)
 - [Maintainability and generation](docs/advanced/maintainability.md)
-- [Product reliability plan and acceptance gates](docs/advanced/product-reliability-plan.md)
+- [Quality evidence and acceptance gates](docs/quality/README.md)
 - [API reference](docs/reference/api.md)
 - [CLI reference](docs/reference/cli.md)
 - [Docker deployment](docs/setup/docker.md)

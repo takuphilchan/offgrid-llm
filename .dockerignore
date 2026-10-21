@@ -17,16 +17,15 @@ dist/
 build/
 bin/
 **/node_modules/
-web/dist/
+# Runtime/release UI output is not source input to the Docker build.
 web/ui/
-desktop/
-!desktop/
-desktop/*
-!desktop/compatibility.cjs
-dev/
+apps/desktop/
+!apps/desktop/
+apps/desktop/*
+!apps/desktop/compatibility.cjs
+apps/computer/
 examples/
 installers/
-python/
 
 # Models (too large for Docker image)
 models/

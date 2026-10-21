@@ -49,6 +49,15 @@ after a timeout, retry reconnects to an already-started child rather than
 spawning another one.
 If a previously attached external service goes offline, Retry waits for that
 service to return; it does not silently start the bundled service in its place.
+That ownership is now remembered across application restarts, separately for
+each configured endpoint and desktop profile. If Docker/WSL starts later than
+OffGrid, start the external service and choose **Retry connection**. No empty
+Windows workspace is substituted. A missing or damaged settings write is
+reported rather than silently ignoring the ownership record. Explicit separate
+workspace recovery remains session-only and does not erase the external choice.
+The record contains only a schema version, local endpoint and external-ownership
+flag; it stores no credentials or computer-access permission. Older installations
+learn this ownership on their first successful connection with the updated app.
 
 For a container running in WSL, also check `wsl --list --verbose` in PowerShell.
 A stopped distribution cannot serve the Windows desktop. Verify the URL from
@@ -162,9 +171,9 @@ targets; a passing Windows test does not qualify every other package.
 
 ## Verification and limits
 
-`desktop/test` covers version/build identity, hostile/occupied ports, cancellation,
+`apps/desktop/test` covers version/build identity, hostile/occupied ports, cancellation,
 single-flight startup, recovery states, workspace separation and IPC trust.
-`dev/scripts/test-desktop-startup.mjs` launches the real packaged Electron app
+`scripts/test/test-desktop-startup.mjs` launches the real packaged Electron app
 against disposable data and a local fixture, then checks the bundled Go runtime,
 session-scoped isolated recovery, relaunch, keyboard recovery and external-service
 ownership. CI runs it on Windows, Linux and both Mac architectures.
@@ -175,10 +184,10 @@ same version and uninstalls while checking its workspace fixture is preserved.
 It exercises the real Finish button with launch checked/unchecked, populated Show
 details, DPI awareness, silent running-app refusal, and consent-driven reinstall.
 It does not replace a user's real desktop installation. See the
-[desktop development guide](../../desktop/README.md) for the exact commands.
+[desktop development guide](../../apps/desktop/README.md) for the exact commands.
 
 These checks are not qualification of every historical upgrade, elevated install,
 SmartScreen reputation, notarization, or model performance.
-The [reliability log](../advanced/product-reliability-plan.md) records
+The [quality evidence](../quality/README.md) records
 which checks actually ran and which still require native hardware or signing
 identities. No existing installation is updated simply by editing this source.

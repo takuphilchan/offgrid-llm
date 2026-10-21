@@ -8,7 +8,7 @@ ARG RUNTIME_IMAGE=offgrid-llm:local-runtime
 FROM ${APPLICATION_IMAGE} AS application
 FROM node:22-alpine AS checked-ui
 COPY --from=application /var/lib/offgrid/web/ui /ui
-COPY desktop/compatibility.cjs /compatibility.cjs
+COPY apps/desktop/compatibility.cjs /compatibility.cjs
 RUN node -e "require('/compatibility.cjs').verifyUI('/ui')"
 FROM ${RUNTIME_IMAGE}
 

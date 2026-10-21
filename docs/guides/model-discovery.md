@@ -200,7 +200,7 @@ go to stderr; stdout is JSON. Ctrl+C requests cancellation and exits 130; inspec
 status if the service could not acknowledge it. Usage errors exit 2 and operational
 failures 1. Identical request IDs deduplicate accepted source-bound work; changed
 sources conflict. A fresh preview of the same immutable package can recover the
-original operation, but never restarts it. See [Python examples](../../python/README.md#speech-model-packages).
+original operation, but never restarts it. See [Python examples](../../sdk/python/README.md#speech-model-packages).
 
 ## Language and embedding download recovery
 

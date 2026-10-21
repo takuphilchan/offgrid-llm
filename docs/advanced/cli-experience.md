@@ -7,7 +7,11 @@ background or color profile.
 
 ## Visual contract
 
-Terminal presentation is owned by `cmd/offgrid/terminal_style.go`. The default
+Terminal capability detection and the legacy style aliases remain in
+`cmd/offgrid/terminal_style.go`. Migrated presentation and command results
+live in `internal/cli`; `cmd/offgrid/terminal_output.go` and `progress.go`
+adapt host-terminal behavior while older commands move.
+The default
 language is monochrome:
 
 - terminal foreground and background colors remain authoritative;

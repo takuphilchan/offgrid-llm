@@ -10,9 +10,9 @@ Choose one service installation and connect your clients to it. This guide cover
 | Keep a service in Docker or WSL | CPU or NVIDIA container | [Docker deployment](docker.md) |
 | Use terminal commands or an API server | CLI/runtime archive | Extract it and run `offgrid serve` |
 | Change the code | Source checkout | [Build guide](../advanced/BUILDING.md) |
-| Call an existing service from Python | Python client | [Python guide](../../python/README.md); this does not install the service |
+| Call an existing service from Python | Python client | [Python guide](../../sdk/python/README.md); this does not install the service |
 
-Check memory, storage, CPU instructions, and model requirements before downloading. The project targets lightweight qualified workflows on 8 GB systems and recommends 16 GB; this is not a guarantee for every model, context, or vision workflow. See [CPU support](../advanced/cpu-support.md) and the [reliability plan](../advanced/product-reliability-plan.md).
+Check memory, storage, CPU instructions, and model requirements before downloading. The project targets lightweight qualified workflows on 8 GB systems and recommends 16 GB; this is not a guarantee for every model, context, or vision workflow. See [CPU support](../advanced/cpu-support.md) and the [quality evidence](../quality/README.md).
 
 ## Download and verify a release
 

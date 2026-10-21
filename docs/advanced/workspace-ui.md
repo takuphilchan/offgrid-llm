@@ -14,10 +14,10 @@ The primary navigation is organized by user intent:
 - **Library** contains Knowledge and Models.
 - **System** contains Activity and Settings.
 
-Feature behavior belongs under `web/app/src/features/<feature>`. `App.tsx` owns
+Feature behavior belongs under `apps/web/src/features/<feature>`. `App.tsx` owns
 only shell-level state: routing, authentication, service reachability, the
 selected chat model, locale, theme, and onboarding. API access remains in
-`web/app/src/api/client.ts`; feature components should not duplicate fetch and
+`apps/web/src/api/client.ts`; feature components should not duplicate fetch and
 error-decoding logic.
 
 The shared header shows the page title, quick actions and relevant work status.
@@ -240,13 +240,13 @@ must never be selected as chat fallbacks.
 For shell or workflow changes run:
 
 ```bash
-cd web/app
+cd apps/web
 npm run api:check
 npm run check
 npm run build
 npm run test:e2e
 
-cd ../../desktop
+cd ../desktop
 node --check main.js
 node --check preload.js
 ```
@@ -356,7 +356,7 @@ data; this is scope isolation, not a new secret store.
 - Bulk deletion operates on the confirmed snapshot and shows processed counts.
   Stop finishes the current request, then leaves remaining entries untouched.
 - Desktop startup and custom menu labels share the nine-locale presentation
-  resource in `web/app/public/desktop-presentation.json`. Validated locale/theme
+  resource in `apps/web/public/desktop-presentation.json`. Validated locale/theme
   preferences are saved by trusted host IPC, independently of backend availability.
   Technical startup failures remain available under details. Native OS menu roles
   follow the platform. Translation key coverage is not speaker qualification.

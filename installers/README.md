@@ -12,15 +12,20 @@
 curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
 ```
 
-Interactive menu lets you choose:
-- CLI tools and server
-- Desktop application  
-- Voice/Audio support (whisper.cpp + piper)
+The root installer selects a platform release bundle, installs the CLI and
+included Web UI/audio assets, and offers the matching desktop build when one
+is published. It does not currently present a component-selection menu.
 
-For non-interactive installation:
+To select a published release and opt into the Linux user service:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | CLI=yes DESKTOP=yes AUDIO=yes bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | VERSION=v0.4.18 AUTOSTART=yes bash
 ```
+
+The previously published `scripts/install.sh` raw URL remains a compatibility
+wrapper. It preserves its GPU bundle selection and `AUTOSTART=ask` default.
+The root installer has no systemd side effect unless `AUTOSTART` is selected.
+Repository unit sources are under [`systemd/`](systemd/); the installer retains
+the installed `offgrid@.service` name.
 
 ---
 
@@ -61,7 +66,10 @@ irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/d
 
 **For servers with auto-start on boot:**
 
-See [../dev/README.md](../dev/README.md) for building from source with systemd services.
+See [the source-build guide](../docs/advanced/BUILDING.md) and the explicit
+[`install-from-source.sh`](../scripts/build/install-from-source.sh) helper for
+the older source/GPU/systemd path. It installs and changes system services;
+the root release installer is the maintained default.
 
 ---
 

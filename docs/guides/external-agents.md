@@ -26,18 +26,22 @@ Agent currently requires at least 64,000 tokens and OffGrid recommends 65,536.
 A small model may implement the wire-level tool protocol and still be poor at
 selecting tools; test a real governed task before making it the default.
 
-To use a 65,536-token context explicitly:
+Fresh installations use a 65,536-token operator ceiling with adaptive planning.
+To request that ceiling explicitly while retaining hardware/model safeguards:
 
 ```bash
 export OFFGRID_MAX_CONTEXT=65536
-export OFFGRID_ADAPTIVE_CONTEXT=false
+export OFFGRID_ADAPTIVE_CONTEXT=true
 offgrid serve
 ```
 
-Large contexts consume substantially more RAM or VRAM. Keep adaptive context
-enabled when the machine cannot safely allocate the requested window; the
-readiness endpoint will then report the effective value and remain honest
-about whether the external agent is ready.
+Large contexts consume substantially more RAM or VRAM. Adaptive mode reads the
+selected model's GGUF context/KV metadata and a startup hardware snapshot, then
+admits a stable tier no larger than the ceiling. Existing deployments that set
+`OFFGRID_MAX_CONTEXT=8192` remain capped at 8K until the operator raises it.
+Use `OFFGRID_ADAPTIVE_CONTEXT=false` only for a measured fixed allocation. The
+readiness endpoint reports the actual planned value and remains honest about
+whether the selected model is ready.
 
 ## Hermes Agent
 

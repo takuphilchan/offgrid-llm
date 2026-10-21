@@ -84,7 +84,7 @@ offgrid serve
 ```
 
 Clients for that example need `OFFGRID_SERVER_URL=http://127.0.0.1:11612`.
-The web UI is at `/ui/`. See [deployment](../advanced/DEPLOYMENT.md) for
+The web UI is at `/ui/`. See [deployment](../operations/deployment.md) for
 authentication, storage, and service ownership.
 
 ## Models

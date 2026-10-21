@@ -17,6 +17,7 @@ Start here to install OffGrid, finish a task, or maintain an existing workspace.
 | Understand computer access and its limits | [Computer tasks](guides/computer-tasks.md) |
 | Stop work or remove old history | [History management](guides/history-management.md) |
 | Back up or restore work | [Workspace recovery](advanced/workspace-recovery.md) |
+| Ask the community or share a demo | [Join the OffGrid LLM Discord](https://discord.gg/fc7EqyqHf) |
 
 ## Understand the workspace
 
@@ -24,12 +25,12 @@ The browser and desktop display the same UI from one OffGrid service. The servic
 
 Local inference does not require a cloud model provider. Downloads, public model search, remote MCP tools, and external websites use the network when requested. A remote tool receives the arguments sent to it; do not treat those calls as offline.
 
-[Getting started](guides/getting-started.md) explains the main workflows. [Feature availability](guides/features.md) separates available paths from preview capabilities. The [reliability plan](advanced/product-reliability-plan.md) is the qualification record; a passing build is not proof of every platform, model, or task.
+[Getting started](guides/getting-started.md) explains the main workflows. [Feature availability](guides/features.md) separates available paths from preview capabilities. The [quality evidence index](quality/README.md) links dated qualification records; a passing build is not proof of every platform, model, or task.
 
 ## Install and operate
 
 - [Installation](setup/installation.md), [Docker](setup/docker.md), and [autostart](setup/autostart.md)
-- [Desktop recovery](setup/desktop-startup.md) and [deployment](advanced/DEPLOYMENT.md)
+- [Desktop recovery](setup/desktop-startup.md) and [deployment](operations/deployment.md)
 - [Models](guides/models.md), [model discovery](guides/model-discovery.md), and [Hugging Face downloads](guides/huggingface.md)
 - [Voice](guides/voice.md): ASR/TTS selection, dictation, playback and troubleshooting
 - [Multi-user access](guides/multi-user.md), [audit records](guides/audit.md), and [metrics](guides/metrics.md)
@@ -40,21 +41,22 @@ Local inference does not require a cloud model provider. Downloads, public model
 
 - [CLI reference](reference/cli.md) and [JSON output](reference/json-output.md)
 - [API reference](reference/api.md) and [OpenAPI source](../pkg/api/openapi.yaml)
-- [Python client](../python/README.md)
+- [Python client](../sdk/python/README.md)
 - [External agents](guides/external-agents.md): Hermes and OpenClaw are separate runtimes, not OffGrid's governed runner
 
 Replace `YOUR_MODEL`, `RUN_ID`, and `/path/to/...` with your own values. Copy an installed model ID from Models or `offgrid list`. Bash and PowerShell use different continuation and environment-variable syntax.
 
 ## Develop and qualify
 
-- [Build from source](advanced/BUILDING.md) and [contributing](../dev/CONTRIBUTING.md)
-- [Architecture](advanced/ARCHITECTURE.md), [repository map](repository-structure.md), and [client contracts](advanced/client-contracts.md)
+- [Architecture](architecture/README.md), [operations](operations/README.md), [contributing](contributing/README.md), and [quality evidence](quality/README.md) are the maintained entry points.
+- [Build from source](advanced/BUILDING.md) and [contributing](../CONTRIBUTING.md)
+- [Architecture](architecture/overview.md), [repository map](repository-structure.md), and [client contracts](advanced/client-contracts.md)
 - [Workspace UI](advanced/workspace-ui.md), [agent progress](advanced/agent-live-progress.md), and [maintainability](advanced/maintainability.md)
 - [Releasing](advanced/releasing.md), [distribution](advanced/distribution.md), and [versioning](reference/versioning.md)
 - [Documentation standards](templates/README.md)
 
 ## Plans and historical material
 
-[Production readiness](advanced/production-readiness.md) and the [roadmap](ROADMAP.md) describe unfinished work, not current guarantees. [Release notes](releases/) describe the version named in each file; old commands in those archives are not current setup instructions.
+[Production readiness](quality/production-readiness.md) and the [roadmap](ROADMAP.md) describe unfinished work, not current guarantees. [Release notes](releases/) describe the version named in each file; old commands in those archives are not current setup instructions.
 
-Report documentation problems with the page, installed version, OS, and exact command or UI step. Remove credentials and private task contents before posting an [issue](https://github.com/takuphilchan/offgrid-llm/issues).
+Report documentation problems with the page, installed version, OS, and exact command or UI step. Remove credentials and private task contents before posting an [issue](https://github.com/takuphilchan/offgrid-llm/issues). For questions, demonstrations, and community discussion, [join the OffGrid LLM Discord](https://discord.gg/fc7EqyqHf).
