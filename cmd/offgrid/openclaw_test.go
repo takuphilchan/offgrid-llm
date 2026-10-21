@@ -1,11 +1,114 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+func TestMergeOpenClawModelsPreservesExistingEntries(t *testing.T) {
+	provider := map[string]any{"models": []any{map[string]any{"id": "llama", "contextWindow": float64(32768), "maxTokens": float64(4096)}}}
+	qwen := json.RawMessage(`{"id":"qwen","contextWindow":8192,"maxTokens":4096,"custom":{"keep":true}}`)
+	catalog := []api.Model{{ID: "qwen", Type: "llm", ContextWindow: 32768}, {ID: "llama", Type: "llm", ContextWindow: 32768}}
+	if err := mergeOpenClawModels(provider, []json.RawMessage{qwen}, catalog); err != nil {
+		t.Fatal(err)
+	}
+	models, ok := provider["models"].([]json.RawMessage)
+	if !ok || len(models) != 2 || !strings.Contains(string(models[0]), `"custom":{"keep":true}`) || !strings.Contains(string(models[0]), `"contextWindow":32768`) {
+		t.Fatalf("existing model was not preserved: %#v", provider["models"])
+	}
+	var added struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(models[1], &added); err != nil || added.ID != "llama" {
+		t.Fatalf("selected model not added: %s, %v", models[1], err)
+	}
+	provider = map[string]any{"models": []any{map[string]any{"id": "qwen", "contextWindow": float64(32768), "maxTokens": float64(4096)}}}
+	if err := mergeOpenClawModels(provider, []json.RawMessage{qwen}, catalog); err != nil {
+		t.Fatal(err)
+	}
+	models = provider["models"].([]json.RawMessage)
+	if len(models) != 1 || !strings.Contains(string(models[0]), `"custom":{"keep":true}`) || !strings.Contains(string(models[0]), `"contextWindow":32768`) {
+		t.Fatalf("reinstall changed the existing model: %#v", models)
+	}
+}
+
+func TestMergeOpenClawModelsRejectsUnsafeConfig(t *testing.T) {
+	for _, existing := range [][]json.RawMessage{
+		{json.RawMessage(`{"name":"missing id"}`)},
+		{json.RawMessage(`{"id":"qwen"}`), json.RawMessage(`{"id":"qwen"}`)},
+		{json.RawMessage(`not json`)},
+	} {
+		provider := map[string]any{"models": []any{map[string]any{"id": "llama", "contextWindow": float64(32768), "maxTokens": float64(4096)}}}
+		if err := mergeOpenClawModels(provider, existing, []api.Model{{ID: "llama", Type: "llm", ContextWindow: 32768}}); err == nil {
+			t.Fatalf("unsafe existing models accepted: %s", existing)
+		}
+	}
+}
+
+func TestMergeOpenClawModelsRejectsChangedCatalogContext(t *testing.T) {
+	provider := map[string]any{"models": []any{map[string]any{"id": "llama", "contextWindow": float64(32768), "maxTokens": float64(4096)}}}
+	if err := mergeOpenClawModels(provider, nil, []api.Model{{ID: "llama", Type: "llm", ContextWindow: 16384}}); err == nil {
+		t.Fatal("changed model context was accepted")
+	}
+}
+
+func TestReadOpenClawModelsDistinguishesUnsetFromFailure(t *testing.T) {
+	original := runIntegrationProcess
+	t.Cleanup(func() { runIntegrationProcess = original })
+	for _, test := range []struct {
+		name, stdout string
+		runError     error
+		wantCount    int
+		wantError    bool
+	}{
+		{name: "configured", stdout: `[{"id":"qwen"}]`, wantCount: 1},
+		{name: "fresh", stdout: `{"ok":false,"error":{"message":"Config path is valid but unset: models.providers.offgrid.models"}}`, runError: errors.New("exit status 1")},
+		{name: "malformed", stdout: `{}`, wantError: true},
+		{name: "other failure", stdout: `{"error":"permission denied"}`, runError: errors.New("exit status 1"), wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runIntegrationProcess = func(command *exec.Cmd) error {
+				if got := command.Args[1:]; len(got) != 4 || got[0] != "config" || got[1] != "get" || got[2] != "models.providers.offgrid.models" || got[3] != "--json" {
+					t.Fatalf("unexpected OpenClaw command: %v", got)
+				}
+				_, _ = io.WriteString(command.Stdout, test.stdout)
+				return test.runError
+			}
+			models, err := readOpenClawModels("openclaw")
+			if (err != nil) != test.wantError || len(models) != test.wantCount {
+				t.Fatalf("models = %s, error = %v", models, err)
+			}
+			if test.name == "configured" {
+				if selected, err := preferredOpenClawModel("openclaw"); err != nil || selected != "qwen" {
+					t.Fatalf("configured model = %q, error = %v", selected, err)
+				}
+			}
+		})
+	}
+}
+
+func TestInspectOpenClawProviderRejectsStaleContext(t *testing.T) {
+	original := runIntegrationProcess
+	t.Cleanup(func() { runIntegrationProcess = original })
+	runIntegrationProcess = func(command *exec.Cmd) error {
+		_, _ = io.WriteString(command.Stdout, `{"baseUrl":"http://127.0.0.1:11611/v1","models":[{"id":"qwen","contextWindow":8192}]}`)
+		return nil
+	}
+	if ready, problem := inspectOpenClawProvider("openclaw", "http://127.0.0.1:11611/v1", "qwen", 32768); ready || !strings.Contains(problem, "8192") {
+		t.Fatalf("stale model context was accepted: ready=%t problem=%q", ready, problem)
+	}
+	if ready, problem := inspectOpenClawProvider("openclaw", "http://127.0.0.1:11611/v1", "qwen", 8192); !ready || problem != "" {
+		t.Fatalf("matching model context was rejected: ready=%t problem=%q", ready, problem)
+	}
+}
 
 func TestParseOpenClawOptions(t *testing.T) {
 	options, err := parseOpenClawOptions([]string{

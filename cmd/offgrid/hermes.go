@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -243,7 +244,7 @@ func handleHermesInstall(args []string) error {
 }
 
 func handleHermesStatus(args []string) error {
-	serverURL, _, _, err := integrationFlags(args)
+	serverURL, requestedModel, _, err := integrationFlags(args)
 	if err != nil {
 		return err
 	}
@@ -259,21 +260,37 @@ func handleHermesStatus(args []string) error {
 	if info, statErr := os.Stat(filepath.Join(result.PluginPath, "__init__.py")); statErr == nil && !info.IsDir() {
 		result.Plugin = true
 	}
-	var response cliIntegrationsResponse
-	if err := getIntegrationJSON(serverURL+"/v1/integrations", &response); err != nil {
-		result.Error = err.Error()
+	configuredModel, configuredContext := "", 0
+	if result.Installed {
+		var configErr error
+		configuredModel, configuredContext, configErr = readHermesModelConfig(result.Executable)
+		if configErr != nil {
+			result.Error = configErr.Error()
+		}
+	}
+	selected := configuredModel
+	if requestedModel != "" {
+		selected = requestedModel
+	}
+	setup, serviceErr := fetchIntegrationSetup(serverURL, "hermes", selected, serverURL)
+	if serviceErr != nil {
+		if result.Error == "" {
+			result.Error = serviceErr.Error()
+		}
 	} else {
 		result.Service = true
-		for index := range response.Integrations {
-			if response.Integrations[index].ID == "hermes" {
-				item := response.Integrations[index]
-				result.Runtime = &item
-				break
-			}
+		result.Runtime = &setup.Integration
+		if result.Installed && requestedModel != "" && requestedModel != configuredModel {
+			result.Runtime.Ready = false
+			result.Runtime.Warnings = append(result.Runtime.Warnings, "Hermes is configured for a different model; run offgrid hermes install --model "+requestedModel+" to select it")
+		}
+		if result.Installed && configuredContext > 0 && configuredContext != result.Runtime.ContextWindow {
+			result.Runtime.Ready = false
+			result.Runtime.Warnings = append(result.Runtime.Warnings, fmt.Sprintf("Hermes records %d context tokens, but OffGrid currently allocates %d for this model; reconfigure Hermes only after the model is ready", configuredContext, result.Runtime.ContextWindow))
 		}
 	}
 	if outputJSON(result) {
-		if result.Installed && result.Plugin && result.Service && result.Runtime != nil && result.Runtime.Ready {
+		if result.Installed && result.Plugin && result.Service && result.Runtime != nil && result.Runtime.Ready && result.Error == "" {
 			return nil
 		}
 		return fmt.Errorf("Hermes is not ready; %s", hermesStatusAdvice(result))
@@ -292,7 +309,7 @@ func handleHermesStatus(args []string) error {
 	if result.Error != "" {
 		printWarning(result.Error)
 	}
-	if result.Installed && result.Plugin && result.Service && result.Runtime != nil && result.Runtime.Ready {
+	if result.Installed && result.Plugin && result.Service && result.Runtime != nil && result.Runtime.Ready && result.Error == "" {
 		fmt.Printf("\n  %sPreflight ready.%s Verify a model reply: offgrid hermes test\n\n", brandSuccess+colorBold, colorReset)
 		return nil
 	} else {
@@ -301,7 +318,49 @@ func handleHermesStatus(args []string) error {
 	}
 }
 
+// Status checks the model Hermes will actually run, not an unrelated first
+// model in OffGrid's catalog. A stale configured context must not appear ready.
+func readHermesModelConfig(executable string) (string, int, error) {
+	provider, err := readHermesConfigValue(executable, "model.provider")
+	if err != nil {
+		return "", 0, fmt.Errorf("cannot inspect Hermes provider: %w", err)
+	}
+	if provider != "offgrid" {
+		return "", 0, fmt.Errorf("Hermes currently uses provider %q, not offgrid", provider)
+	}
+	model, err := readHermesConfigValue(executable, "model.default")
+	if err != nil || model == "" {
+		return "", 0, fmt.Errorf("cannot inspect Hermes selected model; run offgrid hermes install --model <installed-id>")
+	}
+	contextText, err := readHermesConfigValue(executable, "model.context_length")
+	if err != nil {
+		return "", 0, fmt.Errorf("cannot inspect Hermes configured context: %w", err)
+	}
+	contextWindow, err := strconv.Atoi(contextText)
+	if err != nil || contextWindow < 1 {
+		return "", 0, fmt.Errorf("Hermes configured context is invalid")
+	}
+	return model, contextWindow, nil
+}
+
+func readHermesConfigValue(executable, path string) (string, error) {
+	args := []string{"config", "get", path}
+	if err := validateIntegrationArgs("Hermes", append([]string{executable}, args...)); err != nil {
+		return "", err
+	}
+	command := hermesExecCommand(executable, args...)
+	var stdout bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, io.Discard
+	if err := runIntegrationProcess(command); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
 func hermesStatusAdvice(status hermesStatusResult) string {
+	if status.Error != "" {
+		return status.Error
+	}
 	if !status.Installed || !status.Plugin || !status.Service || status.Runtime == nil {
 		return "run offgrid hermes install after starting the OffGrid service"
 	}
@@ -310,7 +369,7 @@ func hermesStatusAdvice(status hermesStatusResult) string {
 
 func hermesReadinessAdvice(status cliIntegrationStatus) string {
 	if status.ContextWindow < status.MinimumContext {
-		return fmt.Sprintf("Hermes requires an effective OffGrid context of at least %d tokens (65536 recommended). Increase the service context only if RAM/VRAM allows it, then retry. Do not claim a larger Hermes context than OffGrid actually allocates", status.MinimumContext)
+		return fmt.Sprintf("Hermes requires an effective OffGrid context of at least %d tokens (65536 recommended); this model currently receives %d. Choose a model and memory/KV-cache configuration that actually allocates 64K. Increasing the configured ceiling alone may not help; change service settings only if RAM/VRAM allows it. Do not claim a larger Hermes context than OffGrid actually allocates", status.MinimumContext, status.ContextWindow)
 	}
 	if status.ModelID == "" {
 		return "install a suitable chat model in OffGrid, then retry offgrid hermes install"
@@ -326,6 +385,18 @@ func handleHermesTest(args []string) error {
 	if publicURL == "" {
 		publicURL = serverURL
 	}
+	home, _ := os.UserHomeDir()
+	executable, err := findHermesExecutable(home)
+	if err != nil {
+		return fmt.Errorf("Hermes is not installed; run offgrid hermes install")
+	}
+	configuredContext := 0
+	if modelID == "" {
+		modelID, configuredContext, err = readHermesModelConfig(executable)
+		if err != nil {
+			return err
+		}
+	}
 	setup, err := fetchIntegrationSetup(serverURL, "hermes", modelID, publicURL)
 	if err != nil {
 		return fmt.Errorf("cannot inspect OffGrid: %w", err)
@@ -333,10 +404,8 @@ func handleHermesTest(args []string) error {
 	if !setup.Integration.Ready {
 		return fmt.Errorf("Hermes cannot be tested yet; %s", hermesReadinessAdvice(setup.Integration))
 	}
-	home, _ := os.UserHomeDir()
-	executable, err := findHermesExecutable(home)
-	if err != nil {
-		return fmt.Errorf("Hermes is not installed; run offgrid hermes install")
+	if configuredContext > 0 && configuredContext != setup.Integration.ContextWindow {
+		return fmt.Errorf("Hermes records %d context tokens but OffGrid allocates %d for %s; rerun offgrid hermes install --model %s after verifying the model", configuredContext, setup.Integration.ContextWindow, modelID, modelID)
 	}
 	baseURL := setup.Setup.Environment["OFFGRID_BASE_URL"]
 	apiKey := setup.Setup.Environment["OFFGRID_API_KEY"]

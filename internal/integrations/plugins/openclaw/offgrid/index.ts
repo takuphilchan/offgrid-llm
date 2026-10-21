@@ -9,7 +9,7 @@ const id = "offgrid";
 const label = "OffGrid";
 const defaultBaseUrl = "http://127.0.0.1:11611/v1";
 const apiKeyEnvVar = "OFFGRID_API_KEY";
-const modelPlaceholder = "phi-3.5-mini-instruct.Q4_K_M";
+const modelPlaceholder = "<installed-offgrid-model-id>";
 
 type OffGridModel = {
   id?: string;
@@ -30,9 +30,9 @@ async function discoverChatModels(baseUrl: string, apiKey?: string) {
   if (!Array.isArray(payload.data)) throw new Error("OffGrid model discovery returned an invalid catalog");
   return payload.data.flatMap((model) => {
     if (!model.id || model.type === "embedding" || !model.capabilities?.includes("chat")) return [];
-    const contextWindow = Number.isInteger(model.context_window) && model.context_window! > 0
-      ? model.context_window!
-      : 8192;
+    // Do not invent capacity for newly imported models with missing metadata.
+    const contextWindow = model.context_window;
+    if (typeof contextWindow !== "number" || !Number.isInteger(contextWindow) || contextWindow < 2) return [];
     return [{
       id: model.id,
       name: model.id,

@@ -88,6 +88,13 @@ offgrid hermes -q "Summarize this directory"
 ```
 
 `offgrid hermes` always opens Hermes chat through the `offgrid` provider.
+OffGrid selects an installed chat model whose **admitted** context meets
+Hermes's requirement when installing without `--model`; `--model` keeps the
+choice explicit. Downloading a model adds it to OffGrid's catalog, but does not
+silently change an existing Hermes session or its saved default. Run
+`offgrid hermes install --model <new-id>` to select it. `offgrid hermes status`
+checks the model and context Hermes actually has configured against OffGrid's
+current allocation; a stale saved 65K value is not proof of 65K capacity.
 Hermes' own commands remain accessible, for example `offgrid hermes model` and
 `offgrid hermes sessions`. The provider is installed under
 `$HERMES_HOME/plugins/model-providers/offgrid`; the default is
@@ -119,8 +126,16 @@ If OpenClaw is missing, OffGrid asks before running its official installer
 without onboarding. It then asks before registering the first-party local
 plugin, checks that it loaded, dry-runs the config patch, and saves only the
 `models.providers.offgrid` settings. Pass `--yes` for an explicitly approved
-unattended install. Existing OpenClaw default models remain unchanged; OffGrid
-selects the chosen model explicitly for `openclaw run` and `openclaw test`.
+unattended install. The installer retains existing entries in OpenClaw's
+`models.providers.offgrid.models` array when adding a selected model; it stops
+if that array cannot be read safely. It does not replace OpenClaw's other
+providers or default model. OffGrid selects the chosen model explicitly for
+`openclaw run` and `openclaw test`. The provider plugin discovers installed
+chat models and their reported context from OffGrid's live `/v1/models` catalog;
+newly installed models can appear on catalog refresh without a hardcoded model
+name. Existing OpenClaw selections are not changed automatically. Rerun
+`offgrid openclaw install --model <new-id>` to add a newly chosen model to the
+saved provider configuration when needed.
 The plugin discovers only chat-capable OffGrid models, not embedding-only
 models. Models use native references such as
 `offgrid/phi-3.5-mini-instruct.Q4_K_M`.

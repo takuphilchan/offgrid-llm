@@ -39,10 +39,15 @@ func (s *Server) handleIntegrations(w http.ResponseWriter, r *http.Request) {
 	}
 	models := s.integrationModels()
 	requestedModel := strings.TrimSpace(r.URL.Query().Get("model"))
-	contextWindow := s.modelContextWindow(integrationModelID(models, requestedModel))
 	items := make([]integrationStatus, 0, len(s.integrationRegistry.List()))
 	for _, adapter := range s.integrationRegistry.List() {
-		items = append(items, evaluateIntegration(adapter.Profile(), models, contextWindow, requestedModel))
+		profile := adapter.Profile()
+		selected := selectIntegrationModel(models, requestedModel, profile.MinimumContext, s.modelContextWindow)
+		assessment := selected
+		if requestedModel != "" {
+			assessment = requestedModel
+		}
+		items = append(items, evaluateIntegration(profile, models, s.modelContextWindow(selected), assessment))
 	}
 	writeJSON(w, http.StatusOK, integrationsResponse{
 		Provider:     "offgrid",
@@ -70,8 +75,13 @@ func (s *Server) handleIntegration(w http.ResponseWriter, r *http.Request) {
 
 	models := s.integrationModels()
 	requestedModel := strings.TrimSpace(r.URL.Query().Get("model"))
-	contextWindow := s.modelContextWindow(integrationModelID(models, requestedModel))
-	status := evaluateIntegration(adapter.Profile(), models, contextWindow, requestedModel)
+	profile := adapter.Profile()
+	selected := selectIntegrationModel(models, requestedModel, profile.MinimumContext, s.modelContextWindow)
+	assessment := selected
+	if requestedModel != "" {
+		assessment = requestedModel
+	}
+	status := evaluateIntegration(profile, models, s.modelContextWindow(selected), assessment)
 	if status.ModelID == "" {
 		writeIntegrationError(w, http.StatusConflict, "model_required", "Install a chat model or provide ?model=<id>")
 		return
@@ -106,7 +116,7 @@ func (s *Server) handleIntegration(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, integrationSetupResponse{Integration: status, Setup: setup})
 }
 
-func integrationModelID(models []api.Model, requested string) string {
+func selectIntegrationModel(models []api.Model, requested string, minimumContext int, contextFor func(string) int) string {
 	if requested != "" {
 		for _, model := range models {
 			if model.ID == requested {
@@ -115,17 +125,24 @@ func integrationModelID(models []api.Model, requested string) string {
 		}
 		return ""
 	}
-	if len(models) > 0 {
-		return models[0].ID
+	bestID, bestContext := "", 0
+	for _, model := range models {
+		window := contextFor(model.ID)
+		// Prefer a model that actually meets this integration's requirement;
+		// among equally eligible models, retain deterministic catalog order.
+		if bestID == "" || (window >= minimumContext && bestContext < minimumContext) ||
+			(window > bestContext && (window >= minimumContext) == (bestContext >= minimumContext)) {
+			bestID, bestContext = model.ID, window
+		}
 	}
-	return ""
+	return bestID
 }
 
 func (s *Server) integrationModels() []api.Model {
 	models := s.registry.ListModels()
 	result := make([]api.Model, 0, len(models))
 	for _, model := range models {
-		if model.Type != "embedding" {
+		if model.SupportsChat() {
 			result = append(result, model)
 		}
 	}

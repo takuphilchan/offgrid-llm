@@ -45,6 +45,29 @@ func TestHermesReadinessMatchesRuntimeContextFloor(t *testing.T) {
 	}
 }
 
+func TestIntegrationSelectionUsesInstalledModelContext(t *testing.T) {
+	models := []api.Model{
+		{ID: "a-32k", Type: "llm"},
+		{ID: "b-64k", Type: "llm"},
+		{ID: "c-8k", Type: "llm"},
+	}
+	windows := map[string]int{"a-32k": 32768, "b-64k": 65536, "c-8k": 8192}
+	contextFor := func(id string) int { return windows[id] }
+	if got := selectIntegrationModel(models, "", 64000, contextFor); got != "b-64k" {
+		t.Fatalf("Hermes default = %q, want eligible downloaded model", got)
+	}
+	if got := selectIntegrationModel(models, "a-32k", 64000, contextFor); got != "a-32k" {
+		t.Fatalf("explicit model changed to %q", got)
+	}
+	if got := selectIntegrationModel(models, "absent", 64000, contextFor); got != "" {
+		t.Fatalf("unknown model %q was selected", got)
+	}
+	delete(windows, "b-64k")
+	if got := selectIntegrationModel(models[:1], "", 64000, contextFor); got != "a-32k" {
+		t.Fatalf("constrained model = %q", got)
+	}
+}
+
 func TestValidateIntegrationBaseURL(t *testing.T) {
 	for _, value := range []string{"http://127.0.0.1:11611", "https://offgrid.example/v1"} {
 		if err := validateIntegrationBaseURL(value); err != nil {
