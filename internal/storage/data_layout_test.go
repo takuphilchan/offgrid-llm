@@ -1,4 +1,4 @@
-package server
+package storage
 
 import (
 	"os"
@@ -29,7 +29,7 @@ func TestPrepareDataLayoutCopiesLegacyStateWithoutOverwriting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := prepareDataLayout(modelsDir, dataDir); err != nil {
+	if err := PrepareDataLayout(modelsDir, dataDir); err != nil {
 		t.Fatal(err)
 	}
 
@@ -53,7 +53,7 @@ func TestPrepareDataLayoutCopiesLegacyStateWithoutOverwriting(t *testing.T) {
 }
 
 func TestPrepareDataLayoutRejectsEmptyDataDirectory(t *testing.T) {
-	if err := prepareDataLayout(t.TempDir(), ""); err == nil {
+	if err := PrepareDataLayout(t.TempDir(), ""); err == nil {
 		t.Fatal("expected an error for an empty data directory")
 	}
 }

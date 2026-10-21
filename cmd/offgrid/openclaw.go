@@ -46,6 +46,7 @@ type openClawInstallResult struct {
 
 var openClawLookPath = exec.LookPath
 var openClawExecCommand = exec.Command
+var openClawExecCommandContext = exec.CommandContext
 var openClawRuntimeOS = runtime.GOOS
 
 func handleOpenClaw(args []string) error {
@@ -348,8 +349,11 @@ func installOpenClawRuntime() error {
 		}
 		command = openClawExecCommand(bash, file.Name(), "--no-onboard")
 	}
+	if err := validateIntegrationArgs("OpenClaw installer", command.Args[1:]); err != nil {
+		return err
+	}
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, commandOutput(), os.Stderr
-	return command.Run()
+	return runIntegrationProcess(command)
 }
 
 func trustedOpenClawInstallerHost(host string) bool {
@@ -381,10 +385,16 @@ func findOpenClawExecutable(home string) (string, error) {
 }
 
 func openClawCommand(executable string, args []string) (*exec.Cmd, error) {
+	if err := validateIntegrationArgs("OpenClaw", append([]string{executable}, args...)); err != nil {
+		return nil, err
+	}
 	if strings.EqualFold(filepath.Ext(executable), ".mjs") {
 		node, err := openClawLookPath("node")
 		if err != nil {
 			return nil, fmt.Errorf("Node.js is required to launch OpenClaw")
+		}
+		if err := validateIntegrationArgs("OpenClaw", append([]string{node, executable}, args...)); err != nil {
+			return nil, err
 		}
 		return openClawExecCommand(node, append([]string{executable}, args...)...), nil
 	}
@@ -396,6 +406,9 @@ func openClawCommand(executable string, args []string) (*exec.Cmd, error) {
 		node, err := openClawLookPath("node")
 		if err != nil {
 			return nil, fmt.Errorf("Node.js is required to launch OpenClaw")
+		}
+		if err := validateIntegrationArgs("OpenClaw", append([]string{node, entry}, args...)); err != nil {
+			return nil, err
 		}
 		return openClawExecCommand(node, append([]string{entry}, args...)...), nil
 	}
@@ -414,7 +427,7 @@ func runOpenClawCommand(executable string, args []string, stdin io.Reader, stdou
 		stdout = commandOutput()
 	}
 	command.Stdin, command.Stdout, command.Stderr = stdin, stdout, os.Stderr
-	return command.Run()
+	return runIntegrationProcess(command)
 }
 
 func inspectOpenClawPlugin(executable string) (rootDir string, loaded bool, err error) {
@@ -424,7 +437,7 @@ func inspectOpenClawPlugin(executable string) (rootDir string, loaded bool, err 
 	}
 	var stdout bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, io.Discard
-	if err := command.Run(); err != nil {
+	if err := runIntegrationProcess(command); err != nil {
 		return "", false, err
 	}
 	var result struct {
@@ -446,7 +459,7 @@ func inspectOpenClawProvider(executable, expectedBaseURL, expectedModelID string
 	}
 	var stdout bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, io.Discard
-	if err := command.Run(); err != nil {
+	if err := runIntegrationProcess(command); err != nil {
 		return false, "OffGrid provider is not configured in OpenClaw"
 	}
 	var provider struct {
@@ -589,10 +602,10 @@ func handleOpenClawTest(args []string) error {
 	if err != nil {
 		return err
 	}
-	command = exec.CommandContext(ctx, command.Path, command.Args[1:]...)
+	command = openClawExecCommandContext(ctx, command.Path, command.Args[1:]...)
 	var stdout bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, os.Stderr
-	runErr := command.Run()
+	runErr := runIntegrationProcess(command)
 	if runErr != nil {
 		if ctx.Err() != nil {
 			return fmt.Errorf("OpenClaw inference timed out after 180 seconds; inspect OffGrid model performance and logs")

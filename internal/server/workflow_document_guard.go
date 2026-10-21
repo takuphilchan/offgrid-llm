@@ -219,6 +219,9 @@ func bindRecordedDocumentAction(t *agents.Task, check *agents.OutcomeCheck) {
 			}
 			continue
 		}
+		if check.ActionDerivedCallID != "" && s.CallID != check.ActionDerivedCallID {
+			return
+		}
 		var a computer.DocumentActionEvidence
 		args, valid := decodeDocumentEditArguments(s.ToolName, []byte(s.ToolArgs))
 		if s.Type != "action" || !decodeNativeModelResult(s.ToolResult, &a) || a.Validate() != nil || !valid || documentOperationTool(a.Operation) != s.ToolName || a.After.Target.Driver != t.Config.ComputerDriver || evidenceTargetDigest(a.After.Target) != b.TargetSHA256 {

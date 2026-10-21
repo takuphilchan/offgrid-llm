@@ -130,6 +130,17 @@ func TestTaskFirstBrowserInputChecksVisionAndPreservesStructuredFallback(t *test
 			if w.Code != 202 {
 				t.Fatalf("structured flow blocked: %d %s", w.Code, w.Body.String())
 			}
+			saved, ok := s.agentManager.GetTask(task.ID)
+			if !ok {
+				t.Fatal("attached task missing")
+			}
+			probeCalls := 1
+			if scenario != "missing" && scenario != "cached" {
+				probeCalls = 2
+			}
+			if saved.Checkpoint.SyntheticProbeCalls != probeCalls || saved.Checkpoint.SyntheticProbeTokens != int64(384+(probeCalls-1)*128) {
+				t.Fatalf("task-specific local preflight escaped root budget: %+v", saved.Checkpoint)
+			}
 			want := scenario != "missing" && scenario != "wrong"
 			if s.computerVisionReady(model) != want {
 				t.Fatalf("incorrect vision state: %+v", engine)

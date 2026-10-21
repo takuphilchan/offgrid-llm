@@ -38,8 +38,8 @@ func (s *Server) handleIntegrations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	models := s.integrationModels()
-	contextWindow := s.effectiveContextWindow()
 	requestedModel := strings.TrimSpace(r.URL.Query().Get("model"))
+	contextWindow := s.modelContextWindow(integrationModelID(models, requestedModel))
 	items := make([]integrationStatus, 0, len(s.integrationRegistry.List()))
 	for _, adapter := range s.integrationRegistry.List() {
 		items = append(items, evaluateIntegration(adapter.Profile(), models, contextWindow, requestedModel))
@@ -69,8 +69,9 @@ func (s *Server) handleIntegration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	models := s.integrationModels()
-	contextWindow := s.effectiveContextWindow()
-	status := evaluateIntegration(adapter.Profile(), models, contextWindow, strings.TrimSpace(r.URL.Query().Get("model")))
+	requestedModel := strings.TrimSpace(r.URL.Query().Get("model"))
+	contextWindow := s.modelContextWindow(integrationModelID(models, requestedModel))
+	status := evaluateIntegration(adapter.Profile(), models, contextWindow, requestedModel)
 	if status.ModelID == "" {
 		writeIntegrationError(w, http.StatusConflict, "model_required", "Install a chat model or provide ?model=<id>")
 		return
@@ -95,7 +96,7 @@ func (s *Server) handleIntegration(w http.ResponseWriter, r *http.Request) {
 	setup, err := adapter.Render(integrations.Options{
 		BaseURL:         baseURL,
 		ModelID:         status.ModelID,
-		ContextWindow:   contextWindow,
+		ContextWindow:   status.ContextWindow,
 		MaxOutputTokens: maxOutput,
 	})
 	if err != nil {
@@ -103,6 +104,21 @@ func (s *Server) handleIntegration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, integrationSetupResponse{Integration: status, Setup: setup})
+}
+
+func integrationModelID(models []api.Model, requested string) string {
+	if requested != "" {
+		for _, model := range models {
+			if model.ID == requested {
+				return requested
+			}
+		}
+		return ""
+	}
+	if len(models) > 0 {
+		return models[0].ID
+	}
+	return ""
 }
 
 func (s *Server) integrationModels() []api.Model {

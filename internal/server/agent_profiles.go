@@ -69,6 +69,14 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 	}
 	if s.registry == nil {
 		issue("model", profile.Settings.Model, "model_unavailable", "Model storage is unavailable.")
+	} else if _, native, err := s.selectNativeChat(r.Context(), profile.Settings.Model); native {
+		if err != nil {
+			issue("model", profile.Settings.Model, "native_model_unavailable", "The native text runtime is not qualified on this machine.")
+		} else if depth > 0 {
+			issue("model", profile.Settings.Model, "native_delegation_unqualified", "Native text models are not yet qualified as delegated child jobs.")
+		} else if profile.Settings.Computer || len(profile.Settings.Tools) != 0 || len(profile.Settings.Delegates) != 0 {
+			issue("model", profile.Settings.Model, "native_tools_unqualified", "This native model is qualified for text only. Remove computer access, tools, and collaborators or select a qualified tool-calling model.")
+		}
 	} else if _, err := s.registry.GetChatModel(profile.Settings.Model); err != nil {
 		issue("model", profile.Settings.Model, "model_unavailable", "Select an installed chat model. No model was downloaded.")
 	}

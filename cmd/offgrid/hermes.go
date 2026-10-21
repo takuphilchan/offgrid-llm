@@ -558,6 +558,9 @@ func hermesStageArgs(goos, stage string) []string {
 }
 
 func runHermesInstallerFile(installer string, args ...string) error {
+	if err := validateIntegrationArgs("Hermes installer", append([]string{installer}, args...)); err != nil {
+		return err
+	}
 	var command *exec.Cmd
 	if hermesRuntimeOS == "windows" {
 		powershell, err := hermesLookPath("powershell.exe")
@@ -579,7 +582,7 @@ func runHermesInstallerFile(installer string, args ...string) error {
 	command.Stdin = os.Stdin
 	command.Stdout = commandOutput()
 	command.Stderr = os.Stderr
-	if err := command.Run(); err != nil {
+	if err := runIntegrationProcess(command); err != nil {
 		return err
 	}
 	return nil
@@ -663,6 +666,9 @@ func trustedHermesInstallerHost(host string) bool {
 }
 
 func runHermesProcess(executable string, args, environment []string, quiet bool) error {
+	if err := validateIntegrationArgs("Hermes", append([]string{executable}, args...)); err != nil {
+		return err
+	}
 	command := hermesExecCommand(executable, args...)
 	command.Stdin = os.Stdin
 	command.Stderr = os.Stderr
@@ -672,17 +678,20 @@ func runHermesProcess(executable string, args, environment []string, quiet bool)
 	} else {
 		command.Stdout = os.Stdout
 	}
-	return command.Run()
+	return runIntegrationProcess(command)
 }
 
 func runHermesSmokeTest(executable string, args, environment []string, expected string) error {
+	if err := validateIntegrationArgs("Hermes", append([]string{executable}, args...)); err != nil {
+		return err
+	}
 	command := hermesExecCommand(executable, args...)
 	command.Stdin = os.Stdin
 	command.Env = environment
 	var captured hermesOutputTail
 	command.Stdout = io.MultiWriter(os.Stdout, &captured)
 	command.Stderr = io.MultiWriter(os.Stderr, &captured)
-	if err := command.Run(); err != nil {
+	if err := runIntegrationProcess(command); err != nil {
 		return err
 	}
 	if !containsExactOutputLine(captured.String(), expected) {

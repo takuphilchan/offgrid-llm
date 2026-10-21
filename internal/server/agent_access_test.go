@@ -119,4 +119,7 @@ func TestAccessProposalRunnerRejectsInstructionsAfterInvalidChrome(t *testing.T)
 	if err != nil || task.Status != agents.TaskInterrupted || task.ErrorCode != "tool_proposal_repair_limit" || calls != 4 || task.Result != "" || task.Checkpoint.ExecutingCall != "" {
 		t.Fatalf("false completion: %+v calls=%d err=%v", task, calls, err)
 	}
+	if !strings.Contains(task.Error, "computer-access request") || strings.Contains(task.Error, "compatible model") {
+		t.Fatalf("access validation misreported as model incompatibility: %s", task.Error)
+	}
 }

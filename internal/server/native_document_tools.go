@@ -8,6 +8,15 @@ import (
 
 const documentTaskProtocol = " When computer_documents is offered, use it for document work. For a new document: inspect documents -> declare document_blank with the observed target_id and command -> computer_create_document once -> inspect documents -> computer_read_text to independently verify blankness. For editing: read the active document -> declare document_edit_matches using the current document, snapshot, edit_mode and exact input -> one supported edit -> inspect documents -> computer_read_text for independent verification. Use insert_text for a collapsed caret and replace_selection for a nonempty selection; replace_value replaces the entire document only if supported. Never clear an existing document to simulate creation. Missing commands, incomplete snapshots or unknown composition mean unavailable, not permission to guess a shortcut. Keep previous outcome checks. Tool schemas follow the current observed stage; rediscovery does not prove progress."
 
+const actionDocumentTaskProtocol = " For document work use computer_documents. For a requested new document: create once using an observed command, inspect documents, then read the new active document to verify blankness. Never edit or clear an existing document instead of creating one. For editing: read the intended document, perform one supported typed edit using its current snapshot and exact requested text, inspect documents and independently read back. The harness derives and saves mechanical checks from each validated action; do not separately declare the same arguments. Use insert_text for a collapsed caret, replace_selection for a nonempty selection, and replace_value only for explicitly supported whole-document replacement. Missing commands, incomplete snapshots or unknown composition are unavailable, not permission to guess shortcuts. Never repeat uncertain input."
+
+func nativeDocumentProtocol(config agents.AgentConfig) string {
+	if config.NativeActionContractVersion == agents.NativeActionContractVersion {
+		return actionDocumentTaskProtocol
+	}
+	return documentTaskProtocol
+}
+
 func nativeDocumentTools() []api.Tool {
 	id := map[string]interface{}{"type": "string", "maxLength": 256}
 	offset := map[string]interface{}{"type": "integer", "minimum": 0, "maximum": computer.MaxDocumentSnapshotBytes}

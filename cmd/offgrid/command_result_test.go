@@ -12,8 +12,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
@@ -47,11 +49,26 @@ func TestCLIProcessHelper(t *testing.T) {
 	for i, arg := range os.Args {
 		if arg == "--" {
 			os.Args = append([]string{"offgrid"}, os.Args[i+1:]...)
+			beforeNoColor := os.Getenv("NO_COLOR")
 			main()
+			if os.Getenv("OFFGRID_CLI_CHECK_ENV") == "1" && os.Getenv("NO_COLOR") != beforeNoColor {
+				os.Exit(98)
+			}
 			os.Exit(0)
 		}
 	}
 	os.Exit(99)
+}
+
+func TestCLIFlagsDoNotChangeProcessEnvironment(t *testing.T) {
+	for _, args := range [][]string{{"--no-color", "--help"}, {"--json", "--help"}} {
+		command := exec.Command(os.Args[0], append([]string{"-test.run=^TestCLIProcessHelper$", "--"}, args...)...)
+		command.Env = append(os.Environ(), "OFFGRID_CLI_HELPER=1", "OFFGRID_CLI_CHECK_ENV=1", "NO_COLOR=")
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v mutated the environment or failed: %v; output=%q", args, err, output)
+		}
+	}
 }
 
 func TestCLIProcessExitAndJSON(t *testing.T) {
@@ -133,6 +150,84 @@ func TestCLIProcessExitAndJSON(t *testing.T) {
 		if status != test.status || !json.Valid(stdout.Bytes()) || !strings.Contains(stdout.String(), test.contains) || stderr.Len() != 0 {
 			t.Fatalf("%v: status=%d stdout=%q stderr=%q", test.args, status, stdout.String(), stderr.String())
 		}
+	}
+}
+
+func TestCLIProcessGlobalFlagsAndSafeAliases(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		args     []string
+		exit     int
+		contains string
+		json     bool
+	}{
+		{"json-before-command", []string{"--json", "model", "list", "--category", "unsupported"}, 2, `"invalid_usage"`, true},
+		{"json-after-command", []string{"model", "list", "--category", "unsupported", "--json"}, 2, `"invalid_usage"`, true},
+		{"root-help", []string{"--no-color", "--help"}, 0, "Usage", false},
+		{"bench-alias", []string{"bench", "--help"}, 1, "offgrid benchmark", false},
+		{"remove-alias", []string{"rm", "--help"}, 1, "offgrid remove", false},
+		{"favorite-alias", []string{"fav", "--help"}, 0, "offgrid favorite", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			command := exec.Command(os.Args[0], append([]string{"-test.run=^TestCLIProcessHelper$", "--"}, test.args...)...)
+			root := t.TempDir()
+			command.Env = append(os.Environ(), "OFFGRID_CLI_HELPER=1", "NO_COLOR=1", "OFFGRID_DATA_DIR="+filepath.Join(root, "data"), "OFFGRID_MODELS_DIR="+filepath.Join(root, "models"))
+			var stdout, stderr bytes.Buffer
+			command.Stdout, command.Stderr = &stdout, &stderr
+			err := command.Run()
+			exit := 0
+			if err != nil {
+				var status *exec.ExitError
+				if !errors.As(err, &status) {
+					t.Fatal(err)
+				}
+				exit = status.ExitCode()
+			}
+			if exit != test.exit || !strings.Contains(stdout.String(), test.contains) {
+				t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout.String(), stderr.String())
+			}
+			if test.json && !json.Valid(stdout.Bytes()) {
+				t.Fatalf("invalid JSON: %q", stdout.String())
+			}
+			if strings.Contains(stdout.String(), "\x1b[") || strings.Contains(stderr.String(), "\x1b[") {
+				t.Fatal("NO_COLOR or --no-color emitted ANSI escape")
+			}
+		})
+	}
+}
+
+func TestCLIProcessInterruptCancelsServiceRequest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Interrupt cannot be delivered to a child process by Go on Windows; cancellation mapping is covered by TestCommandErrorContract")
+	}
+	started := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	command := exec.Command(os.Args[0], "-test.run=^TestCLIProcessHelper$", "--", "agent", "status", "run-1", "--json")
+	root := t.TempDir()
+	command.Env = append(os.Environ(), "OFFGRID_CLI_HELPER=1", "OFFGRID_SERVER_URL="+server.URL, "OFFGRID_API_KEY=testing-key", "OFFGRID_DATA_DIR="+filepath.Join(root, "data"), "OFFGRID_MODELS_DIR="+filepath.Join(root, "models"))
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		_ = command.Process.Kill()
+		t.Fatal("service request did not start")
+	}
+	if err := command.Process.Signal(os.Interrupt); err != nil {
+		_ = command.Process.Kill()
+		t.Fatal(err)
+	}
+	err := command.Wait()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 130 || !strings.Contains(stdout.String(), `"cancelled"`) {
+		t.Fatalf("err=%v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
 	}
 }
 

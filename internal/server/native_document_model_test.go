@@ -1,16 +1,11 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
-	"net/http/httptest"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
@@ -35,53 +30,16 @@ func TestDocumentWorkflowInstalledModel(t *testing.T) {
 		t.Fatal("installed model test requires a literal loopback URL without credentials, query or fragment")
 	}
 	base, _ := url.Parse(strings.TrimSuffix(endpoint, "/v1/chat/completions"))
-	proxy := httputil.NewSingleHostReverseProxy(base)
-	var previous []byte
-	var previousMessages []json.RawMessage
-	trace := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/chat/completions" {
-			body, err := io.ReadAll(io.LimitReader(r.Body, 2*1024*1024+1))
-			if err != nil || len(body) > 2*1024*1024 {
-				http.Error(w, "fixture request too large", http.StatusBadRequest)
-				return
-			}
-			var payload struct {
-				Messages json.RawMessage `json:"messages"`
-			}
-			if json.Unmarshal(body, &payload) != nil {
-				http.Error(w, "invalid fixture request", http.StatusBadRequest)
-				return
-			}
-			common := 0
-			for common < len(previous) && common < len(payload.Messages) && previous[common] == payload.Messages[common] {
-				common++
-			}
-			t.Logf("synthetic inference wire: message_bytes=%d unchanged_prefix_bytes=%d", len(payload.Messages), common)
-			var messages []json.RawMessage
-			_ = json.Unmarshal(payload.Messages, &messages)
-			for i, message := range messages {
-				if i >= len(previousMessages) || !bytes.Equal(message, previousMessages[i]) {
-					var identity struct {
-						Role string `json:"role"`
-					}
-					_ = json.Unmarshal(message, &identity)
-					t.Logf("first changed fixture message: index=%d role=%s bytes=%d", i, identity.Role, len(message))
-					break
-				}
-			}
-			previousMessages = messages
-			previous = append(previous[:0], payload.Messages...)
-			r.Body = io.NopCloser(bytes.NewReader(body))
-		}
-		proxy.ServeHTTP(w, r)
-	}))
-	defer trace.Close()
-	engine := inference.NewLlamaHTTPEngine(trace.URL)
+	// Exercise the production engine's direct runtime transport for counting and
+	// generation. A tracing reverse proxy introduces a separate connection pool
+	// and can turn transport failures into HTTP 502, changing the tested path.
+	engine := inference.NewLlamaHTTPEngine(base.String())
+	t.Logf("synthetic prompt counts and generation use the installed runtime directly: %s; no diagnostic proxy or generation retry", base.String())
 	for repetition := 1; repetition <= 3; repetition++ {
 		passed := t.Run(fmt.Sprintf("repeat-%d", repetition), func(t *testing.T) {
 			calls, tokens := 0, 0
 			modelDuration := time.Duration(0)
-			runDocumentWorkflowFixtureFrom(t, "none", func(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (*api.ChatCompletionResponse, error) {
+			runConversationQualificationFixture(t, "none", func(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (*api.ChatCompletionResponse, error) {
 				zero, max := float32(0), 512
 				request := &api.ChatCompletionRequest{Model: model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &zero, MaxTokens: &max}
 				request.StreamOptions = &api.StreamOptions{IncludeUsage: true}
@@ -122,7 +80,7 @@ func TestDocumentWorkflowInstalledModel(t *testing.T) {
 					t.Logf("fixture proposal: %s %s", call.Function.Name, call.Function.Arguments)
 				}
 				return result, nil
-			}, true, func(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (int, error) {
+			}, true, "document-action", func(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (int, error) {
 				zero, max := float32(0), 512
 				request := &api.ChatCompletionRequest{Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &zero, MaxTokens: &max}
 				configureComputerRequest(request, task)

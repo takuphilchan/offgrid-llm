@@ -104,7 +104,7 @@ func TestAgentCrossClientIntegration(t *testing.T) {
 		}
 		env = append(env, pair)
 	}
-	env = append(env, "OFFGRID_SERVER_URL="+server.URL, "OFFGRID_API_KEY="+aliceKey, "OFFGRID_DATA_DIR="+filepath.Join(temp, "data"), "OFFGRID_MODELS_DIR="+filepath.Join(temp, "models"), "OFFGRID_BIN_DIR="+filepath.Join(temp, "bin"), "OFFGRID_CONFIG="+filepath.Join(temp, "config.yaml"), "PYTHONPATH="+filepath.Join(root, "python"))
+	env = append(env, "OFFGRID_SERVER_URL="+server.URL, "OFFGRID_API_KEY="+aliceKey, "OFFGRID_DATA_DIR="+filepath.Join(temp, "data"), "OFFGRID_MODELS_DIR="+filepath.Join(temp, "models"), "OFFGRID_BIN_DIR="+filepath.Join(temp, "bin"), "OFFGRID_CONFIG="+filepath.Join(temp, "config.yaml"), "PYTHONPATH="+filepath.Join(root, "sdk", "python"))
 	run := func(name string, args ...string) map[string]any {
 		t.Helper()
 		command := exec.CommandContext(ctx, name, args...)

@@ -38,6 +38,23 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 		return nil
 	}
 	var tools []api.Tool
+	// A selected-window mutation cannot be planned without its first real
+	// observation. Match the existing dispatch guard in the offered schema, so
+	// small models are not encouraged to invent element/observation references.
+	initialNativeObservation := task.Config.TaskFirst && task.Config.ComputerSession != "" && nativeComputerDriver(task.Config.ComputerDriver) && task.Config.ComputerScope != "desktop"
+	if initialNativeObservation {
+		for i, step := range task.Steps {
+			if i < task.Config.ComputerStepOffset || step.Type != "action" {
+				continue
+			}
+			if invalidatesNativeCheck(step.ToolName, "control_text_equals") {
+				initialNativeObservation = true
+			}
+			if i >= task.Config.ComputerStepOffset && step.Type == "action" && (step.ToolName == "computer_observe" || step.ToolName == "computer_documents") {
+				initialNativeObservation = false
+			}
+		}
+	}
 	if task.Config.ComputerSession == "" || task.Config.TaskFirst {
 		registryTools := b.RunTools.GetTools()
 		if scoped, ok := b.RunTools.(interface {
@@ -64,7 +81,11 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 	if task.Config.ComputerSession != "" {
 		if nativeComputerDriver(task.Config.ComputerDriver) {
 			nativeTools := nativeComputerTools()
-			documentsAvailable := b.documentToolsAvailable(task)
+			// Host negotiation alone must not steer a model into the document
+			// protocol for browser/search/control work. Route it only when the
+			// requested outcome actually mentions document/tab editing or reading.
+			documentsAvailable := b.documentToolsAvailable(task) && nativeDocumentTaskIntent(task)
+			recoveryPending := nativeDocumentObservationRecoveryPending(task)
 			if documentsAvailable {
 				state, _ := documentState(task)
 				controlObserved := task.Config.ComputerScope != "desktop"
@@ -72,7 +93,7 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 					if i >= task.Config.ComputerStepOffset && step.Type == "action" && step.ToolName == "computer_observe" {
 						controlObserved = true
 					}
-					if i >= task.Config.ComputerStepOffset && step.Type == "action" && (step.ToolName == "computer_open_application" || step.ToolName == "computer_focus_window") {
+					if i >= task.Config.ComputerStepOffset && (step.Type == "action" || step.Type == "tool_error") && (step.ToolName == "computer_open_application" || step.ToolName == "computer_focus_window" || step.ToolName == "computer_documents") {
 						controlObserved = false
 					}
 				}
@@ -88,9 +109,19 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 						filtered = append(filtered, tool)
 					}
 				}
-				nativeTools = append(filtered, stagedDocumentTools(task)...)
+				nativeTools = filtered
+				if !recoveryPending {
+					nativeTools = append(nativeTools, stagedDocumentTools(task)...)
+				}
 			}
 			for _, tool := range nativeTools {
+				if recoveryPending && !nativeDocumentRecoveryToolAllowed(tool.Function.Name) {
+					continue
+				}
+				if initialNativeObservation && tool.Function.Name != "computer_observe" && tool.Function.Name != "computer_documents" {
+					continue
+				}
+				tool = selectedWindowToolReferences(task, tool)
 				if task.Config.ComputerScope != "desktop" || desktopPlanningTool(task, tool.Function.Name) {
 					tools = append(tools, tool)
 				}
@@ -99,6 +130,9 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 				state, _ := documentState(task)
 				_, _, selected := desktopPlanningState(task)
 				for _, tool := range desktopComputerTools() {
+					if recoveryPending && !nativeDocumentRecoveryToolAllowed(tool.Function.Name) {
+						continue
+					}
 					// Inspect the newly selected editor before returning to its app
 					// catalog. This read establishes the available document/control
 					// operations; it neither executes input nor prevents later app
@@ -116,10 +150,10 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 		}
 	}
 	if task.Config.TaskFirst && task.ParentID == "" {
-		if task.Config.ComputerScope != "desktop" {
+		if task.Config.ComputerScope != "desktop" && !initialNativeObservation {
 			tools = append(tools, computerAccessTool())
 		}
-		if b.server.artifactStore != nil {
+		if b.server.artifactStore != nil && !agents.ComputerAccessNeedsObservation(task, b) {
 			tools = append(tools, taskArtifactTool())
 		}
 	}

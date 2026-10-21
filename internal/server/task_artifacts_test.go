@@ -98,3 +98,48 @@ func TestArtifactValidationRejectsExecutablePathsAndMalformedFormats(t *testing.
 		}
 	}
 }
+
+// Exercise the real composed catalog, strict response gate, runner preconditions,
+// artifact policy and independent storage verification. No companion is enrolled
+// and no native app is touched; a desktop grant must not demand native evidence
+// for this service-owned operation.
+func TestTaskArtifactWithDesktopWorkflowBeforeObservation(t *testing.T) {
+	store, err := artifacts.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{artifactStore: store, agentManager: agents.NewManagerWithPersistence(nil, nil, nil, t.TempDir())}
+	adapter := &browserRunTools{RunTools: agents.NewToolRegistry(), server: s}
+	calls := 0
+	r := agents.NewRunner(s.agentManager, adapter, func(_ context.Context, task *agents.Task, _ []api.ChatMessage, offered []api.Tool) (*api.ChatCompletionResponse, error) {
+		calls++
+		if !availableNames(offered)[taskArtifactToolName] {
+			t.Fatal("artifact missing from composed tool menu")
+		}
+		message := api.ChatMessage{Role: "assistant", Content: "Saved a private draft. No desktop work was performed."}
+		reason := "stop"
+		if calls == 1 {
+			message.Content = ""
+			message.ToolCalls = []api.ToolCall{{ID: "fixture-call", Type: "function", Function: api.FunctionCall{Name: taskArtifactToolName, Arguments: `{"name":"draft.md","format":"markdown","content":"# Synthetic draft"}`}}}
+			reason = "tool_calls"
+		}
+		response := &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message, FinishReason: reason}}}
+		return response, validateAgentDecision(task, &api.ChatCompletionRequest{Tools: offered}, response)
+	})
+	cfg := compositionConfig("windows-uia", true)
+	cfg.ComputerScope = "desktop"
+	cfg.NativeWorkflowVersion = agents.DocumentWorkflowEvidenceVersion
+	cfg.Profile = &agents.AgentProfile{Settings: agents.ProfileSettings{Computer: true}}
+	task, err := r.Create("Save a private workspace draft; do not edit an application", "model", "local-admin", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.Continue(context.Background(), task.ID, task.Actor, "start", "", false)
+	if err != nil || got.Status != agents.TaskCompleted || calls != 2 {
+		t.Fatalf("composed artifact failed: status=%s error=%s calls=%d err=%v", got.Status, got.Error, calls, err)
+	}
+	evidence := taskArtifacts(got)
+	if len(evidence) != 1 || !evidence[0].Verified || len(got.Steps) != 1 || got.Steps[0].ToolName != taskArtifactToolName {
+		t.Fatalf("unexpected effects/evidence: %+v", got.Steps)
+	}
+}

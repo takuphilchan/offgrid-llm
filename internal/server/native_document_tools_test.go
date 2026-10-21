@@ -95,8 +95,12 @@ func TestDocumentToolsRequireNegotiatedHostAndKeepMCP(t *testing.T) {
 			if names["computer_insert_text"] {
 				t.Fatal("edit before observation")
 			}
-			if !names["computer_replace_text"] {
-				t.Fatal("legacy control editing disappeared before a document was selected")
+			if names["computer_replace_text"] {
+				t.Fatal("legacy editing offered before observation")
+			}
+			task.Steps = []agents.Step{{ID: 1, Type: "action", ToolName: "computer_observe"}}
+			if !availableNames(adapter.ToolsForTask(task))["computer_replace_text"] {
+				t.Fatal("legacy control editing disappeared after observation")
 			}
 			if !want {
 				d, _ := adapter.Capability("computer_documents")

@@ -46,10 +46,22 @@ func (s *Server) visionCheckKey(model string) (string, bool) {
 	if modelErr != nil || projectorErr != nil || !modelInfo.Mode().IsRegular() || !projectorInfo.Mode().IsRegular() {
 		return "", false
 	}
+	return visionEvidenceIdentity(model, metadata.Path, metadata.ProjectorPath, modelInfo, projectorInfo, s.visionProcessGeneration(model)), true
+}
+
+func visionEvidenceIdentity(model, modelPath, projectorPath string, modelInfo, projectorInfo os.FileInfo, generation uint64) string {
 	return strings.Join([]string{
-		model, metadata.Path, modelInfo.ModTime().UTC().Format(time.RFC3339Nano), strconv.FormatInt(modelInfo.Size(), 10),
-		metadata.ProjectorPath, projectorInfo.ModTime().UTC().Format(time.RFC3339Nano), strconv.FormatInt(projectorInfo.Size(), 10),
-	}, "\x00"), true
+		model, modelPath, modelInfo.ModTime().UTC().Format(time.RFC3339Nano), strconv.FormatInt(modelInfo.Size(), 10),
+		projectorPath, projectorInfo.ModTime().UTC().Format(time.RFC3339Nano), strconv.FormatInt(projectorInfo.Size(), 10),
+		strconv.FormatUint(generation, 10),
+	}, "\x00")
+}
+
+func (s *Server) visionProcessGeneration(model string) uint64 {
+	if s.modelCache == nil {
+		return 0
+	}
+	return s.modelCache.InstanceGeneration(model)
 }
 
 func (s *Server) computerVisionReady(model string) bool {
@@ -62,22 +74,36 @@ func (s *Server) computerVisionReady(model string) bool {
 }
 
 func (s *Server) checkComputerVision(ctx context.Context, model string) computerVisionCheck {
+	return s.checkComputerVisionWithBudget(ctx, model, 90*time.Second)
+}
+
+func (s *Server) checkComputerVisionWithBudget(ctx context.Context, model string, probeBudget time.Duration) computerVisionCheck {
 	result := computerVisionCheck{Code: "computer_vision_unavailable", Message: "Local vision is not installed for this model. Structured controls remain available.", Retryable: false}
 	key, installed := s.visionCheckKey(model)
 	result.Installed = installed
 	if !installed {
 		return result
 	}
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
-	release, err := s.acquireInference(ctx, model)
+	lease, err := s.acquireInferenceLease(ctx, model, s.modelContextWindow(model), nil)
 	if err != nil {
 		result.Retryable = true
 		result.Message = "The local vision runtime is busy or unavailable. Structured controls remain available; retry the check later."
 		return result
 	}
-	defer release()
-	if err := probeComputerVision(ctx, s.engine, model); err != nil {
+	defer lease.Release()
+	// Queueing and cold loading have their own bounded admission. Start the
+	// synthetic perception budget only once generation can actually begin.
+	ctx, cancel := context.WithTimeout(ctx, probeBudget)
+	defer cancel()
+	// Admission may have loaded or restarted llama.cpp. Bind the pass to the
+	// process actually probed, not the file-only identity seen before loading.
+	key, installed = s.visionCheckKey(model)
+	if !installed {
+		return result
+	}
+	if err := lease.Run(ctx, func(ctx context.Context) error {
+		return probeComputerVision(ctx, s.engine, model)
+	}); err != nil {
 		if errors.Is(err, errComputerVision) {
 			result.Code = "computer_vision_check_failed"
 			result.Message = "The installed model/projector did not read the synthetic image and return the required governed tool call. Screenshot tools remain disabled; structured controls still work."
@@ -85,6 +111,12 @@ func (s *Server) checkComputerVision(ctx context.Context, model string) computer
 		}
 		result.Retryable = true
 		result.Message = "The local vision check could not complete. Screenshot tools remain disabled; structured controls still work."
+		return result
+	}
+	if current, ok := s.visionCheckKey(model); !ok || current != key {
+		result.Code = "computer_vision_check_stale"
+		result.Message = "The model, projector, or runtime changed during the vision check. Screenshot tools remain disabled; retry the check after the runtime settles."
+		result.Retryable = true
 		return result
 	}
 	s.computerVisionChecks.Range(func(existing, _ any) bool {
@@ -138,6 +170,7 @@ func probeComputerVisionCode(ctx context.Context, engine inference.Engine, model
 	var response *api.ChatCompletionResponse
 	if raw, ok := engine.(inference.RawStreamingEngine); ok {
 		request.Stream = true
+		request.StreamOptions = &api.StreamOptions{IncludeUsage: true}
 		acc := agentStreamAccumulator{calls: make(map[int]*api.ToolCall)}
 		err = raw.ChatCompletionStreamRaw(ctx, request, func(data json.RawMessage) error { _, _, addErr := acc.add(data); return addErr })
 		response = acc.response()
@@ -145,6 +178,9 @@ func probeComputerVisionCode(ctx context.Context, engine inference.Engine, model
 		response, err = engine.ChatCompletion(ctx, request)
 	}
 	if err != nil {
+		return err
+	}
+	if err := checkSyntheticProbeUsage(response, tokens); err != nil {
 		return err
 	}
 	if response == nil || len(response.Choices) != 1 || response.Choices[0].FinishReason != "tool_calls" || len(response.Choices[0].Message.ToolCalls) != 1 {

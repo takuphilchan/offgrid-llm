@@ -336,6 +336,9 @@ func (b *browserRunTools) Authorize(ctx context.Context, name string, args json.
 		if !task.Config.TaskFirst || task.ParentID != "" || b.server.artifactStore == nil || e.ExpectedCapability == nil || *e.ExpectedCapability != taskArtifactDescriptor() {
 			return capabilities.ErrDenied
 		}
+		if agents.ComputerAccessNeedsObservation(task, b) {
+			return &agents.ToolAuthorizationError{Code: "task_artifact_work_pending", Message: "Inspect the application you requested access to before saving findings. Access and artifact storage are not evidence that the requested work was performed."}
+		}
 		if _, _, err := parseTaskArtifact(args); err != nil {
 			return &agents.ToolAuthorizationError{Code: "invalid_task_artifact", Message: err.Error()}
 		}
@@ -588,6 +591,13 @@ func (b *browserRunTools) ExecuteWithPolicy(ctx context.Context, name string, ar
 	result, err := b.server.browserHub.ExecuteAuthorized(ctx, e.Actor, task.Config.ComputerSession, e.RunID, e.CallID, name, args, authorization)
 	if err != nil {
 		if d, ok := browserDescriptor(name); ok && capabilities.TrustedNativeRead(d) {
+			if name == "computer_documents" && errors.Is(err, computer.ErrDocumentUnavailable) {
+				// The host protocol exists but this surface is not a supported
+				// document. Preserve that typed negative capability so ordinary
+				// controls can be freshly observed. Other reads and errors remain
+				// failures; no mutation or fallback input is dispatched here.
+				return unavailableDocumentCapabilityResult, nil
+			}
 			return "", nativeReadFailureForTask(task, nativeReadFailure(err))
 		}
 		return "", err

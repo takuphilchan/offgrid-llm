@@ -141,6 +141,12 @@ func NewSessionHandlers(sessionsDir string) *SessionHandlers {
 	}
 }
 
+// RecoverTurns completes durable session recovery before HTTP admission.
+func (h *SessionHandlers) RecoverTurns() error { return h.manager.RecoverTurns() }
+
+// Close drains session turns before app releases the workspace it owns.
+func (h *SessionHandlers) Close() error { h.closeTurns(); return nil }
+
 // HandleSessionsList handles GET /v1/sessions - list all sessions
 func (h *SessionHandlers) HandleSessionsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

@@ -124,7 +124,12 @@ func TestApplicationHandoffRequiresVerifiedCurrentTarget(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "verify") {
 		t.Fatalf("unverified handoff accepted: %v", err)
 	}
-	// The tool remains available for same-run handoffs, including browser-only tests without a registry.
+	if availableNames(b.ToolsForTask(task))[computerAccessToolName] {
+		t.Fatal("handoff offered before inspecting current native target")
+	}
+	task.Steps = []agents.Step{{ID: 1, Type: "action", ToolName: "computer_observe"}}
+	// After observation the tool remains available for same-run handoffs;
+	// dispatch still independently requires verification.
 	for _, driver := range []string{"windows-uia", "browser"} {
 		task.Config.ComputerDriver = driver
 		found := false

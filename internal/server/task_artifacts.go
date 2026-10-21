@@ -22,6 +22,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/artifacts"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -44,7 +45,26 @@ type taskArtifactEvidence struct {
 }
 
 func taskArtifactTool() api.Tool {
-	return api.Tool{Type: "function", Function: api.FunctionDef{Name: taskArtifactToolName, Description: "Save a private downloadable workspace artifact (UTF-8 text, Markdown, JSON or CSV; at most 128 KiB). The service independently rereads, hashes and parses it before reporting verified storage. This does not save into a host application or establish factual accuracy. No executable files or spreadsheet formulas. Use a basename with matching extension. Call separately from computer actions.", Parameters: map[string]interface{}{"type": "object", "additionalProperties": false, "required": []string{"name", "format", "content"}, "properties": map[string]interface{}{"name": map[string]string{"type": "string"}, "format": map[string]interface{}{"type": "string", "enum": []string{"text", "markdown", "json", "csv"}}, "content": map[string]string{"type": "string"}}}}}
+	variants := []any{}
+	for _, format := range []string{"text", "markdown", "json", "csv"} {
+		suffix := artifactSuffix(format)
+		// Keep patterns printable: literal control ranges survive JSON decoding
+		// and corrupt llama.cpp's generated grammar. The authoritative parser
+		// below still rejects all control characters and enforces UTF-8 byte limits.
+		variants = append(variants, map[string]any{
+			"type": "object", "additionalProperties": false, "required": []string{"name", "format", "content"},
+			"properties": map[string]any{
+				"name":    map[string]any{"type": "string", "maxLength": 120, "pattern": `^[^/\\:]+\` + suffix + "$", "description": "Plain filename, at most 120 UTF-8 bytes, ending in " + suffix + "; no directories or control characters."},
+				"format":  map[string]any{"type": "string", "enum": []string{format}},
+				"content": map[string]any{"type": "string", "minLength": 1, "maxLength": 131072, "description": "Nonempty UTF-8 content, at most 131072 bytes (not characters), without NUL. JSON and CSV must parse; CSV formulas are forbidden."},
+			},
+		})
+	}
+	return api.Tool{Type: "function", Function: api.FunctionDef{Name: taskArtifactToolName, Description: "Save a private downloadable workspace artifact: text uses .txt, markdown .md, json .json, csv .csv. Example: name=notes.txt, format=text. Storage read-back verifies bytes and format ONLY, not factual accuracy or completion of research. First perform the requested work using available tools and actual source evidence; never save the search query as a substitute for research. This does not open applications or save into a host document. Call separately from computer actions.", Parameters: map[string]any{"oneOf": variants}}}
+}
+
+func artifactSuffix(format string) string {
+	return map[string]string{"text": ".txt", "markdown": ".md", "csv": ".csv", "json": ".json"}[format]
 }
 func taskArtifactDescriptor() capabilities.Descriptor {
 	return capabilities.Descriptor{Name: taskArtifactToolName, Namespace: "workspace", Source: "workspace", Kind: capabilities.Write, Risk: capabilities.RiskLow, Description: taskArtifactTool().Function.Description}
@@ -54,12 +74,27 @@ func parseTaskArtifact(raw json.RawMessage) (taskArtifactRequest, taskArtifactEv
 	var evidence taskArtifactEvidence
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if len(raw) > 1<<20 || decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF {
+	if len(raw) > 1<<20 || !utf8.Valid(raw) || jsonwire.Validate(raw) != nil || decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF {
 		return req, evidence, fmt.Errorf("invalid artifact request")
 	}
-	suffix := map[string]string{"text": ".txt", "markdown": ".md", "csv": ".csv", "json": ".json"}[req.Format]
-	if suffix == "" || path.Base(req.Name) != req.Name || len(req.Name) > 120 || len(req.Name) <= len(suffix) || !strings.HasSuffix(req.Name, suffix) || strings.ContainsAny(req.Name, "\\:\x00\r\n") || strings.IndexFunc(req.Name, unicode.IsControl) >= 0 || len(req.Content) == 0 || len(req.Content) > 128<<10 || !utf8.ValidString(req.Content) || strings.ContainsRune(req.Content, 0) {
-		return req, evidence, fmt.Errorf("use a plain filename and 1–131072 bytes of UTF-8 content in a supported format")
+	suffix := artifactSuffix(req.Format)
+	if suffix == "" {
+		return req, evidence, fmt.Errorf("artifact format must be text, markdown, json or csv")
+	}
+	if req.Name == "" || path.Base(req.Name) != req.Name || len(req.Name) > 120 || strings.ContainsAny(req.Name, "\\:\x00\r\n") || strings.IndexFunc(req.Name, unicode.IsControl) >= 0 {
+		return req, evidence, fmt.Errorf("artifact name must be a plain filename of at most 120 UTF-8 bytes, without paths or control characters")
+	}
+	if len(req.Name) <= len(suffix) || !strings.HasSuffix(req.Name, suffix) {
+		return req, evidence, fmt.Errorf("artifact name must have a nonempty basename followed by %s for the selected format", suffix)
+	}
+	if len(req.Content) == 0 {
+		return req, evidence, fmt.Errorf("artifact content is empty; supply the actual requested content")
+	}
+	if len(req.Content) > 128<<10 {
+		return req, evidence, fmt.Errorf("artifact content exceeds 131072 UTF-8 bytes; shorten it without omitting required work")
+	}
+	if !utf8.ValidString(req.Content) || strings.ContainsRune(req.Content, 0) {
+		return req, evidence, fmt.Errorf("artifact content must be valid UTF-8 without NUL characters")
 	}
 	if req.Format == "json" && !json.Valid([]byte(req.Content)) {
 		return req, evidence, fmt.Errorf("artifact content is not valid JSON")

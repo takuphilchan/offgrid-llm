@@ -33,7 +33,7 @@ func (e *chatServiceStreamEngine) ChatCompletionStreamRaw(ctx context.Context, r
 	if e.failure != nil {
 		return e.failure
 	}
-	terminal, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"delta": map[string]string{}, "finish_reason": e.finish}}, "usage": map[string]int{"completion_tokens": 4}})
+	terminal, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"delta": map[string]string{}, "finish_reason": e.finish}}, "usage": map[string]int{"prompt_tokens": 2, "completion_tokens": 4, "total_tokens": 6}})
 	return callback(terminal)
 }
 
@@ -42,13 +42,17 @@ func TestStreamChatServiceCompletionAndFailures(t *testing.T) {
 		name, finish string
 		failure      error
 		knowledge    bool
+		provider     bool
 		wantSuccess  bool
 	}{
-		{"complete", "stop", nil, false, true},
-		{"budget reached", "length", nil, false, true},
-		{"missing finish", "", nil, false, false},
-		{"partial failure", "", io.ErrUnexpectedEOF, false, false},
-		{"knowledge unavailable", "stop", nil, true, false},
+		{"complete", "stop", nil, false, false, true},
+		{"budget reached", "length", nil, false, false, true},
+		{"missing finish", "", nil, false, false, false},
+		{"partial failure", "", io.ErrUnexpectedEOF, false, false, false},
+		{"provider complete", "stop", nil, false, true, true},
+		{"provider missing finish", "", nil, false, true, false},
+		{"provider partial failure", "", io.ErrUnexpectedEOF, false, true, false},
+		{"knowledge unavailable", "stop", nil, true, false, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -67,6 +71,19 @@ func TestStreamChatServiceCompletionAndFailures(t *testing.T) {
 			release()
 			engine := &chatServiceStreamEngine{finish: test.finish, failure: test.failure}
 			s := &Server{config: &config.Config{MaxContextSize: 65536, ChatContextSize: 8192}, registry: registry, engine: engine, inferenceLifecycle: gate}
+			if test.provider {
+				loaded := inference.NewMockEngine()
+				if err := loaded.Load(context.Background(), filepath.Join(dir, "model.gguf"), inference.LoadOptions{}); err != nil {
+					t.Fatal(err)
+				}
+				engine.Engine = loaded
+				s.llamaProcess = &llamaLifecycleFixture{}
+				s.providerScheduler, err = inference.NewProviderScheduler(inference.NewProviderRegistry(), 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer s.providerScheduler.Close()
+			}
 			var events []ChatStreamEvent
 			result, err := s.streamSessionChat(context.Background(), &api.ChatCompletionRequest{Model: "model", Messages: []api.ChatMessage{{Role: "user", Content: "hello"}}, Stream: true, UseKnowledgeBase: &test.knowledge}, "interactive", func(event ChatStreamEvent) error { events = append(events, event); return nil })
 			if (err == nil) != test.wantSuccess {

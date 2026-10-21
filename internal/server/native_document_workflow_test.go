@@ -331,6 +331,9 @@ func runConversationQualificationFixture(t *testing.T, fault string, modelCall a
 	}
 	cfg := compositionConfig(target.Driver, true)
 	cfg.ComputerSession, cfg.NativeWorkflowVersion = session.ID, 2
+	if scenario == "document-action" {
+		cfg.NativeActionContractVersion = agents.NativeActionContractVersion
+	}
 	if desktop {
 		cfg.ComputerSession = ""
 		cfg.RequestedComputerScope, cfg.RequestedComputerApprovalMode = "desktop", "full_task"
@@ -421,6 +424,9 @@ func runConversationQualificationFixture(t *testing.T, fault string, modelCall a
 	prompt := "In the already selected editor create a new blank document, insert exactly: " + input + ". Read it back and confirm. Do not save or change the existing document."
 	if desktop {
 		prompt = "Open Notepad. In a new blank document, insert exactly: " + input + ". Read it back and confirm. Do not save or change the existing document."
+	}
+	if scenario == "document-action" {
+		prompt = "Open Notepad. Create a new blank document without changing existing documents. Type exactly: " + input + ". Read the text back and verify an exact match. Do not save. If you cannot identify a distinct new blank document safely, stop and explain."
 	}
 	appName := ""
 	switch scenario {

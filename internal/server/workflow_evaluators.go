@@ -33,6 +33,9 @@ func (b *browserRunTools) ValidateWorkflowEdit(t *agents.Task, name string, args
 	if t == nil || !agents.WorkflowVersionSupported(t) {
 		return computer.ErrInvalidControl
 	}
+	if err := b.validateNativeActionReadback(t, name); err != nil {
+		return err
+	}
 	if !t.Config.TaskFirst || t.Config.NativeWorkflowVersion == 0 || !nativeComputerDriver(t.Config.ComputerDriver) {
 		return nil
 	}
@@ -215,6 +218,13 @@ func (b *browserRunTools) AssessWorkflow(task *agents.Task) []agents.OutcomeChec
 	for i := range checks {
 		c := &checks[i]
 		c.State, c.Reason, c.EvidenceSteps, c.CheckedAt = "pending", "Matching independent evidence has not been recorded.", nil, nil
+		actionStep := 0
+		if c.ActionDerivedCallID != "" {
+			actionStep = derivedActionStep(task, c)
+			if actionStep == 0 {
+				continue // No successful dispatch matching this service-authored check.
+			}
+		}
 		if documentOutcomeKind(c.Expectation.Kind) {
 			bindRecordedDocumentAction(task, c)
 			assessDocumentOutcome(task, c)
@@ -245,6 +255,12 @@ func (b *browserRunTools) AssessWorkflow(task *agents.Task) []agents.OutcomeChec
 		observeStep := 0
 		for index := task.Config.ComputerStepOffset; index < len(task.Steps); index++ {
 			s := task.Steps[index]
+			if actionStep > 0 && s.ID < actionStep {
+				continue
+			}
+			if actionStep > 0 && c.State == "verified" {
+				break // A verified action receipt is history, not a perpetual state invariant.
+			}
 			if s.ID != index+1 {
 				continue
 			}

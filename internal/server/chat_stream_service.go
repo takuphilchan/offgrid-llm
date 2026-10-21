@@ -18,8 +18,17 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	if err := s.authorizeChat(ctx, request); err != nil {
 		return result, err
 	}
+	var nativeDescriptor inference.ProviderDescriptor
+	native := false
 	if _, err := s.registry.GetChatModel(request.Model); err != nil {
-		return result, newServiceError(http.StatusNotFound, "Model not found", err)
+		var selectErr error
+		nativeDescriptor, native, selectErr = s.selectNativeChat(ctx, request.Model)
+		if selectErr != nil {
+			return result, selectErr
+		}
+		if !native {
+			return result, newServiceError(http.StatusNotFound, "Model not found", err)
+		}
 	}
 	if s.degradationMgr != nil {
 		if !s.degradationMgr.RequestStart() {
@@ -42,18 +51,18 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	if err := phase("queued"); err != nil {
 		return result, err
 	}
-	result.Metrics.ContextWindow = s.chatContextWindow(profile)
-	queued := time.Now()
-	var loading time.Time
-	release, err := s.acquireInferenceContext(ctx, request.Model, result.Metrics.ContextWindow, func() error { loading = time.Now(); return phase("loading") })
+	if native {
+		return s.streamNativeSessionChat(ctx, &prepared, nativeDescriptor, started, emit)
+	}
+	result.Metrics.ContextWindow = s.chatContextWindowForModel(profile, request.Model)
+	lease, err := s.acquireInferenceLease(ctx, request.Model, result.Metrics.ContextWindow, func() error { return phase("loading") })
 	if err != nil {
 		return result, newServiceError(http.StatusServiceUnavailable, "Model could not be loaded; check available memory and runtime logs", err)
 	}
-	defer release()
-	if !loading.IsZero() {
-		result.Metrics.LoadMS = time.Since(loading).Milliseconds()
-	}
-	result.Metrics.QueueMS = time.Since(queued).Milliseconds() - result.Metrics.LoadMS
+	defer lease.Release()
+	admission := lease.Timing()
+	result.Metrics.LoadMS = admission.Load.Milliseconds()
+	result.Metrics.QueueMS = admission.Queue.Milliseconds()
 	result.Metrics.ReadyMS = time.Since(started).Milliseconds()
 	if err := phase("processing"); err != nil {
 		return result, err
@@ -78,41 +87,59 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 		answer.WriteString(text)
 		return emit(ChatStreamEvent{Type: "delta", Delta: text})
 	}
-	if raw, ok := s.engine.(inference.RawStreamingEngine); ok {
-		err = raw.ChatCompletionStreamRaw(ctx, &prepared, func(data json.RawMessage) error {
-			var chunk struct {
-				Error   json.RawMessage `json:"error"`
-				Choices []struct {
-					Delta struct {
-						Content string `json:"content"`
-					} `json:"delta"`
-					FinishReason *string `json:"finish_reason"`
-				} `json:"choices"`
-				Usage struct {
-					CompletionTokens int `json:"completion_tokens"`
-				} `json:"usage"`
-			}
-			if err := json.Unmarshal(data, &chunk); err != nil {
-				return err
-			}
-			if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
-				return newServiceError(http.StatusBadGateway, "Inference stream failed", nil)
-			}
-			if chunk.Usage.CompletionTokens > 0 {
-				result.Metrics.CompletionTokens = chunk.Usage.CompletionTokens
-			}
-			if len(chunk.Choices) > 0 {
-				if chunk.Choices[0].FinishReason != nil {
-					result.FinishReason = *chunk.Choices[0].FinishReason
+	err = lease.Run(ctx, func(ctx context.Context) error {
+		if s.providerScheduler != nil && s.llamaProcess != nil && len(prepared.Tools) == 0 {
+			// The shared scheduler/model lease above owns admission and the GGUF
+			// process. Production text streams use the provider's terminal/identity
+			// gate without acquiring a second slot or changing the public SSE shape.
+			return inference.StreamAdmittedLlamaChat(ctx, s.engine, "legacy-active:"+request.Model, result.Metrics.ContextWindow, &prepared, func(event inference.ProviderEvent) error {
+				switch event.Type {
+				case inference.ProviderEventDelta:
+					return emitText(event.Text)
+				case inference.ProviderEventUsage:
+					result.Metrics.CompletionTokens = event.Usage.CompletionTokens
+				case inference.ProviderEventDone:
+					result.FinishReason = event.FinishReason
 				}
-				return emitText(chunk.Choices[0].Delta.Content)
-			}
-			return nil
-		})
-	} else {
-		err = s.engine.ChatCompletionStream(ctx, &prepared, emitText)
-		result.FinishReason = "stop"
-	}
+				return nil
+			})
+		} else if raw, ok := s.engine.(inference.RawStreamingEngine); ok {
+			return raw.ChatCompletionStreamRaw(ctx, &prepared, func(data json.RawMessage) error {
+				var chunk struct {
+					Error   json.RawMessage `json:"error"`
+					Choices []struct {
+						Delta struct {
+							Content string `json:"content"`
+						} `json:"delta"`
+						FinishReason *string `json:"finish_reason"`
+					} `json:"choices"`
+					Usage struct {
+						CompletionTokens int `json:"completion_tokens"`
+					} `json:"usage"`
+				}
+				if err := json.Unmarshal(data, &chunk); err != nil {
+					return err
+				}
+				if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
+					return newServiceError(http.StatusBadGateway, "Inference stream failed", nil)
+				}
+				if chunk.Usage.CompletionTokens > 0 {
+					result.Metrics.CompletionTokens = chunk.Usage.CompletionTokens
+				}
+				if len(chunk.Choices) > 0 {
+					if chunk.Choices[0].FinishReason != nil {
+						result.FinishReason = *chunk.Choices[0].FinishReason
+					}
+					return emitText(chunk.Choices[0].Delta.Content)
+				}
+				return nil
+			})
+		} else {
+			err := s.engine.ChatCompletionStream(ctx, &prepared, emitText)
+			result.FinishReason = "stop"
+			return err
+		}
+	})
 	if err != nil {
 		if typed := inference.AsEngineError(err); typed != nil {
 			return result, newServiceError(http.StatusBadRequest, typed.Message, err)

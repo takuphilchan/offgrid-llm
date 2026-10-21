@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
@@ -23,11 +24,14 @@ func (s *Server) agentActor(r *http.Request) string {
 }
 
 func (s *Server) callAgentModel(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (*api.ChatCompletionResponse, error) {
-	release, err := s.acquireInference(ctx, task.Model)
+	if task.Config.TextOnlyInference {
+		return s.callNativeTextAgent(ctx, task, messages, tools, nil)
+	}
+	lease, err := s.acquireInferenceLease(ctx, task.Model, s.taskContextWindow(task), nil)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	defer lease.Release()
 	messages, err = s.attachTransientComputerCapture(task, messages)
 	if err != nil {
 		return nil, err
@@ -36,7 +40,39 @@ func (s *Server) callAgentModel(ctx context.Context, task *agents.Task, messages
 	maxTokens := task.Config.MaxTokens
 	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens}
 	configureComputerRequest(request, task)
-	return s.engine.ChatCompletion(ctx, request)
+	var response *api.ChatCompletionResponse
+	err = lease.Run(ctx, func(ctx context.Context) error {
+		var callErr error
+		response, callErr = s.engine.ChatCompletion(ctx, request)
+		return callErr
+	})
+	return response, err
+}
+
+// Native text jobs use the same qualified package selector and provider
+// scheduler as ordinary Chat. A persisted text-only job must never fall back
+// to llama.cpp or gain tool authority if its native runtime disappears.
+func (s *Server) callNativeTextAgent(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool, onDelta func(string) error) (*api.ChatCompletionResponse, error) {
+	if len(tools) != 0 || task.ParentID != "" || task.Config.ComputerSession != "" || task.Config.RequestedComputerScope != "" || len(task.Config.NativeExpectations) != 0 || len(task.Config.AllowedTools) != 0 || len(task.Config.AllowedCapabilities) != 0 || len(task.Config.DelegateProfiles) != 0 {
+		return nil, errors.New("native text job cannot use tools, delegates, or computer access")
+	}
+	descriptor, selected, err := s.selectNativeChat(ctx, task.Model)
+	if err != nil {
+		return nil, err
+	}
+	if !selected {
+		return nil, errors.New("pinned native text runtime is unavailable")
+	}
+	maxTokens := task.Config.MaxTokens
+	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, MaxTokens: &maxTokens}
+	result, err := inference.GenerateNativeTextChat(ctx, s.providerScheduler, descriptor, request, onDelta)
+	if err != nil {
+		return nil, err
+	}
+	if err := inference.ValidateToolDecision(request, result.Response); err != nil {
+		return nil, err
+	}
+	return result.Response, nil
 }
 
 func writeAgentError(w http.ResponseWriter, err error) {

@@ -93,7 +93,7 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 		if !valid {
 			return
 		}
-		config.ContextWindow = s.chatContextWindow(req.Profile)
+		config.ContextWindow = s.chatContextWindowForModel(req.Profile, job.Model)
 		config.ConversationProfile = req.Profile
 		if config.ConversationProfile == "" {
 			config.ConversationProfile = "interactive"

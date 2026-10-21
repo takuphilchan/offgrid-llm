@@ -135,37 +135,38 @@ var applianceProfiles = []applianceProfile{
 	},
 }
 
-func handleAppliance(args []string) {
+func handleAppliance(args []string) int {
 	if len(args) == 0 || isHelpArg(args[0]) {
 		printApplianceHelp()
-		return
+		return 0
 	}
 
 	switch strings.ToLower(args[0]) {
 	case "status":
 		handleApplianceStatus()
+		return 0
 	case "plan":
 		profile := ""
 		if len(args) > 1 {
 			profile = args[1]
 		}
-		handleAppliancePlan(profile)
+		return handleAppliancePlan(profile)
 	case "profile", "profiles":
 		profile := ""
 		if len(args) > 1 {
 			profile = args[1]
 		}
-		handleApplianceProfile(profile)
+		return handleApplianceProfile(profile)
 	case "init":
 		profile := "hub"
 		if len(args) > 1 {
 			profile = args[1]
 		}
-		handleApplianceInit(profile)
+		return handleApplianceInit(profile)
 	default:
 		printError("unknown appliance command: " + args[0])
 		printApplianceHelp()
-		os.Exit(1)
+		return 1
 	}
 }
 
@@ -224,7 +225,7 @@ func handleApplianceStatus() {
 	fmt.Println()
 }
 
-func handleAppliancePlan(name string) {
+func handleAppliancePlan(name string) int {
 	if name == "" {
 		name = "hub"
 	}
@@ -232,7 +233,7 @@ func handleAppliancePlan(name string) {
 	if !ok {
 		printError("unknown profile: " + name)
 		printApplianceProfiles()
-		os.Exit(1)
+		return 1
 	}
 
 	printSection(profile.Label)
@@ -250,19 +251,20 @@ func handleAppliancePlan(name string) {
 	fmt.Printf("    %s4.%s Start the portal with offgrid serve\n", brandMuted, colorReset)
 	fmt.Printf("    %s5.%s Add curriculum and community documents with offgrid kb add\n", brandMuted, colorReset)
 	fmt.Println()
+	return 0
 }
 
-func handleApplianceProfile(name string) {
+func handleApplianceProfile(name string) int {
 	if name == "" {
 		printApplianceProfiles()
-		return
+		return 0
 	}
 
 	profile, ok := findApplianceProfile(name)
 	if !ok {
 		printError("unknown profile: " + name)
 		printApplianceProfiles()
-		os.Exit(1)
+		return 1
 	}
 
 	printSection(profile.Label + " Settings")
@@ -270,37 +272,38 @@ func handleApplianceProfile(name string) {
 	printApplianceList("Good models", profile.Models)
 	fmt.Printf("  %sApply manually in your shell, service file, or appliance env file.%s\n", brandMuted, colorReset)
 	fmt.Println()
+	return 0
 }
 
-func handleApplianceInit(name string) {
+func handleApplianceInit(name string) int {
 	profile, ok := findApplianceProfile(name)
 	if !ok {
 		printError("unknown profile: " + name)
 		printApplianceProfiles()
-		os.Exit(1)
+		return 1
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil || homeDir == "" {
 		printError("could not locate home directory")
-		os.Exit(1)
+		return 1
 	}
 
 	dir := filepath.Join(homeDir, ".offgrid", "appliance")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		printError(fmt.Sprintf("failed to create appliance directory: %v", err))
-		os.Exit(1)
+		return 1
 	}
 
 	envPath := filepath.Join(dir, "appliance.env")
 	readmePath := filepath.Join(dir, "README.md")
 	if err := os.WriteFile(envPath, []byte(applianceEnv(profile)), 0644); err != nil {
 		printError(fmt.Sprintf("failed to write %s: %v", envPath, err))
-		os.Exit(1)
+		return 1
 	}
 	if err := os.WriteFile(readmePath, []byte(applianceReadme(profile)), 0644); err != nil {
 		printError(fmt.Sprintf("failed to write %s: %v", readmePath, err))
-		os.Exit(1)
+		return 1
 	}
 
 	printSection("Appliance Initialized")
@@ -311,6 +314,7 @@ func handleApplianceInit(name string) {
 	fmt.Println()
 	fmt.Printf("  %sNext:%s review the env file, import models, then run offgrid serve\n", brandMuted, colorReset)
 	fmt.Println()
+	return 0
 }
 
 func printApplianceProfiles() {

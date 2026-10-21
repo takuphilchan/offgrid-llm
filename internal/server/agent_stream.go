@@ -9,6 +9,7 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
+	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -16,11 +17,17 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	if err := emit("queued", ""); err != nil {
 		return nil, err
 	}
-	release, err := s.acquireInferenceContext(ctx, task.Model, s.effectiveContextWindow(), func() error { return emit("loading", "") })
+	if task.Config.TextOnlyInference {
+		if err := emit("processing", ""); err != nil {
+			return nil, err
+		}
+		return s.callNativeTextAgent(ctx, task, messages, tools, func(delta string) error { return emit("generating", delta) })
+	}
+	lease, err := s.acquireInferenceLease(ctx, task.Model, s.taskContextWindow(task), func() error { return emit("loading", "") })
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	defer lease.Release()
 	messages, err = s.attachTransientComputerCapture(task, messages)
 	if err != nil {
 		return nil, err
@@ -30,7 +37,11 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	}
 	temperature := float32(task.Config.Temperature)
 	maxTokens := task.Config.MaxTokens
-	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens, Stream: true}
+	toolChoice := interface{}("auto")
+	if agents.DelegationRequired(task) {
+		toolChoice = map[string]any{"type": "function", "function": map[string]any{"name": "delegate_tasks"}}
+	}
+	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: toolChoice, Temperature: &temperature, MaxTokens: &maxTokens, Stream: true}
 	request.StreamOptions = &api.StreamOptions{IncludeUsage: true}
 	configureComputerRequest(request, task)
 	raw, ok := s.engine.(inference.RawStreamingEngine)
@@ -38,26 +49,54 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 		// A text-only stream discards structured tool calls and finish reasons.
 		// Preserve safety for such engines instead of fabricating a completion.
 		request.Stream = false
-		return s.engine.ChatCompletion(ctx, request)
+		var response *api.ChatCompletionResponse
+		err := lease.Run(ctx, func(ctx context.Context) error {
+			var generationErr error
+			response, generationErr = s.engine.ChatCompletion(ctx, request)
+			return generationErr
+		})
+		if err == nil {
+			err = validateAgentDecision(task, request, response)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return response, nil
 	}
 	accumulator := agentStreamAccumulator{calls: make(map[int]*api.ToolCall)}
-	err = raw.ChatCompletionStreamRaw(ctx, request, func(data json.RawMessage) error {
-		text, toolDelta, err := accumulator.add(data)
-		if err != nil {
-			return err
-		}
-		if text != "" {
-			return emit("generating", text)
-		}
-		if toolDelta {
-			return emit("preparing_tool", "")
-		}
-		return nil
+	err = lease.Run(ctx, func(ctx context.Context) error {
+		return raw.ChatCompletionStreamRaw(ctx, request, func(data json.RawMessage) error {
+			text, toolDelta, err := accumulator.add(data)
+			if err != nil {
+				return err
+			}
+			if text != "" {
+				return emit("generating", text)
+			}
+			if toolDelta {
+				return emit("preparing_tool", "")
+			}
+			return nil
+		})
 	})
 	if err != nil {
 		return nil, err
 	}
-	return accumulator.response(), nil
+	response := accumulator.response()
+	if err := validateAgentDecision(task, request, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func validateAgentDecision(task *agents.Task, request *api.ChatCompletionRequest, response *api.ChatCompletionResponse) error {
+	// The runner already has a durable, paired-feedback rejection for a complete
+	// computer batch. Preserve that repair path: it rejects the WHOLE batch before
+	// authorization/dispatch, never executes a prefix, and owns its repair budget.
+	if task.Config.ComputerSession != "" && response != nil && len(response.Choices) == 1 && response.Choices[0].FinishReason == "tool_calls" && len(response.Choices[0].Message.ToolCalls) > 1 {
+		return nil
+	}
+	return inference.ValidateToolDecision(request, response)
 }
 
 // Assemble structured calls privately. Never expose arguments or reasoning
@@ -72,6 +111,9 @@ type agentStreamAccumulator struct {
 }
 
 func (a *agentStreamAccumulator) add(data json.RawMessage) (string, bool, error) {
+	if jsonwire.Validate(data) != nil {
+		return "", false, fmt.Errorf("ambiguous or malformed agent stream chunk")
+	}
 	var chunk struct {
 		Usage   *api.Usage      `json:"usage"`
 		Error   json.RawMessage `json:"error"`

@@ -2,11 +2,12 @@ package server
 
 import (
 	"encoding/json"
-	"github.com/takuphilchan/offgrid-llm/internal/agents"
-	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/computer"
 )
 
 func (s *Server) handleBrowserPairing(w http.ResponseWriter, r *http.Request) {

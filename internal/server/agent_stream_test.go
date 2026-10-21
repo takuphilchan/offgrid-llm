@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,8 +12,71 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+type lateAgentEngine struct {
+	inference.Engine
+	entered chan struct{}
+	finish  chan struct{}
+}
+
+func (e *lateAgentEngine) ChatCompletion(context.Context, *api.ChatCompletionRequest) (*api.ChatCompletionResponse, error) {
+	close(e.entered)
+	<-e.finish // Deliberately ignores the cancelled generation context.
+	return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: api.ChatMessage{Role: "assistant", Content: "late success"}, FinishReason: "stop"}}}, nil
+}
+
+func TestAgentStreamRejectsLateModelSuccessAfterStop(t *testing.T) {
+	gate := inference.NewLifecycleGate(1)
+	release, err := gate.AcquireWithContext(context.Background(), "fixture", 4096, func(context.Context, string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	engine := &lateAgentEngine{Engine: inference.NewMockEngine(), entered: make(chan struct{}), finish: make(chan struct{})}
+	s := &Server{engine: engine, inferenceLifecycle: gate}
+	task := &agents.Task{Model: "fixture", Config: agents.AgentConfig{ContextWindow: 4096, MaxTokens: 32}}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		response, err := s.streamAgentModel(ctx, task, []api.ChatMessage{{Role: "user", Content: "test"}}, nil, func(string, string) error { return nil })
+		if response != nil {
+			done <- errors.New("late response crossed the agent boundary")
+			return
+		}
+		done <- err
+	}()
+	<-engine.entered
+	cancel()
+	close(engine.finish)
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("late model response was not cancelled: %v", err)
+	}
+}
+
+func TestAgentDecisionPreservesComputerBatchRepair(t *testing.T) {
+	parallel := false
+	request := &api.ChatCompletionRequest{ParallelToolCalls: &parallel}
+	response := &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{FinishReason: "tool_calls", Message: api.ChatMessage{ToolCalls: []api.ToolCall{
+		{ID: "reused", Type: "function", Function: api.FunctionCall{Name: "computer_observe", Arguments: `{}`}},
+		{ID: "reused", Type: "function", Function: api.FunctionCall{Name: "computer_activate", Arguments: `{}`}},
+	}}}}}
+	task := &agents.Task{Config: agents.AgentConfig{ComputerSession: "fixture"}}
+	if err := validateAgentDecision(task, request, response); err != nil {
+		t.Fatal("runner's whole-batch rejection was bypassed by permanent failure", err)
+	}
+	task.Config.ComputerSession = ""
+	if err := validateAgentDecision(task, request, response); err == nil {
+		t.Fatal("non-computer batch escaped the decision gate")
+	}
+	response.Choices[0].FinishReason = "length"
+	task.Config.ComputerSession = "fixture"
+	if _, ok := validateAgentDecision(task, request, response).(*inference.DecisionValidationError); !ok {
+		t.Fatal("truncation bypassed the gate")
+	}
+}
 
 func TestAgentStreamAssemblesToolsWithoutLeakingReasoningOrArguments(t *testing.T) {
 	a := agentStreamAccumulator{calls: map[int]*api.ToolCall{}}
@@ -39,6 +103,8 @@ func TestAgentStreamAssemblesToolsWithoutLeakingReasoningOrArguments(t *testing.
 
 func TestAgentStreamRejectsMalformedAndOversizedCalls(t *testing.T) {
 	for _, chunk := range []string{
+		`{"choices":[],"choices":[{"index":0,"delta":{"content":"hidden"}}]}`,
+		`{"choices":[{"index":0,"delta":{"content":"\ud800"}}]}`,
 		`{"choices":[{"delta":{"tool_calls":[{"function":{"name":"x"}}]}}]}`,
 		`{"choices":[{"delta":{"tool_calls":[{"index":16,"function":{"name":"x"}}]}}]}`,
 		`{"choices":[{"index":1,"delta":{"content":"wrong choice"}}]}`,

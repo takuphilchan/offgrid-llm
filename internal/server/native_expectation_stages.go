@@ -17,6 +17,11 @@ func (b *browserRunTools) ProjectModelTools(task *agents.Task, tools []api.Tool)
 	if task == nil || !task.Config.TaskFirst || task.Config.ComputerScope != "desktop" || !nativeComputerDriver(task.Config.ComputerDriver) || task.Config.NativeWorkflowVersion != agents.DocumentWorkflowEvidenceVersion {
 		return tools
 	}
+	if agents.UsesNativeActionContract(task) {
+		return b.projectActionCoupledTools(task, tools)
+	}
+	documentIntent := nativeDocumentTaskIntent(task)
+	recoveryPending := nativeDocumentObservationRecoveryPending(task)
 	refs := nativeModelReferences(task)
 	matchedApp, _ := resolvedApplicationLookup(task)
 	var apps []string
@@ -247,6 +252,13 @@ func (b *browserRunTools) ProjectModelTools(task *agents.Task, tools []api.Tool)
 		}
 	}
 	for _, tool := range tools {
+		name := tool.Function.Name
+		if !documentIntent && nativeDocumentOnlyToolName(name) {
+			continue
+		}
+		if recoveryPending && !nativeDocumentRecoveryToolAllowed(name) && strings.HasPrefix(name, "computer_") {
+			continue
+		}
 		// A dispatched input already has its check and intent. Archive lookups,
 		// planning and another input cannot substitute for independent read-back.
 		// Keep the composed MCP catalog; narrow only this native planning stage.
@@ -313,6 +325,207 @@ func (b *browserRunTools) ProjectModelTools(task *agents.Task, tools []api.Tool)
 		projected = append(projected, tool)
 	}
 	return projected
+}
+
+// New contracts derive mechanical checks at dispatch admission. Projection is
+// still only a planning aid: references and host authority are revalidated.
+func (b *browserRunTools) projectActionCoupledTools(task *agents.Task, tools []api.Tool) []api.Tool {
+	refs := nativeModelReferences(task)
+	state, _ := documentState(task)
+	documentIntent := nativeDocumentTaskIntent(task)
+	pending := documentIntent && pendingDocumentReadback(task, state)
+	controlPending := b.pendingNativeControlReadback(task)
+	recoveryPending := nativeDocumentObservationRecoveryPending(task)
+	matched, lookupErr := resolvedApplicationLookup(task)
+	lastAction, lastPlan := 0, lastNativePlanStep(task)
+	for _, step := range task.Steps {
+		if step.Type == "action" {
+			lastAction = step.ID
+		}
+	}
+	var result []api.Tool
+	for _, tool := range tools {
+		name := tool.Function.Name
+		if !documentIntent && nativeDocumentOnlyToolName(name) {
+			continue
+		}
+		if recoveryPending && !nativeDocumentRecoveryToolAllowed(name) && strings.HasPrefix(name, "computer_") {
+			continue
+		}
+		// Once a selected application has been independently verified, a
+		// negotiated document provider must get the first post-launch turn.
+		// Re-offering the generic observation tool here lets small models loop
+		// over an unchanged address field instead of discovering whether the
+		// surface supports documents. An unsupported provider returns a typed
+		// negative capability and the fallback then exposes a fresh control view.
+		if name == "computer_observe" && state.step == 0 && b.documentToolsAvailable(task) && documentIntent && desktopSelected(task) && !nativeDocumentControlFallback(task) && !recoveryPending {
+			continue
+		}
+		if controlPending && (name == "task_history" || name == "task_plan" || name == "task_expectations" || (strings.HasPrefix(name, "computer_") && name != "computer_observe" && name != "computer_verify" && name != "computer_verify_checked" && name != "computer_inspect_control" && name != "computer_find_controls")) {
+			continue
+		}
+		if pending && (name == "task_history" || name == "task_plan" || name == "task_expectations" || (strings.HasPrefix(name, "computer_") && name != "computer_documents" && name != "computer_read_text")) {
+			continue
+		}
+		if name == "task_expectations" {
+			// Read-only requested content checks remain available. Mechanical
+			// mutation checks are derived instead of adding a metadata round trip.
+			var ok bool
+			tool, ok = b.projectReadOnlyNativeExpectations(task, tool)
+			if !ok {
+				continue
+			}
+		}
+		if name == "task_plan" && lastPlan > lastAction {
+			continue
+		}
+		if name == "task_history" {
+			var ok bool
+			tool, ok = projectNeededHistory(task, tool, !desktopSelected(task))
+			if !ok {
+				continue
+			}
+		}
+		if name == "computer_documents" && nativeDocumentControlFallback(task) {
+			continue
+		}
+		if name == "computer_open_application" {
+			if lookupErr != nil || len(agents.PendingApplicationLaunches(task)) != 0 {
+				continue
+			}
+			verified := false
+			for _, id := range agents.VerifiedApplications(task) {
+				verified = verified || id == matched
+			}
+			if verified {
+				continue
+			}
+			tool.Function.Parameters = map[string]any{"type": "object", "additionalProperties": false, "required": []string{"application_id"}, "properties": map[string]any{"application_id": map[string]any{"type": "string", "const": modelReference(refs, matched)}}}
+		}
+		if documentMutationTool(name) && (name != "computer_replace_text" || state.step > 0) {
+			if state.step == 0 {
+				continue
+			}
+			fixed := func(v string) map[string]any { return map[string]any{"type": "string", "const": v} }
+			properties := map[string]any{}
+			required := []string{"observation_id"}
+			if name == "computer_create_document" {
+				if !nativeCreationCanAdvance(task, state) {
+					continue
+				}
+				commands := []string{}
+				for _, command := range state.inventory.Commands {
+					commands = append(commands, command.ID)
+				}
+				if len(commands) == 0 {
+					continue
+				}
+				properties["observation_id"], properties["command"] = fixed(state.inventory.Observation.ID), map[string]any{"type": "string", "enum": commands}
+				required = append(required, "command")
+				tool.Function.Description = "Create one fresh blank document using the observed command. The harness records its mechanical check before dispatch. Never clear an existing document; inspect documents and read the new document afterwards."
+			} else {
+				if !nativeEditCanAdvance(task, state) || !documentEditCapability(state, name) {
+					continue
+				}
+				properties["observation_id"], properties["document"], properties["snapshot"] = fixed(state.read.Binding.Observation), fixed(state.read.Binding.Document), fixed(state.read.Snapshot)
+				properties["text"] = map[string]any{"type": "string", "maxLength": computer.MaxDocumentInputBytes}
+				required = append(required, "document", "snapshot", "text")
+				tool.Function.Description = "Perform the requested " + documentEditModeForTool(name) + " once on the independently read document. The harness binds its mechanical check before dispatch. Preserve exact requested text; inspect documents and independently read back after input. Never repeat uncertain input."
+			}
+			tool.Function.Parameters = map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
+		}
+		if name == "computer_verify" || name == "computer_verify_checked" {
+			kind, exists := "control_text_equals", false
+			if name == "computer_verify_checked" {
+				kind = "control_checked_equals"
+			}
+			if task.Workflow != nil {
+				for _, check := range b.AssessWorkflow(task) {
+					exists = exists || (check.Expectation.Kind == kind && check.Binding != nil && check.State != "verified")
+				}
+			}
+			if !exists {
+				continue
+			}
+			if controlPending {
+				var ok bool
+				tool, ok = b.projectPendingControlReadback(task, tool, kind, refs)
+				if !ok {
+					continue
+				}
+			}
+		}
+		result = append(result, tool)
+	}
+	return result
+}
+
+func (b *browserRunTools) projectPendingControlReadback(task *agents.Task, tool api.Tool, kind string, refs map[string]string) (api.Tool, bool) {
+	view, ok := currentNativeControlView(task)
+	if !ok {
+		return tool, false
+	}
+	fixed := func(value any) map[string]any { return map[string]any{"const": value} }
+	var branches []any
+	for _, check := range b.AssessWorkflow(task) {
+		if check.Expectation.Kind != kind || check.State == "verified" || check.Binding == nil || check.Binding.TargetSHA256 != evidenceTargetDigest(view.Observation.Target) {
+			continue
+		}
+		var elements []string
+		for _, control := range view.Elements {
+			if control.Identity != "" && control.Identity == check.Binding.Identity {
+				elements = append(elements, modelReference(refs, control.ID))
+			}
+		}
+		if len(elements) != 1 {
+			continue
+		}
+		field, value := "text", any(check.Expectation.Text)
+		if kind == "control_checked_equals" {
+			field, value = "checked", check.Expectation.Checked
+		}
+		branches = append(branches, map[string]any{"type": "object", "additionalProperties": false, "required": []string{"observation_id", "element", field}, "properties": map[string]any{"observation_id": fixed(modelReference(refs, view.Observation.ID)), "element": fixed(elements[0]), field: fixed(value)}})
+	}
+	if len(branches) == 0 {
+		return tool, false
+	}
+	tool.Function.Parameters = map[string]any{"oneOf": branches}
+	tool.Function.Description = "Independently verify the recorded edit against its exact expected value in the freshly observed control. Verification must precede Enter, navigation or another input."
+	return tool, true
+}
+
+func desktopSelected(task *agents.Task) bool {
+	_, _, selected := desktopPlanningState(task)
+	return selected
+}
+
+func (b *browserRunTools) projectReadOnlyNativeExpectations(task *agents.Task, tool api.Tool) (api.Tool, bool) {
+	legacy := *task
+	legacy.Config.NativeActionContractVersion = 0
+	projected := b.ProjectModelTools(&legacy, []api.Tool{tool})
+	if len(projected) != 1 {
+		return tool, false
+	}
+	tool = projected[0]
+	properties, _ := tool.Function.Parameters["properties"].(map[string]any)
+	expectations, _ := properties["expectations"].(map[string]any)
+	items, _ := expectations["items"].(map[string]any)
+	branches, _ := items["oneOf"].([]any)
+	var readOnly []any
+	for _, raw := range branches {
+		branch, _ := raw.(map[string]any)
+		fields, _ := branch["properties"].(map[string]any)
+		kind, _ := fields["kind"].(map[string]any)
+		if kind["const"] == "document_text_equals" {
+			readOnly = append(readOnly, raw)
+		}
+	}
+	if len(readOnly) == 0 {
+		return tool, false
+	}
+	items["oneOf"] = readOnly
+	tool.Function.Description = "Record a requested read-only exact-content check already observed in the intended document. This does not permit an edit. For planned creation or edits use the typed action directly; its mechanical check is recorded by the harness."
+	return tool, true
 }
 
 func pendingDocumentReadback(task *agents.Task, state savedDocumentState) bool {

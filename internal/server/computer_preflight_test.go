@@ -26,6 +26,19 @@ type probeEngine struct {
 	delay    time.Duration
 }
 
+type rawProbeBudgetEngine struct {
+	inference.Engine
+	calls int
+}
+
+func (e *rawProbeBudgetEngine) ChatCompletionStreamRaw(_ context.Context, request *api.ChatCompletionRequest, callback inference.ChatCompletionStreamCallback) error {
+	e.calls++
+	if !request.Stream || request.StreamOptions == nil || !request.StreamOptions.IncludeUsage || request.MaxTokens == nil || *request.MaxTokens != 192 {
+		return errors.New("streamed probe did not request bounded usage")
+	}
+	return callback(json.RawMessage(`{"choices":[],"usage":{"completion_tokens":193}}`))
+}
+
 func pairedBrowserForPreflight(t *testing.T) (*computer.BrowserHub, string, string) {
 	t.Helper()
 	hub := computer.NewBrowserHub()
@@ -93,7 +106,11 @@ func (e *probeEngine) ChatCompletion(ctx context.Context, request *api.ChatCompl
 			finish = "length"
 		}
 	}
-	return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message, FinishReason: finish}}}, nil
+	response := &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{Message: message, FinishReason: finish}}}
+	if e.mode == "over-budget" {
+		response.Usage.CompletionTokens = 193
+	}
+	return response, nil
 }
 
 func TestComputerModelCheckAdmissionDoesNotConsumeProbeBudget(t *testing.T) {
@@ -111,6 +128,9 @@ func TestComputerModelCheckAdmissionDoesNotConsumeProbeBudget(t *testing.T) {
 	result := s.checkComputerModelDriverWithBudget(context.Background(), "model", "browser", 100*time.Millisecond)
 	if !result.Passed || engine.requests != 2 {
 		t.Fatalf("cold/queued admission stole probe budget: %+v calls=%d", result, engine.requests)
+	}
+	if result.Timings == nil || result.Timings.AdmissionMS < 100 || result.Timings.ProbeMS >= 100 {
+		t.Fatalf("admission/probe timing not separated: %+v", result.Timings)
 	}
 	if gate.Status().Active != 0 {
 		t.Fatal("probe leaked inference lease")
@@ -155,7 +175,7 @@ func TestComputerModelCheckReportsProbeDeadlineAndCancellation(t *testing.T) {
 }
 
 func TestComputerModelProbeRequiresActualTwoStepCalls(t *testing.T) {
-	for _, mode := range []string{"good", "prose", "shell", "extra-args", "null", "wrong-text", "multiple", "truncated", "runtime"} {
+	for _, mode := range []string{"good", "prose", "shell", "extra-args", "null", "wrong-text", "multiple", "truncated", "runtime", "over-budget"} {
 		t.Run(mode, func(t *testing.T) {
 			engine := &probeEngine{mode: mode}
 			err := probeComputerTools(context.Background(), engine, "fixture")
@@ -171,6 +191,9 @@ func TestComputerModelProbeRequiresActualTwoStepCalls(t *testing.T) {
 			if mode == "multiple" && (!errors.Is(err, errComputerToolCalling) || !strings.Contains(err.Error(), "multiple tool calls")) {
 				t.Fatalf("missing safe sequential failure detail: %v", err)
 			}
+			if mode == "over-budget" && (!errors.Is(err, errProbeOutputBudget) || engine.requests != 1) {
+				t.Fatalf("over-budget synthetic answer was accepted or continued: calls=%d err=%v", engine.requests, err)
+			}
 		})
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -182,6 +205,13 @@ func TestComputerModelProbeRequiresActualTwoStepCalls(t *testing.T) {
 		if required, ok := tool.Function.Parameters["required"]; ok && required == nil {
 			t.Fatal("invalid null schema required")
 		}
+	}
+}
+
+func TestStreamedComputerModelProbeRejectsReportedOutputOveruse(t *testing.T) {
+	engine := &rawProbeBudgetEngine{}
+	if err := probeComputerTools(context.Background(), engine, "fixture"); !errors.Is(err, errProbeOutputBudget) || engine.calls != 1 {
+		t.Fatalf("streamed overuse escaped before the second check: calls=%d err=%v", engine.calls, err)
 	}
 }
 

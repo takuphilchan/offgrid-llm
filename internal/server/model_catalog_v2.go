@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ type modelResolutionRecord struct {
 
 func hasSpeechPackage(packages []models.PackageState) bool {
 	for _, p := range packages {
-		if p.Manifest != nil {
+		if p.Manifest != nil && (slices.Contains(p.Manifest.Capabilities, models.CapabilityTranscription) || slices.Contains(p.Manifest.Capabilities, models.CapabilitySynthesis)) {
 			return true
 		}
 	}

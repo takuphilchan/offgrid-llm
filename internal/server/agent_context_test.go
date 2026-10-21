@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
@@ -60,5 +61,48 @@ func TestAgentContextCountingPinsModelAndReleasesLease(t *testing.T) {
 	}
 	if _, err = s.countAgentContext(context.Background(), task, nil, nil); !errors.Is(err, agents.ErrContextCountUnavailable) {
 		t.Fatal(err)
+	}
+}
+
+func TestAgentContextCountRejectsLateSuccessAndRecordsSharedTiming(t *testing.T) {
+	scheduler, err := inference.NewProviderScheduler(inference.NewProviderRegistry(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer scheduler.Close()
+	gate := inference.NewLifecycleGate(1)
+	release, err := gate.AcquireWithContext(context.Background(), "model", 8192, func(context.Context, string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	entered, finish := make(chan struct{}), make(chan struct{})
+	s := &Server{config: &config.Config{MaxContextSize: 8192}, inferenceLifecycle: gate, providerScheduler: scheduler}
+	s.engine = &contextCountingEngine{count: func(context.Context, *api.ChatCompletionRequest) (int, error) {
+		close(entered)
+		<-finish // Simulate a tokenizer that ignores Stop until its own work ends.
+		return 4000, nil
+	}}
+	task := &agents.Task{Model: "model", Config: agents.AgentConfig{MaxTokens: 1024}}
+	ctx, cancel := context.WithCancel(context.Background())
+	type result struct {
+		count int
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		count, err := s.countAgentContext(ctx, task, nil, nil)
+		done <- result{count, err}
+	}()
+	<-entered
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+	close(finish)
+	got := <-done
+	if got.count != 0 || !errors.Is(got.err, context.Canceled) || gate.Status().Active != 0 {
+		t.Fatalf("late tokenizer success crossed Stop: %+v gate=%+v", got, gate.Status())
+	}
+	if timing := scheduler.LegacyTimingSnapshot(); timing.Samples != 1 || timing.Generation <= 0 {
+		t.Fatalf("tokenizer work was not accounted by shared scheduler: %+v", timing)
 	}
 }

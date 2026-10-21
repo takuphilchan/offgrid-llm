@@ -98,10 +98,19 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 		defer s.degradationMgr.RequestEnd()
 	}
 	metadata, err := s.registry.GetChatModel(request.Model)
+	var nativeDescriptor inference.ProviderDescriptor
+	native := false
 	if err != nil {
-		return nil, newServiceError(http.StatusNotFound, fmt.Sprintf("model not found: %s", request.Model), err)
+		var selectErr error
+		nativeDescriptor, native, selectErr = s.selectNativeChat(ctx, request.Model)
+		if selectErr != nil {
+			return nil, selectErr
+		}
+		if !native {
+			return nil, newServiceError(http.StatusNotFound, fmt.Sprintf("model not found: %s", request.Model), err)
+		}
 	}
-	if hasImage && metadata.ProjectorPath == "" {
+	if hasImage && (native || metadata.ProjectorPath == "") {
 		return nil, newCodedServiceError(http.StatusUnprocessableEntity, "vision_projector_unavailable", "the selected model has no installed vision projector; no image was sent to inference", nil)
 	}
 
@@ -112,14 +121,26 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 		return nil, err
 	}
 
-	releaseInference, err := s.acquireInference(ctx, request.Model)
-	if err != nil {
-		return nil, newServiceError(http.StatusInternalServerError, "failed to switch model", err)
+	var response *api.ChatCompletionResponse
+	if native {
+		response, err = s.completeNativeChat(ctx, &prepared, nativeDescriptor)
+	} else {
+		var lease *inference.LegacyGenerationLease
+		lease, err = s.acquireInferenceLease(ctx, request.Model, s.modelContextWindow(request.Model), nil)
+		if err != nil {
+			return nil, newServiceError(http.StatusInternalServerError, "failed to switch model", err)
+		}
+		defer lease.Release()
+		err = lease.Run(ctx, func(ctx context.Context) error {
+			var callErr error
+			response, callErr = s.engine.ChatCompletion(ctx, &prepared)
+			return callErr
+		})
 	}
-	defer releaseInference()
-
-	response, err := s.engine.ChatCompletion(ctx, &prepared)
 	if err != nil {
+		if native {
+			return nil, err
+		}
 		if engineErr := inference.AsEngineError(err); engineErr != nil {
 			return nil, newServiceError(http.StatusBadRequest, engineErr.Message, err)
 		}

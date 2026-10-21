@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -508,8 +509,8 @@ func waitForStream(ch <-chan chatStreamMsg) tea.Cmd {
 	}
 }
 
-func runChatTUI(rt *ChatRuntime) error {
-	program := tea.NewProgram(newChatTUIModel(rt), tea.WithAltScreen())
+func runChatTUI(ctx context.Context, rt *ChatRuntime) error {
+	program := tea.NewProgram(newChatTUIModel(rt), tea.WithAltScreen(), tea.WithContext(ctx))
 	_, err := program.Run()
 	return err
 }

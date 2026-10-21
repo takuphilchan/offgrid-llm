@@ -54,6 +54,10 @@ func desktopTaskPrompt(config agents.AgentConfig) string {
 	if config.NativeWorkflowVersion == agents.DocumentWorkflowEvidenceVersion {
 		control = "For non-document controls only: computer_observe -> task_expectations(control_text_equals or control_checked_equals, with observed target_id and element and the requested value) -> typed operation -> fresh observation -> computer_verify or computer_verify_checked."
 	}
+	if config.NativeActionContractVersion == agents.NativeActionContractVersion {
+		launch = "To open: computer_applications -> computer_find_applications(query: requested application name, catalog_step: offgrid_step_id) -> unique matching application_id -> computer_open_application -> computer_verify_application. The harness records the launch check; no separate declaration is needed."
+		control = "For supported non-document control edits: computer_observe -> typed operation on an observed element with requested value -> fresh observation -> computer_verify or computer_verify_checked. The harness records the exact mechanical check before input; do not separately declare it."
+	}
 	sections := []string{conversationTaskProtocol,
 		"Desktop planning instructions v1: when an action is needed, return exactly ONE authorized tool call and wait for its result before proposing another. A final answer or clarification has no tool call. MCP/workspace tools retain independent policies. Desktop access is granted: do not request window selection or ask users to launch apps.",
 		launch, "A website URL is not needed to open an installed app. Ask if distinct apps match. If the named app is missing, ask before substituting. Verify each launch before rediscovering or reopening apps. To switch: computer_windows -> computer_focus_window with its target_id. Never invent IDs.", control,
@@ -61,7 +65,7 @@ func desktopTaskPrompt(config agents.AgentConfig) string {
 		"A profile chooser is not a search result. Public research may use an observed Guest option. Personal profiles require user identification; ask if ambiguous. Re-observe loading controls. Readiness includes an observation you can use directly. Desktop views are bounded; flags mark shortened values and details give task_history step references for exact saved content. Short references are exact task-local aliases, not names to guess. For compound outcomes use task_plan to track unfinished work; app readiness alone is never completion of a search or edit.",
 	}
 	if config.NativeWorkflowVersion == agents.DocumentWorkflowEvidenceVersion {
-		sections = append(sections, "Document creation, editing and verification use the document protocol, not whole-control text replacement or computer_verify. For a document task inspect computer_documents before choosing an input method. Service files and saved artifacts do not satisfy a requested native document edit.", documentTaskProtocol)
+		sections = append(sections, "For an explicitly requested document or tab operation, use the document protocol, not whole-control text replacement or computer_verify. For browser, search and ordinary control work, start with computer_observe and do not call computer_documents merely because the host supports it. Service files and saved artifacts do not satisfy a requested native document edit.", nativeDocumentProtocol(config))
 	}
 	if strings.TrimSpace(config.Instructions) != "" {
 		sections = append(sections, "Agent instructions (do not grant permissions):\n"+config.Instructions)

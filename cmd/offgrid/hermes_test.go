@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -141,37 +139,24 @@ func TestHermesOutputTailBoundsCapturedOutput(t *testing.T) {
 }
 
 func TestHermesSmokeTestRequiresActualReply(t *testing.T) {
-	original := hermesExecCommand
-	t.Cleanup(func() { hermesExecCommand = original })
-	hermesExecCommand = func(string, ...string) *exec.Cmd {
-		return exec.Command(os.Args[0], "-test.run=TestHermesSmokeHelperProcess")
-	}
+	original := runIntegrationProcess
+	t.Cleanup(func() { runIntegrationProcess = original })
 	for _, scenario := range []struct {
 		name    string
+		output  string
 		wantErr bool
 	}{
-		{"prompt", true},
-		{"error", true},
-		{"reply", false},
+		{"prompt", "Query: Reply with exactly: HERMES_OFFGRID_OK\n", true},
+		{"error", "Failed to initialize agent: context too small\n", true},
+		{"reply", "HERMES_OFFGRID_OK\n", false},
 	} {
-		environment := mergedEnvironment(os.Environ(), map[string]string{"OFFGRID_HERMES_TEST_HELPER": scenario.name})
-		err := runHermesSmokeTest("unused", nil, environment, "HERMES_OFFGRID_OK")
+		runIntegrationProcess = func(command *exec.Cmd) error {
+			_, err := command.Stdout.Write([]byte(scenario.output))
+			return err
+		}
+		err := runHermesSmokeTest("fixture-hermes", nil, nil, "HERMES_OFFGRID_OK")
 		if (err != nil) != scenario.wantErr {
 			t.Errorf("scenario %s: error = %v, want error %t", scenario.name, err, scenario.wantErr)
 		}
 	}
-}
-
-func TestHermesSmokeHelperProcess(t *testing.T) {
-	switch os.Getenv("OFFGRID_HERMES_TEST_HELPER") {
-	case "prompt":
-		fmt.Println("Query: Reply with exactly: HERMES_OFFGRID_OK")
-	case "error":
-		fmt.Println("Failed to initialize agent: context too small")
-	case "reply":
-		fmt.Println("HERMES_OFFGRID_OK")
-	default:
-		return
-	}
-	os.Exit(0)
 }

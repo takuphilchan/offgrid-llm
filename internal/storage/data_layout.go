@@ -1,4 +1,4 @@
-package server
+package storage
 
 import (
 	"fmt"
@@ -10,10 +10,10 @@ import (
 
 const dataLayoutVersion = 1
 
-// prepareDataLayout creates the single application-state root and copies
+// PrepareDataLayout creates the single application-state root and copies
 // legacy state into it without overwriting newer files. Legacy files are kept
 // in place so an interrupted migration is recoverable.
-func prepareDataLayout(modelsDir, dataDir string) error {
+func PrepareDataLayout(modelsDir, dataDir string) error {
 	if dataDir == "" {
 		return fmt.Errorf("data directory is required")
 	}

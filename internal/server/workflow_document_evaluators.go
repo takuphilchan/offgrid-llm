@@ -49,6 +49,13 @@ func assessDocumentOutcome(task *agents.Task, check *agents.OutcomeCheck) {
 		return
 	}
 	e, binding := check.Expectation, check.Binding
+	actionStep := 0
+	if check.ActionDerivedCallID != "" {
+		actionStep = derivedActionStep(task, check)
+		if actionStep == 0 {
+			return
+		}
+	}
 	if binding == nil || binding.Document == nil || binding.Session == "" || binding.Session != task.Config.ComputerSession || binding.Step < 1 || task.Config.ComputerStepOffset < 0 || task.Config.ComputerStepOffset > len(task.Steps) {
 		return
 	}
@@ -67,7 +74,13 @@ func assessDocumentOutcome(task *agents.Task, check *agents.OutcomeCheck) {
 		check.State, check.Reason, check.EvidenceSteps, check.CheckedAt = "pending", "Matching independent document read-back has not been recorded.", nil, nil
 	}
 	for index := task.Config.ComputerStepOffset; index < len(task.Steps); index++ {
+		if check.ActionDerivedCallID != "" && agents.UsesNativeActionContract(task) && check.State == "verified" {
+			return // Independently verified action-bound milestone; retain its original evidence.
+		}
 		s := task.Steps[index]
+		if actionStep > 0 && s.ID < actionStep {
+			continue
+		}
 		if s.ID != index+1 {
 			reset()
 			return

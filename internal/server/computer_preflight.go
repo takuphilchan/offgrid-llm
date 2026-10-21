@@ -25,6 +25,14 @@ type computerModelCheck struct {
 	Retryable bool                       `json:"retryable"`
 	Runtime   *inference.ToolRuntimeInfo `json:"runtime,omitempty"`
 	Vision    *computerVisionCheck       `json:"vision,omitempty"`
+	Timings   *computerCheckTimings      `json:"timings,omitempty"`
+}
+
+// Admission includes queueing and model readiness, not synthetic generation.
+// These measurements describe the shared check, not an individual observer's wait.
+type computerCheckTimings struct {
+	AdmissionMS int64 `json:"admission_ms"`
+	ProbeMS     int64 `json:"probe_ms"`
 }
 
 func (s *Server) checkComputerModel(ctx context.Context, model string) computerModelCheck {
@@ -36,10 +44,22 @@ func (s *Server) checkComputerModelDriver(ctx context.Context, model, driver str
 }
 
 func (s *Server) checkComputerModelDriverWithBudget(ctx context.Context, model, driver string, probeBudget time.Duration) computerModelCheck {
-	result := computerModelCheck{Model: model, Code: "computer_model_check_unavailable", Message: "The model runtime could not complete its tool-call check. Check service health and retry this saved task; no computer action was executed by the check.", Retryable: true}
+	if driver == "" {
+		driver = "browser"
+	}
+	key := computerCheckKey{model: model, driver: driver, contextWindow: s.modelContextWindow(model), budget: probeBudget}
+	return s.computerModelChecks.do(ctx, s.runtimeCtx, key, func(checkCtx context.Context) computerModelCheck {
+		return s.runComputerModelCheck(checkCtx, model, driver, probeBudget)
+	})
+}
+
+func (s *Server) runComputerModelCheck(ctx context.Context, model, driver string, probeBudget time.Duration) (result computerModelCheck) {
+	result = computerModelCheck{Model: model, Code: "computer_model_check_unavailable", Message: "The model runtime could not complete its tool-call check. Check service health and retry this saved task; no computer action was executed by the check.", Retryable: true, Timings: &computerCheckTimings{}}
 	// Admission already has the configured model-load deadline (including queue
 	// wait). Cold loading must not consume the two-step inference check's budget.
-	release, err := s.acquireInference(ctx, model)
+	admissionStarted := time.Now()
+	lease, err := s.acquireInferenceLease(ctx, model, s.modelContextWindow(model), nil)
+	result.Timings.AdmissionMS = time.Since(admissionStarted).Milliseconds()
 	if err != nil {
 		result.Code = "computer_model_admission_unavailable"
 		result.Message = "The model could not become ready for its tool-call check. Check model loading and service health, then retry this saved task."
@@ -51,7 +71,9 @@ func (s *Server) checkComputerModelDriverWithBudget(ctx context.Context, model, 
 		}
 		return result
 	}
-	defer release()
+	defer lease.Release()
+	probeStarted := time.Now()
+	defer func() { result.Timings.ProbeMS = time.Since(probeStarted).Milliseconds() }()
 	ctx, cancel := context.WithTimeout(ctx, probeBudget)
 	defer cancel()
 	if runtime, ok := s.engine.(interface {
@@ -62,7 +84,9 @@ func (s *Server) checkComputerModelDriverWithBudget(ctx context.Context, model, 
 			result.Runtime = info
 		}
 	}
-	err = probeComputerToolsDriver(ctx, s.engine, model, driver)
+	err = lease.Run(ctx, func(ctx context.Context) error {
+		return probeComputerToolsDriver(ctx, s.engine, model, driver)
+	})
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			result.Code, result.Message = "computer_model_check_timeout", "The model loaded, but its two-step tool-call check exceeded the time limit. Retry this saved task or choose a faster tool-calling model. The check did not execute a computer action."
@@ -146,6 +170,7 @@ func probeComputerToolsDriver(ctx context.Context, engine inference.Engine, mode
 		var err error
 		if raw, ok := engine.(inference.RawStreamingEngine); ok {
 			request.Stream = true
+			request.StreamOptions = &api.StreamOptions{IncludeUsage: true}
 			acc := agentStreamAccumulator{calls: make(map[int]*api.ToolCall)}
 			err = raw.ChatCompletionStreamRaw(ctx, request, func(data json.RawMessage) error { _, _, err := acc.add(data); return err })
 			response = acc.response()
@@ -155,12 +180,21 @@ func probeComputerToolsDriver(ctx context.Context, engine inference.Engine, mode
 		if err != nil {
 			return err
 		}
+		if err := checkSyntheticProbeUsage(response, tokens); err != nil {
+			return err
+		}
 		if response == nil || len(response.Choices) != 1 || response.Choices[0].FinishReason != "tool_calls" {
 			return &computerToolCheckError{"The runtime did not return a complete structured computer tool call."}
 		}
 		message := response.Choices[0].Message
 		if len(message.ToolCalls) != 1 {
 			return &computerToolCheckError{"The runtime returned zero or multiple tool calls in one response instead of one sequential call."}
+		}
+		if err := inference.ValidateToolDecision(request, response); err != nil {
+			if _, operational := err.(*inference.DecisionContractError); operational {
+				return err
+			}
+			return &computerToolCheckError{"The runtime returned an incomplete or invalid structured decision."}
 		}
 		call := message.ToolCalls[0]
 		var args map[string]json.RawMessage
@@ -224,12 +258,20 @@ func (s *Server) handleComputerModelCheck(w http.ResponseWriter, r *http.Request
 		result.Vision = &vision
 	}
 	if result.Retryable {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": map[string]any{"code": result.Code, "message": result.Message, "retryable": true}})
+		writeJSON(w, http.StatusServiceUnavailable, computerCheckErrorMessage(result, result.Message))
 		return
 	}
 	writeJSON(w, 200, result)
 }
 
 func computerCheckError(result computerModelCheck) map[string]any {
-	return map[string]any{"error": map[string]any{"code": result.Code, "message": fmt.Sprintf("%s: %s", result.Model, result.Message), "retryable": result.Retryable}}
+	return computerCheckErrorMessage(result, fmt.Sprintf("%s: %s", result.Model, result.Message))
+}
+
+func computerCheckErrorMessage(result computerModelCheck, message string) map[string]any {
+	response := map[string]any{"error": map[string]any{"code": result.Code, "message": message, "retryable": result.Retryable}}
+	if result.Timings != nil {
+		response["timings"] = *result.Timings
+	}
+	return response
 }
