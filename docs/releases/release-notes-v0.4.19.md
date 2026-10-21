@@ -23,6 +23,13 @@ volumes are not migrated by this release.
   fixtures now cover the composed service and current Models response shape.
 - An availability test now waits for its simulated storage failure before
   clearing it, avoiding an intermittent CI timeout.
+- Hermes setup chooses an installed chat model using its admitted context, and
+  readiness checks the model and context actually saved in Hermes. A configured
+  65K value no longer masks a smaller OffGrid allocation.
+- OpenClaw setup preserves existing OffGrid model entries when adding another
+  model. Its provider discovers installed chat models and reported contexts
+  from the running service instead of relying on a baked-in model name or
+  invented context size.
 
 ## Verification and limits
 
@@ -31,6 +38,14 @@ tests (10 environment-gated skips), 71 desktop tests, 73 companion tests,
 74 Python client/worker tests, packaged Windows startup/browser/presentation
 fixtures, release-script fixtures and maintained-document checks passed during
 release preparation. These checks do not establish universal native-app success.
+
+For the integration correction, the Go suite, API/type/web build, 71 desktop
+tests, documentation and OpenSpec checks passed locally. A CPU-only container
+loaded Meta-Llama at a 65,536-token slot with q4_0 KV cache and generated a
+reply. OpenClaw's provider smoke test returned a model response, and both
+integration readiness checks passed. A full Hermes agent reply and sustained
+OpenClaw agent workflow were not established by these smoke tests; concurrent
+CPU-model tests caused a canceled load, so test full workflows one at a time.
 
 The full native workflow matrix, installed macOS/Linux permission behavior,
 Apple Silicon MLX and local PyTorch model qualification remain unverified. On
