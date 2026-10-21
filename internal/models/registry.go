@@ -37,6 +37,16 @@ func (r *Registry) Packages() *PackageStore { return r.packages }
 
 // ScanModels scans the models directory for available models
 func (r *Registry) ScanModels() error {
+	return r.scanModels(true)
+}
+
+// ScanModelsReadOnly inspects an existing model directory without creating it.
+// CLI diagnostics must not initialize user storage as a side effect of a read.
+func (r *Registry) ScanModelsReadOnly() error {
+	return r.scanModels(false)
+}
+
+func (r *Registry) scanModels(createDirectory bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -47,9 +57,14 @@ func (r *Registry) ScanModels() error {
 	// Clear existing models to get fresh state
 	r.models = make(map[string]*api.ModelMetadata)
 
-	// Ensure models directory exists
-	if err := os.MkdirAll(r.modelsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create models directory: %w", err)
+	if createDirectory {
+		if err := os.MkdirAll(r.modelsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create models directory: %w", err)
+		}
+	} else if info, err := os.Stat(r.modelsDir); err != nil {
+		return err
+	} else if !info.IsDir() {
+		return fmt.Errorf("models path is not a directory: %s", r.modelsDir)
 	}
 
 	// Scan for .gguf files
@@ -82,10 +97,16 @@ func (r *Registry) ScanModels() error {
 				Size:         info.Size(),
 				Format:       ext[1:], // Remove the dot
 				Quantization: r.detectQuantization(path),
-				ContextSize:  4096, // Default, will be updated when loaded
+				ContextSize:  0, // Unknown until bounded GGUF metadata is read.
 				Parameters:   r.detectParameters(path),
 				Type:         modelType,
 				IsLoaded:     previouslyLoaded[modelID],
+			}
+			if ext == ".gguf" {
+				if profile, profileErr := ReadGGUFContextProfile(path); profileErr == nil {
+					metadata.ContextSize = profile.ContextLength
+					metadata.KVElementsPerToken = profile.KVElementsPerToken
+				}
 			}
 
 			// Check for projector
@@ -117,6 +138,10 @@ func (r *Registry) ListModels() []api.Model {
 			sizeGB = fmt.Sprintf("%.0f MB", float64(meta.Size)/(1024*1024))
 		}
 
+		format := ""
+		if meta.Format == FormatGGUF {
+			format = FormatGGUF
+		}
 		models = append(models, api.Model{
 			ID:      meta.ID,
 			Object:  "model",
@@ -125,6 +150,8 @@ func (r *Registry) ListModels() []api.Model {
 			Type:    meta.Type,
 			Size:    meta.Size,
 			SizeGB:  sizeGB,
+			Engine:  EngineLlamaCPP,
+			Format:  format,
 		})
 	}
 

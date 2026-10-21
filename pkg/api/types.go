@@ -190,6 +190,14 @@ type Model struct {
 	ContextLength    int               `json:"context_length,omitempty"` // Compatibility alias used by agent clients
 	Capabilities     []string          `json:"capabilities,omitempty"`
 	CapabilityStatus map[string]string `json:"capability_status,omitempty"`
+	Engine           string            `json:"engine,omitempty"`
+	Format           string            `json:"format,omitempty"`
+	Backend          string            `json:"backend,omitempty"`
+	RunnerRevision   string            `json:"runner_revision,omitempty"`
+	AdapterRevision  string            `json:"adapter_revision,omitempty"`
+	RuntimeReady     bool              `json:"runtime_ready,omitempty"`
+	SmokeTested      bool              `json:"smoke_tested,omitempty"`
+	Qualified        bool              `json:"qualified,omitempty"`
 }
 
 // ModelListResponse represents the response for listing models
@@ -212,18 +220,19 @@ type ErrorDetail struct {
 
 // ModelMetadata contains additional metadata about a model
 type ModelMetadata struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Path          string    `json:"path"`
-	Size          int64     `json:"size"`                     // Size in bytes
-	Format        string    `json:"format"`                   // "gguf", "ggml", etc.
-	Quantization  string    `json:"quantization"`             // "Q4_0", "Q5_K_M", etc.
-	ContextSize   int       `json:"context_size"`             // Max context window
-	Parameters    string    `json:"parameters"`               // "7B", "13B", etc.
-	Type          string    `json:"type"`                     // "llm" or "embedding"
-	ProjectorPath string    `json:"projector_path,omitempty"` // Path to vision projector file
-	LoadedAt      time.Time `json:"loaded_at,omitempty"`
-	IsLoaded      bool      `json:"is_loaded"`
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	Path               string    `json:"path"`
+	Size               int64     `json:"size"`                     // Size in bytes
+	Format             string    `json:"format"`                   // "gguf", "ggml", etc.
+	Quantization       string    `json:"quantization"`             // "Q4_0", "Q5_K_M", etc.
+	ContextSize        int       `json:"context_size"`             // Max context window
+	KVElementsPerToken int64     `json:"-"`                        // KV scalar elements per token from GGUF metadata
+	Parameters         string    `json:"parameters"`               // "7B", "13B", etc.
+	Type               string    `json:"type"`                     // "llm" or "embedding"
+	ProjectorPath      string    `json:"projector_path,omitempty"` // Path to vision projector file
+	LoadedAt           time.Time `json:"loaded_at,omitempty"`
+	IsLoaded           bool      `json:"is_loaded"`
 }
 
 // EmbeddingRequest represents an OpenAI-compatible embedding request

@@ -52,6 +52,22 @@ func TestPackageStoreLifecycle(t *testing.T) {
 	}
 }
 
+func TestOfflineTextPackageImportDoesNotAuthorizeInference(t *testing.T) {
+	store := NewPackageStore(t.TempDir())
+	manifest := testPackageManifest("transformers-text")
+	state, err := store.Import(context.Background(), manifest, fixturePackageSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Installed || state.Integrity != "checked" || state.RuntimeCompatible || state.SmokeTested || state.Qualified {
+		t.Fatalf("import promoted text model into a runnable state: %+v", state)
+	}
+	items, err := store.List()
+	if err != nil || len(items) != 1 || items[0].Manifest == nil || items[0].Manifest.Engine != EngineTransformers {
+		t.Fatalf("text package identity was not persisted: %+v, %v", items, err)
+	}
+}
+
 func TestPackageStoreRejectsCorruptionAndCancellation(t *testing.T) {
 	for _, mode := range []string{"short", "long", "digest", "cancel"} {
 		t.Run(mode, func(t *testing.T) {

@@ -59,6 +59,7 @@ func (t InstallationTarget) Validate() error {
 type ModelReadiness struct {
 	Installed         bool   `json:"installed"`
 	Integrity         string `json:"integrity"`
+	RuntimeReady      bool   `json:"runtime_ready"`
 	RuntimeCompatible bool   `json:"runtime_compatible"`
 	SmokeTested       bool   `json:"smoke_tested"`
 	Qualified         bool   `json:"qualified"`
@@ -78,6 +79,9 @@ type TypedModelVariant struct {
 	Target     InstallationTarget `json:"target"`
 	Provenance ModelProvenance    `json:"provenance"`
 	Readiness  ModelReadiness     `json:"readiness"`
+	Engine     string             `json:"engine,omitempty"`
+	Format     string             `json:"format,omitempty"`
+	Backend    string             `json:"backend,omitempty"`
 }
 
 type TypedCatalogEntry struct {
@@ -100,6 +104,9 @@ type PackageCatalogEntry struct {
 }
 
 func packageCategory(m ModelPackageManifest) ModelCategory {
+	if slices.Contains(m.Capabilities, CapabilityChat) {
+		return CategoryLanguage
+	}
 	if slices.Contains(m.Capabilities, CapabilityTranscription) {
 		return CategoryRecognition
 	}
@@ -154,7 +161,7 @@ func (c *ModelCatalog) TypedEntries(category ModelCategory) []TypedCatalogEntry 
 			}
 			// Catalog packages use pinned, reviewed data, not a promise that the
 			// runtime is installed, tested or suitable for this hardware.
-			variant := TypedModelVariant{ID: m.Revision, Name: m.Name, SizeBytes: size, Target: InstallationTarget{Kind: "package", Package: &m}, Provenance: ModelProvenance{Kind: "curated_manifest", Revision: m.Revision}, Readiness: ModelReadiness{Integrity: "unchecked", Issue: "runtime_unavailable"}}
+			variant := TypedModelVariant{ID: m.Revision, Name: m.Name, SizeBytes: size, Target: InstallationTarget{Kind: "package", Package: &m}, Provenance: ModelProvenance{Kind: "curated_manifest", Revision: m.Revision}, Readiness: ModelReadiness{Integrity: "unchecked", Issue: "runtime_unavailable"}, Engine: effectiveEngine(m), Format: m.Format, Backend: m.Backend}
 			found := false
 			for i := range entries {
 				if entries[i].ID == e.ID && entries[i].Category == cat {
@@ -179,6 +186,9 @@ type InstalledModel struct {
 	Category     ModelCategory     `json:"category,omitempty"`
 	Capabilities []ModelCapability `json:"capabilities"`
 	Readiness    ModelReadiness    `json:"readiness"`
+	Engine       string            `json:"engine,omitempty"`
+	Format       string            `json:"format,omitempty"`
+	Backend      string            `json:"backend,omitempty"`
 	Provenance   ModelProvenance   `json:"provenance"`
 	Package      *PackageState     `json:"package,omitempty"`
 	Legacy       *api.Model        `json:"legacy,omitempty"`
@@ -198,7 +208,7 @@ func Inventory(legacy []api.Model, packages []PackageState, category ModelCatego
 		if category != "" && category != cat {
 			continue
 		}
-		result = append(result, InstalledModel{ID: m.ID, Name: m.ID, Kind: "legacy_file", Category: cat, Capabilities: caps, Legacy: &m, Readiness: ModelReadiness{Installed: true, Integrity: "unchecked"}, Provenance: ModelProvenance{Kind: "legacy"}})
+		result = append(result, InstalledModel{ID: m.ID, Name: m.ID, Kind: "legacy_file", Category: cat, Capabilities: caps, Legacy: &m, Engine: EngineLlamaCPP, Format: m.Format, Readiness: ModelReadiness{Installed: true, Integrity: "unchecked"}, Provenance: ModelProvenance{Kind: "legacy"}})
 	}
 	for _, p := range packages {
 		entry := InstalledModel{ID: p.ID, Revision: p.Revision, Name: p.ID, Kind: "package", Capabilities: []ModelCapability{}, Package: &p, Readiness: ModelReadiness{Installed: p.Installed, Integrity: p.Integrity, RuntimeCompatible: p.RuntimeCompatible, SmokeTested: p.SmokeTested, Qualified: p.Qualified, Issue: p.Issue}, Provenance: ModelProvenance{Kind: p.Provenance}}
@@ -206,6 +216,10 @@ func Inventory(legacy []api.Model, packages []PackageState, category ModelCatego
 			entry.Name = p.Manifest.Name
 			entry.Category = packageCategory(*p.Manifest)
 			entry.Capabilities = append(entry.Capabilities, p.Manifest.Capabilities...)
+			entry.Engine = effectiveEngine(*p.Manifest)
+			entry.Format = p.Manifest.Format
+			entry.Backend = p.Manifest.Backend
+			entry.Readiness.RuntimeReady = p.RuntimeCompatible
 		}
 		if category != "" && category != entry.Category {
 			continue
@@ -213,4 +227,11 @@ func Inventory(legacy []api.Model, packages []PackageState, category ModelCatego
 		result = append(result, entry)
 	}
 	return result
+}
+
+func effectiveEngine(m ModelPackageManifest) string {
+	if m.Engine == "" {
+		return EngineLlamaCPP
+	}
+	return m.Engine
 }

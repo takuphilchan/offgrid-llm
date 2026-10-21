@@ -15,3 +15,5 @@ func startOwnedProcess(cmd *exec.Cmd) error { return cmd.Start() }
 func ownedProcessAlive(process *os.Process) bool {
 	return process != nil && process.Signal(syscall.Signal(0)) == nil
 }
+
+func ownedProcessExitedAfterKill(*os.Process) bool { return false }

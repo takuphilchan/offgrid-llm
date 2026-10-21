@@ -81,3 +81,21 @@ func TestOwnedRuntimeDiesWithWindowsService(t *testing.T) {
 		t.Fatalf("orphan survived owner exit: status=%d err=%v", status, err)
 	}
 }
+
+func TestOwnedProcessExitObservation(t *testing.T) {
+	if os.Getenv("OFFGRID_TEST_FAST_EXIT") == "1" {
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestOwnedProcessExitObservation$")
+	cmd.Env = append(os.Environ(), "OFFGRID_TEST_FAST_EXIT=1")
+	configureBackgroundProcess(cmd)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if !ownedProcessExitedAfterKill(cmd.Process) {
+		t.Fatal("exited worker was not independently observed as exited")
+	}
+}

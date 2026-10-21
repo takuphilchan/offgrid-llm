@@ -23,31 +23,6 @@ func singleStepRequest(req *api.ChatCompletionRequest) bool {
 	return req.ParallelToolCalls != nil && !*req.ParallelToolCalls && len(req.Tools) > 0 && req.ToolChoice != "none"
 }
 
-func singleStepToolChoice(req *api.ChatCompletionRequest) (string, bool, error) {
-	if req.ToolChoice == nil || req.ToolChoice == "auto" {
-		return "", false, nil
-	}
-	if req.ToolChoice == "required" {
-		return "", true, nil
-	}
-	raw, err := json.Marshal(req.ToolChoice)
-	if err != nil {
-		return "", false, fmt.Errorf("invalid sequential tool choice")
-	}
-	var choice struct {
-		Type     string `json:"type"`
-		Function struct {
-			Name string `json:"name"`
-		} `json:"function"`
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&choice) != nil || choice.Type != "function" || choice.Function.Name == "" {
-		return "", false, fmt.Errorf("invalid sequential tool choice")
-	}
-	return choice.Function.Name, true, nil
-}
-
 func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
 	if !singleStepRequest(req) {
 		return json.Marshal(req)
@@ -55,7 +30,7 @@ func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
 	copy := *req
 	copy.Tools, copy.ToolChoice = nil, nil
 	copy.Messages = append([]api.ChatMessage(nil), req.Messages...)
-	selected, required, err := singleStepToolChoice(req)
+	selected, required, err := decisionToolChoice(req)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +52,15 @@ func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Preserve discriminator-first ordering for grammar-based decoding. Go maps
+		// sort "arguments" before "name", forcing a small model to choose a schema
+		// branch while it is still generating an unlabelled argument object.
+		properties := struct {
+			Name      any `json:"name"`
+			Arguments any `json:"arguments"`
+		}{map[string]any{"const": tool.Function.Name}, params}
 		branches = append(branches, map[string]any{"type": "object", "properties": map[string]any{
-			"tool_call": map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"const": tool.Function.Name}, "arguments": params}, "required": []string{"name", "arguments"}, "additionalProperties": false},
+			"tool_call": map[string]any{"type": "object", "properties": properties, "required": []string{"name", "arguments"}, "additionalProperties": false},
 		}, "required": []string{"tool_call"}, "additionalProperties": false})
 	}
 	if len(available) == 0 {
@@ -114,7 +96,6 @@ func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
 	for i := range copy.Messages {
 		message := &copy.Messages[i]
 		if message.Role == "assistant" && len(message.ToolCalls) > 0 {
-			// Historical rejected batches remain explicit, not executable examples.
 			data, _ := json.Marshal(map[string]any{"previous_tool_calls": message.ToolCalls})
 			message.Content, message.ToolCalls = string(data), nil
 		}
@@ -162,7 +143,16 @@ func embedSingleStepParameters(parameters map[string]any, root string) (map[stri
 	return copied, nil
 }
 
-func decodeSingleStep(req *api.ChatCompletionRequest, choice *api.ChatCompletionChoice) error {
+func decodeSingleStep(req *api.ChatCompletionRequest, choice *api.ChatCompletionChoice) (err error) {
+	// A fully received but invalid decision is eligible for the runner's bounded
+	// pre-dispatch correction. This does not certify any earlier tool effects.
+	defer func() {
+		if err != nil {
+			if _, operational := err.(*EngineError); !operational {
+				err = &DecisionValidationError{reason: err.Error()}
+			}
+		}
+	}()
 	if choice.FinishReason != "stop" || len(choice.Message.ToolCalls) != 0 {
 		return fmt.Errorf("sequential model response did not finish cleanly")
 	}
@@ -183,7 +173,7 @@ func decodeSingleStep(req *api.ChatCompletionRequest, choice *api.ChatCompletion
 		return fmt.Errorf("invalid sequential model envelope")
 	}
 	if envelope.Message != nil {
-		_, required, err := singleStepToolChoice(req)
+		_, required, err := decisionToolChoice(req)
 		if err != nil || required || strings.TrimSpace(*envelope.Message) == "" {
 			return fmt.Errorf("sequential model omitted a required action")
 		}
@@ -191,7 +181,7 @@ func decodeSingleStep(req *api.ChatCompletionRequest, choice *api.ChatCompletion
 		return nil
 	}
 	call := envelope.Call
-	selected, _, err := singleStepToolChoice(req)
+	selected, _, err := decisionToolChoice(req)
 	if err != nil || (selected != "" && selected != call.Name) {
 		return fmt.Errorf("sequential model ignored the selected tool")
 	}
@@ -208,7 +198,7 @@ func decodeSingleStep(req *api.ChatCompletionRequest, choice *api.ChatCompletion
 	// partial or rejected response, and never treat it as an execution grant.
 	var identity [16]byte
 	if _, err := rand.Read(identity[:]); err != nil {
-		return fmt.Errorf("could not identify sequential tool call")
+		return &EngineError{Code: "decision_identity_unavailable", Message: "Could not identify the model decision. No call from this response was dispatched."}
 	}
 	choice.Message.Content = ""
 	choice.Message.ToolCalls = []api.ToolCall{{ID: "call_" + hex.EncodeToString(identity[:]), Type: "function", Function: api.FunctionCall{Name: call.Name, Arguments: string(call.Arguments)}}}
@@ -225,12 +215,21 @@ type singleStepStream struct {
 }
 
 func (s *singleStepStream) add(data json.RawMessage) error {
+	if jsonwire.Validate(data) != nil {
+		return fmt.Errorf("ambiguous or malformed sequential inference stream")
+	}
 	var chunk api.ChatCompletionChunk
 	var failure struct {
 		Error json.RawMessage `json:"error"`
 	}
-	if json.Unmarshal(data, &chunk) != nil || json.Unmarshal(data, &failure) != nil || (len(failure.Error) > 0 && string(failure.Error) != "null") {
+	if json.Unmarshal(data, &chunk) != nil || json.Unmarshal(data, &failure) != nil {
 		return fmt.Errorf("invalid sequential inference stream")
+	}
+	if len(failure.Error) > 0 && string(failure.Error) != "null" {
+		if rejection := singleStepRuntimeRejection(data); rejection != nil {
+			return rejection
+		}
+		return fmt.Errorf("local runtime interrupted sequential inference; no decision was emitted")
 	}
 	if chunk.Usage != nil {
 		s.usage = chunk.Usage
@@ -253,6 +252,26 @@ func (s *singleStepStream) add(data json.RawMessage) error {
 	}
 	if choice.FinishReason != nil {
 		s.finish = *choice.FinishReason
+	}
+	return nil
+}
+
+// Only this exact, owned-runtime parser rejection is a model decision failure.
+// HTTP status alone, arbitrary provider text, EOF, cancellation and malformed
+// transport are NOT retry classifications. Never retain raw generated content.
+func singleStepRuntimeRejection(body []byte) *DecisionValidationError {
+	var response struct {
+		Error struct {
+			Code    int    `json:"code"`
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if jsonwire.Validate(body) != nil || json.Unmarshal(body, &response) != nil {
+		return nil
+	}
+	if response.Error.Code == 500 && response.Error.Type == "server_error" && response.Error.Message == "The model produced output that does not match the expected peg-native format" {
+		return &DecisionValidationError{reason: "the local runtime rejected an incomplete or invalid structured model decision"}
 	}
 	return nil
 }

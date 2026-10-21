@@ -142,7 +142,7 @@ func LoadConfig() *Config {
 		ModelsDir:       getEnv("OFFGRID_MODELS_DIR", defaultModelsDir),
 		DataDir:         getEnv("OFFGRID_DATA_DIR", defaultDataDir),
 		DefaultModel:    getEnv("OFFGRID_DEFAULT_MODEL", ""),
-		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 4096),
+		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 65536),
 		ChatContextSize: getEnvInt("OFFGRID_CHAT_CONTEXT", 8192),
 		NumThreads:      getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
 		MaxMemoryMB:     uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
@@ -394,7 +394,7 @@ func (c *Config) applyDefaults() {
 		c.DataDir = filepath.Join(filepath.Dir(c.ModelsDir), "data")
 	}
 	if c.MaxContextSize == 0 {
-		c.MaxContextSize = 4096
+		c.MaxContextSize = 65536
 	}
 	if c.ChatContextSize <= 0 {
 		c.ChatContextSize = 8192

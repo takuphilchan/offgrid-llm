@@ -24,6 +24,22 @@ func TestLlamaHTTPPortUsesExplicitIPv4Loopback(t *testing.T) {
 	}
 }
 
+func TestServiceLlamaEngineStartsIdleUntilActivation(t *testing.T) {
+	engine := NewLlamaEngine()
+	if engine.IsLoaded() {
+		t.Fatal("service llama engine reported a model before scheduler ownership")
+	}
+	if err := engine.Load(context.Background(), "fixture.gguf", LoadOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if !engine.IsLoaded() {
+		t.Fatal("service llama engine did not become active after model load")
+	}
+	if err := engine.Unload(); err != nil || engine.IsLoaded() {
+		t.Fatalf("service llama engine did not retire: %v", err)
+	}
+}
+
 func TestHTTPRequestsPreserveParallelToolPolicy(t *testing.T) {
 	for _, stream := range []bool{false, true} {
 		for _, mode := range []string{"unset", "enabled", "disabled"} {
@@ -153,6 +169,33 @@ func TestContextOverflowGivesActionableProfileError(t *testing.T) {
 	typed := AsEngineError(err)
 	if typed == nil || typed.Code != "context_exceeded" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGrammarFailureIsPrivateAndNotAModelDecision(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":{"message":"Failed to initialize samplers: failed to parse grammar PRIVATE_SCHEMA"}}`)
+		}))
+		engine := NewLlamaHTTPEngine(backend.URL)
+		var err error
+		callbacks := 0
+		if stream {
+			err = engine.ChatCompletionStreamRaw(context.Background(), &api.ChatCompletionRequest{}, func(json.RawMessage) error { callbacks++; return nil })
+		} else {
+			_, err = engine.ChatCompletion(context.Background(), &api.ChatCompletionRequest{})
+		}
+		backend.Close()
+		failure := AsEngineError(err)
+		if failure == nil || failure.Code != ErrCodeInvalidToolGrammar || failure.Message != InvalidToolGrammarMessage || failure.Details != "" || callbacks != 0 {
+			t.Fatalf("unsafe grammar error: %+v, callbacks=%d", failure, callbacks)
+		}
+	}
+	for _, body := range []string{"Failed to initialize samplers: out of memory", "unknown runtime error"} {
+		if failure := AsEngineError(classifyLlamaServerError(400, []byte(body))); failure != nil && failure.Code == ErrCodeInvalidToolGrammar {
+			t.Fatal("misclassified unrelated runtime fault")
+		}
 	}
 }
 

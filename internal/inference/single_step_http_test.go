@@ -5,6 +5,7 @@ package inference
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,74 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+func TestSingleStepGrammarSelectsToolBeforeArguments(t *testing.T) {
+	body, err := marshalLlamaRequest(singleStepFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Check the serialized schema, not a decoded map which loses key order.
+	if !strings.Contains(string(body), `"properties":{"name":{"const":"fixture_open"},"arguments":`) {
+		t.Fatal("grammar asks for arguments before the tool discriminator")
+	}
+}
+
+func TestSingleStepMalformedCompleteDecisionsAreRepairable(t *testing.T) {
+	for _, value := range []struct{ content, finish string }{
+		{`{"tool_call":`, "length"},
+		{`{"tool_call":{"name":"computer_search","arguments":{}}}`, "stop"},
+		{`{"tool_call":{"name":"fixture_open","arguments":[]}}`, "stop"},
+		{`{"message":"a","message":"PRIVATE"}`, "stop"},
+	} {
+		choice := api.ChatCompletionChoice{FinishReason: value.finish, Message: api.ChatMessage{Content: value.content}}
+		err := decodeSingleStep(singleStepFixture(), &choice)
+		var rejection *DecisionValidationError
+		if !errors.As(err, &rejection) || strings.Contains(err.Error(), "PRIVATE") || len(choice.Message.ToolCalls) > 0 {
+			t.Fatal("rejection was not safe bounded correction", err)
+		}
+	}
+}
+
+func TestSingleStepRuntimeParserFailureHasBoundedCorrectionClassification(t *testing.T) {
+	const known = `{"error":{"code":500,"type":"server_error","message":"The model produced output that does not match the expected peg-native format"}}`
+	for _, mode := range []string{"sse", "http", "nonstream"} {
+		t.Run(mode, func(t *testing.T) {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if mode == "sse" {
+					fmt.Fprintf(w, "data: %s\n\n", known)
+				} else {
+					w.WriteHeader(500)
+					fmt.Fprint(w, known)
+				}
+			}))
+			defer backend.Close()
+			engine := NewLlamaHTTPEngine(backend.URL)
+			var err error
+			called := false
+			if mode == "nonstream" {
+				_, err = engine.ChatCompletion(context.Background(), singleStepFixture())
+			} else {
+				err = engine.ChatCompletionStreamRaw(context.Background(), singleStepFixture(), func(json.RawMessage) error { called = true; return nil })
+			}
+			var rejected *DecisionValidationError
+			if !errors.As(err, &rejected) || called {
+				t.Fatal("parser rejection escaped gate", err)
+			}
+		})
+	}
+	for _, body := range []string{
+		`{"error":{"code":500,"type":"server_error","message":"out of memory PRIVATE"}}`,
+		`{"error":{"code":503,"type":"unavailable_error","message":"The model produced output that does not match the expected peg-native format"}}`,
+		`{"error":"PRIVATE"}`, `{"choices":`,
+	} {
+		var stream singleStepStream
+		err := stream.add(json.RawMessage(body))
+		var rejected *DecisionValidationError
+		if err == nil || errors.As(err, &rejected) || strings.Contains(err.Error(), "PRIVATE") {
+			t.Fatal("operational error promoted to retry", err)
+		}
+	}
+}
 
 func singleStepFixture() *api.ChatCompletionRequest {
 	parallel := false
@@ -37,6 +106,46 @@ func TestSingleStepStrictResponseBeforeToolDispatch(t *testing.T) {
 		if decodeSingleStep(singleStepFixture(), &choice) == nil {
 			t.Fatal("unfinished response accepted", finish)
 		}
+	}
+}
+
+func TestSingleStepAndNativeUseSameDecisionGate(t *testing.T) {
+	for _, valid := range []bool{false, true} {
+		req, native := decisionFixture()
+		args := `{"text":"café 日本語","version":1}`
+		if !valid {
+			args = `{"text":"café 日本語","version":"not an integer"}`
+		}
+		native.Choices[0].Message.ToolCalls[0].Function.Arguments = args
+		constrained := &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{FinishReason: "stop", Message: api.ChatMessage{Content: `{"tool_call":{"name":"write_draft","arguments":` + args + `}}`}}}}
+		if err := decodeSingleStep(req, &constrained.Choices[0]); err != nil {
+			t.Fatal(err)
+		}
+		for _, response := range []*api.ChatCompletionResponse{native, constrained} {
+			if err := ValidateToolDecision(req, response); (err == nil) != valid {
+				t.Fatalf("adapters disagree about schema validation: %v", err)
+			}
+		}
+	}
+}
+
+func TestToolResponseRejectsAmbiguousWireBeforeDecode(t *testing.T) {
+	for _, sequential := range []bool{false, true} {
+		t.Run(fmt.Sprint(sequential), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `{"choices":[],"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"done"}}]}`)
+			}))
+			defer srv.Close()
+			engine := NewLlamaHTTPEngine(srv.URL)
+			engine.loaded = true
+			req := singleStepFixture()
+			if !sequential {
+				req.ParallelToolCalls = nil
+			}
+			if response, err := engine.ChatCompletion(context.Background(), req); err == nil || response != nil {
+				t.Fatal("ambiguous outer response reached adapter", err)
+			}
+		})
 	}
 }
 

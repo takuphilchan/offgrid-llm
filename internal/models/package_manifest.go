@@ -35,6 +35,17 @@ type PackageRuntime struct {
 	Revision string `json:"revision"`
 }
 
+// Engine metadata is optional for legacy speech packages. Language packages
+// that declare it must use one of the trusted, locally supervised providers.
+const (
+	EngineLlamaCPP       = "llama_cpp"
+	EngineMLX            = "mlx"
+	EngineTransformers   = "transformers"
+	FormatGGUF           = "gguf"
+	FormatMLXSafetensors = "mlx_safetensors"
+	FormatSafetensors    = "safetensors"
+)
+
 type ArtifactSource struct {
 	Repository string `json:"repository"`
 	Revision   string `json:"revision"`
@@ -68,6 +79,7 @@ type ModelPackageManifest struct {
 	Revision         string                   `json:"revision"`
 	Name             string                   `json:"name"`
 	Architecture     string                   `json:"architecture"`
+	ModelFamily      string                   `json:"model_family,omitempty"`
 	Runtime          PackageRuntime           `json:"runtime"`
 	Capabilities     []ModelCapability        `json:"capabilities"`
 	Languages        []string                 `json:"languages"`
@@ -76,6 +88,16 @@ type ModelPackageManifest struct {
 	License          string                   `json:"license"`
 	Artifacts        []PackageArtifact        `json:"artifacts"`
 	HardwareProfiles []PackageHardwareProfile `json:"hardware_profiles,omitempty"`
+	Engine           string                   `json:"engine,omitempty"`
+	Format           string                   `json:"format,omitempty"`
+	Backend          string                   `json:"backend,omitempty"`
+	RunnerRevision   string                   `json:"runner_revision,omitempty"`
+	AdapterRevision  string                   `json:"adapter_revision,omitempty"`
+	Modalities       []string                 `json:"modalities,omitempty"`
+	ToolCalling      string                   `json:"tool_calling,omitempty"`
+	ContextLength    int                      `json:"context_length,omitempty"`
+	TemplateDigest   string                   `json:"template_digest,omitempty"`
+	Preprocessing    []string                 `json:"preprocessing,omitempty"`
 }
 
 var packageComponent = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,95}$`)
@@ -96,10 +118,12 @@ var packageLayouts = map[string]packageLayout{
 	"kokoro":              {"sherpa-onnx", map[string][]string{"weights": {".onnx"}, "voices": {".bin"}, "tokens": {".txt"}}, []ModelCapability{CapabilitySynthesis}},
 	"qwen3-asr":           {"qwen3-asr", map[string][]string{"weights": {".safetensors"}, "config": {".json"}}, []ModelCapability{CapabilityTranscription}},
 	"qwen3-tts":           {"qwen3-tts", map[string][]string{"weights": {".safetensors"}, "config": {".json"}}, []ModelCapability{CapabilitySynthesis, CapabilityIncrementalSynthesis}},
+	"mlx-text":            {"mlx-lm", map[string][]string{"weights": {".safetensors"}, "config": {".json"}, "tokenizer": {".json", ".model"}}, []ModelCapability{CapabilityChat}},
+	"transformers-text":   {"transformers", map[string][]string{"weights": {".safetensors"}, "config": {".json"}, "tokenizer": {".json", ".model"}}, []ModelCapability{CapabilityChat}},
 }
 
 func repeatablePackageRole(architecture, role string) bool {
-	return (architecture == "qwen3-asr" || architecture == "qwen3-tts") && (role == "weights" || role == "config" || role == "tokenizer" || role == "codec")
+	return (architecture == "qwen3-asr" || architecture == "qwen3-tts" || architecture == "mlx-text" || architecture == "transformers-text") && (role == "weights" || role == "config" || role == "tokenizer" || role == "codec")
 }
 
 func DecodePackageManifest(r io.Reader) (ModelPackageManifest, error) {
@@ -163,9 +187,56 @@ func (m ModelPackageManifest) Validate() error {
 	if strings.TrimSpace(m.Name) == "" || len(m.Name) > 200 || strings.TrimSpace(m.License) == "" || len(m.License) > 256 {
 		return fmt.Errorf("package name and license are required")
 	}
+	if m.Engine != "" {
+		if !slices.Contains([]string{EngineLlamaCPP, EngineMLX, EngineTransformers}, m.Engine) {
+			return fmt.Errorf("unsupported inference engine %q", m.Engine)
+		}
+		if m.RunnerRevision == "" || !validPackageComponent(m.RunnerRevision) || slices.Contains([]string{"main", "master", "latest"}, m.RunnerRevision) {
+			return fmt.Errorf("a pinned runner revision is required")
+		}
+		if m.AdapterRevision != "" && (!validPackageComponent(m.AdapterRevision) || slices.Contains([]string{"main", "master", "latest"}, m.AdapterRevision)) {
+			return fmt.Errorf("adapter revision must be pinned")
+		}
+	}
+	if m.Format != "" && !slices.Contains([]string{FormatGGUF, FormatMLXSafetensors, FormatSafetensors}, m.Format) {
+		return fmt.Errorf("unsupported model format %q", m.Format)
+	}
+	if m.ContextLength < 0 {
+		return fmt.Errorf("context length cannot be negative")
+	}
+	if m.TemplateDigest != "" && !packageDigest.MatchString(m.TemplateDigest) {
+		return fmt.Errorf("template digest must be a complete SHA-256 digest")
+	}
+	if m.ToolCalling != "" && !slices.Contains([]string{"qualified", "unqualified", "unsupported"}, m.ToolCalling) {
+		return fmt.Errorf("unsupported tool calling state %q", m.ToolCalling)
+	}
+	seenModalities := map[string]bool{}
+	for _, modality := range m.Modalities {
+		if modality == "" || len(modality) > 32 || seenModalities[modality] {
+			return fmt.Errorf("invalid or duplicate modality %q", modality)
+		}
+		seenModalities[modality] = true
+	}
 	layout, ok := packageLayouts[m.Architecture]
 	if !ok {
 		return fmt.Errorf("unsupported package architecture %q", m.Architecture)
+	}
+	textPackage := m.Architecture == "mlx-text" || m.Architecture == "transformers-text"
+	if textPackage {
+		expectedEngine, expectedFormat := EngineMLX, FormatMLXSafetensors
+		if m.Architecture == "transformers-text" {
+			expectedEngine, expectedFormat = EngineTransformers, FormatSafetensors
+		}
+		if m.Engine != expectedEngine || m.Format != expectedFormat || m.AdapterRevision == "" || !validPackageComponent(m.ModelFamily) || m.ContextLength < 1 {
+			return fmt.Errorf("text package requires matching engine, format, pinned adapter, model family, and context")
+		}
+		// Imported model metadata cannot self-certify tool execution. Qualification
+		// is service evidence tied to an exact model and runner revision.
+		if m.ToolCalling == "qualified" {
+			return fmt.Errorf("model package cannot self-qualify tool calling")
+		}
+	} else if m.Engine == EngineMLX || m.Engine == EngineTransformers || m.ModelFamily != "" {
+		return fmt.Errorf("native text provider metadata is not valid for a speech package")
 	}
 	if m.Runtime.Adapter != layout.adapter || !validPackageComponent(m.Runtime.Revision) || slices.Contains([]string{"main", "master", "latest"}, m.Runtime.Revision) {
 		return fmt.Errorf("a pinned %s runtime revision is required", layout.adapter)
@@ -193,7 +264,7 @@ func (m ModelPackageManifest) Validate() error {
 		}
 		langs[l] = true
 	}
-	if len(m.SampleRates) == 0 || len(m.SampleRates) > 16 {
+	if textPackage && len(m.SampleRates) != 0 || !textPackage && (len(m.SampleRates) == 0 || len(m.SampleRates) > 16) {
 		return fmt.Errorf("sample rates are required")
 	}
 	rates := map[int]bool{}
@@ -244,6 +315,11 @@ func (m ModelPackageManifest) Validate() error {
 				allowed = []string{".json", ".txt", ".model", ".merges", ".vocab"}
 			case "codec":
 				allowed = []string{".json", ".txt", ".model", ".bin", ".safetensors"}
+			case "metadata":
+				if !textPackage {
+					return fmt.Errorf("unsupported artifact role %q", a.Role)
+				}
+				allowed = []string{".json", ".txt"}
 			default:
 				return fmt.Errorf("unsupported artifact role %q", a.Role)
 			}
@@ -263,7 +339,7 @@ func (m ModelPackageManifest) Validate() error {
 		}
 	}
 	for role := range layout.required {
-		if roles[role] != 1 && !repeatablePackageRole(m.Architecture, role) {
+		if roles[role] == 0 || roles[role] != 1 && !repeatablePackageRole(m.Architecture, role) {
 			return fmt.Errorf("missing required artifact role %q", role)
 		}
 	}

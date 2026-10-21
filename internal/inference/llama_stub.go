@@ -26,9 +26,12 @@ func NewLlamaEngine() *LlamaEngine {
 		llamaServerURL = fmt.Sprintf("http://127.0.0.1:%s", port)
 	}
 
-	return &LlamaEngine{
-		httpEngine: NewLlamaHTTPEngine(llamaServerURL),
-	}
+	transport := NewLlamaHTTPEngine(llamaServerURL)
+	// Standalone HTTP clients can address an already-running llama-server, but
+	// the service-owned engine starts without a selected model. The provider
+	// scheduler must attach its cache before the first model activation.
+	transport.loaded = false
+	return &LlamaEngine{httpEngine: transport}
 }
 
 // Load delegates to HTTP engine

@@ -66,6 +66,9 @@ func TestModelStartupNeverEvictsAnUnrelatedPortOwner(t *testing.T) {
 			if first.Port == 42382 {
 				t.Fatal("reused occupied port")
 			}
+			if first.Generation == 0 || cache.InstanceGeneration("fixture") != first.Generation {
+				t.Fatal("started runtime has no cache process generation")
+			}
 			again, err := cache.GetOrLoadContext(ctx, "fixture", model, "")
 			if err != nil || again != first {
 				t.Fatalf("live runtime not reused: %v", err)
@@ -76,6 +79,18 @@ func TestModelStartupNeverEvictsAnUnrelatedPortOwner(t *testing.T) {
 			}
 			if capacity == 2 && second.Port == first.Port {
 				t.Fatal("models share a port")
+			}
+			if second.Generation <= first.Generation {
+				t.Fatal("a new runtime reused an earlier process generation")
+			}
+			if capacity == 2 {
+				if err := cache.Unload("fixture"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			restarted, err := cache.GetOrLoadContext(ctx, "fixture", model, "")
+			if err != nil || restarted.Generation <= second.Generation || cache.InstanceGeneration("fixture") != restarted.Generation {
+				t.Fatalf("restarted runtime inherited earlier generation: %+v %v", restarted, err)
 			}
 			conn, err := net.DialTimeout("tcp4", "127.0.0.1:42382", time.Second)
 			if err != nil {

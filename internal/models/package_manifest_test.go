@@ -11,6 +11,16 @@ import (
 func testPackageManifest(architecture string) ModelPackageManifest {
 	l := packageLayouts[architecture]
 	m := ModelPackageManifest{SchemaVersion: 1, ID: "test-" + architecture, Revision: "fixture-1", Name: "Synthetic test bytes, not an inference model", Architecture: architecture, Runtime: PackageRuntime{l.adapter, "fixture-1"}, Capabilities: append([]ModelCapability{}, l.capabilities...), Languages: []string{"en"}, SampleRates: []int{16000}, License: "CC0-1.0"}
+	if architecture == "mlx-text" || architecture == "transformers-text" {
+		m.Engine, m.Format = EngineMLX, FormatMLXSafetensors
+		if architecture == "transformers-text" {
+			m.Engine, m.Format = EngineTransformers, FormatSafetensors
+		}
+		m.RunnerRevision, m.AdapterRevision, m.ModelFamily, m.ContextLength = "fixture-1", "fixture-1", "qwen2.5", 4096
+		template := sha256.Sum256([]byte("chatml"))
+		m.TemplateDigest = hex.EncodeToString(template[:])
+		m.SampleRates = []int{}
+	}
 	if architecture == "piper" || architecture == "kokoro" || architecture == "qwen3-tts" {
 		m.Voices = []PackageVoice{{"default", "en"}}
 	}
@@ -29,6 +39,34 @@ func TestPackageManifestSupportedLayouts(t *testing.T) {
 			b, _ := json.Marshal(m)
 			if _, err := DecodePackageManifest(strings.NewReader(string(b))); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestTextPackageRequiresConsistentPinnedProviderMetadata(t *testing.T) {
+	for _, architecture := range []string{"mlx-text", "transformers-text"} {
+		t.Run(architecture, func(t *testing.T) {
+			base := testPackageManifest(architecture)
+			if err := base.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			for name, mutate := range map[string]func(*ModelPackageManifest){
+				"wrong engine":          func(m *ModelPackageManifest) { m.Engine = EngineLlamaCPP },
+				"wrong format":          func(m *ModelPackageManifest) { m.Format = FormatGGUF },
+				"missing family":        func(m *ModelPackageManifest) { m.ModelFamily = "" },
+				"unpinned adapter":      func(m *ModelPackageManifest) { m.AdapterRevision = "" },
+				"self qualification":    func(m *ModelPackageManifest) { m.ToolCalling = "qualified" },
+				"short template digest": func(m *ModelPackageManifest) { m.TemplateDigest = "abc" },
+				"speech sample rate":    func(m *ModelPackageManifest) { m.SampleRates = []int{16000} },
+			} {
+				t.Run(name, func(t *testing.T) {
+					m := base
+					mutate(&m)
+					if err := m.Validate(); err == nil {
+						t.Fatal("accepted unsafe text package")
+					}
+				})
 			}
 		})
 	}

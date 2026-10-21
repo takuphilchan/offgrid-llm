@@ -5,6 +5,10 @@ import "errors"
 const (
 	// ErrCodeMissingMmproj indicates the backend rejected an image request because the model is missing its mmproj adapter
 	ErrCodeMissingMmproj = "missing_mmproj"
+	// ErrCodeInvalidToolGrammar is a runtime/schema fault, not a model decision
+	// that corrective prompting or an automatic tool retry can repair.
+	ErrCodeInvalidToolGrammar = "invalid_tool_grammar"
+	InvalidToolGrammarMessage = "The local runtime could not compile the tool schema. This model response executed no tools; earlier work remains saved. Update the service/runtime before explicitly resuming."
 )
 
 // EngineError wraps structured errors returned by inference engines so callers can react intelligently

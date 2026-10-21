@@ -79,3 +79,25 @@ func TestInventoryKeepsIndependentEvidenceAndCorruptPackages(t *testing.T) {
 		t.Fatal("corrupt model disappeared")
 	}
 }
+
+func TestLegacyModelDefaultsToLlamaCPP(t *testing.T) {
+	m := testPackageManifest("whisper")
+	if got := effectiveEngine(m); got != EngineLlamaCPP {
+		t.Fatalf("legacy engine: %q", got)
+	}
+	m.Engine = EngineMLX
+	if got := effectiveEngine(m); got != EngineMLX {
+		t.Fatalf("explicit engine: %q", got)
+	}
+}
+
+func TestTextPackagesRemainMetadataOnlyUntilRuntimeQualification(t *testing.T) {
+	m := testPackageManifest("mlx-text")
+	items := Inventory(nil, []PackageState{{ID: m.ID, Revision: m.Revision, Manifest: &m, Installed: true, Integrity: "checked", Provenance: "local_untrusted"}}, CategoryLanguage)
+	if len(items) != 1 || items[0].Category != CategoryLanguage || items[0].Engine != EngineMLX || items[0].Format != FormatMLXSafetensors {
+		t.Fatalf("text package metadata missing: %+v", items)
+	}
+	if items[0].Readiness.RuntimeReady || items[0].Readiness.SmokeTested || items[0].Readiness.Qualified {
+		t.Fatal("unqualified text package was promoted to ready")
+	}
+}

@@ -23,13 +23,15 @@ var httpClient = &http.Client{
 
 // ModelInstance represents a running llama-server instance with a loaded model
 type ModelInstance struct {
-	ModelID       string
-	ContextSize   int
-	Port          int
-	Cmd           *exec.Cmd
-	LastAccess    time.Time
-	ModelPath     string // For restart purposes
-	ProjectorPath string // For VLM restart
+	ModelID         string
+	Generation      uint64 // Monotonic cache-owned process identity; never persisted.
+	ContextSize     int
+	Port            int
+	Cmd             *exec.Cmd
+	ProcessCreateMS int64 // OS process identity; zero disables advisory RSS measurement.
+	LastAccess      time.Time
+	ModelPath       string // For restart purposes
+	ProjectorPath   string // For VLM restart
 }
 
 type pendingLoad struct {
@@ -40,6 +42,7 @@ type pendingLoad struct {
 // ModelCache manages multiple llama-server instances for fast model switching
 type ModelCache struct {
 	instances      map[string]*ModelInstance // modelID -> instance
+	nextGeneration uint64                    // Increments for every started llama child.
 	portToModel    map[int]string            // port -> modelID for reverse lookup
 	usedPorts      map[int]bool              // track which ports are in use
 	maxInstances   int
@@ -54,20 +57,25 @@ type ModelCache struct {
 	cacheReuse     int    // KV cache reuse for chat sessions (0 = disabled)
 	contBatching   bool   // Enable continuous batching for multi-request throughput
 	// Speculative decoding settings
-	draftModel     string // Path to draft model for speculative decoding
-	draftTokens    int    // Number of draft tokens to generate (default: 8)
-	draftMin       int    // Minimum draft tokens for acceptance (default: 5)
-	mu             sync.RWMutex
-	pendingLoads   map[string]*pendingLoad // Deduplicate concurrent load requests
-	binManager     *BinaryManager
-	mmapWarmer     *MmapWarmer     // Pre-warms models into page cache
-	loadingTracker *LoadingTracker // Tracks loading progress for UI feedback
-	defaultModelID string          // Protected from eviction
-	useMlock       bool            // Lock small models in RAM
-	modelsDir      string          // Models directory for mmap warming
-	totalRAMMB     int64           // System RAM in MB for smart mlock
-	autoRestart    bool            // Auto-restart crashed processes
-	stopMonitor    chan struct{}
+	draftModel       string // Path to draft model for speculative decoding
+	draftTokens      int    // Number of draft tokens to generate (default: 8)
+	draftMin         int    // Minimum draft tokens for acceptance (default: 5)
+	mu               sync.RWMutex
+	pendingLoads     map[string]*pendingLoad // Deduplicate concurrent load requests
+	binManager       *BinaryManager
+	mmapWarmer       *MmapWarmer     // Pre-warms models into page cache
+	loadingTracker   *LoadingTracker // Tracks loading progress for UI feedback
+	defaultModelID   string          // Protected from eviction
+	useMlock         bool            // Lock small models in RAM
+	modelsDir        string          // Models directory for mmap warming
+	totalRAMMB       int64           // System RAM in MB for smart mlock
+	autoRestart      bool            // Auto-restart crashed processes
+	stopMonitor      chan struct{}
+	monitorDone      chan struct{}
+	monitorStop      sync.Once
+	monitorCtx       context.Context
+	monitorCancel    context.CancelFunc
+	restartAdmission func(context.Context) (func(), error)
 }
 
 // NewModelCache creates a new model cache with specified capacity
@@ -79,6 +87,7 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		maxInstances = 10 // Safety limit
 	}
 
+	monitorCtx, monitorCancel := context.WithCancel(context.Background())
 	mc := &ModelCache{
 		instances:      make(map[string]*ModelInstance),
 		portToModel:    make(map[int]string),
@@ -100,6 +109,9 @@ func NewModelCache(maxInstances int, gpuLayers int, binDir string) *ModelCache {
 		totalRAMMB:     0,     // Will be set by SetSystemRAM
 		autoRestart:    true,  // Enable auto-restart by default
 		stopMonitor:    make(chan struct{}),
+		monitorDone:    make(chan struct{}),
+		monitorCtx:     monitorCtx,
+		monitorCancel:  monitorCancel,
 	}
 
 	// Start process monitor
@@ -359,6 +371,17 @@ func (mc *ModelCache) LoadedModelIDs() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// InstanceGeneration distinguishes a restarted child from an earlier process
+// using the same model, files, or loopback port. Zero means no cache instance.
+func (mc *ModelCache) InstanceGeneration(modelID string) uint64 {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+	if instance := mc.instances[modelID]; instance != nil {
+		return instance.Generation
+	}
+	return 0
 }
 
 // shouldUseMlock determines if mlock should be used for a model
@@ -744,14 +767,17 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 	mc.portToModel[port] = modelID
 
 	instance := &ModelInstance{
-		ModelID:       modelID,
-		ContextSize:   contextSize,
-		Port:          port,
-		Cmd:           cmd,
-		LastAccess:    time.Now(),
-		ModelPath:     modelPath,
-		ProjectorPath: projectorPath,
+		ModelID:         modelID,
+		Generation:      mc.nextGeneration + 1,
+		ContextSize:     contextSize,
+		Port:            port,
+		Cmd:             cmd,
+		ProcessCreateMS: observedProcessCreateTime(cmd.Process.Pid),
+		LastAccess:      time.Now(),
+		ModelPath:       modelPath,
+		ProjectorPath:   projectorPath,
 	}
+	mc.nextGeneration = instance.Generation
 
 	mc.instances[modelID] = instance
 
@@ -1118,85 +1144,6 @@ func (mc *ModelCache) GetStats() map[string]interface{} {
 	return stats
 }
 
-// monitorProcesses periodically checks if llama-server processes are alive
-// and restarts them if they crash
-func (mc *ModelCache) monitorProcesses() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-mc.stopMonitor:
-			return
-		case <-ticker.C:
-			mc.checkAndRestartCrashed()
-		}
-	}
-}
-
-// checkAndRestartCrashed checks all instances and restarts any that have crashed
-func (mc *ModelCache) checkAndRestartCrashed() {
-	mc.mu.Lock()
-
-	if !mc.autoRestart {
-		mc.mu.Unlock()
-		return
-	}
-
-	// Collect crashed models
-	var crashed []struct {
-		modelID       string
-		modelPath     string
-		projectorPath string
-	}
-
-	for modelID, instance := range mc.instances {
-		if _, loading := mc.pendingLoads[modelID]; loading {
-			continue
-		}
-		if instance.Cmd == nil || instance.Cmd.Process == nil {
-			continue
-		}
-
-		if !mc.instanceHealthy(instance) {
-			// Process has crashed
-			log.Printf("Detected crashed llama-server for model %s, will restart...", modelID)
-			crashed = append(crashed, struct {
-				modelID       string
-				modelPath     string
-				projectorPath string
-			}{modelID, instance.ModelPath, instance.ProjectorPath})
-
-			// Clean up the crashed instance
-			mc.cleanupInstance(modelID)
-		}
-	}
-	mc.mu.Unlock()
-
-	// Restart crashed models outside of lock
-	for _, c := range crashed {
-		log.Printf("Restarting model %s...", c.modelID)
-		_, err := mc.GetOrLoad(c.modelID, c.modelPath, c.projectorPath)
-		if err != nil {
-			log.Printf("Failed to restart model %s: %v", c.modelID, err)
-		} else {
-			log.Printf("Successfully restarted model %s", c.modelID)
-		}
-	}
-}
-
-// SetAutoRestart enables or disables automatic restart of crashed processes
-func (mc *ModelCache) SetAutoRestart(enable bool) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	mc.autoRestart = enable
-}
-
-// StopMonitor stops the process monitor goroutine
-func (mc *ModelCache) StopMonitor() {
-	close(mc.stopMonitor)
-}
-
 // HotSwapResult contains the result of a hot-swap operation
 type HotSwapResult struct {
 	Success      bool   `json:"success"`
@@ -1214,6 +1161,15 @@ type HotSwapResult struct {
 // 2. If model is in mmap cache (warm), loads faster
 // 3. Otherwise performs cold load with optimizations
 func (mc *ModelCache) HotSwap(toModelID, toModelPath, toProjectorPath string) (*HotSwapResult, error) {
+	return mc.HotSwapContext(context.Background(), toModelID, toModelPath, toProjectorPath)
+}
+
+// HotSwapContext retains the established hot-swap behavior while allowing the
+// service's shared admission lease and request cancellation to cover the load.
+func (mc *ModelCache) HotSwapContext(ctx context.Context, toModelID, toModelPath, toProjectorPath string) (*HotSwapResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	startTime := time.Now()
 	result := &HotSwapResult{
 		ToModel: toModelID,
@@ -1273,7 +1229,7 @@ func (mc *ModelCache) HotSwap(toModelID, toModelPath, toProjectorPath string) (*
 	}
 
 	// Perform the actual load
-	instance, err := mc.GetOrLoad(toModelID, toModelPath, toProjectorPath)
+	instance, err := mc.GetOrLoadContext(ctx, toModelID, toModelPath, toProjectorPath)
 	if err != nil {
 		result.Success = false
 		result.ErrorMessage = err.Error()

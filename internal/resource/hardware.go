@@ -11,15 +11,16 @@ import (
 
 // SystemResources represents available hardware resources
 type SystemResources struct {
-	TotalRAM      int64  // Total RAM in MB
-	AvailableRAM  int64  // Available RAM in MB
-	GPUAvailable  bool   // Whether GPU is available
-	GPUMemory     int64  // GPU VRAM in MB
-	GPUName       string // GPU model name
-	CPUCores      int    // Number of CPU cores (logical)
-	PhysicalCores int    // Number of physical CPU cores
-	OS            string // Operating system
-	Arch          string // Architecture
+	TotalRAM           int64  // Total RAM in MB
+	AvailableRAM       int64  // Available RAM in MB
+	GPUAvailable       bool   // Whether GPU is available
+	GPUMemory          int64  // GPU VRAM in MB
+	GPUAvailableMemory int64  // Free GPU VRAM in MB at detection time
+	GPUName            string // GPU model name
+	CPUCores           int    // Number of CPU cores (logical)
+	PhysicalCores      int    // Number of physical CPU cores
+	OS                 string // Operating system
+	Arch               string // Architecture
 }
 
 // DetectResources detects available system resources
@@ -120,6 +121,11 @@ func (res *SystemResources) GetOptimalThreads() int {
 
 // detectRAM detects total and available RAM
 func detectRAM(res *SystemResources) error {
+	if total, available, ok := detectNativeRAM(); ok {
+		res.TotalRAM = total
+		res.AvailableRAM = available
+		return nil
+	}
 	if runtime.GOOS == "linux" {
 		// Read /proc/meminfo
 		data, err := os.ReadFile("/proc/meminfo")
@@ -164,7 +170,7 @@ func detectRAM(res *SystemResources) error {
 // detectGPU detects NVIDIA GPU using nvidia-smi
 func detectGPU(res *SystemResources) {
 	// Try nvidia-smi
-	cmd := exec.Command("nvidia-smi", "--query-gpu=memory.total,name", "--format=csv,noheader,nounits")
+	cmd := exec.Command("nvidia-smi", "--query-gpu=memory.total,memory.free,name", "--format=csv,noheader,nounits")
 	output, err := cmd.Output()
 	if err != nil {
 		// No NVIDIA GPU or nvidia-smi not installed
@@ -172,12 +178,14 @@ func detectGPU(res *SystemResources) {
 		return
 	}
 
-	// Parse output: "8192, NVIDIA GeForce RTX 3070"
+	// Parse output: "8192, 7600, NVIDIA GeForce RTX 3070"
 	parts := strings.Split(strings.TrimSpace(string(output)), ",")
-	if len(parts) >= 2 {
+	if len(parts) >= 3 {
 		vram, _ := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+		freeVRAM, _ := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
 		res.GPUMemory = vram
-		res.GPUName = strings.TrimSpace(parts[1])
+		res.GPUAvailableMemory = freeVRAM
+		res.GPUName = strings.TrimSpace(strings.Join(parts[2:], ","))
 		res.GPUAvailable = true
 	}
 }

@@ -2,11 +2,13 @@ package inference
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
@@ -17,6 +19,11 @@ type EmbeddingEngine struct {
 	mu                sync.RWMutex
 	modelPath         string
 	loaded            bool
+	resident          atomic.Bool // Lock-free scheduler observation during a slow load.
+	parked            bool
+	loadOptions       EmbeddingOptions
+	expectedIdentity  string
+	scheduler         atomic.Pointer[ProviderScheduler]
 	dimensions        int
 	maxBatchSize      int
 	implementation    EmbeddingImpl // Platform-specific implementation
@@ -75,13 +82,94 @@ func NewEmbeddingEngine(binDir ...string) *EmbeddingEngine {
 	}
 }
 
-// Load loads an embedding model
-func (e *EmbeddingEngine) Load(ctx context.Context, modelPath string, opts EmbeddingOptions) error {
-	if err := e.lockContext(ctx); err != nil {
+// SetProviderScheduler connects embedding work to the same admission boundary
+// as chat and native text inference. Configure it before the engine is used.
+func (e *EmbeddingEngine) SetProviderScheduler(scheduler *ProviderScheduler) error {
+	if e == nil || scheduler == nil {
+		return errors.New("embedding scheduler and engine are required")
+	}
+	if e.scheduler.CompareAndSwap(nil, scheduler) || e.scheduler.Load() == scheduler {
+		return nil
+	}
+	return errors.New("embedding engine already belongs to another provider scheduler")
+}
+
+type embeddingAdmission struct {
+	release   func()
+	scheduler *ProviderScheduler
+	timing    ProviderTiming
+}
+
+func (a *embeddingAdmission) close() {
+	a.release()
+	a.scheduler.recordEmbeddingTiming(a.timing)
+}
+
+func (a *embeddingAdmission) run(ctx context.Context, phase *time.Duration, action func() error) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
+	var cancelledAt atomic.Int64
+	cancelObserved := make(chan struct{})
+	stopWatch := context.AfterFunc(ctx, func() {
+		cancelledAt.CompareAndSwap(0, time.Now().UnixNano())
+		close(cancelObserved)
+	})
+	started := time.Now()
+	err := action()
+	finished := time.Now()
+	if stopped := stopWatch(); ctx.Err() != nil {
+		if !stopped {
+			<-cancelObserved
+		} else {
+			cancelledAt.CompareAndSwap(0, finished.UnixNano())
+		}
+	}
+	elapsed := finished.Sub(started)
+	*phase += elapsed
+	if when := cancelledAt.Load(); when != 0 {
+		latency := finished.Sub(time.Unix(0, when))
+		if latency <= 0 {
+			latency = time.Nanosecond
+		}
+		if latency > elapsed {
+			latency = elapsed
+		}
+		a.timing.Cancel += latency
+	}
+	if err == nil {
+		err = ctx.Err()
+	}
+	return err
+}
+
+func (e *EmbeddingEngine) admit(ctx context.Context) (*embeddingAdmission, error) {
+	scheduler := e.scheduler.Load()
+	if scheduler == nil {
+		return &embeddingAdmission{release: func() {}}, nil
+	}
+	release, timing, err := scheduler.AcquireGenerationTimed(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &embeddingAdmission{release: release, scheduler: scheduler, timing: timing}, nil
+}
+
+// Load loads an embedding model
+func (e *EmbeddingEngine) Load(ctx context.Context, modelPath string, opts EmbeddingOptions) error {
+	admission, err := e.admit(ctx)
+	if err != nil {
+		return err
+	}
+	defer admission.close()
+	waiting := time.Now()
+	if err := e.lockContext(ctx); err != nil {
+		admission.timing.Queue += time.Since(waiting)
+		return err
+	}
+	admission.timing.Queue += time.Since(waiting)
 	defer e.mu.Unlock()
-	return e.loadLocked(ctx, modelPath, opts)
+	return admission.run(ctx, &admission.timing.Load, func() error { return e.loadLocked(ctx, modelPath, opts) })
 }
 
 func (e *EmbeddingEngine) loadLocked(ctx context.Context, modelPath string, opts EmbeddingOptions) error {
@@ -112,15 +200,55 @@ func (e *EmbeddingEngine) loadLocked(ctx context.Context, modelPath string, opts
 	e.modelPath = modelPath
 	e.dimensions = impl.GetDimensions()
 	e.loaded = true
+	e.resident.Store(true)
+	e.parked = false
+	e.loadOptions = opts
+	e.expectedIdentity = embeddingIdentity(impl)
 
-	return nil
+	// A backend may ignore cancellation while loading. Keep the successfully
+	// loaded process tracked for an admitted retirement, but do not report the
+	// cancelled request as a successful activation.
+	return ctx.Err()
 }
 
 // Unload unloads the current embedding model
 func (e *EmbeddingEngine) Unload() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.unloadUnsafe()
+	loaded := e.loaded
+	started := time.Now()
+	defer func() {
+		if loaded {
+			e.scheduler.Load().recordEmbeddingTiming(ProviderTiming{Unload: time.Since(started)})
+		}
+	}()
+	if err := e.unloadUnsafe(); err != nil {
+		return err
+	}
+	e.parked = false
+	e.loadOptions = EmbeddingOptions{}
+	e.expectedIdentity = ""
+	return nil
+}
+
+// RetireForProvider releases an idle embedding child before a native provider
+// loads. The verified model identity is retained so Knowledge can reload and
+// compare it on its next explicitly requested embedding operation.
+func (e *EmbeddingEngine) RetireForProvider() (bool, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.loaded {
+		return false, nil
+	}
+	started := time.Now()
+	defer func() { e.scheduler.Load().recordEmbeddingTiming(ProviderTiming{Unload: time.Since(started)}) }()
+	path, opts, identity := e.modelPath, e.loadOptions, e.expectedIdentity
+	if err := e.unloadUnsafe(); err != nil {
+		return true, err
+	}
+	e.modelPath, e.loadOptions, e.expectedIdentity = path, opts, identity
+	e.parked = true
+	return true, nil
 }
 
 func (e *EmbeddingEngine) unloadUnsafe() error {
@@ -136,6 +264,7 @@ func (e *EmbeddingEngine) unloadUnsafe() error {
 	}
 
 	e.loaded = false
+	e.resident.Store(false)
 	e.modelPath = ""
 	e.dimensions = 0
 
@@ -164,26 +293,72 @@ func (e *EmbeddingEngine) GenerateEmbeddings(ctx context.Context, req *api.Embed
 // GenerateEmbeddingsForIdentity prevents a concurrent API model switch from
 // silently contaminating a knowledge index built with a different model.
 func (e *EmbeddingEngine) GenerateEmbeddingsForIdentity(ctx context.Context, req *api.EmbeddingRequest, identity string) (*api.EmbeddingResponse, error) {
-	if err := e.lockContext(ctx); err != nil {
+	admission, err := e.admit(ctx)
+	if err != nil {
 		return nil, err
 	}
+	defer admission.close()
+	waiting := time.Now()
+	if err := e.lockContext(ctx); err != nil {
+		admission.timing.Queue += time.Since(waiting)
+		return nil, err
+	}
+	admission.timing.Queue += time.Since(waiting)
 	defer e.mu.Unlock()
-	return e.generateLocked(ctx, req, identity)
+	if e.parked {
+		if identity == "" || identity != e.expectedIdentity {
+			return nil, fmt.Errorf("embedding runtime was retired; reload the selected model explicitly")
+		}
+		if err := admission.run(ctx, &admission.timing.Load, func() error { return e.loadLocked(ctx, e.modelPath, e.loadOptions) }); err != nil {
+			return nil, err
+		}
+		if embeddingIdentity(e.implementation) != identity {
+			_ = e.unloadUnsafe()
+			return nil, fmt.Errorf("embedding runtime changed; rebuild knowledge before retrying")
+		}
+	}
+	var response *api.EmbeddingResponse
+	err = admission.run(ctx, &admission.timing.Generation, func() error {
+		var generationErr error
+		response, generationErr = e.generateLocked(ctx, req, identity)
+		return generationErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 // GenerateEmbeddingsForModel binds loading and execution to the same lock so
 // concurrent callers cannot return vectors produced by another caller's model.
 func (e *EmbeddingEngine) GenerateEmbeddingsForModel(ctx context.Context, path string, opts EmbeddingOptions, req *api.EmbeddingRequest) (*api.EmbeddingResponse, error) {
-	if err := e.lockContext(ctx); err != nil {
+	admission, err := e.admit(ctx)
+	if err != nil {
 		return nil, err
 	}
+	defer admission.close()
+	waiting := time.Now()
+	if err := e.lockContext(ctx); err != nil {
+		admission.timing.Queue += time.Since(waiting)
+		return nil, err
+	}
+	admission.timing.Queue += time.Since(waiting)
 	defer e.mu.Unlock()
 	if !e.loaded || e.modelPath != path {
-		if err := e.loadLocked(ctx, path, opts); err != nil {
+		if err := admission.run(ctx, &admission.timing.Load, func() error { return e.loadLocked(ctx, path, opts) }); err != nil {
 			return nil, err
 		}
 	}
-	return e.generateLocked(ctx, req, "")
+	var response *api.EmbeddingResponse
+	err = admission.run(ctx, &admission.timing.Generation, func() error {
+		var generationErr error
+		response, generationErr = e.generateLocked(ctx, req, "")
+		return generationErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 func (e *EmbeddingEngine) generateLocked(ctx context.Context, req *api.EmbeddingRequest, identity string) (*api.EmbeddingResponse, error) {
@@ -244,6 +419,9 @@ func (e *EmbeddingEngine) generateLocked(ctx context.Context, req *api.Embedding
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate embeddings: %w", err)
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if len(embeddings) != len(batch) {
 			return nil, fmt.Errorf("embedding runtime returned %d vectors for %d inputs", len(embeddings), len(batch))
 		}
@@ -269,6 +447,9 @@ func (e *EmbeddingEngine) generateLocked(ctx context.Context, req *api.Embedding
 		if measured, ok := impl.(interface{ UsageTokens() int }); ok {
 			totalTokens += measured.UsageTokens()
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	// Build response

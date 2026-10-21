@@ -212,7 +212,7 @@ func (m *Manager) MaxConcurrentRequests() int {
 func (m *Manager) MaxContextSize() int {
 	switch m.CurrentLevel() {
 	case LevelNormal:
-		return 8192
+		return 1048576 // Practical no-cap tier; model/resource admission remains authoritative.
 	case LevelReduced:
 		return 4096
 	case LevelMinimal:
@@ -220,7 +220,7 @@ func (m *Manager) MaxContextSize() int {
 	case LevelEmergency:
 		return 512
 	default:
-		return 8192
+		return 1048576
 	}
 }
 

@@ -72,6 +72,15 @@ func TestLoadConfigHonorsDataDirectory(t *testing.T) {
 	}
 }
 
+func TestAdaptiveContextDefaultsToLongContextCeiling(t *testing.T) {
+	t.Setenv("OFFGRID_MAX_CONTEXT", "")
+	t.Setenv("OFFGRID_ADAPTIVE_CONTEXT", "")
+	cfg := LoadConfig()
+	if cfg.MaxContextSize != 65536 || !cfg.AdaptiveContext {
+		t.Fatalf("adaptive defaults = context %d enabled %t", cfg.MaxContextSize, cfg.AdaptiveContext)
+	}
+}
+
 func TestImporterRejectsTraversalPaths(t *testing.T) {
 	root := t.TempDir()
 	importer := NewImporter(root, filepath.Join(root, "config.yaml"), false)

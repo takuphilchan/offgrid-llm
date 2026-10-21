@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -51,9 +52,9 @@ func NewLlamaHTTPEngine(llamaServerURL string) *LlamaHTTPEngine {
 func (e *LlamaHTTPEngine) Load(ctx context.Context, modelPath string, opts LoadOptions) error {
 	e.modelPath = modelPath
 
-	// Don't check health here - let the actual chat request handle retries
-	// The model cache already waits for server to start, and chat requests
-	// have retry logic for 503 errors during model loading
+	// The model cache waits for llama-server readiness before this connection.
+	// Generation failures remain visible to the caller; an uncertain request is
+	// never replayed here or by the HTTP streaming handler.
 	e.loaded = true
 	return nil
 }
@@ -140,14 +141,23 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
+			if singleStepRequest(req) && resp.StatusCode == http.StatusInternalServerError {
+				if rejection := singleStepRuntimeRejection(body); rejection != nil {
+					return nil, rejection
+				}
+			}
 			return nil, classifyLlamaServerError(resp.StatusCode, body)
 		}
 
 		defer resp.Body.Close()
 		var chatResp api.ChatCompletionResponse
 		var reader io.Reader = resp.Body
-		if singleStepRequest(req) {
-			reader = io.LimitReader(reader, 1<<20)
+		if len(req.Tools) > 0 {
+			body, err := io.ReadAll(io.LimitReader(reader, (4<<20)+1))
+			if err != nil || len(body) > 4<<20 || jsonwire.Validate(body) != nil {
+				return nil, fmt.Errorf("ambiguous, malformed or oversized tool response")
+			}
+			reader = bytes.NewReader(body)
 		}
 		if err := json.NewDecoder(reader).Decode(&chatResp); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
@@ -260,6 +270,11 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
+			if singleStepRequest(req) && resp.StatusCode == http.StatusInternalServerError {
+				if rejection := singleStepRuntimeRejection(body); rejection != nil {
+					return rejection
+				}
+			}
 			return classifyLlamaServerError(resp.StatusCode, body)
 		}
 
@@ -284,7 +299,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 				break
 			}
 
-			if !json.Valid([]byte(data)) {
+			if jsonwire.Validate([]byte(data)) != nil {
 				return fmt.Errorf("invalid JSON in inference stream")
 			}
 			deliver := callback
@@ -372,6 +387,10 @@ func classifyLlamaServerError(status int, body []byte) error {
 	}
 
 	lower := strings.ToLower(message)
+	if status == http.StatusBadRequest && strings.Contains(lower, "failed to parse grammar") {
+		// Do not retain the raw grammar: it may contain private tool schemas.
+		return &EngineError{Code: ErrCodeInvalidToolGrammar, Message: InvalidToolGrammarMessage}
+	}
 	if status == http.StatusBadRequest && (strings.Contains(lower, "exceed_context_size") || strings.Contains(lower, "exceeds the available context") || strings.Contains(lower, "context size") || strings.Contains(lower, "context window")) {
 		return &EngineError{Code: "context_exceeded", Message: "This conversation exceeds the allocated context. Select Extended in Response settings if supported, or start a new conversation. History has not been removed.", Details: message}
 	}

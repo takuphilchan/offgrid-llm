@@ -1,6 +1,7 @@
 package inference
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -70,4 +71,20 @@ func ownedProcessAlive(process *os.Process) bool {
 	defer windows.CloseHandle(handle)
 	status, err := windows.WaitForSingleObject(handle, 0)
 	return err == nil && status == uint32(windows.WAIT_TIMEOUT)
+}
+
+// Kill can report Access denied when an owned Windows worker exited just
+// before TerminateProcess. Confirm exit with a synchronize-only handle before
+// treating that error as harmless; inability to inspect is not proof of exit.
+func ownedProcessExitedAfterKill(process *os.Process) bool {
+	if process == nil {
+		return false
+	}
+	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(process.Pid))
+	if err != nil {
+		return errors.Is(err, windows.ERROR_INVALID_PARAMETER)
+	}
+	defer windows.CloseHandle(handle)
+	status, err := windows.WaitForSingleObject(handle, 100)
+	return err == nil && status == windows.WAIT_OBJECT_0
 }
