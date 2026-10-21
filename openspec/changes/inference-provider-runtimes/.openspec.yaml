@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-18
+goal: Support multiple local inference engines without changing existing
+  llama.cpp behavior.

@@ -159,6 +159,33 @@ acknowledgment or echoed arguments MUST NOT count as verified text.
 - **THEN** no new input is dispatched after acknowledged stopping
 - **AND** unsaved evidence is not announced as verified completion
 
+### Requirement: New typed actions carry mechanical verification intent
+
+New tasks SHALL pin a versioned action contract under which trusted code derives
+and persists a mechanical check from a validated observed typed action before
+dispatch. Separate model-authored metadata calls SHALL NOT be required solely to
+copy that action's arguments. This SHALL NOT authorize input or prove success.
+Existing jobs and explicit caller expectations SHALL retain their semantics.
+
+#### Scenario: Typed creation and exact edit
+- **WHEN** a new-contract task proposes a supported observed creation or text edit
+- **THEN** its check is bound to canonical target/document/preimage evidence and the persisted call identity before any dispatch
+- **AND** independent read-back remains required; malformed or stale arguments dispatch nothing
+
+#### Scenario: Failed persistence or resumed call
+- **WHEN** check persistence fails or the same saved call is inspected after restart
+- **THEN** failure prevents dispatch and existing call/check identities are not duplicated
+- **AND** unknown or uncertain effects cannot be repeated through derivation
+
+#### Scenario: Later authorized field changes
+- **WHEN** independently verified action-bound text is changed by a later authorized operation
+- **THEN** the earlier action receipt remains historical evidence rather than a permanent field invariant
+- **AND** the later operation requires its own evidence; explicit caller checks are not silently replaced
+
+#### Scenario: Legacy or unknown contract
+- **WHEN** a saved job lacks the new action contract or contains an unknown version
+- **THEN** absent versions retain prior behavior and unknown versions cannot execute
+
 ### Requirement: Document workflows remain bounded and transparent
 
 Document tools SHALL use bounded observations and schemas, deterministic host

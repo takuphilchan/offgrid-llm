@@ -33,6 +33,10 @@ it can reliably write without changing existing work.
   functions as unavailable, not as successful no-ops or an OS-name capability flag.
 - Keep recovery and evidence in the current task UI and existing APIs. Do not
   add another access dialog, legacy page, task store or model-specific workflow.
+- For newly admitted tasks, derive mechanical outcome checks from validated typed
+  action proposals and persist them before dispatch, instead of requiring another
+  model turn to duplicate the same action arguments. Preserve independent checks
+  and legacy jobs. Detect successful-but-unchanged observation loops explicitly.
 
 ### User-visible acceptance
 
@@ -50,6 +54,11 @@ it can reliably write without changing existing work.
 5. Equivalent controlled editors exercise the same document and Unicode contracts
    on UIA, Accessibility and AT-SPI. Real platform/app evidence is recorded
    separately from fixtures and unavailable platform tests remain explicit.
+6. A typed launch/create/edit proposal can progress without a separate metadata
+   call, but cannot bypass observed identities, authorization or read-back.
+   Repeated unchanged reads receive bounded correction, not unbounded rediscovery.
+   A document-capable host with an unsupported surface can still expose its
+   existing structured-control operations after fresh observation.
 
 ### Boundary
 

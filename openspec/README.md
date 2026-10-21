@@ -35,11 +35,16 @@ new Codex turn; if discovery has not refreshed, restart Codex in this repository
 
 - `config.yaml`: project-specific constraints and artifact rules.
 - `changes/<name>/`: in-progress change, scaffolded with the OpenSpec CLI.
-- `specs/<capability>/spec.md`: maintained requirements for completed changes.
+- `specs/<capability>/spec.md`: maintained accepted requirements, not evidence
+  that every platform and model is qualified.
 - `changes/archive/`: completed change history, not proof of a release.
 
-Specs and changes intentionally start empty. Existing code has not been
-retroactively certified or rewritten into generated requirements.
+The main spec tree has requirements from verified changes, but existing code has
+not been retroactively certified by their presence. Use the [documentation
+index](../docs/README.md) for current user/maintainer instructions, the
+[roadmap](../docs/ROADMAP.md) for delivery order, and [quality evidence](../docs/quality/README.md)
+for actual test and real-hardware status. An active change is provisional even
+when some tasks are checked; a release note is historical for its named version.
 
 ## Terminal checks
 
@@ -60,10 +65,10 @@ Applicable application checks:
 
 ```sh
 go test ./...
-npm --prefix web/app run api:check
-npm --prefix web/app run check
-npm --prefix web/app run build
-npm --prefix desktop test
+npm --prefix apps/web run api:check
+npm --prefix apps/web run check
+npm --prefix apps/web run build
+npm --prefix apps/desktop test
 ```
 
 Run Go checks from the root and UI/desktop checks with their existing dependencies.

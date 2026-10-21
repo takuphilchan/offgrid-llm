@@ -68,6 +68,42 @@ compilation. Proposal exclusions also apply.
 
 ## Decisions
 
+### Follow-up: action-coupled checks and semantic progress
+
+New task configurations pin native action contract version 1. Existing tasks
+without it retain the explicit-declaration contract; unknown versions refuse
+execution. The model proposes the ordinary typed operation with observed IDs and
+desired text/value. Trusted service code derives the mechanical launch, blankness
+or exact-edit predicate, binds it to canonical evidence, and the runner persists
+it with the existing call identity before authorization/dispatch. This is not
+permission, interpretation of the entire request, or evidence of success.
+
+Derived checks carry their source call identity. Incorporation is idempotent and
+cannot overwrite caller expectations or unresolved earlier effects. Independent
+verification records the result of that particular action; later authorized work
+may legitimately change the same field without retroactively disproving its
+verified action receipt. Legacy checks keep their existing semantics. Failures
+before persistence cannot dispatch; crashes after dispatch use existing receipts
+and reconciliation, never a newly generated action.
+
+Expose supported typed actions after observations establish their inputs; do not
+hide them merely because the model has not copied those inputs into a separate
+check declaration. Keep explicit task_expectations for caller/legacy contracts
+and non-mechanical outcomes. No app-name task macros or inferred permission.
+
+Track bounded semantic native-read progress outside prompts: target/document
+identity, content revision/digest, supported capabilities and verification state.
+Fresh observation IDs, timestamps and repeated metadata are not progress. Warn
+after repeated unchanged reads, then pause with a specific no-progress reason if
+correction fails. Do not force a mutation or suppress necessary fresh observation.
+All attempts consume existing task budgets; saved user limits never grow silently.
+
+Treat a trusted unsupported document-inventory response as negative capability
+evidence, not an uncertain edit or an endlessly retried read. It may enable only
+existing structured controls after fresh observation of the same authorized
+target; it does not establish document identity or broaden consent. Tests must
+use the runner's actual result/error envelope and preserve independent read-back.
+
 ### 1. Model an installed application as an activation identity
 
 Replace the executable-only assumption inside the host catalog with a closed

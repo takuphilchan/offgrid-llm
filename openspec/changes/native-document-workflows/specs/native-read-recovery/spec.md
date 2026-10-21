@@ -90,6 +90,22 @@ MUST NOT broaden authority or replace canonical dispatch validation.
 - **THEN** the failure describes only the read's lack of effects
 - **AND** it does not assert that the whole task made no changes or replay earlier input
 
+### Requirement: Successful reads cannot hide lack of progress
+
+New-contract tasks SHALL persist bounded semantic no-progress accounting for
+trusted native reads. Volatile observation IDs/timestamps and metadata calls
+SHALL NOT reset it. Meaningful changed state SHALL permit fresh observation.
+
+#### Scenario: Repeated unchanged observation cycle
+- **WHEN** successful observation/inventory/read calls repeat unchanged semantic state
+- **THEN** bounded corrective feedback is issued and continued nonprogress pauses with a specific reason
+- **AND** no mutation is forced, no permission is expanded and root budgets are not reset
+
+#### Scenario: Document capability is unavailable
+- **WHEN** a trusted document inventory reports the current surface unsupported
+- **THEN** the task retains typed no-effect negative capability evidence without mutation reconciliation
+- **AND** only previously supported structured controls become eligible after fresh authorized observation
+
 ### Requirement: Restart and legacy recovery remain conservative
 
 Read-only intent evidence SHALL be persisted before dispatch and survive restart,
