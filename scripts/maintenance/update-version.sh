@@ -42,7 +42,7 @@ if [ -f "$ROOT_DIR/internal/p2p/discovery.go" ]; then
 fi
 
 # Update sdk/python/pyproject.toml
-# Note: Python client version is managed separately (0.2.12 versus product 0.4.18).
+# Note: Python client version is managed separately (0.2.12 versus product 0.4.19).
 # if [ -f "$ROOT_DIR/sdk/python/pyproject.toml" ]; then
 #     echo "Updating sdk/python/pyproject.toml..."
 #     sed -i "s/version = \"[^\"]*\"/version = \"$VERSION\"/" "$ROOT_DIR/sdk/python/pyproject.toml"

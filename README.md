@@ -37,7 +37,7 @@ should still be reported through [GitHub Issues](https://github.com/takuphilchan
 Use the versioned stable image for a repeatable installation:
 
 ```bash
-docker pull takuphilchan/offgrid-llm:0.4.18
+docker pull takuphilchan/offgrid-llm:0.4.19
 
 docker run -d \
   --name offgrid \
@@ -48,7 +48,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:0.4.18
+  takuphilchan/offgrid-llm:0.4.19
 ```
 
 Open <http://127.0.0.1:11611/ui/>. The named volumes survive container
@@ -66,9 +66,9 @@ docker logs -f offgrid
 
 Stable releases publish `latest`, full semantic versions, `sha-*` tags,
 provenance, SBOMs, and AMD64/ARM64 CPU manifests. NVIDIA images use the separate
-`0.4.18-gpu` tag (Linux AMD64). The `edge` tag is for development, not a stable
+`0.4.19-gpu` tag (Linux AMD64). The `edge` tag is for development, not a stable
 upgrade channel. See [Docker deployment](docs/setup/docker.md) and the
-[v0.4.18 release notes](docs/releases/release-notes-v0.4.18.md).
+[v0.4.19 release notes](docs/releases/release-notes-v0.4.19.md).
 
 ## Build and run from source
 

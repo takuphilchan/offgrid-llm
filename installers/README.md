@@ -18,7 +18,7 @@ is published. It does not currently present a component-selection menu.
 
 To select a published release and opt into the Linux user service:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | VERSION=v0.4.18 AUTOSTART=yes bash
+curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | VERSION=v0.4.19 AUTOSTART=yes bash
 ```
 
 The previously published `scripts/install.sh` raw URL remains a compatibility
