@@ -53,7 +53,8 @@ if ([IO.Path]::GetFullPath($registered).TrimEnd('\') -ne $installRoot) { throw '
 
 # Real installed Electron and bundled Go service, with disposable profiles.
 $stage = 'start the installed desktop and bundled service'
-$smokeOutput = & node (Join-Path $PSScriptRoot 'test-desktop-startup.mjs') $appExe
+$testScripts = Join-Path (Split-Path -Parent $PSScriptRoot) 'test'
+$smokeOutput = & node (Join-Path $testScripts 'test-desktop-startup.mjs') $appExe
 if ($LASTEXITCODE -ne 0) { throw 'Installed-app startup checks failed; test installation retained for inspection.' }
 $smoke = ($smokeOutput -join "`n") | ConvertFrom-Json
 $sentinel = Join-Path $smoke.evidence 'isolated-profile/desktop-workspace/data/installer-preservation.txt'
@@ -63,7 +64,7 @@ $before = (Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash
 # Keep an independently owned fixture alive across repair, Finish and uninstall.
 # Only this process object is cleaned up; never identify services by port/name.
 $externalRoot = (New-Item -ItemType Directory -Path (Join-Path $testRoot 'external-fixture')).FullName
-$fixtureScript = Join-Path $PSScriptRoot 'desktop-external-fixture.mjs'
+$fixtureScript = Join-Path $testScripts 'desktop-external-fixture.mjs'
 $externalFixtureProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList "`"$fixtureScript`" `"$externalRoot`"" -WindowStyle Hidden -PassThru
 $fixtureReady = Join-Path $externalRoot 'ready.json'
 for ($attempt = 0; $attempt -lt 100 -and -not (Test-Path -LiteralPath $fixtureReady); $attempt++) { Start-Sleep -Milliseconds 100 }
