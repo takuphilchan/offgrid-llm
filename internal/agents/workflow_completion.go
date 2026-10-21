@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -60,12 +61,27 @@ func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
 	if err := initializeWorkflow(t); err != nil {
 		return false, err
 	}
+	accessUnobserved := ComputerAccessNeedsObservation(t, r.tools)
 	// Authority alone is not an external outcome. A direct conversational
-	// answer needs no invented application/check. Once an action or explicit
-	// expectation exists the ordinary evidence gate still applies.
-	if len(t.Workflow.Checks) == 0 && len(t.Config.NativeExpectations) == 0 && len(t.Plan) == 0 {
+	// answer needs no invented application/check. Verified service artifacts
+	// use service read-back evidence, not native-document expectations. Other
+	// actions, an explicit expectation or a saved plan retain the evidence gate.
+	if !accessUnobserved && len(t.Workflow.Checks) == 0 && len(t.Config.NativeExpectations) == 0 && len(t.Plan) == 0 {
 		hasAction := false
 		for _, step := range t.Steps {
+			if step.Type == "action" {
+				descriptor, known := r.tools.Capability(step.ToolName)
+				if known && workspaceArtifactCapability(step.ToolName, descriptor) {
+					var receipt struct {
+						Verified bool   `json:"verified"`
+						Check    string `json:"check"`
+						SHA256   string `json:"sha256"`
+					}
+					if json.Unmarshal([]byte(step.ToolResult), &receipt) == nil && receipt.Verified && receipt.Check == "stored_bytes_sha256_and_format" && len(receipt.SHA256) == 64 {
+						continue
+					}
+				}
+			}
 			if step.Type == "action" || step.Type == "reconciled" || step.Type == "tool_error" {
 				hasAction = true
 				break
@@ -95,7 +111,7 @@ func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
 			}
 		}
 	}
-	if t.Workflow.State != "pending" && len(remainingPlan) == 0 {
+	if !accessUnobserved && t.Workflow.State != "pending" && len(remainingPlan) == 0 {
 		return false, nil
 	}
 	remaining := []string{}
@@ -107,6 +123,9 @@ func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
 	sort.Strings(remaining)
 	data, _ := json.Marshal(remaining)
 	feedback := "Completion is not verified. Pending check IDs: " + string(data) + ". If no checks exist, use task_expectations first. Continue the same task from recorded evidence; do not repeat launches or uncertain actions. Unsupported checks must be reported as unverified, not claimed successful."
+	if accessUnobserved {
+		feedback = "Computer access was granted for your requested operation, but the selected application has not been inspected. A saved workspace artifact verifies only storage, not browser research or application work. Continue with the available application discovery and observation tools, then perform and verify the original request. Use actual observed sources for research findings and links; do not substitute a file containing the search query. Preserve account/profile constraints and do not repeat prior dispatched actions."
+	}
 	if len(remainingPlan) > 0 {
 		plan, _ := json.Marshal(remainingPlan)
 		feedback += " Your saved plan still contains unfinished work: " + string(plan) + ". Perform the requested work and update the plan with actual evidence before finishing. A verified app launch does not finish a document or research task."
@@ -121,4 +140,42 @@ func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
 		setRunPhase(t, "repairing_tool", "")
 	}
 	return true, r.persist(t)
+}
+
+// ComputerAccessNeedsObservation distinguishes a pending model-requested target
+// inspection from a preattached grant, which is only capability, not an obligation.
+// In contrast, a resolved model access request records an explicit outstanding
+// operation. Storage receipts must not erase that operation before the selected
+// target was even inspected. This is a necessary check, not semantic proof of
+// research quality or of every part of the natural-language request.
+func ComputerAccessNeedsObservation(t *Task, tools interface {
+	Capability(string) (capabilities.Descriptor, bool)
+}) bool {
+	if t.LastAccess == nil || t.LastAccess.CallID == "" || t.LastAccess.Kind != "computer" {
+		return false
+	}
+	// An explicit user correction supersedes the old proposed operation, not its
+	// effects. Existing workflow/uncertainty gates continue to own those effects.
+	if offset := t.Config.ComputerStepOffset; offset > 0 && offset <= len(t.Steps) {
+		resolved := t.Steps[offset-1]
+		if resolved.Type == "input_resolved" && !resolved.Timestamp.IsZero() {
+			for _, instruction := range t.Instructions {
+				if instruction.At.After(resolved.Timestamp) {
+					return false
+				}
+			}
+		}
+	}
+	for index, step := range t.Steps {
+		if index < t.Config.ComputerStepOffset || step.Type != "action" {
+			continue
+		}
+		switch step.ToolName {
+		case "computer_observe", "computer_verify_application", "browser_observe":
+			if descriptor, known := tools.Capability(step.ToolName); known && companionCapability(descriptor) {
+				return false
+			}
+		}
+	}
+	return true
 }

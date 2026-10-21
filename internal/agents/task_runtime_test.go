@@ -279,12 +279,12 @@ func TestDurableDelegationDependenciesAndNarrowScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := awaitTask(t, m, task.ID, TaskCompleted)
-	if len(result.ChildHistory) != 2 || first.Load() != 1 || second.Load() != 1 {
+	if len(result.ChildHistory) != 2 || first.Load() != 1 || second.Load() != 1 || result.Checkpoint.Iteration+result.Checkpoint.ReservedChildIterations > result.Config.MaxIterations {
 		t.Fatal("incomplete graph")
 	}
 	for _, link := range result.ChildHistory {
 		child, _ := m.GetTask(link.ID)
-		if child.Actor != "alice" || child.ParentID != task.ID || child.Config.ComputerSession != "" || child.Config.MaxIterations != 10 {
+		if child.Actor != "alice" || child.ParentID != task.ID || child.Config.ComputerSession != "" || child.Config.MaxIterations != 8 {
 			t.Fatal("child scope widened")
 		}
 		if err := r.Delete(child.ID, "alice"); !errors.Is(err, ErrRunConflict) {
@@ -326,6 +326,14 @@ func TestDelegationRestartRequiresExplicitResume(t *testing.T) {
 		t.Fatalf("no graph: %+v %v", task, err)
 	}
 	r.Shutdown(context.Background())
+	// Simulate an older persisted parent checkpoint whose child reservation was
+	// absent even though the child job was durably created.
+	if _, err = m.updateTask(task.ID, func(t *Task) error {
+		t.Checkpoint.ReservedChildIterations = 0
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	restored := NewManagerWithPersistence(nil, nil, nil, dir)
 	if err = restored.StorageError(); err != nil {
 		t.Fatal(err)
@@ -342,6 +350,20 @@ func TestDelegationRestartRequiresExplicitResume(t *testing.T) {
 	child, _ := restored.GetTask(parent.ChildHistory[0].ID)
 	if child.Status != TaskInterrupted {
 		t.Fatal("child silently resumed")
+	}
+	if parent.Checkpoint.ReservedChildIterations != child.Config.MaxIterations {
+		t.Fatalf("restored parent regained allocated child decisions: reserved=%d child=%d", parent.Checkpoint.ReservedChildIterations, child.Config.MaxIterations)
+	}
+	if remaining, err := childDecisionBudget(parent, 1); err == nil || remaining != 0 {
+		t.Fatalf("restored parent could oversubscribe child budget: remaining=%d error=%v", remaining, err)
+	}
+	reopened := NewManagerWithPersistence(nil, nil, nil, dir)
+	if err := reopened.StorageError(); err != nil {
+		t.Fatal(err)
+	}
+	persisted, _ := reopened.GetTask(parent.ID)
+	if persisted.Checkpoint.ReservedChildIterations != child.Config.MaxIterations {
+		t.Fatal("repaired reservation was not persisted")
 	}
 	if _, err = next.Continue(ctx, child.ID, "alice", "resume", "", false); !errors.Is(err, ErrRunConflict) {
 		t.Fatal("child bypassed parent pause")

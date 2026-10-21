@@ -23,7 +23,7 @@ func isRuntimeTool(name string) bool {
 }
 
 func runtimeTools(task *Task) []api.Tool {
-	if !task.Config.TaskFirst {
+	if !task.Config.TaskFirst || task.Config.TextOnlyInference {
 		return nil
 	}
 	tools := []api.Tool{

@@ -71,7 +71,7 @@ func recoverComputerReceipt(t *Task) bool {
 	if err != nil || r.Actor != t.Actor || r.Session != t.Config.ComputerSession || r.CallID != cp.ExecutingCall || r.CallID != call.ID || r.Tool != call.Function.Name || r.Arguments != string(args) || !nativeMutation(cp.ExecutingCapability, r.Tool) || !json.Valid([]byte(r.Result)) {
 		return false
 	}
-	t.Steps = append(t.Steps, Step{ID: len(t.Steps) + 1, Type: "action", Provenance: "companion_receipt", ToolName: r.Tool, ToolArgs: r.Arguments, ToolResult: r.Result, Timestamp: r.At})
+	t.Steps = append(t.Steps, Step{ID: len(t.Steps) + 1, CallID: r.CallID, Type: "action", Provenance: "companion_receipt", ToolName: r.Tool, ToolArgs: r.Arguments, ToolResult: r.Result, Timestamp: r.At})
 	message, _ := json.Marshal(map[string]any{"provenance": "companion_receipt", "offgrid_step_id": len(t.Steps), "result": json.RawMessage(r.Result), "guidance": "Recovered the original invocation result without repeating it. Verify outstanding outcomes through fresh permitted reads before claiming completion."})
 	cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: r.Tool, Content: string(message)})
 	cp.Calls, cp.ExecutingCall, cp.ComputerReceipt, cp.ExecutingCapability = cp.Calls[1:], "", nil, nil

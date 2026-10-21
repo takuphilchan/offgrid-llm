@@ -40,7 +40,7 @@ func TestComputerReceiptRecoversLostAcknowledgmentAfterRestart(t *testing.T) {
 	}
 	restarted := NewManagerWithPersistence(nil, nil, nil, dir)
 	got, _ := restarted.GetTask(task.ID)
-	if got.Status != TaskInterrupted || got.Checkpoint.ExecutingCall != "" || len(got.Steps) != 1 || got.Steps[0].Provenance != "companion_receipt" || !got.ComputerSessionExpired {
+	if got.Status != TaskInterrupted || got.Checkpoint.ExecutingCall != "" || len(got.Steps) != 1 || got.Steps[0].CallID != "call" || got.Steps[0].Provenance != "companion_receipt" || !got.ComputerSessionExpired {
 		t.Fatalf("not recovered safely: %+v", got)
 	}
 	if recoverComputerReceipt(got) || len(got.Steps) != 1 {

@@ -13,6 +13,10 @@ func companionCapability(d capabilities.Descriptor) bool {
 	return d.Kind == capabilities.Computer && d.Namespace == "computer" && d.Source == "local-companion"
 }
 
+func workspaceArtifactCapability(name string, d capabilities.Descriptor) bool {
+	return name == "task_save_artifact" && d.Name == name && d.Kind == capabilities.Write && d.Namespace == "workspace" && d.Source == "workspace"
+}
+
 // ToolsForExecution discovers enabled tools for an authenticated actor/run. It
 // does not approve an action: execution repeats policy with the actual arguments.
 // Approval-required tools remain discoverable so the normal approval flow works.

@@ -75,9 +75,10 @@ func (m *Manager) loadTasks() {
 		m.storageErr = err
 		return
 	}
+	restoredBudgets := restoreChildReservations(tasks)
 	loaded := make(map[string]*Task, len(tasks))
 	for _, task := range tasks {
-		changed := false
+		changed := restoredBudgets[task.ID]
 		if task.Config.ComputerSession != "" && !task.ComputerSessionExpired && task.Status != TaskCompleted && task.Status != TaskCancelled && task.Status != TaskFailed {
 			task.ComputerSessionExpired = true
 			changed = true

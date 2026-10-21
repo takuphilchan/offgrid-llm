@@ -75,6 +75,33 @@ func TestDelegationChecksImplementationBeforeGrant(t *testing.T) {
 	}
 }
 
+func TestUnprofiledDelegationCannotOversubscribeRootBudget(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	r := NewRunner(m, NewToolRegistry(), nil)
+	config := taskConfig()
+	config.MaxIterations = 5
+	task, err := r.Create("Compare findings", "model", "alice", config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err = m.updateTask(task.ID, func(task *Task) error {
+		task.Status = TaskRunning
+		task.Checkpoint.Iteration = 4
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := api.ToolCall{ID: "delegate", Type: "function", Function: api.FunctionCall{Name: "delegate_tasks", Arguments: `{"tasks":[{"key":"first","goal":"Find one fact","depends_on":[],"tools":[]},{"key":"second","goal":"Find another fact","depends_on":[],"tools":[]}]}`}}
+	if err := r.beginDelegation(task, call); err == nil || !strings.Contains(err.Error(), "aggregate iteration budget") {
+		t.Fatalf("unbudgeted delegation accepted: %v", err)
+	}
+	stored, ok := m.GetTask(task.ID)
+	if !ok || len(m.ListTasks()) != 1 || stored.Delegation != nil || stored.Checkpoint.ReservedChildIterations != 0 {
+		t.Fatalf("rejected delegation persisted partial graph: task=%+v found=%v", stored, ok)
+	}
+}
+
 func TestCoordinatorCandidatesExcludeHistoryWithoutCopyingPayloads(t *testing.T) {
 	m := NewManager(nil, nil, nil)
 	payload := strings.Repeat("history", 1<<18)

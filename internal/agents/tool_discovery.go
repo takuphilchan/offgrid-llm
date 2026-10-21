@@ -37,7 +37,7 @@ func projectMCPResult(result string, descriptor capabilities.Descriptor, callID 
 // This is the same authority intersection used for model presentation. Discovery
 // never enumerates the unfiltered registry and never grants execution rights.
 func (r *Runner) authorizedTools(ctx context.Context, task *Task) []api.Tool {
-	if ctx.Err() != nil {
+	if ctx.Err() != nil || task.Config.TextOnlyInference {
 		return nil
 	}
 	tools := r.tools.GetTools()

@@ -27,10 +27,7 @@ func TestComputerRejectsBatchedAndUnobservedCallsBeforeDispatch(t *testing.T) {
 			t.Fatal(err)
 		}
 		task, err = runner.Continue(context.Background(), task.ID, "alice", "start", "", false)
-		wantStatus, wantSteps := TaskFailed, 0
-		if len(names) > 1 {
-			wantStatus, wantSteps = TaskInterrupted, (maxProposalRepairs+1)*len(names)
-		}
+		wantStatus, wantSteps := TaskInterrupted, (maxProposalRepairs+1)*len(names)
 		if err != nil || task.Status != wantStatus || len(task.Steps) != wantSteps || task.PendingApproval != nil || len(task.Checkpoint.Calls) != 0 {
 			t.Fatalf("unsafe response not rejected: %+v %v", task, err)
 		}

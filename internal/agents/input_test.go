@@ -130,7 +130,7 @@ func TestResolvedInputDoesNotCountAsAComputerObservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != TaskFailed || tools.calls.Load() != 0 {
+	if result.Status != TaskInterrupted || result.ErrorCode != proposalRepairLimitCode || tools.calls.Load() != 0 {
 		t.Fatalf("access was mistaken for observation: %+v", result)
 	}
 }

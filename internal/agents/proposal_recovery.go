@@ -15,6 +15,26 @@ const proposalRepairLimitCode = "tool_proposal_repair_limit"
 // access, read, expectation or edit repair with a weaker sequencing repair.
 const computerToolSequenceRepair = ":computer_tool_sequence"
 
+// Reject before executable checkpoint state exists. Keep only tool identity and
+// service-authored feedback, never rejected arguments or assistant prose. A
+// fresh observation repairs the prerequisite, not the requested operation itself.
+func (r *Runner) rejectComputerObservation(task *Task, name, observe string) error {
+	cp := task.Checkpoint
+	cp.Iteration++
+	cp.ProposalRepairs++
+	cp.ProposalUnresolved = true
+	if cp.ProposalTool == "" {
+		cp.ProposalTool = computerToolSequenceRepair
+		cp.SequenceRepairTool = name
+		cp.SequenceRepairCompleted = false
+	}
+	feedback := "The proposed tool requires an observation of the selected target. No call from this response was dispatched. Use " + observe + " when available; for a whole-desktop task first discover/select the intended application with the currently available tools. Wait for each result and use only observed references. Do not repeat earlier dispatched actions or claim completion without evidence."
+	result, _ := json.Marshal(map[string]any{"error": "computer_observation_required", "tool": name, "message": feedback, "effects": "none", "verified": false})
+	cp.Messages = append(cp.Messages, api.ChatMessage{Role: "user", Content: string(result)})
+	task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "rejected", ToolName: name, ToolResult: string(result), Timestamp: time.Now().UTC()})
+	return r.persistProposalRepair(task)
+}
+
 // Reject the entire model batch before queuing, authorization or dispatch.
 // Executing just the first call or serializing the proposed batch would accept
 // actions planned from observations the model has not actually received.
@@ -103,6 +123,14 @@ func proposalRecovery(task *Task, tool string, failure *ToolAuthorizationError) 
 		return ""
 	}
 	switch failure.Code {
+	case "task_artifact_work_pending":
+		if task.Config.TaskFirst && task.ParentID == "" && tool == "task_save_artifact" {
+			return "No artifact was saved. Continue the original operation using the available discovery and observation tools. Gather actual evidence before writing results; do not create a file merely containing the request."
+		}
+	case "invalid_task_artifact":
+		if task.Config.TaskFirst && task.ParentID == "" && tool == "task_save_artifact" {
+			return "No artifact was saved. Correct the indicated field: text requires a .txt filename, markdown .md, json .json, csv .csv, with nonempty content of at most 131072 UTF-8 bytes. Do not invent results or replace requested application work with a file containing the request. Perform outstanding work and gather evidence before saving findings. Earlier dispatched actions must not be repeated."
+		}
 	case "computer_application_lookup_required":
 		if task.Config.ComputerSession != "" && task.Config.ComputerScope == "desktop" && tool == "computer_open_application" {
 			return "Search the latest full application catalog by the requested name using computer_find_applications. Use only its unique matching ID. Ask for clarification if missing or ambiguous; do not guess a substitute. This rejection happened before dispatch."
@@ -136,6 +164,9 @@ func proposalRecovery(task *Task, tool string, failure *ToolAuthorizationError) 
 		}
 	case "computer_target_not_selected", "computer_application_not_ready", "computer_document_changed":
 		if task.Config.ComputerSession != "" {
+			if tool == "computer_documents" || tool == "computer_read_text" || failure.Code == "computer_document_changed" {
+				return "The document read is stale or has no selected target. Call computer_observe once to obtain a fresh application observation, then continue from that result. Do not repeat computer_documents, read text, launch or input until the fresh observation is recorded."
+			}
 			return "Inspect the existing application using computer_verify_application or computer_windows and select the intended observed target. Do not repeat a prior launch or input."
 		}
 	}
@@ -146,7 +177,7 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	cp := task.Checkpoint
 	cp.ProposalRepairs++
 	cp.ProposalUnresolved = true
-	if failure.Code == "host_access_required" || failure.Code == "tool_write_rejected" {
+	if failure.Code == "host_access_required" || failure.Code == "tool_write_rejected" || failure.Code == "invalid_task_artifact" {
 		cp.PreEffectRepairs++
 	}
 	if failure.Code == "workflow_control_expectation_required" {
@@ -154,13 +185,14 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	}
 	if len(cp.Calls) > 0 {
 		cp.ProposalTool = cp.Calls[0].Function.Name
-		if failure.Code == "host_access_required" {
+		if !cp.PreEffectRepair && (failure.Code == "host_access_required" || failure.Code == "invalid_task_artifact") {
 			cp.PreEffectRepair, cp.PreEffectRepairTool = true, cp.ProposalTool
 		}
 	}
 	// Other calls in the same model batch may depend on this invalid proposal.
 	// Complete their tool-message pairs as not executed, never dispatch them.
 	for index, call := range cp.Calls {
+		discardRejectedActionCheck(task, call.ID)
 		code, message := failure.Code, failure.Message
 		if index > 0 {
 			code, message = "tool_proposal_abandoned", "Not executed because an earlier proposal in this batch was invalid. Plan again from the current state."
@@ -186,6 +218,9 @@ func resolvePreEffectRepair(cp *Checkpoint, tool string, descriptor capabilities
 		original = cp.ProposalTool
 	}
 	repaired := tool == original && descriptor.Source == "builtin" && descriptor.Namespace == "tools"
+	if original == "task_save_artifact" {
+		repaired = workspaceArtifactCapability(tool, descriptor)
+	}
 	if companionCapability(descriptor) {
 		switch original {
 		case "write_file":
@@ -225,9 +260,14 @@ func (r *Runner) rejectUnrepairedCompletion(task *Task) error {
 
 func (r *Runner) persistProposalRepair(task *Task) error {
 	setRunPhase(task, "repairing_tool", "")
-	if task.Checkpoint.ProposalRepairs > maxProposalRepairs || task.Checkpoint.PreEffectRepairs > maxProposalRepairs {
+	if task.Checkpoint.ProposalRepairs+task.Checkpoint.DecisionRepairs > maxProposalRepairs || task.Checkpoint.PreEffectRepairs > maxProposalRepairs {
 		task.Status, task.ErrorCode = TaskInterrupted, proposalRepairLimitCode
 		task.Error = "Paused after three unsuccessful proposal repairs. No rejected action was executed. Review the task or choose a compatible model before explicitly continuing."
+		if task.Checkpoint.ProposalTool == "request_computer_access" && task.Config.ComputerSession == "" {
+			// An invalid request is not evidence that the model/runtime is
+			// incompatible. Keep this service-authored, not model/provider prose.
+			task.Error = "The agent could not form a valid computer-access request after three correction attempts. This request granted no access and executed no application action. Your task is preserved; resume explicitly after reviewing the access-request details."
+		}
 		if task.Checkpoint.PreEffectRepair {
 			for i := len(task.Steps) - 1; i >= 0; i-- {
 				step := task.Steps[i]

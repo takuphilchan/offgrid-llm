@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
@@ -128,6 +129,7 @@ func TestPinnedProfileDelegationSharesBudgetAndDoesNotGrantComputer(t *testing.T
 	d, _ := registry.Capability("calculator")
 	config := taskConfig()
 	config.MaxIterations = 12
+	config.TimeoutPerStep = 30 * time.Second
 	config.Profile = &AgentProfile{ID: "parent", Revision: 1, Settings: ProfileSettings{Name: "Parent", Model: "parent-model", MaxIterations: 12}}
 	config.AllowedCapabilities = map[string]capabilities.Descriptor{"calculator": d}
 	child := DefaultAgentConfig()
@@ -171,8 +173,8 @@ func TestPinnedProfileDelegationSharesBudgetAndDoesNotGrantComputer(t *testing.T
 	}
 	for _, link := range result.ChildHistory {
 		child, _ := m.GetTask(link.ID)
-		if child.Config.MaxIterations != 5 || child.ParentID != task.ID {
-			t.Fatal("unbounded child", child.Config.MaxIterations)
+		if child.Config.MaxIterations != 4 || child.Config.TimeoutPerStep != config.TimeoutPerStep || child.ParentID != task.ID {
+			t.Fatal("unbounded child", child.Config.MaxIterations, child.Config.TimeoutPerStep)
 		}
 	}
 	// A child profile cannot turn a denied parent tool into an allowed call.
@@ -237,8 +239,14 @@ func TestPinnedSpecialistsHandoffResearchToDocumentDraft(t *testing.T) {
 	defer r.Shutdown(context.Background())
 	r.StartCoordinator(ctx)
 	task, err := r.Create("Research then draft", "parent-model", "alice", config)
-	if err != nil { t.Fatal(err) }
-	if _, err = r.Continue(ctx, task.ID, "alice", "start", "", true); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.Continue(ctx, task.ID, "alice", "start", "", true); err != nil {
+		t.Fatal(err)
+	}
 	result := awaitTask(t, m, task.ID, TaskCompleted)
-	if len(result.ChildHistory) != 2 || !strings.Contains(result.Result, "no document was changed") { t.Fatal("specialist workflow was not reconciled by parent", result) }
+	if len(result.ChildHistory) != 2 || !strings.Contains(result.Result, "no document was changed") {
+		t.Fatal("specialist workflow was not reconciled by parent", result)
+	}
 }

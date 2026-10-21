@@ -73,7 +73,7 @@ type PowerPolicy struct {
 func DefaultPolicy() PowerPolicy {
 	return PowerPolicy{
 		ACMaxConcurrent:    10,
-		ACMaxContext:       8192,
+		ACMaxContext:       1048576, // Practical no-cap tier; model/resource admission remains authoritative.
 		ACEnableEmbeddings: true,
 
 		BatteryMaxConcurrent:    5,
@@ -106,6 +106,7 @@ func NewPowerManager(policy PowerPolicy) *PowerManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &PowerManager{
 		policy:   policy,
+		status:   PowerStatus{State: PowerUnknown, BatteryLevel: BatteryUnknown},
 		ctx:      ctx,
 		cancel:   cancel,
 		interval: 30 * time.Second,
@@ -162,7 +163,9 @@ func (pm *PowerManager) GetMaxConcurrent() int {
 func (pm *PowerManager) GetMaxContext() int {
 	status := pm.Status()
 
-	if status.State == PowerAC {
+	// Unknown means the platform exposed no battery signal (common in WSL,
+	// containers, and native Windows), not that the machine is on battery.
+	if status.State == PowerAC || status.State == PowerUnknown {
 		return pm.policy.ACMaxContext
 	}
 

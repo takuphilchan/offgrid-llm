@@ -22,6 +22,15 @@ const WorkflowEvidenceVersion = 1
 // selecting v2 does not authorize input or replace host feature negotiation.
 const DocumentWorkflowEvidenceVersion = 2
 
+// Pinned only at new-job admission. Missing means the saved explicit-check
+// protocol; an unknown version must never authorize execution.
+const NativeActionContractVersion = 1
+
+func UsesNativeActionContract(t *Task) bool {
+	return t != nil && t.Config.NativeActionContractVersion == NativeActionContractVersion &&
+		t.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion && usesWorkflow(t)
+}
+
 func knownWorkflowVersion(version int) bool {
 	return version == WorkflowEvidenceVersion || version == DocumentWorkflowEvidenceVersion
 }
@@ -47,14 +56,15 @@ type OutcomeExpectation struct {
 }
 
 type OutcomeCheck struct {
-	Binding       *OutcomeBinding    `json:"binding,omitempty"`
-	Expectation   OutcomeExpectation `json:"expectation"`
-	Provenance    string             `json:"provenance"`
-	Revision      int                `json:"revision"`
-	State         string             `json:"state"`
-	EvidenceSteps []int              `json:"evidence_steps,omitempty"`
-	Reason        string             `json:"reason,omitempty"`
-	CheckedAt     *time.Time         `json:"checked_at,omitempty"`
+	ActionDerivedCallID string             `json:"action_derived_call_id,omitempty"`
+	Binding             *OutcomeBinding    `json:"binding,omitempty"`
+	Expectation         OutcomeExpectation `json:"expectation"`
+	Provenance          string             `json:"provenance"`
+	Revision            int                `json:"revision"`
+	State               string             `json:"state"`
+	EvidenceSteps       []int              `json:"evidence_steps,omitempty"`
+	Reason              string             `json:"reason,omitempty"`
+	CheckedAt           *time.Time         `json:"checked_at,omitempty"`
 }
 
 // Service authored from a canonical host observation; never a model argument.
@@ -133,7 +143,7 @@ func (w WorkflowEvidence) MarshalJSON() ([]byte, error) {
 }
 
 func WorkflowVersionSupported(t *Task) bool {
-	return t != nil && (t.Config.NativeWorkflowVersion == 0 || knownWorkflowVersion(t.Config.NativeWorkflowVersion)) &&
+	return t != nil && (t.Config.NativeActionContractVersion == 0 || (t.Config.NativeActionContractVersion == NativeActionContractVersion && t.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion)) && (t.Config.NativeWorkflowVersion == 0 || knownWorkflowVersion(t.Config.NativeWorkflowVersion)) &&
 		(t.Workflow == nil || (knownWorkflowVersion(t.Workflow.Version) &&
 			(t.Config.NativeWorkflowVersion == 0 || t.Config.NativeWorkflowVersion == t.Workflow.Version)))
 }
@@ -167,7 +177,7 @@ func validateWorkflowEvidence(w *WorkflowEvidence) error {
 	seen := map[string]bool{}
 	for _, check := range w.Checks {
 		e := check.Expectation
-		if validateExpectationVersion(e, w.Version) != nil || validateOutcomeDocumentBinding(check.Binding, w.Version) != nil || seen[e.ID] || check.Revision < 1 || check.Revision > w.Revision || (check.Provenance != "model_proposed" && check.Provenance != "caller_explicit") {
+		if len(check.ActionDerivedCallID) > 128 || (check.ActionDerivedCallID != "" && (w.Version != DocumentWorkflowEvidenceVersion || check.Provenance != "model_proposed")) || validateExpectationVersion(e, w.Version) != nil || validateOutcomeDocumentBinding(check.Binding, w.Version) != nil || seen[e.ID] || check.Revision < 1 || check.Revision > w.Revision || (check.Provenance != "model_proposed" && check.Provenance != "caller_explicit") {
 			return fmt.Errorf("invalid workflow expectation")
 		}
 		seen[e.ID] = true
@@ -312,6 +322,11 @@ func reviseWorkflow(t *Task, instructionID, digest string) error {
 }
 
 func workflowMutation(name string, d capabilities.Descriptor) bool {
+	// Service artifacts have their own format/integrity checks. Native control
+	// expectations cannot verify a private service-side artifact write.
+	if workspaceArtifactCapability(name, d) {
+		return false
+	}
 	// Native outcome checks are tied to companion observations. A connected
 	// tool has its own broker approval and effect classification; forcing it
 	// through a native document/control declaration cannot provide evidence
@@ -335,6 +350,9 @@ func workflowMutation(name string, d capabilities.Descriptor) bool {
 // Used in both initial model context and rejection feedback, including old
 // saved tasks whose persisted system prompt predates this workflow contract.
 func workflowDeclarationGuidance(t *Task) string {
+	if UsesNativeActionContract(t) {
+		return "Choose one available typed action using current observed references and exact requested values. The service records its mechanical check before dispatch; do not call task_expectations merely to unlock it. After input, obtain independent read-back with the available verification tools. Preserve the request, earlier verified milestones and any unresolved effects."
+	}
 	if t.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion {
 		return "Preserve saved checks. After application readiness call computer_documents. Before creating, declare document_blank with its observed target_id and command. Then read the resulting document. Before editing declare document_edit_matches with target_id, document, snapshot, edit_mode and exact requested text. Use only observed references; never guess a future document. Every check requires id, title, kind. Declarations do not grant permission or verify input."
 	}

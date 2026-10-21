@@ -163,14 +163,12 @@ func runUnixDocumentFixture(t *testing.T, create func() (NativeAdapter, error)) 
 	if ready.Kind != "ready" || len(ready.Documents) != 2 || ready.Selected != 0 || ready.Documents[0].Text != "Synthetic lifecycle content" || ready.Documents[1].Text != "Untouched — café 日本語 12345" {
 		t.Fatal("unexpected baseline")
 	}
-	// The GTK fixture now exposes actual tab-to-editor ancestry. Exercise the
-	// production document reader against it, not only the private state oracle.
+	// Exercise each production provider against the owned fixture, not only its
+	// private state oracle. An AX fixture that lacks a provable tab/editor
+	// relationship must fail this opt-in suite rather than appear qualified.
 	var originalDocument string
 	readDocument := func(expected string, count int) {
 		t.Helper()
-		if runtime.GOOS != "linux" {
-			return
-		}
 		provider, ok := driver.(NativeDocumentProvider)
 		if !ok {
 			t.Fatal("document provider missing")
@@ -187,12 +185,14 @@ func runUnixDocumentFixture(t *testing.T, create func() (NativeAdapter, error)) 
 		} else if count == 3 && expected == "" && snap.Binding.Document == originalDocument {
 			t.Fatal("new document reused old identity")
 		}
-		if snap.Composition != "unknown" {
-			t.Fatal("generic AT-SPI fabricated composition state")
-		}
-		for _, doc := range inv.Documents {
-			if doc.Capabilities.InsertText || doc.Capabilities.ReplaceSelection {
-				t.Fatal("unknown composition advertised input")
+		if runtime.GOOS == "linux" {
+			if snap.Composition != "unknown" {
+				t.Fatal("generic AT-SPI fabricated composition state")
+			}
+			for _, doc := range inv.Documents {
+				if doc.Capabilities.InsertText || doc.Capabilities.ReplaceSelection {
+					t.Fatal("unknown composition advertised input")
+				}
 			}
 		}
 	}
@@ -238,5 +238,5 @@ func runUnixDocumentFixture(t *testing.T, create func() (NativeAdapter, error)) 
 		t.Fatal("partial-input fault did not preserve prefix/suffix")
 	}
 	send(map[string]any{"kind": "focus_loss"})
-	t.Log("Owned private fixture lifecycle and native read scope passed; not a native edit or installed-application qualification")
+	t.Log("Owned private fixture lifecycle and native document read scope passed; not a native edit or installed-application qualification")
 }
