@@ -76,16 +76,18 @@ func DefaultPolicy() PowerPolicy {
 		ACMaxContext:       1048576, // Practical no-cap tier; model/resource admission remains authoritative.
 		ACEnableEmbeddings: true,
 
-		BatteryMaxConcurrent:    5,
-		BatteryMaxContext:       4096,
+		BatteryMaxConcurrent: 10,
+		// Power telemetry is informational by default. Optional energy-saving
+		// policy can limit concurrency, never model context capacity.
+		BatteryMaxContext:       1048576,
 		BatteryEnableEmbeddings: true,
 
-		LowBatteryMaxConcurrent:    2,
-		LowBatteryMaxContext:       2048,
-		LowBatteryEnableEmbeddings: false,
+		LowBatteryMaxConcurrent:    10,
+		LowBatteryMaxContext:       1048576,
+		LowBatteryEnableEmbeddings: true,
 
-		CriticalBatteryMaxConcurrent: 1,
-		CriticalBatteryShutdown:      true,
+		CriticalBatteryMaxConcurrent: 10,
+		CriticalBatteryShutdown:      false,
 		CriticalBatteryPercent:       10,
 	}
 }
@@ -145,7 +147,7 @@ func (pm *PowerManager) OnChange(callback func(PowerStatus)) {
 func (pm *PowerManager) GetMaxConcurrent() int {
 	status := pm.Status()
 
-	if status.State == PowerAC {
+	if status.State == PowerAC || status.State == PowerUnknown {
 		return pm.policy.ACMaxConcurrent
 	}
 
@@ -159,31 +161,17 @@ func (pm *PowerManager) GetMaxConcurrent() int {
 	}
 }
 
-// GetMaxContext returns max context size for current power state
+// GetMaxContext retains the legacy diagnostic field independent of power.
+// Model/memory admission, not battery state, determines context capacity.
 func (pm *PowerManager) GetMaxContext() int {
-	status := pm.Status()
-
-	// Unknown means the platform exposed no battery signal (common in WSL,
-	// containers, and native Windows), not that the machine is on battery.
-	if status.State == PowerAC || status.State == PowerUnknown {
-		return pm.policy.ACMaxContext
-	}
-
-	switch status.BatteryLevel {
-	case BatteryCritical:
-		return pm.policy.LowBatteryMaxContext / 2
-	case BatteryLow:
-		return pm.policy.LowBatteryMaxContext
-	default:
-		return pm.policy.BatteryMaxContext
-	}
+	return pm.policy.ACMaxContext
 }
 
 // ShouldEnableEmbeddings returns whether embeddings should be enabled
 func (pm *PowerManager) ShouldEnableEmbeddings() bool {
 	status := pm.Status()
 
-	if status.State == PowerAC {
+	if status.State == PowerAC || status.State == PowerUnknown {
 		return pm.policy.ACEnableEmbeddings
 	}
 
@@ -199,7 +187,7 @@ func (pm *PowerManager) ShouldEnableEmbeddings() bool {
 func (pm *PowerManager) ShouldShutdown() bool {
 	status := pm.Status()
 
-	if status.State == PowerAC || status.IsCharging {
+	if status.State != PowerBattery || status.IsCharging {
 		return false
 	}
 
@@ -260,6 +248,9 @@ func (pm *PowerManager) notifyCallbacks(status PowerStatus) {
 
 // readSystemPower reads power information from the system
 func (pm *PowerManager) readSystemPower() PowerStatus {
+	if status, supported := readNativePower(); supported {
+		return status
+	}
 	status := PowerStatus{
 		State:        PowerUnknown,
 		BatteryLevel: BatteryUnknown,
@@ -280,17 +271,21 @@ func (pm *PowerManager) readSystemPower() PowerStatus {
 
 // readLinuxPower reads power info from Linux sysfs
 func (pm *PowerManager) readLinuxPower() PowerStatus {
+	return readLinuxPowerAt("/sys/class/power_supply")
+}
+
+func readLinuxPowerAt(powerSupplyPath string) PowerStatus {
 	status := PowerStatus{
 		State:        PowerUnknown,
 		BatteryLevel: BatteryUnknown,
 	}
 
-	powerSupplyPath := "/sys/class/power_supply"
 	entries, err := os.ReadDir(powerSupplyPath)
 	if err != nil {
 		return status
 	}
 
+	online, offline, discharging := false, false, false
 	for _, entry := range entries {
 		typePath := filepath.Join(powerSupplyPath, entry.Name(), "type")
 		typeBytes, err := os.ReadFile(typePath)
@@ -300,14 +295,14 @@ func (pm *PowerManager) readLinuxPower() PowerStatus {
 
 		supplyType := strings.TrimSpace(string(typeBytes))
 
-		if supplyType == "Mains" || strings.HasPrefix(entry.Name(), "AC") {
+		if supplyType == "Mains" || strings.HasPrefix(supplyType, "USB") || strings.HasPrefix(entry.Name(), "AC") {
 			// AC adapter
 			onlinePath := filepath.Join(powerSupplyPath, entry.Name(), "online")
 			if data, err := os.ReadFile(onlinePath); err == nil {
 				if strings.TrimSpace(string(data)) == "1" {
-					status.State = PowerAC
-				} else {
-					status.State = PowerBattery
+					online = true
+				} else if strings.TrimSpace(string(data)) == "0" {
+					offline = true
 				}
 			}
 		}
@@ -316,7 +311,7 @@ func (pm *PowerManager) readLinuxPower() PowerStatus {
 			// Battery
 			capacityPath := filepath.Join(powerSupplyPath, entry.Name(), "capacity")
 			if data, err := os.ReadFile(capacityPath); err == nil {
-				if percent, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+				if percent, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && percent >= 0 && percent <= 100 {
 					status.BatteryPercent = percent
 					status.BatteryLevel = percentToLevel(percent)
 				}
@@ -326,7 +321,8 @@ func (pm *PowerManager) readLinuxPower() PowerStatus {
 			statusPath := filepath.Join(powerSupplyPath, entry.Name(), "status")
 			if data, err := os.ReadFile(statusPath); err == nil {
 				batteryStatus := strings.TrimSpace(string(data))
-				status.IsCharging = batteryStatus == "Charging"
+				status.IsCharging = status.IsCharging || batteryStatus == "Charging"
+				discharging = discharging || batteryStatus == "Discharging"
 			}
 
 			// Temperature (if available)
@@ -347,6 +343,11 @@ func (pm *PowerManager) readLinuxPower() PowerStatus {
 		}
 	}
 
+	if online || status.IsCharging {
+		status.State = PowerAC
+	} else if discharging || offline && status.BatteryLevel != BatteryUnknown {
+		status.State = PowerBattery
+	}
 	return status
 }
 
@@ -389,7 +390,7 @@ func (pm *PowerManager) readACPIPower() PowerStatus {
 					if len(parts) >= 3 {
 						if val, err := strconv.Atoi(parts[2]); err == nil {
 							// This is mAh, we need to also read full capacity
-							status.BatteryPercent = val // Simplified
+							_ = val // Capacity in mAh is not a percentage; leave it unknown.
 						}
 					}
 				}
