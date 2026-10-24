@@ -1,0 +1,5 @@
+name: offgrid-verifier
+version: 1.0.0
+description: Explicit per-invocation OffGrid file verification hooks (experimental)
+author: OffGrid
+requires_hermes: ">=0.21.2"

@@ -4,6 +4,8 @@
 offgrid-*
 !cmd/offgrid-computer/
 !cmd/offgrid-computer/*.go
+# Reviewed first-party source, not a generated offgrid-* binary.
+!internal/integrations/plugins/hermes/offgrid-verifier/
 *.exe
 *.dll
 *.so
