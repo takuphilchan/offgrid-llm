@@ -1,6 +1,7 @@
 """Deterministic inference fixture, never a real-model qualification result."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 import re
 import select
 import socket
@@ -69,7 +70,17 @@ def start_fixture(root, model):
                                "parallel_tool_calls": body.get("parallel_tool_calls")})
                 temporary = root / "fixture-events.pending"
                 temporary.write_text(json.dumps(events, indent=2))
-                temporary.replace(root / "fixture-events.json")
+                deadline = time.monotonic() + 2
+                while True:
+                    try:
+                        temporary.replace(root / "fixture-events.json")
+                        break
+                    except PermissionError:
+                        # Windows readers briefly deny replacing an open file.
+                        # Keep the complete previous snapshot until they close.
+                        if os.name != "nt" or time.monotonic() >= deadline:
+                            raise
+                        time.sleep(0.01)
             message = {"role": "assistant", "content": "Fixture model reachable."}
             finish = "stop"
             text = json.dumps(messages, ensure_ascii=False)

@@ -114,10 +114,11 @@ func TestIntegrationTerminalHelper(t *testing.T) {
 	after, err := term.GetState(os.Stdin.Fd())
 	same := err == nil && reflect.DeepEqual(before, after)
 	if err == nil && runtime.GOOS == "darwin" {
-		// Darwin's ioctl structure includes reserved padding, which the kernel
-		// need not preserve. Compare every defined terminal setting instead.
+		// Darwin sets PENDIN when returning from raw to canonical input. It is
+		// transient kernel bookkeeping, not a lost terminal setting. Compare
+		// all defined settings while excluding that pending-input marker.
 		a, b := before.Termios, after.Termios
-		same = a.Iflag == b.Iflag && a.Oflag == b.Oflag && a.Cflag == b.Cflag && a.Lflag == b.Lflag && a.Cc == b.Cc && a.Ispeed == b.Ispeed && a.Ospeed == b.Ospeed
+		same = a.Iflag == b.Iflag && a.Oflag == b.Oflag && a.Cflag == b.Cflag && a.Lflag&^unix.PENDIN == b.Lflag&^unix.PENDIN && a.Cc == b.Cc && a.Ispeed == b.Ispeed && a.Ospeed == b.Ospeed
 	}
 	if !same {
 		t.Fatalf("terminal settings not restored: %v; before=%+v after=%+v", err, before, after)
