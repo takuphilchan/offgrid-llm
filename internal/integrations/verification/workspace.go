@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/takuphilchan/offgrid-llm/internal/platform"
 )
 
 type entry struct {
@@ -58,7 +60,7 @@ func openWorkspace(path string) (*workspace, error) {
 func noLinkedParents(path string) error {
 	for current := path; ; current = filepath.Dir(current) {
 		info, err := os.Lstat(current)
-		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		if err != nil || ((!info.IsDir() || info.Mode()&os.ModeSymlink != 0) && !platform.IsSystemPathAlias(current)) {
 			return errors.New("verification workspace must not traverse links or non-directories")
 		}
 		if filepath.Dir(current) == current {

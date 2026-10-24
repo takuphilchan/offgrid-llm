@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -111,8 +112,15 @@ func TestIntegrationTerminalHelper(t *testing.T) {
 		t.Fatalf("terminal owner not restored: %d -> %d: %v", owner, afterOwner, err)
 	}
 	after, err := term.GetState(os.Stdin.Fd())
-	if err != nil || !reflect.DeepEqual(before, after) {
-		t.Fatalf("terminal settings not restored: %v", err)
+	same := err == nil && reflect.DeepEqual(before, after)
+	if err == nil && runtime.GOOS == "darwin" {
+		// Darwin's ioctl structure includes reserved padding, which the kernel
+		// need not preserve. Compare every defined terminal setting instead.
+		a, b := before.Termios, after.Termios
+		same = a.Iflag == b.Iflag && a.Oflag == b.Oflag && a.Cflag == b.Cflag && a.Lflag == b.Lflag && a.Cc == b.Cc && a.Ispeed == b.Ispeed && a.Ospeed == b.Ospeed
+	}
+	if !same {
+		t.Fatalf("terminal settings not restored: %v; before=%+v after=%+v", err, before, after)
 	}
 	fmt.Println("RESTORED")
 }
@@ -141,9 +149,10 @@ try:
         if found:
             finished=True
             break
-    if not finished:
+    while not finished and time.monotonic()<deadline:
         found,status=os.waitpid(pid,os.WNOHANG)
         finished=bool(found)
+        if not finished:time.sleep(.01)
     print(data.decode(errors='replace'))
     if not finished or not os.WIFEXITED(status) or os.WEXITSTATUS(status)!=0 or b'RESTORED' not in data:
         raise SystemExit(1)

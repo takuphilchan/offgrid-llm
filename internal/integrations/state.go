@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/platform"
 	"github.com/takuphilchan/offgrid-llm/internal/storage"
 )
 
@@ -58,7 +59,7 @@ func privatePath(path string, create bool) error {
 	}
 	for current := abs; ; current = filepath.Dir(current) {
 		info, err := os.Lstat(current)
-		if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		if err == nil && info.Mode()&os.ModeSymlink != 0 && !platform.IsSystemPathAlias(current) {
 			return fmt.Errorf("integration state must not traverse a symbolic link: %s", current)
 		}
 		if err != nil && !os.IsNotExist(err) {
