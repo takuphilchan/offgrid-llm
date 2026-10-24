@@ -94,6 +94,9 @@ func (s *ProviderScheduler) Close() error {
 	for _, load := range s.loading {
 		pending = append(pending, load.done)
 	}
+	for _, load := range s.legacyPreparing {
+		pending = append(pending, load.done)
+	}
 	for _, request := range s.requests {
 		if request.cancelAt.IsZero() {
 			request.cancelAt = time.Now()

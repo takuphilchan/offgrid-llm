@@ -15,6 +15,9 @@ func TestEvaluateIntegrationReportsContextAndModelReadiness(t *testing.T) {
 	if !ready.Ready || ready.Status != "ready" || len(ready.Warnings) != 0 {
 		t.Fatalf("expected ready integration, got %#v", ready)
 	}
+	if ready.ReadinessScope != "service_model" || ready.HostState != "not_inspected" || ready.WorkflowState != "unverified" || len(ready.Checks) == 0 {
+		t.Fatalf("service readiness must not qualify a host or tool workflow: %#v", ready)
+	}
 
 	usable := evaluateIntegration(profile, models, profile.MinimumContext, "agent-model")
 	if !usable.Ready || usable.Status != "ready" || len(usable.Warnings) != 1 {

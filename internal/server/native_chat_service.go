@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -153,36 +152,32 @@ func (s *Server) streamNativeSessionChat(ctx context.Context, request *api.ChatC
 }
 
 func (s *Server) handleNativeChatCompletionsStream(w http.ResponseWriter, r *http.Request, request *api.ChatCompletionRequest, descriptor inference.ProviderDescriptor) {
-	flusher, ok := w.(http.Flusher)
+	stream, ok := w.(*chatEventStream)
 	if !ok {
-		writeError(w, "Streaming not supported", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-	chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
-	write := func(value any) error {
-		data, err := json.Marshal(value)
+		var err error
+		stream, err = startChatEventStream(w, r, request.Model)
 		if err != nil {
-			return err
+			return
 		}
-		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
-			return err
-		}
-		flusher.Flush()
-		return nil
+		defer stream.Close()
 	}
-	native, err := inference.GenerateNativeTextChat(r.Context(), s.providerScheduler, descriptor, request, func(delta string) error {
+	chunkID := stream.id
+	write := stream.writeJSON
+	native, err := inference.GenerateNativeTextChat(stream.ctx, s.providerScheduler, descriptor, request, func(delta string) error {
+		if err := stream.ctx.Err(); err != nil {
+			return err
+		}
+		if err := stream.setPhase("receiving_output"); err != nil {
+			return err
+		}
 		return write(api.ChatCompletionChunk{ID: chunkID, Object: "chat.completion.chunk", Created: time.Now().Unix(), Model: request.Model,
 			Choices: []api.ChatCompletionChoiceChunk{{Index: 0, Delta: api.ChatMessage{Role: "assistant", Content: delta}}}})
 	})
-	if r.Context().Err() != nil {
-		return
+	if stream.ctx.Err() != nil {
+		err = stream.ctx.Err()
 	}
 	if err != nil {
-		_ = write(map[string]any{"error": map[string]string{"type": "native_inference_failed", "code": "native_inference_failed", "message": "Native generation was interrupted; no complete answer was produced"}})
+		stream.writeError(newCodedServiceError(http.StatusBadGateway, "native_inference_failed", "Native generation was interrupted; no complete answer was produced", err))
 		return
 	}
 	finish := native.Response.Choices[0].FinishReason
@@ -190,8 +185,7 @@ func (s *Server) handleNativeChatCompletionsStream(w http.ResponseWriter, r *htt
 		Choices: []api.ChatCompletionChoiceChunk{{Index: 0, Delta: api.ChatMessage{}, FinishReason: &finish}}}); err != nil {
 		return
 	}
-	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
-	flusher.Flush()
+	_, _ = fmt.Fprint(stream, "data: [DONE]\n\n")
 	if s.statsTracker != nil {
 		s.statsTracker.RecordInference(request.Model, int64(native.Response.Usage.TotalTokens), native.Timing.Queue.Milliseconds()+native.Timing.Load.Milliseconds()+native.Timing.Generation.Milliseconds())
 	}

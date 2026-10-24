@@ -20,13 +20,6 @@ type browserRunTools struct {
 
 const computerSequentialProtocol = "Browser planning instructions v1: when a tool is needed, use exactly ONE browser tool call per response. Before the first browser interaction call browser_observe with {}. End that response and wait for its actual result. A final answer or clarification has no tool call. Do not call browser_verify or an interaction tool in the same response as browser_observe. Never invent observations or tool results."
 
-func configureComputerRequest(request *api.ChatCompletionRequest, task *agents.Task) {
-	if task.Config.ComputerSession != "" || task.Config.TaskFirst {
-		parallel := false
-		request.ParallelToolCalls = &parallel
-	}
-}
-
 func configureComputerTask(config *agents.AgentConfig) {
 	if nativeComputerDriver(config.ComputerDriver) {
 		configureNativeTask(config)

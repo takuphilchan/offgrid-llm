@@ -68,8 +68,11 @@ func TestVisionProbeBudgetStartsAfterInferenceAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer release()
-	go func() { time.Sleep(200 * time.Millisecond); release() }()
-	result := s.checkComputerVisionWithBudget(context.Background(), model, 100*time.Millisecond)
+	// Queue longer than the probe budget, but allow enough time for PNG
+	// encoding/decoding under the race detector. This tests deadline ownership,
+	// not whether instrumented image processing finishes within 100 ms.
+	go func() { time.Sleep(1500 * time.Millisecond); release() }()
+	result := s.checkComputerVisionWithBudget(context.Background(), model, time.Second)
 	if !result.Passed || engine.visionCalls != 1 || gate.Status().Active != 0 {
 		t.Fatalf("admission consumed perception budget or leaked lease: result=%+v calls=%d gate=%+v", result, engine.visionCalls, gate.Status())
 	}

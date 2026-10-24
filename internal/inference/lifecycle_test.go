@@ -27,6 +27,25 @@ func TestLifecycleGateSharesActiveModel(t *testing.T) {
 	releaseTwo()
 }
 
+func TestLifecycleSmallerRequestReusesResidentContext(t *testing.T) {
+	gate := NewLifecycleGate(2)
+	calls := 0
+	load := func(context.Context, string) error { calls++; return nil }
+	large, err := gate.AcquireWithContext(context.Background(), "model", 65536, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer large()
+	small, err := gate.AcquireWithContext(context.Background(), "model", 8192, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	small()
+	if calls != 1 || gate.Status().ContextWindow != 65536 {
+		t.Fatalf("allocation shrank: %+v calls=%d", gate.Status(), calls)
+	}
+}
+
 func waitForQueued(t *testing.T, gate *LifecycleGate, want int) {
 	t.Helper()
 	deadline := time.After(3 * time.Second)

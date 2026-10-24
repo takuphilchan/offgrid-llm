@@ -157,7 +157,7 @@ func probeComputerVisionCode(ctx context.Context, engine inference.Engine, model
 		return errors.New("vision probe tool contract changed")
 	}
 	request := &api.ChatCompletionRequest{
-		Model: model, Tools: []api.Tool{verify}, ToolChoice: "auto", ParallelToolCalls: &parallel,
+		Model: model, Tools: []api.Tool{verify}, ToolChoice: "auto", ParallelToolCalls: &parallel, SingleStepTools: true,
 		Temperature: &zero, MaxTokens: &tokens,
 		Messages: []api.ChatMessage{{Role: "system", Content: "This is a synthetic local vision transport check. Read only the large hexadecimal code in the image. Call browser_verify exactly once with that code as text. Do not describe it or call another tool."}, {Role: "user", Content: []api.ChatContentPart{
 			{Type: "text", Text: "Read the large hexadecimal code in this synthetic image and pass it unchanged to browser_verify."},

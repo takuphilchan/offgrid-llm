@@ -171,6 +171,11 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 				return nil, err
 			}
 		}
+		if len(req.Tools) > 0 {
+			if err := ValidateToolDecision(req, &chatResp); err != nil {
+				return nil, err
+			}
+		}
 		return &chatResp, nil
 	}
 
@@ -286,6 +291,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 		completed := false
 		sequential := singleStepStream{}
+		native := nativeToolStream{}
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -305,6 +311,8 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 			deliver := callback
 			if singleStepRequest(req) {
 				deliver = sequential.add
+			} else if len(req.Tools) > 0 {
+				deliver = func(data json.RawMessage) error { return native.add(data, callback) }
 			}
 			if err := deliver(json.RawMessage(append([]byte(nil), data...))); err != nil {
 				return err
@@ -323,6 +331,9 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		}
 		if singleStepRequest(req) {
 			return sequential.emit(req, callback)
+		}
+		if len(req.Tools) > 0 {
+			return native.emit(req, callback)
 		}
 
 		return nil

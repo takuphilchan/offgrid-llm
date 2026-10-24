@@ -4,23 +4,27 @@ import "time"
 
 // ChatCompletionRequest represents an OpenAI-compatible chat completion request
 type ChatCompletionRequest struct {
-	Model            string         `json:"model"`
-	Messages         []ChatMessage  `json:"messages"`
-	Temperature      *float32       `json:"temperature,omitempty"`
-	TopP             *float32       `json:"top_p,omitempty"`
-	Seed             *int64         `json:"seed,omitempty"`
-	N                *int           `json:"n,omitempty"`
-	Stream           bool           `json:"stream,omitempty"`
-	StreamOptions    *StreamOptions `json:"stream_options,omitempty"`
-	Stop             []string       `json:"stop,omitempty"`
-	MaxTokens        *int           `json:"max_tokens,omitempty"`
-	PresencePenalty  *float32       `json:"presence_penalty,omitempty"`
-	FrequencyPenalty *float32       `json:"frequency_penalty,omitempty"`
-	User             string         `json:"user,omitempty"`
+	Model            string          `json:"model"`
+	Messages         []ChatMessage   `json:"messages"`
+	Temperature      *float32        `json:"temperature,omitempty"`
+	TopP             *float32        `json:"top_p,omitempty"`
+	Seed             *int64          `json:"seed,omitempty"`
+	N                *int            `json:"n,omitempty"`
+	Stream           bool            `json:"stream,omitempty"`
+	StreamOptions    *StreamOptions  `json:"stream_options,omitempty"`
+	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`
+	Stop             []string        `json:"stop,omitempty"`
+	MaxTokens        *int            `json:"max_tokens,omitempty"`
+	PresencePenalty  *float32        `json:"presence_penalty,omitempty"`
+	FrequencyPenalty *float32        `json:"frequency_penalty,omitempty"`
+	User             string          `json:"user,omitempty"`
 	// Function calling
 	Tools             []Tool      `json:"tools,omitempty"`
 	ToolChoice        interface{} `json:"tool_choice,omitempty"`         // "none", "auto", or {"type": "function", "function": {"name": "..."}}
 	ParallelToolCalls *bool       `json:"parallel_tool_calls,omitempty"` // nil preserves the runtime default; false requests sequential calls
+	// SingleStepTools selects the private governed-runner adapter in process only.
+	// Public cardinality controls must not rewrite a model's native tool template.
+	SingleStepTools bool `json:"-"`
 	// RAG / Knowledge Base
 	UseKnowledgeBase *bool `json:"use_knowledge_base,omitempty"` // Enable RAG context injection
 }

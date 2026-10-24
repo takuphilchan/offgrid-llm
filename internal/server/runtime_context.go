@@ -19,6 +19,7 @@ type contextPlanningInput struct {
 	KVCacheType    string
 	InferenceSlots int
 	GPUEnabled     bool
+	AutomaticGPU   bool // llama.cpp fits layers across host RAM and VRAM
 }
 
 type contextPlan struct {
@@ -29,8 +30,8 @@ type contextPlan struct {
 
 // resolveContextWindow returns the context window that will actually be
 // allocated to llama-server. Explicit context settings are authoritative when
-// adaptive context is disabled; otherwise current power and resource limits
-// are applied before the model process is launched.
+// adaptive context is disabled; otherwise model and memory limits are applied.
+// Battery and transient queue/pressure levels are not context capacities.
 func resolveContextWindow(configured int, adaptive bool, limits ...int) int {
 	if configured < 1 {
 		configured = 4096
@@ -57,8 +58,8 @@ func planContextWindow(input contextPlanningInput) contextPlan {
 		}
 	}
 	if input.Adaptive {
-		plan.ResourceMax = estimateContextCapacity(input.Model, input.Resources, input.KVCacheType, input.InferenceSlots, input.GPUEnabled)
-		if plan.ResourceMax > 0 && plan.ResourceMax < plan.Window {
+		plan.ResourceMax = estimateContextCapacity(input.Model, input.Resources, input.KVCacheType, input.InferenceSlots, input.GPUEnabled, input.AutomaticGPU)
+		if plan.ResourceMax < plan.Window {
 			plan.Window = plan.ResourceMax
 		}
 	}
@@ -68,7 +69,7 @@ func planContextWindow(input contextPlanningInput) contextPlan {
 	return plan
 }
 
-func estimateContextCapacity(model *api.ModelMetadata, resources *resource.SystemResources, cacheType string, slots int, gpuEnabled bool) int {
+func estimateContextCapacity(model *api.ModelMetadata, resources *resource.SystemResources, cacheType string, slots int, gpuEnabled bool, automaticGPU ...bool) int {
 	// Unknown evidence stays useful for ordinary chat but cannot create a
 	// long-context readiness claim.
 	if model == nil || resources == nil || model.Size <= 0 {
@@ -76,24 +77,28 @@ func estimateContextCapacity(model *api.ModelMetadata, resources *resource.Syste
 	}
 	modelMB := (model.Size + (1 << 20) - 1) >> 20
 	availableRAM := resources.AvailableRAM
-	if availableRAM <= 0 && resources.TotalRAM > 0 {
-		availableRAM = resources.TotalRAM * 3 / 4
-	}
 	ramReserve := max(int64(1024), resources.TotalRAM/10)
 	ramBudget := availableRAM - modelMB - ramReserve
 	bestBudget := ramBudget
 	if gpuEnabled && resources.GPUAvailable && resources.GPUMemory > 0 {
 		availableGPU := resources.GPUAvailableMemory
-		if availableGPU <= 0 {
-			availableGPU = resources.GPUMemory
-		}
+		// Zero free VRAM is not an idle GPU. Never substitute total memory for
+		// a full or unmeasured device during load admission.
 		gpuBudget := availableGPU - modelMB - 768
 		if gpuBudget > bestBudget {
 			bestBudget = gpuBudget
 		}
+		// Automatic placement may split layers and their KV caches across RAM
+		// and VRAM. Requiring weights plus all KV to fit in either pool rejects
+		// valid hybrid allocations. Keep host/driver reserves and a transfer
+		// margin; the worker must still confirm the complete requested context.
+		if len(automaticGPU) > 0 && automaticGPU[0] && availableGPU >= 1024 && ramBudget > 0 {
+			hybridBudget := ramBudget + max(int64(0), availableGPU-768) - 1024
+			bestBudget = max(bestBudget, hybridBudget)
+		}
 	}
 	if bestBudget <= 0 {
-		return 512
+		return 0
 	}
 
 	bytesPerToken := estimatedKVBytesPerToken(model, cacheType)
@@ -151,26 +156,12 @@ func (s *Server) effectiveContextWindow() int {
 	if s == nil || s.config == nil {
 		return 4096
 	}
-	limits := make([]int, 0, 2)
-	if s.powerManager != nil {
-		limits = append(limits, s.powerManager.GetMaxContext())
-	}
-	if s.degradationMgr != nil {
-		limits = append(limits, s.degradationMgr.MaxContextSize())
-	}
-	return resolveContextWindow(s.config.MaxContextSize, s.config.AdaptiveContext, limits...)
+	return resolveContextWindow(s.config.MaxContextSize, s.config.AdaptiveContext)
 }
 
 func (s *Server) modelContextWindow(modelID string) int {
 	if s == nil || s.config == nil {
 		return 4096
-	}
-	limits := make([]int, 0, 2)
-	if s.powerManager != nil {
-		limits = append(limits, s.powerManager.GetMaxContext())
-	}
-	if s.degradationMgr != nil {
-		limits = append(limits, s.degradationMgr.MaxContextSize())
 	}
 	var metadata *api.ModelMetadata
 	if s.registry != nil && modelID != "" {
@@ -178,9 +169,10 @@ func (s *Server) modelContextWindow(modelID string) int {
 	}
 	return planContextWindow(contextPlanningInput{
 		OperatorMax: s.config.MaxContextSize, Adaptive: s.config.AdaptiveContext,
-		PolicyLimits: limits, Model: metadata, Resources: s.systemResources,
+		Model: metadata, Resources: s.systemResources,
 		KVCacheType: s.config.KVCacheType, InferenceSlots: s.config.InferenceSlots,
-		GPUEnabled: s.config.EnableGPU,
+		GPUEnabled:   s.config.EnableGPU,
+		AutomaticGPU: s.config.EnableGPU && s.config.NumGPULayers == 0,
 	}).Window
 }
 

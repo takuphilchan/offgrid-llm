@@ -88,6 +88,20 @@ func (p *LlamaCPPProcess) Activate(ctx context.Context, modelID, modelPath, proj
 	if err := p.engine.Load(ctx, modelPath, opts); err != nil {
 		return 0, fmt.Errorf("connect inference engine: %w", err)
 	}
+	// Confirm the actual per-slot allocation, not just a ready process/port.
+	if reporter, ok := p.engine.(interface {
+		ToolRuntimeInfo(context.Context) (*ToolRuntimeInfo, error)
+	}); ok {
+		info, err := reporter.ToolRuntimeInfo(ctx)
+		if err != nil || info == nil || info.Context < opts.ContextSize {
+			_ = p.engine.Unload()
+			_ = p.cache.Unload(modelID)
+			if err != nil {
+				return 0, fmt.Errorf("confirm runtime context: %w", err)
+			}
+			return 0, fmt.Errorf("runtime did not confirm the requested %d-token context; no generation dispatched", opts.ContextSize)
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}

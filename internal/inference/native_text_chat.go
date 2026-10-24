@@ -20,9 +20,22 @@ type NativeTextChatResult struct {
 	Timing   ProviderTiming
 }
 
+// ValidateNativeTextChatRequest checks the same adapter contract used at
+// dispatch, allowing transports to reject unsupported inputs before SSE starts.
+func ValidateNativeTextChatRequest(request *api.ChatCompletionRequest, descriptor ProviderDescriptor) error {
+	_, err := nativeTextPrompt(request, descriptor)
+	return err
+}
+
 func nativeTextPrompt(request *api.ChatCompletionRequest, descriptor ProviderDescriptor) (json.RawMessage, error) {
 	if request == nil || request.Model == "" || len(request.Messages) == 0 {
 		return nil, errors.New("native text request requires a model and messages")
+	}
+	if err := request.ResponseFormat.Validate(); err != nil {
+		return nil, err
+	}
+	if request.ResponseFormat.Constrained() {
+		return nil, &api.UnsupportedControlError{Control: "response_format for native text provider"}
 	}
 	if request.Temperature != nil || request.TopP != nil || request.Seed != nil || len(request.Stop) != 0 || request.PresencePenalty != nil || request.FrequencyPenalty != nil || request.N != nil && *request.N != 1 || len(request.Tools) != 0 || request.ToolChoice != nil || request.ParallelToolCalls != nil {
 		return nil, errors.New("native text worker does not support the requested generation or tool controls")

@@ -129,3 +129,30 @@ func TestLlamaCPPProcessStopAfterCacheLoadDoesNotConnectEngine(t *testing.T) {
 		t.Fatalf("cancelled load connected engine: port=%d err=%v actions=%v", port, err, actions)
 	}
 }
+
+type contextReportingEngine struct {
+	*llamaProcessEngineFixture
+	capacity int
+	infoErr  error
+}
+
+func (e *contextReportingEngine) ToolRuntimeInfo(context.Context) (*ToolRuntimeInfo, error) {
+	return &ToolRuntimeInfo{Context: e.capacity}, e.infoErr
+}
+
+func TestLlamaActivationConfirmsRuntimeContext(t *testing.T) {
+	for _, capacity := range []int{0, 4096, 65536} {
+		var actions []string
+		cache := &llamaProcessCacheFixture{actions: &actions, port: 12345}
+		engine := &contextReportingEngine{llamaProcessEngineFixture: &llamaProcessEngineFixture{Engine: NewMockEngine(), actions: &actions}, capacity: capacity}
+		process := &LlamaCPPProcess{cache: cache, engine: engine}
+		_, err := process.Activate(context.Background(), "model", "model.gguf", "", LoadOptions{ContextSize: 65536})
+		if capacity < 65536 {
+			if err == nil || engine.IsLoaded() || len(cache.ids) != 0 {
+				t.Fatalf("unconfirmed capacity usable: %d %v", capacity, err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
+		}
+	}
+}

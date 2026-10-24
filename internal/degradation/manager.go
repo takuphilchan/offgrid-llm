@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 // DegradationLevel represents the current system degradation state
@@ -41,6 +43,7 @@ type ResourceMetrics struct {
 	MemoryUsedMB   int64   `json:"memory_used_mb"`
 	MemoryTotalMB  int64   `json:"memory_total_mb"`
 	MemoryPercent  float64 `json:"memory_percent"`
+	MemoryMeasured bool    `json:"memory_measured"`
 	CPUPercent     float64 `json:"cpu_percent"`
 	DiskUsedMB     int64   `json:"disk_used_mb"`
 	DiskFreeMB     int64   `json:"disk_free_mb"`
@@ -102,6 +105,7 @@ type Manager struct {
 	cancel          context.CancelFunc
 	activeRequests  int64 // atomic
 	queuedRequests  int64 // atomic
+	memorySample    func() (*mem.VirtualMemoryStat, error)
 }
 
 // NewManager creates a new degradation manager
@@ -112,6 +116,7 @@ func NewManager(config DegradationConfig) *Manager {
 		lastLevelChange: time.Now(),
 		ctx:             ctx,
 		cancel:          cancel,
+		memorySample:    mem.VirtualMemory,
 	}
 }
 
@@ -208,20 +213,10 @@ func (m *Manager) MaxConcurrentRequests() int {
 	}
 }
 
-// MaxContextSize returns the max context size for current level
+// MaxContextSize retains diagnostic compatibility. Pressure limits new work,
+// not context capacity. Model/memory admission remains the loader's concern.
 func (m *Manager) MaxContextSize() int {
-	switch m.CurrentLevel() {
-	case LevelNormal:
-		return 1048576 // Practical no-cap tier; model/resource admission remains authoritative.
-	case LevelReduced:
-		return 4096
-	case LevelMinimal:
-		return 2048
-	case LevelEmergency:
-		return 512
-	default:
-		return 1048576
-	}
+	return 1048576
 }
 
 // MaxResponseTokens returns the max response tokens for current level
@@ -284,19 +279,26 @@ func (m *Manager) checkResources() {
 
 // collectMetrics collects current resource metrics
 func (m *Manager) collectMetrics() ResourceMetrics {
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
-
 	metrics := ResourceMetrics{
-		MemoryUsedMB:   int64(memStats.Alloc / 1024 / 1024),
-		MemoryTotalMB:  int64(memStats.Sys / 1024 / 1024),
 		ActiveRequests: atomic.LoadInt64(&m.activeRequests),
 		QueuedRequests: atomic.LoadInt64(&m.queuedRequests),
 		Goroutines:     runtime.NumGoroutine(),
 	}
 
-	if metrics.MemoryTotalMB > 0 {
-		metrics.MemoryPercent = float64(metrics.MemoryUsedMB) / float64(metrics.MemoryTotalMB) * 100
+	// Go heap occupancy (Alloc/Sys) is not machine memory pressure. It can
+	// exceed 85% on an idle, healthy host and spuriously shrink model context.
+	// Include other processes and reclaimable memory through the OS sampler.
+	if sample, err := m.memorySample(); err == nil && sample != nil && sample.Total > 0 && sample.Available <= sample.Total {
+		used := sample.Total - sample.Available
+		metrics.MemoryTotalMB = int64(sample.Total >> 20)
+		metrics.MemoryUsedMB = int64(used >> 20)
+		metrics.MemoryPercent = float64(used) / float64(sample.Total) * 100
+		metrics.MemoryMeasured = true
+	} else {
+		// A missing measurement is not evidence of recovery. Retain the last
+		// pressure observation while exposing that it is no longer fresh.
+		previous := m.Metrics()
+		metrics.MemoryTotalMB, metrics.MemoryUsedMB, metrics.MemoryPercent = previous.MemoryTotalMB, previous.MemoryUsedMB, previous.MemoryPercent
 	}
 
 	return metrics

@@ -78,7 +78,8 @@ func (g *LifecycleGate) Acquire(ctx context.Context, model string, switchModel f
 	return g.AcquireWithContext(ctx, model, 0, switchModel)
 }
 
-// Context changes require the same exclusive boundary as a model change.
+// Context growth requires the same exclusive boundary as a model change.
+// Smaller requests reuse the resident allocation without shrinking it.
 func (g *LifecycleGate) AcquireWithContext(ctx context.Context, model string, contextWindow int, switchModel func(context.Context, string) error) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -104,7 +105,7 @@ func (g *LifecycleGate) AcquireWithContext(ctx context.Context, model string, co
 		}
 		g.mu.Lock()
 		first := len(g.waiters) > 0 && g.waiters[0] == waiter
-		if first && !g.switching && g.currentModel == model && g.contextWindow == contextWindow && g.active < g.maxConcurrent {
+		if first && !g.switching && g.currentModel == model && contextCompatible(g.contextWindow, contextWindow) && g.active < g.maxConcurrent {
 			g.active++
 			g.removeWaiterLocked(waiter)
 			g.mu.Unlock()
@@ -144,6 +145,10 @@ func (g *LifecycleGate) AcquireWithContext(ctx context.Context, model string, co
 		case <-notify:
 		}
 	}
+}
+
+func contextCompatible(allocated, requested int) bool {
+	return allocated == requested || allocated > 0 && requested > 0 && allocated >= requested
 }
 
 func (g *LifecycleGate) Status() LifecycleStatus {

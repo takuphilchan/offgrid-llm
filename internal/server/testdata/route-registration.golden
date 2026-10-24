@@ -18,6 +18,7 @@ mux.HandleFunc("/v1/models/download/cancel", modelManagerOnly(s.handleCancelDown
 mux.HandleFunc("/v1/models/verify", modelManagerOnly(s.handleVerifyModel))
 mux.HandleFunc("/v1/integrations", modelsOnly(s.handleIntegrations))
 mux.HandleFunc("/v1/integrations/", modelsOnly(s.handleIntegration))
+mux.HandleFunc("/v1/inference/prepare", guards.chatOnly(s.inferenceRateLimiter.Middleware(s.handleInferencePrepare)))
 mux.HandleFunc("/v1/chat/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleChatCompletions)))
 mux.HandleFunc("/v1/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleCompletions)))
 mux.HandleFunc("/v1/embeddings", chatOnly(s.inferenceRateLimiter.Middleware(s.handleEmbeddings)))

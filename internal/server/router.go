@@ -117,6 +117,7 @@ func (s *Server) registerModelRoutes(mux *http.ServeMux, guards routeGuards) {
 }
 
 func (s *Server) registerInferenceRoutes(mux *http.ServeMux, guards routeGuards) {
+	mux.HandleFunc("/v1/inference/prepare", guards.chatOnly(s.inferenceRateLimiter.Middleware(s.handleInferencePrepare)))
 	chatOnly := guards.chatOnly
 	// Inference endpoints with strict rate limiting
 	mux.HandleFunc("/v1/chat/completions", chatOnly(s.inferenceRateLimiter.Middleware(s.handleChatCompletions)))

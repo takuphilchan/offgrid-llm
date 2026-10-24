@@ -11,6 +11,49 @@ curl http://127.0.0.1:11611/openapi.yaml
 The OpenAPI document is the source of truth for request and response fields.
 This page explains the main workflows and persistence semantics.
 
+## External integration assessments
+
+The llama.cpp chat path accepts `response_format` with `text`, `json_object`, or
+`json_schema` (a named `json_schema.schema` object, at most 64 KiB, local references
+only). Constraints are forwarded to the runtime, not dropped. Constrained formats
+cannot currently be combined with tools, and native text providers reject them
+before generation until qualified. Text-completion endpoints still reject this
+chat-only control. A format constraint is not proof of factual correctness; a
+truncated response is not a completed structured result.
+
+Non-streaming model loads that cannot fit their requested context return HTTP 503 with
+`insufficient_runtime_capacity`; they do not silently shrink context or change
+the saved external-agent configuration. Battery percentage and transient pressure
+do not change the planned catalog context. Load-time memory checks and runtime
+confirmation remain separate from service-only readiness inspection.
+
+Accepted streamed chat emits a standard assistant-role chunk before waiting for
+the inference runtime. This is acceptance, not generated text or task completion.
+SSE comments contain request-local phase/elapsed metadata (`waiting_for_runtime`,
+`loading_model`, `waiting_for_output`, `receiving_output` where observed); consumers
+may ignore them. No token counts or prefill percentages are inferred. Tool
+decisions remain buffered until complete validation. Streaming requests have a
+15-minute service budget, including admission/loading; earlier client deadlines
+still apply. Keep-alives do not reset that budget.
+
+Authentication/input/selection failures precede stream startup. Once started,
+operational failures use the SSE `error` envelope and never `[DONE]` or a fabricated
+successful finish. Clients must handle both HTTP errors and SSE errors, including
+`insufficient_runtime_capacity` and `inference_queue_full`. Non-streaming chat
+cancellation uses `request_cancelled` (499), and deadline expiration uses
+`inference_timeout` (504), rather than claiming a model-switch failure. These
+outcomes do not authorize automatic replay of external-agent tool effects.
+
+`GET /v1/integrations` and `GET /v1/integrations/{id}/setup` use registry-defined
+integration IDs. Existing `ready`, `status`, model and context fields remain.
+Additive `contract_revision`, `checks`, `readiness_scope: "service_model"`,
+`host_state: "not_inspected"` and `workflow_state: "unverified"` make the boundary
+explicit: this service cannot certify an external CLI installation or a tool
+workflow. Requests use normal service authentication; generated snippets never
+contain the caller's credential. Host `configure/status/test/run` commands use
+these APIs, not a separate inference executor. See the
+[external agent guide](../guides/external-agents.md).
+
 ## Task-wide desktop access
 
 Computer sessions accept one tool call per model turn. A multi-call response
@@ -67,9 +110,9 @@ old proposed operation without erasing earlier effects. Target inspection and
 storage receipts are necessary mechanical checks, not proof that research is
 complete or that cited sources substantiate every claim.
 
-For sequential tool requests through the owned HTTP inference adapter, OffGrid
-uses a private schema-constrained single-step envelope rather than relying only
-on a runtime's `parallel_tool_calls: false` hint. It normalizes one complete,
+Governed internal tool requests explicitly select a private schema-constrained
+single-step envelope. Public `parallel_tool_calls: false` controls cardinality;
+it does not select that private protocol. The governed adapter normalizes one complete,
 validated response into the existing tool-call contract. Partial JSON, duplicate
 keys, unknown tools, truncated generations and incomplete streams cannot
 dispatch input. Counting and generation use the same wire messages and schemas.
@@ -81,8 +124,10 @@ clean envelope validation. Native compatibility checks use the same transport
 and stage-relevant tools; a synthetic preflight pass is not native workflow
 qualification. Failed checks retain their service-authored reason.
 
-The existing native tool-call transport remains available to non-sequential
-requests; it does not become a prose-to-tool fallback. Tool-enabled agent
+External tool requests retain the model's native template, tools and history,
+including sequential requests. Answer text streams normally; tool fragments and
+successful finish events are withheld until the complete response passes identity,
+schema, cardinality and terminal validation. This is not a prose-to-tool fallback. Tool-enabled agent
 responses from either transport pass a shared complete-decision gate before
 dispatch. It checks terminal metadata, offered tool identity, unambiguous JSON
 and the offered argument schema using local references only. It never downloads

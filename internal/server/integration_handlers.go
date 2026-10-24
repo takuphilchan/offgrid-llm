@@ -12,25 +12,9 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-type integrationStatus struct {
-	integrations.Profile
-	Ready         bool     `json:"ready"`
-	Status        string   `json:"status"`
-	ModelID       string   `json:"model_id,omitempty"`
-	ContextWindow int      `json:"context_window"`
-	Warnings      []string `json:"warnings"`
-}
-
-type integrationsResponse struct {
-	Provider     string              `json:"provider"`
-	BaseURL      string              `json:"base_url"`
-	Integrations []integrationStatus `json:"integrations"`
-}
-
-type integrationSetupResponse struct {
-	Integration integrationStatus  `json:"integration"`
-	Setup       integrations.Setup `json:"setup"`
-}
+type integrationStatus = integrations.ServiceStatus
+type integrationsResponse = integrations.ListResponse
+type integrationSetupResponse = integrations.SetupResponse
 
 func (s *Server) handleIntegrations(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -151,7 +135,7 @@ func (s *Server) integrationModels() []api.Model {
 }
 
 func evaluateIntegration(profile integrations.Profile, models []api.Model, contextWindow int, requestedModel string) integrationStatus {
-	status := integrationStatus{Profile: profile, ContextWindow: contextWindow, Warnings: []string{}}
+	status := integrationStatus{Profile: profile, ContextWindow: contextWindow, Warnings: []string{}, ReadinessScope: "service_model", HostState: "not_inspected", WorkflowState: "unverified", Checks: []integrations.Check{}}
 	blocked := false
 	if requestedModel != "" {
 		found := false
@@ -180,6 +164,11 @@ func evaluateIntegration(profile integrations.Profile, models []api.Model, conte
 		status.Warnings = append(status.Warnings, fmt.Sprintf("context window is %d; %d is recommended for long %s sessions", contextWindow, profile.RecommendedContext, profile.Name))
 	}
 	status.Ready = status.ModelID != "" && !blocked
+	modelState := "passed"
+	if status.ModelID == "" {
+		modelState = "blocked"
+	}
+	status.Checks = append(status.Checks, integrations.Check{ID: "model", State: modelState, Code: "installed_chat_model", Message: "An installed chat model is required"}, integrations.ContextCheck(contextWindow, contextWindow, profile.MinimumContext))
 	if status.Ready {
 		status.Status = "ready"
 	} else {

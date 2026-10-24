@@ -39,14 +39,28 @@ func (e *serviceError) Unwrap() error   { return e.cause }
 func (e *serviceError) HTTPStatus() int { return e.status }
 
 func newServiceError(status int, message string, cause error) error {
+	var capacity *contextCapacityError
+	if errors.As(cause, &capacity) {
+		return &serviceError{status: http.StatusServiceUnavailable, code: "insufficient_runtime_capacity", message: capacity.Error(), cause: cause}
+	}
 	if errors.Is(cause, inference.ErrInferenceQueueFull) {
-		return &serviceError{status: http.StatusTooManyRequests, message: inference.ErrInferenceQueueFull.Error(), cause: cause}
+		return &serviceError{status: http.StatusTooManyRequests, code: "inference_queue_full", message: inference.ErrInferenceQueueFull.Error(), cause: cause}
 	}
 	return &serviceError{status: status, message: message, cause: cause}
 }
 
 func newCodedServiceError(status int, code, message string, cause error) error {
 	return &serviceError{status: status, code: code, message: message, cause: cause}
+}
+
+func inferenceContextError(cause error) *serviceError {
+	if errors.Is(cause, context.DeadlineExceeded) {
+		return &serviceError{status: http.StatusGatewayTimeout, code: "inference_timeout", message: "Inference deadline expired; the request was not replayed", cause: cause}
+	}
+	if errors.Is(cause, context.Canceled) {
+		return &serviceError{status: 499, code: "request_cancelled", message: "Inference request was cancelled", cause: cause}
+	}
+	return nil
 }
 
 func authorizeChatAccess(ctx context.Context, requireAuth, knowledge bool) error {
@@ -113,6 +127,9 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	if hasImage && (native || metadata.ProjectorPath == "") {
 		return nil, newCodedServiceError(http.StatusUnprocessableEntity, "vision_projector_unavailable", "the selected model has no installed vision projector; no image was sent to inference", nil)
 	}
+	if native && request.ResponseFormat.Constrained() {
+		return nil, newCodedServiceError(http.StatusBadRequest, "unsupported_parameter", "response_format is not qualified for the selected native provider", nil)
+	}
 
 	prepared := *request
 	prepared.Stream = false
@@ -128,7 +145,10 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 		var lease *inference.LegacyGenerationLease
 		lease, err = s.acquireInferenceLease(ctx, request.Model, s.modelContextWindow(request.Model), nil)
 		if err != nil {
-			return nil, newServiceError(http.StatusInternalServerError, "failed to switch model", err)
+			if operational := inferenceContextError(err); operational != nil {
+				return nil, operational
+			}
+			return nil, newServiceError(http.StatusServiceUnavailable, "Inference admission or model loading failed; check runtime availability", err)
 		}
 		defer lease.Release()
 		err = lease.Run(ctx, func(ctx context.Context) error {
@@ -138,6 +158,9 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 		})
 	}
 	if err != nil {
+		if operational := inferenceContextError(err); operational != nil {
+			return nil, operational
+		}
 		if native {
 			return nil, err
 		}

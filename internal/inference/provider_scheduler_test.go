@@ -1882,6 +1882,7 @@ func TestProviderSchedulerCoordinatesLegacyModelLoadReuseAndInvalidation(t *test
 	alive := true
 	loader := func(context.Context, string) error {
 		loads++
+		alive = true
 		time.Sleep(5 * time.Millisecond)
 		return nil
 	}

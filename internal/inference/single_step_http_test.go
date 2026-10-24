@@ -86,7 +86,7 @@ func TestSingleStepRuntimeParserFailureHasBoundedCorrectionClassification(t *tes
 
 func singleStepFixture() *api.ChatCompletionRequest {
 	parallel := false
-	return &api.ChatCompletionRequest{ParallelToolCalls: &parallel, ToolChoice: "auto", Messages: []api.ChatMessage{{Role: "system", Content: "Fixture authority"}, {Role: "user", Content: "Open the fixture and read it"}}, Tools: []api.Tool{
+	return &api.ChatCompletionRequest{SingleStepTools: true, ParallelToolCalls: &parallel, ToolChoice: "auto", Messages: []api.ChatMessage{{Role: "system", Content: "Fixture authority"}, {Role: "user", Content: "Open the fixture and read it"}}, Tools: []api.Tool{
 		{Type: "function", Function: api.FunctionDef{Name: "fixture_open", Parameters: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}},
 		{Type: "function", Function: api.FunctionDef{Name: "fixture_read", Parameters: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}},
 	}}

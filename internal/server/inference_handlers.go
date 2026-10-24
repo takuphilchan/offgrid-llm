@@ -89,6 +89,16 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeErrorWithCode(w, "The selected model has no installed vision projector; no image was sent to inference", http.StatusUnprocessableEntity, "vision_projector_unavailable")
 		return
 	}
+	if native && req.ResponseFormat.Constrained() {
+		writeErrorWithCode(w, "response_format is not qualified for the selected native provider", http.StatusBadRequest, "unsupported_parameter")
+		return
+	}
+	if native {
+		if err := inference.ValidateNativeTextChatRequest(&req, nativeDescriptor); err != nil {
+			writeErrorWithCode(w, "The selected native provider does not support this request", http.StatusBadRequest, "unsupported_parameter")
+			return
+		}
+	}
 
 	// Streaming and durable chat use the same retrieval and error contract.
 	// Check optional knowledge before loading a potentially expensive chat model.
@@ -96,15 +106,21 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
+	stream, err := startChatEventStream(w, r, req.Model)
+	if err != nil {
+		return
+	}
+	defer stream.Close()
+	w, r = stream, r.WithContext(stream.ctx)
 	if native {
 		s.handleNativeChatCompletionsStream(w, r, &req, nativeDescriptor)
 		return
 	}
 
 	// Admit bounded same-model concurrency; model changes remain exclusive.
-	lease, err := s.acquireInferenceLease(r.Context(), req.Model, s.modelContextWindow(req.Model), nil)
+	lease, err := s.acquireInferenceLease(r.Context(), req.Model, s.modelContextWindow(req.Model), func() error { return stream.setPhase("preparing_model") })
 	if err != nil {
-		writeServiceError(w, newServiceError(http.StatusServiceUnavailable, "Model could not be loaded; check runtime availability", err))
+		stream.writeError(newServiceError(http.StatusServiceUnavailable, "Inference admission or model loading failed; check runtime availability", err))
 		return
 	}
 	defer lease.Release()
@@ -118,26 +134,35 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		writeError(w, "Inference admission is required", http.StatusServiceUnavailable)
 		return
 	}
-	// Set headers for SSE
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
-
-	flusher, ok := w.(http.Flusher)
+	streamWriter, ok := w.(*chatEventStream)
 	if !ok {
-		writeError(w, "Streaming not supported", http.StatusInternalServerError)
+		var err error
+		streamWriter, err = startChatEventStream(w, r, req.Model)
+		if err != nil {
+			return
+		}
+		defer streamWriter.Close()
+	}
+	w = streamWriter
+	flusher := streamWriter
+	ctx := streamWriter.ctx
+	if err := streamWriter.setPhase("waiting_for_output"); err != nil {
+		streamWriter.writeError(err)
 		return
 	}
-
-	ctx := r.Context()
-	chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
+	chunkID := streamWriter.id
 	tokenIndex := 0
 	rawFinished := false
 	rawEngine, supportsStructuredStream := s.engine.(inference.RawStreamingEngine)
 
 	// Define callback to reuse
 	callback := func(token string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := streamWriter.setPhase("receiving_output"); err != nil {
+			return err
+		}
 		chunk := api.ChatCompletionChunk{
 			ID:      chunkID,
 			Object:  "chat.completion.chunk",
@@ -169,6 +194,12 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		return nil
 	}
 	rawCallback := func(data json.RawMessage) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := streamWriter.setPhase("receiving_output"); err != nil {
+			return err
+		}
 		var chunk map[string]interface{}
 		if err := json.Unmarshal(data, &chunk); err != nil {
 			return err
@@ -230,34 +261,12 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 	}
 
 	if ctx.Err() != nil {
-		return
+		err = ctx.Err()
 	}
 
 	if err != nil {
 		log.Printf("Streaming error: %v", err)
-		streamType := "stream_error"
-		code := ""
-		message := err.Error()
-		if engineErr := inference.AsEngineError(err); engineErr != nil {
-			if engineErr.Code != "" {
-				streamType = engineErr.Code
-				code = engineErr.Code
-			}
-			if engineErr.Message != "" {
-				message = engineErr.Message
-			}
-		}
-		// Send error as final chunk
-		errChunk := map[string]interface{}{
-			"error": map[string]string{
-				"message": message,
-				"type":    streamType,
-				"code":    code,
-			},
-		}
-		data, _ := json.Marshal(errChunk)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
+		streamWriter.writeError(err)
 		return
 	}
 	if supportsStructuredStream {

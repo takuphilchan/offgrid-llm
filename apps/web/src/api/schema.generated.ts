@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/v1/inference/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Load the selected installed GGUF chat model through normal chat permission, memory admission and the shared scheduler. No generation, tool execution, default-model change or workflow qualification. Cancellation releases this caller's demand; preparation still required by live callers is retained. Native provider preparation is not supported by this endpoint yet. */
+        post: operations["prepareInferenceModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/models": {
         parameters: {
             query?: never;
@@ -1577,6 +1594,20 @@ export interface components {
         };
         IntegrationStatus: {
             id: string;
+            contract_revision?: string;
+            /** @enum {string} */
+            readiness_scope?: "service_model";
+            /** @enum {string} */
+            host_state?: "not_inspected";
+            /** @enum {string} */
+            workflow_state?: "unverified";
+            checks?: {
+                id: string;
+                /** @enum {string} */
+                state: "passed" | "blocked";
+                code: string;
+                message: string;
+            }[];
             /** @constant */
             provider_id: "offgrid";
             plugin_id: string;
@@ -1778,6 +1809,20 @@ export interface components {
             messages: components["schemas"]["ChatMessage"][];
             /** @default false */
             stream: boolean;
+            /** @description Explicit text/JSON constraint supported by the llama.cpp chat path. Constrained formats cannot be combined with tools; unsupported providers reject before generation. */
+            response_format?: {
+                /** @enum {string} */
+                type: "text" | "json_object" | "json_schema";
+                json_schema?: {
+                    name: string;
+                    description?: string;
+                    strict?: boolean;
+                    /** @description Bounded JSON schema with local references only. */
+                    schema: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
             stream_options?: {
                 /** @default false */
                 include_usage: boolean;
@@ -2286,6 +2331,60 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    prepareInferenceModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    model: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Selected runtime prepared; it remains subject to subsequent admission and runtime availability. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        model: string;
+                        prepared: boolean;
+                        context_window: number;
+                        /** Format: int64 */
+                        elapsed_ms: number;
+                    };
+                };
+            };
+            /** @description Invalid request or unavailable chat model. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Chat permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Runtime preparation or memory admission failed; no generation dispatched. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listTypedModels: {
         parameters: {
             query?: {
@@ -4435,7 +4534,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                id: "hermes" | "openclaw";
+                id: string;
             };
             cookie?: never;
         };

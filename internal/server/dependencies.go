@@ -129,7 +129,7 @@ func NewTransport(cfg HTTPConfig, deps Dependencies) (*Server, error) {
 		return nil, err
 	}
 	runtimeCtx, runtimeCancel := context.WithCancel(deps.Context)
-	return &Server{
+	server := &Server{
 		config:               cfg.Runtime,
 		registry:             deps.Registry,
 		engine:               deps.Engine,
@@ -183,5 +183,7 @@ func NewTransport(cfg HTTPConfig, deps Dependencies) (*Server, error) {
 		runtimeCancel:        runtimeCancel,
 		workspaceID:          deps.Workspace,
 		version:              deps.Version,
-	}, nil
+	}
+	server.modelCache.SetLoadAdmission(server.checkModelLoadCapacity)
+	return server, nil
 }

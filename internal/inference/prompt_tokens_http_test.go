@@ -51,7 +51,7 @@ func TestPromptTokensRetriesOnlyReadOnlyTransportEOFOnce(t *testing.T) {
 
 func TestPromptTokensCountsFullRequestWithoutGeneration(t *testing.T) {
 	parallel := false
-	request := &api.ChatCompletionRequest{Model: "any-installed-model", Stream: true, ToolChoice: "auto", ParallelToolCalls: &parallel,
+	request := &api.ChatCompletionRequest{SingleStepTools: true, Model: "any-installed-model", Stream: true, ToolChoice: "auto", ParallelToolCalls: &parallel,
 		Messages: []api.ChatMessage{{Role: "user", Content: "旅行 \"quoted\""}},
 		Tools:    []api.Tool{{Type: "function", Function: api.FunctionDef{Name: "fixture", Description: "Must count schemas too", Parameters: map[string]interface{}{"type": "object"}}}},
 	}

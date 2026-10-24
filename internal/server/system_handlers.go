@@ -40,22 +40,13 @@ func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getPowerMode() string {
 	status := s.powerManager.Status()
 
-	if status.State == power.PowerAC {
-		return "full"
-	}
-
-	switch status.BatteryLevel {
-	case power.BatteryFull:
-		return "full"
-	case power.BatteryGood:
-		return "normal"
-	case power.BatteryLow:
-		return "saver"
-	case power.BatteryCritical:
-		return "critical"
-	default:
+	if status.State == power.PowerUnknown {
 		return "unknown"
 	}
+	if status.PowerSaveActive {
+		return "saver"
+	}
+	return "full"
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {

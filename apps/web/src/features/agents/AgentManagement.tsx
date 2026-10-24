@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { externalIntegrations } from '../../i18n/external-integrations';
 import { api, type AgentTool, type ExternalIntegration, type IntegrationSetup, type MCPServer } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -103,13 +104,7 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
   const copyIntegrationSetup = async () => {
     if (!integrationSetup) return;
     try {
-      if (integrationSetup.id === 'hermes') {
-        await navigator.clipboard.writeText(integrationSetup.setup.install_command);
-        setCopied(true);
-        return;
-      }
-      const environment = Object.entries(integrationSetup.setup.environment ?? {}).map(([key, value]) => `export ${key}=${JSON.stringify(value)}`).join('\n');
-      await navigator.clipboard.writeText([integrationSetup.setup.install_command, environment, integrationSetup.setup.content, ...integrationSetup.setup.verify].filter(Boolean).join('\n\n'));
+      await navigator.clipboard.writeText(integrationSetup.setup.install_command);
       setCopied(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : text.common.error);
@@ -170,16 +165,18 @@ type ExternalProvidersPanelProps = {
 
 function ExternalProvidersPanel({ integrations, loading, busy, setup, copied, onSetup, onCopy }: ExternalProvidersPanelProps) {
   const { messages: text } = useI18n();
-  const managedHermes = setup?.id === 'hermes';
+  const { locale } = useI18n();
+  const labels = externalIntegrations[locale];
   return <section className="runtime-panel external-providers">
     <SectionHeading title={text.agentRuntime.providerPluginsTitle} description={text.agentRuntime.externalProvidersBody} />
     {!loading && integrations.length === 0 && <EmptyState title={text.agentRuntime.noExternalProviders} />}
     <div className="provider-grid">{integrations.map(item => <article key={item.id} className="provider-card">
-      <div><span className={item.ready ? 'status-pill' : 'status-pill warning'}>{item.ready ? text.agentRuntime.providerReady : text.agentRuntime.providerNeedsSetup}</span><h3>{item.name}</h3><p>{item.description}</p></div>
+      <div><span className={item.ready ? 'status-pill' : 'status-pill warning'}>{item.ready ? labels.ready : labels.blocked}</span><h3>{item.name}</h3><p>{item.description}</p></div>
       <dl><div><dt>{text.agentRuntime.provider}</dt><dd>{item.provider_id}</dd></div><div><dt>{text.agentRuntime.transport}</dt><dd>{item.transport}</dd></div><div><dt>{text.agentRuntime.model}</dt><dd>{item.model_id ?? '—'}</dd></div><div><dt>{text.agentRuntime.context}</dt><dd>{item.context_window.toLocaleString()} / {item.minimum_context.toLocaleString()}</dd></div></dl>
+      <p>{labels.host}<br />{labels.workflow}</p>
       {item.warnings.length > 0 && <ul>{item.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}
       <button className="secondary-button" disabled={busy === item.id || !item.model_id} onClick={() => onSetup(item)}>{busy === item.id ? text.common.loading : text.agentRuntime.generateSetup}</button>
     </article>)}</div>
-    {setup && <div className="provider-setup"><div className="section-heading"><div><span className="eyebrow">{setup.name}</span><h3>{text.agentRuntime.configuration}</h3></div><button className="secondary-button" onClick={onCopy}>{copied ? text.agentRuntime.copied : text.agentRuntime.copy}</button></div><label>{text.agentRuntime.installPlugin}</label><pre>{setup.setup.install_command}</pre>{!managedHermes && <>{Object.keys(setup.setup.environment ?? {}).length > 0 && <><label>{text.agentRuntime.environment}</label><pre>{Object.entries(setup.setup.environment ?? {}).map(([key, value]) => `export ${key}=${JSON.stringify(value)}`).join('\n')}</pre></>}<label>{setup.setup.config_file}</label><pre>{setup.setup.content}</pre></>}<label>{text.agentRuntime.verification}</label><pre>{setup.setup.verify.join('\n')}</pre>{(setup.setup.notes?.length ?? 0) > 0 && <div className="provider-notes"><strong>{text.agentRuntime.notes}</strong><ul>{setup.setup.notes?.map(note => <li key={note}>{note}</li>)}</ul></div>}</div>}
+    {setup && <div className="provider-setup"><div className="section-heading"><div><span className="eyebrow">{setup.name}</span><h3>{text.agentRuntime.configuration}</h3></div><button className="secondary-button" onClick={onCopy}>{copied ? text.agentRuntime.copied : text.agentRuntime.copy}</button></div><label>{text.agentRuntime.installPlugin}</label><pre>{setup.setup.install_command}</pre><details><summary>{labels.manual}</summary>{Object.keys(setup.setup.environment ?? {}).length > 0 && <><label>{text.agentRuntime.environment}</label><pre>{Object.entries(setup.setup.environment ?? {}).map(([key, value]) => `export ${key}=${JSON.stringify(value)}`).join('\n')}</pre></>}<label>{setup.setup.config_file}</label><pre>{setup.setup.content}</pre></details><label>{text.agentRuntime.verification}</label><pre>{setup.setup.verify.join('\n')}</pre>{(setup.setup.notes?.length ?? 0) > 0 && <div className="provider-notes"><strong>{text.agentRuntime.notes}</strong><ul>{setup.setup.notes?.map(note => <li key={note}>{note}</li>)}</ul></div>}</div>}
   </section>;
 }

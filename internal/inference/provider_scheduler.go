@@ -42,6 +42,7 @@ type ProviderScheduler struct {
 	legacyMemory     func() LegacyProcessMemory
 	legacyCache      *ModelCache
 	legacyEngine     Engine
+	legacyPreparing  map[legacyPreparationKey]*legacyPreparation
 	embeddingOwner   *EmbeddingEngine
 	closeCtx         context.Context
 	closeRun         context.CancelFunc
@@ -267,6 +268,21 @@ func (s *ProviderScheduler) AcquireLegacyModel(ctx context.Context, gate *Lifecy
 	if gate == nil || model == "" || load == nil {
 		return nil, timing, errors.New("legacy model admission requires lifecycle gate, model identity, and loader")
 	}
+	prepared, err := s.prepareLegacyModel(ctx, gate, model, contextWindow, alive, load)
+	if err != nil {
+		return nil, prepared, err
+	}
+	// Reacquire the generation lease and recheck identity: another model may
+	// have run after shared preparation. Never infer ownership from readiness.
+	release, timing, err := s.acquireLegacyModelDirect(ctx, gate, model, contextWindow, alive, load)
+	timing.Load += prepared.Load
+	timing.Queue += prepared.Queue
+	timing.Unload += prepared.Unload
+	return release, timing, err
+}
+
+func (s *ProviderScheduler) acquireLegacyModelDirect(ctx context.Context, gate *LifecycleGate, model string, contextWindow int, alive func() bool, load func(context.Context, string) error) (func(), ProviderTiming, error) {
+	var timing ProviderTiming
 	releaseProvider, admission, err := s.AcquireGenerationTimed(ctx)
 	timing = admission
 	if err != nil {

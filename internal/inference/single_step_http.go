@@ -15,15 +15,19 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-// Native template parsers do not consistently enforce parallel_tool_calls=false.
-// Sequential requests use an owned, grammar-constrained single-step envelope.
-// This is inference transport only: durable history and policy stay unchanged.
-// Ordinary Chat and callers permitting parallel calls keep their native path.
+// Governed callers explicitly select the owned grammar-constrained envelope.
+// Public parallel_tool_calls controls cardinality, not the response adapter.
 func singleStepRequest(req *api.ChatCompletionRequest) bool {
-	return req.ParallelToolCalls != nil && !*req.ParallelToolCalls && len(req.Tools) > 0 && req.ToolChoice != "none"
+	return req.SingleStepTools && req.ParallelToolCalls != nil && !*req.ParallelToolCalls && len(req.Tools) > 0 && req.ToolChoice != "none"
 }
 
 func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
+	if err := req.ResponseFormat.Validate(); err != nil {
+		return nil, err
+	}
+	if req.ResponseFormat.Constrained() && len(req.Tools) > 0 {
+		return nil, &api.UnsupportedControlError{Control: "response_format with tools"}
+	}
 	if !singleStepRequest(req) {
 		return json.Marshal(req)
 	}

@@ -9,6 +9,37 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /v1/inference/prepare:
+    post:
+      operationId: prepareInferenceModel
+      description: Load the selected installed GGUF chat model through normal chat permission, memory admission and the shared scheduler. No generation, tool execution, default-model change or workflow qualification. Cancellation releases this caller's demand; preparation still required by live callers is retained. Native provider preparation is not supported by this endpoint yet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [model]
+              properties:
+                model: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Selected runtime prepared; it remains subject to subsequent admission and runtime availability.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [model, prepared, context_window, elapsed_ms]
+                properties:
+                  model: { type: string }
+                  prepared: { type: boolean }
+                  context_window: { type: integer }
+                  elapsed_ms: { type: integer, format: int64 }
+        '400': { description: Invalid request or unavailable chat model. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: Chat permission required. }
+        '503': { description: Runtime preparation or memory admission failed; no generation dispatched. }
   /api/v2/models:
     get:
       operationId: listTypedModels
@@ -1286,7 +1317,7 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string, enum: [hermes, openclaw] }
+          schema: { type: string, pattern: '^[a-z0-9-]+$' }
         - in: query
           name: model
           schema: { type: string }
@@ -1979,6 +2010,20 @@ components:
       required: [id, provider_id, plugin_id, name, description, transport, documentation_url, minimum_context, recommended_context, requires_tools, capabilities, ready, status, context_window, warnings]
       properties:
         id: { type: string }
+        contract_revision: { type: string }
+        readiness_scope: { type: string, enum: [service_model] }
+        host_state: { type: string, enum: [not_inspected] }
+        workflow_state: { type: string, enum: [unverified] }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [id, state, code, message]
+            properties:
+              id: { type: string }
+              state: { type: string, enum: [passed, blocked] }
+              code: { type: string }
+              message: { type: string }
         provider_id: { type: string, const: offgrid }
         plugin_id: { type: string }
         name: { type: string }
@@ -2215,6 +2260,22 @@ components:
           minItems: 1
           items: { $ref: '#/components/schemas/ChatMessage' }
         stream: { type: boolean, default: false }
+        response_format:
+          type: object
+          additionalProperties: false
+          required: [type]
+          description: Explicit text/JSON constraint supported by the llama.cpp chat path. Constrained formats cannot be combined with tools; unsupported providers reject before generation.
+          properties:
+            type: { type: string, enum: [text, json_object, json_schema] }
+            json_schema:
+              type: object
+              additionalProperties: false
+              required: [name, schema]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9_-]+$' }
+                description: { type: string }
+                strict: { type: boolean }
+                schema: { type: object, additionalProperties: true, description: Bounded JSON schema with local references only. }
         stream_options:
           type: object
           properties:

@@ -4,6 +4,7 @@ package inference
 type ToolRuntimeInfo struct {
 	Build             string `json:"build"`
 	TemplateSHA256    string `json:"template_sha256"`
+	TemplateAdapter   string `json:"template_adapter,omitempty"`
 	Context           int    `json:"context"`
 	SupportsTools     *bool  `json:"supports_tools,omitempty"`
 	SupportsToolCalls *bool  `json:"supports_tool_calls,omitempty"`

@@ -54,7 +54,7 @@ func (s *Server) switchModelWithContextSize(ctx context.Context, modelID string,
 	}
 	// A cache-owned child may restart at the same port. An alive process is
 	// insufficient: the HTTP engine must be connected to this generation.
-	if s.currentModelID == modelID && s.currentPort > 0 && s.currentContext == effectiveContext {
+	if s.currentModelID == modelID && s.currentPort > 0 && s.currentContext >= effectiveContext {
 		generation := process.Generation(modelID)
 		if generation != 0 && s.currentGeneration == generation && process.Alive(modelID) {
 			log.Printf("Model %s already loaded on port %d, skipping reload", modelID, s.currentPort)
@@ -163,6 +163,13 @@ func (s *Server) acquireInferenceContextTimed(ctx context.Context, modelID strin
 	// lifecycle lease through the caller's generation. The model cache still
 	// owns the actual llama process during this compatibility migration.
 	var loadingElapsed time.Duration
+	// Request progress must not be captured by a shared preparation callback:
+	// its first waiter may disconnect while another request still needs loading.
+	if loading != nil {
+		if err := loading(); err != nil {
+			return nil, timing, err
+		}
+	}
 	switcher := func(ctx context.Context, model string) error {
 		loadCtx := ctx
 		cancel := func() {}
@@ -172,11 +179,6 @@ func (s *Server) acquireInferenceContextTimed(ctx context.Context, modelID strin
 		defer cancel()
 		started := time.Now()
 		defer func() { loadingElapsed += time.Since(started) }()
-		if loading != nil {
-			if err := loading(); err != nil {
-				return err
-			}
-		}
 		return s.switchModelWithContextSize(loadCtx, model, contextWindow)
 	}
 	if s.providerScheduler != nil {

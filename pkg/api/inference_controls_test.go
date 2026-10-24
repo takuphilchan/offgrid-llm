@@ -7,7 +7,7 @@ import (
 )
 
 func TestInferenceControlsAreNotSilentlyDiscarded(t *testing.T) {
-	for _, raw := range []string{`{"logprobs":true}`, `{"response_format":{"type":"json_object"}}`, `{"top_k":5}`} {
+	for _, raw := range []string{`{"logprobs":true}`, `{"response_format":{"type":"unsupported"}}`, `{"top_k":5}`} {
 		for _, request := range []any{&ChatCompletionRequest{}, &CompletionRequest{}} {
 			err := json.Unmarshal([]byte(raw), request)
 			var unsupported *UnsupportedControlError

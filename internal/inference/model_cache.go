@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -76,6 +77,7 @@ type ModelCache struct {
 	monitorCtx       context.Context
 	monitorCancel    context.CancelFunc
 	restartAdmission func(context.Context) (func(), error)
+	loadAdmission    func(context.Context, string, int) error
 }
 
 // NewModelCache creates a new model cache with specified capacity
@@ -502,7 +504,7 @@ func (mc *ModelCache) GetOrLoadContext(ctx context.Context, modelID, modelPath, 
 
 	// Check if model is already loaded and process is alive
 	if instance, exists := mc.instances[modelID]; exists {
-		if mc.instanceHealthy(instance) && (mc.contextSize <= 0 || instance.ContextSize == mc.contextSize) {
+		if mc.instanceHealthy(instance) && (mc.contextSize <= 0 || instance.ContextSize >= mc.contextSize) {
 			instance.LastAccess = time.Now()
 			log.Printf("Model %s already loaded on port %d", modelID, instance.Port)
 			// Mark as ready immediately if already loaded
@@ -615,6 +617,15 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 		}
 	}
 
+	if mc.loadAdmission != nil {
+		if err := mc.loadAdmission(ctx, modelID, contextSize); err != nil {
+			mc.mu.Unlock()
+			if mc.loadingTracker != nil {
+				mc.loadingTracker.Complete(modelID, false, err.Error())
+			}
+			return nil, err
+		}
+	}
 	// Use configured batch size - smaller = faster first token, less memory spikes
 	batchSize := mc.batchSize
 	if batchSize <= 0 {
@@ -734,6 +745,16 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 	if err != nil {
 		mc.mu.Unlock()
 		return nil, fmt.Errorf("failed to get llama-server binary: %w", err)
+	}
+	templateArgs, cleanupTemplate, err := prepareToolTemplate(ctx, binaryPath, modelPath)
+	if err != nil {
+		mc.mu.Unlock()
+		return nil, fmt.Errorf("prepare tool template: %w", err)
+	}
+	defer cleanupTemplate() // Runtime has read the private file before readiness.
+	args = append(args, templateArgs...)
+	if len(templateArgs) != 0 {
+		log.Printf("Using tool template adapter %s (workflow qualification separate)", strings.TrimSuffix(filepath.Base(templateArgs[len(templateArgs)-1]), ".jinja"))
 	}
 
 	// The model server belongs to the cache, not to the HTTP request that first

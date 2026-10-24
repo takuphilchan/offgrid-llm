@@ -5,9 +5,31 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
+	"github.com/takuphilchan/offgrid-llm/internal/degradation"
+	"github.com/takuphilchan/offgrid-llm/internal/power"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+func TestContextPlanningIsIndependentOfPowerAndPressure(t *testing.T) {
+	policy := power.DefaultPolicy()
+	policy.ACMaxContext = 512
+	policy.BatteryMaxContext = 256
+	pm := power.NewPowerManager(policy)
+	defer pm.Stop()
+	pressure := degradation.NewManager(degradation.DefaultConfig())
+	defer pressure.Stop()
+	for i := 0; i < 60; i++ {
+		pressure.QueueRequest()
+	}
+	s := &Server{config: &config.Config{MaxContextSize: 65536, AdaptiveContext: true}, powerManager: pm, degradationMgr: pressure}
+	if got := s.effectiveContextWindow(); got != 65536 {
+		t.Fatalf("power/pressure changed context: %d", got)
+	}
+	if got := s.modelContextWindow(""); got != 8192 {
+		t.Fatalf("unknown model memory guard lost: %d", got)
+	}
+}
 
 func TestResolveContextWindowHonorsExplicitContext(t *testing.T) {
 	got := resolveContextWindow(65536, false, 4096, 8192)
@@ -42,7 +64,7 @@ func TestPlanContextWindowAdmitsCapableLongContextModel(t *testing.T) {
 	plan := planContextWindow(contextPlanningInput{
 		OperatorMax: 65536, Adaptive: true, KVCacheType: "q8_0", InferenceSlots: 1,
 		Model:      &api.ModelMetadata{Size: 4700 << 20, ContextSize: 131072, KVElementsPerToken: 28672},
-		Resources:  &resource.SystemResources{TotalRAM: 10000, AvailableRAM: 7600, GPUAvailable: true, GPUMemory: 8151},
+		Resources:  &resource.SystemResources{TotalRAM: 10000, AvailableRAM: 7600, GPUAvailable: true, GPUMemory: 8151, GPUAvailableMemory: 8151},
 		GPUEnabled: true,
 	})
 	if plan.Window != 65536 || plan.ModelMax != 131072 || plan.ResourceMax != 65536 {

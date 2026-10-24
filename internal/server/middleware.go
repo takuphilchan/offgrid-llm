@@ -135,6 +135,13 @@ type statusResponseWriter struct {
 	statusCode int
 }
 
+// Preserve ResponseController deadlines/errors through the logging wrapper.
+func (w *statusResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (w *statusResponseWriter) FlushError() error {
+	return http.NewResponseController(w.ResponseWriter).Flush()
+}
+
 func (w *statusResponseWriter) WriteHeader(code int) {
 	w.statusCode = code
 	w.ResponseWriter.WriteHeader(code)
@@ -142,7 +149,5 @@ func (w *statusResponseWriter) WriteHeader(code int) {
 
 // Flush implements http.Flusher to support streaming
 func (w *statusResponseWriter) Flush() {
-	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	_ = w.FlushError()
 }

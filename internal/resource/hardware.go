@@ -148,6 +148,7 @@ func detectRAM(res *SystemResources) error {
 				res.AvailableRAM = kb / 1024 // Convert KB to MB
 			}
 		}
+		limitContainerMemory(res, "/sys/fs/cgroup")
 		return nil
 	}
 

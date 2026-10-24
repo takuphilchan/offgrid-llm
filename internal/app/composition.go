@@ -105,13 +105,13 @@ func New(cfg *config.Config) (_ *Runtime, err error) {
 	c.owned.add("power manager", func() error { powerManager.Stop(); return nil })
 	powerStatus := powerManager.Status()
 	if powerStatus.State == power.PowerBattery {
-		log.Printf("Power: Battery %d%% - Power Saver mode recommended", powerStatus.BatteryPercent)
+		log.Printf("Power: Battery %d%% (informational; model context unchanged)", powerStatus.BatteryPercent)
 	} else if powerStatus.State == power.PowerAC {
 		log.Printf("Power: AC connected - Full performance")
 	}
 	powerManager.OnChange(func(status power.PowerStatus) {
 		if status.State == power.PowerBattery {
-			log.Printf("Switched to battery (%d%%) - reducing resource usage", status.BatteryPercent)
+			log.Printf("Switched to battery (%d%%); model context unchanged", status.BatteryPercent)
 		} else if status.State == power.PowerAC {
 			log.Printf("AC power connected - full performance available")
 		}
@@ -120,7 +120,7 @@ func New(cfg *config.Config) (_ *Runtime, err error) {
 	degradationMgr.Start()
 	c.owned.add("degradation manager", func() error { degradationMgr.Stop(); return nil })
 	degradationMgr.OnLevelChange(func(level degradation.DegradationLevel) {
-		log.Printf("Resource pressure changed: %s (max context: %d, max concurrent: %d)", level.String(), degradationMgr.MaxContextSize(), degradationMgr.MaxConcurrentRequests())
+		log.Printf("Resource pressure changed: %s (max concurrent: %d; model context unchanged)", level.String(), degradationMgr.MaxConcurrentRequests())
 	})
 	var auditLogger *audit.AuditLogger
 	if cfg.EnableAuditLog {

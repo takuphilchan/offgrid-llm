@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -21,5 +22,26 @@ func TestToolRuntimeMetadataDoesNotExposeTemplateOrPaths(t *testing.T) {
 	info, err := NewLlamaHTTPEngine(server.URL).ToolRuntimeInfo(context.Background())
 	if err != nil || info.Build != "fixture-runtime" || info.Context != 8192 || len(info.TemplateSHA256) != 64 || info.SupportsTools == nil || *info.SupportsTools {
 		t.Fatalf("metadata: %+v %v", info, err)
+	}
+}
+
+func TestToolRuntimeIdentityIsRefreshedAfterTemplateChange(t *testing.T) {
+	var revision atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"chat_template":"fixture revision %d","build_info":"b1-b95502b"}`, revision.Load())
+	}))
+	defer server.Close()
+	engine := NewLlamaHTTPEngine(server.URL)
+	before, err := engine.ToolRuntimeInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision.Store(1)
+	after, err := engine.ToolRuntimeInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.TemplateSHA256 == after.TemplateSHA256 || before.TemplateAdapter != "" || after.TemplateAdapter != "" {
+		t.Fatal("reused a stale template identity or inferred an adapter from runtime alone")
 	}
 }

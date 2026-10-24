@@ -46,5 +46,12 @@ func (e *LlamaHTTPEngine) ToolRuntimeInfo(ctx context.Context) (*ToolRuntimeInfo
 		return nil, err
 	}
 	digest := sha256.Sum256([]byte(props.Template))
-	return &ToolRuntimeInfo{Build: props.Build, TemplateSHA256: hex.EncodeToString(digest[:]), Context: props.Settings.Context, SupportsTools: props.Caps.Tools, SupportsToolCalls: props.Caps.Calls}, nil
+	info := &ToolRuntimeInfo{Build: props.Build, TemplateSHA256: hex.EncodeToString(digest[:]), Context: props.Settings.Context, SupportsTools: props.Caps.Tools, SupportsToolCalls: props.Caps.Calls}
+	if props.Build == "b1-b95502b" || props.Build == "b1-b95502b-offgrid-seq1" || props.Build == "b1-b95502b-offgrid-seq2" {
+		info.TemplateAdapter = toolTemplateAdapterIdentity(info.TemplateSHA256)
+		if info.TemplateAdapter == resultToolsAdapter && props.Build != "b1-b95502b-offgrid-seq2" {
+			info.TemplateAdapter = ""
+		}
+	}
+	return info, nil
 }
