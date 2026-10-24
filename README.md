@@ -37,7 +37,7 @@ should still be reported through [GitHub Issues](https://github.com/takuphilchan
 Use the versioned stable image for a repeatable installation:
 
 ```bash
-docker pull takuphilchan/offgrid-llm:0.4.19
+docker pull takuphilchan/offgrid-llm:0.4.20
 
 docker run -d \
   --name offgrid \
@@ -48,7 +48,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:0.4.19
+  takuphilchan/offgrid-llm:0.4.20
 ```
 
 Open <http://127.0.0.1:11611/ui/>. The named volumes survive container
@@ -66,9 +66,9 @@ docker logs -f offgrid
 
 Stable releases publish `latest`, full semantic versions, `sha-*` tags,
 provenance, SBOMs, and AMD64/ARM64 CPU manifests. NVIDIA images use the separate
-`0.4.19-gpu` tag (Linux AMD64). The `edge` tag is for development, not a stable
+`0.4.20-gpu` tag (Linux AMD64). The `edge` tag is for development, not a stable
 upgrade channel. See [Docker deployment](docs/setup/docker.md) and the
-[v0.4.19 release notes](docs/releases/release-notes-v0.4.19.md).
+[v0.4.20 release notes](docs/releases/release-notes-v0.4.20.md).
 
 ## Build and run from source
 
@@ -167,7 +167,7 @@ The source contract is [openapi.yaml](pkg/api/openapi.yaml). UI types are
 generated from it; CI fails when generated types drift.
 
 External agents connect to OffGrid as a native `offgrid` provider. Hermes and
-OpenClaw have guided managed setup:
+OpenClaw share one managed setup and readiness lifecycle:
 
 ```bash
 offgrid hermes install
@@ -193,6 +193,11 @@ that window. OpenClaw uses its official installer when missing and a local
 plugin that discovers chat models only. Lower-level provider commands remain
 available through `offgrid integrations`. See the
 [external agents guide](docs/guides/external-agents.md).
+
+The shared commands are `offgrid integrations configure|status|test|run <id>`.
+Use `run <id> "task" --model <installed-id>` for a temporary model selection;
+`configure <id> --model <installed-id>` saves the choice. Setup, model-reply
+verification and tool-workflow qualification are reported separately.
 
 ## Persistent data
 

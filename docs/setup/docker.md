@@ -18,7 +18,7 @@ Bash continuation syntax; in PowerShell enter `docker run` on one line or use
 PowerShell backtick continuations.
 
 ```bash
-docker pull takuphilchan/offgrid-llm:0.4.19
+docker pull takuphilchan/offgrid-llm:0.4.20
 docker run -d \
   --name offgrid \
   --init \
@@ -28,7 +28,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:0.4.19
+  takuphilchan/offgrid-llm:0.4.20
 ```
 
 Open <http://localhost:11611/ui/> and download a model from the Models page, or
@@ -48,7 +48,7 @@ and TLS for remote access.
 | --- | --- |
 | `edge` | Current development image; update deliberately |
 | `latest` | Moving alias for the latest published stable CPU release |
-| `<version>` | Versioned release, for example `0.4.19` |
+| `<version>` | Versioned release, for example `0.4.20` |
 | `<major>.<minor>` | Most recent patch in a stable minor release |
 | `sha-<commit>` | Image built from an exact source revision |
 | `latest-gpu` | Most recent stable NVIDIA release (Linux AMD64) |
@@ -66,7 +66,7 @@ Clone the repository only when using its Compose definitions:
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm/docker
 cp .env.example .env
-# Edit .env: set OFFGRID_VERSION=0.4.19 before pulling.
+# Edit .env: set OFFGRID_VERSION=0.4.20 before pulling.
 docker compose pull
 docker compose up -d
 ```
@@ -136,7 +136,7 @@ long-context model is preferable. Example Compose overrides:
 
 ```bash
 OFFGRID_MAX_CONTEXT=65536 OFFGRID_ADAPTIVE_CONTEXT=true \
-  OFFGRID_KV_CACHE_TYPE=q4_0 \
+  OFFGRID_KV_CACHE_TYPE=q8_0 \
   docker compose -f docker-compose.gpu.yml up -d
 ```
 
@@ -144,6 +144,12 @@ Adaptive mode treats 65,536 as a ceiling and can select a smaller stable tier
 from the model's GGUF metadata and the container's visible RAM/VRAM. Use fixed
 mode only after measuring the exact model/context combination. Existing
 containers with an explicit 8,192 ceiling remain at 8K when upgraded.
+
+Use the default `q8_0` cache for agent workflows. In the local RTX 5060 test,
+`q4_0` KV caching corrupted Qwen responses while `q8_0` passed the same three
+synthetic prompts. KV cache precision is separate from the model's weight
+quantization: a Q4 GGUF does not require a Q4 KV cache. Qualify the actual
+model/runtime/cache combination before trading correctness for a larger window.
 
 Do not run the CPU and GPU profiles on the same host port simultaneously.
 Compose creates project-scoped volumes, while the `docker run` example above
