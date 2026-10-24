@@ -65,6 +65,10 @@ test('manual reading exposes Latest without a second scrolling page', async ({ p
   await transcript.evaluate(el => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });
   await page.getByRole('button', { name: 'Latest', exact: true }).click();
   await expect.poll(() => transcript.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(3);
+  // A delayed native keyboard scroll can drift inside the 100px follow threshold.
+  // Explicit Latest must still pin the actual bottom, not merely hide its button.
+  await transcript.evaluate(el => { el.scrollTop -= 53; el.dispatchEvent(new Event('scroll')); });
+  await expect.poll(() => transcript.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(3);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1)).toBe(true);
 });
 
