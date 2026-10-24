@@ -102,17 +102,9 @@ func runRoot(ctx context.Context, rawArgs []string, env cli.Environment) int {
 			handleLoRA(args[2:])
 			return 0
 		case "hermes":
-			if err := handleHermes(args[2:]); err != nil {
-				printError(err.Error())
-				return 1
-			}
-			return 0
+			return reportCommandError(handleHermes(args[2:]), options.JSON, env.Stdout, env.Stderr)
 		case "openclaw":
-			if err := handleOpenClaw(args[2:]); err != nil {
-				printError(err.Error())
-				return 1
-			}
-			return 0
+			return reportCommandError(handleOpenClaw(args[2:]), options.JSON, env.Stdout, env.Stderr)
 		case "serve":
 			// Fall through to start server
 		default:

@@ -8,18 +8,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
-	"github.com/takuphilchan/offgrid-llm/internal/config"
-	"github.com/takuphilchan/offgrid-llm/internal/integrations"
 	"github.com/takuphilchan/offgrid-llm/internal/output"
-	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 const (
@@ -28,26 +23,8 @@ const (
 	maxOpenClawInstallerSize    = 4 << 20
 )
 
-type openClawOptions struct {
-	ServerURL string
-	BaseURL   string
-	ModelID   string
-	APIKey    string
-	Force     bool
-	Yes       bool
-}
-
-type openClawInstallResult struct {
-	Installed  bool   `json:"installed"`
-	Executable string `json:"executable"`
-	PluginPath string `json:"plugin_path"`
-	ModelID    string `json:"model_id"`
-	BaseURL    string `json:"base_url"`
-}
-
 var openClawLookPath = exec.LookPath
 var openClawExecCommand = exec.Command
-var openClawExecCommandContext = exec.CommandContext
 var openClawRuntimeOS = runtime.GOOS
 
 func handleOpenClaw(args []string) error {
@@ -83,208 +60,15 @@ func printOpenClawHelp() {
 	fmt.Println("  offgrid openclaw install [--model <id>] [--yes] [--force]")
 	fmt.Println("  offgrid openclaw status")
 	fmt.Println("  offgrid openclaw test")
-	fmt.Println("  offgrid openclaw run \"Summarize this directory\"")
+	fmt.Println("  offgrid openclaw run \"Summarize this directory\" [--model <id>] [--timeout <seconds>]")
 	fmt.Println("  offgrid openclaw install --server <url> --base-url <url> --api-key <token>")
 	fmt.Println()
 }
 
-func parseOpenClawOptions(args []string) (openClawOptions, error) {
-	cfg, err := config.LoadWithPriority(os.Getenv("OFFGRID_CONFIG"))
-	if err != nil {
-		return openClawOptions{}, err
-	}
-	options := openClawOptions{
-		ServerURL: fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort),
-		APIKey:    strings.TrimSpace(os.Getenv("OFFGRID_API_KEY")),
-	}
-	for index := 0; index < len(args); index++ {
-		switch args[index] {
-		case "--server", "--base-url", "--model", "--api-key":
-			flag := args[index]
-			index++
-			if index >= len(args) || strings.TrimSpace(args[index]) == "" {
-				return openClawOptions{}, fmt.Errorf("%s requires a value", flag)
-			}
-			value := strings.TrimSpace(args[index])
-			switch flag {
-			case "--server":
-				options.ServerURL = strings.TrimRight(value, "/")
-			case "--base-url":
-				options.BaseURL = strings.TrimRight(value, "/")
-			case "--model":
-				options.ModelID = value
-			case "--api-key":
-				options.APIKey = value
-			}
-		case "--yes", "-y":
-			options.Yes = true
-		case "--force":
-			options.Force = true
-		default:
-			return openClawOptions{}, fmt.Errorf("unknown option: %s", args[index])
-		}
-	}
-	return options, nil
-}
-
-func openClawSetup(options openClawOptions) (cliIntegrationSetupResponse, error) {
-	baseURL := options.BaseURL
-	if baseURL == "" {
-		baseURL = options.ServerURL
-	}
-	endpoint := options.ServerURL + "/v1/integrations/openclaw/setup?" + (url.Values{
-		"base_url": {baseURL},
-		"model":    {options.ModelID},
-	}).Encode()
-	var setup cliIntegrationSetupResponse
-	if err := getIntegrationJSONWithKey(endpoint, options.APIKey, &setup); err != nil {
-		return setup, fmt.Errorf("cannot inspect OffGrid: %w; start the service and retry", err)
-	}
-	return setup, nil
-}
-
-func getIntegrationJSONWithKey(endpoint, apiKey string, target any) error {
-	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		return err
-	}
-	request.Header.Set("Accept", "application/json")
-	if apiKey != "" {
-		request.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-	response, err := httpClient.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("service returned HTTP %d", response.StatusCode)
-	}
-	return json.NewDecoder(response.Body).Decode(target)
-}
-
-func handleOpenClawInstall(args []string) error {
-	options, err := parseOpenClawOptions(args)
-	if err != nil {
-		return err
-	}
-	setup, err := openClawSetup(options)
-	if err != nil {
-		return err
-	}
-	if !setup.Integration.Ready {
-		return fmt.Errorf("OffGrid is reachable but OpenClaw is not ready: %s", strings.Join(setup.Integration.Warnings, "; "))
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	executable, err := findOpenClawExecutable(home)
-	if err != nil {
-		accepted, confirmErr := confirmOpenClawInstall(options.Yes)
-		if confirmErr != nil {
-			return confirmErr
-		}
-		if !accepted {
-			printInfo("Installation cancelled; no external software was changed")
-			return nil
-		}
-		if err := installOpenClawRuntime(); err != nil {
-			return fmt.Errorf("official OpenClaw installer failed: %w", err)
-		}
-		executable, err = findOpenClawExecutable(home)
-		if err != nil {
-			return fmt.Errorf("OpenClaw installed but its command is not on PATH; open a new terminal and retry offgrid openclaw install")
-		}
-	}
-	// A local plugin executes code in OpenClaw. Consent is explicit even when
-	// the OpenClaw CLI itself is already present.
-	accepted, err := confirmOpenClawPlugin(options.Yes)
-	if err != nil {
-		return err
-	}
-	if !accepted {
-		printInfo("OpenClaw provider registration cancelled")
-		return nil
-	}
-	plugin, err := integrations.InstallPluginBundle("openclaw", home, options.Force)
-	if err != nil {
-		return err
-	}
-	if err := ensureOpenClawPlugin(executable, plugin.Path, options.Force); err != nil {
-		return err
-	}
-	var rendered struct {
-		Models struct {
-			Providers map[string]json.RawMessage `json:"providers"`
-		} `json:"models"`
-	}
-	if err := json.Unmarshal([]byte(setup.Setup.Content), &rendered); err != nil {
-		return fmt.Errorf("invalid generated OpenClaw config: %w", err)
-	}
-	var provider map[string]any
-	if err := json.Unmarshal(rendered.Models.Providers["offgrid"], &provider); err != nil {
-		return fmt.Errorf("invalid generated OffGrid provider: %w", err)
-	}
-	configuredBaseURL, ok := provider["baseUrl"].(string)
-	if !ok || configuredBaseURL == "" {
-		return fmt.Errorf("generated OffGrid provider has no base URL")
-	}
-	apiKey := options.APIKey
-	if apiKey == "" {
-		apiKey = "offgrid-local"
-	}
-	provider["apiKey"] = apiKey
-	existingModels, err := readOpenClawModels(executable)
-	if err != nil {
-		return fmt.Errorf("cannot preserve existing OpenClaw models: %w", err)
-	}
-	var catalog api.ModelListResponse
-	if err := getIntegrationJSONWithKey(options.ServerURL+"/v1/models", options.APIKey, &catalog); err != nil {
-		return fmt.Errorf("cannot inspect current OffGrid model contexts: %w", err)
-	}
-	if err := mergeOpenClawModels(provider, existingModels, catalog.Data); err != nil {
-		return fmt.Errorf("cannot merge OffGrid model into OpenClaw: %w", err)
-	}
-	patch, err := json.Marshal(map[string]any{"models": map[string]any{
-		"mode": "merge", "providers": map[string]any{"offgrid": provider},
-	}})
-	if err != nil {
-		return err
-	}
-	for _, dryRun := range []bool{true, false} {
-		command := []string{"config", "patch", "--stdin"}
-		if dryRun {
-			command = append(command, "--dry-run")
-		}
-		if err := runOpenClawCommand(executable, command, bytes.NewReader(patch), nil); err != nil {
-			return fmt.Errorf("cannot configure OpenClaw provider: %w", err)
-		}
-	}
-	if configured, problem := inspectOpenClawProvider(executable, configuredBaseURL, setup.Integration.ModelID, setup.Integration.ContextWindow); !configured {
-		return fmt.Errorf("OpenClaw saved an incomplete OffGrid provider: %s", problem)
-	}
-	result := openClawInstallResult{
-		Installed: true, Executable: executable, PluginPath: plugin.Path,
-		ModelID: setup.Integration.ModelID, BaseURL: configuredBaseURL,
-	}
-	if outputJSON(result) {
-		return nil
-	}
-	printSuccess("OpenClaw is configured to use OffGrid")
-	fmt.Printf("  %sModel%s     %s\n", brandMuted, colorReset, result.ModelID)
-	fmt.Printf("  %sEndpoint%s  %s\n", brandMuted, colorReset, result.BaseURL)
-	fmt.Printf("  %sVerify%s    offgrid openclaw test\n", brandMuted, colorReset)
-	fmt.Printf("  %sRun%s       offgrid openclaw run \"your task\"\n\n", brandMuted, colorReset)
-	return nil
-}
+func handleOpenClawInstall(args []string) error { return managedAlias("configure", "openclaw", args) }
 
 func confirmOpenClawInstall(yes bool) (bool, error) {
 	return confirmOpenClawAction(yes, "OpenClaw is external software. OffGrid will run the official installer from "+openClawInstallerURL()+". Continue?")
-}
-
-func confirmOpenClawPlugin(yes bool) (bool, error) {
-	return confirmOpenClawAction(yes, "The first-party OffGrid provider is local executable code with OpenClaw text-inference capability. Register it in OpenClaw?")
 }
 
 func confirmOpenClawAction(yes bool, prompt string) (bool, error) {
@@ -311,9 +95,13 @@ func openClawInstallerURL() string {
 	return openClawUnixInstallerURL
 }
 
-func installOpenClawRuntime() error {
+func installOpenClawRuntime(ctx context.Context) error {
 	installerURL := openClawInstallerURL()
-	response, err := httpClient.Get(installerURL)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, installerURL, nil)
+	if err != nil {
+		return err
+	}
+	response, err := httpClient.Do(request)
 	if err != nil {
 		return fmt.Errorf("download official installer: %w", err)
 	}
@@ -365,7 +153,7 @@ func installOpenClawRuntime() error {
 		return err
 	}
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, commandOutput(), os.Stderr
-	return runIntegrationProcess(command)
+	return runIntegrationProcess(bindIntegrationContext(ctx, command))
 }
 
 func trustedOpenClawInstallerHost(host string) bool {
@@ -442,14 +230,14 @@ func runOpenClawCommand(executable string, args []string, stdin io.Reader, stdou
 	return runIntegrationProcess(command)
 }
 
-func inspectOpenClawPlugin(executable string) (rootDir string, loaded bool, err error) {
+func inspectOpenClawPlugin(ctx context.Context, executable string) (rootDir string, loaded bool, err error) {
 	command, err := openClawCommand(executable, []string{"plugins", "inspect", "offgrid", "--json"})
 	if err != nil {
 		return "", false, err
 	}
 	var stdout bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, io.Discard
-	if err := runIntegrationProcess(command); err != nil {
+	if err := runIntegrationProcess(bindIntegrationContext(ctx, command)); err != nil {
 		return "", false, err
 	}
 	var result struct {
@@ -464,8 +252,8 @@ func inspectOpenClawPlugin(executable string) (rootDir string, loaded bool, err 
 	return result.Plugin.RootDir, result.Plugin.Status == "loaded", nil
 }
 
-func ensureOpenClawPlugin(executable, pluginPath string, force bool) error {
-	if rootDir, loaded, err := inspectOpenClawPlugin(executable); err == nil && loaded {
+func ensureOpenClawPlugin(ctx context.Context, executable, pluginPath string, force bool) error {
+	if rootDir, loaded, err := inspectOpenClawPlugin(ctx, executable); err == nil && loaded {
 		if filepath.Clean(rootDir) == filepath.Clean(pluginPath) {
 			return nil
 		}
@@ -473,10 +261,10 @@ func ensureOpenClawPlugin(executable, pluginPath string, force bool) error {
 			return fmt.Errorf("an OffGrid OpenClaw plugin is already installed at %s; use --force only if you want to replace it", rootDir)
 		}
 	}
-	if err := runOpenClawCommand(executable, []string{"plugins", "install", "--link", "--force", "--accept-capabilities", pluginPath}, nil, nil); err != nil {
+	if err := externalCommand(ctx, openClawCommand, executable, []string{"plugins", "install", "--link", "--force", "--accept-capabilities", pluginPath}, nil, os.Stdin, commandOutput(), os.Stderr); err != nil {
 		return fmt.Errorf("register OffGrid provider in OpenClaw: %w", err)
 	}
-	rootDir, loaded, err := inspectOpenClawPlugin(executable)
+	rootDir, loaded, err := inspectOpenClawPlugin(ctx, executable)
 	if err != nil || !loaded {
 		return fmt.Errorf("OpenClaw accepted the plugin but it did not load; run openclaw plugins inspect offgrid --runtime --json")
 	}
@@ -486,124 +274,9 @@ func ensureOpenClawPlugin(executable, pluginPath string, force bool) error {
 	return nil
 }
 
-func handleOpenClawStatus(args []string) error {
-	options, err := parseOpenClawOptions(args)
-	if err != nil {
-		return err
-	}
-	home, _ := os.UserHomeDir()
-	executable, runtimeErr := findOpenClawExecutable(home)
-	pluginPath := ""
-	pluginLoaded := false
-	if runtimeErr == nil {
-		pluginPath, pluginLoaded, _ = inspectOpenClawPlugin(executable)
-	}
-	configurationProblem := ""
-	if runtimeErr == nil && options.ModelID == "" {
-		options.ModelID, err = preferredOpenClawModel(executable)
-		if err != nil {
-			configurationProblem = err.Error()
-		}
-	}
-	setup, serviceErr := openClawSetup(options)
-	configured := false
-	if runtimeErr == nil && serviceErr == nil && configurationProblem == "" {
-		configured, configurationProblem = inspectOpenClawProvider(executable, expectedOpenClawBaseURL(options), setup.Integration.ModelID, setup.Integration.ContextWindow)
-	}
-	ready := runtimeErr == nil && pluginLoaded && configured && serviceErr == nil && setup.Integration.Ready
-	status := map[string]any{"installed": runtimeErr == nil, "plugin_loaded": pluginLoaded, "plugin_path": pluginPath, "configured": configured, "service_ready": serviceErr == nil && setup.Integration.Ready, "ready": ready}
-	if configurationProblem != "" {
-		status["config_error"] = configurationProblem
-	}
-	if serviceErr == nil {
-		status["model_id"] = setup.Integration.ModelID
-		status["warnings"] = setup.Integration.Warnings
-	} else {
-		status["error"] = serviceErr.Error()
-	}
-	if !outputJSON(status) {
-		fmt.Println()
-		printHermesStatusLine("OpenClaw runtime", runtimeErr == nil, executable)
-		printHermesStatusLine("OffGrid provider", pluginLoaded, pluginPath)
-		printHermesStatusLine("Model config", configured, setup.Integration.ModelID)
-		printHermesStatusLine("OffGrid service", serviceErr == nil && setup.Integration.Ready, options.ServerURL)
-		if configurationProblem != "" {
-			printWarning(configurationProblem)
-		}
-		if serviceErr != nil {
-			printWarning(serviceErr.Error())
-		} else {
-			for _, warning := range setup.Integration.Warnings {
-				printWarning(warning)
-			}
-		}
-		fmt.Println()
-	}
-	if !ready {
-		return fmt.Errorf("OpenClaw is not ready; run offgrid openclaw install")
-	}
-	return nil
-}
+func handleOpenClawStatus(args []string) error { return managedAlias("status", "openclaw", args) }
 
-func handleOpenClawTest(args []string) error {
-	options, err := parseOpenClawOptions(args)
-	if err != nil {
-		return err
-	}
-	home, _ := os.UserHomeDir()
-	executable, err := findOpenClawExecutable(home)
-	if err != nil {
-		return fmt.Errorf("OpenClaw is not installed; run offgrid openclaw install")
-	}
-	if options.ModelID == "" {
-		options.ModelID, err = preferredOpenClawModel(executable)
-		if err != nil {
-			return err
-		}
-	}
-	setup, err := openClawSetup(options)
-	if err != nil {
-		return err
-	}
-	if !setup.Integration.Ready {
-		return fmt.Errorf("OpenClaw is not ready: %s", strings.Join(setup.Integration.Warnings, "; "))
-	}
-	if _, loaded, err := inspectOpenClawPlugin(executable); err != nil || !loaded {
-		return fmt.Errorf("OffGrid provider is not loaded in OpenClaw; run offgrid openclaw install")
-	}
-	if configured, problem := inspectOpenClawProvider(executable, expectedOpenClawBaseURL(options), setup.Integration.ModelID, setup.Integration.ContextWindow); !configured {
-		return fmt.Errorf("OpenClaw is not configured for this OffGrid model: %s; run offgrid openclaw install", problem)
-	}
-	// This checks the provider transport without loading OpenClaw's full agent
-	// prompt, tool inventory, and workspace. A small local model can answer a
-	// model.run probe even when it is too slow for a full agent task.
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-	defer cancel()
-	command, err := openClawCommand(executable, []string{
-		"infer", "model", "run", "--local",
-		"--model", "offgrid/" + setup.Integration.ModelID,
-		"--prompt", "Reply briefly to confirm the model is reachable.",
-		"--thinking", "off", "--json",
-	})
-	if err != nil {
-		return err
-	}
-	command = openClawExecCommandContext(ctx, command.Path, command.Args[1:]...)
-	var stdout bytes.Buffer
-	command.Stdout, command.Stderr = &stdout, os.Stderr
-	runErr := runIntegrationProcess(command)
-	if runErr != nil {
-		if ctx.Err() != nil {
-			return fmt.Errorf("OpenClaw inference timed out after 180 seconds; inspect OffGrid model performance and logs")
-		}
-		return fmt.Errorf("OpenClaw inference failed: %w; inspect the model and OffGrid logs", runErr)
-	}
-	if _, err := parseOpenClawInferResult(stdout.Bytes(), setup.Integration.ModelID); err != nil {
-		return fmt.Errorf("OpenClaw did not return a usable OffGrid model response: %w", err)
-	}
-	printSuccess("OpenClaw reached OffGrid and returned a model response (provider smoke test)")
-	return nil
-}
+func handleOpenClawTest(args []string) error { return managedAlias("test", "openclaw", args) }
 
 func parseOpenClawInferResult(data []byte, expectedModel string) (string, error) {
 	var result struct {
@@ -628,35 +301,4 @@ func parseOpenClawInferResult(data []byte, expectedModel string) (string, error)
 	return "", fmt.Errorf("model returned no text")
 }
 
-func runOpenClawAgent(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: offgrid openclaw run \"your task\"")
-	}
-	options, err := parseOpenClawOptions(args[1:])
-	if err != nil {
-		return err
-	}
-	home, _ := os.UserHomeDir()
-	executable, err := findOpenClawExecutable(home)
-	if err != nil {
-		return fmt.Errorf("OpenClaw is not installed; run offgrid openclaw install")
-	}
-	if options.ModelID == "" {
-		options.ModelID, err = preferredOpenClawModel(executable)
-		if err != nil {
-			return err
-		}
-	}
-	setup, err := openClawSetup(options)
-	if err != nil {
-		return err
-	}
-	if !setup.Integration.Ready {
-		return fmt.Errorf("OffGrid is not ready for OpenClaw: %s", strings.Join(setup.Integration.Warnings, "; "))
-	}
-	if configured, problem := inspectOpenClawProvider(executable, expectedOpenClawBaseURL(options), setup.Integration.ModelID, setup.Integration.ContextWindow); !configured {
-		return fmt.Errorf("OpenClaw is not configured for this OffGrid model: %s; run offgrid openclaw install", problem)
-	}
-	command := []string{"agent", "exec", args[0], "--model", "offgrid/" + setup.Integration.ModelID, "--local-model-lean", "--code-mode", "direct"}
-	return runOpenClawCommand(executable, command, nil, os.Stdout)
-}
+func runOpenClawAgent(args []string) error { return managedAlias("run", "openclaw", args) }

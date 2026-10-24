@@ -1,4 +1,5 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+import { registerVerification } from "./verification";
 import {
   configureOpenAICompatibleSelfHostedProviderNonInteractive,
   discoverOpenAICompatibleSelfHostedProvider,
@@ -50,11 +51,20 @@ export default definePluginEntry({
   name: "OffGrid Provider",
   description: "Private local model inference through OffGrid",
   register(api) {
+    registerVerification(api);
     api.registerProvider({
       id,
       label,
       docsPath: "/providers/offgrid",
       envVars: [apiKeyEnvVar],
+      // Use the runtime's normal parameter composition, not a replacement
+      // stream function. Explicit snake/camel-case values (including null
+      // suppression) win; messages, tools and payload callbacks are untouched.
+      prepareExtraParams: (ctx) => {
+        const params = ctx.extraParams ?? {};
+        if (params.parallel_tool_calls !== undefined || params.parallelToolCalls !== undefined) return params;
+        return { ...params, parallel_tool_calls: false };
+      },
       auth: [{
         id: "custom",
         label,

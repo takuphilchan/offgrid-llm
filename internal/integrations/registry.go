@@ -1,8 +1,8 @@
 // Package integrations defines first-class adapters for external agent runtimes.
 //
-// An adapter owns only the external system's configuration contract. Runtime
-// health and model probes remain in the server package so adapters stay small,
-// deterministic, and easy to extend.
+// Render adapters own portable setup contracts; host adapters contain only
+// runtime-specific operations. Manager owns their shared lifecycle. Service
+// assessments never imply that a user's external host or tools were tested.
 package integrations
 
 import (
@@ -27,6 +27,7 @@ type Profile struct {
 	RecommendedContext int      `json:"recommended_context"`
 	RequiresTools      bool     `json:"requires_tools"`
 	Capabilities       []string `json:"capabilities"`
+	ContractRevision   string   `json:"contract_revision,omitempty"`
 }
 
 // Options are the runtime-specific values used to render setup instructions.
@@ -116,6 +117,7 @@ type hermesAdapter struct{}
 func (hermesAdapter) Profile() Profile {
 	return Profile{
 		ID:                 "hermes",
+		ContractRevision:   "hermes-provider-profile-v1",
 		ProviderID:         "offgrid",
 		PluginID:           "offgrid",
 		Name:               "Hermes Agent",
@@ -169,6 +171,7 @@ type openClawAdapter struct{}
 func (openClawAdapter) Profile() Profile {
 	return Profile{
 		ID:                 "openclaw",
+		ContractRevision:   "openclaw-provider-sdk-2026-10",
 		ProviderID:         "offgrid",
 		PluginID:           "offgrid",
 		Name:               "OpenClaw",
@@ -197,10 +200,9 @@ func (openClawAdapter) Render(options Options) (Setup, error) {
 			"mode": "merge",
 			"providers": map[string]any{
 				"offgrid": map[string]any{
-					"baseUrl":        baseURL,
-					"apiKey":         "offgrid-local",
-					"api":            "openai-completions",
-					"timeoutSeconds": 300,
+					"baseUrl": baseURL,
+					"apiKey":  "offgrid-local",
+					"api":     "openai-completions",
 					"models": []map[string]any{{
 						"id":            options.ModelID,
 						"name":          options.ModelID + " via OffGrid",
@@ -232,6 +234,7 @@ func (openClawAdapter) Render(options Options) (Setup, error) {
 		Notes: []string{
 			"The managed command installs OpenClaw when needed and configures a native provider named offgrid.",
 			"The provider uses OffGrid's OpenAI-compatible /v1 transport and discovers chat models only.",
+			"Provider timeouts are not overridden; OpenClaw's finite agent deadline and OffGrid's request deadline still apply.",
 			"Run a real tool task before making a small local model your default.",
 		},
 	}, nil

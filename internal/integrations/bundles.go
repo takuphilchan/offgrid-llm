@@ -66,7 +66,7 @@ func readManagedManifest(path string) (managedManifest, error) {
 	return manifest, nil
 }
 
-//go:embed plugins/hermes/offgrid/* plugins/openclaw/offgrid/*
+//go:embed plugins/hermes/offgrid/* plugins/hermes/offgrid-verifier/__init__.py plugins/hermes/offgrid-verifier/plugin.yaml plugins/hermes/offgrid-verifier/README.md plugins/openclaw/offgrid/*
 var pluginBundles embed.FS
 
 // InstallResult describes files written by InstallPluginBundle. External
@@ -109,28 +109,12 @@ func InstallPluginBundle(integrationID, userHome string, overwrite bool) (Instal
 		return InstallResult{}, fmt.Errorf("user home is required")
 	}
 
-	var source, target string
-	var next []string
-	switch integrationID {
-	case "hermes":
-		source = "plugins/hermes/offgrid"
-		target = HermesPluginPath(userHome)
-		next = []string{
-			"Set OFFGRID_API_KEY=offgrid-local and OFFGRID_BASE_URL=http://127.0.0.1:11611/v1",
-			"Run hermes doctor",
-		}
-	case "openclaw":
-		source = "plugins/openclaw/offgrid"
-		target = filepath.Join(userHome, ".offgrid", "integrations", "openclaw-offgrid")
-		next = []string{
-			fmt.Sprintf("openclaw plugins install --link %q", target),
-			"Set OFFGRID_API_KEY=offgrid-local and OFFGRID_BASE_URL=http://127.0.0.1:11611/v1",
-			"Run openclaw plugins inspect offgrid --runtime --json",
-		}
-	default:
+	bundle, ok := bundledProviders[integrationID]
+	if !ok {
 		return InstallResult{}, fmt.Errorf("unsupported integration %q", integrationID)
 	}
-
+	source, target := bundle.source, bundle.path(userHome)
+	next := bundle.next(target)
 	if info, err := os.Lstat(target); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return InstallResult{}, fmt.Errorf("refusing to install through symbolic link %s", target)
@@ -146,6 +130,9 @@ func InstallPluginBundle(integrationID, userHome string, overwrite bool) (Instal
 	}
 
 	result := InstallResult{Integration: integrationID, PluginID: "offgrid", Path: target, Next: next}
+	if integrationID == "hermes-verifier" {
+		result.PluginID = "offgrid-verifier"
+	}
 	manifestPath := filepath.Join(target, managedManifestName)
 	manifest, err := readManagedManifest(manifestPath)
 	if err != nil {

@@ -85,6 +85,7 @@ func osCLIEnvironment() cli.Environment {
 		NewEngine:   func(cfg audio.Config) (cli.AudioEngine, error) { return audio.NewEngine(cfg) },
 	}
 	env.Integrations = cli.IntegrationDependencies{
+		Managed: managedIntegration,
 		HomeDir: os.UserHomeDir, Install: integrations.InstallPluginBundle,
 		LookPath: exec.LookPath,
 	}

@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -79,5 +80,30 @@ func TestRegistryRejectsDuplicateAdapter(t *testing.T) {
 	}
 	if err := registry.Register(hermesAdapter{}); err == nil {
 		t.Fatal("duplicate adapter was accepted")
+	}
+}
+
+func TestOpenClawSetupDoesNotImposeProviderTimeout(t *testing.T) {
+	adapter, _ := NewDefaultRegistry().Get("openclaw")
+	setup, err := adapter.Render(Options{BaseURL: "http://127.0.0.1:11611", ModelID: "model-a", ContextWindow: 65536, MaxOutputTokens: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var configuration struct {
+		Models struct {
+			Providers map[string]map[string]json.RawMessage `json:"providers"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal([]byte(setup.Content), &configuration); err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := configuration.Models.Providers["offgrid"]
+	if !ok {
+		t.Fatal("missing provider configuration")
+	}
+	for _, field := range []string{"timeoutSeconds", "requestTimeoutMs"} {
+		if _, ok := provider[field]; ok {
+			t.Fatalf("setup must not impose %s: local prefill can exceed a fixed provider deadline", field)
+		}
 	}
 }

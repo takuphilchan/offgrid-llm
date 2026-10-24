@@ -12,6 +12,12 @@ func WriteJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
+	return WriteBytes(path, data)
+}
+
+// WriteBytes atomically publishes private configuration or snapshot data.
+func WriteBytes(path string, data []byte) error {
+	var err error
 	if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}

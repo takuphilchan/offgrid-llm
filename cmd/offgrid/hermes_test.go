@@ -1,8 +1,6 @@
 package main
 
 import (
-	"errors"
-	"io"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -11,48 +9,13 @@ import (
 	"testing"
 )
 
-func TestReadHermesModelConfigUsesSelectedModel(t *testing.T) {
-	original := runIntegrationProcess
-	t.Cleanup(func() { runIntegrationProcess = original })
-	values := map[string]string{
-		"model.provider":       "offgrid\n",
-		"model.default":        "downloaded-model\n",
-		"model.context_length": "65536\n",
-	}
-	runIntegrationProcess = func(command *exec.Cmd) error {
-		if len(command.Args) != 4 || command.Args[1] != "config" || command.Args[2] != "get" {
-			t.Fatalf("unexpected Hermes command: %v", command.Args)
-		}
-		_, _ = io.WriteString(command.Stdout, values[command.Args[3]])
-		return nil
-	}
-	model, contextWindow, err := readHermesModelConfig("hermes")
-	if err != nil || model != "downloaded-model" || contextWindow != 65536 {
-		t.Fatalf("model=%q context=%d error=%v", model, contextWindow, err)
-	}
-	values["model.provider"] = "other\n"
-	if _, _, err := readHermesModelConfig("hermes"); err == nil {
-		t.Fatal("non-OffGrid provider was accepted")
-	}
-	values["model.provider"] = "offgrid\n"
-	values["model.context_length"] = "not-a-number\n"
-	if _, _, err := readHermesModelConfig("hermes"); err == nil {
-		t.Fatal("invalid configured context was accepted")
-	}
-	runIntegrationProcess = func(*exec.Cmd) error { return errors.New("unreadable config") }
-	if _, _, err := readHermesModelConfig("hermes"); err == nil {
-		t.Fatal("unreadable config was accepted")
-	}
-}
-
 func TestHermesConfigurationCommandsPersistProvider(t *testing.T) {
 	setup := cliIntegrationSetupResponse{Integration: cliIntegrationStatus{
 		ModelID:       "tool-model",
 		ContextWindow: 16384,
 	}}
-	commands := hermesConfigurationCommands(setup, "local-token", "http://127.0.0.1:11611/v1")
+	commands := hermesConfigurationCommands(setup, "http://127.0.0.1:11611/v1")
 	want := [][]string{
-		{"config", "set", "OFFGRID_API_KEY", "local-token"},
 		{"config", "set", "OFFGRID_BASE_URL", "http://127.0.0.1:11611/v1", "--force"},
 		{"config", "set", "model.default", "tool-model"},
 		{"config", "set", "model.provider", "offgrid"},
@@ -121,16 +84,6 @@ func TestContainsExactOutputLine(t *testing.T) {
 	}
 	if containsExactOutputLine("Query: Reply with exactly: HERMES_OFFGRID_OK\nfailed\n", "HERMES_OFFGRID_OK") {
 		t.Fatal("prompt echo must not be accepted as a model response")
-	}
-}
-
-func TestHermesReadinessAdviceExplainsActualContext(t *testing.T) {
-	status := cliIntegrationStatus{ContextWindow: 8192, MinimumContext: 64000, ModelID: "small-model"}
-	advice := hermesReadinessAdvice(status)
-	for _, part := range []string{"64000", "8192", "ceiling alone may not help", "RAM/VRAM", "actually allocates"} {
-		if !strings.Contains(advice, part) {
-			t.Errorf("readiness advice %q missing %q", advice, part)
-		}
 	}
 }
 

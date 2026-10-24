@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/integrations"
 	"github.com/takuphilchan/offgrid-llm/internal/output"
 )
@@ -30,39 +30,6 @@ var (
 	hermesRuntimeOS   = runtime.GOOS
 	hermesRuntimeArch = runtime.GOARCH
 )
-
-type hermesInstallOptions struct {
-	ServerURL   string
-	BaseURL     string
-	ModelID     string
-	APIKey      string
-	Force       bool
-	Yes         bool
-	WithBrowser bool
-	RunDoctor   bool
-}
-
-type hermesInstallResult struct {
-	Installed     bool     `json:"installed"`
-	Executable    string   `json:"executable"`
-	PluginPath    string   `json:"plugin_path"`
-	Provider      string   `json:"provider"`
-	ModelID       string   `json:"model_id"`
-	BaseURL       string   `json:"base_url"`
-	DoctorChecked bool     `json:"doctor_checked"`
-	DoctorOK      bool     `json:"doctor_ok"`
-	Warnings      []string `json:"warnings,omitempty"`
-}
-
-type hermesStatusResult struct {
-	Installed  bool                  `json:"installed"`
-	Executable string                `json:"executable,omitempty"`
-	Plugin     bool                  `json:"plugin"`
-	PluginPath string                `json:"plugin_path"`
-	Service    bool                  `json:"service"`
-	Runtime    *cliIntegrationStatus `json:"runtime,omitempty"`
-	Error      string                `json:"error,omitempty"`
-}
 
 func handleHermes(args []string) error {
 	if len(args) == 0 {
@@ -119,255 +86,13 @@ func printHermesHelp() {
 	fmt.Printf("    %-24s %sAlso run full Hermes diagnostics (may check remote services)%s\n\n", "--doctor", colorDim, colorReset)
 }
 
-func handleHermesInstall(args []string) error {
-	options, err := parseHermesInstallOptions(args)
-	if err != nil {
-		return err
-	}
-	publicURL := options.BaseURL
-	if publicURL == "" {
-		publicURL = options.ServerURL
-	}
-	setup, err := fetchIntegrationSetup(options.ServerURL, "hermes", options.ModelID, publicURL)
-	if err != nil {
-		return fmt.Errorf("cannot reach a compatible OffGrid service: %w; start OffGrid, then retry offgrid hermes install", err)
-	}
-	if !setup.Integration.Ready {
-		for _, warning := range setup.Integration.Warnings {
-			printWarning(warning)
-		}
-		return fmt.Errorf("OffGrid is reachable, but Hermes is not ready; %s", hermesReadinessAdvice(setup.Integration))
-	}
+func handleHermesInstall(args []string) error { return managedAlias("configure", "hermes", args) }
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("cannot resolve user home: %w", err)
-	}
-	executable, findErr := findHermesExecutable(home)
-	if findErr != nil {
-		accepted, confirmErr := confirmHermesInstall(options.Yes)
-		if confirmErr != nil {
-			return confirmErr
-		}
-		if !accepted {
-			printInfo("Installation cancelled; no external software was changed")
-			return nil
-		}
-		hermesProgress("Installing Hermes Agent with its official installer")
-		if err := installHermesRuntime(); err != nil {
-			return fmt.Errorf("Hermes installation failed: %w", err)
-		}
-		executable, err = findHermesExecutable(home)
-		if err != nil {
-			return fmt.Errorf("Hermes installed, but its command could not be located; open a new terminal and run offgrid hermes install again")
-		}
-	} else {
-		hermesProgress("Hermes Agent is already installed")
-	}
+func handleHermesStatus(args []string) error { return managedAlias("status", "hermes", args) }
 
-	hermesProgress("Installing the native OffGrid provider")
-	plugin, err := integrations.InstallPluginBundle("hermes", home, options.Force)
-	if err != nil {
-		return err
-	}
+func handleHermesTest(args []string) error { return managedAlias("test", "hermes", args) }
 
-	baseURL := setup.Setup.Environment["OFFGRID_BASE_URL"]
-	if baseURL == "" {
-		baseURL = strings.TrimRight(publicURL, "/") + "/v1"
-	}
-	apiKey := options.APIKey
-	if apiKey == "" {
-		apiKey = setup.Setup.Environment["OFFGRID_API_KEY"]
-	}
-	if apiKey == "" {
-		apiKey = "offgrid-local"
-	}
-	environment := mergedEnvironment(os.Environ(), map[string]string{
-		"OFFGRID_API_KEY":  apiKey,
-		"OFFGRID_BASE_URL": baseURL,
-	})
-
-	hermesProgress("Saving the OffGrid provider and model in Hermes")
-	for _, command := range hermesConfigurationCommands(setup, apiKey, baseURL) {
-		if err := runHermesProcess(executable, command, environment, output.JSONMode); err != nil {
-			return fmt.Errorf("cannot configure Hermes setting %s: %w", command[2], err)
-		}
-	}
-
-	runtimeWarnings := append([]string(nil), setup.Integration.Warnings...)
-	if options.WithBrowser {
-		hermesProgress("Installing optional browser and computer-use dependencies")
-		if err := installHermesOptionalTools(); err != nil {
-			warning := "Hermes core is configured; optional browser tools failed; retry with offgrid hermes install --with-browser"
-			runtimeWarnings = append(runtimeWarnings, warning)
-			printWarning(fmt.Sprintf("%s (%v)", warning, err))
-		}
-	}
-
-	doctorOK := false
-	if options.RunDoctor {
-		hermesProgress("Checking the Hermes provider connection")
-		if err := runHermesProcess(executable, []string{"doctor"}, environment, output.JSONMode); err != nil {
-			printWarning(fmt.Sprintf("Hermes is configured, but doctor reported a problem: %v", err))
-		} else {
-			doctorOK = true
-		}
-	}
-
-	result := hermesInstallResult{
-		Installed:     true,
-		Executable:    executable,
-		PluginPath:    plugin.Path,
-		Provider:      "offgrid",
-		ModelID:       setup.Integration.ModelID,
-		BaseURL:       baseURL,
-		DoctorChecked: options.RunDoctor,
-		DoctorOK:      doctorOK,
-		Warnings:      runtimeWarnings,
-	}
-	if output.JSONMode {
-		outputJSON(result)
-		return nil
-	}
-	printSuccess("Hermes Agent is configured to use OffGrid (core runtime)")
-	fmt.Printf("  %sModel%s     %s\n", brandMuted, colorReset, result.ModelID)
-	fmt.Printf("  %sEndpoint%s  %s\n", brandMuted, colorReset, result.BaseURL)
-	fmt.Printf("  %sVerify%s    offgrid hermes test\n", brandMuted, colorReset)
-	fmt.Printf("  %sStart%s     offgrid hermes\n", brandMuted, colorReset)
-	if !options.WithBrowser {
-		fmt.Printf("  %sOptional%s  offgrid hermes install --with-browser (browser/computer use)\n", brandMuted, colorReset)
-	}
-	fmt.Println()
-	return nil
-}
-
-func handleHermesStatus(args []string) error {
-	serverURL, requestedModel, _, err := integrationFlags(args)
-	if err != nil {
-		return err
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("cannot resolve user home: %w", err)
-	}
-	result := hermesStatusResult{PluginPath: integrations.HermesPluginPath(home)}
-	if executable, findErr := findHermesExecutable(home); findErr == nil {
-		result.Installed = true
-		result.Executable = executable
-	}
-	if info, statErr := os.Stat(filepath.Join(result.PluginPath, "__init__.py")); statErr == nil && !info.IsDir() {
-		result.Plugin = true
-	}
-	configuredModel, configuredContext := "", 0
-	if result.Installed {
-		var configErr error
-		configuredModel, configuredContext, configErr = readHermesModelConfig(result.Executable)
-		if configErr != nil {
-			result.Error = configErr.Error()
-		}
-	}
-	selected := configuredModel
-	if requestedModel != "" {
-		selected = requestedModel
-	}
-	setup, serviceErr := fetchIntegrationSetup(serverURL, "hermes", selected, serverURL)
-	if serviceErr != nil {
-		if result.Error == "" {
-			result.Error = serviceErr.Error()
-		}
-	} else {
-		result.Service = true
-		result.Runtime = &setup.Integration
-		if result.Installed && requestedModel != "" && requestedModel != configuredModel {
-			result.Runtime.Ready = false
-			result.Runtime.Warnings = append(result.Runtime.Warnings, "Hermes is configured for a different model; run offgrid hermes install --model "+requestedModel+" to select it")
-		}
-		if result.Installed && configuredContext > 0 && configuredContext != result.Runtime.ContextWindow {
-			result.Runtime.Ready = false
-			result.Runtime.Warnings = append(result.Runtime.Warnings, fmt.Sprintf("Hermes records %d context tokens, but OffGrid currently allocates %d for this model; reconfigure Hermes only after the model is ready", configuredContext, result.Runtime.ContextWindow))
-		}
-	}
-	if outputJSON(result) {
-		if result.Installed && result.Plugin && result.Service && result.Runtime != nil && result.Runtime.Ready && result.Error == "" {
-			return nil
-		}
-		return fmt.Errorf("Hermes is not ready; %s", hermesStatusAdvice(result))
-	}
-	fmt.Println()
-	fmt.Printf("  %sHermes Agent readiness%s\n\n", brandPrimary+colorBold, colorReset)
-	printHermesStatusLine("Hermes runtime", result.Installed, result.Executable)
-	printHermesStatusLine("OffGrid provider", result.Plugin, result.PluginPath)
-	printHermesStatusLine("OffGrid service", result.Service, serverURL)
-	if result.Runtime != nil {
-		printHermesStatusLine("Model/context", result.Runtime.Ready, emptyFallback(result.Runtime.ModelID, "no model"))
-		for _, warning := range result.Runtime.Warnings {
-			printWarning(warning)
-		}
-	}
-	if result.Error != "" {
-		printWarning(result.Error)
-	}
-	if result.Installed && result.Plugin && result.Service && result.Runtime != nil && result.Runtime.Ready && result.Error == "" {
-		fmt.Printf("\n  %sPreflight ready.%s Verify a model reply: offgrid hermes test\n\n", brandSuccess+colorBold, colorReset)
-		return nil
-	} else {
-		fmt.Printf("\n  %sNext:%s %s\n\n", brandAccent, colorReset, hermesStatusAdvice(result))
-		return fmt.Errorf("Hermes is not ready")
-	}
-}
-
-func handleHermesTest(args []string) error {
-	serverURL, modelID, publicURL, err := integrationFlags(args)
-	if err != nil {
-		return err
-	}
-	if publicURL == "" {
-		publicURL = serverURL
-	}
-	home, _ := os.UserHomeDir()
-	executable, err := findHermesExecutable(home)
-	if err != nil {
-		return fmt.Errorf("Hermes is not installed; run offgrid hermes install")
-	}
-	configuredContext := 0
-	if modelID == "" {
-		modelID, configuredContext, err = readHermesModelConfig(executable)
-		if err != nil {
-			return err
-		}
-	}
-	setup, err := fetchIntegrationSetup(serverURL, "hermes", modelID, publicURL)
-	if err != nil {
-		return fmt.Errorf("cannot inspect OffGrid: %w", err)
-	}
-	if !setup.Integration.Ready {
-		return fmt.Errorf("Hermes cannot be tested yet; %s", hermesReadinessAdvice(setup.Integration))
-	}
-	if configuredContext > 0 && configuredContext != setup.Integration.ContextWindow {
-		return fmt.Errorf("Hermes records %d context tokens but OffGrid allocates %d for %s; rerun offgrid hermes install --model %s after verifying the model", configuredContext, setup.Integration.ContextWindow, modelID, modelID)
-	}
-	baseURL := setup.Setup.Environment["OFFGRID_BASE_URL"]
-	apiKey := setup.Setup.Environment["OFFGRID_API_KEY"]
-	environment := mergedEnvironment(os.Environ(), map[string]string{
-		"OFFGRID_API_KEY":  apiKey,
-		"OFFGRID_BASE_URL": baseURL,
-	})
-	const expected = "HERMES_OFFGRID_OK"
-	if err := runHermesSmokeTest(executable, []string{
-		"chat", "--oneshot", "--provider", "offgrid", "--model", setup.Integration.ModelID,
-		"-q", "Reply with exactly: " + expected,
-	}, environment, expected); err != nil {
-		return fmt.Errorf("Hermes smoke test failed: %w", err)
-	}
-	printSuccess(fmt.Sprintf("Hermes reached OffGrid at %s", baseURL))
-	return nil
-}
-
-func runHermesChat(args []string) error {
-	chatArgs := []string{"chat", "--provider", "offgrid"}
-	chatArgs = append(chatArgs, args...)
-	return runHermesRaw(chatArgs)
-}
+func runHermesChat(args []string) error { return managedAlias("run", "hermes", args) }
 
 func runHermesRaw(args []string) error {
 	home, _ := os.UserHomeDir()
@@ -379,56 +104,6 @@ func runHermesRaw(args []string) error {
 		return fmt.Errorf("Hermes exited with an error: %w", err)
 	}
 	return nil
-}
-
-func parseHermesInstallOptions(args []string) (hermesInstallOptions, error) {
-	cfg, err := config.LoadWithPriority(os.Getenv("OFFGRID_CONFIG"))
-	if err != nil {
-		return hermesInstallOptions{}, err
-	}
-	options := hermesInstallOptions{
-		ServerURL: fmt.Sprintf("http://127.0.0.1:%d", cfg.ServerPort),
-		APIKey:    strings.TrimSpace(os.Getenv("OFFGRID_API_KEY")),
-	}
-	for index := 0; index < len(args); index++ {
-		switch args[index] {
-		case "--server", "--base-url", "--model", "--api-key":
-			name := args[index]
-			index++
-			if index >= len(args) {
-				return hermesInstallOptions{}, fmt.Errorf("%s requires a value", name)
-			}
-			value := strings.TrimSpace(args[index])
-			if value == "" {
-				return hermesInstallOptions{}, fmt.Errorf("%s cannot be empty", name)
-			}
-			switch name {
-			case "--server":
-				options.ServerURL = strings.TrimRight(value, "/")
-			case "--base-url":
-				options.BaseURL = strings.TrimRight(value, "/")
-			case "--model":
-				options.ModelID = value
-			case "--api-key":
-				options.APIKey = value
-			}
-		case "--force":
-			options.Force = true
-		case "--yes", "-y":
-			options.Yes = true
-		case "--with-browser":
-			options.WithBrowser = true
-		case "--skip-browser":
-			options.WithBrowser = false
-		case "--doctor":
-			options.RunDoctor = true
-		case "--skip-doctor":
-			options.RunDoctor = false
-		default:
-			return hermesInstallOptions{}, fmt.Errorf("unknown option: %s", args[index])
-		}
-	}
-	return options, nil
 }
 
 func findHermesExecutable(userHome string) (string, error) {
@@ -485,11 +160,11 @@ func hermesInstallerURL() string {
 	return hermesUnixInstallerURL
 }
 
-func installHermesRuntime() error {
+func installHermesRuntime(ctx context.Context) error {
 	if err := validateHermesPlatform(hermesRuntimeOS, hermesRuntimeArch); err != nil {
 		return err
 	}
-	installer, cleanup, err := downloadHermesInstaller(hermesInstallerURL())
+	installer, cleanup, err := downloadHermesInstaller(ctx, hermesInstallerURL())
 	if err != nil {
 		return err
 	}
@@ -502,7 +177,7 @@ func installHermesRuntime() error {
 	// the required stages provision their own prerequisites on demand.
 	for _, stage := range hermesCoreStages(hermesRuntimeOS) {
 		hermesProgress("Hermes setup: " + stage)
-		if err := runHermesStage(installer, stage); err != nil {
+		if err := runHermesStage(ctx, installer, stage); err != nil {
 			return fmt.Errorf("official installer stage %s: %w", stage, err)
 		}
 	}
@@ -516,25 +191,25 @@ func hermesCoreStages(goos string) []string {
 	return []string{"repository", "venv", "python-deps", "path", "config", "complete"}
 }
 
-func installHermesOptionalTools() error {
-	installer, cleanup, err := downloadHermesInstaller(hermesInstallerURL())
+func installHermesOptionalTools(ctx context.Context) error {
+	installer, cleanup, err := downloadHermesInstaller(ctx, hermesInstallerURL())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 	if hermesRuntimeOS == "windows" {
-		if err := runHermesStage(installer, "node"); err != nil {
+		if err := runHermesStage(ctx, installer, "node"); err != nil {
 			return fmt.Errorf("official installer optional node stage: %w", err)
 		}
 	}
-	if err := runHermesStage(installer, "node-deps"); err != nil {
+	if err := runHermesStage(ctx, installer, "node-deps"); err != nil {
 		return fmt.Errorf("official installer optional node-deps stage: %w", err)
 	}
 	return nil
 }
 
-func runHermesStage(installer, stage string) error {
-	return runHermesInstallerFile(installer, hermesStageArgs(hermesRuntimeOS, stage)...)
+func runHermesStage(ctx context.Context, installer, stage string) error {
+	return runHermesInstallerContext(ctx, installer, hermesStageArgs(hermesRuntimeOS, stage)...)
 }
 
 func hermesStageArgs(goos, stage string) []string {
@@ -553,6 +228,10 @@ func hermesStageArgs(goos, stage string) []string {
 }
 
 func runHermesInstallerFile(installer string, args ...string) error {
+	return runHermesInstallerContext(context.Background(), installer, args...)
+}
+
+func runHermesInstallerContext(ctx context.Context, installer string, args ...string) error {
 	if err := validateIntegrationArgs("Hermes installer", append([]string{installer}, args...)); err != nil {
 		return err
 	}
@@ -577,7 +256,7 @@ func runHermesInstallerFile(installer string, args ...string) error {
 	command.Stdin = os.Stdin
 	command.Stdout = commandOutput()
 	command.Stderr = os.Stderr
-	if err := runIntegrationProcess(command); err != nil {
+	if err := runIntegrationProcess(bindIntegrationContext(ctx, command)); err != nil {
 		return err
 	}
 	return nil
@@ -608,12 +287,16 @@ func validateHermesPlatform(goos, goarch string) error {
 	return fmt.Errorf("Hermes Agent does not support automatic installation on %s/%s", goos, goarch)
 }
 
-func downloadHermesInstaller(installerURL string) (string, func(), error) {
+func downloadHermesInstaller(ctx context.Context, installerURL string) (string, func(), error) {
 	parsed, err := url.Parse(installerURL)
 	if err != nil || parsed.Scheme != "https" {
 		return "", nil, fmt.Errorf("Hermes installer URL must use HTTPS")
 	}
-	response, err := httpClient.Get(installerURL)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, installerURL, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	response, err := httpClient.Do(request)
 	if err != nil {
 		return "", nil, fmt.Errorf("download official installer: %w", err)
 	}
@@ -781,16 +464,6 @@ func hermesProgress(message string) {
 		return
 	}
 	printInfo(message)
-}
-
-func printHermesStatusLine(label string, ready bool, detail string) {
-	color := brandError
-	state := "blocked"
-	if ready {
-		color = brandSuccess
-		state = "ready"
-	}
-	fmt.Printf("  %-18s %s%-8s%s %s\n", label, color, state, colorReset, detail)
 }
 
 func containsHelp(args []string) bool {

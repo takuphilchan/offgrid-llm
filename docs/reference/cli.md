@@ -7,6 +7,44 @@ Examples assume the executable is on `PATH`. In PowerShell, use
 
 ## Service connection
 
+### External agent lifecycle
+
+```bash
+offgrid integrations list
+offgrid integrations configure hermes --model <installed-model-id>
+offgrid integrations configure openclaw --model <installed-model-id> --dry-run
+offgrid integrations status openclaw --json
+offgrid integrations test openclaw
+offgrid integrations run openclaw "your task" --model <installed-model-id>
+offgrid integrations run openclaw "your task" --verify-contract <file.json>
+```
+
+IDs come from the service registry. The `hermes` and `openclaw` command aliases
+share the same manager. `configure` persists a selection after verification;
+per-run/test/status `--model` does not change it. Common flags are `--server`,
+`--base-url`, `--api-key`, and `--model` (also `-m`); prefer `OFFGRID_API_KEY` over
+putting a secret in your shell history. Options may precede or follow the task.
+Hermes-specific arguments follow `--` when necessary, but cannot override the
+managed provider/model after preflight. OpenClaw accepts one quoted task and an
+optional following `--timeout <seconds>` (1–86400). This is a per-run deadline,
+not a persistent context/model setting; without it the upstream default remains.
+Individual streamed inference requests retain the service's 15-minute limit.
+
+Experimental `--verify-contract` accepts strict JSON for `exact_copy` or
+`no_changes` in one bounded local workspace. It requires one quoted task without
+additional runtime arguments, matching reviewed hook revisions and explicit hook
+enablement/permissions. Failed or incomplete verification exits nonzero even if
+the external agent exits zero. No defaults, plugin permissions or model choices
+are changed. See [file contract setup and limits](../guides/external-agents.md#experimental-explicit-file-contracts).
+Contracted OpenClaw uses `agent --local` with a fresh private session/config
+overlay so supported lifecycle hooks run; ordinary launches remain `agent exec`.
+
+`integrations install <id>` remains bundle-only; `setup <id>` renders manual
+configuration. Managed `configure` supports `--dry-run`, explicit `--yes`, and
+`--force` for replacing a modified bundle. Status is read-only and does not
+replay work. A ready preflight is not a model/tool qualification. See
+[readiness and recovery](../guides/external-agents.md#one-managed-lifecycle).
+
 ### Reusable agents and saved conversations
 
 `offgrid agent profiles list|show|effective|resources` reads the connected

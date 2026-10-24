@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
@@ -14,14 +14,14 @@ import (
 // OffGrid model array first so a newly selected model cannot remove a model
 // that was already configured. A concurrent addition is still protected by
 // OpenClaw's own config-patch clobber check.
-func readOpenClawModels(executable string) ([]json.RawMessage, error) {
+func readOpenClawModels(ctx context.Context, executable string) ([]json.RawMessage, error) {
 	command, err := openClawCommand(executable, []string{"config", "get", "models.providers.offgrid.models", "--json"})
 	if err != nil {
 		return nil, err
 	}
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
-	if err := runIntegrationProcess(command); err != nil {
+	if err := runIntegrationProcess(bindIntegrationContext(ctx, command)); err != nil {
 		// A fresh installation has no OffGrid provider. Only this exact unset
 		// path is an empty array; auth, parse, and CLI failures must stop.
 		if strings.Contains(stdout.String()+stderr.String(), "Config path is valid but unset: models.providers.offgrid.models") {
@@ -40,55 +40,6 @@ func readOpenClawModels(executable string) ([]json.RawMessage, error) {
 		return nil, fmt.Errorf("OpenClaw returned no model array")
 	}
 	return models, nil
-}
-
-func preferredOpenClawModel(executable string) (string, error) {
-	models, err := readOpenClawModels(executable)
-	if err != nil {
-		return "", err
-	}
-	primary, err := readOpenClawPrimary(executable)
-	if err != nil {
-		return "", err
-	}
-	selected := strings.TrimPrefix(primary, "offgrid/")
-	if selected == primary {
-		selected = ""
-	}
-	for _, entry := range models {
-		var model struct {
-			ID string `json:"id"`
-		}
-		if err := json.Unmarshal(entry, &model); err != nil || strings.TrimSpace(model.ID) == "" {
-			return "", fmt.Errorf("OpenClaw has an invalid OffGrid model entry")
-		}
-		if selected == "" {
-			selected = model.ID
-		}
-		if model.ID == selected {
-			return selected, nil
-		}
-	}
-	if selected != "" {
-		return "", fmt.Errorf("OpenClaw's selected OffGrid model %q is missing from its provider catalog; rerun offgrid openclaw install --model %s", selected, selected)
-	}
-	return "", nil
-}
-
-func readOpenClawPrimary(executable string) (string, error) {
-	command, err := openClawCommand(executable, []string{"config", "get", "agents.defaults.model.primary"})
-	if err != nil {
-		return "", err
-	}
-	var stdout, stderr bytes.Buffer
-	command.Stdout, command.Stderr = &stdout, &stderr
-	if err := runIntegrationProcess(command); err != nil {
-		if strings.Contains(stdout.String()+stderr.String(), "Config path is valid but unset: agents.defaults.model.primary") {
-			return "", nil
-		}
-		return "", fmt.Errorf("read OpenClaw primary model: %w", err)
-	}
-	return strings.TrimSpace(stdout.String()), nil
 }
 
 func mergeOpenClawModels(provider map[string]any, existing []json.RawMessage, catalog []api.Model) error {
@@ -116,7 +67,7 @@ func mergeOpenClawModels(provider map[string]any, existing []json.RawMessage, ca
 			contexts[available.ID] = available.ContextWindow
 		}
 	}
-	if contexts[modelID] != int(model["contextWindow"].(float64)) {
+	if contexts[modelID] < int(model["contextWindow"].(float64)) {
 		return fmt.Errorf("selected model context changed during setup; retry without replacing existing config")
 	}
 	seen := make(map[string]bool, len(existing))
@@ -131,14 +82,14 @@ func mergeOpenClawModels(provider map[string]any, existing []json.RawMessage, ca
 			return fmt.Errorf("existing OffGrid model %q is duplicated", saved.ID)
 		}
 		seen[saved.ID] = true
-		if currentContext, installed := contexts[saved.ID]; installed {
-			// Refresh saved OffGrid contexts from live discovery, retaining
-			// unknown fields and unavailable historical model entries.
+		if saved.ID == modelID {
+			// Only update the explicitly selected model. Other models' authored
+			// context limits and custom fields belong to the user.
 			var configured map[string]json.RawMessage
 			if err := json.Unmarshal(entry, &configured); err != nil {
 				return fmt.Errorf("existing OffGrid model %q is invalid: %w", saved.ID, err)
 			}
-			contextValue, err := json.Marshal(currentContext)
+			contextValue, err := json.Marshal(model["contextWindow"])
 			if err != nil {
 				return err
 			}
@@ -149,15 +100,6 @@ func mergeOpenClawModels(provider map[string]any, existing []json.RawMessage, ca
 					return err
 				}
 				configured["maxTokens"] = maxOutput
-			} else {
-				var maxOutput int
-				if err := json.Unmarshal(configured["maxTokens"], &maxOutput); err == nil && maxOutput >= currentContext {
-					bounded, err := json.Marshal(currentContext - 1)
-					if err != nil {
-						return err
-					}
-					configured["maxTokens"] = bounded
-				}
 			}
 			updated, err := json.Marshal(configured)
 			if err != nil {
@@ -193,46 +135,4 @@ func mergeOpenClawModels(provider map[string]any, existing []json.RawMessage, ca
 	}
 	provider["models"] = append([]json.RawMessage{selected}, ordered...)
 	return nil
-}
-
-func inspectOpenClawProvider(executable, expectedBaseURL, expectedModelID string, expectedContext int) (bool, string) {
-	command, err := openClawCommand(executable, []string{"config", "get", "models.providers.offgrid", "--json"})
-	if err != nil {
-		return false, err.Error()
-	}
-	var stdout bytes.Buffer
-	command.Stdout, command.Stderr = &stdout, io.Discard
-	if err := runIntegrationProcess(command); err != nil {
-		return false, "OffGrid provider is not configured in OpenClaw"
-	}
-	var provider struct {
-		BaseURL string `json:"baseUrl"`
-		Models  []struct {
-			ID            string `json:"id"`
-			ContextWindow int    `json:"contextWindow"`
-		} `json:"models"`
-	}
-	if err := json.Unmarshal(stdout.Bytes(), &provider); err != nil {
-		return false, "OpenClaw returned an invalid OffGrid provider configuration"
-	}
-	if strings.TrimRight(provider.BaseURL, "/") != strings.TrimRight(expectedBaseURL, "/") {
-		return false, fmt.Sprintf("OpenClaw points at %s, expected %s", provider.BaseURL, expectedBaseURL)
-	}
-	for _, model := range provider.Models {
-		if model.ID == expectedModelID {
-			if model.ContextWindow != expectedContext {
-				return false, fmt.Sprintf("model %s records %d context tokens in OpenClaw, but OffGrid currently allocates %d; rerun offgrid openclaw install --model %s", expectedModelID, model.ContextWindow, expectedContext, expectedModelID)
-			}
-			return true, ""
-		}
-	}
-	return false, fmt.Sprintf("model %s is not configured in OpenClaw", expectedModelID)
-}
-
-func expectedOpenClawBaseURL(options openClawOptions) string {
-	baseURL := options.BaseURL
-	if baseURL == "" {
-		baseURL = options.ServerURL
-	}
-	return strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1") + "/v1"
 }

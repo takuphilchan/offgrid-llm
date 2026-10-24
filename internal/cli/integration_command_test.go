@@ -77,7 +77,25 @@ func TestIntegrationUsesInjectedServiceAndInstallBoundary(t *testing.T) {
 	// Validation fails before the installer is asked to touch user files.
 	out.Reset()
 	errOut.Reset()
-	if code := Execute(context.Background(), []string{"integration", "install", "hermes", "--unknown"}, env); code != 0 || installed != 1 || !strings.Contains(errOut.String(), "Unknown option") {
+	if code := Execute(context.Background(), []string{"integration", "install", "hermes", "--unknown"}, env); code == 0 || installed != 1 || !strings.Contains(errOut.String(), "unknown option") {
 		t.Fatalf("invalid install: code=%d installs=%d stderr=%q", code, installed, errOut.String())
+	}
+}
+
+func TestManagedIntegrationRoutesRegistryIDsWithoutSpecialCases(t *testing.T) {
+	var out, errOut bytes.Buffer
+	env := testEnvironment(&out, &errOut, &fakeRunner{})
+	for _, action := range []string{"configure", "status", "test", "run"} {
+		called := false
+		env.Integrations.Managed = func(_ context.Context, operation, id string, args []string) error {
+			called = true
+			if operation != action || id != "fixture-third" || strings.Join(args, " ") != "--model downloaded" {
+				t.Fatalf("unexpected managed request: %s %s %v", operation, id, args)
+			}
+			return nil
+		}
+		if code := Execute(context.Background(), []string{"integrations", action, "fixture-third", "--model", "downloaded"}, env); code != 0 || !called {
+			t.Fatalf("action=%s code=%d called=%v", action, code, called)
+		}
 	}
 }

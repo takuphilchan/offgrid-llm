@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,7 +22,7 @@ func TestMergeOpenClawModelsPreservesExistingEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	models, ok := provider["models"].([]json.RawMessage)
-	if !ok || len(models) != 2 || !strings.Contains(string(models[1]), `"custom":{"keep":true}`) || !strings.Contains(string(models[1]), `"contextWindow":32768`) {
+	if !ok || len(models) != 2 || string(models[1]) != string(qwen) {
 		t.Fatalf("existing model was not preserved: %#v", provider["models"])
 	}
 	var added struct {
@@ -94,65 +95,11 @@ func TestReadOpenClawModelsDistinguishesUnsetFromFailure(t *testing.T) {
 				_, _ = io.WriteString(command.Stdout, test.stdout)
 				return test.runError
 			}
-			models, err := readOpenClawModels("openclaw")
+			models, err := readOpenClawModels(context.Background(), "openclaw")
 			if (err != nil) != test.wantError || len(models) != test.wantCount {
 				t.Fatalf("models = %s, error = %v", models, err)
 			}
-			if test.name == "configured" {
-				if selected, err := preferredOpenClawModel("openclaw"); err != nil || selected != "qwen" {
-					t.Fatalf("configured model = %q, error = %v", selected, err)
-				}
-			}
 		})
-	}
-}
-
-func TestPreferredOpenClawModelUsesConfiguredPrimary(t *testing.T) {
-	original := runIntegrationProcess
-	t.Cleanup(func() { runIntegrationProcess = original })
-	runIntegrationProcess = func(command *exec.Cmd) error {
-		switch command.Args[3] {
-		case "models.providers.offgrid.models":
-			_, _ = io.WriteString(command.Stdout, `[{"id":"qwen"},{"id":"llama"}]`)
-		case "agents.defaults.model.primary":
-			_, _ = io.WriteString(command.Stdout, "offgrid/llama\n")
-		default:
-			t.Fatalf("unexpected OpenClaw command: %v", command.Args)
-		}
-		return nil
-	}
-	if selected, err := preferredOpenClawModel("openclaw"); err != nil || selected != "llama" {
-		t.Fatalf("selected model = %q, error = %v", selected, err)
-	}
-}
-
-func TestInspectOpenClawProviderRejectsStaleContext(t *testing.T) {
-	original := runIntegrationProcess
-	t.Cleanup(func() { runIntegrationProcess = original })
-	runIntegrationProcess = func(command *exec.Cmd) error {
-		_, _ = io.WriteString(command.Stdout, `{"baseUrl":"http://127.0.0.1:11611/v1","models":[{"id":"qwen","contextWindow":8192}]}`)
-		return nil
-	}
-	if ready, problem := inspectOpenClawProvider("openclaw", "http://127.0.0.1:11611/v1", "qwen", 32768); ready || !strings.Contains(problem, "8192") {
-		t.Fatalf("stale model context was accepted: ready=%t problem=%q", ready, problem)
-	}
-	if ready, problem := inspectOpenClawProvider("openclaw", "http://127.0.0.1:11611/v1", "qwen", 8192); !ready || problem != "" {
-		t.Fatalf("matching model context was rejected: ready=%t problem=%q", ready, problem)
-	}
-}
-
-func TestParseOpenClawOptions(t *testing.T) {
-	options, err := parseOpenClawOptions([]string{
-		"--server", "http://127.0.0.1:11611/", "--base-url", "https://inference.example", "--model", "chat-model", "--yes", "--force",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if options.ServerURL != "http://127.0.0.1:11611" || options.BaseURL != "https://inference.example" || options.ModelID != "chat-model" || !options.Yes || !options.Force {
-		t.Fatalf("unexpected parsed options: %+v", options)
-	}
-	if _, err := parseOpenClawOptions([]string{"--model"}); err == nil {
-		t.Fatal("missing model value was accepted")
 	}
 }
 
