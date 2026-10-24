@@ -2,6 +2,8 @@
 * text=auto
 *.sh text eol=lf
 *.bash text eol=lf
+*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+runtimes/llama-cpp/*.h text eol=lf
 
 # Docker files
 Dockerfile text eol=lf

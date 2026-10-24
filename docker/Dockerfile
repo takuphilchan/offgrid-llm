@@ -78,11 +78,13 @@ RUN apk add --no-cache \
 WORKDIR /build
 
 # Fetch an immutable llama.cpp revision and build it
+COPY runtimes/llama-cpp/ /build/offgrid-llama-patches/
 RUN mkdir llama.cpp && cd llama.cpp && \
     git init && \
     git remote add origin https://github.com/ggml-org/llama.cpp.git && \
     git fetch --depth 1 origin ${LLAMA_CPP_COMMIT} && \
     git checkout --detach FETCH_HEAD && \
+    sh /build/offgrid-llama-patches/apply-patches.sh /build/llama.cpp && \
     cmake -B build \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \

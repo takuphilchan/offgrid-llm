@@ -30,6 +30,11 @@ mode and device-free operation do not need a first-use runtime download. The
 effective configuration (including configuration-file values) controls runtime
 selection; embedding placement is independent of Chat's GPU preference.
 
+Source builds apply the reviewed [native sequencing patch](../runtimes/llama-cpp/README.md)
+at that exact upstream pin. Its `-offgrid-seq1` runtime identity distinguishes it
+from an unpatched worker. Patch mismatch fails the build; installed binaries and
+model files are not silently rewritten. Parser tests are not workflow qualification.
+
 Start with [DOCKER_README.md](DOCKER_README.md) for commands or see the
 [complete deployment guide](../docs/setup/docker.md).
 

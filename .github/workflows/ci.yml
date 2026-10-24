@@ -14,6 +14,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  native-tool-parser:
+    name: Pinned native tool parser and grammar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test patch admission
+        run: python3 -m unittest scripts/test/test_llama_patch.py
+      - name: Build and test pinned CPU parser without models
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/llama-parser
+          git -C build/llama-parser init
+          git -C build/llama-parser remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C build/llama-parser fetch --depth 1 origin b95502ba9aa0eb73a2f4fc8878d7fbe6a847a0b9
+          git -C build/llama-parser checkout --detach FETCH_HEAD
+          sh runtimes/llama-cpp/apply-patches.sh "$PWD/build/llama-parser"
+          cmake -S build/llama-parser -B build/llama-parser/build -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=OFF -DLLAMA_BUILD_TESTS=ON -DLLAMA_BUILD_UI=OFF
+          cmake --build build/llama-parser/build --parallel 3 --target test-chat-auto-parser
+          cd build/llama-parser
+          build/bin/test-chat-auto-parser
+
   python-sdk:
     name: Python SDK and worker protocol (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -35,6 +58,8 @@ jobs:
         env:
           PYTHONPATH: sdk/python
         run: python -m pytest -q sdk/python/tests/test_client.py runtimes/python/tests
+      - name: Test external provider catalog without network or installed agents
+        run: python -m unittest scripts/test/test_hermes_provider.py scripts/test/test_external_model_matrix.py scripts/test/test_external_agent_oracle.py scripts/test/test_external_agent_fixture.py scripts/test/test_tool_result_fidelity.py scripts/test/test_verification_hooks.py
       - name: Build and verify public client wheel
         shell: bash
         run: |
@@ -116,7 +141,7 @@ jobs:
         run: go test ./...
 
       - name: Race-test privacy, storage, and request lifecycle
-        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/inference
+        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/inference ./internal/integrations/... ./internal/cli ./internal/power ./internal/degradation ./cmd/offgrid
 
       - name: Generate and build web UI
         working-directory: apps/web
@@ -125,6 +150,9 @@ jobs:
           npm run api:check
           npm run check
           npm run build
+
+      - name: Test first-party OpenClaw provider controls
+        run: node --test scripts/test/test-openclaw-provider.mjs scripts/test/test-verification-hooks.mjs
 
       - name: Build runtime for integration and desktop packaging
         run: |
@@ -245,7 +273,7 @@ jobs:
       - name: Test native CLI, persistence, and agent contracts
         # These tests use subprocesses and real local files, not OS emulation.
         # They do not substitute for installed-app or hardware qualification.
-        run: go test ./cmd/offgrid ./cmd/offgrid-computer ./internal/computer ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models
+        run: go test ./cmd/offgrid ./cmd/offgrid-computer ./internal/computer ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models ./internal/integrations/...
       - name: Test isolated Windows UI Automation and local stop controls
         if: runner.os == 'Windows'
         env:

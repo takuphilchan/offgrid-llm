@@ -74,3 +74,13 @@ scripts/
 config.yaml
 *.yaml
 !docker-compose.yml
+
+# Source assets required by Go embeds and the pinned native parser build.
+!runtimes/llama-cpp/offgrid-native-sequential.h
+!internal/integrations/plugins/hermes/offgrid/plugin.yaml
+!internal/integrations/plugins/hermes/offgrid/README.md
+!internal/integrations/plugins/hermes/offgrid-verifier/
+!internal/integrations/plugins/hermes/offgrid-verifier/__init__.py
+!internal/integrations/plugins/hermes/offgrid-verifier/plugin.yaml
+!internal/integrations/plugins/hermes/offgrid-verifier/README.md
+!internal/integrations/plugins/openclaw/offgrid/README.md

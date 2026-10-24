@@ -357,7 +357,8 @@ jobs:
           git remote add origin https://github.com/ggml-org/llama.cpp.git
           git fetch --depth 1 origin "${llama_commit}"
           git checkout --detach FETCH_HEAD
-          echo "LLAMA_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          sh "$GITHUB_WORKSPACE/runtimes/llama-cpp/apply-patches.sh" /tmp/llama.cpp
+          echo "LLAMA_COMMIT=$(git rev-parse --short HEAD)-offgrid-seq2" >> $GITHUB_ENV
 
       - name: Build llama-server
         if: steps.existing.outputs.skip != 'true'

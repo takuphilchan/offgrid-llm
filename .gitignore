@@ -6,6 +6,7 @@ offgrid-*
 !cmd/offgrid-computer/*.go
 # Reviewed first-party source, not a generated offgrid-* binary.
 !internal/integrations/plugins/hermes/offgrid-verifier/
+!runtimes/llama-cpp/offgrid-native-sequential.h
 *.exe
 *.dll
 *.so
