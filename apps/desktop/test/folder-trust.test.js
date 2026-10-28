@@ -28,3 +28,14 @@ test('plaintext keyring fallback, corrupt records and workspace-owned trust fail
   const inside=new FolderTrust(path.join(folder,'private'),storage());await assert.rejects(inside.pin(approval));
   const trust=new FolderTrust(path.join(base,'private'),storage()),pin=await trust.pin(approval);await trust.remember(pin);await fs.writeFile(trust.file(pin.id),Buffer.from('corrupt'));await assert.rejects(trust.matches(pin));
 });
+
+test('workspace-owned trust through an alias of its parent fails closed',async t=>{
+  const base=await fs.mkdtemp(path.join(os.tmpdir(),'offgrid-trust-alias-'));
+  const alias=base+'-alias';
+  t.after(async()=>{await fs.rm(alias,{force:true});await fs.rm(base,{recursive:true,force:true});});
+  try{await fs.symlink(base,alias,'dir');}
+  catch(error){if(error.code==='EPERM'||error.code==='EACCES'){t.skip('directory symlinks unavailable');return;}throw error;}
+  const folder=path.join(base,'workspace');await fs.mkdir(folder);
+  const trust=new FolderTrust(path.join(alias,'workspace','private'),storage());
+  await assert.rejects(trust.pin({folder,permissions:{read:true},service:'http://localhost',workspace:'installation',actor:'alice'}));
+});

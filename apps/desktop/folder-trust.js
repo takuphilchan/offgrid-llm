@@ -3,6 +3,18 @@ const path=require('node:path');
 const os=require('node:os');
 const crypto=require('node:crypto');
 
+async function resolvedDestination(destination){
+  const suffix=[];let cursor=path.resolve(destination);
+  for(;;){
+    try{return path.join(await fs.realpath(cursor),...suffix.reverse());}
+    catch(error){
+      if(error.code!=='ENOENT')throw error;
+      const parent=path.dirname(cursor);if(parent===cursor)throw error;
+      suffix.push(path.basename(cursor));cursor=parent;
+    }
+  }
+}
+
 // Native-only preferences. The renderer never supplies paths or approval
 // records. OS-keyring encryption is required; basic-text fallback is disabled.
 class FolderTrust {
@@ -11,7 +23,7 @@ class FolderTrust {
   async pin({folder,permissions,service,workspace,actor}){
     if(!this.available())throw Error('folder_trust_unavailable');
     const root=await fs.realpath(folder),stat=await fs.stat(root,{bigint:true});
-    const relative=path.relative(root,this.directory);
+    const relative=path.relative(root,await resolvedDestination(this.directory));
     if(!stat.isDirectory()||stat.ino===0n||stat.birthtimeNs<=0n||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)))throw Error('folder_trust_unavailable');
     if(![service,workspace,actor].every(v=>typeof v==='string'&&v.length>0&&v.length<1024))throw Error('folder_trust_unavailable');
     const scope={version:1,root,host:os.hostname(),service,workspace,actor,permissions:{read:permissions.read===true,write:permissions.write===true,processes:permissions.processes===true},identity:`${stat.dev}:${stat.ino}:${stat.birthtimeNs}`};
