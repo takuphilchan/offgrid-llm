@@ -13,8 +13,9 @@ import (
 // Config holds application configuration
 type Config struct {
 	// Server settings
-	ServerPort int    `yaml:"server_port" json:"server_port"`
-	ServerHost string `yaml:"server_host" json:"server_host"`
+	ServerPort             int    `yaml:"server_port" json:"server_port"`
+	ServerHost             string `yaml:"server_host" json:"server_host"`
+	EnableExecutionPreview bool   `yaml:"enable_execution_preview" json:"enable_execution_preview"`
 
 	// Model settings
 	ModelsDir       string `yaml:"models_dir" json:"models_dir"`
@@ -489,6 +490,9 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if auth := os.Getenv("OFFGRID_REQUIRE_AUTH"); auth != "" {
 		c.RequireAuth = getEnvBool("OFFGRID_REQUIRE_AUTH", false)
+	}
+	if preview := os.Getenv("OFFGRID_ENABLE_EXECUTION_PREVIEW"); preview != "" {
+		c.EnableExecutionPreview = getEnvBool("OFFGRID_ENABLE_EXECUTION_PREVIEW", false)
 	}
 	if guest := os.Getenv("OFFGRID_GUEST_ACCESS"); guest != "" {
 		c.GuestAccess = getEnvBool("OFFGRID_GUEST_ACCESS", true)

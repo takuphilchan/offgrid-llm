@@ -33,6 +33,12 @@ type Client struct {
 	http *http.Client
 }
 
+// HostBridge retains the selected service origin and redirect policy but drops
+// user credentials. Narrow host transport authenticates with its own token.
+func (c *Client) HostBridge() *Client { return &Client{base: c.base, http: c.http} }
+
+func (c *Client) Origin() string { return c.base.Scheme + "://" + c.base.Host }
+
 func New(baseURL, key string, transport *http.Client) (*Client, error) {
 	base, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil || base == nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || (base.Path != "" && base.Path != "/") {
