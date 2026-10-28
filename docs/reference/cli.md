@@ -1,5 +1,16 @@
 # CLI reference
 
+Development native-agent workspace selection uses `--workspace SESSION` on
+`agent run`, `agent chat` and `session send/chat`. SESSION must already be
+published by a trusted, locally approved host; this flag does not grant a folder
+or reinterpret the terminal's directory on the service. Interactive chat resolves
+the exact host/grant revision once and keeps it across follow-up turns. Missing
+or incompatible host discovery fails explicitly, without a service-file fallback.
+Matching preview builds include host enrollment, packaged-worker setup and app
+folder selection. The service must explicitly enable execution preview; installed
+model/platform workflow qualification is recorded separately in the quality
+evidence and is not implied by the version number.
+
 Use `offgrid --help` for the command inventory. This reference covers the main
 supported workflows; optional and legacy commands have different prerequisites.
 Examples assume the executable is on `PATH`. In PowerShell, use
@@ -70,15 +81,35 @@ offgrid agent status RUN_ID
 Profile chat supports `/status`, `/pause`, `/stop`, `/resume`, `/recover` and
 `/exit`. A correction while steerable is queued on the same job, not submitted
 as another task. Access/approval/uncertain states do not automatically accept a
-new task. Exiting or losing the terminal does not cancel durable work; `/stop`
-is explicit. Existing `agent chat --model MODEL` remains a task-per-prompt
-compatibility client; `session chat` is the conversation-aware profile client.
+new task. `/exit` detaches without cancelling saved work. Ctrl+C during a submitted
+interactive turn inspects that exact turn and requests Stop for its canonical job;
+an unconfirmed acknowledgment stays explicit. A lost connection alone never replays
+or cancels work.
 
-`--wait` on `agent run` or `session send` observes canonical job events. Without
+In current development source, `offgrid agent` and `agent chat` use this same saved
+conversation path, not independent ten-step tasks. Select an owned profile (a menu
+is shown when several exist), or use `--profile ID [--profile-revision N]`.
+`--model MODEL` is forwarded explicitly on each turn and must match the selected
+profile's pinned model; use another profile or revision to change it. `--resume NAME` continues an
+existing conversation without creating another one. The selected profile budget
+is retained. First-time setup offers an installed model and a General profile with
+30 decisions only after confirmation; it grants no file, terminal or computer
+authority. These commands require the matching v0.4.21 service and CLI; an
+older installed v0.4.20 binary does not gain them from a source checkout.
+
+`--wait` observes canonical job events. Terminal `agent run` follows by default
+and requests current-folder access only when local work needs it on a matching
+conversation-first service; `--detach` explicitly returns early.
+For nonterminal `agent run` and `session send`, without
 it, commands return the saved state. `--json` returns structured state without
 waiting or interactive consent; successful admission is not task completion.
 Inspect `status`, pending access/approval, `uncertain_call_id` and verification.
 Commands report transport/conflict failures rather than replaying mutations.
+
+Foreground output presents committed local directory pages as “Observed files”
+with their host/path and partial-page state, independently of the model's prose.
+Repeated stream snapshots do not repeat the same page. Filenames are escaped for
+terminal safety; missing or rejected receipts never become a displayed listing.
 Preserve the request ID and exact payload after a lost reply; inspect first.
 
 `session recover NAME REQUEST_ID` explicitly completes bookkeeping or attaches
@@ -203,13 +234,87 @@ offgrid agent chat --model YOUR_MODEL_ID
 | `--model ID` | Required installed model ID |
 | `--request-id ID` | 8–128 characters; reuse only for an identical submission retry |
 | `--wait` | Follow task progress; input or approval may still be required |
+| `--detach` | Explicit background submission; cannot own a temporary local folder session |
+| `--workspace-folder FOLDER` | Select the local folder to offer if the task requests access |
+| `--workspace-access read\|edit\|trusted` | Limit new folder grants; trusted processes are not sandboxed |
 | `--style react\|cot\|plan-execute` | Instruction style; `plan` aliases `plan-execute` |
 | `--max-steps N` | 1–50 model iterations |
+| `--workspace SESSION` | Already locally approved host reference; never service cwd |
 | `--json` | Return the saved submission snapshot; inspect its run ID for completion |
 
-Without `--wait`, submission returns after saving the task. Reusing a request ID
-with different work conflicts. `agent chat` accepts `--model`, not the old
-`--template` examples. A style changes neither permissions nor model capability.
+Terminal runs stream the result. With a matching service advertising
+`execution-access-request-v1`, greetings, stories, explanations and capability
+questions start without opening an executor or asking for folder access. The
+client captures its launch folder; a file/process request pauses the same job
+for local approval, then continues it. A changed/replaced launch folder is rejected.
+An interactive `agent chat` keeps its approved host for follow-up turns until
+the session ends. Requests exceeding that host's permissions need an explicit
+upgrade within the selected profile and `--workspace-access` ceiling.
+Older services retain their existing up-front approval behavior.
+Nonterminal/JSON submission retains its asynchronous default; `--wait` follows a
+nonterminal request, while `--detach` explicitly requests background operation.
+Detached local work must use an independently approved `--workspace SESSION`.
+Ctrl+C stops the canonical root before closing owned folder authority; uncertain
+effects remain saved for inspection. Reusing a request ID
+with different work conflicts. `agent chat` accepts `--model`, `--profile`,
+`--profile-revision` and `--resume`, not the old `--template` examples.
+`--style` and `--max-steps` apply to `agent run`; interactive turns use profile
+settings. A style changes neither permissions nor model capability.
+
+### Native workspace preview
+
+Source builds can explicitly enable `OFFGRID_ENABLE_EXECUTION_PREVIEW=true` on
+the service. Build a matching trusted worker pack before enabling a local host:
+
+```sh
+go run ./tools/executor-pack --output /absolute/private-assets/execution-runtime --version development
+```
+
+Use the exact version of your service/CLI instead of `development` for a versioned
+build. Set `OFFGRID_EXECUTOR_PACK_DIR` to this absolute asset directory, or package
+it beside the CLI as `execution-runtime`. Do not put private worker assets, grants
+or journals inside the folder granted to the agent. No runtime download occurs.
+
+```sh
+offgrid agent chat --profile PROFILE_ID --workspace-folder /absolute/test-project --workspace-access trusted
+offgrid agent workspace list
+offgrid agent workspace start /absolute/test-project --access read
+# Keep that host terminal open. Another terminal or browser can select SESSION:
+offgrid agent run "List files in the selected directory" --model MODEL_ID --workspace SESSION --wait
+offgrid agent workspace stop SESSION
+```
+
+New local access requires a native-terminal review unless you explicitly chose
+remembered trust for the identical scope. `y` approves this host session only;
+`remember` also saves client-owned trust for this exact folder identity, host,
+service installation, account and permission level. It does not include child
+folders as separately selected roots, other accounts or broader permissions.
+Each use still pairs a fresh authenticated host; this is not desktop Full access.
+If private trust storage is unavailable, session-only approval remains available.
+
+```sh
+offgrid agent workspace trust list
+offgrid agent workspace trust revoke TRUST_ID
+```
+
+Revocation removes future automatic approval. Stop an already connected host
+with `offgrid agent workspace stop SESSION` to revoke its current authority.
+No existing grant is silently converted into remembered trust.
+
+`read` permits files
+only; `edit` also permits preconditioned writes; `trusted` permits commands with
+your OS account's authority and is **not a sandbox**. Routine reviewed project
+commands use session authority; other commands need exact per-call approval.
+Use disposable trusted projects for testing. The interactive default offers its
+local launch folder when a task needs access and matching host setup is available; refusal creates
+no grant. `--workspace none` skips that offer. `--workspace-folder` cannot be
+combined with an existing `--workspace SESSION`.
+
+Closing an owned host or Ctrl+C revokes its session and stops its owned worker.
+An unconfirmed stop remains uncertain. Earlier file/network changes are not
+undone, and reconnecting never repeats an uncertain command. Matching preview
+builds include desktop folder setup and isolated execution; real-platform/model
+qualification remains a separate gate. This preview does not imply release readiness.
 
 ### Control and recover a saved task
 
@@ -223,12 +328,20 @@ offgrid agent takeover RUN_ID
 offgrid agent reconnect RUN_ID
 offgrid agent cancel RUN_ID
 offgrid agent export RUN_ID
+offgrid agent recover-execution RUN_ID
 ```
 
 Run only the operation intended for the current task, not this whole block.
 Approval IDs come from its pending snapshot. Stop/cancel does not undo effects.
 Use `agent reconcile RUN_ID CALL_ID "verified outcome"` only after independently
 inspecting an uncertain operation; it records a result without rerunning it.
+`recover-execution` instead inspects only the original pinned host intent and
+authenticated saved receipt. It accepts no replacement arguments or claimed
+result, never creates/resumes a task or renews a grant, and leaves missing,
+partial or still-running evidence uncertain. A conclusive receipt returns the
+same task to interrupted for review—not completed. A disconnected host may
+require local inspection of its retained private journal; reconnect/Refresh is
+not permission to repeat the operation.
 See [agent recovery](../guides/agents.md).
 
 ### Computer Tasks
@@ -344,6 +457,15 @@ universal JSON support from the global flag. See [JSON output](json-output.md)
 and [client contracts](../advanced/client-contracts.md).
 
 ## Optional commands
+
+`offgrid agent schedules help` documents owned daily/weekday calendar policies.
+Use `list`, `show ID`, `history ID`, `create FILE`, `update ID REVISION FILE` and
+`disable ID REVISION`. FILE is reviewed schedule JSON; `-` reads stdin. Calendar
+weekdays use Sunday=0 through Saturday=6 and an explicit IANA zone. Profile and
+execution references are pinned; commands never create host consent or substitute
+models. Inspection cannot dispatch work, and missed/uncertain occurrences are
+never replayed. See [agent schedules](../guides/agents.md#reviewed-calendar-schedules-preview)
+for the input schema, operating limits and recovery behavior.
 
 `offgrid --json agent status RUN_ID` retains an optional `verification` object
 from the existing authenticated job API. `agent export RUN_ID` preserves the

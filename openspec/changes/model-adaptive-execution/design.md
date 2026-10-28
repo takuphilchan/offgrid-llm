@@ -32,6 +32,26 @@ an operational cancellation result, not the eventual shared compatibility result
 
 ### Evidence and adaptation
 
+Native agent tool support uses a service-owned qualification policy, not a model
+name allowlist or a public request flag. A trusted runtime owner supplies the
+current measured fingerprint and suite/platform target; the existing capability
+evidence store must report matching workflow qualification. Admission pins the
+adapter revision, evidence ID and fingerprint ID in the durable job. No pin means
+the existing constrained adapter. Before counting or generating, revalidate under
+the held inference lease; missing, failed, changed or superseded evidence stops a
+pinned job without silently changing adapters or replaying effects. Both response
+paths use the complete-call validator and existing dispatch/approval boundary.
+Startup policy installation cannot modify saved jobs. Hardware/workflow evidence
+remains distinct from implementation and isolated skill/fixture passes.
+
+Separate installation-target resolution at job admission from live-runtime
+measurement under the inference lease. Admission must not load a model merely
+to select an adapter. Before counting or generating, both the still-selected
+installation target and the active process must match the persisted evidence
+pin. Missing live measurement or an operational timeout stops that decision;
+it does not turn an installation declaration into qualification or invalidate
+otherwise unchanged historical evidence.
+
 Persist versioned records outside model context. A complete fingerprint includes
 verified model/projector content identity, runtime/template/adapter/context and
 backend configuration; missing identity never qualifies a profile. Preserve past
@@ -71,6 +91,28 @@ make external-agent configuration disagree with the runtime.
 
 ### Frozen evaluation manifest
 
+Native-tool selection may alternatively use a versioned conversation/skills/
+workspace qualification scope. Its immutable suite and reviewed tool inventory
+define the boundary, not a provider's annotations or the model's claims. Every
+case runs three times for the same measured model/runtime; relevant known failures
+must pass, with zero unauthorized actions, repeated uncertain mutations or false
+completion. Record per-case results, source artifact identity and failures; a
+synthetic aggregate or isolated skill pass cannot qualify the scope.
+
+Persist the scope with the adapter/evidence pin. Filter both initial menus and
+discovery, and independently check the scope before every dispatch, including
+runtime tools and resumed checkpoints. Check registered capability identity as
+well as tool name. Existing permission, profile, folder and approval boundaries
+remain additional restrictions. Unknown scopes fail closed. Out-of-scope work
+cannot switch adapters mid-task, delegate to escape the boundary or use a desktop
+grant to expand qualification. Explain the limitation without claiming completion.
+
+Evidence also binds runtime bundle bytes and actual launch configuration. Changes
+to either invalidate reuse even when build labels are unchanged. Historical
+build-only records remain inspectable. Full-suite qualification remains required
+for desktop, visual and broader release claims; scoped evidence must not project
+as general workflow qualification.
+
 Store public synthetic prompts and deterministic acceptance checks in a versioned
 test fixture. Six families each contain five cases. Every case declares setup,
 required evidence, forbidden effects and whether an isolated native desktop is
@@ -78,6 +120,33 @@ required. A fixture-validation test proves only manifest structure. Baseline and
 qualification results are separate evidence; missing machines do not count as passes.
 
 ## Risks / Trade-offs
+
+### Reviewed skill response contracts
+
+Newly imported reviewed skill revisions may declare `response_contract` in
+SKILL.md frontmatter: version 1, a bounded RE2 text pattern and maximum UTF-8 byte
+length. Match the complete answer, not a substring. Reject unknown versions,
+unknown contract fields, invalid patterns and excessive limits at import. No
+scripts, model-generated validators, external references or network access.
+Persist the parsed contract in immutable bundle metadata and profile/task skill
+metadata. Old stored bundles with no reviewed contract field do not acquire one
+merely because a previously inert frontmatter key is now understood. A draft
+cannot activate a contract; the normal explicit import/revision review applies.
+
+Only a successfully loaded, exactly pinned skill can constrain completion. Check
+all active contracts after existing effect and workflow verification. On mismatch,
+persist a correction counter and concise failure feedback; retain the rejected
+answer in history but do not publish it as completed. Correction has no tools,
+and the dispatch boundary independently refuses calls, including restored calls.
+Allow at most two corrective answers within existing iteration/token/time limits;
+failure remains explicit without replaying any previous effect. Cancellation and
+restart preserve the counter. Conflicting contracts fail within the same bound.
+Ordinary skills and earlier jobs keep their behavior. Formatting verification is
+not semantic quality verification or permission to change user instructions.
+
+Test the reviewed checklist revision separately from the unchanged legacy
+fixture. Record both failures and new-contract results; changing the frozen
+qualification fixture requires a new suite identity, never retroactive passes.
 
 - Shared cancellation races -> deterministic concurrent tests and race coverage.
 - Stale model evidence -> content/runtime fingerprints, never names alone.

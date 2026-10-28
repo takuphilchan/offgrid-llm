@@ -11,6 +11,98 @@ curl http://127.0.0.1:11611/openapi.yaml
 The OpenAPI document is the source of truth for request and response fields.
 This page explains the main workflows and persistence semantics.
 
+## Native execution workspaces (development)
+
+`GET /api/v2/execution/workspaces` returns ready, already locally approved hosts
+scoped to the authenticated actor and service workspace. It does not accept a
+folder path or create authority. The catalog is empty without a trusted host
+connection. Enrollment and desktop folder approval are explicitly enabled
+development-preview capabilities; implementation/fixture evidence does not
+qualify an installed platform or model workflow.
+
+With `OFFGRID_ENABLE_EXECUTION_PREVIEW=true`, a matching native CLI/supervisor
+can request a two-minute single-use ticket from authenticated
+`POST /api/v2/execution/pairing` with `{}`. Local review precedes ticket creation;
+the ticket itself cannot approve a folder. The host independently verifies the
+worker digest/version and private grant/journal, then establishes protocol-v1
+transport. User API credentials are not forwarded onto the host channel.
+`POST /api/v2/execution/revoke` accepts `{reference: ...}` for an owned connection.
+It revokes service authority, not earlier effects or proof of disconnected process
+termination. Tickets, host credentials and grant files must stay private.
+
+Services advertising `agent-response-profiles-v1` accept optional
+`response_profile: "interactive" | "extended"` on `POST /api/v2/jobs`.
+Interactive uses the configured Chat allocation bounded by the model limit;
+extended uses the eligible model limit. Omission retains the legacy allocation.
+The selection is persisted per job and participates in request idempotency;
+it does not change service settings, external-agent context or existing jobs.
+Session generation retains its existing `profile` field for this choice.
+
+Tool-enabled `POST /api/v2/jobs` and agent session generation accept an optional
+`execution: {host, session, grant, revision}` reference. The job and conversation
+intent pin it, and it participates in submission idempotency. Older callers omit
+it and retain their existing behavior. A reference is not a grant: unavailable,
+cross-owner or changed grants are rejected before admission. Retrying already
+accepted input retrieves the canonical job even after its host disconnects; it
+does not dispatch again or renew authority.
+
+Services advertising `execution-access-request-v1` also accept
+`execution_request_version: 1` on tool-enabled jobs and agent turns. It makes
+local access requestable, not granted. Conversation can complete without a host.
+When a tool needs local access, the canonical root enters `waiting_for_input`
+with `pending_input.kind: "workspace"` and mode `read`, `edit` or `trusted`.
+The trusted client obtains local approval and posts
+`{input_id, execution: {host, session, grant, revision}}` to
+`POST /api/v2/jobs/{id}/input`. This endpoint accepts exactly one execution
+reference or computer-session reference, never both. It independently validates
+actor, service workspace, profile/task ceilings and the current pending call.
+Duplicate attachment acknowledges the same root without replay; another folder
+or host cannot replace an already attached execution scope during an upgrade.
+Cancellation, unresolved effects and unsupported versions cannot acquire access.
+Older clients/jobs keep their existing behavior. Remembered folder trust belongs
+to the trusted local client and does not create service authority by itself.
+
+Selected-workspace jobs use reviewed `workspace_*` tools, not the service's
+`read_file`, `write_file` or `list_files`. Relative paths and cwd belong to the
+selected host. Reads retain original bytes/revisions and include exact UTF-8 text
+when the page is valid UTF-8; no line-number display prefix is added. Writes use
+exclusive creation or an exact preimage revision and independent read-back.
+Host loss or unknown effects must not trigger a service-file fallback or replay.
+
+`AgentProfileSettings.execution` and per-turn `restrictions.execution` contain
+`{read, write, processes}` ceilings. Omission inherits the separately selected
+host grant; all-false disables host tools. Turn restrictions may not widen a
+pinned profile. Discovery and dispatch independently apply profile/turn and
+current host limits. No setting, profile revision or saved conversation creates
+an execution grant. The admission-time `execution_workspace` remains an immutable
+host snapshot, distinct from this effective policy and current readiness.
+The reviewed process tools require a separately approved trusted-process grant.
+Routine invocation grammar runs under that session; unknown commands require
+the runner's exact per-call approval. The worker repeats policy checks. Tool
+arguments cannot carry an approval flag. Process start returns a handle; bounded
+output/wait tools retain actual exit codes, and completion requires terminal host
+evidence. Stop remains uncertain if owned-tree termination is unconfirmed.
+No public arbitrary-command HTTP endpoint or arbitrary-folder registration exists.
+
+For uncertain host mutations, `can_recover_execution` indicates that the original
+intent is retained for inspection. `POST /api/v2/jobs/{id}/recover-execution` takes
+only `{}`. It may incorporate a conclusive authenticated receipt already saved in
+the service or read it from the same ready, pinned host journal. It never claims,
+dispatches, substitutes another host, resumes work or accepts a user-supplied
+result. Missing/partial/dispatched evidence remains uncertain. A recovered result
+moves the canonical job to interrupted for explicit review; it does not prove
+overall success or the current file state after later manual edits.
+
+The `/api/v2/execution/host/{enroll,poll,reply,heartbeat,revoke}` routes are private
+native-supervisor transport, not ordinary client APIs. Exact routes accept only
+their single-use ticket or host-specific credential, strict bounded JSON and
+matching protocol/actor/workspace/grant envelopes. They expose no general user API
+and never redeliver an operation after a lost response. The local protocol is
+documented in [internal/execution](../../internal/execution/README.md).
+
+These are source/API and isolated-fixture results, not installed-app, model or
+cross-platform qualification. See the [execution evidence](../quality/evidence/native-agent-execution-2026-10-25.md).
+
 ## External integration assessments
 
 The llama.cpp chat path accepts `response_format` with `text`, `json_object`, or
@@ -20,6 +112,11 @@ cannot currently be combined with tools, and native text providers reject them
 before generation until qualified. Text-completion endpoints still reject this
 chat-only control. A format constraint is not proof of factual correctness; a
 truncated response is not a completed structured result.
+
+Unchanged validated schemas retain their submitted property order when forwarded
+to grammar-based runtimes, including exact numeric constants. Duplicate object
+keys and malformed Unicode are rejected. In-process schema edits supersede any
+retained wire representation; no stale schema is forwarded after an edit.
 
 Non-streaming model loads that cannot fit their requested context return HTTP 503 with
 `insufficient_runtime_capacity`; they do not silently shrink context or change
@@ -1105,6 +1202,62 @@ remain separate delivery gates.
 
 ## Error handling
 
+### Owned agent context resources
+
+`agent-context-resources-v1` adds authenticated Chat-permission APIs. Ownership is
+always derived from the authenticated actor and current workspace; requests
+cannot nominate another owner or a service filesystem path.
+
+- `GET/POST /api/v2/agent-skills` lists metadata or imports explicit files. Each
+  file has a portable relative `path` and base64 `content` bytes. Bounds: 64 files,
+  64 KiB each, 512 KiB total; UTF-8 `SKILL.md` is limited to 32 KiB.
+- `GET /api/v2/agent-skills/{id}?revision=N&digest=SHA256` inspects the exact owned
+  revision. `PUT` with `expected_revision` and `files` adds a revision without
+  changing prior bytes. No automatic attachment or code execution occurs.
+- `POST /api/v2/agent-skills/{id}/review` with `expected_revision` and `digest`
+  copies an inspected draft into a new reviewed ID. Explicit profile attachment
+  is still required. `ProfileSettings.skills` pins `{id, revision, digest}`.
+- `GET /api/v2/agent-memory/{profile}` returns live consent and owned entries for
+  user inspection, even with automatic use disabled. `PUT .../consent` requires
+  `expected_revision` and explicit `enabled`; re-enable never authorizes old jobs.
+- `POST /api/v2/agent-memory/{profile}` performs an explicit user edit using a
+  stable `operation`, `expected_revision`, `label`, `content` and optional `id`.
+  It does not enable automatic use. Entry CAS and payload-bound operation IDs
+  reject stale updates or changed replays. Model tools instead derive provenance
+  and operation identity from the canonical root job/call and recheck live consent.
+- `DELETE /api/v2/agent-memory/{profile}/{id}?revision=N` clears live text and
+  cached write responses. Historical task evidence/backups are not erased.
+
+Context operations do not grant host, desktop, MCP or outbound-data authority.
+Unknown fields and duplicate JSON fields are rejected. Foreign resources return
+404, stale revisions/operation identities 409, stale model consent 403 and
+unavailable storage 503. Old profiles/tasks acquire neither skills nor memory
+consent automatically. See OpenAPI for additive schemas and exact response types.
+
+New reviewed skill revisions may declare optional `response_contract` frontmatter
+with `version: 1`, a `pattern` (RE2, at most 2,048 UTF-8 bytes) and `max_bytes`
+(1–32,768). The pattern matches the complete answer, not a substring. Import
+rejects unknown contract fields/versions, invalid patterns and excessive limits.
+The parsed contract is exposed on skill/bundle metadata and pinned with the skill
+revision. Old stored revisions with no reviewed contract metadata stay inert,
+even if their original frontmatter used the same previously unknown key.
+
+After a matching skill is successfully loaded, the runner checks its contract
+after existing effect verification. A mismatch allows at most two persisted,
+answer-only corrections within the original job budget. Tools are unavailable
+and the dispatch boundary also rejects calls during correction. Exhaustion returns
+`skill_response_contract_limit`; malformed pinned metadata returns
+`skill_response_contract_invalid`. Earlier effects remain saved and are never
+replayed to repair an answer. Draft streaming is provisional; only a validated
+answer can become the completed result. A format pass does not verify factual
+accuracy or grant permission to perform the checklist or workflow it describes.
+The contract applies to the whole final answer once loaded, including clarification
+or limitation answers. Reviewers must make the skill's instructions and pattern
+consistent with those possibilities. It is not a conditional instruction inferred
+from model prose. Canonical skill receipts retain the full file; the model-facing
+view of a contracted `SKILL.md` presents its instruction body without validator
+frontmatter. Supporting files and legacy skill views retain their complete content.
+
 For v2 job errors, use the structured `error.code`, `message`, `retryable`,
 and `request_id` envelope with its HTTP status. Older routes can retain their
 legacy error shape; consult the contract and support both only where required.
@@ -1114,6 +1267,31 @@ A retryable transport/storage error is not permission to rerun an uncertain
 side effect. Read the saved job or retry its identical submission with the
 original request ID. Keep server logs private; omit tokens and private tool
 data from issue reports.
+
+## Owned calendar schedules (preview)
+
+Services advertising `agent-schedules-v1` expose actor/workspace-owned Chat APIs:
+
+- `GET /api/v2/agent-schedules` lists reviewed policy projections.
+- `POST /api/v2/agent-schedules` creates a policy without creating a job.
+- `GET /api/v2/agent-schedules/{id}?revision=N` inspects a current/historical revision.
+- `PUT /api/v2/agent-schedules/{id}` performs a full live-resource review with
+  `expected_revision`; stale writers return 409.
+- `POST /api/v2/agent-schedules/{id}/disable` takes `expected_revision`, revokes
+  dispatch first and stops only owned roots without concealing uncertain effects.
+- `GET /api/v2/agent-schedules/{id}/occurrences` returns up to 128 most recent
+  occurrence records, reasons and canonical `job_id` links; it cannot replay work.
+
+`AgentScheduleWrite` contains `settings` (name, prompt, enabled and typed IANA
+calendar), exact `profile_id`/`profile_revision`, optional approved `execution`
+reference and bounded `max_iterations`. Creation uses absent/zero
+`expected_revision`. Unknown/duplicate fields and caller-supplied actor, task
+config, grant creation, due-time overrides or run-now flags are rejected.
+Responses omit private runner context and runtime review epochs. Policy revisions
+and occurrence identities remain durable; no credentials are stored in schedules.
+Jobs expose additive `schedule` provenance. Existing APIs and ordinary jobs keep
+their current behavior. See OpenAPI and the agent guide for concrete schemas and
+missed/DST/revocation/overlap semantics. This is not an OS wake-up service.
 
 ## Changing the contract
 

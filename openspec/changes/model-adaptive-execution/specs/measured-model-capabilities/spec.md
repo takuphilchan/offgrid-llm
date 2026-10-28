@@ -34,6 +34,11 @@ failed capability measurement.
 - **WHEN** a recorded runtime fingerprint differs from the active runtime
 - **THEN** its evidence is shown as stale and cannot qualify current work
 
+#### Scenario: Runtime rebuilt with the same label
+- **WHEN** runtime bundle bytes or measured launch configuration change while the build label remains the same
+- **THEN** native qualification cannot be reused
+- **AND** older build-only records remain inspectable without enabling native selection
+
 #### Scenario: Runtime queue is busy
 - **WHEN** admission times out or is cancelled before a measurement completes
 - **THEN** the result reports operational unavailability, not model incompatibility

@@ -9,6 +9,18 @@ and profiles do not yet provide explicitly approved safe-boundary model escalati
 
 ## What Changes
 
+- Add explicitly installed, qualification-gated native agent tool selection for
+  new jobs. Pin the adapter and evidence before inference, revalidate the measured
+  runtime under the existing lease, and retain the constrained path for old or
+  unqualified jobs. The reported skill loop motivates this integration; isolated
+  skill passes alone do not establish general workflow qualification.
+
+- Add capability-scoped native-tool qualification for conversation, skills and
+  workspace operations. Freeze a separate suite, run every case three times per
+  model/runtime, retain failures, and enforce its reviewed tool subset at discovery
+  and dispatch. Scoped evidence does not qualify desktop, vision, delegation or
+  broader release claims; those retain the thirty-workflow gate.
+
 - Freeze a versioned, thirty-workflow evaluation manifest before behavior changes;
   distinguish fixture execution from real model/platform qualification.
 - Deduplicate concurrent synthetic checks without caching permission or carrying
@@ -31,6 +43,14 @@ and profiles do not yet provide explicitly approved safe-boundary model escalati
   admitted window for each task, and report that same allocation to external agents.
 
 ### Boundaries and acceptance
+
+Add optional reviewed skill response contracts to address measured output-format
+failures without silently rewriting answers. New skill revisions may declare a
+versioned, bounded text contract; persisted reviewed metadata pins it. Loaded
+contracts are checked by code before completion. At most two answer-only
+corrections consume the existing root budget, with no tool dispatch or replay.
+Old skills and revisions remain unchanged. A format pass does not establish
+factual accuracy, tool success or general model qualification.
 
 This owns model adaptation, not a replacement runner, native driver or UI. Typed
 delegation belongs to `agent-conversation-workflows`; document providers remain in

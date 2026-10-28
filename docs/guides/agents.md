@@ -6,6 +6,87 @@ health check alone does not prove it can complete a useful task.
 
 ## Reusable agents in Chat
 
+For verbatim text already in a task request, a compatible new job may offer
+`workspace_write_from_input`. The agent selects unique boundary strings in that
+root's request or an applied correction, and the service copies the selected
+bytes through the same approved folder writer. It preserves Unicode and line
+endings and verifies host read-back. It cannot select another job, prior tool
+output or a pending correction, and it does not add permission. Ordinary writing
+remains available. Verified bytes prove the selected span, not the correctness
+of every model interpretation; see [qualification fixtures](../quality/native-agent-workflows.md).
+
+Native agents share one runner for conversation, explanations, approved folder
+reads/edits, trusted project commands, attached research connections, Knowledge
+and configured collaborators. A tool being available does not mean it should be
+called: a greeting or explanation normally needs no workspace inspection. The
+selected profile, model and current grants determine the usable toolset.
+
+Use `offgrid agent chat --model INSTALLED_MODEL --workspace-folder .` to keep a
+conversation and its folder grant across follow-up requests. For project test
+commands, explicitly select `--workspace-access trusted`; this uses your host
+account and is not a sandbox. `agent run` is one foreground task, so its local
+host session ends with that CLI invocation. Research and collaboration require
+their corresponding authorized attachments; a folder grant supplies neither.
+
+A proven rejected workspace file read is returned to the model for a bounded
+correction, preserving the same root and recorded error. Repeated rejections
+pause the task. This does not retry a write, renew access, settle an unknown
+effect or treat an unavailable host as permission to use service files.
+
+### Selected execution folders (preview)
+
+On a matching service with `OFFGRID_ENABLE_EXECUTION_PREVIEW=true`, a native
+client may explicitly approve a host folder. Chat's **Workspace** control selects
+an already connected grant; it never creates access or uses the service cwd.
+The selected host/folder and read/edit/command ceiling are shown before sending.
+A disconnected selection is retained as unavailable, not silently substituted.
+The host lease must remain running. In a matching desktop app, **Choose a local
+folder** opens native folder selection and a native read/edit/trusted-command
+confirmation. The renderer cannot nominate a path, service, command or approval.
+**Stop workspace access** and the File/tray equivalent revoke that lease without
+waiting for model inference. Quit, lock/suspend, account/workspace change or
+renderer failure also stop the owned helper; unconfirmed stopping stays uncertain.
+Older desktops without these optional IPC methods can still select a CLI host.
+Browser users approve their host through the trusted CLI, not a web permission
+dialog:
+
+```bash
+offgrid agent workspace start /absolute/test-project --access edit
+# In another terminal, select the reported SESSION:
+offgrid agent chat --profile PROFILE_ID --workspace SESSION
+```
+
+`trusted` access additionally permits project commands with your OS account's
+authority. It is **not a sandbox**. For explicitly isolated Linux/WSL commands,
+select an already-installed immutable image ID (no image is downloaded):
+
+```bash
+offgrid agent workspace start /absolute/test-project --access trusted \
+  --backend isolated_linux --image sha256:YOUR_INSTALLED_IMAGE_DIGEST --network none
+```
+
+Only that folder is mounted at `/workspace`; edits there affect the host folder.
+The default limits are 512 MiB, one CPU and 64 processes, configurable through
+`--memory-mib`, `--cpu-millis`, and `--pids` before local review. `bridge` networking
+must be explicitly selected. The current non-root host UID/GID is used. This
+requires a native Linux host, local Docker socket and matching executor pack;
+it does not silently fall back to trusted local commands when unavailable.
+
+Source/release/desktop builds now stage a matching executor binary and digest
+manifest. Native CLI installation retains versioned packs for rollback. Keep
+CLI and executor assets together; a mismatched version/digest fails closed.
+Updating assets does not restore saved grants or resume uncertain work.
+
+Profiles may narrow host read/edit/process ceilings in **Advanced → Workspace**;
+Chat's **Tools → Workspace** may narrow them again for a new turn. Inherit means
+the selected, separately approved host ceiling, not automatic folder access.
+All-false disables host tools. A turn cannot widen its profile, and a profile
+cannot widen the actual host grant. Existing jobs keep their pinned policy.
+Command activity distinguishes starting/running from actual exit, failed exit,
+cancel/timeout and incomplete output; a start receipt is not proof of completion.
+
+### Profile selection
+
 On services advertising agent profiles and conversations, **Agents** is the
 profile library. Create an agent, choose an installed model and instructions,
 then select the Knowledge and tools it may use. **Use in Chat** selects the
@@ -155,7 +236,21 @@ offgrid agent tasks
 offgrid agent status RUN_ID
 ```
 
-The web UI uses **Agents → Work**. It restores the selected run after navigation
+The current development CLI also accepts `offgrid agent chat --profile ID
+--profile-revision N` and `--resume NAME`. Its default interactive command uses
+saved conversation turns with the profile's budget. Explicit `--model` selection
+is retained on follow-up turns and must match that profile's pinned model; it
+does not silently modify a profile or pick a model from its name.
+No profile/folder selection automatically grants host tools. A matching native
+CLI can explicitly approve a folder and supervise a pinned worker in the
+[native workspace preview](../reference/cli.md#native-workspace-preview).
+Its reviewed file/command tools share canonical jobs and check their independent
+grant, rather than borrowing computer consent. Matching desktop folder selection
+and worker packaging are implemented in preview; general model/platform
+qualification remains unfinished. Without that separate grant, service file tools
+still mean the service filesystem, never the terminal's current directory.
+
+The shared task UI restores the selected run after navigation
 or reload, including pending approvals and committed tool results. Task drafts
 save while editing, separately per account and identified workspace. Old
 account-only drafts require explicit restoration; originals and newer text are
@@ -232,7 +327,14 @@ offgrid agent export RUN_ID
 `computer pause|resume|takeover|stop RUN_ID` are aliases for the same lifecycle.
 `computer setup RUN_ID` opens local consent in the installed desktop app; it does
 not bypass it. `agent run --request-id ID` safely retries a lost submission.
-Without `--wait`, submission returns the saved run immediately. JSON submission
+In a terminal, `agent run` offers the current local folder once, then streams the
+same saved job until its result or intervention. `--workspace-folder FOLDER` and
+`--workspace-access read|edit|trusted` select/narrow that local session explicitly.
+Declining or failing local approval submits no service-directory substitute.
+`--detach` explicitly submits in the background; use an independently approved
+`--workspace SESSION` for local files, since a detached run cannot retain a host
+owned by the exiting CLI. Piped/nonterminal calls keep asynchronous submission
+unless `--wait` or an explicit local folder requests following. JSON submission
 returns a snapshot; inspect that ID for completion rather than resubmitting.
 
 ### Verified workspace artifacts
@@ -394,8 +496,9 @@ served locally; inspect their capabilities and restrict what the service can acc
 In task-first runs, granting computer access adds the available computer tools
 without removing permitted MCP tools. Registry discovery applies the current
 actor policy and hides disabled/denied tools; execution checks that policy again.
-Local shell/script execution is excluded from task-first work even under another
-tool name. Computer policies do not authorize connected-service operations.
+Unreviewed local shell/script tools are excluded from task-first work even under
+another name. Reviewed workspace commands require their separate execution grant
+and invocation policy. Computer policies do not authorize connected-service operations.
 The agent may research through MCP before observing an application, but it must
 observe before computer input and verify after completing computer work. A tool
 result from an external service cannot substitute for application verification.
@@ -439,3 +542,124 @@ external MCP servers, or real Hermes/OpenClaw tasks on every machine.
 
 See the [API contract](../reference/api.md) and
 [roadmap](../ROADMAP.md) for remaining work and [quality evidence](../quality/README.md) for recorded checks.
+
+## Reusable skills and profile memory
+
+On a service advertising `agent-context-resources-v1`, the profile editor's
+Advanced section includes Skills and Profile memory. Older services do not gain
+these controls by interpreting saved labels as permission.
+
+Import an offline Agent Skills folder containing `SKILL.md` and optional relative
+support files. Imports allow at most 64 files, 64 KiB per file, 512 KiB total and
+32 KiB of UTF-8 `SKILL.md`. Links, traversal and duplicate/case-colliding paths
+are rejected. Nothing is downloaded or executed. Scripts and `allowed-tools`
+frontmatter are context data, not tool permissions. Inspect before attaching.
+
+```bash
+offgrid agent skills import ./my-reviewed-skill
+offgrid agent skills list
+offgrid agent skills show SKILL_ID REVISION DIGEST
+offgrid agent skills attach PROFILE_ID PROFILE_REVISION SKILL_ID REVISION DIGEST
+```
+
+Attachment saves a new immutable profile revision. Existing tasks retain their
+original revision. The model sees only attached names/descriptions initially;
+`skill_load` reads a selected file when needed. `skill_draft` stores an inert
+draft with job provenance. Inspect it, then use `skills review ID REVISION DIGEST`
+to create a reviewed copy, and explicitly attach that copy. Review never executes
+it or silently changes a profile.
+
+Skill authors can optionally declare a reviewed `response_contract` in a new
+revision's frontmatter. It contains `version: 1`, an RE2 `pattern` matching the
+whole answer, and a `max_bytes` limit. Write the same output requirements clearly
+in the instruction body; the model receives those instructions, while code
+checks the contract. See the [skill API contract](../reference/api.md) for limits.
+
+Once loaded, the format applies to the entire final answer, including any
+clarification or limitation. Review the pattern for those cases before attaching
+the revision. A mismatch permits at most two answer-only corrections within the
+turn's existing budget. Corrections cannot run tools or repeat earlier actions;
+if the answer still fails validation, the turn fails with its earlier work saved.
+This verifies format, not factual accuracy. Existing installed revisions are not
+changed automatically, and conflicting contracts can prevent completion.
+
+Automatic durable memory is distinct from transcript compression and defaults
+off. It is scoped to your account, workspace and profile. Enable it explicitly
+in the editor, or inspect/change its exact consent revision:
+
+```bash
+offgrid agent memory show PROFILE_ID
+offgrid agent memory consent PROFILE_ID CONSENT_REVISION on
+offgrid agent memory consent PROFILE_ID CONSENT_REVISION off
+```
+
+Only new root tasks pin the enabled consent. They can use bounded `memory_read`
+and `memory_write` in their existing tool budget. Revocation blocks subsequent
+reads/writes, and re-enable never restores old tasks. Children do not acquire
+independent context-resource authority. Memory is untrusted historical context,
+not a current observation, proof of accuracy or permission. Avoid credentials
+and unrelated private content. No extra background model captures memory.
+
+Inspect, edit or delete entries even when automatic use is off. `memory put
+PROFILE FILE` accepts JSON containing a stable `operation`, `expected_revision`,
+`label`, `content` and optional existing `id`; use `-` for stdin. Conflicts preserve
+newer text. `memory delete PROFILE ID ENTRY_REVISION` removes live text and future
+retrieval, not saved task evidence, backups or forensic SQLite remnants. Limits
+are 8 KiB per entry, 128 entries/512 KiB per profile and bounded model retrieval.
+Successful persistence is not evidence that every local model will recall or
+apply the information correctly; real-model usefulness requires separate tests.
+
+## Reviewed calendar schedules (preview)
+
+Activity → Schedules manages recurring work on the same service. Choose an exact
+profile revision, daily/selected weekdays, IANA timezone and wall time. Review the
+model, resources, execution folder/backend, permissions and decision budget before
+saving. New editor drafts are disabled until explicitly enabled. Creation,
+inspection and refresh never execute work. No desktop consent is available to a
+schedule; an existing independently approved execution host may be selected.
+Trusted local commands run as the host account and are **not sandboxed**.
+
+CLI controls use the same authenticated APIs:
+
+```bash
+offgrid agent schedules list
+offgrid agent schedules create schedule.json
+offgrid agent schedules show SCHEDULE_ID
+offgrid agent schedules history SCHEDULE_ID
+offgrid agent schedules update SCHEDULE_ID REVIEWED_REVISION schedule.json
+offgrid agent schedules disable SCHEDULE_ID REVIEWED_REVISION
+```
+
+An example policy (replace the profile identity with one you inspected):
+
+```json
+{
+  "settings": {
+    "name": "Morning briefing",
+    "prompt": "Summarize the supported findings in my attached Knowledge documents. Report missing evidence.",
+    "enabled": true,
+    "calendar": {"zone": "Africa/Harare", "hour": 9, "minute": 0, "weekdays": [1, 2, 3, 4, 5]}
+  },
+  "profile_id": "REVIEWED_PROFILE_ID",
+  "profile_revision": 1,
+  "max_iterations": 8
+}
+```
+
+The service must remain awake and connected. It does not wake the OS or catch up
+missed slots. DST gaps skip; repeated wall times use the first instant. Startup,
+clock jumps or delayed preparation can record missed work. Prior running,
+approval-waiting, interrupted or uncertain work blocks overlap. Occurrences link
+one canonical root in Activity; there is no schedule replay/run-now button.
+
+Profiles/models/budgets/grants are pinned, not silently upgraded. Knowledge
+excerpts refresh under the same document IDs before admission; stale excerpts do
+not become new authority. Current actor, profile, memory consent, tool policy and
+host access are checked again. Unavailable resources record blocked occurrences;
+reconnection does not replay them. Disable revokes new actions before stopping
+owned jobs; already-dispatched effects still require truthful settlement.
+Re-enable requires full review and never reauthorizes an older root. Storage
+retains policy revisions and bounded occurrence history; disabling is not erasure.
+
+Clock/storage/scripted-runner and browser fixtures verify these mechanics, not
+local model quality, installed-platform control or unattended production readiness.
