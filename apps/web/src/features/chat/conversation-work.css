@@ -52,3 +52,7 @@
   :is(.chat-agent-selector, .chat-agent-tools) > button { max-width: 100%; text-align: start; white-space: normal; overflow-wrap: anywhere; }
   .message-actions > .message-job-link { margin: 0; }
 }
+.execution-step { padding-block: 12px; border-block-end: 1px solid var(--line); min-width: 0; }
+.execution-step p, .execution-location { overflow-wrap: anywhere; }
+.chat-execution-workspace fieldset { min-width: 0; border: 0; padding: 0; display: grid; gap: 12px; }
+.chat-execution-workspace select { min-width: 0; max-width: 100%; width: 100%; }

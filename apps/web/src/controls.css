@@ -72,7 +72,7 @@
   .icon-button { width: var(--control-height); height: var(--control-height); flex-shrink: 0; border-radius: var(--control-radius); }
 
   :where(input:not([type]), input[type='text'], input[type='search'], input[type='url'],
-    input[type='email'], input[type='password'], input[type='number'], select, textarea) {
+    input[type='email'], input[type='password'], input[type='number'], input[type='time'], select, textarea) {
     min-width: 0;
     width: 100%;
     max-width: 100%;

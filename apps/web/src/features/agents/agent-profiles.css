@@ -32,6 +32,8 @@
   .profile-option span { min-width: 0; overflow-wrap: anywhere; }
   .profile-option small { display: block; line-height: 1.5; margin-block-start: .2rem; }
   .profile-advanced > :not(summary) { margin-block-start: 1rem; }
+  .profile-context-resources { min-width: 0; overflow-wrap: anywhere; }
+  .profile-context-field { display: grid; gap: .5rem; margin-block: .75rem; }
   .profile-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
   .profile-issues { padding: 1rem; border-inline-start: 3px solid var(--line-strong); background: var(--surface-2); overflow-wrap: anywhere; }
   .profile-issues h4 { margin-block: 0 .5rem; }

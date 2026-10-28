@@ -3,6 +3,8 @@
 const path=require('node:path');
 const {verifyPack}=require('../computer/pack.cjs');
 module.exports=async context=>{
+ const executionRoot=path.join(context.packager.getResourcesDir(context.appOutDir),'execution-runtime');
+ await require('./execution-pack.cjs').verify(executionRoot,require('./package.json').version,context.electronPlatformName,require('builder-util').Arch[context.arch]);
  require('./compatibility.cjs').verifyUI(path.join(context.packager.getResourcesDir(context.appOutDir),'ui'));
  const root=path.join(context.packager.getResourcesDir(context.appOutDir),'computer');
  const arch=require('builder-util').Arch[context.arch];

@@ -1,7 +1,7 @@
 {
   "name": "offgrid-llm-desktop",
   "desktopName": "com.offgrid.llm.desktop",
-  "version": "0.4.20",
+  "version": "0.4.21",
   "description": "OffGrid LLM Desktop - Local AI Platform",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
@@ -44,6 +44,10 @@
     },
     "files": [
       "main.js",
+      "execution-runtime.js",
+      "folder-trust.js",
+      "folder-trust-copy.js",
+      "execution-pack.cjs",
       "backend.js",
       "compatibility.cjs",
       "legacy-compatibility.json",
@@ -67,6 +71,10 @@
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "../../build/execution-runtime/${os}-${arch}",
+        "to": "execution-runtime"
+      },
       {
         "from": "../../build/computer-runtime/${os}-${arch}",
         "to": "computer"

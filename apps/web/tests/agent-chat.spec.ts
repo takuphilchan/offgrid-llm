@@ -2,9 +2,104 @@ import { expect, test, type Page } from '@playwright/test';
 import { agentProfilesText } from '../src/i18n/agent-profiles';
 import { conversationWorkText } from '../src/i18n/conversation-work';
 import type { LocaleCode } from '../src/i18n';
+import { executionWorkspaceText,executionNativeText,executionPolicyText,attachWorkspaceText } from '../src/i18n/execution-workspace';
 
 const jobID = `run-${'b'.repeat(32)}`, model = 'local-chat-model';
 const profile = { id:'writer', revision:1, actor:'local', workspace:'chat-agent-fixture', digest:'fixture', archived:false, created_at:'2026-10-13T00:00:00Z', settings:{ name:'Writer', description:'Write with evidence', model, max_iterations:10, instructions:'Keep it clear.', tools:[], knowledge:[], computer:false } };
+
+for(const locale of Object.keys(attachWorkspaceText) as LocaleCode[]) test(`on-demand folder access attaches once without computer consent in ${locale}`,async({page})=>{
+  const f=await fixture(page,'waiting_for_input');
+  f.setStatus('waiting_for_input',{pending_input:{id:'input-folder',call_id:'call-folder',kind:'workspace',mode:'read',target:'Local workspace'}});
+  await page.addInitScript(value=>localStorage.setItem('offgrid.locale',value),locale);
+  const resource={reference:{host:'approved-host',session:'session',grant:'grant',revision:1},backend:'local',root:'/disposable',directory:'.',permissions:{read:true,write:false,processes:false}};
+  await page.route('**/api/v2/system',route=>route.fulfill({json:{product:'offgrid',api_version:2,version:'fixture',workspace_id:'chat-agent-fixture',capabilities:['agent-profiles-v1','agent-conversations-v1','native-execution-preview-v1','execution-access-request-v1']}}));
+  await page.route('**/api/v2/execution/workspaces',route=>route.fulfill({json:{protocol:1,workspaces:[resource]}}));
+  await page.setViewportSize({width:390,height:844});await page.goto('/ui/#/chat');
+  const access=page.locator('.task-access');await expect(access).toBeVisible();
+  expect(f.commands).toEqual([]);expect(f.submissions).toEqual([]);
+  await access.getByRole('button',{name:executionWorkspaceText[locale].label,exact:true}).click();
+  await page.getByRole('radio',{name:/approved-host/}).check();await page.keyboard.press('Escape');
+  await access.getByRole('button',{name:attachWorkspaceText[locale],exact:true}).click();
+  await expect.poll(()=>f.commands.length).toBe(1);
+  expect(f.commands[0]).toEqual({action:'input',input_id:'input-folder',execution:resource.reference});expect(f.submissions).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('desktop folder UI invokes only an access enum, pins the native grant and stops without submitting',async({page})=>{
+  const f=await fixture(page);await desktopFixture(page);
+  const resource={reference:{host:'desktop fixture',session:'native-session',grant:'native-grant',revision:1},backend:'local',root:'C:/disposable folder',directory:'.',permissions:{read:true,write:true,processes:false}};
+  await page.addInitScript(resource=>{
+    const state={starts:[] as unknown[],stops:0,state:'idle'};
+    Object.assign(window,{executionFixture:state});
+    Object.assign(window.electron!,{
+      startExecutionWorkspace:async(request:unknown)=>{state.starts.push(request);state.state='ready';return {state:state.state,resource};},
+      getExecutionWorkspace:async()=>({state:state.state,...(state.state==='ready'?{resource}:{})}),
+      stopExecutionWorkspace:async()=>{state.stops++;state.state='stopped';return {state:state.state};},
+    });
+  },resource);
+  await page.route('**/api/v2/system',route=>route.fulfill({json:{product:'offgrid',api_version:2,version:'fixture',workspace_id:'chat-agent-fixture',capabilities:['agent-profiles-v1','agent-conversations-v1','native-execution-preview-v1']}}));
+  await page.route('**/api/v2/execution/workspaces',async route=>route.fulfill({json:{protocol:1,workspaces:await page.evaluate(()=> (window as any).executionFixture.state==='ready')?[resource]:[]}}));
+  await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Agent',exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Workspace',exact:true}).click();
+  await page.getByRole('button',{name:executionNativeText.en.choose,exact:true}).click();
+  await expect(page.getByRole('radio',{name:/desktop fixture/})).toBeChecked();
+  expect(await page.evaluate(()=>(window as any).executionFixture.starts)).toEqual([{access:'edit'}]);expect(f.submissions).toEqual([]);
+  await page.getByRole('button',{name:executionNativeText.en.stop,exact:true}).click();
+  await expect(page.getByText(executionWorkspaceText.en.unavailable,{exact:true})).toBeVisible();expect(f.submissions).toEqual([]);
+});
+
+test('command activity preserves running, failed exit and incomplete output instead of claiming completion',async({page})=>{
+  const f=await fixture(page,'interrupted');
+  f.setStatus('interrupted',{steps:[{id:1,type:'action',tool_name:'workspace_process_start',tool_args:JSON.stringify({program:'go',arguments:['test','.']}),tool_result:JSON.stringify({receipt:{state:'dispatched',result:{state:'running',directory:'/workspace',exit_code:null}},text:'starting tests'})},{id:2,type:'action',tool_name:'workspace_process_wait',tool_result:JSON.stringify({receipt:{state:'complete',result:{state:'failed',exit_code:9,output_truncated:true}},text:'assertion failed'})}]});
+  await page.goto('/ui/#/chat');const details=page.locator('.conversation-work-details');await details.locator(':scope > summary').click();
+  await expect(details.locator('.execution-step').first()).toContainText('Running');await expect(details.locator('.execution-step').first()).toContainText('go test .');
+  await expect(details.locator('.execution-step').last()).toContainText('Failed');await expect(details.getByText(`${executionPolicyText.en.exit}: 9`,{exact:true})).toBeVisible();await expect(details.getByText(executionPolicyText.en.incomplete,{exact:true})).toBeVisible();
+  expect(f.submissions).toEqual([]);expect(f.commands).toEqual([]);
+});
+
+for(const locale of Object.keys(executionWorkspaceText) as LocaleCode[]) test(`input-source writes reuse localized edit activity in ${locale}`,async({page})=>{
+  const f=await fixture(page,'interrupted');
+  await page.addInitScript(value=>localStorage.setItem('offgrid.locale',value),locale);
+  f.setStatus('interrupted',{steps:[{id:1,type:'action',tool_name:'workspace_write_from_input',tool_args:JSON.stringify({path:'result.txt',input:'request',after:'<content>',before:'</content>'}),tool_result:JSON.stringify({operation:'file_write',receipt:{state:'complete',result:{verified:true,bytes:45}},source_input:{version:1,input:'request',start_byte:10,end_byte:55},text:'Selected user-input bytes written and independently read back exactly.'})}]});
+  await page.goto('/ui/#/chat');const details=page.locator('.conversation-work-details');await details.locator(':scope > summary').click();
+  const step=details.locator('.execution-step');await expect(step.locator('strong')).toContainText(executionWorkspaceText[locale].edit);await expect(step.getByText('result.txt',{exact:true})).toBeVisible();
+  await expect(step.locator('details')).not.toHaveAttribute('open');
+  expect(f.submissions).toEqual([]);expect(f.commands).toEqual([]);
+});
+
+test('approved execution selection is observation-only and pins one canonical submission', async ({page}) => {
+  const f=await fixture(page);
+  const reference={host:'fixture host',session:'session-reviewed',grant:'grant-reviewed',revision:2};
+  let connected=true, grants=0;
+  await page.route('**/api/v2/system',route=>route.fulfill({json:{product:'offgrid',api_version:2,version:'fixture',workspace_id:'chat-agent-fixture',capabilities:['agent-profiles-v1','agent-conversations-v1','task-first-agents-v2','durable-agent-events-v2','native-execution-preview-v1']}}));
+  await page.route('**/api/v2/execution/**',route=>{
+    if(route.request().method()!=='GET'){grants++;return route.fulfill({status:403,json:{error:'no implicit grant'}});}
+    return route.fulfill({json:{protocol:1,workspaces:connected?[{reference,backend:'local',root:'C:/disposable workspace',directory:'.',permissions:{read:true,write:true,processes:true}}]:[]}});
+  });
+  await page.goto('/ui/#/chat');
+  await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  const selector=page.getByRole('button',{name:'Workspace',exact:true});await selector.click();
+  await page.getByRole('radio',{name:/fixture host/}).check();await page.keyboard.press('Escape');await expect(selector).toBeFocused();
+  expect(f.submissions).toHaveLength(0);expect(grants).toBe(0);
+  connected=false;await selector.click();await expect(page.getByText(executionWorkspaceText.en.unavailable,{exact:true})).toBeVisible();await page.keyboard.press('Escape');
+  await page.locator('.composer textarea').fill('List the approved folder.');await page.locator('.composer-actions').getByRole('button',{name:'Send',exact:true}).click();
+  expect(f.submissions).toHaveLength(0);
+  connected=true;await selector.click();await page.getByRole('radio',{name:/fixture host/}).check();await page.keyboard.press('Escape');
+  await page.locator('.composer-actions').getByRole('button',{name:'Send',exact:true}).click();
+  await expect.poll(()=>f.submissions.length).toBe(1);expect(f.submissions[0].execution).toEqual(reference);expect(grants).toBe(0);
+  await page.reload();expect(f.submissions).toHaveLength(1);
+});
+
+for(const locale of Object.keys(executionWorkspaceText) as LocaleCode[]) test(`execution controls explain unavailable authority in ${locale}`,async({page})=>{
+  await fixture(page);await page.addInitScript(value=>localStorage.setItem('offgrid.locale',value),locale);
+  await page.setViewportSize({width:390,height:844});await page.goto('/ui/#/chat');
+  await page.getByRole('button',{name:agentProfilesText[locale].selector,exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  const copy=executionWorkspaceText[locale];await page.getByRole('button',{name:copy.label,exact:true}).click();await expect(page.getByText(copy.unsupported,{exact:true})).toBeVisible();
+  await expect(page.getByRole('radio',{name:copy.none,exact:true})).toBeChecked();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.keyboard.press('Escape');
+});
 
 async function fixture(page: Page, startStatus?: string, computer = false) {
   await page.addInitScript(() => { if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale','en'); localStorage.setItem('offgrid.onboarding.complete','true'); });

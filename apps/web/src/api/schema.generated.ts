@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/api/v2/execution/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Preview-gated authenticated native-supervisor setup. Issues a two-minute single-use actor/workspace ticket, not a folder grant. The trusted local host must independently approve the scope and verify its pinned worker before using the private host transport. Never log or export the ticket. */
+        post: operations["pairExecutionHost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/execution/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Revoke exactly the authenticated actor's host reference in this workspace. Does not undo effects or establish that a disconnected native process stopped; the native supervisor closes its owned worker when the bridge ends. Inspect uncertain operations rather than replaying them. */
+        post: operations["revokeExecutionHost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/execution/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Inspect only ready, already locally approved execution workspaces owned by the authenticated actor in this service workspace. No folder path submission or implicit service-directory authority. Enrollment and platform qualification remain gated. */
+        get: operations["listExecutionWorkspaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/inference/prepare": {
         parameters: {
             query?: never;
@@ -690,6 +741,183 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/agent-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentSchedules"];
+        put?: never;
+        post: operations["createAgentSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["inspectAgentSchedule"];
+        put: operations["reviseAgentSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-schedules/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableAgentSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-schedules/{id}/occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listAgentScheduleOccurrences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentSkills"];
+        put?: never;
+        post: operations["importAgentSkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-skills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["inspectAgentSkill"];
+        put: operations["reviseAgentSkill"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-skills/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reviewAgentSkillDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-memory/{profile}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile: string;
+            };
+            cookie?: never;
+        };
+        get: operations["inspectAgentMemory"];
+        put?: never;
+        post: operations["writeAgentMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-memory/{profile}/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["changeAgentMemoryConsent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-memory/{profile}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteAgentMemory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/agent-profiles": {
         parameters: {
             query?: never;
@@ -873,6 +1101,23 @@ export interface paths {
         get: operations["downloadTaskArtifact"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/jobs/{id}/recover-execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Inspect only the saved original host intent and its authenticated journal evidence. Never claims or re-dispatches the operation, changes its arguments, renews a grant or resumes the job. Conclusive evidence moves an uncertain task to interrupted for explicit review. Missing, partial or still-dispatched evidence remains uncertain. A disconnected host may leave only locally retained evidence; Refresh never replays it. */
+        post: operations["recoverSavedExecutionReceipt"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1758,6 +2003,8 @@ export interface components {
             tools?: components["schemas"]["AgentToolReference"][];
             knowledge?: string[];
             computer?: boolean;
+            /** @description May only narrow profile and host ceilings. All false disables host tools; never creates access. */
+            execution?: components["schemas"]["ExecutionPermissions"];
         };
         LinkedAgentTurn: {
             turn: components["schemas"]["SessionTurn"];
@@ -1933,6 +2180,143 @@ export interface components {
             /** @enum {string} */
             location: "service" | "host" | "remote";
         };
+        AgentSkillReference: {
+            id: string;
+            revision: number;
+            digest: string;
+        };
+        AgentSkillFile: {
+            /** @description Portable relative POSIX path; no traversal */
+            path: string;
+            /**
+             * Format: byte
+             * @description Base64 exact bytes; at most 64 KiB decoded per file. SKILL.md must be UTF-8 and at most 32 KiB.
+             */
+            content: string;
+        };
+        AgentSkillImport: {
+            expected_revision?: number;
+            /** @description Total decoded content at most 512 KiB. No archive extraction or downloads. */
+            files: components["schemas"]["AgentSkillFile"][];
+        };
+        AgentSkill: components["schemas"]["AgentSkillReference"] & {
+            name: string;
+            description: string;
+            draft: boolean;
+            source_job?: string;
+            response_contract?: components["schemas"]["AgentSkillResponseContract"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        AgentSkillBundle: {
+            name: string;
+            description: string;
+            digest: string;
+            response_contract?: components["schemas"]["AgentSkillResponseContract"];
+            files: components["schemas"]["AgentSkillFile"][];
+        };
+        /** @description Optional reviewed complete-answer format; never tool authority or proof of semantic correctness. Old revisions do not acquire a contract automatically. */
+        AgentSkillResponseContract: {
+            /** @enum {integer} */
+            version: 1;
+            /** @description RE2 pattern matched against the complete UTF-8 answer; bounded to 2048 UTF-8 bytes. */
+            pattern: string;
+            max_bytes: number;
+        };
+        AgentMemoryConsent: {
+            revision: number;
+            /** @default false */
+            enabled: boolean;
+        };
+        AgentMemoryEntry: {
+            id: string;
+            revision: number;
+            label: string;
+            content: string;
+            source_job?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AgentCalendar: {
+            /** @description Explicit offline IANA timezone; Local is rejected. */
+            zone: string;
+            hour: number;
+            minute: number;
+            /** @description Sunday=0; gaps skipped, repeated wall times use the first instant. */
+            weekdays: number[];
+        };
+        AgentScheduleSettings: {
+            name: string;
+            prompt: string;
+            calendar: components["schemas"]["AgentCalendar"];
+            enabled: boolean;
+        };
+        AgentScheduleWrite: {
+            /** @description Zero for creation; exact reviewed revision for update. */
+            expected_revision?: number;
+            settings: components["schemas"]["AgentScheduleSettings"];
+            profile_id: string;
+            profile_revision: number;
+            execution?: components["schemas"]["ExecutionReference"];
+            max_iterations?: number;
+        };
+        AgentSchedule: {
+            /** @enum {integer} */
+            version: 1;
+            id: string;
+            revision: number;
+            digest: string;
+            settings: components["schemas"]["AgentScheduleSettings"];
+            /** Format: date-time */
+            next_at: string;
+            /** Format: date-time */
+            created_at: string;
+            model: string;
+            max_iterations: number;
+            profile: {
+                id: string;
+                revision: number;
+                digest: string;
+                name: string;
+            };
+            execution?: components["schemas"]["ExecutionReference"] | null;
+            execution_workspace?: components["schemas"]["ExecutionWorkspace"] | null;
+        };
+        AgentScheduleOrigin: {
+            /** @enum {integer} */
+            version: 1;
+            schedule: string;
+            revision: number;
+            occurrence: string;
+            /** Format: date-time */
+            due_at: string;
+        };
+        AgentScheduleOccurrence: {
+            id: string;
+            schedule: string;
+            revision: number;
+            /** Format: date-time */
+            due_at: string;
+            /** @enum {string} */
+            state: "claimed" | "admitted" | "completed" | "failed" | "cancelled" | "interrupted" | "blocked" | "missed";
+            reason?: string;
+            /** @description Existing canonical root; inspection only. */
+            job_id?: string;
+            request_id: string;
+            request_digest: string;
+            /** Format: date-time */
+            covered_until: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AgentMemoryWrite: {
+            /** @description Stable user-edit idempotency identity; changed payload reuse is rejected. */
+            operation: string;
+            id?: string;
+            expected_revision: number;
+            label: string;
+            content: string;
+        };
         AgentProfileSettings: {
             name: string;
             description?: string;
@@ -1944,6 +2328,10 @@ export interface components {
             tools?: components["schemas"]["AgentToolReference"][];
             /** @description Makes host access discoverable; does not grant it. */
             computer?: boolean;
+            /** @description Optional ceiling for an explicitly selected host grant. Omitted inherits; never creates access. */
+            execution?: components["schemas"]["ExecutionPermissions"];
+            /** @description Explicit owned immutable revisions. Content and scripts never grant authority. */
+            skills?: components["schemas"]["AgentSkillReference"][];
             max_iterations: number;
             /** @description Owned direct child-profile IDs; pinned at task admission */
             delegates?: string[];
@@ -2051,9 +2439,9 @@ export interface components {
             id: string;
             call_id: string;
             /** @enum {string} */
-            kind: "computer";
+            kind: "computer" | "workspace";
             /** @enum {string} */
-            mode: "app" | "browser" | "desktop";
+            mode: "app" | "browser" | "desktop" | "read" | "edit" | "trusted";
             /** @description Model-proposed label only; never a host identity or consent grant. */
             target: string;
             /** @description Proposed HTTPS address for local review. */
@@ -2162,7 +2550,44 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        ExecutionPairing: {
+            /** @description Single-use secret; never send to a model or log. */
+            code: string;
+            actor: string;
+            workspace: string;
+            /** @constant */
+            protocol: 1;
+            version: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        /** @description An address, not a grant. Requires a currently connected host with matching local approval. Never silently resolves against the service filesystem. */
+        ExecutionReference: {
+            host: string;
+            session: string;
+            grant: string;
+            revision: number;
+        };
+        ExecutionPermissions: {
+            read: boolean;
+            write: boolean;
+            processes: boolean;
+        };
+        ExecutionWorkspace: {
+            reference: components["schemas"]["ExecutionReference"];
+            backend: string;
+            /** @description Provider-local approved root */
+            root: string;
+            /** @description Session-local directory relative to the approved root. */
+            directory: string;
+            permissions: {
+                read: boolean;
+                write: boolean;
+                processes: boolean;
+            };
+        };
         AgentRunResponse: {
+            schedule?: components["schemas"]["AgentScheduleOrigin"];
             origin?: {
                 workspace: string;
                 conversation: string;
@@ -2170,6 +2595,11 @@ export interface components {
             };
             /** @description Execution blocked until the conversation association is durable. Clients cannot release this hold. */
             admission_held?: boolean;
+            /** @description Saved original host intent may be inspected through recover-execution. Readiness is not authority or proof of a conclusive receipt. */
+            can_recover_execution?: boolean;
+            execution?: components["schemas"]["ExecutionReference"];
+            /** @description Immutable admission-time host/root/backend/directory and capability ceiling. A snapshot is not current host readiness or a grant. */
+            execution_workspace?: components["schemas"]["ExecutionWorkspace"];
             profile?: {
                 id: string;
                 revision: number;
@@ -2331,6 +2761,95 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    pairExecutionHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Single-use setup ticket; Cache-Control no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionPairing"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    revokeExecutionHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reference: components["schemas"]["ExecutionReference"];
+                };
+            };
+        };
+        responses: {
+            /** @description Service-side authority revoked, not an undo or native-stop guarantee. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        revoked: true;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            410: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    listExecutionWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ready actor-scoped workspace references; credentials are never included. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        protocol: 1;
+                        workspaces: components["schemas"]["ExecutionWorkspace"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+        };
+    };
     prepareInferenceModel: {
         parameters: {
             query?: never;
@@ -3296,6 +3815,12 @@ export interface operations {
                     /** @description Required for durable streaming or agent selection (8–128 characters for agent turns). Identical agent retries retrieve the canonical job; different payload or deleted-history reuse returns 409. */
                     request_id?: string;
                     agent?: components["schemas"]["AgentSelection"];
+                    execution?: components["schemas"]["ExecutionReference"];
+                    /**
+                     * @description Opt into requesting client-approved workspace access on the same job only when needed. This is not a grant.
+                     * @enum {integer}
+                     */
+                    execution_request_version?: 1;
                     restrictions?: components["schemas"]["AgentResourceRestrictions"];
                     /**
                      * @description Optional on-demand desktop availability
@@ -3737,6 +4262,398 @@ export interface operations {
             503: components["responses"]["Error"];
         };
     };
+    listAgentSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned reviewed policies; inspection never dispatches work */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        schedules: components["schemas"]["AgentSchedule"][];
+                    };
+                };
+            };
+        };
+    };
+    createAgentSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentScheduleWrite"];
+            };
+        };
+        responses: {
+            /** @description Future policy saved with exact resources; no job created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSchedule"];
+                };
+            };
+        };
+    };
+    inspectAgentSchedule: {
+        parameters: {
+            query?: {
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current or exact historical policy; never resumes work */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSchedule"];
+                };
+            };
+        };
+    };
+    reviseAgentSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentScheduleWrite"];
+            };
+        };
+        responses: {
+            /** @description New reviewed revision; old roots do not regain authority */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSchedule"];
+                };
+            };
+            409: components["responses"]["Error"];
+        };
+    };
+    disableAgentSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Policy revoked before stopping owned roots; unknown effects remain unknown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSchedule"];
+                };
+            };
+            409: components["responses"]["Error"];
+        };
+    };
+    listAgentScheduleOccurrences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded owned occurrence history and canonical job identities; no replay operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        occurrences: components["schemas"]["AgentScheduleOccurrence"][];
+                    };
+                };
+            };
+        };
+    };
+    listAgentSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned skill metadata; no instructions or executable authority */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        skills: components["schemas"]["AgentSkill"][];
+                    };
+                };
+            };
+        };
+    };
+    importAgentSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSkillImport"];
+            };
+        };
+        responses: {
+            /** @description Immutable owned skill; never executed or attached automatically */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkill"];
+                };
+            };
+        };
+    };
+    inspectAgentSkill: {
+        parameters: {
+            query: {
+                revision: number;
+                digest: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact owned revision and inert files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        skill: components["schemas"]["AgentSkill"];
+                        bundle: components["schemas"]["AgentSkillBundle"];
+                        /** @constant */
+                        executable: false;
+                    };
+                };
+            };
+        };
+    };
+    reviseAgentSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSkillImport"];
+            };
+        };
+        responses: {
+            /** @description New revision; prior pinned revisions unchanged */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkill"];
+                };
+            };
+        };
+    };
+    reviewAgentSkillDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: number;
+                    digest: string;
+                };
+            };
+        };
+        responses: {
+            /** @description User-reviewed copy with a new ID; still requires explicit profile attachment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSkill"];
+                };
+            };
+        };
+    };
+    inspectAgentMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User inspection remains available when automatic use is disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        consent: components["schemas"]["AgentMemoryConsent"];
+                        entries: components["schemas"]["AgentMemoryEntry"][];
+                        deletion_scope: string;
+                    };
+                };
+            };
+        };
+    };
+    writeAgentMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentMemoryWrite"];
+            };
+        };
+        responses: {
+            /** @description Explicit user edit; does not enable automatic memory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMemoryEntry"];
+                };
+            };
+        };
+    };
+    changeAgentMemoryConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: number;
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Live monotonic consent; re-enable never reauthorizes old jobs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMemoryConsent"];
+                };
+            };
+        };
+    };
+    deleteAgentMemory: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path: {
+                profile: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live text and cached write responses cleared; historical task evidence not erased */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        deleted: true;
+                        /** @constant */
+                        historical_evidence_erased: false;
+                    };
+                };
+            };
+        };
+    };
     listAgentProfiles: {
         parameters: {
             query?: {
@@ -4005,6 +4922,17 @@ export interface operations {
                     /** @description Actor-owned profile; requires an explicit immutable profile_revision. */
                     profile_id?: string;
                     profile_revision?: number;
+                    execution?: components["schemas"]["ExecutionReference"];
+                    /**
+                     * @description Opt into on-demand client workspace selection. No folder or permission is inferred.
+                     * @enum {integer}
+                     */
+                    execution_request_version?: 1;
+                    /**
+                     * @description Optional native job context selection. Interactive uses the Chat allocation; extended uses the model limit. Omission preserves legacy allocation. Pinned for the saved job; does not alter external-agent or service configuration.
+                     * @enum {string}
+                     */
+                    response_profile?: "interactive" | "extended";
                     restrictions?: components["schemas"]["AgentResourceRestrictions"];
                     request_id: string;
                     /** @enum {string} */
@@ -4052,8 +4980,9 @@ export interface operations {
             content: {
                 "application/json": {
                     input_id: string;
-                    computer_session: string;
-                };
+                    computer_session?: string;
+                    execution?: components["schemas"]["ExecutionReference"];
+                } & (unknown | unknown);
             };
         };
         responses: {
@@ -4164,6 +5093,37 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    recoverSavedExecutionReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Original receipt incorporated without replay; not overall workflow completion. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };
     };

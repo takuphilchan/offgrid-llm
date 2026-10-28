@@ -14,6 +14,43 @@ in the [quality evidence](../../docs/quality/README.md).
 
 ## Development
 
+### Native agent workspace access (preview)
+
+With a matching service advertising `native-execution-preview-v1`, Chat can select
+an enrolled host or ask main to choose a local folder. The only renderer input is
+the read/edit/trusted access enum. Native main chooses the path and obtains local
+confirmation, checks the current account/workspace, then requests a short-lived
+pairing ticket through its authenticated session. Only that ticket goes over
+private framed stdin to the digest-verified executor supervisor. User cookies and
+API credentials are not forwarded. The supervisor creates private grants/state
+using native ownership/ACL checks and enrolls the same worker used by the CLI.
+
+Trusted commands use the signed-in OS account and are not sandboxed. This is
+separate from computer-use consent. Main/preload expose no generic spawn, command,
+path or service method. Stop is available from the Workspace control and native
+File/tray menus even without model progress. Lock/suspend, account/workspace change,
+renderer failure and quit revoke owned access. A stop timeout is uncertain, not
+confirmed termination. Restart cannot restore a saved permission.
+
+Services advertising `execution-access-request-v1` let conversations start
+without a folder. When local work is requested, Chat offers attachment to that
+same waiting job. The native folder review has an unchecked **Remember** option
+for that exact folder identity, account, host, service installation and permission
+level. It uses OS-protected encrypted storage outside the approved folder; an
+unavailable or plaintext-fallback keyring leaves session-only approval available.
+Remembered trust creates a fresh checked host session on use, not a restored
+grant. It is separate from desktop Full access. **Manage remembered folders** in
+File/tray lets the user inspect and forget entries; forgetting affects future
+approval, while **Stop workspace access** revokes an already connected host.
+
+The build hook stages a matching `execution-runtime` pack and verifies the copied
+binary/version/platform/digest after packaging. For source development, build it
+with `go run ./tools/executor-pack --output ABSOLUTE_BUILD_DIRECTORY --version VERSION`
+at the repository root; use `build/execution-runtime/win-x64`, `mac-x64`,
+`mac-arm64`, or `linux-x64` as appropriate. This builds local assets only; it does
+not install or replace the desktop app. Native dialog usability, signed packages
+and model workflows still need separate installed-platform qualification.
+
 Build the UI first:
 
 ```bash

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen, utilityProcess, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen, utilityProcess, powerMonitor, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -9,6 +9,10 @@ const { attachmentStore } = require('./attachment');
 const { normalize: normalizePresentation, readCopy } = require('./presentation');
 const { ComputerRuntime, parseComputerLink } = require('./computer-runtime');
 const { createApplicationLauncher } = require('./application-launcher');
+const { ExecutionRuntime } = require('./execution-runtime');
+const { FolderTrust } = require('./folder-trust');
+const { folderTrustCopy } = require('./folder-trust-copy');
+const { spawn } = require('node:child_process');
 // Verification code belongs to the application, not the unverified payload.
 const { verifyPack: verifyComputerPack } = require(app.isPackaged ? './computer-pack/pack.cjs' : '../computer/pack.cjs');
 
@@ -42,6 +46,8 @@ const runtime = new DesktopRuntime({
   attachments: attachmentStore(configRoot),
   onIdentityChange: async () => {
     uploadGrants.clear();
+    await execution.stop();
+    if(execution.child||execution.pending||execution.state==='uncertain')throw Error('Execution access could not be stopped for the changed workspace');
     await computer.stop();
     if (computer.child || computer.pending || computer.stopping) throw Error('Computer access could not be stopped for the changed workspace');
   },
@@ -99,6 +105,23 @@ const computer = new ComputerRuntime({
 // Installed-app discovery and launch stay in the trusted main process. The
 // renderer receives opaque catalog IDs only; it can never provide a path or
 // executable command to the host.
+const executionRoot=app.isPackaged?path.join(process.resourcesPath,'execution-runtime'):path.join(__dirname,'../../build/execution-runtime',`${{win32:'win',darwin:'mac',linux:'linux'}[process.platform]}-${process.arch}`);
+async function executionFetch(service,endpoint,method='GET'){
+  if(!mainWindow||mainWindow.isDestroyed()||!isTrustedPage(mainWindow.webContents.getURL(),service,LOADING_URL))throw Error('execution_scope_changed');
+  const response=await mainWindow.webContents.session.fetch(service+endpoint,{method,credentials:'include',redirect:'error',headers:method==='POST'?{'Content-Type':'application/json',Origin:service}:{},...(method==='POST'?{body:'{}'}:{}),signal:AbortSignal.timeout(10000)});
+  if(!response.ok)throw Error('execution_service_unavailable');return response.json();
+}
+const folderTrust=new FolderTrust(path.join(configRoot,'folder-trust'),safeStorage);
+const execution=new ExecutionRuntime({trust:folderTrust,root:executionRoot,directory:path.join(configRoot,'execution-hosts'),version:app.getVersion(),spawn,
+  service:()=>{if(runtime.state.state!=='ready')throw Error('execution_service_unavailable');return runtime.url;},
+  identity:service=>executionFetch(service,'/api/v2/system'),
+  principal:async service=>{const account=await executionFetch(service,'/v1/users/me');if(account.auth_required===false)return 'local-admin';if(account.auth_required===true&&account.authenticated===true&&typeof account.user?.id==='string'&&account.user.id)return account.user.id;throw Error('execution_scope_changed');},
+  pairing:service=>executionFetch(service,'/api/v2/execution/pairing','POST'),
+  verify:root=>require('./execution-pack.cjs').verify(root,app.getVersion(),process.platform,process.arch),
+  choose:async()=>{const chosen=await dialog.showOpenDialog(mainWindow,{properties:['openDirectory','dontAddToRecent'],title:'Choose an agent workspace folder'});return chosen.canceled||chosen.filePaths.length!==1?null:fs.promises.realpath(chosen.filePaths[0]);},
+  confirm:async({folder,permissions,service,actor,canRemember})=>{const mode=permissions.processes?'Read/edit files and run trusted project commands with your OS account’s authority. Commands are NOT sandboxed.':permissions.write?'Read and edit files in this folder.':'Read files in this folder.';const result=await dialog.showMessageBox(mainWindow,{type:'question',title:'Allow agent workspace access?',message:'Allow agent workspace access?',detail:`${folder}\n${service}\nAccount: ${actor}\n\n${mode}\n\nAccess lasts only for this live host session. Stop workspace access or quit OffGrid to revoke it. Revocation does not undo completed changes.`,buttons:['Cancel','Allow access'],defaultId:0,cancelId:0,noLink:true,...(canRemember?{checkboxLabel:folderTrustCopy(presentation.locale).remember,checkboxChecked:false}:{})});return result.response===1?(result.checkboxChecked?'remember':true):false;}
+});
+execution.on('status',()=>{if(app.isReady()&&presentationCopy)updateMenus();});
 const applicationLauncher = createApplicationLauncher({ platform: process.platform, env: process.env, shell });
 const uploadGrants = new Map();
 async function digestFile(file) {
@@ -233,6 +256,7 @@ async function createMainWindow() {
   });
   mainWindow.webContents.on('render-process-gone', () => {
     void computer.stop();
+    void execution.stop();
     runtime.publish({ state: 'error', reason: 'The workspace window stopped responding. Retry to reopen it; the service and saved work have not been stopped.' });
     void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
   });
@@ -253,11 +277,26 @@ async function createMainWindow() {
   showWorkspace();
 }
 
+async function manageFolderTrust(){
+  const text=folderTrustCopy(presentation.locale);
+  try{
+    const records=await folderTrust.list();
+    if(!records.length){await dialog.showMessageBox(mainWindow,{type:'info',message:text.empty});return;}
+    for(const record of records){
+      const level=['read','write','processes'].filter(key=>record.permissions[key]).map(key=>text.permissions[['read','write','processes'].indexOf(key)]).join(' · ');
+      const answer=await dialog.showMessageBox(mainWindow,{type:'question',message:text.title,detail:`${record.root}\n${record.host}\n${record.service}\n${record.actor}\n${level}\n\n${text.notice}`,buttons:[text.done,text.forget,text.next],defaultId:0,cancelId:0,noLink:true});
+      if(answer.response===0)return;if(answer.response===1)await folderTrust.revoke(record.id);
+    }
+  }catch{await dialog.showMessageBox(mainWindow,{type:'error',message:text.error});}
+}
+
 function updateMenus() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { label: copy('file'), submenu: [
       { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
+      { label:'Stop workspace access',enabled:!!execution.child||execution.pending,click:()=>void execution.stop() },
+      { label:folderTrustCopy(presentation.locale).manage,click:()=>void manageFolderTrust() },
       { type: 'separator' },
       { role: process.platform === 'darwin' ? 'close' : 'quit' }
     ] },
@@ -267,6 +306,8 @@ function updateMenus() {
   tray?.setContextMenu(Menu.buildFromTemplate([
     { label: copy('open'), click: showWindow },
     { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
+    { label:'Stop workspace access',enabled:!!execution.child||execution.pending,click:()=>void execution.stop() },
+      { label:folderTrustCopy(presentation.locale).manage,click:()=>void manageFolderTrust() },
     { type: 'separator' },
     { label: copy('quit'), click: () => app.quit() }
   ]));
@@ -295,6 +336,9 @@ handleTrustedIPC('get-api-url', () => runtime.url);
 handleTrustedIPC('get-app-version', () => app.getVersion());
 handleTrustedIPC('get-server-status', () => runtime.state.state === 'ready');
 handleTrustedIPC('get-backend-info', () => runtime.snapshot());
+handleTrustedIPC('execution-start', request=>execution.start(request));
+handleTrustedIPC('execution-status', ()=>execution.status());
+handleTrustedIPC('execution-stop', ()=>execution.stop());
 handleTrustedIPC('computer-status', () => ({...computer.state, active:!!computer.child||!!computer.pending, installed:fs.existsSync(path.join(computerRoot,'manifest.json'))}));
 handleTrustedIPC('computer-start', request => {
   const upload=request?.uploadGrant ? uploadGrants.get(request.uploadGrant) : undefined;
@@ -369,14 +413,15 @@ app.whenReady().then(async () => {
   await createWindow();
   // Qualification/alternate profiles must not change the user's default handler.
   if(app.isPackaged && !installerTest && !customHome) app.setAsDefaultProtocolClient('offgrid');
-  powerMonitor.on('lock-screen',()=>void computer.stop());
-  powerMonitor.on('suspend',()=>void computer.stop());
+  powerMonitor.on('lock-screen',()=>{void computer.stop();void execution.stop();});
+  powerMonitor.on('suspend',()=>{void computer.stop();void execution.stop();});
   // Cookie removal/replacement includes logout and account changes. Do not let
   // an old actor's host permission survive until a renderer happens to refresh.
   mainWindow.webContents.session.cookies.on('changed',(_event,cookie)=>{
     if(cookie.name==='session'&&(computer.desktopAccess||computer.pending))void computer.stop();
+    if(cookie.name==='session')void execution.stop();
   });
-  mainWindow.on('unresponsive', () => { void computer.stop(); });
+  mainWindow.on('unresponsive', () => { void computer.stop();void execution.stop(); });
   createTray();
   updateMenus();
   // A normal launch always reconnects to the authoritative local workspace.
@@ -398,6 +443,7 @@ app.on('before-quit', event => {
     await saveWindowState();
     await presentationQueue.catch(() => {});
     await computer.stop();
+    await execution.stop();
     await runtime.stop(); // Only our child, never a Docker/external service.
     tray?.destroy();
     shutdownComplete = true;

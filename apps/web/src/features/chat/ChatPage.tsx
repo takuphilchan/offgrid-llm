@@ -4,7 +4,7 @@ import { interaction } from '../../i18n/interaction';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { workspaceRefinement } from '../../i18n/workspace-refinement';
-import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessage, type ChatSession, type Model, type SessionTurn } from '../../api/client';
+import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessage, type ChatSession, type Model, type SessionTurn, type ExecutionWorkspace as ExecutionWorkspaceResource } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ModelSelect } from '../../components/ModelSelect';
@@ -36,27 +36,15 @@ import { ConversationWork, workSettled } from './ConversationWork';
 import { useTaskRun } from '../agents/useTaskRun';
 import { TaskAccessPolicy, type TaskComputerPolicy } from '../agents/TaskAccessPolicy';
 import { conversationWorkText } from '../../i18n/conversation-work';
-
-function messageText(content: ChatMessage['content']): string {
-  if (typeof content === 'string') return content;
-  return content.filter(part => part.type === 'text').map(part => part.text).join('');
-}
+import { ExecutionWorkspace } from './ExecutionWorkspace';
+import { executionWorkspaceText } from '../../i18n/execution-workspace';
+import { messageText, newSessionName, visibleSessionName } from './chat-presentation';
 
 function readPreferences(key: string): { profile: string; maxTokens: number } {
   try {
     const value = JSON.parse(readPreference(key) ?? '{}');
     return { profile: value.profile === 'extended' ? 'extended' : 'interactive', maxTokens: [256, 1024, 4096].includes(value.maxTokens) ? value.maxTokens : 1024 };
   } catch { return { profile: 'interactive', maxTokens: 1024 }; }
-}
-
-function newSessionName(prompt: string): string {
-  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
-  const title = prompt.replace(/\s+/g, ' ').slice(0, 42).trim();
-  return `${title || 'Chat'} · ${stamp}`;
-}
-
-function visibleSessionName(name: string): string {
-  return name.replace(/ · \d{14}$/, '');
 }
 
 export function ChatPage({ scope, models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: {
@@ -115,6 +103,14 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const { value: draft, setValue: setDraft, unsaved, key: composerDraftKey } = useDraft(draftScope, 'chat', activeName);
   const [knowledge, setKnowledge] = useWorkspaceState('chat.knowledge', false);
   const [agent, setAgent] = useWorkspaceState<AgentProfile | null>('chat.agent', null);
+  const [executionWorkspace, setExecutionWorkspace] = useWorkspaceState<ExecutionWorkspaceResource | null>('chat.executionWorkspace', null);
+  const [executionReady, setExecutionReady] = useState(false);
+  const [executionRequestable,setExecutionRequestable]=useState(false);
+  useEffect(()=>{
+    let active=true;setExecutionRequestable(false);
+    void api.systemIdentity().then(identity=>{if(active)setExecutionRequestable(identity.capabilities?.includes('execution-access-request-v1')===true);}).catch(()=>{});
+    return()=>{active=false;};
+  },[scope]);
   const [agentResources, setAgentResources] = useWorkspaceState<{ profile: string; restrictions: AgentResourceRestrictions }>('chat.agentResources', { profile: '', restrictions: {} });
   const [computerPolicy, setComputerPolicy] = useWorkspaceState<TaskComputerPolicy>('chat.agentPolicy', 'full_task');
   const agentKey = agent ? `${agent.id}:${agent.revision}` : '';
@@ -123,6 +119,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const [linkedTurn, setLinkedTurn] = useState<SessionTurn | null>(null);
   const [recoveryNeeded, setRecoveryNeeded] = useState(false);
   const { run: linkedRun, connection: jobConnection, error: jobReadError, refresh: refreshJob } = useTaskRun(linkedTurn?.job_id ?? '');
+  useEffect(()=>{
+    if(linkedRun?.execution_workspace&&linkedRun.run_id===linkedTurn?.job_id)setExecutionWorkspace(linkedRun.execution_workspace);
+  },[linkedRun?.execution?.session,linkedTurn?.job_id]);
   const currentLinked = useRef<SessionTurn | null>(null); currentLinked.current = linkedTurn;
   const linkedUnsettled = !!linkedTurn && !workSettled(linkedRun?.status ?? linkedTurn.status);
   const canSendInstruction = linkedUnsettled && linkedRun?.can_steer === true;
@@ -388,6 +387,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       finally { setBusy(false); }
       return;
     }
+    if (agent && executionWorkspace && !executionReady) { setError(executionWorkspaceText[locale].unavailable); return; }
     const revision = selectionRevision.current;
     const currentView = () => mounted.current && revision === selectionRevision.current;
     const requestController = new AbortController();
@@ -418,7 +418,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       }
       if (agent) {
         const intentKey = draftKey(draftScope, 'chat-agent-request', sessionName);
-        const payload = { content: prompt, model_id: agent.settings.model, profile: profile === 'extended' ? 'extended' as const : 'interactive' as const, max_tokens: maxTokens, agent: { id: agent.id, revision: agent.revision }, restrictions, ...(agent.settings.computer && restrictions.computer !== false ? { computer_scope: 'desktop' as const, computer_approval_mode: computerPolicy } : {}) };
+        const payload = { content: prompt, model_id: agent.settings.model, profile: profile === 'extended' ? 'extended' as const : 'interactive' as const, max_tokens: maxTokens, agent: { id: agent.id, revision: agent.revision }, restrictions, ...(executionWorkspace ? {execution: executionWorkspace.reference} : {}), ...(executionRequestable ? {execution_request_version: 1 as const} : {}), ...(agent.settings.computer && restrictions.computer !== false ? { computer_scope: 'desktop' as const, computer_approval_mode: computerPolicy } : {}) };
         let intent: { request_id: string; payload: typeof payload } | undefined;
         try { intent = JSON.parse(readDraft(intentKey)); } catch { /* No pending admission. */ }
         if (!intent || JSON.stringify(intent.payload) !== JSON.stringify(payload)) intent = { request_id: requestID, payload };
@@ -568,6 +568,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         <div className="composer-input"><textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small>{text.chat.enterHint}</small></div>
         <div className="composer-context">
           <AgentSelector value={agent} onChange={value => { setAgent(value); setAgentResources({ profile: value ? `${value.id}:${value.revision}` : '', restrictions: {} }); }} disabled={busy} />
+          {agent && <ExecutionWorkspace value={executionWorkspace} onChange={setExecutionWorkspace} disabled={busy || linkedUnsettled} onReady={setExecutionReady} ceiling={restrictions.execution??agent.settings.execution} />}
           {agent ? <><div className="chat-agent-model"><span>{text.chat.model}</span>{agent.settings.model}</div><AgentTools profile={agent} restrictions={restrictions} onChange={value => setAgentResources({ profile: agentKey, restrictions: value })} disabled={busy} />{agent.settings.computer && restrictions.computer !== false && <TaskAccessPolicy value={computerPolicy} onChange={setComputerPolicy} disabled={busy} scope="desktop" workspace={permissions.workspace} />}</> : <ModelSelect models={models} value={model} onChange={setModel} />}
           <UtilityPopover label={experience.context} trigger={<><Icon name="settings" size={18} />{!agent && knowledge && <span className="composer-choice">{experience.knowledgeOn}</span>}</>} triggerClassName={!agent && knowledge ? 'secondary-button' : 'icon-button'} className="composer-context-menu">
             {!agent && <label className="switch"><input type="checkbox" checked={knowledge} disabled={busy || (!knowledge && knowledgeState !== 'ready')} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label>}

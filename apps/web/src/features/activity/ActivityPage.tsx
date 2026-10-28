@@ -15,6 +15,7 @@ import { knownWorkText } from '../../i18n/known-work';
 import { workspaceManagement } from '../../i18n/workspace-management';
 import { SearchField } from '../../components/SearchField';
 import { TaskWorkspace, taskFromLocation } from '../agents/TaskWorkspace';
+import { AgentSchedules } from './AgentSchedules';
 
 type Health = 'checking' | 'ready' | 'offline';
 type RuntimeStats = {
@@ -35,6 +36,7 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   if (!taskFirst && !inspecting) return <LegacyActivity health={health} />;
   return <div className="stack activity-page">
     <TaskWorkspace scope={scope} workspace={workspace} />
+    {!inspecting && <AgentSchedules />}
     {!inspecting && admin && <details className="activity-diagnostics activity-archive" open={diagnostics} onToggle={event => setDiagnostics(event.currentTarget.open)}><summary>{workspaceManagement(locale).diagnostics}</summary>{diagnostics && <LegacyActivity health={health} />}</details>}
   </div>;
 }

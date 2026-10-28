@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { AgentProfile, AgentProfileSettings } from '../src/api/client';
+import { executionPolicyText } from '../src/i18n/execution-workspace';
 
 const model = 'installed-local-model';
 const profile = (id: string, settings: Partial<AgentProfileSettings> = {}, revision = 1): AgentProfile => ({
@@ -48,6 +49,15 @@ async function fixture(page: Page, initial = [profile('Researcher')]) {
   });
   return { mutations, conflict: () => { conflict = true; }, get: () => profiles, withdraw:()=>{supported=false;} };
 }
+
+test('profile execution ceilings are explicit configuration and do not grant a host',async({page})=>{
+  const f=await fixture(page);await page.goto('/ui/#/agents/profiles');await page.getByRole('button',{name:/Researcher/}).click();
+  const advanced=page.locator('.profile-advanced');await advanced.locator(':scope > summary').click();
+  const selector=advanced.getByRole('combobox',{name:'Workspace',exact:true});await expect(selector).toHaveValue('inherit');await selector.selectOption('limit');
+  await expect(advanced.getByRole('checkbox',{name:'Read files',exact:true})).toBeChecked();await expect(advanced.getByRole('checkbox',{name:'Edit files',exact:true})).not.toBeChecked();
+  await expect(advanced.getByText(executionPolicyText.en.hint,{exact:true})).toBeVisible();await page.getByRole('button',{name:'Save agent',exact:true}).click();
+  await expect.poll(()=>f.mutations.length).toBe(1);expect(f.mutations[0].body.settings.execution).toEqual({read:true,write:false,processes:false});expect(f.mutations[0].body.execution).toBeUndefined();
+});
 
 test('a temporary capability withdrawal cannot restore task composition over the profile home',async({page})=>{
   const f=await fixture(page);await page.goto('/ui/#/agents');

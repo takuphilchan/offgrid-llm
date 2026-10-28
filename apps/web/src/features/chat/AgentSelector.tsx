@@ -4,6 +4,7 @@ import { UtilityPopover } from '../../components/UtilityPopover';
 import { useI18n } from '../../i18n';
 import { agentProfilesText } from '../../i18n/agent-profiles';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
+import { ExecutionPolicy } from '../agents/ExecutionPolicy';
 
 export function AgentSelector({ value, onChange, disabled }: { value: AgentProfile | null; onChange: (profile: AgentProfile | null) => void; disabled: boolean }) {
   const { locale, messages } = useI18n(), copy = agentProfilesText[locale];
@@ -55,6 +56,6 @@ export function AgentTools({ profile, restrictions, onChange, disabled }: { prof
       {profile.settings.computer && <label className="profile-option"><input type="checkbox" checked={restrictions.computer !== false} onChange={event => onChange({ ...restrictions, computer: event.target.checked })} /><span>{copy.computer}<small>{copy.computerHint}</small></span></label>}
       {(profile.settings.tools ?? []).map(tool => <label className="profile-option" key={`${tool.provider}:${tool.tool}`}><input type="checkbox" checked={tools.some(value => value.provider === tool.provider && value.tool === tool.tool)} onChange={event => onChange({ ...restrictions, tools: event.target.checked ? [...tools, tool] : tools.filter(value => value.tool !== tool.tool || value.provider !== tool.provider) })} /><span>{tool.tool}<small>{tool.provider} · {tool.location}</small></span></label>)}
       {!!profile.settings.knowledge?.length && <details><summary>{copy.knowledge} · {knowledge.length}</summary><div className="agent-resource-options">{profile.settings.knowledge.map(id => <label className="profile-option" key={id}><input type="checkbox" checked={knowledge.includes(id)} onChange={event => onChange({ ...restrictions, knowledge: event.target.checked ? [...knowledge, id] : knowledge.filter(value => value !== id) })} /><span>{documentNames[id] ?? id}</span></label>)}</div></details>}
-    </fieldset><p>{copy.workspaceConnections}</p><a className="secondary-button" href="#/agents/profiles">{copy.edit}</a>
+    </fieldset><ExecutionPolicy value={restrictions.execution} ceiling={profile.settings.execution} onChange={execution=>onChange({...restrictions,execution})} disabled={disabled}/><p>{copy.workspaceConnections}</p><a className="secondary-button" href="#/agents/profiles">{copy.edit}</a>
   </UtilityPopover>;
 }

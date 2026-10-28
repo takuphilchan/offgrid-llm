@@ -9,6 +9,8 @@ import { agentProfilesText } from '../../i18n/agent-profiles';
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import './agent-profiles.css';
+import { ExecutionPolicy } from './ExecutionPolicy';
+import { AgentContextResources } from './AgentContextResources';
 
 type Draft = { original: AgentProfile | null; settings: AgentProfileSettings };
 type Resources = Awaited<ReturnType<typeof api.agentProfileResources>>;
@@ -18,7 +20,7 @@ const reference = (tool: AgentCapabilityIdentity): NonNullable<AgentProfileSetti
 
 export function AgentProfiles({ models }: { models: Model[] }) {
   const { locale, messages } = useI18n(), copy = agentProfilesText[locale];
-  const { knowledge: knowledgePermitted } = useWorkspace();
+  const { knowledge: knowledgePermitted,scope,workspace } = useWorkspace();
   const [profiles, setProfiles] = useState<AgentProfile[]>([]);
   const [resources, setResources] = useState<Resources>();
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -138,6 +140,8 @@ export function AgentProfiles({ models }: { models: Model[] }) {
             </div></details>
           </fieldset>
           <details className="profile-advanced"><summary>{copy.advanced}</summary><label>{copy.iterations}<input type="number" required min={1} max={50} value={draft.settings.max_iterations} onChange={event => update({ max_iterations: event.target.valueAsNumber || 1 })} /></label>
+            <ExecutionPolicy value={draft.settings.execution} onChange={execution=>update({execution})} />
+            <AgentContextResources key={JSON.stringify([scope,workspace,draft.original?.id??'new'])} profile={draft.original?.id} selected={draft.settings.skills??[]} onChange={skills=>update({skills})} disabled={busy}/>
             <fieldset className="profile-resources"><legend>{copy.delegates}</legend><p className="profile-hint">{copy.delegateHint}</p><div className="profile-options">
               {profiles.filter(item => item.id !== draft.original?.id && !item.settings.delegates?.length).map(item => { const selected = draft.settings.delegates?.includes(item.id) ?? false; return <label className="profile-option" key={item.id}><input type="checkbox" checked={selected} disabled={!selected && (draft.settings.delegates?.length ?? 0) >= 4} onChange={event => toggle('delegates', item.id, event.target.checked)} /><span>{item.settings.name}</span></label>; })}
               {(draft.settings.delegates ?? []).filter(id => !profiles.some(item => item.id === id && !item.settings.delegates?.length)).map(id => <label className="profile-option" key={id}><input type="checkbox" checked onChange={() => toggle('delegates', id, false)} /><span>{id}<small>{copy.unavailable}</small></span></label>)}

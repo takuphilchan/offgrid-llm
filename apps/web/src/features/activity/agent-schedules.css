@@ -1,0 +1,24 @@
+@layer components {
+  .agent-schedules { min-width: 0; border-block-start: 1px solid var(--line); padding-block: 1.5rem; overflow-wrap: anywhere; }
+  .schedule-list, .schedule-history ul { list-style: none; margin: 0; padding: 0; }
+  .schedule-list > li { display: grid; gap: 1rem; padding-block: 1rem; border-block-end: 1px solid var(--line); }
+  .schedule-list h3, .schedule-review h4 { margin: 0; font-size: 1rem; }
+  .schedule-list p { margin-block: .5rem; }
+  .schedule-editor { display: grid; gap: 1rem; max-width: 50rem; margin-block: 1.5rem; }
+  .schedule-fields { display: grid; gap: .5rem; min-width: 0; border: 0; padding: 0; margin: 0; }
+  .schedule-fields legend { font-weight: 600; margin-block-end: 1rem; }
+  .schedule-fields :is(input:not([type=checkbox]),select,textarea) { width: 100%; min-width: 0; }
+  .schedule-fields > label, .schedule-calendar label { font-size: .875rem; }
+  .schedule-calendar { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1rem; margin-block: .5rem; }
+  .schedule-calendar label { display: grid; gap: .5rem; }
+  .schedule-days { min-width: 0; border: 0; padding: .5rem 0; margin: 0; }
+  .schedule-days > div { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+  .schedule-days label, .schedule-check { display: flex; align-items: center; gap: .5rem; min-height: 44px; }
+  .agent-schedules input[type=checkbox] { flex-shrink: 0; accent-color: var(--text); }
+  .schedule-review { border-inline-start: 2px solid var(--line); padding-inline-start: 1rem; }
+  .schedule-review pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .schedule-history { padding-block-start: 1rem; }
+  .schedule-history li { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding-block: .75rem; }
+  .schedule-history code { overflow-wrap: anywhere; white-space: normal; }
+  @media(max-width:480px) { .schedule-calendar { grid-template-columns: minmax(0,1fr); } }
+}

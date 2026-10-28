@@ -5,6 +5,7 @@ const {spawn}=require('node:child_process');
 const {createManifest,runtimeFiles}=require('../computer/pack.cjs');
 
 module.exports=async function prepareComputer(context) {
+  await require('./execution-pack.cjs').prepare(context);
   const platform=context.electronPlatformName;
   const arch=require('builder-util').Arch[context.arch];
   const host={win32:{x64:'win64'},darwin:{x64:'mac15',arm64:'mac15-arm64'},linux:{x64:'ubuntu24.04-x64'}}[platform]?.[arch];

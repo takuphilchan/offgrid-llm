@@ -29,9 +29,19 @@ export type AgentTask = components['schemas']['AgentTask'];
 export type AgentRun = components['schemas']['AgentRunResponse'];
 export type AgentProfile = components['schemas']['AgentProfile'];
 export type AgentProfileSettings = components['schemas']['AgentProfileSettings'];
+export type AgentSkill = components['schemas']['AgentSkill'];
+export type AgentSkillReference = components['schemas']['AgentSkillReference'];
+export type AgentMemoryEntry = components['schemas']['AgentMemoryEntry'];
+export type AgentMemoryConsent = components['schemas']['AgentMemoryConsent'];
+export type AgentSchedule = components['schemas']['AgentSchedule'];
+export type AgentScheduleWrite = components['schemas']['AgentScheduleWrite'];
+export type AgentScheduleOccurrence = components['schemas']['AgentScheduleOccurrence'];
+export type AgentSkillInspection = {skill:AgentSkill;bundle:components['schemas']['AgentSkillBundle'];executable:false};
 export type EffectiveAgentProfile = components['schemas']['EffectiveAgentProfile'];
 export type AgentCapabilityIdentity = components['schemas']['AgentCapabilityIdentity'];
 export type AgentSelection = components['schemas']['AgentSelection'];
+export type ExecutionReference = components['schemas']['ExecutionReference'];
+export type ExecutionWorkspace = components['schemas']['ExecutionWorkspace'];
 export type AgentResourceRestrictions = components['schemas']['AgentResourceRestrictions'];
 export type LinkedAgentTurn = components['schemas']['LinkedAgentTurn'];
 export type AgentTurnRequest = NonNullable<operations['generateSessionTurn']['requestBody']>['content']['application/json'] & { agent: AgentSelection; request_id: string };
@@ -113,8 +123,8 @@ export const api = {
   removeModelPackage: (id: string, revision: string, signal: AbortSignal) => request<{ removed: boolean }>(`/api/v2/models/packages/${encodeURIComponent(id)}/${encodeURIComponent(revision)}/remove`, { method: 'POST', body: '{}', signal }),
   searchModels: (query: string, signal: AbortSignal, category?: ModelCategory) => request<{ results: DiscoveredModel[]; total: number }>(`/v1/search?${new URLSearchParams(category ? { query, category } : { query })}`, { signal }),
   modelFiles: (repo: string, signal: AbortSignal) => request<{ repo: string; files: DiscoveredFile[] }>(`/v1/search/files?${new URLSearchParams({ repo })}`, { signal }),
-  systemIdentity: async () => {
-    const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system');
+  systemIdentity: async (signal?:AbortSignal) => {
+    const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});
     if (agentWorkspace !== (identity.workspace_id ?? '')) { agentCursors.clear(); agentReplayGeneration++; }
     agentWorkspace = identity.workspace_id ?? '';
     durableAgentEvents = Array.isArray(identity.capabilities) && identity.capabilities.includes('durable-agent-events-v2');
@@ -161,11 +171,13 @@ export const api = {
     method: 'POST', signal, body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase })
   }),
   currentTurn: (name: string, signal?: AbortSignal) => request<{ turn: SessionTurn | null; job?: AgentRun; recovery_required?: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/turn`, { signal }),
+  executionWorkspaces: (signal?: AbortSignal) => request<{protocol: number; workspaces: ExecutionWorkspace[]}>('/api/v2/execution/workspaces', {signal}),
   submitAgentTurn: async (name: string, data: AgentTurnRequest, signal?: AbortSignal) => {
     // An older generate endpoint may ignore additive fields. Never let a saved
     // agent selection silently turn into an unrestricted/plain Chat request.
     const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system', {signal});
     if (!identity.capabilities?.includes('agent-conversations-v1')) throw new APIError('This service does not support agent conversations. Update the service before retrying.', 409);
+    if (data.execution && !identity.capabilities?.includes('native-execution-preview-v1')) throw new APIError('This service does not support the selected execution workspace. No work was submitted.', 409);
     return request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/generate`, { method: 'POST', signal, body: JSON.stringify(data) });
   },
   recoverAgentTurn: (name: string, id: string) => request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/turn/recover`, { method: 'POST', body: JSON.stringify({id}) }),
@@ -179,6 +191,18 @@ export const api = {
   createAgentProfile: (settings: AgentProfileSettings) => request<AgentProfile>('/api/v2/agent-profiles', {method:'POST',body:JSON.stringify({settings})}),
   updateAgentProfile: (id: string, expected_revision: number, settings: AgentProfileSettings) => request<AgentProfile>(`/api/v2/agent-profiles/${encodeURIComponent(id)}`, {method:'PUT',body:JSON.stringify({expected_revision,settings})}),
   archiveAgentProfile: (id: string, expected_revision: number) => request<{id:string; archived:true}>(`/api/v2/agent-profiles/${encodeURIComponent(id)}/archive`, {method:'POST',body:JSON.stringify({expected_revision})}),
+  agentSchedules: (signal?:AbortSignal)=>request<{schedules:AgentSchedule[]}>('/api/v2/agent-schedules',{signal}),
+  agentScheduleOccurrences: (id:string,signal?:AbortSignal)=>request<{occurrences:AgentScheduleOccurrence[]}>(`/api/v2/agent-schedules/${encodeURIComponent(id)}/occurrences`,{signal}),
+  saveAgentSchedule: (body:AgentScheduleWrite,id?:string)=>request<AgentSchedule>(`/api/v2/agent-schedules${id?`/${encodeURIComponent(id)}`:''}`,{method:id?'PUT':'POST',body:JSON.stringify(body)}),
+  disableAgentSchedule: (id:string,revision:number)=>request<AgentSchedule>(`/api/v2/agent-schedules/${encodeURIComponent(id)}/disable`,{method:'POST',body:JSON.stringify({expected_revision:revision})}),
+  agentSkills: (signal?:AbortSignal)=>request<{skills:AgentSkill[]}>('/api/v2/agent-skills',{signal}),
+  importAgentSkill: (files:components['schemas']['AgentSkillFile'][])=>request<AgentSkill>('/api/v2/agent-skills',{method:'POST',body:JSON.stringify({files})}),
+  inspectAgentSkill: (ref:AgentSkillReference,signal?:AbortSignal)=>request<AgentSkillInspection>(`/api/v2/agent-skills/${encodeURIComponent(ref.id)}?revision=${ref.revision}&digest=${encodeURIComponent(ref.digest)}`,{signal}),
+  reviewAgentSkill: (ref:AgentSkillReference)=>request<AgentSkill>(`/api/v2/agent-skills/${encodeURIComponent(ref.id)}/review`,{method:'POST',body:JSON.stringify({expected_revision:ref.revision,digest:ref.digest})}),
+  agentMemory: (profile:string,signal?:AbortSignal)=>request<{consent:AgentMemoryConsent;entries:AgentMemoryEntry[];deletion_scope:string}>(`/api/v2/agent-memory/${encodeURIComponent(profile)}`,{signal}),
+  changeAgentMemoryConsent: (profile:string,expected_revision:number,enabled:boolean)=>request<AgentMemoryConsent>(`/api/v2/agent-memory/${encodeURIComponent(profile)}/consent`,{method:'PUT',body:JSON.stringify({expected_revision,enabled})}),
+  writeAgentMemory: (profile:string,write:components['schemas']['AgentMemoryWrite'])=>request<AgentMemoryEntry>(`/api/v2/agent-memory/${encodeURIComponent(profile)}`,{method:'POST',body:JSON.stringify(write)}),
+  deleteAgentMemory: (profile:string,entry:AgentMemoryEntry)=>request<{deleted:true;historical_evidence_erased:false}>(`/api/v2/agent-memory/${encodeURIComponent(profile)}/${encodeURIComponent(entry.id)}?revision=${entry.revision}`,{method:'DELETE'}),
   cancelTurn: (name: string, id: string) => request<{ success: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/turn/cancel`, { method: 'POST', body: JSON.stringify({ id }) }),
   followTurn: async (name: string, id: string, onEvent: (event: SessionEvent) => void, signal: AbortSignal) => {
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/turn/events?id=${encodeURIComponent(id)}`, { credentials: 'same-origin', signal });
@@ -282,6 +306,7 @@ export const api = {
   // Default admission: 5 min, then tool check: 3 min, optional vision: 90 s.
   // Do not abort a cold load using the ordinary short API request deadline.
   resolveJobInput: (id: string, input_id: string, computer_session: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/input`, {method: 'POST', body: JSON.stringify({input_id, computer_session})}, 600_000),
+  resolveWorkspaceInput: (id: string, input_id: string, execution: ExecutionWorkspace['reference']) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/input`, {method: 'POST', body: JSON.stringify({input_id, execution})}, 600_000),
   streamAgent: async (id: string, onSnapshot: (run: AgentRun) => void | boolean, onHeartbeat: () => void, signal: AbortSignal) => {
     const replay = durableAgentEvents;
     const generation = agentReplayGeneration;
