@@ -13,7 +13,8 @@ func TestLaunchFolderCannotFollowReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	captured, check, err := captureNativeLaunchFolder(root)
-	if err != nil || captured != root || check() != nil {
+	canonical, canonicalErr := filepath.EvalSymlinks(root)
+	if err != nil || canonicalErr != nil || captured != canonical || check() != nil {
 		t.Fatal(captured, err)
 	}
 	if err := os.Rename(root, filepath.Join(parent, "original")); err != nil {

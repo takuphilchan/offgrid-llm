@@ -13,5 +13,5 @@ func folderIdentity(path string) (string, error) {
 	if st.Mode&unix.S_IFMT != unix.S_IFDIR {
 		return "", ErrPath
 	}
-	return fmt.Sprintf("darwin:%x:%x:%x:%x", st.Dev, st.Ino, st.Birthtimespec.Sec, st.Birthtimespec.Nsec), nil
+	return fmt.Sprintf("darwin:%x:%x:%x:%x", st.Dev, st.Ino, st.Btim.Sec, st.Btim.Nsec), nil
 }

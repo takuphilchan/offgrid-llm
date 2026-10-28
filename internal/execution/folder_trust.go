@@ -33,8 +33,12 @@ func trustScope(a LocalApproval) (FolderTrust, error) {
 	if a.Backend != "local" || a.Isolation != (IsolationPolicy{}) || !validIdentity(a.Actor) || !validIdentity(a.Host) || !validIdentity(a.Workspace) || a.Service == "" || !filepath.IsAbs(a.Root) {
 		return FolderTrust{}, ErrAuthority
 	}
+	entry, err := os.Lstat(a.Root)
+	if err != nil || !entry.IsDir() || entry.Mode()&os.ModeSymlink != 0 {
+		return FolderTrust{}, ErrPath
+	}
 	root, err := filepath.EvalSymlinks(a.Root)
-	if err != nil || root != filepath.Clean(a.Root) {
+	if err != nil {
 		return FolderTrust{}, ErrPath
 	}
 	identity, err := folderIdentity(root)

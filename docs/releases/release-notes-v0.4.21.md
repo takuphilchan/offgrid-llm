@@ -25,6 +25,9 @@ independent result checks.
   revision-bound records. These resources do not grant desktop or folder access.
 - Chat, Agents and Activity expose the new work and access state while retaining
   the current conversation and saved-run identities.
+- Native folder identity uses the supported macOS `Stat_t.Btim` field. Folder
+  trust permits canonicalized temporary-folder parents without widening the
+  approved leaf folder.
 
 ## Verification and limitations
 
