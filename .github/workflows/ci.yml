@@ -135,13 +135,15 @@ jobs:
           node scripts/maintenance/check-source-size.mjs
 
       - name: Check Unix installer entry points without installation
-        run: bash scripts/maintenance/test-installer-entrypoints.sh
+        run: |
+          bash scripts/maintenance/test-installer-entrypoints.sh
+          bash scripts/maintenance/test-executor-install.sh
 
       - name: Test Go packages
         run: go test ./...
 
       - name: Race-test privacy, storage, and request lifecycle
-        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/inference ./internal/integrations/... ./internal/cli ./internal/power ./internal/degradation ./cmd/offgrid
+        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/execution ./internal/inference ./internal/integrations/... ./internal/cli ./internal/power ./internal/degradation ./cmd/offgrid ./cmd/offgrid-executor
 
       - name: Generate and build web UI
         working-directory: apps/web
@@ -273,7 +275,7 @@ jobs:
       - name: Test native CLI, persistence, and agent contracts
         # These tests use subprocesses and real local files, not OS emulation.
         # They do not substitute for installed-app or hardware qualification.
-        run: go test ./cmd/offgrid ./cmd/offgrid-computer ./internal/computer ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models ./internal/integrations/...
+        run: go test ./cmd/offgrid ./cmd/offgrid-computer ./cmd/offgrid-executor ./internal/execution ./internal/computer ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models ./internal/integrations/...
       - name: Test isolated Windows UI Automation and local stop controls
         if: runner.os == 'Windows'
         env:

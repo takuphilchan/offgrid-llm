@@ -24,6 +24,7 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 # The application is a static Go binary. Preserve the base runtime's user,
 # CUDA libraries, llama-server, healthcheck, permissions and startup settings.
 COPY --from=application --chmod=0755 /usr/local/bin/offgrid /usr/local/bin/offgrid
+COPY --from=application /usr/local/bin/execution-runtime /usr/local/bin/execution-runtime
 COPY --from=checked-ui --chown=1000:1000 /ui /var/lib/offgrid/web/ui
 # Reused speech runtimes may point at /usr/local/share/offgrid/ui. Always select
 # the matching renderer copied above; operators must also update any container

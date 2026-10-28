@@ -2,6 +2,8 @@
 /offgrid
 /bin/
 offgrid-*
+!cmd/offgrid-executor/
+!cmd/offgrid-executor/**
 !cmd/offgrid-computer/
 !cmd/offgrid-computer/*.go
 # Reviewed first-party source, not a generated offgrid-* binary.

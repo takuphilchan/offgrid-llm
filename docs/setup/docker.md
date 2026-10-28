@@ -18,7 +18,7 @@ Bash continuation syntax; in PowerShell enter `docker run` on one line or use
 PowerShell backtick continuations.
 
 ```bash
-docker pull takuphilchan/offgrid-llm:0.4.20
+docker pull takuphilchan/offgrid-llm:0.4.21
 docker run -d \
   --name offgrid \
   --init \
@@ -28,7 +28,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:0.4.20
+  takuphilchan/offgrid-llm:0.4.21
 ```
 
 Open <http://localhost:11611/ui/> and download a model from the Models page, or
@@ -48,7 +48,7 @@ and TLS for remote access.
 | --- | --- |
 | `edge` | Current development image; update deliberately |
 | `latest` | Moving alias for the latest published stable CPU release |
-| `<version>` | Versioned release, for example `0.4.20` |
+| `<version>` | Versioned release, for example `0.4.21` |
 | `<major>.<minor>` | Most recent patch in a stable minor release |
 | `sha-<commit>` | Image built from an exact source revision |
 | `latest-gpu` | Most recent stable NVIDIA release (Linux AMD64) |
@@ -66,7 +66,7 @@ Clone the repository only when using its Compose definitions:
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm/docker
 cp .env.example .env
-# Edit .env: set OFFGRID_VERSION=0.4.20 before pulling.
+# Edit .env: set OFFGRID_VERSION=0.4.21 before pulling.
 docker compose pull
 docker compose up -d
 ```

@@ -43,6 +43,7 @@ RUN set -eu; \
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
+COPY tools/executor-pack/ ./tools/executor-pack/
 
 ARG VERSION=dev
 ARG VCS_REF=unknown
@@ -51,6 +52,7 @@ ARG VCS_REF=unknown
 RUN CGO_ENABLED=0 GOOS=linux go build \
 	-trimpath -ldflags="-s -w -X main.Version=${VERSION} -X github.com/takuphilchan/offgrid-llm/internal/server.BuildRevision=${VCS_REF} -extldflags=-static" \
 	-o offgrid ./cmd/offgrid/
+RUN go run ./tools/executor-pack --output /build/execution-runtime --version "${VERSION}"
 
 # =============================================================================
 # Optional target for local application/UI refreshes without rebuilding llama.cpp.
@@ -59,6 +61,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # =============================================================================
 FROM alpine:3.24 AS application-artifacts
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
+COPY --from=go-builder /build/execution-runtime /usr/local/bin/execution-runtime
 COPY --from=ui-builder /build/apps/web/dist/ /var/lib/offgrid/web/ui/
 
 # =============================================================================
@@ -135,6 +138,7 @@ RUN mkdir -p /var/lib/offgrid/models \
 
 # Copy binaries from builders
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
+COPY --from=go-builder /build/execution-runtime /usr/local/bin/execution-runtime
 COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgrid/bin/llama-server
 
 RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
