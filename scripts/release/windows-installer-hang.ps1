@@ -12,7 +12,7 @@ if (-not [OffGridWizard]::IsWindow($target) -or [OffGridWizard]::Owner($target) 
 }
 
 # This helper has a deadline enforced by its parent. WCT follows only the test
-# process's threads; do not capture memory, other windows, or named lock objects.
+# window's UI thread; do not capture memory, other windows, or named lock objects.
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -45,19 +45,17 @@ public static class OffGridWaitChain {
   }
 }
 '@
-$process = Get-Process -Id $OwnerId
 [uint32]$observedOwner = 0
 $uiThread = [OffGridWaitChain]::GetWindowThreadProcessId($target, [ref]$observedOwner)
 if ($observedOwner -ne $OwnerId) { throw 'Installer window changed during diagnostics.' }
-$chains = @($process.Threads | ForEach-Object {
-    $threadId = $_.Id
-    $chain = [OffGridWaitChain]::Read($threadId)
-    @{ thread = $threadId; ui = $threadId -eq $uiThread; success = $chain.Success; error = $chain.Error; cycle = $chain.Cycle; nodes = @($chain.Nodes | ForEach-Object {
+$chain = [OffGridWaitChain]::Read($uiThread)
+$chains = @(
+    @{ thread = $uiThread; ui = $true; success = $chain.Success; error = $chain.Error; cycle = $chain.Cycle; nodes = @($chain.Nodes | ForEach-Object {
         $node = @{ type = $_.Type; status = $_.Status }
         if ($_.Type -eq 8) { $node.process = $_.Process; $node.thread = $_.Thread; $node.waitTime = $_.WaitTime }
         $node
     }) }
-})
+)
 $controls = @([OffGridWizard]::Children($target) | ForEach-Object {
     @{ window = $_.ToInt64(); class = [OffGridWizard]::Class($_); text = [OffGridWizard]::Text($_); visible = [OffGridWizard]::IsWindowVisible($_); enabled = [OffGridWizard]::IsWindowEnabled($_) }
 })

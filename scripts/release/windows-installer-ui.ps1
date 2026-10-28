@@ -145,7 +145,7 @@ function Write-WizardHang([IntPtr]$Window, [string]$OutputPath, [string]$Diagnos
     $helper = Start-Process powershell.exe -ArgumentList "-NoProfile -File `"$worker`" -Window $($Window.ToInt64()) -OwnerId $ownerId -OutputPath `"$OutputPath`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$OutputPath.stdout.log" -RedirectStandardError "$OutputPath.stderr.log"
     try {
         [void]$helper.Handle
-        $finished = $helper.WaitForExit(5000)
+        $finished = $helper.WaitForExit(10000)
         if (-not $finished) {
             $helper.Kill()
             if (-not $helper.WaitForExit(2000)) { throw 'Hang diagnostic helper did not stop.' }
