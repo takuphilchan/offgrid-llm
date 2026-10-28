@@ -24,10 +24,14 @@ class FixtureEvidenceTests(unittest.TestCase):
                     with urlopen(req, timeout=5) as response:
                         self.assertEqual(response.status, 200)
                         json.load(response)
-                    snapshot = json.loads((root / "fixture-events.json").read_text())
-                    self.assertGreaterEqual(len(snapshot), 1)
                 with ThreadPoolExecutor(max_workers=6) as pool:
-                    list(pool.map(request, range(24)))
+                    for start in range(0, 24, 6):
+                        list(pool.map(request, range(start, start + 6)))
+                        # The Windows reader cannot share deletion with an
+                        # atomic replacement. Inspect each completed batch,
+                        # not while the next batch is publishing.
+                        snapshot = json.loads((root / "fixture-events.json").read_text())
+                        self.assertEqual(len(snapshot), start + 6)
                 self.assertEqual(len(json.loads((root / "fixture-events.json").read_text())), 24)
             finally:
                 server.shutdown()
