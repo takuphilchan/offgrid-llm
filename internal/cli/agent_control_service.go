@@ -11,10 +11,15 @@ import (
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
 
 type AgentRunSnapshot struct {
+	Steps               []agents.Step        `json:"steps,omitempty"`
+	CanRecoverExecution bool                 `json:"can_recover_execution,omitempty"`
+	Execution           *execution.Reference `json:"execution,omitempty"`
+	ExecutionWorkspace  *execution.Resource  `json:"execution_workspace,omitempty"`
 	Profile             json.RawMessage      `json:"profile,omitempty"`
 	Origin              json.RawMessage      `json:"origin,omitempty"`
 	PendingInstructions []agents.Instruction `json:"pending_instructions,omitempty"`
@@ -40,7 +45,7 @@ type AgentRunSnapshot struct {
 
 func AgentControlService(ctx context.Context, client *serviceclient.Client, args []string) (*AgentRunSnapshot, error) {
 	if len(args) < 2 {
-		return nil, Usage("usage: offgrid agent status|approve|deny|cancel|resume|reconcile RUN_ID [APPROVAL_ID or CALL_ID RESULT]")
+		return nil, Usage("usage: offgrid agent status|approve|deny|cancel|resume|reconcile|recover-execution RUN_ID [APPROVAL_ID or CALL_ID RESULT]")
 	}
 	action, id := args[0], args[1]
 	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, "/\\?#") {
@@ -50,7 +55,7 @@ func AgentControlService(ctx context.Context, client *serviceclient.Client, args
 	method := http.MethodPost
 	data := map[string]any{"async": true}
 	switch action {
-	case "status", "resume", "cancel", "pause", "takeover", "reconnect", "export":
+	case "status", "resume", "cancel", "pause", "takeover", "reconnect", "export", "recover-execution":
 		if len(args) != 2 {
 			return nil, Usage("usage: offgrid agent %s RUN_ID", action)
 		}
@@ -71,6 +76,9 @@ func AgentControlService(ctx context.Context, client *serviceclient.Client, args
 		data["request_id"], data["instruction"] = args[2], strings.Join(args[3:], " ")
 	default:
 		return nil, Usage("unknown run action %q", action)
+	}
+	if action == "recover-execution" {
+		data = map[string]any{}
 	}
 	var body io.Reader
 	if action == "status" || action == "export" {
@@ -115,11 +123,18 @@ func ValidAgentStatus(status string) bool {
 
 func RenderAgentSnapshot(w io.Writer, snapshot AgentRunSnapshot) {
 	fmt.Fprintf(w, "Status: %s\n", TerminalSafe(snapshot.Status))
+	if snapshot.CanRecoverExecution {
+		fmt.Fprintf(w, "Inspect the saved host receipt without replaying work:\n  offgrid agent recover-execution %s\n", TerminalSafe(snapshot.RunID))
+	}
 	for _, child := range snapshot.Children {
 		fmt.Fprintf(w, "Subtask: %s â€” %s\n  offgrid agent status %s\n", TerminalSafe(child.Spec.Key), TerminalSafe(child.Spec.Goal), TerminalSafe(child.ID))
 	}
 	if input := snapshot.PendingInput; snapshot.Status == string(agents.TaskInput) && input != nil {
-		fmt.Fprintf(w, "Local access needed: %s\nOpen this saved task in Agents in the matching OffGrid Desktop workspace to review access. No input has been dispatched.\n  offgrid agent cancel %s\n", TerminalSafe(input.Target), TerminalSafe(snapshot.RunID))
+		if input.Kind == "workspace" {
+			fmt.Fprintf(w, "Folder access needed: %s. Review the local folder selection to continue this saved job.\n", TerminalSafe(input.Mode))
+		} else {
+			fmt.Fprintf(w, "Local access needed: %s\nOpen this saved task in Agents in the matching OffGrid Desktop workspace to review access. No input has been dispatched.\n  offgrid agent cancel %s\n", TerminalSafe(input.Target), TerminalSafe(snapshot.RunID))
+		}
 	}
 	if snapshot.Output != "" {
 		fmt.Fprintln(w, TerminalSafe(snapshot.Output))

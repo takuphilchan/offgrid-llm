@@ -77,6 +77,10 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 	identity := SystemIdentity{Product: "offgrid", Version: s.version, APIVersion: 2, Revision: BuildRevision, Capabilities: []string{"sessions-v1", "chat-streaming-v1", "durable-agent-runs-v1", "exclusive-workspace-v1", "offline-backup-v1"}}
 	identity.WorkspaceID = s.workspaceID
+	identity.Capabilities = append(identity.Capabilities, "agent-response-profiles-v1")
+	if s.executionEnrollment != nil && s.config != nil && s.config.EnableExecutionPreview {
+		identity.Capabilities = append(identity.Capabilities, "native-execution-preview-v1", "execution-access-request-v1")
+	}
 	if s.browserHub != nil {
 		identity.Capabilities = append(identity.Capabilities, "native-computer-sessions-v2", "native-document-negotiation-v1")
 		if s.agentRunner != nil && s.agentManager != nil && s.agentManager.ActivityReplaySupported() {
@@ -86,7 +90,7 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	if s.agentManager != nil && s.agentManager.ActivityReplaySupported() {
 		identity.Capabilities = append(identity.Capabilities, "durable-agent-events-v2")
 		if s.agentRunner != nil {
-			identity.Capabilities = append(identity.Capabilities, "task-lifecycle-v2", "bounded-readonly-delegation-v1", "task-context-archive-v1", "agent-profiles-v1")
+			identity.Capabilities = append(identity.Capabilities, "task-lifecycle-v2", "bounded-readonly-delegation-v1", "task-context-archive-v1", "agent-profiles-v1", "agent-context-resources-v1", "agent-schedules-v1")
 			if s.sessionHandlers != nil && s.sessionHandlers.agentServer == s {
 				identity.Capabilities = append(identity.Capabilities, "agent-conversations-v1")
 			}

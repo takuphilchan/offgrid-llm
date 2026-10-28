@@ -64,7 +64,7 @@ func TestAgentStatusPreservesAdditiveVerificationJSON(t *testing.T) {
 	}
 }
 
-func TestAgentStreamShowsLivePreviewOnceOnStderr(t *testing.T) {
+func TestAgentStreamPrintsCommittedAnswerOnceWithoutPromptChatter(t *testing.T) {
 	var stream strings.Builder
 	for _, text := range []string{"Hel", "Hello", "Hello"} {
 		event := map[string]any{"type": "status", "run_id": "run-1", "status": "running", "progress": map[string]any{"phase": "generating", "iteration": 1, "preview": text}}
@@ -76,10 +76,10 @@ func TestAgentStreamShowsLivePreviewOnceOnStderr(t *testing.T) {
 	if err := renderAgentStreamTo(&out, &progress, strings.NewReader(stream.String())); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(progress.String(), "Hello") != 1 || !strings.Contains(progress.String(), "Generating response") || !strings.Contains(progress.String(), "not complete") {
+	if strings.Contains(progress.String(), "Hello") || strings.Contains(progress.String(), "Generating response") || strings.Contains(progress.String(), "not complete") {
 		t.Fatalf("wrong progress: %s", progress.String())
 	}
-	if strings.Contains(out.String(), "preview") || !strings.Contains(out.String(), "Hello") {
+	if strings.Contains(out.String(), "preview") || strings.Count(out.String(), "Hello") != 1 {
 		t.Fatalf("wrong final output: %s", out.String())
 	}
 }

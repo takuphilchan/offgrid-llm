@@ -141,7 +141,7 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			if singleStepRequest(req) && resp.StatusCode == http.StatusInternalServerError {
+			if len(req.Tools) > 0 && resp.StatusCode == http.StatusInternalServerError {
 				if rejection := singleStepRuntimeRejection(body); rejection != nil {
 					return nil, rejection
 				}
@@ -275,7 +275,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			if singleStepRequest(req) && resp.StatusCode == http.StatusInternalServerError {
+			if len(req.Tools) > 0 && resp.StatusCode == http.StatusInternalServerError {
 				if rejection := singleStepRuntimeRejection(body); rejection != nil {
 					return rejection
 				}
@@ -291,6 +291,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 		completed := false
 		sequential := singleStepStream{}
+		preview := singleStepPreview{}
 		native := nativeToolStream{}
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -310,7 +311,12 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 			}
 			deliver := callback
 			if singleStepRequest(req) {
-				deliver = sequential.add
+				deliver = func(data json.RawMessage) error {
+					if err := sequential.add(data); err != nil {
+						return err
+					}
+					return preview.update(sequential.text.String(), decisionPreview(ctx))
+				}
 			} else if len(req.Tools) > 0 {
 				deliver = func(data json.RawMessage) error { return native.add(data, callback) }
 			}

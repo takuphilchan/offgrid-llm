@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/storage"
 )
 
@@ -67,6 +68,18 @@ func validateTaskIdentityStatus(task *Task) error {
 }
 
 func validateStoredTask(task *Task) error {
+	if !validateAutomationPin(task) {
+		return fmt.Errorf("invalid schedule provenance")
+	}
+	if task.Config.MemoryConsentRevision < 0 || task.Config.MemoryConsentRevision > 0 && (task.Config.Profile == nil || task.ParentID != "") {
+		return fmt.Errorf("invalid memory consent pin")
+	}
+	if err := task.Config.validateExecution(); err != nil {
+		return err
+	}
+	if task.Config.Execution != nil && (task.Config.Execution.Validate() != nil || task.ParentID != "" || task.Config.TextOnlyInference) {
+		return fmt.Errorf("invalid stored execution reference")
+	}
 	if err := validateTaskIdentityStatus(task); err != nil {
 		return err
 	}
@@ -120,13 +133,23 @@ func validateStoredTask(task *Task) error {
 	}
 	if task.Status == TaskInput {
 		input, cp := task.PendingInput, task.Checkpoint
-		if input == nil || input.ID == "" || input.Kind != "computer" || input.Target == "" || cp == nil || cp.ExecutingCall != "" || task.Config.ComputerSession != "" || !task.Config.TaskFirst {
+		if input == nil || input.ID == "" || input.Target == "" || cp == nil || cp.ExecutingCall != "" || !task.Config.TaskFirst {
 			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
 		}
-		initialDesktop := input.Mode == "desktop" && input.CallID == "" && cp.Iteration == 0 && len(cp.Calls) == 0 && task.Config.RequestedComputerScope == "desktop" && task.Config.RequestedComputerApprovalMode != "" && task.ResolvedInputID == ""
-		onDemandDesktop := input.Mode == "desktop" && task.Config.ComputerAccessOnDemand && task.Config.RequestedComputerScope == "desktop" && task.Config.RequestedComputerApprovalMode != ""
-		if !initialDesktop && (input.CallID == "" || (input.Mode != "app" && input.Mode != "browser" && !onDemandDesktop) || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID) {
-			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
+		if input.Kind == "workspace" {
+			_, ok := execution.AccessPermissions(input.Mode)
+			if !ok || task.ParentID != "" || task.Config.ExecutionRequestVersion != execution.AccessRequestVersion || cp.ExecutionIntent != nil || input.CallID == "" || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID || cp.Calls[0].Function.Name != execution.AccessRequestTool {
+				return fmt.Errorf("invalid workspace input checkpoint for %s", task.ID)
+			}
+		} else {
+			if input.Kind != "computer" || task.Config.ComputerSession != "" {
+				return fmt.Errorf("invalid computer input checkpoint for %s", task.ID)
+			}
+			initialDesktop := input.Mode == "desktop" && input.CallID == "" && cp.Iteration == 0 && len(cp.Calls) == 0 && task.Config.RequestedComputerScope == "desktop" && task.Config.RequestedComputerApprovalMode != "" && task.ResolvedInputID == ""
+			onDemandDesktop := input.Mode == "desktop" && task.Config.ComputerAccessOnDemand && task.Config.RequestedComputerScope == "desktop" && task.Config.RequestedComputerApprovalMode != ""
+			if !initialDesktop && (input.CallID == "" || (input.Mode != "app" && input.Mode != "browser" && !onDemandDesktop) || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID) {
+				return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
+			}
 		}
 	}
 	if a := task.PendingApproval; a != nil {

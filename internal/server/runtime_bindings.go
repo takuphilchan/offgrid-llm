@@ -4,8 +4,10 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/runs"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
@@ -19,15 +21,26 @@ type AgentRuntimeHooks struct {
 	ContextWindow func(*agents.Task) int
 	CountContext  func(context.Context, *agents.Task, []api.ChatMessage, []api.Tool) (int, error)
 	Observe       func(*agents.Task)
+	Coordinate    func(context.Context, time.Time) error
 }
 
 func (s *Server) AgentHooks() AgentRuntimeHooks {
+	if s.schedules == nil {
+		s.schedules = newScheduleController(s, time.Now)
+	}
+	if s.executionHosts == nil {
+		s.executionHosts = execution.NewHosts()
+	}
+	if s.executionEnrollment == nil {
+		s.executionEnrollment = s.newExecutionEnrollment()
+	}
 	return AgentRuntimeHooks{
 		Tools:         &browserRunTools{RunTools: s.toolRegistry, server: s},
 		Call:          s.callAgentModel,
 		Stream:        s.streamAgentModel,
 		ContextWindow: s.taskContextWindow,
 		CountContext:  s.countAgentContext,
+		Coordinate:    s.schedules.coordinate,
 		Observe: func(task *agents.Task) {
 			s.projectConversationTask(task)
 			if task.Status == agents.TaskCompleted || task.Status == agents.TaskFailed || task.Status == agents.TaskCancelled {

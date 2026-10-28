@@ -20,26 +20,20 @@ type LegacyAgentDependencies struct {
 
 func legacyAgentCommand(ctx context.Context, args []string, env Environment) error {
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
-		legacyAgentHelp(env)
+		if len(args) == 2 && args[1] == "all" {
+			legacyAgentHelpAll(env)
+		} else if len(args) == 1 {
+			legacyAgentHelp(env)
+		} else {
+			return Usage("Use offgrid agent help or offgrid agent help all")
+		}
 		return nil
 	}
 	if len(args) == 0 || args[0] == "chat" || strings.HasPrefix(args[0], "--") {
-		modelName := ""
-		for i := 0; i < len(args); i++ {
-			if i == 0 && args[i] == "chat" {
-				continue
-			}
-			if args[i] != "--model" || i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
-				Presenter{Stderr: env.Stderr, Style: env.Style}.Error("Usage: offgrid agent chat [--model <name>]. Unknown or incomplete option: " + args[i])
-				return nil
-			}
-			i++
-			modelName = args[i]
+		if len(args) > 0 && args[0] == "chat" {
+			args = args[1:]
 		}
-		if env.LegacyAgent.SubmitTask == nil {
-			return fmt.Errorf("agent interactive adapter unavailable")
-		}
-		return runInteractiveAgent(ctx, modelName, env)
+		return runInteractiveAgent(ctx, args, env)
 	}
 	switch args[0] {
 	case "tasks", "list":

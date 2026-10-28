@@ -108,7 +108,7 @@ func (m *Manager) loadTasks() {
 			task.Error = "Legacy approval has no resumable checkpoint. Review past actions before starting a new task."
 			changed = true
 		}
-		if recoverComputerReceipt(task) {
+		if recoverProviderReceipts(task) {
 			changed = true
 		}
 		if changed {

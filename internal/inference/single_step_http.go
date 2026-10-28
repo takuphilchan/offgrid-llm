@@ -89,24 +89,25 @@ func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
 	// prefix and force a full CPU prefill every action. Keep the owned catalog near
 	// the current exchange; retain the final tool result for capture attachment.
 	position := len(copy.Messages)
-	for i := len(copy.Messages) - 1; i >= 2; i-- {
+	if position > 0 && copy.Messages[position-1].Role == "user" {
+		// The catalog is supporting context, not the task. Keep the current
+		// request last on initial/follow-up decisions just as for context indexes.
+		position--
+	}
+	for i := len(copy.Messages) - 1; position == len(copy.Messages) && i >= 2; i-- {
 		if copy.Messages[i].Role == "assistant" {
 			position = i
 			break
 		}
 	}
-	catalogMessage := api.ChatMessage{Role: "system", Content: "Available tools for this step (only these schemas may be called): " + string(catalog)}
+	catalogLabel := "Available tools for this step are optional. If the current request needs no external evidence or action, return a message directly; do not inspect the workspace merely because tools are attached. Otherwise call one of these exact schemas: "
+	if required {
+		catalogLabel = "A tool decision is required for this step; call one of these exact schemas: "
+	}
+	catalogMessage := api.ChatMessage{Role: "system", Content: catalogLabel + string(catalog)}
 	copy.Messages = append(copy.Messages[:position:position], append([]api.ChatMessage{catalogMessage}, copy.Messages[position:]...)...)
 	for i := range copy.Messages {
-		message := &copy.Messages[i]
-		if message.Role == "assistant" && len(message.ToolCalls) > 0 {
-			data, _ := json.Marshal(map[string]any{"previous_tool_calls": message.ToolCalls})
-			message.Content, message.ToolCalls = string(data), nil
-		}
-		if message.Role == "tool" {
-			data, _ := json.Marshal(map[string]any{"tool_result": map[string]any{"name": message.Name, "content": message.Content}})
-			message.Role, message.Content, message.Name, message.ToolCallID = "user", string(data), "", ""
-		}
+		copy.Messages[i] = singleStepHistoryMessage(copy.Messages[i])
 	}
 	return json.Marshal(struct {
 		api.ChatCompletionRequest

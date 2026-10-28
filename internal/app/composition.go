@@ -236,12 +236,18 @@ func New(cfg *config.Config) (_ *Runtime, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := transport.InstallMeasuredAgentTools(); err != nil {
+		// Keep conversation and the compatibility adapter available. Saved jobs
+		// with a native pin fail closed when no policy was installed.
+		log.Printf("Native agent qualification disabled: %v", err)
+	}
 	hooks := transport.AgentHooks()
 	runner := agents.NewRunner(agentManager, hooks.Tools, hooks.Call)
 	runner.StreamCaller = hooks.Stream
 	runner.ContextWindow = hooks.ContextWindow
 	runner.CountContext = hooks.CountContext
 	runner.Observer = hooks.Observe
+	runner.Coordinate = hooks.Coordinate
 	if err := transport.BindApplicationRuntime(runner); err != nil {
 		return nil, err
 	}

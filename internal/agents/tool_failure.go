@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 )
 
@@ -32,6 +33,12 @@ func (e *ToolFailure) Error() string { return e.Message }
 func (e *ToolFailure) Unwrap() error { return e.Cause }
 
 func readOnlyBuiltin(d capabilities.Descriptor) bool {
+	if d.Name == "skill_load" || d.Name == "memory_read" {
+		trusted, ok := agentcontext.Descriptor(d.Name)
+		if ok && d == trusted {
+			return true
+		}
+	}
 	if capabilities.TrustedNativeRead(d) {
 		return true
 	}

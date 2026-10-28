@@ -118,12 +118,12 @@ func runRoot(ctx context.Context, rawArgs []string, env cli.Environment) int {
 
 func agentUsesLegacyService(args []string) bool {
 	if len(args) == 0 {
-		return true
+		return false
 	}
 	switch args[0] {
-	case "profiles", "run", "artifact", "status", "approve", "deny", "cancel", "resume", "reconcile", "pause", "takeover", "steer", "reconnect", "export":
-		return false
-	default:
+	case "tasks", "list", "workflows", "tools", "templates", "template", "mcp":
 		return true
+	default:
+		return false
 	}
 }

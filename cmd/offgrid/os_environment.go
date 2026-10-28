@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -50,6 +49,7 @@ func osCLIEnvironment() cli.Environment {
 		return observeInfo(ctx, config.LoadConfig(), getVersion())
 	}
 	env.Service = sessionEnvironment().Service
+	env.Service.ReadAgentLine = newAgentSessionInput()
 	env.Service.ControlClient = func() (*serviceclient.Client, error) {
 		return serviceclient.New(commandServerURL(), os.Getenv("OFFGRID_API_KEY"), httpClient)
 	}
@@ -57,6 +57,7 @@ func osCLIEnvironment() cli.Environment {
 		return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	}
 	env.Service.OpenProfileFile = func(path string) (io.ReadCloser, error) { return os.Open(path) }
+	env.Service.ReadSkillDirectory = cli.ReadSkillDirectory
 	env.ModelPackage = modelPackageEnvironment().ModelPackage
 	env.Computer = cli.ComputerDependencies{
 		Setup: openComputerWorkspace, Control: runAgentControl,
@@ -97,14 +98,15 @@ func osCLIEnvironment() cli.Environment {
 			WriteFile: os.WriteFile, Now: time.Now,
 		},
 	}
+	env.Execution = nativeExecutionDependencies()
 	return env
 }
 
 func legacyAgentEnvironment(env cli.Environment) cli.Environment {
-	// Legacy agent lists use the historical localhost endpoint. Profile and
-	// task commands retain the configured, authenticated service client.
+	// Legacy lists retain their short request timeout, while endpoint and
+	// credentials still belong to the explicitly selected service.
 	env.Service.Client = func() (*serviceclient.Client, error) {
-		return serviceclient.New(fmt.Sprintf("http://localhost:%d", config.LoadConfig().ServerPort), os.Getenv("OFFGRID_API_KEY"), httpClient)
+		return serviceclient.New(commandServerURL(), os.Getenv("OFFGRID_API_KEY"), httpClient)
 	}
 	return env
 }

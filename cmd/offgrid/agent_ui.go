@@ -2,11 +2,16 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/takuphilchan/offgrid-llm/internal/cli"
 	"io"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/x/term"
 )
 
 // Public response previews are provisional; committed steps/results remain
@@ -16,19 +21,34 @@ func renderAgentStream(w io.Writer, body io.Reader) error {
 }
 
 func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
+	terminal := false
+	style := cli.PresentationStyle{}
+	if file, ok := cli.AgentOutputTarget(w).(*os.File); ok {
+		if term.IsTerminal(file.Fd()) {
+			terminal = true
+			style = legacyPresenter().Style
+		}
+	}
+	animate := terminal && os.Getenv("TERM") != "dumb" && os.Getenv("OFFGRID_ANIMATIONS") != "0" && os.Getenv("OFFGRID_PLAIN") != "1"
+	if file, ok := cli.AgentOutputTarget(progress).(*os.File); !ok || !term.IsTerminal(file.Fd()) {
+		animate = false
+	}
+	return renderAgentStreamMode(w, progress, body, terminal, animate, style)
+}
+
+func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, animate bool, style cli.PresentationStyle) error {
+	display := newAgentLiveDisplay(progress, animate)
+	defer display.close()
+	w, progress = agentDisplayWriter{display, w}, agentDisplayWriter{display, progress}
+	draft := &agentDraft{}
+	defer func() { draft.end(w, "Stream ended before completion; inspect saved work.") }()
+	started := time.Now()
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	runID := ""
-	lastPhase, lastPreview, iteration := "", "", 0
+	lastPhase := ""
 	lastChildren := ""
-	previewOpen := false
-	endPreview := func() {
-		if previewOpen {
-			fmt.Fprintln(progress)
-			previewOpen = false
-		}
-	}
-	defer endPreview()
+	observed := map[string]bool{}
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -47,6 +67,14 @@ func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
 		if event.Type == "activity" {
 			continue
 		}
+		if len(event.Steps) > 0 {
+			var evidence bytes.Buffer
+			cli.RenderExecutionObservations(&evidence, event.Steps, observed)
+			if evidence.Len() > 0 {
+				draft.end(w, "Draft ended; work continues.")
+				fmt.Fprint(w, evidence.String())
+			}
+		}
 		if event.Type == "snapshot" || event.Type == "snapshot_recovery" {
 			event.Type = "status"
 			switch event.Status {
@@ -62,58 +90,52 @@ func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
 		}
 		if runID == "" && event.RunID != "" {
 			runID = event.RunID
-			fmt.Fprintf(progress, "Run: %s\n", terminalSafe(runID))
 		}
 		if event.Status == "waiting_for_children" {
 			data, _ := json.Marshal(event.Children)
 			if string(data) != lastChildren {
-				endPreview()
 				renderAgentSnapshot(progress, event.agentRunSnapshot)
 				lastChildren = string(data)
 			}
 		}
 		if p := event.Progress; p != nil && event.Type == "status" {
+			if terminal && p.Phase == "generating" && p.Preview != "" {
+				display.phase("Responding", false)
+				draft.update(w, p.Iteration, p.Preview)
+			} else if p.Phase != "generating" && (p.Iteration != draft.iteration || p.Tool != "") {
+				draft.end(w, "Draft ended; work continues.")
+			}
 			phase := fmt.Sprintf("%d:%s:%s", p.Iteration, p.Phase, p.Tool)
-			if phase != lastPhase {
-				endPreview()
-				labels := map[string]string{"queued": "Waiting for inference", "loading": "Loading model", "processing": "Preparing prompt", "generating": "Generating response", "preparing_tool": "Preparing tool call", "tool": "Running tool", "approval": "Awaiting approval"}
+			liveLabel := map[string]string{"queued": "Waiting for model", "loading": "Loading model", "processing": "Working", "preparing_tool": "Choosing action", "generating": "Responding", "tool": "Running action"}[p.Phase]
+			if liveLabel != "" {
+				display.phase(liveLabel, !draft.open)
+			}
+			labels := map[string]string{"queued": "Waiting for inference", "loading": "Loading model", "tool": "Running tool", "approval": "Awaiting approval"}
+			if phase != lastPhase && (labels[p.Phase] != "" || p.Tool != "") {
 				label := labels[p.Phase]
 				if label == "" {
 					label = "Running"
 				}
-				fmt.Fprintf(progress, "Step %d · %s", p.Iteration, label)
 				if p.Tool != "" {
-					fmt.Fprintf(progress, " · %s", terminalSafe(p.Tool))
+					label = cli.AgentActionLabel(p.Tool)
 				}
-				fmt.Fprintln(progress)
+				display.phase(label, !draft.open)
+				fmt.Fprintf(progress, "  %s%s%s\n", style.Muted, label, style.Reset)
 				lastPhase = phase
-			}
-			if p.Iteration != iteration {
-				lastPreview = ""
-				iteration = p.Iteration
-			}
-			if p.Preview != "" && p.Preview != lastPreview {
-				if !previewOpen {
-					fmt.Fprintln(progress, "Response preview (not complete):")
-					previewOpen = true
-				}
-				if strings.HasPrefix(p.Preview, lastPreview) {
-					fmt.Fprint(progress, terminalSafe(strings.TrimPrefix(p.Preview, lastPreview)))
-				} else {
-					fmt.Fprint(progress, "\n", terminalSafe(p.Preview))
-				}
-				lastPreview = p.Preview
 			}
 		}
 		switch event.Type {
 		case "step":
-			endPreview()
-			if event.ToolName != "" {
-				fmt.Fprintf(progress, "  %s · %s\n", terminalSafe(event.ToolName), truncateTerminalText(terminalSafe(event.ToolResult), 180))
+			draft.end(w, "Draft ended; work continues.")
+			if event.ToolName != "" && !strings.HasSuffix(lastPhase, ":"+event.ToolName) {
+				fmt.Fprintf(progress, "  %s\n", cli.AgentActionLabel(event.ToolName))
 			}
 		case "done", "approval_required", "input_required", "error":
-			endPreview()
-			renderAgentSnapshot(w, event.agentRunSnapshot)
+			display.phase("", false)
+			if !draft.complete(w, progress, event.agentRunSnapshot, style, time.Since(started)) {
+				draft.end(w, "Draft is not the completed answer; see the saved outcome below.")
+				cli.RenderAgentOutcome(w, progress, event.agentRunSnapshot, style, time.Since(started))
+			}
 			if event.Type == "error" {
 				return fmt.Errorf("agent run stopped; use offgrid agent status %s before taking further action", terminalSafe(runID))
 			}

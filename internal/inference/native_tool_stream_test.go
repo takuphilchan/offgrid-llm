@@ -5,6 +5,7 @@ package inference
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,17 @@ func TestNativeWorkerErrorsAreActionableAndPrivate(t *testing.T) {
 		err := AsEngineError(classifyNativeStreamError(raw))
 		if err == nil || err.Code != tc.code || strings.Contains(err.Error(), "PRIVATE") || !strings.Contains(err.Message, "No tool call") {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestNativeDecisionRejectionSurvivesServiceForwarding(t *testing.T) {
+	for _, code := range []string{"invalid_model_tool_response", "runtime_stream_error", "inference_timeout"} {
+		raw, _ := json.Marshal(map[string]string{"code": code, "message": "PRIVATE"})
+		err := classifyNativeStreamError(raw)
+		var decision *DecisionValidationError
+		if errors.As(err, &decision) != (code == "invalid_model_tool_response") || strings.Contains(err.Error(), "PRIVATE") {
+			t.Fatal("invalid repair classification", code, err)
 		}
 	}
 }

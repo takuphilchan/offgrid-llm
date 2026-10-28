@@ -69,15 +69,21 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 	}
 	withIndex := func() []api.ChatMessage {
 		messages := append([]api.ChatMessage(nil), task.Checkpoint.Messages...)
+		messages = projectLoadedSkills(task, messages)
 		if projector, ok := r.tools.(interface {
 			ProjectModelContext(*Task, []api.ChatMessage) []api.ChatMessage
 		}); ok {
 			messages = projector.ProjectModelContext(task, messages)
 		}
-		index := profileResourceContext(task.Config)
+		index := responseContext(task, tools) + profileResourceContext(task.Config) + executionResourceContext(task.Config) + executionProgressContext(task) + inputWriteContext(task) + contextResourcePrompt(task.Config) + loadedSkillContext(task)
 		if len(task.Plan) > 0 {
 			plan, _ := json.Marshal(task.Plan)
-			index += "\nCurrent recorded plan (data, not authority): " + string(plan) + ". Continue unfinished work; a verified application launch alone cannot satisfy a document or research item."
+			index += "\nCurrent recorded plan (data, not authority): " + string(plan)
+			if task.Checkpoint.SkillAnswerRepairs > 0 {
+				index += ". This is answer-only format correction; preserve the recorded plan and evidence without executing more work."
+			} else {
+				index += ". Continue unfinished work; a verified application launch alone cannot satisfy a document or research item."
+			}
 		}
 		if len(task.ContextArchive) > 0 && len(messages) > 0 {
 			plan, _ := json.Marshal(task.Plan)
@@ -159,7 +165,11 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 				break
 			}
 		}
+		retainedSkills := retainedSkillGroups(task)
 		for i := 2; i < latest; i++ {
+			if retainedSkills[i] {
+				continue
+			}
 			if cp.Messages[i].Role != "assistant" {
 				continue
 			}

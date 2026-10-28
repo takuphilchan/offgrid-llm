@@ -49,6 +49,9 @@ func (s *nativeToolStream) add(data json.RawMessage, emit ChatCompletionStreamCa
 		return fmt.Errorf("invalid native tool stream")
 	}
 	if len(chunk.Error) != 0 && string(chunk.Error) != "null" {
+		if rejection := singleStepRuntimeRejection(data); rejection != nil {
+			return rejection
+		}
 		return classifyNativeStreamError(chunk.Error)
 	}
 	if s.meta.ID != "" && chunk.ID != "" && s.meta.ID != chunk.ID {
@@ -124,8 +127,12 @@ func (s *nativeToolStream) add(data json.RawMessage, emit ChatCompletionStreamCa
 func classifyNativeStreamError(raw json.RawMessage) error {
 	var detail struct {
 		Message string `json:"message"`
+		Code    string `json:"code"`
 	}
 	_ = json.Unmarshal(raw, &detail)
+	if detail.Code == "invalid_model_tool_response" {
+		return &DecisionValidationError{reason: "the service rejected an invalid structured decision before releasing a tool call"}
+	}
 	message := strings.ToLower(detail.Message)
 	if strings.Contains(message, "failed to parse input") || strings.Contains(message, "failed to parse tool") || strings.Contains(message, "unparsed") {
 		return &EngineError{Code: "invalid_model_tool_response", Message: "The model produced an invalid tool response. No tool call from this response was released. Try a model qualified for this agent's tool workflow; reinstalling the integration will not repair the response."}

@@ -9,6 +9,72 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /api/v2/execution/pairing:
+    post:
+      operationId: pairExecutionHost
+      description: Preview-gated authenticated native-supervisor setup. Issues a two-minute single-use actor/workspace ticket, not a folder grant. The trusted local host must independently approve the scope and verify its pinned worker before using the private host transport. Never log or export the ticket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        '200':
+          description: Single-use setup ticket; Cache-Control no-store.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutionPairing' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/execution/revoke:
+    post:
+      operationId: revokeExecutionHost
+      description: Revoke exactly the authenticated actor's host reference in this workspace. Does not undo effects or establish that a disconnected native process stopped; the native supervisor closes its owned worker when the bridge ends. Inspect uncertain operations rather than replaying them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reference]
+              properties:
+                reference: { $ref: '#/components/schemas/ExecutionReference' }
+      responses:
+        '200':
+          description: Service-side authority revoked, not an undo or native-stop guarantee.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revoked]
+                properties:
+                  revoked: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/execution/workspaces:
+    get:
+      operationId: listExecutionWorkspaces
+      description: Inspect only ready, already locally approved execution workspaces owned by the authenticated actor in this service workspace. No folder path submission or implicit service-directory authority. Enrollment and platform qualification remain gated.
+      responses:
+        '200':
+          description: Ready actor-scoped workspace references; credentials are never included.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspaces, protocol]
+                properties:
+                  protocol: { type: integer, const: 1 }
+                  workspaces: { type: array, items: { $ref: '#/components/schemas/ExecutionWorkspace' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Error' }
   /v1/inference/prepare:
     post:
       operationId: prepareInferenceModel
@@ -560,6 +626,8 @@ paths:
                 durable: { type: boolean, default: false, description: Persist admission and run independently of the stream connection. Reconnect using the turn endpoints. }
                 request_id: { type: string, maxLength: 128, description: Required for durable streaming or agent selection (8–128 characters for agent turns). Identical agent retries retrieve the canonical job; different payload or deleted-history reuse returns 409. }
                 agent: { $ref: '#/components/schemas/AgentSelection' }
+                execution: { $ref: '#/components/schemas/ExecutionReference' }
+                execution_request_version: { type: integer, enum: [1], description: Opt into requesting client-approved workspace access on the same job only when needed. This is not a grant. }
                 restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
                 computer_scope: { type: string, enum: [desktop], description: Optional on-demand desktop availability, not a grant. Requires an explicit approval policy. }
                 computer_approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task], description: Proposed action policy only; existing host consent remains required. }
@@ -840,6 +908,248 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /api/v2/agent-schedules:
+    get:
+      operationId: listAgentSchedules
+      responses:
+        '200':
+          description: Owned reviewed policies; inspection never dispatches work
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schedules]
+                properties:
+                  schedules: { type: array, items: { $ref: '#/components/schemas/AgentSchedule' } }
+    post:
+      operationId: createAgentSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentScheduleWrite' }
+      responses:
+        '201':
+          description: Future policy saved with exact resources; no job created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSchedule' }
+  /api/v2/agent-schedules/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: inspectAgentSchedule
+      parameters:
+        - { in: query, name: revision, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Current or exact historical policy; never resumes work
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSchedule' }
+    put:
+      operationId: reviseAgentSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentScheduleWrite' }
+      responses:
+        '200':
+          description: New reviewed revision; old roots do not regain authority
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSchedule' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/v2/agent-schedules/{id}/disable:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      operationId: disableAgentSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision]
+              properties:
+                expected_revision: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Policy revoked before stopping owned roots; unknown effects remain unknown
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSchedule' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/v2/agent-schedules/{id}/occurrences:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: listAgentScheduleOccurrences
+      responses:
+        '200':
+          description: Bounded owned occurrence history and canonical job identities; no replay operation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [occurrences]
+                properties:
+                  occurrences: { type: array, items: { $ref: '#/components/schemas/AgentScheduleOccurrence' } }
+  /api/v2/agent-skills:
+    get:
+      operationId: listAgentSkills
+      responses:
+        '200':
+          description: Owned skill metadata; no instructions or executable authority
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [skills]
+                properties:
+                  skills: { type: array, items: { $ref: '#/components/schemas/AgentSkill' } }
+    post:
+      operationId: importAgentSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentSkillImport' }
+      responses:
+        '201':
+          description: Immutable owned skill; never executed or attached automatically
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSkill' }
+  /api/v2/agent-skills/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: inspectAgentSkill
+      parameters:
+        - { in: query, name: revision, required: true, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: digest, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Exact owned revision and inert files
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [skill, bundle, executable]
+                properties:
+                  skill: { $ref: '#/components/schemas/AgentSkill' }
+                  bundle: { $ref: '#/components/schemas/AgentSkillBundle' }
+                  executable: { type: boolean, const: false }
+    put:
+      operationId: reviseAgentSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentSkillImport' }
+      responses:
+        '201':
+          description: New revision; prior pinned revisions unchanged
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSkill' }
+  /api/v2/agent-skills/{id}/review:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      operationId: reviewAgentSkillDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision, digest]
+              properties:
+                expected_revision: { type: integer, minimum: 1 }
+                digest: { type: string }
+      responses:
+        '201':
+          description: User-reviewed copy with a new ID; still requires explicit profile attachment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSkill' }
+  /api/v2/agent-memory/{profile}:
+    parameters:
+      - { in: path, name: profile, required: true, schema: { type: string } }
+    get:
+      operationId: inspectAgentMemory
+      responses:
+        '200':
+          description: User inspection remains available when automatic use is disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [consent, entries, deletion_scope]
+                properties:
+                  consent: { $ref: '#/components/schemas/AgentMemoryConsent' }
+                  entries: { type: array, items: { $ref: '#/components/schemas/AgentMemoryEntry' } }
+                  deletion_scope: { type: string }
+    post:
+      operationId: writeAgentMemory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentMemoryWrite' }
+      responses:
+        '200':
+          description: Explicit user edit; does not enable automatic memory
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentMemoryEntry' }
+  /api/v2/agent-memory/{profile}/consent:
+    parameters:
+      - { in: path, name: profile, required: true, schema: { type: string } }
+    put:
+      operationId: changeAgentMemoryConsent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision, enabled]
+              properties:
+                expected_revision: { type: integer, minimum: 0 }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: Live monotonic consent; re-enable never reauthorizes old jobs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentMemoryConsent' }
+  /api/v2/agent-memory/{profile}/{id}:
+    parameters:
+      - { in: path, name: profile, required: true, schema: { type: string } }
+      - { in: path, name: id, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteAgentMemory
+      parameters:
+        - { in: query, name: revision, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Live text and cached write responses cleared; historical task evidence not erased
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, historical_evidence_erased]
+                properties:
+                  deleted: { type: boolean, const: true }
+                  historical_evidence_erased: { type: boolean, const: false }
   /api/v2/agent-profiles:
     get:
       operationId: listAgentProfiles
@@ -1012,6 +1322,9 @@ paths:
                 model: { type: string }
                 profile_id: { type: string, description: Actor-owned profile; requires an explicit immutable profile_revision. }
                 profile_revision: { type: integer, minimum: 1 }
+                execution: { $ref: '#/components/schemas/ExecutionReference' }
+                execution_request_version: { type: integer, enum: [1], description: Opt into on-demand client workspace selection. No folder or permission is inferred. }
+                response_profile: { type: string, enum: [interactive, extended], description: Optional native job context selection. Interactive uses the Chat allocation; extended uses the model limit. Omission preserves legacy allocation. Pinned for the saved job; does not alter external-agent or service configuration. }
                 restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
                 request_id: { type: string, minLength: 8, maxLength: 128 }
                 style: { type: string, enum: [react, cot, plan-execute] }
@@ -1041,10 +1354,16 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [input_id, computer_session]
+              required: [input_id]
+              oneOf:
+                - required: [computer_session]
+                  not: { required: [execution] }
+                - required: [execution]
+                  not: { required: [computer_session] }
               properties:
                 input_id: { type: string }
                 computer_session: { type: string }
+                execution: { $ref: '#/components/schemas/ExecutionReference' }
       responses:
         '202':
           description: Persisted task resumed or previously resolved snapshot
@@ -1104,6 +1423,28 @@ paths:
             application/octet-stream:
               schema: { type: string, format: binary }
         '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/jobs/{id}/recover-execution:
+    post:
+      operationId: recoverSavedExecutionReceipt
+      description: Inspect only the saved original host intent and its authenticated journal evidence. Never claims or re-dispatches the operation, changes its arguments, renews a grant or resumes the job. Conclusive evidence moves an uncertain task to interrupted for explicit review. Missing, partial or still-dispatched evidence remains uncertain. A disconnected host may leave only locally retained evidence; Refresh never replays it.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        '202':
+          description: Original receipt incorporated without replay; not overall workflow completion.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
   /api/v2/jobs/{id}/{action}:
     post:
@@ -2200,6 +2541,7 @@ components:
         tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentToolReference' } }
         knowledge: { type: array, maxItems: 32, uniqueItems: true, items: { type: string } }
         computer: { type: boolean }
+        execution: { $ref: '#/components/schemas/ExecutionPermissions', description: May only narrow profile and host ceilings. All false disables host tools; never creates access. }
     LinkedAgentTurn:
       type: object
       required: [turn, job]
@@ -2385,6 +2727,160 @@ components:
         tool: { type: string }
         schema_revision: { type: string }
         location: { type: string, enum: [service, host, remote] }
+    AgentSkillReference:
+      type: object
+      additionalProperties: false
+      required: [id, revision, digest]
+      properties:
+        id: { type: string }
+        revision: { type: integer, minimum: 1 }
+        digest: { type: string, pattern: '^[0-9a-f]{64}$' }
+    AgentSkillFile:
+      type: object
+      additionalProperties: false
+      required: [path, content]
+      properties:
+        path: { type: string, maxLength: 256, description: Portable relative POSIX path; no traversal, backslashes or controls. }
+        content: { type: string, format: byte, description: Base64 exact bytes; at most 64 KiB decoded per file. SKILL.md must be UTF-8 and at most 32 KiB. }
+    AgentSkillImport:
+      type: object
+      additionalProperties: false
+      required: [files]
+      properties:
+        expected_revision: { type: integer, minimum: 0 }
+        files: { type: array, minItems: 1, maxItems: 64, items: { $ref: '#/components/schemas/AgentSkillFile' }, description: Total decoded content at most 512 KiB. No archive extraction or downloads. }
+    AgentSkill:
+      allOf:
+        - { $ref: '#/components/schemas/AgentSkillReference' }
+        - type: object
+          required: [name, description, draft, created_at]
+          properties:
+            name: { type: string }
+            description: { type: string }
+            draft: { type: boolean }
+            source_job: { type: string }
+            response_contract: { $ref: '#/components/schemas/AgentSkillResponseContract' }
+            created_at: { type: string, format: date-time }
+    AgentSkillBundle:
+      type: object
+      required: [name, description, digest, files]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        digest: { type: string }
+        response_contract: { $ref: '#/components/schemas/AgentSkillResponseContract' }
+        files: { type: array, items: { $ref: '#/components/schemas/AgentSkillFile' } }
+    AgentSkillResponseContract:
+      type: object
+      additionalProperties: false
+      required: [version, pattern, max_bytes]
+      description: Optional reviewed complete-answer format; never tool authority or proof of semantic correctness. Old revisions do not acquire a contract automatically.
+      properties:
+        version: { type: integer, enum: [1] }
+        pattern: { type: string, minLength: 1, maxLength: 2048, description: RE2 pattern matched against the complete UTF-8 answer; bounded to 2048 UTF-8 bytes. }
+        max_bytes: { type: integer, minimum: 1, maximum: 32768 }
+    AgentMemoryConsent:
+      type: object
+      required: [revision, enabled]
+      properties:
+        revision: { type: integer, minimum: 0 }
+        enabled: { type: boolean, default: false }
+    AgentMemoryEntry:
+      type: object
+      required: [id, revision, label, content, updated_at]
+      properties:
+        id: { type: string }
+        revision: { type: integer, minimum: 1 }
+        label: { type: string, maxLength: 128 }
+        content: { type: string, maxLength: 8192 }
+        source_job: { type: string }
+        updated_at: { type: string, format: date-time }
+    AgentCalendar:
+      type: object
+      additionalProperties: false
+      required: [zone, hour, minute, weekdays]
+      properties:
+        zone: { type: string, description: Explicit offline IANA timezone; Local is rejected. }
+        hour: { type: integer, minimum: 0, maximum: 23 }
+        minute: { type: integer, minimum: 0, maximum: 59 }
+        weekdays: { type: array, minItems: 1, maxItems: 7, uniqueItems: true, items: { type: integer, minimum: 0, maximum: 6 }, description: 'Sunday=0; gaps skipped, repeated wall times use the first instant.' }
+    AgentScheduleSettings:
+      type: object
+      additionalProperties: false
+      required: [name, prompt, calendar, enabled]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        prompt: { type: string, minLength: 1, maxLength: 32000 }
+        calendar: { $ref: '#/components/schemas/AgentCalendar' }
+        enabled: { type: boolean }
+    AgentScheduleWrite:
+      type: object
+      additionalProperties: false
+      required: [settings, profile_id, profile_revision]
+      properties:
+        expected_revision: { type: integer, minimum: 0, description: Zero for creation; exact reviewed revision for update. }
+        settings: { $ref: '#/components/schemas/AgentScheduleSettings' }
+        profile_id: { type: string }
+        profile_revision: { type: integer, minimum: 1 }
+        execution: { $ref: '#/components/schemas/ExecutionReference' }
+        max_iterations: { type: integer, minimum: 1, maximum: 50 }
+    AgentSchedule:
+      type: object
+      required: [version, id, revision, digest, settings, next_at, created_at, model, max_iterations, profile]
+      properties:
+        version: { type: integer, enum: [1] }
+        id: { type: string }
+        revision: { type: integer, minimum: 1 }
+        digest: { type: string }
+        settings: { $ref: '#/components/schemas/AgentScheduleSettings' }
+        next_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        model: { type: string }
+        max_iterations: { type: integer }
+        profile:
+          type: object
+          required: [id, revision, digest, name]
+          properties:
+            id: { type: string }
+            revision: { type: integer }
+            digest: { type: string }
+            name: { type: string }
+        execution: { oneOf: [{ $ref: '#/components/schemas/ExecutionReference' }, { type: 'null' }] }
+        execution_workspace: { oneOf: [{ $ref: '#/components/schemas/ExecutionWorkspace' }, { type: 'null' }] }
+    AgentScheduleOrigin:
+      type: object
+      required: [version, schedule, revision, occurrence, due_at]
+      properties:
+        version: { type: integer, enum: [1] }
+        schedule: { type: string }
+        revision: { type: integer, minimum: 1 }
+        occurrence: { type: string }
+        due_at: { type: string, format: date-time }
+    AgentScheduleOccurrence:
+      type: object
+      required: [id, schedule, revision, due_at, state, request_id, request_digest, covered_until, created_at]
+      properties:
+        id: { type: string }
+        schedule: { type: string }
+        revision: { type: integer }
+        due_at: { type: string, format: date-time }
+        state: { type: string, enum: [claimed, admitted, completed, failed, cancelled, interrupted, blocked, missed] }
+        reason: { type: string }
+        job_id: { type: string, description: Existing canonical root; inspection only. }
+        request_id: { type: string }
+        request_digest: { type: string }
+        covered_until: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    AgentMemoryWrite:
+      type: object
+      additionalProperties: false
+      required: [operation, expected_revision, label, content]
+      properties:
+        operation: { type: string, minLength: 1, maxLength: 251, description: Stable user-edit idempotency identity; changed payload reuse is rejected. }
+        id: { type: string }
+        expected_revision: { type: integer, minimum: 0 }
+        label: { type: string, minLength: 1, maxLength: 128 }
+        content: { type: string, minLength: 1, maxLength: 8192 }
     AgentProfileSettings:
       type: object
       additionalProperties: false
@@ -2400,6 +2896,8 @@ components:
           maxItems: 128
           items: { $ref: '#/components/schemas/AgentToolReference' }
         computer: { type: boolean, description: Makes host access discoverable; does not grant it. }
+        execution: { $ref: '#/components/schemas/ExecutionPermissions', description: Optional ceiling for an explicitly selected host grant. Omitted inherits; never creates access. }
+        skills: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/AgentSkillReference' }, description: Explicit owned immutable revisions. Content and scripts never grant authority. }
         max_iterations: { type: integer, minimum: 1, maximum: 50 }
         delegates: { type: array, maxItems: 4, uniqueItems: true, items: { type: string }, description: Owned direct child-profile IDs; pinned at task admission, no nested delegation or desktop input. }
     AgentProfileWrite:
@@ -2506,8 +3004,8 @@ components:
       properties:
         id: { type: string }
         call_id: { type: string }
-        kind: { type: string, enum: [computer] }
-        mode: { type: string, enum: [app, browser, desktop] }
+        kind: { type: string, enum: [computer, workspace] }
+        mode: { type: string, enum: [app, browser, desktop, read, edit, trusted] }
         target: { type: string, description: Model-proposed label only; never a host identity or consent grant. }
         url: { type: string, description: Proposed HTTPS address for local review. }
         previous_session: { type: string, description: Revoked session identity; never reusable authority. }
@@ -2611,10 +3109,55 @@ components:
         state: { type: string, enum: [pending, partial, unverified, checks_passed] }
         checks: { type: array, maxItems: 12, items: { $ref: '#/components/schemas/OutcomeCheck' } }
         history: { type: array, items: { type: object, additionalProperties: true } }
+    ExecutionPairing:
+      type: object
+      additionalProperties: false
+      required: [code, actor, workspace, protocol, version, expires_at]
+      properties:
+        code: { type: string, pattern: '^[0-9a-f]{64}$', description: Single-use secret; never send to a model or log. }
+        actor: { type: string }
+        workspace: { type: string }
+        protocol: { type: integer, const: 1 }
+        version: { type: string }
+        expires_at: { type: string, format: date-time }
+    ExecutionReference:
+      type: object
+      additionalProperties: false
+      description: An address, not a grant. Requires a currently connected host with matching local approval. Never silently resolves against the service filesystem.
+      required: [host, session, grant, revision]
+      properties:
+        host: { type: string, minLength: 1, maxLength: 256 }
+        session: { type: string, minLength: 1, maxLength: 256 }
+        grant: { type: string, minLength: 1, maxLength: 256 }
+        revision: { type: integer, minimum: 1 }
+    ExecutionPermissions:
+      type: object
+      additionalProperties: false
+      required: [read, write, processes]
+      properties:
+        read: { type: boolean }
+        write: { type: boolean }
+        processes: { type: boolean }
+    ExecutionWorkspace:
+      type: object
+      required: [reference, backend, root, directory, permissions]
+      properties:
+        reference: { $ref: '#/components/schemas/ExecutionReference' }
+        backend: { type: string }
+        root: { type: string, description: Provider-local approved root, not a portable service path. }
+        directory: { type: string, description: Session-local directory relative to the approved root. }
+        permissions:
+          type: object
+          required: [read, write, processes]
+          properties:
+            read: { type: boolean }
+            write: { type: boolean }
+            processes: { type: boolean }
     AgentRunResponse:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        schedule: { $ref: '#/components/schemas/AgentScheduleOrigin' }
         origin:
           type: object
           required: [workspace, conversation, turn_id]
@@ -2623,6 +3166,9 @@ components:
             conversation: { type: string }
             turn_id: { type: string }
         admission_held: { type: boolean, description: Execution blocked until the conversation association is durable. Clients cannot release this hold. }
+        can_recover_execution: { type: boolean, description: Saved original host intent may be inspected through recover-execution. Readiness is not authority or proof of a conclusive receipt. }
+        execution: { $ref: '#/components/schemas/ExecutionReference' }
+        execution_workspace: { $ref: '#/components/schemas/ExecutionWorkspace', description: Immutable admission-time host/root/backend/directory and capability ceiling. A snapshot is not current host readiness or a grant. }
         profile:
           type: object
           required: [id, revision, digest, name]

@@ -75,6 +75,7 @@ func recoverComputerReceipt(t *Task) bool {
 	message, _ := json.Marshal(map[string]any{"provenance": "companion_receipt", "offgrid_step_id": len(t.Steps), "result": json.RawMessage(r.Result), "guidance": "Recovered the original invocation result without repeating it. Verify outstanding outcomes through fresh permitted reads before claiming completion."})
 	cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: r.Tool, Content: string(message)})
 	cp.Calls, cp.ExecutingCall, cp.ComputerReceipt, cp.ExecutingCapability = cp.Calls[1:], "", nil, nil
+	cp.ExecutionIntent, cp.ExecutionReceipt = nil, nil
 	t.Status, t.ErrorCode, t.Error, t.CompletedAt = TaskInterrupted, "computer_result_recovered", "Saved computer result recovered without repeating the action. Review and resume explicitly.", nil
 	return true
 }

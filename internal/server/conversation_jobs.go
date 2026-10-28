@@ -88,12 +88,21 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 			writeSessionError(w, sessions.ErrTurnConflict)
 			return
 		}
-		job := jobSubmitRequest{Prompt: req.Content, Model: req.ModelID, RequestID: requestID, ProfileID: req.Agent.ID, ProfileRevision: req.Agent.Revision, Restrictions: req.Restrictions, ComputerScope: req.ComputerScope, ComputerApprovalMode: req.ComputerApprovalMode}
+		job := jobSubmitRequest{ExecutionRequestVersion: req.ExecutionRequestVersion, Prompt: req.Content, Model: req.ModelID, RequestID: requestID, ProfileID: req.Agent.ID, ProfileRevision: req.Agent.Revision, Restrictions: req.Restrictions, ComputerScope: req.ComputerScope, ComputerApprovalMode: req.ComputerApprovalMode}
+		job.Execution = req.Execution
 		config, valid := s.resolveJobConfig(w, r, &job)
 		if !valid {
 			return
 		}
 		config.ContextWindow = s.chatContextWindowForModel(req.Profile, job.Model)
+		if !config.TextOnlyInference && s.agentToolPolicy != nil {
+			pin, err := s.agentToolPolicy.Select(r.Context(), job.Model, config.ContextWindow)
+			if err != nil {
+				writeJobError(w, 422, "agent_adapter_unavailable", "Native tool qualification could not be verified for this conversation context. No turn was started.", false)
+				return
+			}
+			config.ToolAdapter = pin
+		}
 		config.ConversationProfile = req.Profile
 		if config.ConversationProfile == "" {
 			config.ConversationProfile = "interactive"

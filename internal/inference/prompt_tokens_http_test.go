@@ -66,7 +66,7 @@ func TestPromptTokensCountsFullRequestWithoutGeneration(t *testing.T) {
 		delete(wire, "response_format")
 		data, _ := json.Marshal(wire)
 		var got api.ChatCompletionRequest
-		if json.Unmarshal(data, &got) != nil || len(got.Tools) != 0 || len(got.Messages) != 3 || !strings.Contains(got.Messages[2].StringContent(), request.Tools[0].Function.Description) || got.Messages[1].StringContent() != request.Messages[0].StringContent() || got.ToolChoice != nil || got.ParallelToolCalls == nil || *got.ParallelToolCalls || got.Model != "" || got.Stream {
+		if json.Unmarshal(data, &got) != nil || len(got.Tools) != 0 || len(got.Messages) != 3 || !strings.Contains(got.Messages[1].StringContent(), request.Tools[0].Function.Description) || got.Messages[2].StringContent() != request.Messages[0].StringContent() || got.ToolChoice != nil || got.ParallelToolCalls == nil || *got.ParallelToolCalls || got.Model != "" || got.Stream {
 			t.Errorf("count request diverged: %+v", got)
 		}
 		w.Write([]byte(`{"input_tokens":1234,"object":"response.input_tokens"}`))

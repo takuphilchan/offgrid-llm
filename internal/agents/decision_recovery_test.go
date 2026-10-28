@@ -50,10 +50,22 @@ func TestModelDecisionRecoveryAllowsCorrectedConversation(t *testing.T) {
 	manager := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
 	tools := &runTestTools{}
 	calls := 0
-	runner := NewRunner(manager, tools, func(context.Context, *Task, []api.ChatMessage, []api.Tool) (*api.ChatCompletionResponse, error) {
+	runner := NewRunner(manager, tools, func(_ context.Context, _ *Task, messages []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {
 		calls++
 		if calls == 1 {
 			return nil, rejectedDecision()
+		}
+		users := 0
+		for _, message := range messages {
+			if message.Role == "user" {
+				users++
+				if message.StringContent() != "hello" {
+					t.Fatal("harness repair replaced the user's request")
+				}
+			}
+		}
+		if users != 1 || messages[len(messages)-1].Role != "system" {
+			t.Fatal("repair provenance was lost")
 		}
 		return runAnswer(api.ChatMessage{Role: "assistant", Content: "Hello"}), nil
 	})
@@ -64,6 +76,33 @@ func TestModelDecisionRecoveryAllowsCorrectedConversation(t *testing.T) {
 	task, err = runner.Continue(context.Background(), task.ID, "alice", "start", "", false)
 	if err != nil || task.Status != TaskCompleted || task.Result != "Hello" || calls != 2 || tools.calls.Load() != 0 || task.Checkpoint.Iteration != 2 || task.Checkpoint.DecisionRepairs != 0 {
 		t.Fatalf("corrected conversation failed: %+v %v", task, err)
+	}
+}
+
+func TestConversationConfigDoesNotAccumulateProtocol(t *testing.T) {
+	for _, style := range []string{"", "react", "cot", "plan-execute"} {
+		for _, native := range []bool{false, true} {
+			cfg := DefaultAgentConfig()
+			cfg.SystemPrompt = "Keep the supplied persona and user constraints."
+			cfg.ReasoningStyle = style
+			if native {
+				cfg.ToolAdapter = &inference.AgentToolPin{Adapter: inference.NativeAgentToolAdapter}
+			}
+			first, err := cfg.initialSystemPrompt()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 10; i++ {
+				cfg.SystemPrompt = first
+				next, err := cfg.initialSystemPrompt()
+				if err != nil || next != first {
+					t.Fatal("conversation duplicated protocol", style, native, err)
+				}
+			}
+			if strings.Contains(first, nativeDecisionInstruction) != native {
+				t.Fatal("native protocol changed a legacy job")
+			}
+		}
 	}
 }
 

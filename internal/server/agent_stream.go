@@ -14,6 +14,9 @@ import (
 )
 
 func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool, emit func(string, string) error) (*api.ChatCompletionResponse, error) {
+	if err := s.scheduledTaskAccess(ctx, task, ""); err != nil {
+		return nil, err
+	}
 	if err := emit("queued", ""); err != nil {
 		return nil, err
 	}
@@ -43,7 +46,9 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	}
 	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: toolChoice, Temperature: &temperature, MaxTokens: &maxTokens, Stream: true}
 	request.StreamOptions = &api.StreamOptions{IncludeUsage: true}
-	configureComputerRequest(request, task)
+	if err := s.configureAgentRequest(ctx, request, task); err != nil {
+		return nil, err
+	}
 	raw, ok := s.engine.(inference.RawStreamingEngine)
 	if !ok {
 		// A text-only stream discards structured tool calls and finish reasons.
@@ -65,12 +70,17 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	}
 	accumulator := agentStreamAccumulator{calls: make(map[int]*api.ToolCall)}
 	err = lease.Run(ctx, func(ctx context.Context) error {
+		previewed := false
+		ctx = inference.WithDecisionPreview(ctx, func(text string) error {
+			previewed = true
+			return emit("generating", text)
+		})
 		return raw.ChatCompletionStreamRaw(ctx, request, func(data json.RawMessage) error {
 			text, toolDelta, err := accumulator.add(data)
 			if err != nil {
 				return err
 			}
-			if text != "" {
+			if text != "" && !previewed {
 				return emit("generating", text)
 			}
 			if toolDelta {

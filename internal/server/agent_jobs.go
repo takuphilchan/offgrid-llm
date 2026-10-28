@@ -14,21 +14,27 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 )
 
 // Omitted additive fields must not alter the original idempotency payload.
 type jobSubmitRequest struct {
-	Prompt               string                      `json:"prompt"`
-	Model                string                      `json:"model"`
-	RequestID            string                      `json:"request_id"`
-	Style                string                      `json:"style,omitempty"`
-	MaxIterations        int                         `json:"max_iterations,omitempty"`
-	ComputerApprovalMode string                      `json:"computer_approval_mode,omitempty"`
-	ComputerScope        string                      `json:"computer_scope,omitempty"`
-	Expectations         []agents.OutcomeExpectation `json:"expectations,omitempty"`
-	ProfileID            string                      `json:"profile_id,omitempty"`
-	ProfileRevision      int                         `json:"profile_revision,omitempty"`
-	Restrictions         *agentResourceRestrictions  `json:"restrictions,omitempty"`
+	ResponseProfile         string                      `json:"response_profile,omitempty"`
+	ExecutionRequestVersion int                         `json:"execution_request_version,omitempty"`
+	DeferKnowledge          bool                        `json:"-"` // Internal calendar review; never accepted from clients.
+	Execution               *execution.Reference        `json:"execution,omitempty"`
+	Prompt                  string                      `json:"prompt"`
+	Model                   string                      `json:"model"`
+	RequestID               string                      `json:"request_id"`
+	Style                   string                      `json:"style,omitempty"`
+	MaxIterations           int                         `json:"max_iterations,omitempty"`
+	ComputerApprovalMode    string                      `json:"computer_approval_mode,omitempty"`
+	ComputerScope           string                      `json:"computer_scope,omitempty"`
+	Expectations            []agents.OutcomeExpectation `json:"expectations,omitempty"`
+	ProfileID               string                      `json:"profile_id,omitempty"`
+	ProfileRevision         int                         `json:"profile_revision,omitempty"`
+	Restrictions            *agentResourceRestrictions  `json:"restrictions,omitempty"`
 }
 
 func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +112,17 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 // validates resources without creating a task, consent, or model download.
 func (s *Server) resolveJobConfig(w http.ResponseWriter, r *http.Request, req *jobSubmitRequest) (agents.AgentConfig, bool) {
 	config := agents.DefaultAgentConfig()
+	if req.ResponseProfile != "" && req.ResponseProfile != "interactive" && req.ResponseProfile != "extended" {
+		writeJobError(w, 400, "invalid_response_profile", "Choose interactive or extended context.", false)
+		return config, false
+	}
+	if req.ExecutionRequestVersion != 0 {
+		if req.ExecutionRequestVersion != execution.AccessRequestVersion || s.executionHosts == nil || s.config == nil || !s.config.EnableExecutionPreview {
+			writeJobError(w, 422, "execution_request_unavailable", "This service cannot request local workspace access. Update matching clients and service.", false)
+			return config, false
+		}
+		config.ExecutionRequestVersion = req.ExecutionRequestVersion
+	}
 	config.TaskFirst = true
 	config.ComputerAccessOnDemand = true
 	config.NativeWorkflowVersion = agents.DocumentWorkflowEvidenceVersion
@@ -147,7 +164,7 @@ func (s *Server) resolveJobConfig(w http.ResponseWriter, r *http.Request, req *j
 			writeJobError(w, 422, "native_model_unavailable", "The selected native text runtime is not qualified on this machine.", false)
 			return config, false
 		}
-		if config.RequestedComputerScope != "" || len(config.NativeExpectations) != 0 || len(config.AllowedCapabilities) != 0 || len(config.DelegateProfiles) != 0 || (config.Profile != nil && (config.Profile.Settings.Computer || len(config.Profile.Settings.Tools) != 0 || len(config.Profile.Settings.Delegates) != 0)) {
+		if req.Execution != nil || config.RequestedComputerScope != "" || len(config.NativeExpectations) != 0 || len(config.AllowedCapabilities) != 0 || len(config.DelegateProfiles) != 0 || (config.Profile != nil && (config.Profile.Settings.Computer || len(config.Profile.Settings.Tools) != 0 || len(config.Profile.Settings.Delegates) != 0)) {
 			writeJobError(w, 422, "native_tools_unqualified", "This native model is qualified for text only. Use a tool-calling model for tools, collaborators, or computer work.", false)
 			return config, false
 		}
@@ -165,8 +182,61 @@ func (s *Server) resolveJobConfig(w http.ResponseWriter, r *http.Request, req *j
 		}
 		config.ContextWindow = s.modelContextWindow(req.Model)
 	}
+	if req.ResponseProfile != "" {
+		config.ContextWindow = min(config.ContextWindow, s.chatContextWindowForModel(req.ResponseProfile, req.Model))
+		config.ConversationProfile = req.ResponseProfile
+	}
 	if config.ContextWindow/4 < config.MaxTokens {
 		config.MaxTokens = config.ContextWindow / 4
+	}
+	if !config.TextOnlyInference {
+		if err := s.pinProfileContext(&config); err != nil {
+			writeContextError(w, err)
+			return config, false
+		}
+	}
+	if req.Execution != nil {
+		if req.Execution.Validate() != nil || s.executionHosts == nil {
+			writeJobError(w, 422, "execution_unavailable", "Select a ready, locally approved execution workspace. No service-directory fallback was used.", false)
+			return config, false
+		}
+		resource, err := s.executionHosts.Resolve(r.Context(), s.agentActor(r), s.workspaceID, *req.Execution)
+		if err != nil {
+			writeJobError(w, 422, "execution_unavailable", "The selected host or folder grant is unavailable. Reconnect it locally; no work was dispatched.", false)
+			return config, false
+		}
+		ref := *req.Execution
+		config.Execution = &ref
+		config.InputWriteVersion = execution.InputWriteVersion
+		config.ExecutionWorkspace = &resource
+		if config.AllowedCapabilities == nil {
+			config.AllowedCapabilities = map[string]capabilities.Descriptor{}
+		}
+		for _, tool := range executionTools() {
+			if executionPermitted(tool.Function.Name, resource.Permissions) && (config.ExecutionPolicy == nil || executionPermitted(tool.Function.Name, *config.ExecutionPolicy)) {
+				d, _ := executionDescriptor(tool.Function.Name)
+				config.AllowedCapabilities[d.Name] = d
+			}
+		}
+		config.SystemPrompt += "\nA locally approved execution workspace is attached. Use workspace_* tools for its files and current directory; never substitute service files or translate paths between hosts. Read pages include exact UTF-8 text where possible and original bytes, not line-numbered display content. Preserve exact bytes when copying and verify actual results."
+	}
+	if config.ExecutionRequestVersion == execution.AccessRequestVersion {
+		if config.TextOnlyInference {
+			writeJobError(w, 422, "native_tools_unqualified", "This model is qualified for text only.", false)
+			return config, false
+		}
+		if config.AllowedCapabilities == nil {
+			config.AllowedCapabilities = map[string]capabilities.Descriptor{}
+		}
+		config.AllowedCapabilities[execution.AccessRequestTool] = execution.AccessRequestDescriptor()
+	}
+	if !config.TextOnlyInference && s.agentToolPolicy != nil {
+		pin, err := s.agentToolPolicy.Select(r.Context(), req.Model, config.ContextWindow)
+		if err != nil {
+			writeJobError(w, 422, "agent_adapter_unavailable", "Native tool qualification could not be verified. No job was started.", false)
+			return config, false
+		}
+		config.ToolAdapter = pin
 	}
 	return config, true
 }
@@ -177,16 +247,17 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 	var req struct {
-		InputID string `json:"input_id"`
-		Session string `json:"computer_session"`
+		InputID   string               `json:"input_id"`
+		Session   string               `json:"computer_session"`
+		Execution *execution.Reference `json:"execution,omitempty"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || req.InputID == "" || req.Session == "" {
+	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || req.InputID == "" || (req.Session == "") == (req.Execution == nil) {
 		writeJobError(w, 400, "invalid_task_input", "Select locally approved access for this task.", false)
 		return
 	}
-	if s.agentRunner == nil || s.agentManager == nil || s.browserHub == nil {
+	if s.agentRunner == nil || s.agentManager == nil || req.Execution == nil && s.browserHub == nil {
 		writeJobReadError(w, agents.ErrRunStorage)
 		return
 	}
@@ -194,6 +265,18 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 	task, ok := s.agentManager.GetTask(id)
 	if !ok || task.Actor != actor {
 		writeJobReadError(w, agents.ErrTaskNotFound)
+		return
+	}
+	if req.Execution != nil {
+		s.handleExecutionInput(w, r, task, req.InputID, *req.Execution)
+		return
+	}
+	if !s.profileAdmin(r) {
+		writeJobError(w, 403, "computer_administration_required", "Computer access administration requires an administrator.", false)
+		return
+	}
+	if task.Config.Automation != nil {
+		writeJobError(w, 403, "scheduled_computer_access_unavailable", "Computer consent cannot attach to a scheduled root.", false)
 		return
 	}
 	if task.AdmissionHeld {

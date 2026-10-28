@@ -74,12 +74,13 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 			issue("model", profile.Settings.Model, "native_model_unavailable", "The native text runtime is not qualified on this machine.")
 		} else if depth > 0 {
 			issue("model", profile.Settings.Model, "native_delegation_unqualified", "Native text models are not yet qualified as delegated child jobs.")
-		} else if profile.Settings.Computer || len(profile.Settings.Tools) != 0 || len(profile.Settings.Delegates) != 0 {
+		} else if profile.Settings.Computer || len(profile.Settings.Tools) != 0 || len(profile.Settings.Delegates) != 0 || len(profile.Settings.Skills) != 0 {
 			issue("model", profile.Settings.Model, "native_tools_unqualified", "This native model is qualified for text only. Remove computer access, tools, and collaborators or select a qualified tool-calling model.")
 		}
 	} else if _, err := s.registry.GetChatModel(profile.Settings.Model); err != nil {
 		issue("model", profile.Settings.Model, "model_unavailable", "Select an installed chat model. No model was downloaded.")
 	}
+	s.checkProfileSkills(profile, issue)
 	if profile.Settings.Computer && !s.profileAdmin(r) {
 		issue("computer", "desktop", "computer_admin_required", "Computer control currently requires workspace administrator permission.")
 	}
@@ -218,7 +219,7 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 			}
 		}
 		childConfig.KnowledgeSelection = &selected
-		if !s.attachProfileKnowledge(w, r, req.Prompt, &childConfig) {
+		if !s.attachJobKnowledge(w, r, req, &childConfig) {
 			return false
 		}
 		if config.DelegateProfiles == nil {
@@ -226,7 +227,7 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 		}
 		config.DelegateProfiles[id] = childConfig
 	}
-	return s.attachProfileKnowledge(w, r, req.Prompt, config)
+	return s.attachJobKnowledge(w, r, req, config)
 }
 
 func (s *Server) attachProfileKnowledge(w http.ResponseWriter, r *http.Request, prompt string, config *agents.AgentConfig) bool {

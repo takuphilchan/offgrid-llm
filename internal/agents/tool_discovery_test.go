@@ -8,9 +8,42 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+func TestSkillPackageCreationRemainsDiscoverableWithoutCompetingWithUse(t *testing.T) {
+	d := newDiscoveryTools(0)
+	for _, tool := range agentcontext.Tools() {
+		if tool.Function.Name == "skill_load" || tool.Function.Name == "skill_draft" {
+			d.tools = append(d.tools, tool)
+			desc, _ := agentcontext.Descriptor(tool.Function.Name)
+			d.descriptors[desc.Name] = desc
+		}
+	}
+	r := NewRunner(nil, d, nil)
+	task := &Task{Prompt: "Use an attached skill", Config: taskConfig(), Checkpoint: &Checkpoint{}}
+	visible := func() map[string]bool {
+		names := map[string]bool{}
+		for _, tool := range r.relevantTools(task, append(r.authorizedTools(context.Background(), task), runtimeTools(task)...)) {
+			names[tool.Function.Name] = true
+		}
+		return names
+	}
+	if names := visible(); names["skill_draft"] || !names["skill_load"] || !names["task_find_tools"] {
+		t.Fatal("unexpected initial menu", names)
+	}
+	if _, err := r.discoverTools(context.Background(), task, `{"query":"skill_draft"}`); err != nil {
+		t.Fatal(err)
+	}
+	if names := visible(); !names["skill_draft"] {
+		t.Fatal("creation capability removed", names)
+	}
+	if d.calls.Load() != 0 {
+		t.Fatal("discovery dispatched an operation")
+	}
+}
 
 type discoveryTools struct {
 	runTestTools

@@ -34,14 +34,16 @@ type taskArtifactRequest struct {
 	Content string `json:"content"`
 }
 type taskArtifactEvidence struct {
-	Name     string `json:"name"`
-	Format   string `json:"format"`
-	SHA256   string `json:"sha256"`
-	Bytes    int    `json:"bytes"`
-	Rows     int    `json:"rows,omitempty"`
-	Columns  int    `json:"columns,omitempty"`
-	Verified bool   `json:"verified"`
-	Check    string `json:"check"`
+	StorageLocation string `json:"storage_location,omitempty"`
+	HostFileCreated bool   `json:"host_file_created"`
+	Name            string `json:"name"`
+	Format          string `json:"format"`
+	SHA256          string `json:"sha256"`
+	Bytes           int    `json:"bytes"`
+	Rows            int    `json:"rows,omitempty"`
+	Columns         int    `json:"columns,omitempty"`
+	Verified        bool   `json:"verified"`
+	Check           string `json:"check"`
 }
 
 func taskArtifactTool() api.Tool {
@@ -60,14 +62,14 @@ func taskArtifactTool() api.Tool {
 			},
 		})
 	}
-	return api.Tool{Type: "function", Function: api.FunctionDef{Name: taskArtifactToolName, Description: "Save a private downloadable workspace artifact: text uses .txt, markdown .md, json .json, csv .csv. Example: name=notes.txt, format=text. Storage read-back verifies bytes and format ONLY, not factual accuracy or completion of research. First perform the requested work using available tools and actual source evidence; never save the search query as a substitute for research. This does not open applications or save into a host document. Call separately from computer actions.", Parameters: map[string]any{"oneOf": variants}}}
+	return api.Tool{Type: "function", Function: api.FunctionDef{Name: taskArtifactToolName, Description: "Create a private download in OffGrid task storage, NEVER a file in the user's current directory or computer. For local files request workspace access and use workspace_write instead. Text downloads use .txt, markdown .md, json .json, csv .csv. Storage read-back verifies stored bytes and format ONLY, not the requested destination, factual accuracy or completed research. First perform requested work and gather actual evidence. Report this result as an OffGrid download, never as a host file. Call separately from computer actions.", Parameters: map[string]any{"oneOf": variants}}}
 }
 
 func artifactSuffix(format string) string {
 	return map[string]string{"text": ".txt", "markdown": ".md", "csv": ".csv", "json": ".json"}[format]
 }
 func taskArtifactDescriptor() capabilities.Descriptor {
-	return capabilities.Descriptor{Name: taskArtifactToolName, Namespace: "workspace", Source: "workspace", Kind: capabilities.Write, Risk: capabilities.RiskLow, Description: taskArtifactTool().Function.Description}
+	return capabilities.Descriptor{Name: taskArtifactToolName, Namespace: "workspace", Source: "workspace", Location: "service", Kind: capabilities.Write, Risk: capabilities.RiskLow, Description: taskArtifactTool().Function.Description}
 }
 func parseTaskArtifact(raw json.RawMessage) (taskArtifactRequest, taskArtifactEvidence, error) {
 	var req taskArtifactRequest
@@ -147,6 +149,7 @@ func (s *Server) saveTaskArtifact(ctx context.Context, args json.RawMessage) (st
 		return "", fmt.Errorf("saved artifact read-back mismatch")
 	}
 	evidence.Verified, evidence.Check = true, "stored_bytes_sha256_and_format"
+	evidence.StorageLocation = "offgrid_task_artifact"
 	result, _ := json.Marshal(evidence)
 	return string(result), nil
 }

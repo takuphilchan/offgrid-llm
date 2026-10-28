@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"strings"
 	"sync"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
-	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -70,6 +68,10 @@ type Runner struct {
 	closing         bool
 	workers         sync.WaitGroup
 	coordinatorOnce sync.Once
+	// Configure before StartCoordinator. Preparation shares cancellation and
+	// ownership with this runner but never blocks ready child coordination.
+	Coordinate       func(context.Context, time.Time) error
+	coordinateCancel context.CancelFunc
 }
 
 func NewRunner(manager *Manager, tools RunTools, caller RunCaller) *Runner {
@@ -106,27 +108,6 @@ func runID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// CanonicalArguments preserves integer precision and rejects extra JSON values.
-func CanonicalArguments(args json.RawMessage) (json.RawMessage, error) {
-	if len(args) == 0 {
-		args = json.RawMessage(`{}`)
-	}
-	if jsonwire.Validate(args) != nil {
-		return nil, fmt.Errorf("tool arguments contain malformed Unicode or repeated fields")
-	}
-	decoder := json.NewDecoder(bytes.NewReader(args))
-	decoder.UseNumber()
-	var value map[string]any
-	if err := decoder.Decode(&value); err != nil || value == nil {
-		return nil, fmt.Errorf("tool arguments must be a JSON object")
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return nil, fmt.Errorf("tool arguments contain trailing data")
-	}
-	return json.Marshal(value)
-}
-
 func (r *Runner) Create(prompt, model, actor string, config AgentConfig) (*Task, error) {
 	task, _, err := r.CreateRequest(prompt, model, actor, config, "", "")
 	return task, err
@@ -151,6 +132,9 @@ func (r *Runner) createRequest(prompt, model, actor string, config AgentConfig, 
 		return nil, false, fmt.Errorf("invalid agent run configuration")
 	}
 	if err := config.validateTextOnly(); err != nil {
+		return nil, false, err
+	}
+	if err := config.validateExecution(); err != nil {
 		return nil, false, err
 	}
 	var err error
@@ -332,11 +316,14 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		result, err := r.execute(runCtx, task, grant)
 		if err != nil {
 			log.Printf("Agent run %s interrupted: %v", id, err)
+			if _, stopErr := r.stopOwnedExecution(task); stopErr != nil {
+				return nil, stopErr
+			}
 			// Last durable checkpoint decides whether a retry is safe. Never
 			// assume a failed/cancelled tool has rolled back external effects.
 			recovered, saveErr := r.manager.updateTask(id, func(current *Task) error {
 				if current.Status != TaskRunning {
-					recoverComputerReceipt(current)
+					recoverProviderReceipts(current)
 					return nil
 				}
 				current.Status, current.Error = TaskInterrupted, "Execution interrupted. Review and resume explicitly."
@@ -347,7 +334,7 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 					current.ErrorCode, current.Error = failure.Code, inference.InvalidToolGrammarMessage
 				}
 				releaseInterruptedRead(current.Checkpoint)
-				recoverComputerReceipt(current)
+				recoverProviderReceipts(current)
 				return nil
 			})
 			if saveErr != nil {
@@ -379,6 +366,9 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 func (r *Runner) Shutdown(ctx context.Context) error {
 	r.mu.Lock()
 	r.closing = true
+	if r.coordinateCancel != nil {
+		r.coordinateCancel()
+	}
 	for _, cancel := range r.active {
 		cancel()
 	}
@@ -417,9 +407,11 @@ func (r *Runner) persist(task *Task) error {
 		snapshot.PendingInstructions = append([]Instruction(nil), current.PendingInstructions...)
 		if snapshot.Checkpoint != nil && current.Checkpoint != nil && snapshot.Checkpoint.ExecutingCall != "" && snapshot.Checkpoint.ExecutingCall == current.Checkpoint.ExecutingCall {
 			snapshot.Checkpoint.ComputerReceipt = current.Checkpoint.ComputerReceipt
+			snapshot.Checkpoint.ExecutionIntent, snapshot.Checkpoint.ExecutionReceipt = current.Checkpoint.ExecutionIntent, current.Checkpoint.ExecutionReceipt
 		}
 		if snapshot.Checkpoint != nil && snapshot.Checkpoint.ExecutingCall == "" {
 			snapshot.Checkpoint.ComputerReceipt, snapshot.Checkpoint.ExecutingCapability = nil, nil
+			snapshot.Checkpoint.ExecutionIntent, snapshot.Checkpoint.ExecutionReceipt = nil, nil
 		}
 		*current = *snapshot
 		return nil
@@ -461,6 +453,9 @@ func (r *Runner) execute(ctx context.Context, task *Task, grant *Approval) (*Tas
 
 func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Approval) (*Task, error) {
 	cp := task.Checkpoint
+	if err := ValidateAgentToolScope(task.Config.ToolAdapter); err != nil {
+		return r.fail(task, err.Error())
+	}
 	// Older checkpoints persisted the repair budget without a separate marker.
 	if cp.ProposalRepairs > 0 {
 		cp.ProposalUnresolved = true
@@ -478,12 +473,20 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			cp, grant = task.Checkpoint, nil
 		}
 		if len(cp.Calls) > 0 {
+			if cp.SkillAnswerRepairs > 0 {
+				task.ErrorCode = "skill_response_contract_tool_rejected"
+				return r.fail(task, "Skill answer correction cannot execute tools. Earlier work remains saved; no proposed call was dispatched.")
+			}
 			// Older checkpoints also pass the execution boundary. Never trust a
 			// previously persisted batch merely because admission now rejects it.
 			if task.Config.ComputerSession != "" && len(cp.Calls) != 1 {
 				return r.fail(task, "Computer tasks require one tool call at a time. Review this old checkpoint before starting a new task.")
 			}
 			call := cp.Calls[0]
+			identity, registered := r.tools.Capability(call.Function.Name)
+			if !qualifiedTool(task, call.Function.Name, identity, registered) {
+				return r.fail(task, "This model/runtime is not qualified for the requested tool. No action was dispatched. Start new work with an appropriately qualified configuration; existing effects were not replayed.")
+			}
 			if handled, err := r.executeRuntimeTool(ctx, task, call); handled {
 				if err != nil {
 					return nil, err
@@ -562,8 +565,10 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 						request.Mode = "desktop"
 					}
 					request.ID, request.CallID = "input-"+runID(), call.ID
-					request.PreviousSession = task.Config.ComputerSession
-					task.Config.ComputerSession = ""
+					if request.Kind == "computer" {
+						request.PreviousSession = task.Config.ComputerSession
+						task.Config.ComputerSession = ""
+					}
 					task.PendingApproval = nil
 					task.PendingInput, task.Status = &request, TaskInput
 					setRunPhase(task, "input", call.Function.Name)
@@ -607,6 +612,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			cp.ExecutingCall = call.ID
 			pinned := descriptor
 			cp.ExecutingCapability, cp.ComputerReceipt = &pinned, nil
+			cp.ExecutionIntent, cp.ExecutionReceipt = nil, nil
 			cp.ReadOnlyCall = ""
 			cp.ReadOnlyCapability = nil
 			if readOnlyBuiltin(descriptor) {
@@ -633,6 +639,12 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 					_ = errors.As(err, &failure)
 				}
 				if failure != nil {
+					if handled, repairErr := r.repairWorkspaceWritePrecondition(task, descriptor, failure); handled {
+						if repairErr != nil || task.Status != TaskRunning {
+							return task, repairErr
+						}
+						continue
+					}
 					if failure.BeforeEffects && failure.Recovery != "" && descriptor.Source == "builtin" && descriptor.Namespace == "tools" {
 						cp.ExecutingCall, cp.ReadOnlyCall, cp.ReadOnlyCapability = "", "", nil
 						cp.PreEffectRepair = true
@@ -654,6 +666,12 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 					cp.Calls, cp.ExecutingCall, cp.ReadOnlyCall = cp.Calls[1:], "", ""
 					cp.ReadOnlyCapability = nil
 					task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "tool_error", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: string(encoded), Timestamp: time.Now().UTC()})
+					if repaired, repairErr := r.repairWorkspaceReadFailure(task, descriptor, failure); repaired {
+						if repairErr != nil || task.Status != TaskRunning {
+							return task, repairErr
+						}
+						continue
+					}
 					if capabilities.TrustedNativeRead(descriptor) && failure.Recovery != "" {
 						if err := r.repairNativeRead(task, call); err != nil {
 							return nil, err
@@ -681,6 +699,12 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			}
 			if task.Config.TaskFirst && descriptor.Namespace == "mcp" {
 				modelResult = projectMCPResult(result, descriptor, call.ID, len(task.Steps)+1)
+			}
+			modelResult = executionModelResult(task, call.Function.Name, descriptor, modelResult, len(task.Steps)+1)
+			if cp.PreEffectRepair && call.Function.Name == "workspace_write_from_input" {
+				if saved, found := r.manager.GetTask(task.ID); found {
+					resolveInputWriteRepair(task, saved, descriptor)
+				}
 			}
 			cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: modelResult})
 			cp.Calls, cp.ExecutingCall, cp.ReadOnlyCall = cp.Calls[1:], "", ""
@@ -737,7 +761,13 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 		}); ok {
 			tools = projector.ProjectModelTools(task, tools)
 		}
+		tools = projectInputWriteMarkers(task, tools)
+		tools = projectWorkspaceWriteRepair(task, tools)
 		tools = r.relevantTools(task, tools)
+		tools = r.qualifiedTools(task, tools)
+		if cp.SkillAnswerRepairs > 0 {
+			tools = nil
+		}
 		if err := reserveModelBudget(task); err != nil {
 			cancel()
 			return r.fail(task, err.Error())
@@ -912,6 +942,29 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 					return r.fail(task, err.Error())
 				}
 			}
+			if validator, ok := r.tools.(interface{ ValidateExecutionCompletion(*Task) error }); ok {
+				if err := validator.ValidateExecutionCompletion(task); err != nil {
+					if handled, repairErr := r.repairExecutionCompletion(task, err); handled {
+						if repairErr != nil || task.Status != TaskRunning {
+							return task, repairErr
+						}
+						continue
+					}
+					return r.fail(task, err.Error())
+				}
+			}
+			if repair, err := r.repairSkillAnswer(task, message.StringContent()); err != nil {
+				return nil, err
+			} else if repair {
+				if task.Status != TaskRunning {
+					return task, nil
+				}
+				continue
+			}
+			settled, err := r.stopOwnedExecution(task)
+			if err != nil || settled.Status == TaskUncertain {
+				return settled, err
+			}
 			task.Result = message.StringContent()
 			finishTask(task, TaskCompleted, "")
 		}
@@ -925,75 +978,13 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 }
 
 func (r *Runner) fail(task *Task, message string) (*Task, error) {
+	settled, err := r.stopOwnedExecution(task)
+	if err != nil || settled.Status == TaskUncertain {
+		return settled, err
+	}
 	finishTask(task, TaskFailed, message)
 	if err := r.persist(task); err != nil {
 		return nil, err
 	}
 	return task, nil
-}
-
-func (r *Runner) Stop(id, actor, action, approvalID string) (*Task, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	task, err := r.manager.updateTask(id, func(task *Task) error {
-		if task.Actor != actor {
-			return ErrTaskNotFound
-		}
-		if action == "deny" {
-			if task.Status != TaskWaiting || task.PendingApproval == nil || task.PendingApproval.ID != approvalID {
-				return ErrRunConflict
-			}
-		} else if action != "cancel" {
-			return ErrRunConflict
-		}
-		if task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled {
-			return ErrRunConflict
-		}
-		finishTask(task, TaskCancelled, "Stopped by user.")
-		if uncertainEffect(task.Checkpoint) {
-			task.Status, task.Error = TaskUncertain, "Cancelled during a tool call. Its external outcome must be checked."
-		}
-		releaseInterruptedRead(task.Checkpoint)
-		return nil
-	})
-	if err == nil {
-		if cancel := r.active[id]; cancel != nil {
-			cancel()
-		}
-		if cascadeErr := r.stopChildrenLocked(task, true); cascadeErr != nil {
-			return task, cascadeErr
-		}
-		r.observe(task)
-	}
-	return task, err
-}
-
-// Reconcile records an actor's report, not independent verification. It never
-// re-executes the original call or automatically resumes the task.
-func (r *Runner) Reconcile(id, actor, callID, result string) (*Task, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, active := r.active[id]; active {
-		return nil, ErrRunConflict
-	}
-	task, err := r.manager.updateTask(id, func(task *Task) error {
-		if task.Actor != actor {
-			return ErrTaskNotFound
-		}
-		cp := task.Checkpoint
-		if task.Status != TaskUncertain || cp == nil || len(cp.Calls) == 0 || cp.ExecutingCall != callID || cp.Calls[0].ID != callID || callID == "" || result == "" {
-			return ErrRunConflict
-		}
-		call := cp.Calls[0]
-		report, _ := json.Marshal(map[string]any{"provenance": "human_reported", "verified": false, "report": result, "guidance": "This is a user report, not independent tool evidence. Do not repeat the original action. Verify outstanding outcomes through permitted read-only observation before claiming success."})
-		cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(report)})
-		cp.Calls, cp.ExecutingCall = cp.Calls[1:], ""
-		task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "reconciled", Provenance: "human_reported", ToolName: call.Function.Name, ToolArgs: call.Function.Arguments, ToolResult: result, Timestamp: time.Now().UTC()})
-		task.Status, task.Error, task.CompletedAt = TaskInterrupted, "Outcome recorded. Resume explicitly to continue.", nil
-		return nil
-	})
-	if err == nil {
-		r.observe(task)
-	}
-	return task, err
 }

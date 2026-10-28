@@ -10,17 +10,26 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
 
 type TaskSubmission struct {
-	Prompt          string `json:"prompt"`
-	Model           string `json:"model"`
-	RequestID       string `json:"request_id"`
-	Style           string `json:"style,omitempty"`
-	MaxIterations   int    `json:"max_iterations,omitempty"`
-	ProfileID       string `json:"profile_id,omitempty"`
-	ProfileRevision int    `json:"profile_revision,omitempty"`
+	ResponseProfile         string               `json:"response_profile,omitempty"`
+	ExecutionRequestVersion int                  `json:"execution_request_version,omitempty"`
+	Execution               *execution.Reference `json:"execution,omitempty"`
+	Workspace               string               `json:"-"`
+	Folder                  string               `json:"-"`
+	FolderCheck             *launchFolderCheck   `json:"-"`
+	Access                  string               `json:"-"`
+	Detach                  bool                 `json:"-"`
+	Prompt                  string               `json:"prompt"`
+	Model                   string               `json:"model"`
+	RequestID               string               `json:"request_id"`
+	Style                   string               `json:"style,omitempty"`
+	MaxIterations           int                  `json:"max_iterations,omitempty"`
+	ProfileID               string               `json:"profile_id,omitempty"`
+	ProfileRevision         int                  `json:"profile_revision,omitempty"`
 }
 
 func ParseTaskSubmission(args []string) (TaskSubmission, bool, error) {
@@ -37,6 +46,10 @@ func ParseTaskSubmission(args []string) (TaskSubmission, bool, error) {
 			wait = true
 			continue
 		}
+		if arg == "--detach" {
+			req.Detach = true
+			continue
+		}
 		if !strings.HasPrefix(arg, "--") {
 			prompt = append(prompt, arg)
 			continue
@@ -47,6 +60,26 @@ func ParseTaskSubmission(args []string) (TaskSubmission, bool, error) {
 		i++
 		value := args[i]
 		switch arg {
+		case "--response-profile":
+			if req.ResponseProfile != "" || value != "interactive" && value != "extended" {
+				return req, wait, Usage("Choose one --response-profile interactive|extended")
+			}
+			req.ResponseProfile = value
+		case "--workspace-folder":
+			if req.Folder != "" || strings.TrimSpace(value) == "" {
+				return req, wait, Usage("Select one explicit local folder")
+			}
+			req.Folder = value
+		case "--workspace-access":
+			if _, err := executionPermissions(value); err != nil {
+				return req, wait, err
+			}
+			req.Access = value
+		case "--workspace":
+			if req.Workspace != "" || !ValidProfileID(value) {
+				return req, wait, Usage("Select one valid approved execution session with --workspace")
+			}
+			req.Workspace = value
 		case "--model":
 			req.Model = value
 		case "--profile":
@@ -81,6 +114,9 @@ func ParseTaskSubmission(args []string) (TaskSubmission, bool, error) {
 		}
 	}
 	req.Prompt = strings.TrimSpace(strings.Join(prompt, " "))
+	if req.Detach && (wait || req.Folder != "") || req.Folder != "" && req.Workspace != "" || req.Access != "" && req.Workspace != "" {
+		return req, wait, Usage("Choose one local folder or an existing workspace. --detach cannot own a local folder or combine with --wait")
+	}
 	if req.Prompt == "" || (req.Model == "" && req.ProfileID == "") || (req.ProfileID == "") != (req.ProfileRevision == 0) || len(req.RequestID) < 8 || len(req.RequestID) > 128 {
 		return req, wait, Usage("agent run <task> (--model <installed model> | --profile ID --profile-revision N) [--request-id <id>] [--wait]")
 	}
@@ -88,6 +124,18 @@ func ParseTaskSubmission(args []string) (TaskSubmission, bool, error) {
 }
 
 func SubmitTask(ctx context.Context, client *serviceclient.Client, req TaskSubmission) (*AgentRunSnapshot, error) {
+	if req.ResponseProfile != "" {
+		if err := client.RequireCapability(ctx, "agent-response-profiles-v1"); err != nil {
+			return nil, err
+		}
+	}
+	if req.Workspace != "" {
+		ref, _, err := resolveExecutionWorkspace(ctx, client, req.Workspace)
+		if err != nil {
+			return nil, err
+		}
+		req.Execution = &ref
+	}
 	if req.ProfileID != "" {
 		if err := client.RequireCapability(ctx, "agent-profiles-v1"); err != nil {
 			return nil, err

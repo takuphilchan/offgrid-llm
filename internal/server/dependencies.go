@@ -14,6 +14,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/degradation"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/integrations"
 	"github.com/takuphilchan/offgrid-llm/internal/mcp"
@@ -178,6 +179,7 @@ func NewTransport(cfg HTTPConfig, deps Dependencies) (*Server, error) {
 		runLog:               deps.RunLog,
 		artifactStore:        deps.ArtifactStore,
 		browserHub:           deps.BrowserHub,
+		executionHosts:       execution.NewHosts(),
 		integrationRegistry:  deps.IntegrationRegistry,
 		runtimeCtx:           runtimeCtx,
 		runtimeCancel:        runtimeCancel,
@@ -185,5 +187,6 @@ func NewTransport(cfg HTTPConfig, deps Dependencies) (*Server, error) {
 		version:              deps.Version,
 	}
 	server.modelCache.SetLoadAdmission(server.checkModelLoadCapacity)
+	server.executionEnrollment = server.newExecutionEnrollment()
 	return server, nil
 }

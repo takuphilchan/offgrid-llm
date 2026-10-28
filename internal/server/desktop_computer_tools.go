@@ -41,7 +41,7 @@ func configureDesktopTask(config *agents.AgentConfig) {
 	config.SystemPrompt = desktopTaskPrompt(*config)
 }
 
-const conversationTaskProtocol = "Answer conversational requests directly. Available tools and Full access do not require tool use. Ask a concise question when the requested outcome is ambiguous. Use tools only when needed for the user's request. When requested outcomes are verified, return the answer without unrelated tool calls. Do not claim an external action succeeded without matching evidence."
+const conversationTaskProtocol = "You are OffGrid's native assistant; follow the attached profile's identity and instructions when present. Answer conversational requests directly. Available tools and Full access do not require tool use. Ask a concise question when the requested outcome is ambiguous. Use tools only when needed for the user's request. When requested outcomes are verified, return the answer without unrelated tool calls. Do not claim an external action succeeded without matching evidence."
 
 func desktopTaskPrompt(config agents.AgentConfig) string {
 	launch := "To open: computer_applications -> computer_find_applications(query: requested application name, catalog_step: offgrid_step_id) -> unique matching application_id -> computer_open_application -> computer_verify_application."

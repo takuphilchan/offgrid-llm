@@ -319,39 +319,6 @@ func (r *Runner) beginDelegation(task *Task, call api.ToolCall) error {
 	return nil
 }
 
-// StartCoordinator schedules durable children through the SAME Runner. Waiting
-// parents consume no execution slot. Restart does not auto-resume a graph: the
-// storage loader changes unfinished parents/children to interrupted first.
-func (r *Runner) StartCoordinator(ctx context.Context) {
-	r.coordinatorOnce.Do(func() {
-		go func() {
-			ticker := time.NewTicker(200 * time.Millisecond)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					r.mu.Lock()
-					closing := r.closing
-					r.mu.Unlock()
-					if closing {
-						return
-					}
-					for _, task := range r.manager.coordinationCandidates() {
-						if task.Status == TaskPending {
-							_, _ = r.Continue(ctx, task.ID, task.Actor, "start", "", true)
-						}
-						if task.Status == TaskChildren {
-							r.advanceDelegation(ctx, task.ID)
-						}
-					}
-				}
-			}
-		}()
-	})
-}
-
 type coordinationCandidate struct {
 	ID, Actor string
 	Status    TaskStatus

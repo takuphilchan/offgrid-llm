@@ -24,6 +24,9 @@ func (s *Server) agentActor(r *http.Request) string {
 }
 
 func (s *Server) callAgentModel(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (*api.ChatCompletionResponse, error) {
+	if err := s.scheduledTaskAccess(ctx, task, ""); err != nil {
+		return nil, err
+	}
 	if task.Config.TextOnlyInference {
 		return s.callNativeTextAgent(ctx, task, messages, tools, nil)
 	}
@@ -39,13 +42,18 @@ func (s *Server) callAgentModel(ctx context.Context, task *agents.Task, messages
 	temperature := float32(task.Config.Temperature)
 	maxTokens := task.Config.MaxTokens
 	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens}
-	configureComputerRequest(request, task)
+	if err := s.configureAgentRequest(ctx, request, task); err != nil {
+		return nil, err
+	}
 	var response *api.ChatCompletionResponse
 	err = lease.Run(ctx, func(ctx context.Context) error {
 		var callErr error
 		response, callErr = s.engine.ChatCompletion(ctx, request)
 		return callErr
 	})
+	if err == nil {
+		err = validateAgentDecision(task, request, response)
+	}
 	return response, err
 }
 
@@ -114,7 +122,11 @@ func taskResponse(task *agents.Task) map[string]any {
 		steps = []agents.Step{}
 	}
 	response := map[string]any{"task_id": task.ID, "run_id": task.ID, "status": task.Status, "output": task.Result, "steps": steps, "pending_approval": task.PendingApproval}
+	response["can_recover_execution"] = agents.CanRecoverExecution(task)
 	response["progress"] = task.Progress
+	if task.Config.Automation != nil {
+		response["schedule"] = task.Config.Automation
+	}
 	if task.Origin != nil {
 		response["origin"], response["admission_held"] = task.Origin, task.AdmissionHeld
 	}
@@ -122,6 +134,10 @@ func taskResponse(task *agents.Task) map[string]any {
 		response["verification"] = task.Workflow
 	}
 	response["model"], response["pending_input"] = task.Model, task.PendingInput
+	if task.Config.Execution != nil {
+		response["execution"] = task.Config.Execution
+		response["execution_workspace"] = task.Config.ExecutionWorkspace
+	}
 	if task.Config.Profile != nil {
 		response["profile"] = map[string]any{"id": task.Config.Profile.ID, "revision": task.Config.Profile.Revision, "digest": task.Config.Profile.Digest, "name": task.Config.Profile.Settings.Name}
 	}

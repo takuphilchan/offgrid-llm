@@ -27,6 +27,31 @@ func TestSingleStepGrammarSelectsToolBeforeArguments(t *testing.T) {
 	}
 }
 
+func TestSingleStepCatalogDoesNotDisplaceCurrentUserRequest(t *testing.T) {
+	for _, history := range []bool{false, true} {
+		req := singleStepFixture()
+		if history {
+			req.Messages = append(req.Messages, api.ChatMessage{Role: "assistant", Content: "Earlier answer."})
+		}
+		req.Messages = append(req.Messages, api.ChatMessage{Role: "user", Content: "Hello."})
+		body, err := marshalLlamaRequest(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sent api.ChatCompletionRequest
+		if json.Unmarshal(body, &sent) != nil || sent.Messages[len(sent.Messages)-1].Role != "user" || sent.Messages[len(sent.Messages)-1].StringContent() != "Hello." {
+			t.Fatal("tool catalog displaced user intent", string(body))
+		}
+		if !strings.Contains(sent.Messages[len(sent.Messages)-2].StringContent(), "fixture_read") || req.Messages[len(req.Messages)-1].StringContent() != "Hello." {
+			t.Fatal("catalog lost or caller state changed")
+		}
+		choice := api.ChatCompletionChoice{FinishReason: "stop", Message: api.ChatMessage{Role: "assistant", Content: `{"message":"Hello! How can I help?"}`}}
+		if err := decodeSingleStep(req, &choice); err != nil || len(choice.Message.ToolCalls) != 0 || choice.Message.StringContent() != "Hello! How can I help?" {
+			t.Fatal("direct reply required a tool", err)
+		}
+	}
+}
+
 func TestSingleStepMalformedCompleteDecisionsAreRepairable(t *testing.T) {
 	for _, value := range []struct{ content, finish string }{
 		{`{"tool_call":`, "length"},
@@ -46,29 +71,33 @@ func TestSingleStepMalformedCompleteDecisionsAreRepairable(t *testing.T) {
 func TestSingleStepRuntimeParserFailureHasBoundedCorrectionClassification(t *testing.T) {
 	const known = `{"error":{"code":500,"type":"server_error","message":"The model produced output that does not match the expected peg-native format"}}`
 	for _, mode := range []string{"sse", "http", "nonstream"} {
-		t.Run(mode, func(t *testing.T) {
-			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if mode == "sse" {
-					fmt.Fprintf(w, "data: %s\n\n", known)
+		for _, native := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/native-%t", mode, native), func(t *testing.T) {
+				backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if mode == "sse" {
+						fmt.Fprintf(w, "data: %s\n\n", known)
+					} else {
+						w.WriteHeader(500)
+						fmt.Fprint(w, known)
+					}
+				}))
+				defer backend.Close()
+				engine := NewLlamaHTTPEngine(backend.URL)
+				var err error
+				called := false
+				request := singleStepFixture()
+				request.SingleStepTools = !native
+				if mode == "nonstream" {
+					_, err = engine.ChatCompletion(context.Background(), request)
 				} else {
-					w.WriteHeader(500)
-					fmt.Fprint(w, known)
+					err = engine.ChatCompletionStreamRaw(context.Background(), request, func(json.RawMessage) error { called = true; return nil })
 				}
-			}))
-			defer backend.Close()
-			engine := NewLlamaHTTPEngine(backend.URL)
-			var err error
-			called := false
-			if mode == "nonstream" {
-				_, err = engine.ChatCompletion(context.Background(), singleStepFixture())
-			} else {
-				err = engine.ChatCompletionStreamRaw(context.Background(), singleStepFixture(), func(json.RawMessage) error { called = true; return nil })
-			}
-			var rejected *DecisionValidationError
-			if !errors.As(err, &rejected) || called {
-				t.Fatal("parser rejection escaped gate", err)
-			}
-		})
+				var rejected *DecisionValidationError
+				if !errors.As(err, &rejected) || called {
+					t.Fatal("parser rejection escaped gate", err)
+				}
+			})
+		}
 	}
 	for _, body := range []string{
 		`{"error":{"code":500,"type":"server_error","message":"out of memory PRIVATE"}}`,

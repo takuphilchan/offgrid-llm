@@ -80,6 +80,9 @@ func (f *conversationFixture) waitComplete(t *testing.T) *sessions.Session {
 		time.Sleep(5 * time.Millisecond)
 	}
 	saved, loadErr := f.s.sessionHandlers.manager.Load("chat")
+	for _, task := range f.s.agentManager.ListTasks() {
+		t.Logf("unattached job: status=%s error_code=%s error=%q steps=%d", task.Status, task.ErrorCode, task.Error, len(task.Steps))
+	}
 	t.Fatalf("conversation result was not attached: session=%+v load=%v jobs=%+v", saved, loadErr, f.s.agentManager.ListTasks())
 	return nil
 }

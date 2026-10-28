@@ -11,7 +11,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 )
 
 var (
@@ -30,15 +32,17 @@ type ProfileToolReference struct {
 }
 
 type ProfileSettings struct {
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description,omitempty"`
-	Instructions  string                 `json:"instructions,omitempty"`
-	Model         string                 `json:"model"`
-	Knowledge     []string               `json:"knowledge,omitempty"`
-	Tools         []ProfileToolReference `json:"tools,omitempty"`
-	Computer      bool                   `json:"computer,omitempty"`
-	MaxIterations int                    `json:"max_iterations"`
-	Delegates     []string               `json:"delegates,omitempty"`
+	Name          string                        `json:"name"`
+	Description   string                        `json:"description,omitempty"`
+	Instructions  string                        `json:"instructions,omitempty"`
+	Model         string                        `json:"model"`
+	Knowledge     []string                      `json:"knowledge,omitempty"`
+	Tools         []ProfileToolReference        `json:"tools,omitempty"`
+	Computer      bool                          `json:"computer,omitempty"`
+	Execution     *execution.Permissions        `json:"execution,omitempty"`
+	Skills        []agentcontext.SkillReference `json:"skills,omitempty"`
+	MaxIterations int                           `json:"max_iterations"`
+	Delegates     []string                      `json:"delegates,omitempty"`
 }
 
 type AgentProfile struct {
@@ -57,8 +61,15 @@ func validProfileText(s string, max int, required bool) bool {
 }
 
 func validateProfileSettings(s ProfileSettings) error {
-	if !validProfileText(s.Name, 128, true) || !validProfileText(s.Description, 512, false) || !validProfileText(s.Instructions, 8192, false) || !validProfileText(s.Model, 256, true) || s.MaxIterations < 1 || s.MaxIterations > 50 || len(s.Knowledge) > 32 || len(s.Tools) > 128 || len(s.Delegates) > 4 {
+	if !validProfileText(s.Name, 128, true) || !validProfileText(s.Description, 512, false) || !validProfileText(s.Instructions, 8192, false) || !validProfileText(s.Model, 256, true) || s.MaxIterations < 1 || s.MaxIterations > 50 || len(s.Knowledge) > 32 || len(s.Tools) > 128 || len(s.Delegates) > 4 || len(s.Skills) > 16 {
 		return ErrInvalidProfile
+	}
+	skills := map[string]bool{}
+	for _, ref := range s.Skills {
+		if !ref.Valid() || skills[ref.ID] {
+			return ErrInvalidProfile
+		}
+		skills[ref.ID] = true
 	}
 	for _, refs := range [][]string{s.Knowledge, s.Delegates} {
 		seen := map[string]bool{}
@@ -156,9 +167,11 @@ func (m *Manager) SaveProfile(workspace, actor, id string, expectedRevision int,
 	}
 	// Copy slices before storing/returning the snapshot; caller changes cannot
 	// change either the digest or the persisted revision.
-	if err = json.Unmarshal(encoded, &settings); err != nil {
+	var detached ProfileSettings
+	if err = json.Unmarshal(encoded, &detached); err != nil {
 		return nil, err
 	}
+	settings = detached
 	digest := sha256.Sum256(encoded)
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -167,6 +180,12 @@ func (m *Manager) SaveProfile(workspace, actor, id string, expectedRevision int,
 		return nil, err
 	}
 	defer db.Close()
+	for _, ref := range settings.Skills {
+		item, _, loadErr := scanSkill(db.QueryRow(`SELECT s.id,r.revision,r.digest,r.bundle,s.draft,s.source_job,r.created_at FROM agent_context_skills s JOIN agent_context_skill_revisions r ON s.id=r.skill_id WHERE s.id=? AND s.workspace=? AND s.actor=? AND r.revision=? AND r.digest=?`, ref.ID, workspace, actor, ref.Revision, ref.Digest))
+		if loadErr != nil || item.Draft {
+			return nil, ErrInvalidProfile
+		}
+	}
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err

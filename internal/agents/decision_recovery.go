@@ -15,7 +15,10 @@ func (r *Runner) rejectModelDecision(task *Task, failure *inference.DecisionVali
 	cp.DecisionRepairs++
 	cp.Iteration++
 	feedback := "The last model decision was rejected before any call from that response was dispatched: " + failure.Error() + ". Return a complete answer or a valid call using the currently available tool schema. Use one call at a time for computer work. Do not repeat earlier dispatched actions or invent verification."
-	cp.Messages = append(cp.Messages, api.ChatMessage{Role: "user", Content: feedback})
+	// This is harness feedback, not a new user request. Keeping its provenance
+	// prevents a corrected response from answering the repair notice instead of
+	// the original task; rejected model output is still never retained.
+	cp.Messages = append(cp.Messages, api.ChatMessage{Role: "system", Content: feedback})
 	task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "rejected", Content: feedback, Timestamp: time.Now().UTC()})
 	if cp.DecisionRepairs+cp.ProposalRepairs >= maxProposalRepairs {
 		task.Status, task.ErrorCode = TaskInterrupted, "model_decision_repair_limit"

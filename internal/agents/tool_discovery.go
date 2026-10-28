@@ -10,7 +10,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -56,6 +58,9 @@ func (r *Runner) authorizedTools(ctx context.Context, task *Task) []api.Tool {
 	for _, tool := range tools {
 		name := tool.Function.Name
 		d, exists := r.tools.Capability(name)
+		if !qualifiedTool(task, name, d, exists) {
+			continue
+		}
 		if task.ParentID != "" {
 			pinned, granted := task.Config.AllowedCapabilities[name]
 			if !exists || !granted || pinned != d || !containsTool(task.Config.AllowedTools, name) || !delegatedCapability(name, d) {
@@ -190,7 +195,7 @@ func (r *Runner) relevantTools(task *Task, tools []api.Tool) []api.Tool {
 		d, ok := r.tools.Capability(tool.Function.Name)
 		// Host tools are already narrowed by observed workflow stage. Never
 		// starve required verification/access or runtime recovery behind MCP.
-		if isRuntimeTool(tool.Function.Name) || (ok && companionCapability(d)) || tool.Function.Name == "request_computer_access" {
+		if isRuntimeTool(tool.Function.Name) || (ok && companionCapability(d)) || tool.Function.Name == "request_computer_access" || tool.Function.Name == "request_workspace_access" {
 			core = append(core, tool)
 		} else {
 			optional = append(optional, tool)
@@ -214,6 +219,24 @@ func (r *Runner) relevantTools(task *Task, tools []api.Tool) []api.Tool {
 	sort.SliceStable(optional, func(i, j int) bool { return preferred(optional[i]) && !preferred(optional[j]) })
 	count, size := 0, 0
 	for _, tool := range optional {
+		// Download storage is a different destination from the caller's folder.
+		// Local-workspace clients keep it discoverable explicitly, rather than
+		// presenting it as the first available way to create a file before consent.
+		if task.Config.ExecutionRequestVersion == execution.AccessRequestVersion && !preferred(tool) {
+			if d, ok := r.tools.Capability(tool.Function.Name); ok && workspaceArtifactCapability(tool.Function.Name, d) {
+				continue
+			}
+		}
+		// Creating reusable skill packages is a management operation, distinct
+		// from applying an attached skill. Keep it discoverable on demand rather
+		// than competing with ordinary answers in every skill-enabled turn.
+		if tool.Function.Name == "skill_draft" && !preferred(tool) {
+			d, ok := r.tools.Capability(tool.Function.Name)
+			trusted, _ := agentcontext.Descriptor("skill_draft")
+			if ok && d == trusted {
+				continue
+			}
+		}
 		encoded, err := json.Marshal(tool)
 		if err != nil || len(encoded) > relevantSchemaBytes || size+len(encoded) > relevantSchemaBytes {
 			continue // Never truncate a schema into a different argument contract.

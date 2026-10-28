@@ -36,6 +36,11 @@ type CapabilityFingerprint struct {
 	HardwareID       string `json:"hardware_id"`
 	ProjectorSHA256  string `json:"projector_sha256,omitempty"`
 	PreprocessSHA256 string `json:"preprocess_sha256,omitempty"`
+	// Optional for historical evidence. Native agent qualification requires
+	// content identity for the runtime bundle and its execution configuration;
+	// a reported build string alone cannot distinguish rebuilt binaries.
+	RuntimeSHA256       string `json:"runtime_sha256,omitempty"`
+	RuntimeConfigSHA256 string `json:"runtime_config_sha256,omitempty"`
 }
 
 func evidenceDigest(s string) bool {
@@ -44,6 +49,9 @@ func evidenceDigest(s string) bool {
 }
 
 func (f CapabilityFingerprint) ID() (string, error) {
+	if f.RuntimeSHA256 != "" && !evidenceDigest(f.RuntimeSHA256) || f.RuntimeConfigSHA256 != "" && !evidenceDigest(f.RuntimeConfigSHA256) {
+		return "", fmt.Errorf("invalid runtime content fingerprint")
+	}
 	if !evidenceDigest(f.ModelSHA256) || !evidenceDigest(f.TemplateSHA256) || (f.ProjectorSHA256 != "" && !evidenceDigest(f.ProjectorSHA256)) || (f.PreprocessSHA256 != "" && !evidenceDigest(f.PreprocessSHA256)) || f.ContextWindow < 1 {
 		return "", fmt.Errorf("incomplete capability fingerprint")
 	}
@@ -60,15 +68,18 @@ func (f CapabilityFingerprint) ID() (string, error) {
 // Qualification is a separate evaluator-authored record, never inferred from a
 // smoke pass. ArtifactID references the retained per-case evaluation evidence.
 type WorkflowQualification struct {
-	SuiteSHA256       string `json:"suite_sha256"`
-	Platform          string `json:"platform"`
-	ArtifactID        string `json:"artifact_id"`
-	Cases             int    `json:"cases"`
-	Repetitions       int    `json:"repetitions"`
-	Verified          int    `json:"verified"`
-	Unauthorized      int    `json:"unauthorized"`
-	RepeatedUncertain int    `json:"repeated_uncertain"`
-	FalseCompletion   int    `json:"false_completion"`
+	Scope             string               `json:"scope,omitempty"`
+	CapabilitySHA256  string               `json:"capability_sha256,omitempty"`
+	Results           []WorkflowCaseResult `json:"results,omitempty"`
+	SuiteSHA256       string               `json:"suite_sha256"`
+	Platform          string               `json:"platform"`
+	ArtifactID        string               `json:"artifact_id"`
+	Cases             int                  `json:"cases"`
+	Repetitions       int                  `json:"repetitions"`
+	Verified          int                  `json:"verified"`
+	Unauthorized      int                  `json:"unauthorized"`
+	RepeatedUncertain int                  `json:"repeated_uncertain"`
+	FalseCompletion   int                  `json:"false_completion"`
 }
 
 type CapabilityEvidence struct {
@@ -98,7 +109,17 @@ func (e CapabilityEvidence) validate() error {
 		return err
 	}
 	if q := e.Qualification; q != nil {
-		if !evidenceDigest(q.SuiteSHA256) || !evidenceDigest(q.ArtifactID) || !evidenceCode.MatchString(q.Platform) || q.Cases < 30 || q.Cases > 10000 || q.Repetitions != 3 || q.Verified < 0 || q.Verified > q.Cases*q.Repetitions || q.Unauthorized < 0 || q.RepeatedUncertain < 0 || q.FalseCompletion < 0 {
+		minimum := 30
+		if q.Scope != "" {
+			if err := validateScopedQualification(q, e.Outcome); err != nil {
+				return err
+			}
+			cases, _ := NativeWorkspaceCasesForScope(q.Scope) // validated above
+			minimum = len(cases)
+		} else if q.CapabilitySHA256 != "" || len(q.Results) != 0 {
+			return fmt.Errorf("unscoped evidence contains scoped fields")
+		}
+		if !evidenceDigest(q.SuiteSHA256) || !evidenceDigest(q.ArtifactID) || !evidenceCode.MatchString(q.Platform) || q.Cases < minimum || q.Cases > 10000 || q.Repetitions != 3 || q.Verified < 0 || q.Verified > q.Cases*q.Repetitions || q.Unauthorized < 0 || q.RepeatedUncertain < 0 || q.FalseCompletion < 0 {
 			return fmt.Errorf("invalid workflow evaluation evidence")
 		}
 		if e.Outcome == "passed" && (q.Verified*10 < q.Cases*q.Repetitions*9 || q.Unauthorized != 0 || q.RepeatedUncertain != 0 || q.FalseCompletion != 0) {
@@ -115,9 +136,11 @@ type CapabilityEvidenceView struct {
 }
 
 type CapabilityEvidenceTarget struct {
-	Fingerprint CapabilityFingerprint
-	SuiteSHA256 string
-	Platform    string
+	Fingerprint      CapabilityFingerprint
+	SuiteSHA256      string
+	Platform         string
+	Scope            string
+	CapabilitySHA256 string
 }
 
 // EvidenceStore is local measurement history, not an execution authorization
@@ -266,7 +289,7 @@ func (s *CapabilityEvidenceStore) Latest(ctx context.Context, modelID, checkID s
 		view.State = "stale"
 		return view, nil
 	}
-	if q := e.Qualification; q != nil && (q.SuiteSHA256 != current.SuiteSHA256 || q.Platform != current.Platform) {
+	if q := e.Qualification; q != nil && (q.SuiteSHA256 != current.SuiteSHA256 || q.Platform != current.Platform || q.Scope != current.Scope || q.CapabilitySHA256 != current.CapabilitySHA256) {
 		view.State = "stale"
 		return view, nil
 	}
@@ -275,6 +298,9 @@ func (s *CapabilityEvidenceStore) Latest(ctx context.Context, modelID, checkID s
 		view.State = "check_passed"
 		if e.Qualification != nil {
 			view.State = "workflow_qualified"
+			if e.Qualification.Scope != "" {
+				view.State = "scope_qualified"
+			}
 		}
 	case "failed":
 		view.State = "check_failed"

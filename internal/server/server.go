@@ -18,6 +18,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/degradation"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
 	"github.com/takuphilchan/offgrid-llm/internal/integrations"
 	"github.com/takuphilchan/offgrid-llm/internal/mcp"
@@ -36,6 +37,7 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
+	agentToolPolicy      *inference.AgentToolPolicy // Installed at startup; nil preserves constrained behavior.
 	audioMutex           sync.Mutex
 	audioEngine          *audio.Engine
 	speechPackages       *audio.PackageRuntime
@@ -104,6 +106,9 @@ type Server struct {
 	runLog               *runs.Log                // Durable event stream for agent runs
 	artifactStore        *artifacts.Store         // Content-addressed agent outputs and captures
 	browserHub           *computer.BrowserHub
+	executionHosts       *execution.Hosts
+	executionEnrollment  *execution.Enrollment
+	schedules            *scheduleController
 	computerVisionChecks sync.Map               // exact runtime/model/projector smoke passes; never persisted
 	computerModelChecks  computerCheckFlights   // synthetic in-flight work only; no completed-result cache
 	integrationRegistry  *integrations.Registry // External agent adapters (Hermes, OpenClaw, ...)
@@ -166,6 +171,9 @@ func (s *Server) Serve(ctx context.Context) error {
 		return fmt.Errorf("serve context is required")
 	}
 	defer s.Close()
+	if s.executionEnrollment != nil && s.config.EnableExecutionPreview {
+		go s.executionEnrollment.Run(s.runtimeCtx)
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -279,6 +287,12 @@ func (s *Server) Serve(ctx context.Context) error {
 // without starting its HTTP listener.
 func (s *Server) Close() error {
 	s.closeOnce.Do(func() {
+		if s.executionEnrollment != nil {
+			_ = s.executionEnrollment.Close()
+		}
+		if s.executionHosts != nil {
+			_ = s.executionHosts.Close()
+		}
 		if s.browserHub != nil {
 			s.browserHub.Stop("")
 		}

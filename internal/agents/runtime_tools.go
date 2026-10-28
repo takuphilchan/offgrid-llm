@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"io"
 	"strings"
 	"time"
@@ -51,7 +52,22 @@ func runtimeTools(task *Task) []api.Tool {
 		constrainWorkflowRepairTool(&tool, task)
 		tools = append(tools, tool)
 	}
-	return tools
+	if planJustRecorded(task) {
+		filtered := tools[:0]
+		for _, tool := range tools {
+			if tool.Function.Name != "task_plan" {
+				filtered = append(filtered, tool)
+			}
+		}
+		tools = filtered
+	}
+	filtered := tools[:0]
+	for _, tool := range tools {
+		if qualifiedTool(task, tool.Function.Name, capabilities.Descriptor{}, false) {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
 }
 
 func (r *Runner) executeRuntimeTool(ctx context.Context, task *Task, call api.ToolCall) (bool, error) {

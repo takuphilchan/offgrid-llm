@@ -21,14 +21,16 @@ func (s *Server) countAgentContext(ctx context.Context, task *agents.Task, messa
 	if !ok || (task.Config.ComputerSession != "" && !nativeComputerDriver(task.Config.ComputerDriver)) {
 		return 0, agents.ErrContextCountUnavailable
 	}
-	lease, err := s.acquireInferenceLease(ctx, task.Model, s.effectiveContextWindow(), nil)
+	lease, err := s.acquireInferenceLease(ctx, task.Model, s.taskContextWindow(task), nil)
 	if err != nil {
 		return 0, err
 	}
 	defer lease.Release()
 	temperature, maxTokens := float32(task.Config.Temperature), task.Config.MaxTokens
 	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens}
-	configureComputerRequest(request, task)
+	if err := s.configureAgentRequest(ctx, request, task); err != nil {
+		return 0, err
+	}
 	var count int
 	err = lease.Run(ctx, func(admitted context.Context) error {
 		var countErr error

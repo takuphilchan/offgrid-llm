@@ -3,6 +3,7 @@
 package inference
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,7 +11,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 )
 
 func (e *LlamaEngine) ToolRuntimeInfo(ctx context.Context) (*ToolRuntimeInfo, error) {
@@ -42,11 +46,25 @@ func (e *LlamaHTTPEngine) ToolRuntimeInfo(ctx context.Context) (*ToolRuntimeInfo
 			Calls *bool `json:"supports_tool_calls"`
 		} `json:"chat_template_caps"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&props); err != nil {
+	const metadataLimit = 1 << 20
+	data, err := io.ReadAll(io.LimitReader(resp.Body, metadataLimit+1))
+	if err != nil {
 		return nil, err
 	}
-	digest := sha256.Sum256([]byte(props.Template))
-	info := &ToolRuntimeInfo{Build: props.Build, TemplateSHA256: hex.EncodeToString(digest[:]), Context: props.Settings.Context, SupportsTools: props.Caps.Tools, SupportsToolCalls: props.Caps.Calls}
+	if len(data) > metadataLimit || jsonwire.Validate(data) != nil || !bytes.HasPrefix(bytes.TrimSpace(data), []byte("{")) {
+		return nil, fmt.Errorf("runtime metadata is incomplete or ambiguous")
+	}
+	if err := json.Unmarshal(data, &props); err != nil {
+		return nil, fmt.Errorf("runtime metadata has an invalid shape")
+	}
+	info := &ToolRuntimeInfo{Build: props.Build, Context: props.Settings.Context, SupportsTools: props.Caps.Tools, SupportsToolCalls: props.Caps.Calls}
+	// Missing identity must remain missing. SHA256("") is a valid digest, but
+	// does not identify a measured template. Older runtimes may still report
+	// context for conversation without supplying a native tool template.
+	if strings.TrimSpace(props.Template) != "" {
+		digest := sha256.Sum256([]byte(props.Template))
+		info.TemplateSHA256 = hex.EncodeToString(digest[:])
+	}
 	if props.Build == "b1-b95502b" || props.Build == "b1-b95502b-offgrid-seq1" || props.Build == "b1-b95502b-offgrid-seq2" {
 		info.TemplateAdapter = toolTemplateAdapterIdentity(info.TemplateSHA256)
 		if info.TemplateAdapter == resultToolsAdapter && props.Build != "b1-b95502b-offgrid-seq2" {

@@ -83,6 +83,7 @@ func (s *Server) buildRouter() http.Handler {
 	var handler http.Handler = mux
 	handler = s.authMiddleware.Wrap(handler) // Auth middleware
 	handler = s.browserTransport(handler)    // Narrow token-authenticated companion channel, never agent administration.
+	handler = s.executionTransport(handler)  // Exact delegated host routes only; pairing and workspace controls retain user authentication.
 	handler = requestBodyLimitMiddleware(handler)
 	handler = s.loggingMiddleware(handler) // Logging middleware (outermost)
 	return handler
@@ -287,8 +288,16 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux, guards routeGuards) {
 	mux.HandleFunc("/v1/agents/tasks/", adminOnly(s.handleAgentTaskAction))
 	mux.HandleFunc("/api/v2/jobs/", chatOnly(s.profileJobAccess(s.handleJobRead)))
 	mux.HandleFunc("/api/v2/jobs", chatOnly(s.handleJobSubmit))
+	mux.HandleFunc("/api/v2/execution/workspaces", chatOnly(s.handleExecutionWorkspaces))
+	mux.HandleFunc("/api/v2/execution/pairing", chatOnly(s.handleExecutionPairing))
+	mux.HandleFunc("/api/v2/execution/revoke", chatOnly(s.handleExecutionRevoke))
 	mux.HandleFunc("/api/v2/agent-profiles", chatOnly(s.handleAgentProfiles))
 	mux.HandleFunc("/api/v2/agent-profiles/", chatOnly(s.handleAgentProfiles))
+	mux.HandleFunc("/api/v2/agent-skills", chatOnly(s.handleAgentSkills))
+	mux.HandleFunc("/api/v2/agent-skills/", chatOnly(s.handleAgentSkills))
+	mux.HandleFunc("/api/v2/agent-memory/", chatOnly(s.handleAgentMemory))
+	mux.HandleFunc("/api/v2/agent-schedules", chatOnly(s.handleAgentSchedules))
+	mux.HandleFunc("/api/v2/agent-schedules/", chatOnly(s.handleAgentSchedules))
 	mux.HandleFunc("/v1/agents/workflows", adminOnly(s.handleAgentWorkflows))
 	mux.HandleFunc("/v1/agents/orchestrate", adminOnly(s.handleAgentOrchestrate))
 	mux.HandleFunc("/v1/runs", adminOnly(s.handleRuns))

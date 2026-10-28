@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
@@ -298,18 +299,20 @@ func (h *SessionHandlers) HandleSessionAddMessage(w http.ResponseWriter, r *http
 // exchange under the same session. Calls for one session are serialized so
 // concurrent browser tabs cannot lose messages.
 type sessionGenerateRequest struct {
-	Content              string                     `json:"content"`
-	ModelID              string                     `json:"model_id,omitempty"`
-	UseKnowledgeBase     bool                       `json:"use_knowledge_base,omitempty"`
-	Stream               bool                       `json:"stream,omitempty"`
-	Profile              string                     `json:"profile,omitempty"`
-	MaxTokens            int                        `json:"max_tokens,omitempty"`
-	Durable              bool                       `json:"durable,omitempty"`
-	RequestID            string                     `json:"request_id,omitempty"`
-	Agent                *sessions.AgentSelection   `json:"agent,omitempty"`
-	Restrictions         *agentResourceRestrictions `json:"restrictions,omitempty"`
-	ComputerApprovalMode string                     `json:"computer_approval_mode,omitempty"`
-	ComputerScope        string                     `json:"computer_scope,omitempty"`
+	ExecutionRequestVersion int                        `json:"execution_request_version,omitempty"`
+	Execution               *execution.Reference       `json:"execution,omitempty"`
+	Content                 string                     `json:"content"`
+	ModelID                 string                     `json:"model_id,omitempty"`
+	UseKnowledgeBase        bool                       `json:"use_knowledge_base,omitempty"`
+	Stream                  bool                       `json:"stream,omitempty"`
+	Profile                 string                     `json:"profile,omitempty"`
+	MaxTokens               int                        `json:"max_tokens,omitempty"`
+	Durable                 bool                       `json:"durable,omitempty"`
+	RequestID               string                     `json:"request_id,omitempty"`
+	Agent                   *sessions.AgentSelection   `json:"agent,omitempty"`
+	Restrictions            *agentResourceRestrictions `json:"restrictions,omitempty"`
+	ComputerApprovalMode    string                     `json:"computer_approval_mode,omitempty"`
+	ComputerScope           string                     `json:"computer_scope,omitempty"`
 }
 
 func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.Request, name string) {
@@ -340,7 +343,7 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		h.agentServer.submitConversationJob(w, r, name, req)
 		return
 	}
-	if req.Restrictions != nil || req.ComputerScope != "" || req.ComputerApprovalMode != "" {
+	if req.Execution != nil || req.Restrictions != nil || req.ComputerScope != "" || req.ComputerApprovalMode != "" {
 		writeError(w, "Select an agent before adding tools or computer access", 400)
 		return
 	}

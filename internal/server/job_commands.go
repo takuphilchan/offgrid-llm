@@ -25,6 +25,10 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 		writeJobReadError(w, agents.ErrTaskNotFound)
 		return
 	}
+	if task.Config.Automation != nil && action == "reconnect" {
+		writeJobError(w, 403, "scheduled_computer_access_unavailable", "Scheduled work cannot acquire computer access. Start separate interactive work if needed.", false)
+		return
+	}
 	if action == "delete" && r.Method == http.MethodDelete {
 		if err := s.agentRunner.Delete(id, s.agentActor(r)); err != nil {
 			writeJobCommandError(w, err)
@@ -44,6 +48,18 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 	}
 	if r.Method != http.MethodPost {
 		writeJobError(w, 405, "method_not_allowed", "Use POST for task commands.", false)
+		return
+	}
+	if action == "recover-execution" {
+		if !decodeExecutionRequest(w, r, &struct{}{}, 4096) {
+			return
+		}
+		recovered, err := s.agentRunner.RecoverExecution(r.Context(), id, task.Actor)
+		if err != nil {
+			writeJobCommandError(w, err)
+			return
+		}
+		writeJSON(w, 202, taskResponse(recovered))
 		return
 	}
 	var req struct {
@@ -113,6 +129,10 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 }
 
 func writeJobCommandError(w http.ResponseWriter, err error) {
+	if errors.Is(err, agents.ErrExecutionEvidenceUnavailable) {
+		writeJobError(w, 409, "execution_evidence_unavailable", "No conclusive saved host receipt is available. Keep the original outcome uncertain; inspect locally instead of repeating it.", false)
+		return
+	}
 	if errors.Is(err, agents.ErrRunConflict) {
 		writeJobError(w, 409, "task_state_changed", "The task is still settling, its approval expired, or its state changed. Refresh this saved task before continuing.", true)
 		return

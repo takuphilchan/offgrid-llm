@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -123,6 +124,14 @@ func proposalRecovery(task *Task, tool string, failure *ToolAuthorizationError) 
 		return ""
 	}
 	switch failure.Code {
+	case "execution_program_repeated":
+		if task.Config.TaskFirst && task.ParentID == "" && task.Config.Execution != nil && tool == "workspace_process_start" {
+			return "No command was dispatched. The program field is the executable; arguments contains only what comes AFTER it. For go test ., use program=go and arguments=[\"test\",\".\"], not [\"go\",\"test\",\".\"]. Review the user's actual command and submit a corrected proposal yourself. Do not change the command's intended meaning, request broader access, or repeat any earlier dispatched process."
+		}
+	case "execution_input_selection_invalid":
+		if task.Config.TaskFirst && task.ParentID == "" && task.Config.InputWriteVersion == execution.InputWriteVersion && tool == execution.InputWriteTool {
+			return "No write was dispatched. Select an offered user-input ID. The after marker is the opening/start boundary; the before marker is the closing/end boundary later in that same input. Use unique exact marker strings, excluding both markers from the content. Correct the proposal yourself; do not retype the payload or repeat any dispatched write. Ask for clarification if boundaries are genuinely ambiguous."
+		}
 	case "task_artifact_work_pending":
 		if task.Config.TaskFirst && task.ParentID == "" && tool == "task_save_artifact" {
 			return "No artifact was saved. Continue the original operation using the available discovery and observation tools. Gather actual evidence before writing results; do not create a file merely containing the request."
@@ -177,7 +186,7 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	cp := task.Checkpoint
 	cp.ProposalRepairs++
 	cp.ProposalUnresolved = true
-	if failure.Code == "host_access_required" || failure.Code == "tool_write_rejected" || failure.Code == "invalid_task_artifact" {
+	if failure.Code == "host_access_required" || failure.Code == "tool_write_rejected" || failure.Code == "invalid_task_artifact" || failure.Code == "execution_input_selection_invalid" || failure.Code == "execution_write_precondition" {
 		cp.PreEffectRepairs++
 	}
 	if failure.Code == "workflow_control_expectation_required" {
@@ -185,7 +194,7 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	}
 	if len(cp.Calls) > 0 {
 		cp.ProposalTool = cp.Calls[0].Function.Name
-		if !cp.PreEffectRepair && (failure.Code == "host_access_required" || failure.Code == "invalid_task_artifact") {
+		if !cp.PreEffectRepair && (failure.Code == "host_access_required" || failure.Code == "invalid_task_artifact" || failure.Code == "execution_input_selection_invalid") {
 			cp.PreEffectRepair, cp.PreEffectRepairTool = true, cp.ProposalTool
 		}
 	}
@@ -220,6 +229,10 @@ func resolvePreEffectRepair(cp *Checkpoint, tool string, descriptor capabilities
 	repaired := tool == original && descriptor.Source == "builtin" && descriptor.Namespace == "tools"
 	if original == "task_save_artifact" {
 		repaired = workspaceArtifactCapability(tool, descriptor)
+	}
+	if original == execution.InputWriteTool || original == "workspace_write" {
+		expected, ok := execution.Descriptor(original)
+		repaired = ok && tool == original && descriptor == expected
 	}
 	if companionCapability(descriptor) {
 		switch original {

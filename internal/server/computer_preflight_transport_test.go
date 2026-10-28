@@ -38,8 +38,8 @@ func TestNativePreflightThroughSingleStepTransport(t *testing.T) {
 				if calls == 2 {
 					var wrapper struct {
 						Result struct {
-							Name    string `json:"name"`
-							Content string `json:"content"`
+							Name    string          `json:"name"`
+							Content json.RawMessage `json:"content"`
 						} `json:"tool_result"`
 					}
 					if json.Unmarshal([]byte(wire.Messages[len(wire.Messages)-1].StringContent()), &wrapper) != nil || wrapper.Result.Name != "computer_observe" {

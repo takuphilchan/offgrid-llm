@@ -1,13 +1,14 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
 
@@ -18,8 +19,10 @@ type ServiceDependencies struct {
 	ControlClient           func() (*serviceclient.Client, error)
 	RenderStream            func(io.Writer, io.Writer, io.Reader) error
 	Chat                    func(context.Context, *serviceclient.Client, []string, io.Reader, io.Writer, bool) error
+	ReadAgentLine           func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
 	CreateArtifactFile      func(string) (ArtifactFile, error)
 	OpenProfileFile         func(string) (io.ReadCloser, error)
+	ReadSkillDirectory      func(string) ([]agentcontext.SkillFile, error)
 	CreateSessionExportFile func(string) (SessionExportFile, error)
 	RemoveSessionExportFile func(string) error
 }
@@ -124,6 +127,15 @@ func RunKnowledgeCommand(ctx context.Context, args []string, env Environment) er
 }
 
 func agentServiceCommand(ctx context.Context, args []string, env Environment) error {
+	if len(args) > 0 && args[0] == "schedules" {
+		return agentScheduleCommand(ctx, args[1:], env)
+	}
+	if len(args) > 0 && (args[0] == "skills" || args[0] == "memory") {
+		return agentContextCommand(ctx, args[0], args[1:], env)
+	}
+	if len(args) > 0 && args[0] == "workspace" {
+		return agentWorkspaceCommand(ctx, args[1:], env)
+	}
 	if len(args) == 0 {
 		return legacyAgentCommand(ctx, args, env)
 	}
@@ -177,13 +189,13 @@ func RunAgentCommand(ctx context.Context, args []string, env Environment) error 
 
 func agentControlAction(action string) bool {
 	switch action {
-	case "status", "approve", "deny", "cancel", "resume", "reconcile", "pause", "takeover", "steer", "reconnect", "export":
+	case "status", "approve", "deny", "cancel", "resume", "reconcile", "pause", "takeover", "steer", "reconnect", "export", "recover-execution":
 		return true
 	}
 	return false
 }
 
-func taskSubmitCommand(ctx context.Context, args []string, env Environment) error {
+func taskSubmitCommand(ctx context.Context, args []string, env Environment) (result error) {
 	req, wait, err := ParseTaskSubmission(args)
 	if err != nil {
 		return err
@@ -192,10 +204,32 @@ func taskSubmitCommand(ctx context.Context, args []string, env Environment) erro
 	if err != nil {
 		return err
 	}
-	if !env.Options.JSON {
+	owned, err := prepareRunWorkspace(ctx, client, &req, env)
+	if err != nil {
+		return err
+	}
+	runContext, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if owned != nil {
+		defer func() { result = errors.Join(result, closeExecutionLease(owned)) }()
+		go func() {
+			select {
+			case <-owned.Done():
+				cancel()
+			case <-runContext.Done():
+			}
+		}()
+	}
+	ctx = runContext
+	terminal := env.Execution.Interactive != nil && env.Execution.Interactive()
+	wait = wait || !req.Detach && (terminal || owned != nil)
+	if !env.Options.JSON && !(terminal && wait) {
 		if _, err := fmt.Fprintf(env.Stderr, "Request: %s\n", req.RequestID); err != nil {
 			return err
 		}
+	}
+	if !env.Options.JSON && terminal && wait {
+		AgentHeader(env.Stderr, env.Style, req.Model, req.ProfileID)
 	}
 	snapshot, err := SubmitTask(ctx, client, req)
 	if err != nil {
@@ -204,20 +238,29 @@ func taskSubmitCommand(ctx context.Context, args []string, env Environment) erro
 	if env.Options.JSON {
 		return json.NewEncoder(env.Stdout).Encode(snapshot)
 	}
-	if _, err := fmt.Fprintf(env.Stdout, "Run: %s\n", TerminalSafe(snapshot.RunID)); err != nil {
-		return err
-	}
-	RenderAgentSnapshot(env.Stdout, *snapshot)
-	if wait && (snapshot.Status == "running" || snapshot.Status == "pending" || snapshot.Status == "waiting_for_children") {
-		if env.Service.RenderStream == nil {
-			return fmt.Errorf("agent stream renderer unavailable")
-		}
-		response, err := client.Do(ctx, http.MethodGet, "/api/v2/jobs/"+url.PathEscape(snapshot.RunID)+"/events", "", nil)
-		if err != nil {
+	if !wait || !foregroundRunLive(snapshot.Status) {
+		if _, err := fmt.Fprintf(env.Stdout, "Run: %s\n", TerminalSafe(snapshot.RunID)); err != nil {
 			return err
 		}
-		defer response.Body.Close()
-		return env.Service.RenderStream(env.Stdout, env.Stderr, response.Body)
+	}
+	if wait && req.ExecutionRequestVersion == 1 {
+		if !terminal {
+			fmt.Fprintln(env.Stderr, "Working… Ctrl+C stops this run.")
+		}
+		return runWithWorkspaceInput(ctx, client, req, snapshot, env)
+	}
+	if wait && foregroundRunLive(snapshot.Status) {
+		if !terminal {
+			fmt.Fprintln(env.Stderr, "Working… Ctrl+C stops this run. Loading a cold model can take time.")
+		}
+		return streamForegroundRun(ctx, client, snapshot, owned != nil, env)
+	}
+	RenderAgentSnapshot(env.Stdout, *snapshot)
+	if wait && (snapshot.Status == "failed" || snapshot.Status == "uncertain" || snapshot.Status == "cancelled") {
+		return fmt.Errorf("Run ended as %s", TerminalSafe(snapshot.Status))
+	}
+	if wait && owned != nil && (snapshot.Status == "waiting_for_approval" || snapshot.Status == "waiting_for_input") {
+		return settleForegroundRun(client, snapshot.RunID, true, nil)
 	}
 	return nil
 }

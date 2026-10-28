@@ -68,6 +68,7 @@ func serverRouteManifest() (string, error) {
 			if strings.HasPrefix(line, "handler = ") &&
 				(strings.Contains(line, "authMiddleware.Wrap(") ||
 					strings.Contains(line, "browserTransport(") ||
+					strings.Contains(line, "executionTransport(") ||
 					strings.Contains(line, "requestBodyLimitMiddleware(") ||
 					strings.Contains(line, "loggingMiddleware(")) {
 				if cut := strings.Index(line, " //"); cut >= 0 {
@@ -85,7 +86,7 @@ func serverRouteManifest() (string, error) {
 			return "", fmt.Errorf("route group runtime call order differs from source registration order at %d: %s/%s", i, routeCalls[i], routeDefinitions[i])
 		}
 	}
-	if len(routes) != 137 || len(middleware) != 4 {
+	if len(routes) != 145 || len(middleware) != 5 {
 		return "", fmt.Errorf("unexpected baseline manifest shape: %d routes, %d outer middleware", len(routes), len(middleware))
 	}
 	return "# ordered route registrations\n" + strings.Join(routes, "\n") +

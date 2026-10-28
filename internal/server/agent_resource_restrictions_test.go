@@ -6,7 +6,34 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 )
+
+func TestExecutionProfileCeilingAndTurnRestrictionsAreIndependentOfGrants(t *testing.T) {
+	limit := execution.Permissions{Read: true}
+	config := agents.DefaultAgentConfig()
+	config.Profile = &agents.AgentProfile{Settings: agents.ProfileSettings{Execution: &limit}}
+	if !restrictProfileConfig(httptest.NewRecorder(), nil, &config) || config.ExecutionPolicy == nil || *config.ExecutionPolicy != limit {
+		t.Fatal("profile ceiling not pinned", config.ExecutionPolicy)
+	}
+	limit.Read = false // The saved profile policy cannot alias caller-owned state.
+	if !config.ExecutionPolicy.Read {
+		t.Fatal("policy aliased")
+	}
+	for _, selected := range []execution.Permissions{{Read: true, Write: true}, {Read: true, Processes: true}} {
+		w := httptest.NewRecorder()
+		if restrictProfileConfig(w, &agentResourceRestrictions{Execution: &selected}, &config) || w.Code != 403 {
+			t.Fatal("policy widened", selected, w.Code)
+		}
+	}
+	none := execution.Permissions{}
+	if !restrictProfileConfig(httptest.NewRecorder(), &agentResourceRestrictions{Execution: &none}, &config) || *config.ExecutionPolicy != none {
+		t.Fatal("explicit denial inherited")
+	}
+	if config.Execution != nil || config.ExecutionWorkspace != nil {
+		t.Fatal("policy created a grant")
+	}
+}
 
 func TestProfileConversationRestrictionsCannotWidenAuthority(t *testing.T) {
 	s := profileFixture(t)

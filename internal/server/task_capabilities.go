@@ -6,12 +6,55 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
+
+func (b *browserRunTools) Capability(name string) (capabilities.Descriptor, bool) {
+	if name == execution.AccessRequestTool {
+		return execution.AccessRequestDescriptor(), true
+	}
+	if d, ok := contextDescriptor(name); ok {
+		return d, true
+	}
+	if d, ok := executionDescriptor(name); ok {
+		return d, true
+	}
+	if name == taskArtifactToolName {
+		return taskArtifactDescriptor(), true
+	}
+	if name == computerAccessToolName {
+		return computerAccessDescriptor(), true
+	}
+	if d, ok := browserDescriptor(name); ok {
+		return d, true
+	}
+	return b.RunTools.Capability(name)
+}
+
+func browserToolsForVision(enabled bool) []api.Tool {
+	tools := browserTools()
+	if enabled {
+		return tools
+	}
+	filtered := make([]api.Tool, 0, len(tools)-1)
+	for _, tool := range tools {
+		if tool.Function.Name != "browser_capture" {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
 
 // registryToolAllowed is shared by discovery and dispatch. A companion session
 // adds a provider to task-first work; it never broadens legacy computer-only work.
 func (b *browserRunTools) registryToolAllowed(task *agents.Task, name string) bool {
+	if _, reserved := contextDescriptor(name); reserved {
+		return false
+	}
+	if name == execution.AccessRequestTool || executionToolNamespace(name) || (task.Config.Execution != nil || task.Config.ExecutionRequestVersion != 0) && serviceFileTool(name) {
+		return false
+	}
 	if task.Config.ComputerSession != "" && !task.Config.TaskFirst {
 		return false
 	}
@@ -38,6 +81,11 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 		return nil
 	}
 	var tools []api.Tool
+	if requestableWorkspace(task) {
+		tools = append(tools, workspaceAccessTool())
+	}
+	tools = append(tools, b.workspaceTools(ctx, task)...)
+	tools = append(tools, b.contextTools(ctx, task)...)
 	// A selected-window mutation cannot be planned without its first real
 	// observation. Match the existing dispatch guard in the offered schema, so
 	// small models are not encouraged to invent element/observation references.

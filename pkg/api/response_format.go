@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
 )
 
 // ResponseFormat is a constraint, not a prompt hint. Unsupported engines must
@@ -19,6 +21,54 @@ type ResponseJSONSchema struct {
 	Description string         `json:"description,omitempty"`
 	Strict      *bool          `json:"strict,omitempty"`
 	Schema      map[string]any `json:"schema"`
+	// Grammar backends can use property order as their generation order. Retain
+	// the validated wire schema while its decoded value is unchanged. Callers
+	// can still construct or modify Schema through the existing public API.
+	wireSchema      json.RawMessage
+	canonicalSchema []byte
+}
+
+func (s *ResponseJSONSchema) UnmarshalJSON(data []byte) error {
+	if err := jsonwire.Validate(data); err != nil {
+		return err
+	}
+	type wire ResponseJSONSchema
+	var value wire
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	canonical, err := json.Marshal(value.Schema)
+	if err != nil {
+		return err
+	}
+	value.wireSchema = append(json.RawMessage(nil), fields["schema"]...)
+	value.canonicalSchema = canonical
+	*s = ResponseJSONSchema(value)
+	return nil
+}
+
+func (s ResponseJSONSchema) MarshalJSON() ([]byte, error) {
+	canonical, err := json.Marshal(s.Schema)
+	if err != nil {
+		return nil, err
+	}
+	schema := json.RawMessage(canonical)
+	if len(s.wireSchema) > 0 && bytes.Equal(canonical, s.canonicalSchema) {
+		schema = s.wireSchema
+	}
+	return json.Marshal(struct {
+		Name        string          `json:"name"`
+		Description string          `json:"description,omitempty"`
+		Strict      *bool           `json:"strict,omitempty"`
+		Schema      json.RawMessage `json:"schema"`
+	}{s.Name, s.Description, s.Strict, schema})
 }
 
 func (f *ResponseFormat) UnmarshalJSON(data []byte) error {

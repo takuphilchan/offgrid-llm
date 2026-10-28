@@ -62,6 +62,7 @@ type Environment struct {
 	Audio         AudioDependencies
 	Integrations  IntegrationDependencies
 	LegacyAgent   LegacyAgentDependencies
+	Execution     ExecutionDependencies
 }
 
 type DeviceInfo struct {

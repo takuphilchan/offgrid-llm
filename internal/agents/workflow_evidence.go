@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -322,6 +323,12 @@ func reviseWorkflow(t *Task, instructionID, digest string) error {
 }
 
 func workflowMutation(name string, d capabilities.Descriptor) bool {
+	// Workspace effects are verified by their own host receipt/read-back,
+	// not by unrelated native-window observations. Exact reviewed identity is
+	// required; a provider cannot claim this exception through annotations.
+	if reviewed, ok := execution.Descriptor(name); ok && reviewed == d {
+		return false
+	}
 	// Service artifacts have their own format/integrity checks. Native control
 	// expectations cannot verify a private service-side artifact write.
 	if workspaceArtifactCapability(name, d) {

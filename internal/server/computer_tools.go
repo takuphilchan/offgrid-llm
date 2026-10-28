@@ -230,20 +230,6 @@ func browserTools() []api.Tool {
 	}
 }
 
-func browserToolsForVision(enabled bool) []api.Tool {
-	tools := browserTools()
-	if enabled {
-		return tools
-	}
-	filtered := make([]api.Tool, 0, len(tools)-1)
-	for _, tool := range tools {
-		if tool.Function.Name != "browser_capture" {
-			filtered = append(filtered, tool)
-		}
-	}
-	return filtered
-}
-
 // Reject malformed calls before creating an approval, and repeat on execution.
 // The companion independently validates the same bounded typed contract.
 func validateBrowserArguments(name string, args json.RawMessage) error {
@@ -302,22 +288,28 @@ func browserDescriptor(name string) (capabilities.Descriptor, bool) {
 	}
 	return capabilities.Descriptor{}, false
 }
-func (b *browserRunTools) Capability(name string) (capabilities.Descriptor, bool) {
-	if name == taskArtifactToolName {
-		return taskArtifactDescriptor(), true
-	}
-	if name == computerAccessToolName {
-		return computerAccessDescriptor(), true
-	}
-	if d, ok := browserDescriptor(name); ok {
-		return d, true
-	}
-	return b.RunTools.Capability(name)
-}
 func (b *browserRunTools) Authorize(ctx context.Context, name string, args json.RawMessage, e agents.ToolExecution) (authorizationErr error) {
 	task, ok := b.server.agentManager.GetTask(e.RunID)
 	if !ok || task.Actor != e.Actor {
 		return agents.ErrTaskNotFound
+	}
+	if err := b.server.scheduledTaskAccess(ctx, task, name); err != nil {
+		return err
+	}
+	if name == "request_workspace_access" {
+		return b.authorizeWorkspaceInput(task, args, e)
+	}
+	if _, contextTool := contextDescriptor(name); contextTool {
+		return b.contextAccess(ctx, task, name, e)
+	}
+	if executionToolNamespace(name) {
+		if err := b.executionAccess(ctx, task, name, e); err != nil {
+			return err
+		}
+		return authorizeWorkspaceInvocation(task, name, args, e)
+	}
+	if (task.Config.Execution != nil || task.Config.ExecutionRequestVersion != 0) && serviceFileTool(name) {
+		return capabilities.ErrDenied
 	}
 	if task.Config.Profile != nil {
 		d, exists := b.Capability(name)
@@ -553,8 +545,22 @@ func (b *browserRunTools) ExecuteWithPolicy(ctx context.Context, name string, ar
 	if err := b.Authorize(ctx, name, args, e); err != nil {
 		return "", &agents.ToolFailure{Code: "tool_dispatch_denied", Message: "Tool access changed before execution. No action was dispatched. Review access and try again.", Cause: err}
 	}
+	if _, contextTool := contextDescriptor(name); contextTool {
+		task, ok := b.server.agentManager.GetTask(e.RunID)
+		if !ok {
+			return "", agents.ErrTaskNotFound
+		}
+		return b.executeContext(ctx, task, name, args, e)
+	}
 	if name == taskArtifactToolName {
 		return b.server.saveTaskArtifact(ctx, args)
+	}
+	if executionToolNamespace(name) {
+		task, ok := b.server.agentManager.GetTask(e.RunID)
+		if !ok {
+			return "", agents.ErrTaskNotFound
+		}
+		return b.executeWorkspace(ctx, task, name, args, e)
 	}
 	if _, companion := browserDescriptor(name); !companion {
 		return b.RunTools.ExecuteWithPolicy(ctx, name, args, e)

@@ -8,7 +8,14 @@ func TestAgentLegacyServiceSelection(t *testing.T) {
 		args []string
 		want bool
 	}{
-		{"interactive", nil, true},
+		{"interactive", nil, false},
+		{"conversation", []string{"chat"}, false},
+		{"conversation model", []string{"--model", "selected"}, false},
+		{"workspace", []string{"workspace", "list"}, false},
+		{"skills", []string{"skills", "list"}, false},
+		{"memory", []string{"memory", "list"}, false},
+		{"schedules", []string{"schedules", "list"}, false},
+		{"execution recovery", []string{"recover-execution", "run-fixture"}, false},
 		{"legacy list", []string{"tasks"}, true},
 		{"legacy mcp", []string{"mcp"}, true},
 		{"profile", []string{"profiles"}, false},

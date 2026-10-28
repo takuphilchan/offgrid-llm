@@ -250,13 +250,14 @@ func BuiltInTools() []api.Tool {
 			Type: "function",
 			Function: api.FunctionDef{
 				Name:        "http_get",
-				Description: "Make an HTTP GET request to a URL and return the response.",
+				Description: "Fetch a remote HTTP or HTTPS URL. Cannot read local files, list a directory, or access a user's workspace. For local work use workspace tools, requesting workspace access first when it is not attached.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"url": map[string]interface{}{
 							"type":        "string",
-							"description": "The URL to fetch",
+							"description": "Absolute http:// or https:// URL, never a file:// URL or filesystem path",
+							"pattern":     "^https?://.*$",
 						},
 					},
 					"required": []string{"url"},
@@ -684,13 +685,12 @@ func getDangerousCommands() []string {
 }
 
 func executeHTTPGet(ctx context.Context, url string) (string, error) {
-	if url == "" {
-		return "", fmt.Errorf("url is required")
+	if err := validateHTTPGetURL(url); err != nil {
+		return "", err
 	}
-
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return "", err
+		return "", invalidHTTPGet(err)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
 )
 
@@ -30,6 +31,15 @@ func (s *Server) profileActorCapabilityAllowed(actor string, d capabilities.Desc
 	if s.userStore.ActorHasPermission(actor, users.PermissionAdmin) {
 		return true
 	}
+	if d == execution.AccessRequestDescriptor() {
+		return true
+	}
+	if expected, ok := executionDescriptor(d.Name); ok && expected == d {
+		return true
+	}
+	if expected, ok := contextDescriptor(d.Name); ok && expected == d {
+		return true
+	}
 	// Artifacts are scoped by the canonical owner/job, not an arbitrary path.
 	return d == taskArtifactDescriptor() || profileToolAllowed(false, d)
 }
@@ -52,7 +62,8 @@ func (s *Server) profileJobAccess(next http.HandlerFunc) http.HandlerFunc {
 			writeJobReadError(w, agents.ErrTaskNotFound)
 			return
 		}
-		if r.Method != http.MethodGet && (strings.HasSuffix(r.URL.Path, "/input") || strings.HasSuffix(r.URL.Path, "/reconnect")) {
+		workspaceInput := strings.HasSuffix(r.URL.Path, "/input") && (task.PendingInput != nil && task.PendingInput.Kind == "workspace" || task.Config.ExecutionRequestVersion == execution.AccessRequestVersion && task.Config.Execution != nil)
+		if r.Method != http.MethodGet && (strings.HasSuffix(r.URL.Path, "/input") && !workspaceInput || strings.HasSuffix(r.URL.Path, "/reconnect")) {
 			writeJobError(w, 403, "computer_administration_required", "Computer access administration requires an administrator.", false)
 			return
 		}
