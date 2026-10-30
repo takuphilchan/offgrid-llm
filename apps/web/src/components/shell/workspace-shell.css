@@ -3,9 +3,9 @@
   .app-shell { --sidebar-width: 248px; --header-height: 60px; --page-gutter: clamp(16px, 2.5vw, 32px); --page-block-space: 24px; --mobile-nav-height: 0px; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: 100dvh; }
   .app-shell.sidebar-collapsed { --sidebar-width: 64px; }
   .sidebar { position: sticky; inset-block-start: 0; height: 100dvh; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px; background: var(--surface-0); border-inline-end: 1px solid var(--line); z-index: 25; }
-  .sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; flex-shrink: 0; }
+  .sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 40px; flex-shrink: 0; padding-inline: var(--space-1); }
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text); }
-  .brand strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .brand strong { font-size: var(--type-body); font-weight: var(--weight-heading); letter-spacing: var(--tracking-title); }
   .brand img { display: block; flex: none; }
   .sidebar-create { flex-shrink: 0; }
   .sidebar-create .new-chat-button { --control-justify: flex-start; width: 100%; text-decoration: none; }
@@ -16,20 +16,20 @@
   .sidebar-collapsed :is(.nav-link, .new-chat-button, .workspace-options > button) { --control-justify: center; justify-content: center; padding-inline: 0; }
   .sidebar-collapsed .service-state { justify-content: center; padding-inline: 0; }
   .sidebar-toggle, .navigation-trigger { display: none; }
-  .primary-nav { display: grid; gap: 2px; flex-shrink: 0; }
+  .primary-nav { display: grid; gap: var(--space-1); flex-shrink: 0; }
   .nav-group { display: grid; gap: 2px; }
-  .nav-link { position: relative; display: flex; width: 100%; align-items: center; min-height: 40px; gap: 10px; padding: 8px 10px; border-radius: 7px; color: var(--muted); text-decoration: none; text-align: start; transition: background .12s ease; }
+  .nav-link { position: relative; display: flex; width: 100%; align-items: center; min-height: 40px; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--control-radius); color: var(--muted); text-decoration: none; text-align: start; transition: transform var(--motion-press) var(--ease-move); }
   .nav-link svg { flex-shrink: 0; }
-  .nav-link span { font-size: 14px; overflow-wrap: anywhere; }
+  .nav-link span { font-size: var(--type-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
   .nav-link:hover, .nav-link.active { background: var(--accent-soft); color: var(--text); }
   .nav-link.active { font-weight: 600; }
-  .sidebar-context { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-block-start: 4px; }
+  .sidebar-context { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-block-start: var(--space-3); }
   .sidebar-context[hidden] { display: none; }
   .sidebar-context .conversation-history { position: static; inset: auto; width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 0; border: 0; background: transparent; box-shadow: none; }
   .sidebar-context .history-list { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
   .sidebar-context .history-row { min-height: 40px; gap: 0; border-radius: 7px; }
   .sidebar-context .history-open { min-height: 40px; text-align: start; padding: 8px 10px; }
-  .sidebar-context .history-open strong { font-size: 13px; font-weight: 400; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .sidebar-context .history-open strong { font-size: var(--type-meta); font-weight: var(--weight-regular); line-height: var(--leading-ui); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   .sidebar-context .history-row.active strong { font-weight: 500; color: var(--text); }
   .sidebar-foot { flex-shrink: 0; margin-block-start: auto; border-block-start: 1px solid var(--line); padding-block-start: 8px; display: grid; gap: 4px; }
   .sidebar-foot .workspace-options > button { --control-justify: flex-start; width: 100%; }
@@ -39,7 +39,7 @@
   .workspace { min-width: 0; background: var(--surface-1); }
   .topbar { min-height: var(--header-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px var(--page-gutter); border-block-end: 1px solid var(--line); }
   .topbar-leading { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .topbar h1 { min-width: 0; margin: 0; font-size: 18px; font-weight: 600; line-height: 1.4; letter-spacing: -.02em; overflow-wrap: anywhere; }
+  .topbar h1 { min-width: 0; margin: 0; font-size: var(--type-section); font-weight: var(--weight-heading); line-height: var(--leading-ui); letter-spacing: var(--tracking-title); overflow-wrap: anywhere; }
   .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .command-trigger { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 13px; cursor: pointer; }
   .command-trigger:hover { background: var(--surface-2); color: var(--text); }
@@ -58,6 +58,19 @@
   .chat-page .conversation { padding: 8px max(0px, calc((100% - 800px) / 2)) 24px; }
   .chat-page .composer { width: min(800px, 100%); margin-inline: auto; }
   .chat-latest { position: absolute; inset-inline-end: 16px; inset-block-start: 8px; z-index: 2; box-shadow: var(--shadow); }
+  .nav-link:active { transform: translateY(var(--press-distance)); }
+  .sidebar :is(.brand, .nav-link, .sidebar-foot), .topbar { user-select: none; }
+  .sidebar .history-open { user-select: auto; }
+  .sidebar-collapsed .sidebar { animation: rail-enter var(--motion-enter) var(--ease-enter); }
+  .sidebar.open { animation: workspace-enter var(--motion-enter) var(--ease-enter); }
+  .navigation-scrim { animation: scrim-enter var(--motion-enter) var(--ease-enter); }
+  @keyframes rail-enter { from { opacity: .6; } to { opacity: 1; } }
+  @keyframes scrim-enter { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar-collapsed .sidebar, .sidebar.open, .navigation-scrim { animation: none; }
+    .nav-link { transition: none; }
+    .nav-link:active { transform: none; }
+  }
   @media (max-width: 1023px) {
     .app-shell { --sidebar-width: 0px; display: block; padding: 0; }
     .sidebar { position: fixed; inset-block: 0; inset-inline-start: 0; width: min(280px, calc(100vw - 32px)); display: none; box-shadow: var(--shadow); }
