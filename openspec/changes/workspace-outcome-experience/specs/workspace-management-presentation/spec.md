@@ -4,6 +4,18 @@ Make documents, work history and preferences useful to ordinary users while reta
 
 ## ADDED Requirements
 
+### Requirement: Learnable terminology without changed authority
+The workspace SHALL explain model categories, document retrieval, agent profiles
+and task inspection in plain localized language. Guidance SHALL name supported
+next actions and distinguish local service reachability from internet access.
+Glossary and cognitive-walkthrough evidence SHALL identify protected changes and
+unreviewed translations without claiming real-user validation.
+
+#### Scenario: Discover a capability for the first time
+- **WHEN** an operator opens Models, Knowledge or Agents
+- **THEN** guidance explains its purpose and prerequisites using existing controls
+- **AND** reading guidance does not download, execute, grant access or change a draft
+
 ### Requirement: Consistent search and profile organization
 Search fields SHALL share an icon, accessible name, localized placeholder and conditional clear action. Agent profile editors SHALL group identity/instructions, model, tools and collaboration settings with advanced configuration subordinate, without altering execution semantics.
 

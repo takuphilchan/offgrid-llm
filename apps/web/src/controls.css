@@ -21,7 +21,7 @@
     border: 1px solid var(--line-strong);
     border-radius: var(--control-radius);
     font-size: var(--control-font-size);
-    font-weight: 500;
+    font-weight: var(--weight-medium);
     line-height: 22px;
     white-space: normal;
     text-decoration: none;
@@ -29,14 +29,14 @@
     color: var(--text);
     background: var(--surface-1);
     cursor: pointer;
-    transition: background .12s ease, border-color .12s ease;
+    transition: transform var(--motion-press) var(--ease-move), opacity var(--motion-press) var(--ease-move);
     transform: none;
   }
   :where(.primary-button, .composer-actions > button) {
     color: var(--on-accent);
     background: var(--accent-strong);
     border-color: var(--accent-strong);
-    font-weight: 600;
+    font-weight: var(--weight-heading);
   }
   /* Legacy text-button call sites use the same visible secondary control.
      Workspace actions must not depend on hover to reveal their boundary. */
@@ -68,6 +68,8 @@
     color: var(--text); background: var(--surface-2); border-color: var(--text); font-weight: 600;
   }
   button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  :where(button, a.primary-button, a.secondary-button):active:not(:disabled) { transform: translateY(var(--press-distance)); }
+  :where(button, a.primary-button, a.secondary-button):focus-visible { scroll-margin-block: var(--space-4); }
   button > svg { flex-shrink: 0; }
   .icon-button { width: var(--control-height); height: var(--control-height); flex-shrink: 0; border-radius: var(--control-radius); }
 
@@ -189,6 +191,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
+    :where(button, a.primary-button, a.secondary-button):active:not(:disabled) { transform: none; }
   }
   @media (pointer: coarse) {
     :where(.primary-button, .secondary-button, .utility-button, .text-button, .danger-button, .nav-link, .history-open, .new-chat-button) { min-height: 44px; }

@@ -1,5 +1,18 @@
 # Proposal
 
+## Approved presentation and usability refinement (2026-10-30)
+
+The owner's two implementation briefs authorize a color-frozen presentation pass
+and a separate usability pass in the existing shared renderer. Preserve all color
+declarations and literals, public behavior, authority, recovery and first-reply
+setup contracts. Add semantic geometry/type/motion tokens, migrate superseded
+legacy geometry, refine the seven presentation phases, and improve explanatory
+copy and safe navigation using all nine typed locales. Record cognitive-walkthrough
+findings, task paths and protected-contract proposals in `docs/ux/findings.md`.
+Use isolated fixtures and disposable real-service state; no real-user study is
+implied. The user explicitly requests a branch and small logical commits. No push,
+deployment or release is part of these briefs.
+
 ## Why
 
 The completed state/recovery and shell slices make OffGrid more consistent, but everyday work still competes with setup, maintenance and repeated status controls. This follow-up makes the existing shared renderer outcome-led across Chat, Agents, Models, Knowledge, Activity and Settings, with observable workflow and usability gates rather than an unsupported claim of parity with leading AI products.

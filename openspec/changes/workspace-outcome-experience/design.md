@@ -1,5 +1,38 @@
 # Design
 
+## Color-frozen craft and usability extension (2026-10-30)
+
+The approved briefs refine the existing composition. The baseline is commit
+`7357acae431e40092fd40a5458207d3649d503e8`. A parser-backed inventory freezes
+color-bearing CSS declarations and UI color literals, including desktop startup.
+Existing palette, borders, shadows and color pairings are retained. New work uses
+geometry, typography, spacing and transform/opacity motion. The freeze takes
+precedence over suggested new shadow, scrollbar or focus colors.
+
+Foundation tokens: type 12/13/14/16/18/24px, weights 400/500/600, UI leading 1.4,
+prose leading 1.6, Arabic leading 1.65 without Latin tracking, spacing 4/8/12/16/
+24/32/48px, control radius 8px, panel radius 12px, editor/dialog radius 16px,
+motion 120/180ms and small transform distances. Retain existing canvas/surface/
+overlay colors and elevation; no new surface palette. Keep 800px chat reading
+width and 248px/64px shell. Do not animate grid dimensions or reanimate tokens
+on every streaming update. CSS-only entrances and press feedback respect reduced
+motion. Static code language labels are presentation; Copy and Markdown safety
+remain unchanged. Desktop uses equivalent inherited spacing where shared renderer
+tokens are unavailable; no duplicated color palette or packaging dependency.
+
+UX changes use existing navigation and components: contextual explanations of
+model types, offline discovery, documents/indexing, agent configuration versus
+execution, recovery, and keyboard actions. New copy enters the typed Messages
+contract in all nine locales and requires native-speaker review. No automatic
+model selection, grant, download, retry, request replay or first-run completion.
+
+Baseline/after matrix uses isolated API fixtures at 390/768/1024/1440 in both
+themes and English/Arabic, with 320px, short-height, zoom, German/isiNdebele,
+keyboard, streaming, auth and failure coverage in existing/full regression suites.
+Compare screenshot states and task paths; distinguish synthetic evidence, live
+service evidence, installed-platform evidence and unavailable screen-reader/user
+studies. Preserve the outstanding earlier qualification tasks.
+
 ## Context
 
 See `proposal.md` for motivation. This is the next interaction layer over the completed `workspace-state-recovery` and `workspace-shell-foundation` changes, not a second shell redesign. Existing ownership and release boundaries are in `docs/advanced/workspace-ui.md`, `client-contracts.md` and `production-readiness.md`.

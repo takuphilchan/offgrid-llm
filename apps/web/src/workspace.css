@@ -46,7 +46,7 @@
   .model-select select { color: var(--text); background: var(--surface-2); font-size: 13px; border-radius: 6px; }
   .icon-button { width: 40px; height: 40px; color: var(--muted); background: var(--surface-1); border-color: var(--line); border-radius: 8px; }
   .icon-button:hover { color: var(--text); border-color: var(--line-strong); }
-  .text-button { min-height: 40px; padding-inline: 12px; color: var(--muted); font-size: 12px; border-radius: 8px; }
+  .text-button { color: var(--muted); }
 
   .stack { gap: 20px; }
   .eyebrow, .history-label { color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: .07em; }

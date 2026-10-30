@@ -1,5 +1,26 @@
 # Tasks
 
+## 12. Approved color-frozen presentation refinement (2026-10-30)
+
+- [x] 12.1 Freeze colors/source identity, capture the full before matrix and document the 12 aesthetic findings and token plan.
+- [x] 12.2 Add semantic type/geometry/motion foundations; preserve colors and migrate superseded legacy geometry.
+- [ ] 12.3 Refine shell, sidebar/rail, header and footer within existing dimensions and focus behavior.
+- [ ] 12.4 Refine Chat prose, code header, composer and response actions without changing streaming or Markdown safety.
+- [ ] 12.5 Refine Models/Knowledge list rhythm, metadata, search and transfer presentation.
+- [ ] 12.6 Refine Agents/Activity/Settings headings, lists, disclosures and outcomes.
+- [ ] 12.7 Refine palette/popover/onboarding motion, geometry and loading with reduced-motion support.
+- [ ] 12.8 Refine desktop startup presentation using the frozen desktop colors and existing bridge.
+- [ ] 12.9 Verify color inventory, full isolated renderer, API/types/build, desktop syntax/tests, before/after matrix, docs and focused accessibility/performance checks. Record unavailable native/screen-reader checks honestly; commit each working phase.
+
+## 13. Approved usability refinement (2026-10-30)
+
+- [ ] 13.1 Document three personas, fifteen task paths, heuristic findings/severity, baseline steps and protected-contract proposals in docs/ux.
+- [ ] 13.2 Add a typed nine-locale explanatory vocabulary and glossary, with native-review status.
+- [ ] 13.3 Improve shell/Chat/setup guidance and keyboard discoverability through existing controls and routes.
+- [ ] 13.4 Improve Models/Knowledge guidance, offline distinctions and empty/error next steps without automatic actions.
+- [ ] 13.5 Improve Agents/Activity/Settings and permission/recovery guidance without altering protected contracts.
+- [ ] 13.6 Verify task flows, role/offline boundaries and unchanged mutation contracts; report after step counts, remaining risks and evidence limits.
+
 ## 11. Approved composition-first refinement
 
 - [x] 11.1 Freeze the current three representative fixtures and source/build identity; capture populated Chat, running work and blocked access before changing presentation, using disposable state.

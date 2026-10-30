@@ -4,6 +4,24 @@ Set observable visual and behavioral quality gates for the shared web and deskto
 
 ## ADDED Requirements
 
+### Requirement: Frozen palette and bounded presentation motion
+The refinement SHALL preserve every existing UI color declaration and literal.
+New geometry, type and motion SHALL use additive semantic tokens. Animations
+SHALL use transform or opacity, respect reduced motion and avoid replaying over
+long streaming transcripts. Superseded legacy geometry SHALL be removed when
+migrated; frozen color declarations remain at their original owners.
+
+#### Scenario: Compare the refinement to its baseline
+- **WHEN** the presentation refinement is verified
+- **THEN** the authored color inventory has zero additions, removals or changes
+- **AND** before/after fixtures cover all main screens, streaming/code, overlays,
+  empty/loading/error states, both themes and Arabic RTL at four viewport widths
+
+#### Scenario: Reduced motion and slow hardware
+- **WHEN** motion is reduced or a long answer is streaming
+- **THEN** actions, focus and output remain available without animation-dependent timing
+- **AND** transitions do not animate layout dimensions or apply large backdrop blur
+
 ### Requirement: Authoritative presentation foundations
 The shared renderer SHALL use one monochrome token source, bundled IBM Plex fonts and consistent product mark. Controls SHALL preserve explicit boundaries and usable target sizes. OffGrid-owned desktop startup and consent surfaces SHALL follow the same hierarchy without moving local authorization into the service renderer.
 

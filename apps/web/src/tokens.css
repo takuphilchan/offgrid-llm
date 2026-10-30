@@ -53,4 +53,46 @@
   :root[lang='ar'] { font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans Variable', sans-serif; }
   :root { --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; font-synthesis: none; text-rendering: optimizeLegibility; }
   body { font: inherit; }
+  /* Additive, color-free presentation scale. Existing palette/size tokens stay
+     intact for compatibility; new feature geometry consumes these roles. */
+  :root {
+    --type-caption: 12px;
+    --type-meta: 13px;
+    --type-ui: 14px;
+    --type-body: 16px;
+    --type-section: 18px;
+    --type-title: 24px;
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-heading: 600;
+    --leading-ui: 1.4;
+    --leading-prose: 1.6;
+    --tracking-title: -.025em;
+    --tracking-label: .06em;
+    --space-12: 48px;
+    --radius-panel: 12px;
+    --radius-editor: 16px;
+    --motion-press: 120ms;
+    --motion-enter: 180ms;
+    --ease-enter: cubic-bezier(.2, .8, .2, 1);
+    --ease-move: cubic-bezier(.4, 0, .2, 1);
+    --motion-distance: 4px;
+    --press-distance: 1px;
+    --measure-copy: 70ch;
+  }
+  :root[lang='ar'] { --leading-ui: 1.65; --leading-prose: 1.8; --tracking-title: 0; --tracking-label: 0; }
+}
+
+@layer workspace {
+  h1, h2, h3, h4, h5, h6, strong, b { font-weight: var(--weight-heading); }
+  button, input, select { line-height: var(--leading-ui); }
+  :is(time, progress, .model-meta, .model-identity-facts, .response-metrics, .task-list-item small) { font-variant-numeric: tabular-nums; }
+  @keyframes workspace-enter {
+    from { opacity: 0; transform: translateY(var(--motion-distance)); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes workspace-pulse {
+    0%, 100% { opacity: .55; }
+    50% { opacity: 1; }
+  }
 }
