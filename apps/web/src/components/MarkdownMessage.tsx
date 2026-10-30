@@ -16,6 +16,8 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   const { messages: text } = useI18n();
   const [copied, setCopied] = useState(false);
   const source = nodeText(children).replace(/\n$/, '');
+  const className = isValidElement<{ className?: string }>(children) ? children.props.className ?? '' : '';
+  const language = /\blanguage-([a-z0-9_+-]{1,40})\b/i.exec(className)?.[1];
 
   const copy = async () => {
     try {
@@ -25,8 +27,9 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   };
 
   return <div className="code-block">
+    {language && <span className="code-language">{language}</span>}
     <button type="button" onClick={() => void copy()} aria-label={copied ? text.chat.copied : text.chat.copyCode}>
-      <Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? text.chat.copied : text.chat.copy}
+      <Icon name={copied ? 'check' : 'copy'} size={16} />{copied ? text.chat.copied : text.chat.copy}
     </button>
     <pre>{children}</pre>
   </div>;

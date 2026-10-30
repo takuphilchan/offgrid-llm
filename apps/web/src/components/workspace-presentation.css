@@ -39,7 +39,7 @@
   .workspace-search-field:focus-within { border-color: var(--line-strong); outline: 2px solid var(--text); outline-offset: 1px; }
   .workspace-search-field input { min-height: 36px; padding: 0; outline: 0; }
   .history-empty.workspace-empty { text-align: start; }
-  .composer { max-width: 800px; padding: 12px; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+  .composer { max-width: 800px; padding: var(--space-4); gap: var(--space-3); grid-template-columns: minmax(0, 1fr) auto; }
   .composer-input { grid-column: 1 / -1; }
   .composer-context { grid-row: 2; grid-column: 1; }
   .composer-footer { display: contents; }
@@ -54,7 +54,7 @@
   .composer-context-menu p { font-size: 13px; line-height: 1.6; margin: 0; color: var(--muted); }
   .composer-choice { font-size: 12px; border-inline-start: 1px solid var(--line); padding-inline-start: 8px; }
   .composer-hint { max-width: 46ch; color: var(--muted); font-size: 13px; line-height: 1.6; }
-  .composer-input small { font-size: 12px; color: var(--muted); }
+  .composer-input small { font-size: var(--type-caption); line-height: var(--leading-ui); color: var(--muted); }
   .composer-retrieval-scope { margin: 0; max-width: 90ch; color: var(--muted); font-size: 13px; line-height: 1.6; }
   .knowledge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
   .knowledge-actions > p { flex-basis: 100%; max-width: 90ch; margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted); }

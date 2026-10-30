@@ -5,7 +5,7 @@
 - [x] 12.1 Freeze colors/source identity, capture the full before matrix and document the 12 aesthetic findings and token plan.
 - [x] 12.2 Add semantic type/geometry/motion foundations; preserve colors and migrate superseded legacy geometry.
 - [x] 12.3 Refine shell, sidebar/rail, header and footer within existing dimensions and focus behavior.
-- [ ] 12.4 Refine Chat prose, code header, composer and response actions without changing streaming or Markdown safety.
+- [x] 12.4 Refine Chat prose, code header, composer and response actions without changing streaming or Markdown safety.
 - [ ] 12.5 Refine Models/Knowledge list rhythm, metadata, search and transfer presentation.
 - [ ] 12.6 Refine Agents/Activity/Settings headings, lists, disclosures and outcomes.
 - [ ] 12.7 Refine palette/popover/onboarding motion, geometry and loading with reduced-motion support.

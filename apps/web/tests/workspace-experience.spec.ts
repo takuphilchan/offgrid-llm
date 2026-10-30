@@ -120,6 +120,12 @@ test('first-run completes only after a returned assistant message', async ({ pag
   await expect(page.locator('.message.assistant').getByRole('heading', { name: 'Hello from OffGrid' })).toBeVisible();
   await expect(page.locator('.message.assistant table')).toBeVisible();
   await expect(page.locator('.message.assistant pre code')).toContainText('fmt.Println("offgrid")');
+  await expect(page.locator('.message.assistant .code-language')).toHaveText('go');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as unknown as { copiedSource: string }).copiedSource = value; } } });
+  });
+  await page.locator('.message.assistant .code-block > button').click();
+  expect(await page.evaluate(() => (window as unknown as { copiedSource: string }).copiedSource)).toBe('fmt.Println("offgrid")');
   await expect(page.locator('.message.assistant img')).toHaveCount(0);
   await expect(page.locator('.message.assistant .blocked-image')).toContainText('Remote diagram');
   await page.getByRole('button', { name: 'Copy response' }).click();

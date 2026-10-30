@@ -115,32 +115,33 @@
   .message { margin-block-end: 32px; }
   .message-heading { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-end: 5px; }
   .message-label { color: var(--faint); font-size: 12px; letter-spacing: .05em; }
-  .message-body { color: var(--text); font-size: 16px; line-height: 1.7; }
-  .message.user .message-body { background: var(--surface-1); border-radius: 10px; }
+  .message-body { color: var(--text); font-size: var(--type-body); line-height: var(--leading-prose); }
+  .message.user .message-body { background: var(--surface-1); border-radius: var(--radius-panel); }
   .message.assistant .message-body { white-space: normal; }
   .message-copy { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; color: var(--faint); background: transparent; border-radius: 6px; font-size: 11px; cursor: pointer; opacity: 0; }
   .message:hover .message-copy, .message-copy:focus-visible { opacity: 1; }
   .message-copy:hover { color: var(--text); background: var(--accent-soft); }
   .message-body > :first-child { margin-block-start: 0; }
   .message-body > :last-child { margin-block-end: 0; }
-  .message-body p, .message-body ul, .message-body ol, .message-body blockquote { margin: 0 0 14px; }
+  .message-body p, .message-body ul, .message-body ol, .message-body blockquote { margin: 0 0 var(--space-4); }
   .message-body ul, .message-body ol { padding-inline-start: 24px; }
-  .message-body li + li { margin-block-start: 5px; }
-  .message-body h1, .message-body h2, .message-body h3, .message-body h4 { margin: 24px 0 10px; color: var(--text); line-height: 1.25; letter-spacing: -.015em; }
-  .message-body h1 { font-size: 23px; }.message-body h2 { font-size: 20px; }.message-body h3 { font-size: 17px; }.message-body h4 { font-size: 15px; }
+  .message-body li + li { margin-block-start: var(--space-2); }
+  .message-body h1, .message-body h2, .message-body h3, .message-body h4 { margin: var(--space-6) 0 var(--space-3); color: var(--text); line-height: var(--leading-ui); letter-spacing: var(--tracking-title); }
+  .message-body h1 { font-size: var(--type-title); }.message-body h2 { font-size: var(--type-section); }.message-body h3 { font-size: var(--type-body); }.message-body h4 { font-size: var(--type-body); }
   .message-body blockquote { padding-inline-start: 15px; border-inline-start: 2px solid var(--line-strong); color: var(--muted); }
   .message-body a { color: var(--text); text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px; }
   .message-body a:hover { text-decoration-color: var(--text); }
-  .message-body code { padding: 2px 5px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; font: 13px/1.5 var(--mono); }
+  .message-body code { padding: 2px var(--space-1); color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--space-1); font: var(--type-meta)/var(--leading-prose) var(--mono); }
   .message-body table { width: 100%; display: block; margin: 4px 0 16px; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
   .message-body th, .message-body td { min-width: 120px; padding: 9px 11px; border: 1px solid var(--line); text-align: start; }
   .message-body th { background: var(--surface-2); font-weight: 600; }
   .message-body input[type='checkbox'] { accent-color: var(--text); }
   .blocked-image { display: inline-block; padding: 2px 6px; color: var(--faint); border: 1px solid var(--line); border-radius: 5px; font-size: 12px; }
-  .code-block { position: relative; margin: 5px 0 16px; overflow: hidden; background: var(--surface-1); border: 1px solid var(--line); border-radius: 9px; }
-  .code-block > button { position: absolute; inset-block-start: 8px; inset-inline-end: 8px; display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; cursor: pointer; }
+  .code-block { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: var(--space-4) 0; overflow: hidden; background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-panel); }
+  .code-block > button { grid-column: 2; grid-row: 1; justify-self: end; margin: var(--space-2); display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-height); padding: 0 var(--space-3); color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--control-radius); font-size: var(--type-caption); cursor: pointer; }
   .code-block > button:hover { color: var(--text); border-color: var(--line-strong); }
-  .code-block pre { margin: 0; padding: 42px 16px 16px; overflow-x: auto; }
+  .code-block pre { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0 var(--space-4) var(--space-4); overflow-x: auto; direction: ltr; text-align: start; tab-size: 2; }
+  .code-language { grid-column: 1; grid-row: 1; align-self: center; padding: var(--space-3) var(--space-4); font: var(--type-caption)/var(--leading-ui) var(--mono); overflow-wrap: anywhere; }
   .code-block pre code { padding: 0; background: transparent; border: 0; border-radius: 0; }
   .thinking i { background: var(--text); }
   .generation-status { color: var(--muted); font-size: 12px; padding-block: 8px; }
@@ -150,7 +151,7 @@
   .chat-performance label { display: flex; align-items: center; gap: 8px; }
   .chat-performance select { color: var(--text); background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
   .chat-performance p { flex-basis: 100%; margin: 0; max-width: 70ch; }
-  .composer { grid-template-columns: minmax(0, 1fr); background: var(--surface-1); border-color: var(--line-strong); border-radius: 11px; box-shadow: none; backdrop-filter: none; }
+  .composer { grid-template-columns: minmax(0, 1fr); background: var(--surface-1); border-color: var(--line-strong); border-radius: var(--radius-editor); box-shadow: none; backdrop-filter: none; }
   .composer-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
   .composer-footer > .composer-actions { margin-inline-start: auto; }
   .composer:focus-within { border-color: var(--text); }
