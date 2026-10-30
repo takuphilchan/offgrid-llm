@@ -1,6 +1,8 @@
 /* Shared web/Electron control contract. Feature styles own layout; this layer
    owns control geometry and states. Composite editors have explicit exceptions. */
 @layer controls {
+  /* Last composer action is Send/Stop; the microphone remains secondary. */
+  .primary-button:not(:disabled), .composer-actions > button:last-child:not(:disabled) { background-image: var(--gradient-primary); }
   :root {
     --control-height: 40px;
     --control-radius: 8px;

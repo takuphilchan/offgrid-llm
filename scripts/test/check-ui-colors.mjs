@@ -31,9 +31,24 @@ function inventory(read) {
 }
 const before = inventory(path => baselinePaths.has(path) ? git(['show', `${base}:${path}`]) : '');
 const after = inventory(path => existsSync(resolve(root,path)) ? readFileSync(resolve(root,path),'utf8') : '');
-if (process.argv[3]) { mkdirSync(dirname(resolve(process.argv[3])), {recursive:true}); writeFileSync(process.argv[3], JSON.stringify({base, entries:before},null,2)); }
+const snapshot = process.argv.slice(3).find(arg => !arg.startsWith('--'));
+if (snapshot) { mkdirSync(dirname(resolve(snapshot)), {recursive:true}); writeFileSync(snapshot, JSON.stringify({base, entries:before},null,2)); }
 const counts = list => { const map = new Map(); for (const entry of list) { const key=JSON.stringify(entry); map.set(key,(map.get(key)??0)+1); } return map; };
-const a=counts(before), b=counts(after), changes=[];
-for (const key of new Set([...a.keys(),...b.keys()])) if(a.get(key)!==b.get(key)) changes.push({entry:JSON.parse(key), before:a.get(key)??0, after:b.get(key)??0});
-console.log(JSON.stringify({base,files:paths.length,entries:before.length,colorChanges:changes},null,2));
+const a=counts(before), b=counts(after), changes=[], intentional=[];
+function gradientAddition(entry) {
+  if (entry[0] === 'apps/web/src/tokens.css') return (
+    /^--gradient-(sidebar|composer|primary|progress)$/.test(entry[2] ?? '') ||
+    (entry[1] === 'literal' && (entry[2].startsWith('color-mix(in oklab, var(--') || entry[2] === 'color-mix(in oklab, currentColor, currentColor))'))
+  );
+  return ['apps/web/src/workspace.css','apps/web/src/controls.css'].includes(entry[0]) &&
+    entry[2] === 'background-image' && /^var\(--gradient-(sidebar|composer|primary|progress)\)$/.test(entry[3]);
+}
+for (const key of new Set([...a.keys(),...b.keys()])) if(a.get(key)!==b.get(key)) {
+  const change={entry:JSON.parse(key), before:a.get(key)??0, after:b.get(key)??0};
+  // The later explicit gradient brief permits only additive generated ramps and
+  // their reviewed consumers. It never permits changing/removing a baseline entry.
+  if(process.argv.includes('--gradients') && change.after>change.before && gradientAddition(change.entry)) intentional.push(change);
+  else changes.push(change);
+}
+console.log(JSON.stringify({base,files:paths.length,entries:before.length,intentionalGradientAdditions:intentional.length,colorChanges:changes},null,2));
 if(changes.length) process.exitCode=1;

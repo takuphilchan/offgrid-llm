@@ -4,9 +4,15 @@
 
 - [x] 14.1 Inventory existing treatments and support; document budget and capture four isolated prototypes before production wiring.
 - [x] 14.2 Add centralized generated tonal/eased tokens, flat fallback, kill switch and accessibility flattening; preserve every palette token.
-- [ ] 14.3 Apply reviewed functional/surface/action treatments within the three-treatment budget; keep content and desktop startup flat.
+- [x] 14.3 Apply reviewed functional/surface/action treatments within the three-treatment budget; keep content and desktop startup flat.
 - [ ] 14.4 Verify every treatment on/off, worst-point contrast, supported syntax, RTL/reflow, throttled stream/download paint and local feedback; run full applicable checks and record physical/native limits.
-- [ ] 14.5 Update evidence/token inventory/rejections and commit the verified gradient phases separately.
+- [x] 14.5 Update evidence/token inventory/rejections and commit the verified gradient phases separately.
+
+14.4 remains open: the ordinary renderer and contrast/gating checks pass, but
+three 4x/6x throttled Stop samples exceed 250 ms (including flat mode). See
+`docs/ux/gradients.md`; physical display, native and screen-reader qualification
+remain unverified. The subsequent user request authorizes replacing the local
+container and desktop for testing, with backups; it does not authorize release.
 
 ## 12. Approved color-frozen presentation refinement (2026-10-30)
 

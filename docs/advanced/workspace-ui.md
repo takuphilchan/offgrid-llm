@@ -426,6 +426,9 @@ in `Messages.guidance` in all nine locales; native review remains outstanding.
 
 See [the heuristic findings](../ux/findings.md) and
 [terminology and translation review](../ux/terminology.md). Palette freeze proof:
-`node scripts/test/check-ui-colors.mjs 7357acae431e40092fd40a5458207d3649d503e8`.
+`node scripts/test/check-ui-colors.mjs 7357acae431e40092fd40a5458207d3649d503e8 --gradients`.
 Later explicitly approved gradients are audited separately; no palette token may
 change. Source/API, permissions, task identity and recovery are not styling knobs.
+
+See [tonal treatments and qualification](../ux/gradients.md) for the flat-mode
+switch, contrast measurements and the outstanding throttled streaming limitation.

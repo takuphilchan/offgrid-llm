@@ -1,6 +1,13 @@
 /* Tokens and feature presentation. Shell geometry lives in components/shell;
    legacy feature layout remains in styles.css until migrated. */
 @layer workspace {
+  /* Three decorative families maximum: sidebar, composer, primary controls.
+     Reading surfaces and code remain flat. All ramps resolve centrally. */
+  .app-shell > .sidebar { background-image: var(--gradient-sidebar); }
+  .chat-workspace .composer { background-image: var(--gradient-composer); }
+  .download-state.downloading > div span, .download-state.finalizing > div span { background-image: var(--gradient-progress); }
+}
+@layer workspace {
   .model-category-picker { display: flex; flex-wrap: wrap; gap: 8px; }
   .package-card { min-height: auto; gap: 12px; }
   .package-card > p { min-height: 0; }
