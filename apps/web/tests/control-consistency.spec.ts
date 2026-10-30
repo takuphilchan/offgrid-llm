@@ -82,7 +82,7 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   await expect(query).toBeVisible();
   await expect(query).toHaveAttribute('placeholder', 'Model name or publisher');
   await expect(searchField).toHaveCSS('border-radius', '8px');
-  await expect(searchField).toHaveCSS('min-height', '40px');
+  await expect(searchField).toHaveCSS('min-height', '36px');
   const search = page.locator('.model-search-form > button');
   await expect(search).toBeDisabled();
   await expect(search).toHaveCSS('cursor', 'not-allowed');
@@ -96,13 +96,13 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   const [fieldBox, buttonBox] = await Promise.all([searchField.boundingBox(), search.boundingBox()]);
   expect(Math.abs(fieldBox!.height - buttonBox!.height)).toBeLessThanOrEqual(2);
   await page.goto('/ui/#/chat');
-  await expect(page.getByRole('button',{name:'Agent',exact:true})).toHaveCSS('min-height', '40px');
+  await expect(page.getByRole('button',{name:'Agent',exact:true})).toHaveCSS('min-height', '32px');
   await expect(page.locator('.composer')).toHaveCSS('border-radius', '16px');
   await page.goto('/ui/#/knowledge');
   const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
   for (const control of controls) {
     await expect(control).toBeVisible();
-    await expect(control).toHaveCSS('min-height', '40px');
+    await expect(control).toHaveCSS('min-height', await control.evaluate(el => el.classList.contains('primary-button') ? '36px' : '32px'));
     await control.focus();
     await expect(control).toBeFocused();
   }
@@ -142,7 +142,7 @@ for (const theme of ['light', 'dark']) test(`workspace actions have consistent v
     page.getByRole('link', { name: 'Set up Knowledge', exact: true }),
   ];
   for (const action of actions) {
-    await expect(action).toHaveCSS('min-height', '40px');
+    await expect(action).toHaveCSS('min-height', await action.evaluate(el => el.classList.contains('voice-button') ? '40px' : '32px'));
     await expect(action).toHaveCSS('border-radius', '8px');
     await expect(action).toHaveCSS('text-decoration-line', 'none');
     await expect(action).toHaveCSS('background-color', theme === 'dark' ? 'rgb(24, 24, 25)' : 'rgb(255, 255, 255)');
@@ -152,7 +152,7 @@ for (const theme of ['light', 'dark']) test(`workspace actions have consistent v
   const voiceSettings = page.getByRole('button', { name: 'Voice settings', exact: true });
   await voiceSettings.focus(); await voiceSettings.press('Enter');
   const manage = page.getByRole('link', { name: 'Manage speech models' });
-  await expect(manage).toHaveCSS('min-height', '40px');
+  await expect(manage).toHaveCSS('min-height', '32px');
   await expect(manage).toHaveCSS('text-decoration-line', 'none');
   await manage.focus(); await expect(manage).toHaveCSS('outline-width', '2px');
   await page.screenshot({ path: info.outputPath(`action-controls-${theme}.png`) });

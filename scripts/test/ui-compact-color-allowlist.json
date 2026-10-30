@@ -1,0 +1,107 @@
+{
+  "reason": "2026-10-30 user feedback: existing-palette menu, scrollbar and editor treatments; additive only",
+  "entries": [
+    [
+      "apps/web/src/components/shell/workspace-shell.css",
+      "@layer workspace / .sidebar-context .history-list::-webkit-scrollbar-thumb",
+      "background",
+      "var(--faint)"
+    ],
+    [
+      "apps/web/src/components/shell/workspace-shell.css",
+      "@layer workspace / .sidebar-context .history-list::-webkit-scrollbar-thumb",
+      "border",
+      "2px solid var(--surface-0)"
+    ],
+    [
+      "apps/web/src/components/shell/workspace-shell.css",
+      "@layer workspace / .sidebar-context .history-list::-webkit-scrollbar-track",
+      "background",
+      "transparent"
+    ],
+    [
+      "apps/web/src/components/shell/workspace-shell.css",
+      "@layer workspace / .sidebar-context .history-list",
+      "scrollbar-color",
+      "var(--faint) transparent"
+    ],
+    [
+      "apps/web/src/components/shell/workspace-shell.css",
+      "@layer workspace / @media (forced-colors: active) / .sidebar-context .history-list",
+      "scrollbar-color",
+      "auto"
+    ],
+    [
+      "apps/web/src/controls.css",
+      "@layer controls / .workspace-options > button[aria-expanded='true']",
+      "background",
+      "var(--surface-2)"
+    ],
+    [
+      "apps/web/src/controls.css",
+      "@layer controls / .workspace-options > button[aria-expanded='true']",
+      "border-color",
+      "var(--line)"
+    ],
+    [
+      "apps/web/src/controls.css",
+      "@layer controls / .workspace-options > button[aria-expanded='true']",
+      "color",
+      "var(--text)"
+    ],
+    [
+      "apps/web/src/controls.css",
+      "@layer controls / .workspace-options-panel .secondary-button:hover:not(:disabled)",
+      "background",
+      "var(--surface-2)"
+    ],
+    [
+      "apps/web/src/controls.css",
+      "@layer controls / .workspace-options-panel .secondary-button:hover:not(:disabled)",
+      "border-color",
+      "transparent"
+    ],
+    [
+      "apps/web/src/controls.css",
+      "@layer controls / .workspace-options-panel .secondary-button",
+      "background",
+      "transparent"
+    ],
+    [
+      "apps/web/src/controls.css",
+      "@layer controls / .workspace-options-panel .secondary-button",
+      "border-color",
+      "transparent"
+    ],
+    [
+      "apps/web/src/features/agents/agent-profiles.css",
+      "@layer workspace / .profile-basics .model-select",
+      "background",
+      "none"
+    ],
+    [
+      "apps/web/src/features/agents/agent-profiles.css",
+      "@layer workspace / .profile-basics .model-select",
+      "border",
+      "0"
+    ],
+    [
+      "apps/web/src/features/agents/agent-profiles.css",
+      "@layer workspace / .profile-editor > .profile-actions",
+      "background",
+      "var(--surface-1)"
+    ],
+    [
+      "apps/web/src/features/agents/agent-profiles.css",
+      "@layer workspace / .profile-editor > .profile-actions",
+      "border-block-start",
+      "1px solid var(--line)"
+    ],
+    [
+      "apps/web/src/features/agents/agent-profiles.css",
+      "@layer workspace / @container (min-width: 960px) / .profile-fields > .profile-resources",
+      "border-block-start",
+      "0"
+    ]
+  ]
+}

@@ -1,5 +1,16 @@
 # Tasks
 
+## 15. User feedback: compact controls and direct configuration (2026-10-30)
+
+- [x] 15.1 Introduce compact fine-pointer actions, retaining larger coarse-pointer targets, keyboard focus and the existing palette.
+- [x] 15.2 Use available editor width for identity/instructions and visible resource sections; move skills/collaborators out of nested Advanced disclosure without changing persistence or grants.
+- [x] 15.3 Group Workspace options into compact aligned rows with stable hover/open treatment; refine the chat-history scrollbar without hiding scroll access.
+- [x] 15.4 Verify creation, revision/conflict, dirty drafts, resource availability, popup keyboard/dismissal, responsive/RTL/touch layouts and scroll containment; capture affected surfaces and run applicable renderer/build checks.
+
+Group 15: 444 renderer tests passed, 27 skipped; API/type/build, source-size,
+palette and OpenSpec checks passed. Evidence is under `build/ui-craft/compact-*`.
+Unchanged earlier hardware, participant and throttled-stream gates remain open.
+
 ## 14. Approved palette-preserving gradients (2026-10-30)
 
 - [x] 14.1 Inventory existing treatments and support; document budget and capture four isolated prototypes before production wiring.

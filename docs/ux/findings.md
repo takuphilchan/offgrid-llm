@@ -41,6 +41,42 @@ on unavailable hardware/downloads and no comparable count is claimed.
 
 ## Prioritized findings
 
+### Follow-up from installed-app feedback
+
+The user found controls too large, the options popup cumbersome and agent
+configuration too dependent on disclosures. The follow-up introduces 32px
+fine-pointer secondary actions and 36px primary/form controls; coarse-pointer
+targets remain at least 44px. Workspace options uses aligned label/control rows
+and compact menu actions, with stable pressed/open feedback. Chat history has a
+reserved thin scrollbar lane, neutral thumb and native forced-color fallback.
+
+Agent identity/model/instructions and resources now occupy adjacent columns when
+the content width permits. Tools and Knowledge are visible immediately; Skills
+and collaborators no longer sit inside Advanced. Budget and workspace execution
+policy remain advanced. Save remains explicit, with its existing draft/conflict
+and permission protections.
+
+In the deterministic create-with-tool/Knowledge/collaborator fixture, three
+disclosure activations are removed (Tools, Knowledge, Advanced). Opening Skills
+requires one disclosure rather than two. These are path counts, not participant
+performance measurements. Native dropdown keyboard behavior is retained.
+
+Validation: 444 renderer tests passed, 27 skipped; API/type/build, palette
+inventory, source-size and OpenSpec checks passed. Six added tests cover the
+editor/options at 390/1440px in English/Arabic, history scrolling without footer
+movement, and coarse-pointer targets. Existing model selection, resource save,
+revision conflict, dirty draft and permission tests remain active. Two older
+fixtures were corrected to wait for completed entrance animation before exact
+geometry measurements and to use a real outside target for popup dismissal;
+their spacing, dismissal and request-identity assertions were retained.
+
+The existing palette is unchanged. Seventeen explicit additive declarations for
+the menu, scrollbar and editor are recorded in
+`scripts/test/ui-compact-color-allowlist.json`; the palette audit accepts only
+those exact entries with `--compact`, and still rejects baseline modifications.
+The heavy-stream CPU-throttling limitation and unrun native-speaker/screen-reader
+checks from the earlier pass remain open.
+
 Severity weighs potential confusion and frequency. Effort is relative (S/M/L).
 Protected means a proposed resolution could change authority, persistence,
 first-run completion or execution semantics. Initial status is deferred until

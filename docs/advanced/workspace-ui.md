@@ -426,9 +426,17 @@ in `Messages.guidance` in all nine locales; native review remains outstanding.
 
 See [the heuristic findings](../ux/findings.md) and
 [terminology and translation review](../ux/terminology.md). Palette freeze proof:
-`node scripts/test/check-ui-colors.mjs 7357acae431e40092fd40a5458207d3649d503e8 --gradients`.
+`node scripts/test/check-ui-colors.mjs 7357acae431e40092fd40a5458207d3649d503e8 --gradients --compact`.
 Later explicitly approved gradients are audited separately; no palette token may
 change. Source/API, permissions, task identity and recovery are not styling knobs.
 
 See [tonal treatments and qualification](../ux/gradients.md) for the flat-mode
 switch, contrast measurements and the outstanding throttled streaming limitation.
+
+Installed-app feedback supersedes the uniform desktop control size above:
+fine-pointer secondary actions are 32px and primary/form controls 36px, with
+44px coarse-pointer targets retained. Workspace options is grouped into compact
+rows. Agent editing uses two columns when space permits, with Tools/Knowledge
+visible and Skills/collaborators outside Advanced. Narrow layouts stack in
+reading order. No resource, grant or draft is changed merely by opening the form.
+Chat-history scrolling keeps the footer fixed and reserves its scrollbar lane.

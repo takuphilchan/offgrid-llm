@@ -35,6 +35,9 @@ const snapshot = process.argv.slice(3).find(arg => !arg.startsWith('--'));
 if (snapshot) { mkdirSync(dirname(resolve(snapshot)), {recursive:true}); writeFileSync(snapshot, JSON.stringify({base, entries:before},null,2)); }
 const counts = list => { const map = new Map(); for (const entry of list) { const key=JSON.stringify(entry); map.set(key,(map.get(key)??0)+1); } return map; };
 const a=counts(before), b=counts(after), changes=[], intentional=[];
+const compactEntries = process.argv.includes('--compact')
+  ? new Set(JSON.parse(readFileSync(resolve(root,'scripts/test/ui-compact-color-allowlist.json'),'utf8')).entries.map(entry=>JSON.stringify(entry))) : new Set();
+let compactAdditions = 0;
 function gradientAddition(entry) {
   if (entry[0] === 'apps/web/src/tokens.css') return (
     /^--gradient-(sidebar|composer|primary|progress)$/.test(entry[2] ?? '') ||
@@ -48,7 +51,8 @@ for (const key of new Set([...a.keys(),...b.keys()])) if(a.get(key)!==b.get(key)
   // The later explicit gradient brief permits only additive generated ramps and
   // their reviewed consumers. It never permits changing/removing a baseline entry.
   if(process.argv.includes('--gradients') && change.after>change.before && gradientAddition(change.entry)) intentional.push(change);
+  else if(change.before===0 && change.after===1 && compactEntries.has(key)) compactAdditions++;
   else changes.push(change);
 }
-console.log(JSON.stringify({base,files:paths.length,entries:before.length,intentionalGradientAdditions:intentional.length,colorChanges:changes},null,2));
+console.log(JSON.stringify({base,files:paths.length,entries:before.length,intentionalGradientAdditions:intentional.length,intentionalCompactAdditions:compactAdditions,colorChanges:changes},null,2));
 if(changes.length) process.exitCode=1;

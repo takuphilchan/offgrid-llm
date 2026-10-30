@@ -199,6 +199,35 @@
     :where(.primary-button, .secondary-button, .utility-button, .text-button, .danger-button, .nav-link, .history-open, .new-chat-button) { min-height: 44px; }
     .icon-button { min-width: 44px; min-height: 44px; }
   }
+  @media (pointer: fine) {
+    :where(.secondary-button, .text-button, .utility-button, .danger-button,
+      .resource-actions button, .model-actions button, .message-copy) {
+      min-height: 32px; padding: 4px 10px; line-height: 22px;
+    }
+    .primary-button, .new-chat-button { min-height: 36px; padding: 6px 12px; }
+    .icon-button { width: 32px; height: 32px; min-height: 32px; padding: 6px; }
+    :where(input:not([type]), input[type='text'], input[type='search'], input[type='url'],
+      input[type='email'], input[type='password'], input[type='number'], select) {
+      min-height: 36px; padding-block: 6px; line-height: 22px;
+    }
+    .history-search { min-height: 36px; }
+    .history-search input { min-height: 34px; padding-block: 5px; }
+    .workspace-search-field .search-clear { width: 32px; height: 32px; min-width: 32px; }
+    .workspace-history-toolbar .history-manage { width: 32px; min-height: 32px; }
+    .sidebar-foot .workspace-options > button { min-height: 36px; padding: 6px 10px; }
+    .sidebar-context .history-open, .sidebar-context .history-row { min-height: 32px; }
+    .sidebar-context .history-open { padding-block: 6px; }
+    .workspace-options-panel .secondary-button { min-height: 32px; }
+  }
+  .workspace-options-panel .utility-popover-content { gap: 12px; }
+  .workspace-options-panel .field { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: center; gap: 12px; }
+  .workspace-options-panel .field label { overflow-wrap: anywhere; }
+  .workspace-options-panel .secondary-button { justify-content: flex-start; text-align: start; border-color: transparent; background: transparent; }
+  .workspace-options-panel .secondary-button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
+  .workspace-options-panel .workspace-account { font-size: 13px; padding-block-start: 12px; }
+  .workspace-options > button { transition: none; }
+  .workspace-options > button:active:not(:disabled) { transform: none; }
+  .workspace-options > button[aria-expanded='true'] { background: var(--surface-2); color: var(--text); border-color: var(--line); }
   @media (max-width: 420px) {
     .navigation-trigger { width: 44px; min-width: 44px; min-height: 44px; padding: 8px; justify-content: center; }
   }

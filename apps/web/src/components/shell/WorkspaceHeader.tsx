@@ -23,13 +23,13 @@ export function WorkspaceOptions({ refreshing, onRefresh, theme, onThemeChange, 
   const { messages: text, locale, setLocale, available } = useI18n();
   const id = useId();
   return <UtilityPopover label={workspaceShell[locale].options} className="workspace-options" triggerClassName="utility-button" panelClassName="workspace-options-panel" trigger={<><Icon name="settings" size={18} /><span>{text.guidance.workspaceOptions}</span><Icon name="more" size={16} /></>}>
-        <strong>{workspaceShell[locale].options}</strong>
-        <a className="secondary-button" href="#/settings" aria-current={location.hash === '#/settings' ? 'page' : undefined}>{text.nav.settings}</a>
+        {username !== undefined && <strong className="workspace-options-identity">{username}</strong>}
+        <a className="secondary-button" href="#/settings" aria-current={location.hash === '#/settings' ? 'page' : undefined}><Icon name="settings" size={16} />{text.nav.settings}</a>
         <div className="field locale-picker"><label htmlFor={`${id}-locale`}>{text.common.language}</label><select id={`${id}-locale`} value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></div>
         <div className="field"><label htmlFor={`${id}-theme`}>{text.shell.appearance}</label><select id={`${id}-theme`} value={theme} onChange={event => onThemeChange(event.target.value as ThemeChoice)}>
           <option value="system">{text.shell.systemTheme}</option><option value="light">{text.shell.lightTheme}</option><option value="dark">{text.shell.darkTheme}</option>
         </select></div>
         <button className="secondary-button" disabled={refreshing} aria-busy={refreshing} onClick={onRefresh}><Icon name="refresh" size={16} />{text.common.refresh}</button>
-        {username !== undefined && <div className="workspace-account"><span>{username}</span><button className="text-button" onClick={onLogout}>{text.auth.signOut}</button></div>}
+        {username !== undefined && <div className="workspace-account"><button className="text-button" onClick={onLogout}>{text.auth.signOut}</button></div>}
       </UtilityPopover>;
 }

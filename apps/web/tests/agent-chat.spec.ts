@@ -427,6 +427,7 @@ test('Chat resource popovers keep separated rows, fields and recovery actions', 
       const trigger=page.getByRole('button',{name:'Tools and context',exact:true});
       await trigger.click();
       const panel=page.getByRole('region',{name:'Tools and context',exact:true});
+      await expect.poll(()=>panel.evaluate(el=>el.getAnimations().every(animation=>animation.playState==='finished'))).toBe(true);
       const details=panel.locator('details');
       if(!(await details.evaluate(el=>(el as HTMLDetailsElement).open))) await details.locator('summary').click();
       const rows=panel.locator('.agent-resource-options .profile-option');
@@ -444,6 +445,7 @@ test('Chat resource popovers keep separated rows, fields and recovery actions', 
   }
   const voice=page.getByRole('button',{name:'Voice settings',exact:true}); await voice.click();
   const voicePanel=page.getByRole('region',{name:'Voice settings',exact:true});
+  await expect.poll(()=>voicePanel.evaluate(el=>el.getAnimations().every(animation=>animation.playState==='finished'))).toBe(true);
   const alert=voicePanel.getByRole('alert'); await expect(alert).toBeVisible();
   const gap=await alert.evaluate(el=>el.querySelector('button')!.getBoundingClientRect().top-el.querySelector('small')!.getBoundingClientRect().bottom);
   expect(gap).toBeGreaterThanOrEqual(12);

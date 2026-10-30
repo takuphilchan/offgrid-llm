@@ -78,11 +78,11 @@ test('profile creation, revision editing, duplication and archive do not execute
   await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Writing assistant');
   await editor.getByRole('combobox', { name: 'Model', exact: true }).selectOption(model);
   await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('Use short paragraphs. Cite supporting documents.');
-  await editor.getByText('Tools · 0', { exact: true }).click();
+  await expect(editor.getByRole('checkbox', { name: /read_docs/ })).toBeVisible();
   await editor.getByRole('checkbox', { name: /read_docs/ }).check();
-  await editor.getByText('Knowledge · 0', { exact: true }).click();
+  await expect(editor.getByRole('checkbox', { name: 'Design notes', exact: true })).toBeVisible();
   await editor.getByRole('checkbox', { name: 'Design notes', exact: true }).check();
-  await editor.getByText('Advanced', { exact: true }).click();
+  await expect(editor.locator('.profile-advanced')).not.toHaveAttribute('open');
   await editor.getByRole('checkbox', { name: 'Researcher', exact: true }).check();
   await editor.getByRole('button', { name: 'Save agent', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Agent saved' })).toBeVisible();

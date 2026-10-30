@@ -4,6 +4,25 @@ Make documents, work history and preferences useful to ordinary users while reta
 
 ## ADDED Requirements
 
+### Requirement: Direct profile resource configuration
+Agent creation SHALL use available desktop width for identity/instructions and
+resource selection. Tools and Knowledge SHALL be visible without opening a
+disclosure. Skills and collaborators SHALL not require opening Advanced first.
+Narrow screens SHALL retain a single readable order. Presentation changes SHALL
+not select resources, grant access or modify drafts automatically.
+
+#### Scenario: Create and revise a configured agent
+- **WHEN** a user creates or edits a profile on a wide screen
+- **THEN** basic fields and resource choices are visible in adjacent columns
+- **AND** the existing validation, revision checks and explicit save apply
+
+#### Scenario: Compact options and history
+- **WHEN** the user opens Workspace options or scrolls chat history
+- **THEN** aligned compact controls and a stable, visible scrollbar preserve
+  keyboard access, native forced colors, RTL placement and dismissal behavior
+- **AND** fine-pointer secondary actions use compact sizing while coarse-pointer
+  targets remain at least 44px
+
 ### Requirement: Learnable terminology without changed authority
 The workspace SHALL explain model categories, document retrieval, agent profiles
 and task inspection in plain localized language. Guidance SHALL name supported

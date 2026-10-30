@@ -1,5 +1,11 @@
 # Proposal
 
+Follow-up feedback (2026-10-30) adds compact desktop controls, direct visible
+agent resource configuration, a grouped Workspace options panel and consistent
+chat-history scrollbars. This supersedes the earlier single-size desktop control
+geometry, while preserving touch access, the palette and all state/authority
+contracts. See task group 15 and the corresponding design section.
+
 ## Approved presentation and usability refinement (2026-10-30)
 
 The owner's two implementation briefs authorize a color-frozen presentation pass

@@ -1,5 +1,22 @@
 # Design
 
+## Compact control and configuration feedback (2026-10-30)
+
+The user's follow-up supersedes uniform 40px desktop actions: use 32px compact
+secondary actions, 36px primary/form controls where appropriate, and retain 44px
+coarse-pointer targets. Keep the existing palette. Workspace options becomes a
+small grouped utility panel with label/control rows rather than large stacked
+buttons. History gets a stable thin scrollbar using existing neutral tokens,
+with native forced-color behavior and no horizontal scrollbar or content shift.
+
+Agent creation uses a narrower profile list and a two-column editor when space
+permits. Identity/model/instructions and resources are simultaneously visible;
+tools and Knowledge are not hidden behind disclosure clicks. Skills and approved
+collaborators leave the Advanced nesting. Budget and execution policy remain
+advanced. Resource selection, revision conflicts, dirty drafts, save validation
+and authority continue through the existing handlers. Narrow screens stack in
+reading order. No automatic grants, settings or resource selection are added.
+
 ## Color-frozen craft and usability extension (2026-10-30)
 
 The approved briefs refine the existing composition. The baseline is commit

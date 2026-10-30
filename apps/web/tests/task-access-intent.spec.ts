@@ -190,9 +190,9 @@ test('retry with the same preselected policy keeps request identity and does not
   await expect(panel).toBeHidden();
   await expect(trigger).toBeFocused();
   await trigger.click();
-  // Click an uncovered part of the composer; the panel may open above its
-  // anchor and intentionally overlay the middle of the textarea.
-  await page.locator('.composer textarea').click({ position: { x: 10, y: 10 } });
+  // Dismiss through an actual outside target, independent of compact composer
+  // geometry. This remains a real pointer click, not a forced click or Escape.
+  await page.locator('.topbar h1').click();
   await expect(panel).toBeHidden();
   await sendAgentMessage(page,'Open Chrome');
   await expect(page.getByRole('alert').first()).toBeVisible();
