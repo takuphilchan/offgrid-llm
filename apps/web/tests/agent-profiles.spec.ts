@@ -170,7 +170,7 @@ test('profile search matches compact history controls and filters without submit
   await expect(page.locator('.profile-library-list .profile-search svg')).toBeVisible();
   const list = page.locator('.profile-library-list ul');
   await expect.poll(() => list.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
-  expect(await list.evaluate(el => getComputedStyle(el).scrollbarWidth)).toBe('none');
+  expect(await list.evaluate(el => getComputedStyle(el).scrollbarWidth)).toBe('thin');
   await search.fill('Document');
   await expect(page.locator('.profile-list-item')).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Document specialist/ })).toBeVisible();

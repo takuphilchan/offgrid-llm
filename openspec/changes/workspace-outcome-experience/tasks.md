@@ -6,10 +6,10 @@
 - [x] 12.2 Add semantic type/geometry/motion foundations; preserve colors and migrate superseded legacy geometry.
 - [x] 12.3 Refine shell, sidebar/rail, header and footer within existing dimensions and focus behavior.
 - [x] 12.4 Refine Chat prose, code header, composer and response actions without changing streaming or Markdown safety.
-- [ ] 12.5 Refine Models/Knowledge list rhythm, metadata, search and transfer presentation.
-- [ ] 12.6 Refine Agents/Activity/Settings headings, lists, disclosures and outcomes.
-- [ ] 12.7 Refine palette/popover/onboarding motion, geometry and loading with reduced-motion support.
-- [ ] 12.8 Refine desktop startup presentation using the frozen desktop colors and existing bridge.
+- [x] 12.5 Refine Models/Knowledge list rhythm, metadata, search and transfer presentation.
+- [x] 12.6 Refine Agents/Activity/Settings headings, lists, disclosures and outcomes.
+- [x] 12.7 Refine palette/popover/onboarding motion, geometry and loading with reduced-motion support.
+- [x] 12.8 Refine desktop startup presentation using the frozen desktop colors and existing bridge.
 - [ ] 12.9 Verify color inventory, full isolated renderer, API/types/build, desktop syntax/tests, before/after matrix, docs and focused accessibility/performance checks. Record unavailable native/screen-reader checks honestly; commit each working phase.
 
 ## 13. Approved usability refinement (2026-10-30)
