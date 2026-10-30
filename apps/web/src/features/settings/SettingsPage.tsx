@@ -3,7 +3,7 @@ import { interaction } from '../../i18n/interaction';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client';
-import { useI18n } from '../../i18n';
+import { useI18n, type LocaleCode } from '../../i18n';
 import { presentation } from '../../i18n/presentation';
 import type { DesktopPaths, DesktopBackend } from '../../platform';
 import type { ThemeChoice } from '../../theme';
@@ -25,7 +25,7 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
   onThemeChange: (choice: ThemeChoice) => void;
   onShowOnboarding: () => void;
 }) {
-  const { messages: text, locale } = useI18n();
+  const { messages: text, locale, available, setLocale } = useI18n();
   const { admin, knowledge } = useWorkspace();
   const [details, setDetails] = useState<Details>({});
   const [error, setError] = useState('');
@@ -83,11 +83,13 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
     {backend?.reason && <div className="inline-error" role="alert">{backend.reason}</div>}
     <section className="settings-group" aria-labelledby="preferences-title">
       <SectionHeading title={management.preferences} id="preferences-title" />
+      <div className="settings-panel"><label htmlFor="settings-language">{text.common.language}</label><select id="settings-language" value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></div>
       <div className="settings-panel"><h3>{text.shell.theme}</h3><div className="segmented-control" role="group" aria-label={text.shell.theme}>{options.map(option => <button key={option.choice} aria-pressed={themeChoice === option.choice} onClick={() => onThemeChange(option.choice)}>{option.label}</button>)}</div></div>
       <div className="settings-panel"><div><h3>{text.onboarding.title}</h3><p>{text.onboarding.body}</p></div><button className="secondary-button" onClick={onShowOnboarding}>{text.settings.showGuide}</button></div>
     </section>
     <section className="settings-group" aria-labelledby="workspace-title">
       <SectionHeading title={management.workspace} id="workspace-title" />
+      <p className="model-search-hint">{health === 'offline' ? text.guidance.serviceOffline : text.guidance.connectionMeaning}</p>
       <div className="settings-panel desktop-storage"><h3>{text.settings.service}</h3><dl>
       <div><dt>{text.settings.service}</dt><dd>{backend?.url ?? window.location.origin}</dd></div>
       <div><dt>{management.serviceState}</dt><dd>{health === 'ready' ? text.status.ready : health === 'checking' ? text.status.checking : text.status.offline}</dd></div>

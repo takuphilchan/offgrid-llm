@@ -25,7 +25,7 @@ type RuntimeStats = {
 
 export function ActivityPage({ health, taskFirst = false }: { health: Health; taskFirst?: boolean }) {
   const { scope, workspace, admin } = useWorkspace();
-  const { locale } = useI18n();
+  const { locale, messages: text } = useI18n();
   const [inspecting, setInspecting] = useState(() => !!taskFromLocation());
   const [diagnostics, setDiagnostics] = useWorkspaceState('activity.diagnostics', false);
   useEffect(() => {
@@ -35,6 +35,7 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   }, []);
   if (!taskFirst && !inspecting) return <LegacyActivity health={health} />;
   return <div className="stack activity-page">
+    {!inspecting && <p className="model-search-hint">{text.guidance.activity}</p>}
     <TaskWorkspace scope={scope} workspace={workspace} />
     {!inspecting && <AgentSchedules />}
     {!inspecting && admin && <details className="activity-diagnostics activity-archive" open={diagnostics} onToggle={event => setDiagnostics(event.currentTarget.open)}><summary>{workspaceManagement(locale).diagnostics}</summary>{diagnostics && <LegacyActivity health={health} />}</details>}

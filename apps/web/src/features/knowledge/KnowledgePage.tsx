@@ -174,7 +174,7 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
 	{typeof status?.stats?.index_error === 'string' && <div className="error-banner" role="alert">{status.stats.index_error}</div>}
     {sourceID && <DocumentSourceDialog id={sourceID} close={() => setSourceID('')} />}
     {deleting && <ConfirmDialog title={deleting.name} body={copy.deleteDocument} close={() => setDeleting(null)} confirm={async () => { await api.deleteDocument(deleting.id); await refresh(); }} />}
-    <SectionHeading title={`${management.documents} · ${documents.length}`} actions={
+    <SectionHeading title={`${management.documents} · ${documents.length}`} description={text.guidance.knowledge} actions={
       <button className="primary-button" onClick={() => input.current?.click()} disabled={busy || !enabled || !permissions.admin}><Icon name="upload" size={17} />{busy ? text.common.loading : text.knowledge.add}</button>
     } />
     <input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} />

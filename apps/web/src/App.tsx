@@ -252,6 +252,7 @@ function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClos
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
     <div className="onboarding-mark"><Icon name="models" size={28} /></div><span className="eyebrow">{text.privateWorkspace}</span>
     <h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p>
+    <p>{text.guidance.connectionMeaning}</p>
     <div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div><div><span aria-hidden="true" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div>
     {pending && <p className="onboarding-next">{chatModelCount > 0 ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</p>}
     <button autoFocus className="primary-button" onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : onAction}>{action}</button>

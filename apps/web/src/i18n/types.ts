@@ -1,4 +1,5 @@
 export type Messages = {
+  guidance: { languageModels: string; embeddingModels: string; speechModels: string; discovery: string; knowledge: string; profiles: string; activity: string; coldStart: string; serviceOffline: string; connectionMeaning: string; workspaceOptions: string; };
   modelSearch: { title: string; hint: string; query: string; search: string; empty: string; unavailable: string; choose: string; modelCard: string; file: string; noFiles: string; unknownSize: string; unsupported: string; compatibility: string };
   modelDownload: { downloading: string; finalizing: string; complete: string; failed: string; cancelled: string; retained: string };
   history: { searchChats: string; searchTasks: string; clearChats: string; clearTasks: string; deleteTask: string; confirmTitle: string; deleteChatsBody: string; deleteTasksBody: string; partialFailure: string; deleting: string; noMatches: string; showMore: string; protectedTasks: string; removed: string; copyResult: string; draftProtected: string; reuseTask: string };

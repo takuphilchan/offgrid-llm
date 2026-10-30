@@ -402,3 +402,30 @@ workspace layer, preserve the semantic tokens, include loading/empty/error and
 unavailable states, and test its smallest supported width. Once every feature
 has moved, remove the superseded declarations from `styles.css` rather than
 maintaining two permanent implementations.
+
+### Presentation and learnability refinement (2026-10-30)
+
+The additive semantic scale in `tokens.css` owns type roles (12/13/14/16/18/24),
+400/500/600 weights, UI/prose line heights, spacing, panel/editor radii and
+120/180 ms press/entrance motion. Arabic receives its own line-height and tracking
+values. Control geometry remains 40px/8px/14px/8px; the composer is a composite
+editor with a 16px radius and the existing 800px measure. Reduced motion disables
+entrances and press movement. Streaming tokens never trigger a new entry effect.
+
+Code headers derive a bounded language label from Markdown metadata; Copy still
+copies only the source. Links, raw HTML handling and inert images retain their
+existing safety contract. Popovers and onboarding use transform/opacity, without
+backdrop blur. Palette and disclosure keyboard/focus behavior is unchanged.
+
+Workspace options has an explicit visible label, with the signed-in identity
+inside. Settings also exposes the existing language preference. Models explains
+the selected category or online discovery; Knowledge explains indexing versus
+actual use. Profiles link to Chat and Activity without starting work. Cold model
+loading has a plain explanation and the existing Stop control. New copy lives
+in `Messages.guidance` in all nine locales; native review remains outstanding.
+
+See [the heuristic findings](../ux/findings.md) and
+[terminology and translation review](../ux/terminology.md). Palette freeze proof:
+`node scripts/test/check-ui-colors.mjs 7357acae431e40092fd40a5458207d3649d503e8`.
+Later explicitly approved gradients are audited separately; no palette token may
+change. Source/API, permissions, task identity and recovery are not styling knobs.

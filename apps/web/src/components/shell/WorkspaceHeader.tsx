@@ -22,7 +22,7 @@ export function WorkspaceOptions({ refreshing, onRefresh, theme, onThemeChange, 
 }) {
   const { messages: text, locale, setLocale, available } = useI18n();
   const id = useId();
-  return <UtilityPopover label={workspaceShell[locale].options} className="workspace-options" triggerClassName="utility-button" panelClassName="workspace-options-panel" trigger={<><Icon name="settings" size={18} /><span>{username ?? text.product}</span><Icon name="more" size={16} /></>}>
+  return <UtilityPopover label={workspaceShell[locale].options} className="workspace-options" triggerClassName="utility-button" panelClassName="workspace-options-panel" trigger={<><Icon name="settings" size={18} /><span>{text.guidance.workspaceOptions}</span><Icon name="more" size={16} /></>}>
         <strong>{workspaceShell[locale].options}</strong>
         <a className="secondary-button" href="#/settings" aria-current={location.hash === '#/settings' ? 'page' : undefined}>{text.nav.settings}</a>
         <div className="field locale-picker"><label htmlFor={`${id}-locale`}>{text.common.language}</label><select id={`${id}-locale`} value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></div>

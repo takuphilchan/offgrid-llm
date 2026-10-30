@@ -153,12 +153,13 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   return <div className="stack models-workspace">
     <LibraryNavigation view={view} change={setView} />
     <div className="model-category-picker" role="group" aria-label={categoryCopy.category}>{categories.map(value => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryCopy[value]}</button>)}</div>
+    <p className="model-search-hint">{view === 'discover' ? text.guidance.discovery : category === 'language' ? text.guidance.languageModels : category === 'embeddings' ? text.guidance.embeddingModels : text.guidance.speechModels}</p>
     <div id="model-library-panel" role="tabpanel" aria-labelledby={`model-view-${view}`} className="stack">
     {packageMode ? <PackageModels key={category} category={category} view={view} /> : <>
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
     {needsChatModel && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
     {view === 'discover' && (admin ? <ModelSearch key={category} category={category} models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>)}
-    {error && <div className="inline-error" role="alert">{error}</div>}
+    {error && <div className="inline-error" role="alert">{error}<button disabled={loading} onClick={() => void load()}>{text.common.refresh}</button></div>}
     {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
     {Object.values(progress).filter(item => item.status !== 'complete' && !(view === 'discover' && sortedCatalog.some(model => `${model.id}.gguf` === item.file_name))).map(item => {
       const catalogItem = catalog.find(model => `${model.id}.gguf` === item.file_name);

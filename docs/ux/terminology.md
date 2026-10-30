@@ -24,3 +24,10 @@ English is reviewed for the current scope. French, Spanish, German, Arabic,
 Kiswahili, ChiShona, isiNdebele and isiZulu additions require native-speaker review
 before claiming linguistic qualification. The keys needing review are listed in
 the final evidence report; type checking establishes completeness only.
+
+Review in each of `fr`, `es`, `de`, `ar`, `sw`, `sn`, `nd`, `zu`:
+`guidance.languageModels`, `embeddingModels`, `speechModels`, `discovery`,
+`knowledge`, `profiles`, `activity`, `coldStart`, `serviceOffline`,
+`connectionMeaning`, `workspaceOptions`; also `onboarding.title` and
+`privateWorkspace`. All eleven guidance entries are required by `Messages`.
+Keep the terms aligned with each locale's existing navigation/action labels.

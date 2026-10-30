@@ -10,16 +10,16 @@
 - [x] 12.6 Refine Agents/Activity/Settings headings, lists, disclosures and outcomes.
 - [x] 12.7 Refine palette/popover/onboarding motion, geometry and loading with reduced-motion support.
 - [x] 12.8 Refine desktop startup presentation using the frozen desktop colors and existing bridge.
-- [ ] 12.9 Verify color inventory, full isolated renderer, API/types/build, desktop syntax/tests, before/after matrix, docs and focused accessibility/performance checks. Record unavailable native/screen-reader checks honestly; commit each working phase.
+- [x] 12.9 Verify color inventory, full isolated renderer, API/types/build, desktop syntax/tests, before/after matrix, docs and focused accessibility/performance checks. Record unavailable native/screen-reader checks honestly; commit each working phase.
 
 ## 13. Approved usability refinement (2026-10-30)
 
-- [ ] 13.1 Document three personas, fifteen task paths, heuristic findings/severity, baseline steps and protected-contract proposals in docs/ux.
-- [ ] 13.2 Add a typed nine-locale explanatory vocabulary and glossary, with native-review status.
-- [ ] 13.3 Improve shell/Chat/setup guidance and keyboard discoverability through existing controls and routes.
-- [ ] 13.4 Improve Models/Knowledge guidance, offline distinctions and empty/error next steps without automatic actions.
-- [ ] 13.5 Improve Agents/Activity/Settings and permission/recovery guidance without altering protected contracts.
-- [ ] 13.6 Verify task flows, role/offline boundaries and unchanged mutation contracts; report after step counts, remaining risks and evidence limits.
+- [x] 13.1 Document three personas, fifteen task paths, heuristic findings/severity, baseline steps and protected-contract proposals in docs/ux.
+- [x] 13.2 Add a typed nine-locale explanatory vocabulary and glossary, with native-review status.
+- [x] 13.3 Improve shell/Chat/setup guidance and keyboard discoverability through existing controls and routes.
+- [x] 13.4 Improve Models/Knowledge guidance, offline distinctions and empty/error next steps without automatic actions.
+- [x] 13.5 Improve Agents/Activity/Settings and permission/recovery guidance without altering protected contracts.
+- [x] 13.6 Verify task flows, role/offline boundaries and unchanged mutation contracts; report after step counts, remaining risks and evidence limits.
 
 ## 11. Approved composition-first refinement
 
