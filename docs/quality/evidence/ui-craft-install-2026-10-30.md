@@ -1,5 +1,36 @@
 # UI craft local installation — 2026-10-30
 
+## Follow-up: compact controls and direct agent configuration
+
+The user's installed-app feedback, including chat-history scrollbars, was
+implemented in `008577f` and installed in both editions. Current container image:
+`offgrid-llm:local-ui-compact-20261030` (`b39866e32ffc`). Current shared UI identity:
+`e3b59b7d617bce87cfb3cde0d2fd704b8e837843d52a7b4be37ce9e72133dbfe`.
+
+The final renderer run passed **444 tests, 27 skipped**. Existing API/type/build,
+palette, source-size, docs and OpenSpec checks passed. New captures cover compact
+options/editor layouts at 390/1440px in English/Arabic and long chat history.
+The installed Windows executable passed the isolated theme, saved-preference,
+nine-option and actual 200% zoom checks again. Evidence:
+`build/ui-craft/compact-release-check.log`, `compact-final-focus`,
+`compact-installed-theme.log`, `compact-container-install.log` and
+`%TEMP%/offgrid-desktop-theme-5MJwRl`.
+
+The source draft/authority contracts are unchanged. Fine-pointer controls are
+compact; coarse-pointer targets remain at least 44px. The existing palette audit
+allows only the 17 exact additive declarations reviewed for this follow-up.
+The prior throttled-stream and unrun human/platform gates below remain open.
+
+Before replacement, the service and desktop were idle. A stopped-data backup and
+clone validation preceded activation. The same five models, 282 task IDs and
+workspace identity were independently compared; the served UI matches the
+desktop. The previous container remains stopped as
+`offgrid-before-computer-1793351765`. New rollback copies are retained at
+`/home/phil/offgrid-computer-backup-F6AEPTC9` and
+`%LOCALAPPDATA%/OffGrid-install-backups/ui-compact-20261030-171413`.
+
+The earlier installation record follows; its image and UI hashes are historical.
+
 This records the user's authorized container and desktop replacement for local
 testing. It is not a published release or completion of the broader usability
 and platform qualification gates. Source UI revision: `bb35479` on
