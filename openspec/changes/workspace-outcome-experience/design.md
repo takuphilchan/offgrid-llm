@@ -33,6 +33,24 @@ Compare screenshot states and task paths; distinguish synthetic evidence, live
 service evidence, installed-platform evidence and unavailable screen-reader/user
 studies. Preserve the outstanding earlier qualification tasks.
 
+## Additional approved gradient phase (2026-10-30)
+
+Use top-lit neutral ramps from existing surfaces. Define gradients only in
+tokens.css, with independently tuned light/dark definitions, flat @supports
+fallbacks, data-gradients="off", forced-colors and increased-contrast flattening.
+No gradient behind answer or code text. Initial retained candidates are sidebar,
+composer and primary actions; static progress treatment is functional. Other
+surfaces stay flat to keep the per-screen decorative budget at three. Prototype
+screens precede production consumers. Reject blind scroll fades: overflow and
+directional-edge state must be established without altering the protected state
+model. Retain desktop startup flat rather than duplicating palette ownership.
+
+Generate eased stops for any retained sheen. No animated full-surface backgrounds,
+pointer effects, new image assets or dependencies. Test computed gradients,
+kill switch, contrast extremes, forced colors, RTL, browser support, throttled
+stream/download feedback and before/on/off captures. Report physical-display
+banding and native platform checks as unverified when unavailable.
+
 ## Context
 
 See `proposal.md` for motivation. This is the next interaction layer over the completed `workspace-state-recovery` and `workspace-shell-foundation` changes, not a second shell redesign. Existing ownership and release boundaries are in `docs/advanced/workspace-ui.md`, `client-contracts.md` and `production-readiness.md`.

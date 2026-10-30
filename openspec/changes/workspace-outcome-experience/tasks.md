@@ -1,5 +1,13 @@
 # Tasks
 
+## 14. Approved palette-preserving gradients (2026-10-30)
+
+- [x] 14.1 Inventory existing treatments and support; document budget and capture four isolated prototypes before production wiring.
+- [x] 14.2 Add centralized generated tonal/eased tokens, flat fallback, kill switch and accessibility flattening; preserve every palette token.
+- [ ] 14.3 Apply reviewed functional/surface/action treatments within the three-treatment budget; keep content and desktop startup flat.
+- [ ] 14.4 Verify every treatment on/off, worst-point contrast, supported syntax, RTL/reflow, throttled stream/download paint and local feedback; run full applicable checks and record physical/native limits.
+- [ ] 14.5 Update evidence/token inventory/rejections and commit the verified gradient phases separately.
+
 ## 12. Approved color-frozen presentation refinement (2026-10-30)
 
 - [x] 12.1 Freeze colors/source identity, capture the full before matrix and document the 12 aesthetic findings and token plan.

@@ -4,8 +4,26 @@ Set observable visual and behavioral quality gates for the shared web and deskto
 
 ## ADDED Requirements
 
+### Requirement: Palette-preserving gradient budget
+Decorative gradients SHALL use only existing neutral palette tokens, be defined
+centrally, and have a flat fallback and one central off switch. No screen SHALL
+use more than three decorative treatment families. Answer and code text remain
+on flat surfaces. Forced colors and increased contrast SHALL flatten treatments.
+
+#### Scenario: Low-power and accessible presentation
+- **WHEN** gradients are unsupported, disabled or contrast preferences require flat surfaces
+- **THEN** every treatment falls back without hiding content or changing geometry
+- **AND** any animation uses only transform/opacity and respects reduced motion
+
+#### Scenario: Measured quality
+- **WHEN** gradient treatments are accepted
+- **THEN** both themes pass worst-point text contrast, isolated on/off inspection and throttled stream/download feedback checks
+- **AND** source palette values and application behavior remain unchanged
+
 ### Requirement: Frozen palette and bounded presentation motion
 The refinement SHALL preserve every existing UI color declaration and literal.
+The subsequently approved gradient phase MAY add generated neutral ramps and
+their reviewed background-image consumers; it MUST NOT alter palette tokens.
 New geometry, type and motion SHALL use additive semantic tokens. Animations
 SHALL use transform or opacity, respect reduced motion and avoid replaying over
 long streaming transcripts. Superseded legacy geometry SHALL be removed when
@@ -13,7 +31,7 @@ migrated; frozen color declarations remain at their original owners.
 
 #### Scenario: Compare the refinement to its baseline
 - **WHEN** the presentation refinement is verified
-- **THEN** the authored color inventory has zero additions, removals or changes
+- **THEN** the flat refinement has zero authored color additions, removals or changes, and the later gradient phase has only its explicitly inventoried additive treatments
 - **AND** before/after fixtures cover all main screens, streaming/code, overlays,
   empty/loading/error states, both themes and Arabic RTL at four viewport widths
 

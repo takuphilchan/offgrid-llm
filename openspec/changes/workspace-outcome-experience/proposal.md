@@ -13,6 +13,15 @@ Use isolated fixtures and disposable real-service state; no real-user study is
 implied. The user explicitly requests a branch and small logical commits. No push,
 deployment or release is part of these briefs.
 
+## Additional approved gradient treatment (2026-10-30)
+
+The user's third implementation brief permits tonal gradients derived only from
+existing palette tokens. This supersedes the earlier prohibition on new gradient
+background declarations for this phase only. Existing palette tokens, literals,
+control geometry and all behavior remain frozen. Keep the earlier flat checkpoint
+and its color proof; compare gradient-on/off independently. Cap decorative
+treatments at three per screen and prefer omission to unreadable or costly effects.
+
 ## Why
 
 The completed state/recovery and shell slices make OffGrid more consistent, but everyday work still competes with setup, maintenance and repeated status controls. This follow-up makes the existing shared renderer outcome-led across Chat, Agents, Models, Knowledge, Activity and Settings, with observable workflow and usability gates rather than an unsupported claim of parity with leading AI products.
