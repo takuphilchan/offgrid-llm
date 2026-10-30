@@ -149,3 +149,7 @@ Electron or assistive-technology qualification. API/type/build, palette,
 generator, documentation and OpenSpec checks also passed. The Vite chunk-size
 advisory remains. Local evidence: `gradient-full.log`, `gradient-matrix.log`,
 `labels.log`, `paint-isolated.log` and `gradient-paint.json` under `build/ui-craft`.
+
+Subsequent installation added actual Windows startup/theme/zoom evidence using
+isolated profiles. See the [installation record](../quality/evidence/ui-craft-install-2026-10-30.md).
+Other operating systems, assistive technology and the stress gate remain open.

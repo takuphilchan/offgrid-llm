@@ -48,4 +48,3 @@ export async function craftFixture(page: Page, locale: string, theme: string) {
   });
   return state;
 }
-
