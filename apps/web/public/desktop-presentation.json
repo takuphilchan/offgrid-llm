@@ -33,7 +33,9 @@
     "quit": "Quit OffGrid",
     "directory": "Select directory",
     "actionError": "This action could not complete. Retry, or close and reopen OffGrid.",
-    "details": "Technical details"
+    "details": "Technical details",
+    "reconnecting": "Waiting for your workspace",
+    "reconnectingBody": "Your existing service is not ready yet. OffGrid will reconnect automatically when it becomes available. Your workspace stays unchanged."
   },
   "fr": {
     "serviceUpdateTitle": "Le service de l’espace doit être mis à jour",
@@ -69,7 +71,9 @@
     "quit": "Quitter OffGrid",
     "directory": "Choisir un dossier",
     "actionError": "Cette action a échoué. Réessayez ou rouvrez OffGrid.",
-    "details": "Détails techniques"
+    "details": "Détails techniques",
+    "reconnecting": "En attente de votre espace de travail",
+    "reconnectingBody": "Votre service existant n’est pas encore prêt. OffGrid se reconnectera automatiquement dès qu’il sera disponible. Votre espace de travail reste inchangé."
   },
   "de": {
     "serviceUpdateTitle": "Arbeitsbereichsdienst muss aktualisiert werden",
@@ -105,7 +109,9 @@
     "quit": "OffGrid beenden",
     "directory": "Ordner auswählen",
     "actionError": "Aktion fehlgeschlagen. Erneut versuchen oder OffGrid neu öffnen.",
-    "details": "Technische Details"
+    "details": "Technische Details",
+    "reconnecting": "Warten auf deinen Arbeitsbereich",
+    "reconnectingBody": "Dein bestehender Dienst ist noch nicht bereit. OffGrid verbindet sich automatisch, sobald er verfügbar ist. Dein Arbeitsbereich bleibt unverändert."
   },
   "es": {
     "serviceUpdateTitle": "El servicio del espacio necesita actualizarse",
@@ -141,7 +147,9 @@
     "quit": "Salir de OffGrid",
     "directory": "Seleccionar carpeta",
     "actionError": "No se pudo completar la acción. Reintente o vuelva a abrir OffGrid.",
-    "details": "Detalles técnicos"
+    "details": "Detalles técnicos",
+    "reconnecting": "Esperando tu espacio de trabajo",
+    "reconnectingBody": "Tu servicio existente aún no está listo. OffGrid se reconectará automáticamente cuando esté disponible. Tu espacio de trabajo no cambia."
   },
   "ar": {
     "serviceUpdateTitle": "تحتاج خدمة مساحة العمل إلى تحديث",
@@ -177,7 +185,9 @@
     "quit": "إنهاء OffGrid",
     "directory": "اختيار مجلد",
     "actionError": "تعذر إكمال الإجراء. أعد المحاولة أو أعد فتح OffGrid.",
-    "details": "التفاصيل التقنية"
+    "details": "التفاصيل التقنية",
+    "reconnecting": "بانتظار مساحة عملك",
+    "reconnectingBody": "الخدمة الحالية ليست جاهزة بعد. سيعيد OffGrid الاتصال تلقائيًا عندما تصبح متاحة. ستبقى مساحة عملك دون تغيير."
   },
   "sw": {
     "serviceUpdateTitle": "Huduma ya eneo la kazi inahitaji kusasishwa",
@@ -213,7 +223,9 @@
     "quit": "Funga OffGrid",
     "directory": "Chagua folda",
     "actionError": "Kitendo hakikukamilika. Jaribu tena au fungua OffGrid tena.",
-    "details": "Maelezo ya kiufundi"
+    "details": "Maelezo ya kiufundi",
+    "reconnecting": "Inasubiri eneo lako la kazi",
+    "reconnectingBody": "Huduma yako iliyopo bado haiko tayari. OffGrid itaunganisha tena kiotomatiki itakapopatikana. Eneo lako la kazi halitabadilika."
   },
   "sn": {
     "serviceUpdateTitle": "Sevhisi yenzvimbo yebasa inoda kuvandudzwa",
@@ -249,7 +261,9 @@
     "quit": "Vhara OffGrid",
     "directory": "Sarudza folda",
     "actionError": "Chiito hachina kupera. Edza zvakare kana kuvhurazve OffGrid.",
-    "details": "Ruzivo rwehunyanzvi"
+    "details": "Ruzivo rwehunyanzvi",
+    "reconnecting": "Takamirira nzvimbo yako yebasa",
+    "reconnectingBody": "Sevhisi yako iripo haisati yagadzirira. OffGrid ichabatanazve yega kana yava kuwanikwa. Nzvimbo yako yebasa haichinji."
   },
   "nd": {
     "serviceUpdateTitle": "Isevisi yendawo yokusebenza idinga ukubuyekezwa",
@@ -285,7 +299,9 @@
     "quit": "Vala i-OffGrid",
     "directory": "Khetha ifolda",
     "actionError": "Isenzo asiphumelelanga. Zama futhi kumbe uvule i-OffGrid futhi.",
-    "details": "Imininingwane yobuchwepheshe"
+    "details": "Imininingwane yobuchwepheshe",
+    "reconnecting": "Silindele indawo yakho yokusebenza",
+    "reconnectingBody": "Isevisi yakho ekhona ayikalungeli. I-OffGrid izaxhuma futhi ngokuzenzakalela nxa isitholakala. Indawo yakho yokusebenza kayiguquki."
   },
   "zu": {
     "serviceUpdateTitle": "Isevisi yendawo yokusebenza idinga ukubuyekezwa",
@@ -321,6 +337,8 @@
     "quit": "Vala i-OffGrid",
     "directory": "Khetha ifolda",
     "actionError": "Isenzo asiphumelelanga. Zama futhi noma uvule i-OffGrid futhi.",
-    "details": "Imininingwane yobuchwepheshe"
+    "details": "Imininingwane yobuchwepheshe",
+    "reconnecting": "Ilinde indawo yakho yokusebenza",
+    "reconnectingBody": "Isevisi yakho ekhona ayikalungi. I-OffGrid izoxhuma futhi ngokuzenzakalelayo uma isitholakala. Indawo yakho yokusebenza ayishintshi."
   }
 }

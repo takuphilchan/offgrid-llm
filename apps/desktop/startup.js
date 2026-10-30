@@ -29,9 +29,14 @@ function render(state) {
     byId('status-title').textContent = t(recoveryKind + 'Title');
     byId('status-text').textContent = t(recoveryKind + 'Body');
   } else if (['unavailable','offline'].includes(state.state)) byId('status-text').textContent = t('unavailableBody');
+  if (state.autoReconnect) {
+    byId('title').textContent = t('opening');
+    byId('status-title').textContent = t('reconnecting');
+    byId('status-text').textContent = t('reconnectingBody');
+  }
   byId('technical').hidden = !state.reason;
   byId('technical-reason').textContent = state.reason || '';
-  byId('indicator').classList.toggle('idle', !busy);
+  byId('indicator').classList.toggle('idle', !busy && !state.autoReconnect);
   byId('desktop-version').textContent = state.desktopVersion || '—';
   byId('service-version').textContent = state.version || t(busy ? 'checking' : 'unknown');
   byId('address').textContent = state.url || '—';

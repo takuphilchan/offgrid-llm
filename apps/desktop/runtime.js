@@ -1,5 +1,5 @@
 // One lifecycle owner. Renderer navigation and status reads never start probes
-// or spawn additional services. Only explicit recovery actions retry startup.
+// or spawn additional services. Reconnection only probes the selected endpoint.
 const { EventEmitter } = require('node:events');
 const fs = require('node:fs/promises');
 const net = require('node:net');
@@ -21,7 +21,7 @@ function availablePort() {
 class DesktopRuntime extends EventEmitter {
   constructor(options) {
     super();
-    this.options = { inspect: inspectBackend, spawn, fs, availablePort, timeoutMs: 30000, retryMs: 250, ...options };
+    this.options = { inspect: inspectBackend, spawn, fs, availablePort, timeoutMs: 30000, retryMs: 250, reconnectMs: 5000, ...options };
     this.url = options.url;
     this.workspace = options.workspace;
     this.child = null;
@@ -54,10 +54,10 @@ class DesktopRuntime extends EventEmitter {
         if (this.closing) return this.snapshot();
       }
     }
-    return this.publish(result);
+    return this.publish({ autoReconnect: false, ...result });
   }
 
-  connect(isolated = false) {
+  connect(isolated = false, background = false) {
     if (this.pending) return this.pending;
     if (this.closing || (isolated && this.state.state === 'ready')) return Promise.resolve(this.snapshot());
     // No renderer-supplied paths, commands, or addresses. This explicit action
@@ -65,17 +65,25 @@ class DesktopRuntime extends EventEmitter {
     if (isolated && (this.child || !['checking', 'incompatible', 'unavailable', 'error'].includes(this.state.state))) {
       return Promise.resolve(this.snapshot());
     }
-    this.started = Date.now();
+    clearTimeout(this.reconnectTimer);
+    if (!background) this.started = Date.now();
+    this.attemptStarted = Date.now();
     this.abort = new AbortController();
-    this.pending = this.run(isolated).catch(() => {
-      if (!this.closing) this.publish({ state: 'error', reason: 'The desktop service could not start. Check that its files and workspace are accessible, then retry.' });
+    this.pending = this.run(isolated, background).catch(() => {
+      if (!this.closing) this.publish({ state: 'error', autoReconnect: false, reason: 'The desktop service could not start. Check that its files and workspace are accessible, then retry.' });
       return this.snapshot();
-    }).finally(() => { this.pending = null; });
+    }).finally(() => {
+      this.pending = null;
+      if (!this.closing && this.state.autoReconnect && !this.child && this.state.workspaceMode !== 'isolated') {
+        this.reconnectTimer = setTimeout(() => void this.connect(false, true), this.options.reconnectMs);
+        this.reconnectTimer.unref?.();
+      }
+    });
     return this.pending;
   }
 
-  async run(isolated) {
-    this.publish({ state: 'checking', reason: undefined, code: undefined, version: undefined, canOpenBrowser: false, compatibilityBasis: undefined, bridgeProtocol: undefined });
+  async run(isolated, background) {
+    if (!background) this.publish({ state: 'checking', autoReconnect: false, reason: undefined, code: undefined, version: undefined, canOpenBrowser: false, compatibilityBasis: undefined, bridgeProtocol: undefined });
     if (isolated) {
       this.externalAttached = false;
       this.url = `http://127.0.0.1:${await this.options.availablePort()}`;
@@ -88,15 +96,32 @@ class DesktopRuntime extends EventEmitter {
       if (this.closing) return this.snapshot();
     }
     const probe = () => this.options.inspect(this.url, this.options.version, this.options.uiBuildID,
-      Math.max(1, Math.min(2000, this.options.timeoutMs - (Date.now() - this.started))), this.abort.signal, this.child ? 'owned' : 'external');
+      Math.max(1, Math.min(2000, this.options.timeoutMs - (Date.now() - this.attemptStarted))), this.abort.signal, this.child ? 'owned' : 'external');
     let result = await probe();
     if (this.closing) return this.snapshot();
     if (this.state.workspaceMode === 'isolated' && !this.child && result.state !== 'offline') {
       return this.publish({ state: 'unavailable', reason: 'The selected local port is already occupied. Choose Start desktop workspace again to try another port; no existing service was changed.' });
     }
     if (result.state === 'ready') return this.accept(result);
+    if (!this.child && this.externalAttached && ['offline', 'unavailable'].includes(result.state)) {
+      // Revoke stale local authority before waiting. Never launch a replacement
+      // service, restart Docker/WSL, or replay work while an external owner is away.
+      if (this.acceptedIdentity) {
+        await this.options.onIdentityChange?.();
+        this.acceptedIdentity = null;
+      }
+      if (this.closing) return this.snapshot();
+      while (!background && Date.now() - this.attemptStarted < this.options.timeoutMs) {
+        this.publish({ state: 'checking', autoReconnect: true });
+        await delay(this.options.retryMs, undefined, { signal: this.abort.signal }).catch(() => {});
+        if (this.closing) return this.snapshot();
+        result = await probe();
+        if (this.closing) return this.snapshot();
+        if (!['offline', 'unavailable'].includes(result.state)) return this.accept(result);
+      }
+      return this.publish({ state: 'unavailable', autoReconnect: true, code: 'service_unavailable', reason: 'Waiting for the previously connected external service. Connection checks continue automatically; no replacement workspace was started.' });
+    }
     if (!this.child && result.state !== 'offline') return this.accept(result);
-    if (!this.child && this.externalAttached) return this.accept({state:'unavailable', code:'service_unavailable', reason:'The previously connected external service is offline. Restart that service and retry; no replacement workspace was started.'});
     if (this.acceptedIdentity) {
       await this.options.onIdentityChange?.();
       this.acceptedIdentity = null;
@@ -143,6 +168,7 @@ class DesktopRuntime extends EventEmitter {
 
   async stop() {
     this.closing = true;
+    clearTimeout(this.reconnectTimer);
     this.abort?.abort();
     await this.pending;
     const child = this.child;

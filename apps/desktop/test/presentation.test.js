@@ -35,4 +35,11 @@ for (const locale of Object.keys(catalog)) test(`startup applies ${locale} and s
   assert.equal(documentElement.dir, locale === 'ar' ? 'rtl' : 'ltr');
   assert.equal(documentElement.dataset.theme, 'dark');
   assert.equal(elements.get('status-title').textContent, catalog[locale].ready);
+  vm.runInContext("render({state:'checking',autoReconnect:true})",sandbox);
+  assert.equal(elements.get('status-title').textContent,catalog[locale].reconnecting);
+  assert.equal(elements.get('status-text').textContent,catalog[locale].reconnectingBody);
+  assert.equal(elements.get('recovery').hidden,true);
+  vm.runInContext("render({state:'unavailable',autoReconnect:true})",sandbox);
+  assert.equal(elements.get('title').textContent,catalog[locale].opening);
+  assert.equal(elements.get('recovery').hidden,false);
 });

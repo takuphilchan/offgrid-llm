@@ -4,6 +4,11 @@ The Windows, macOS, and Linux desktop packages use the same startup controller
 and the same product UI. Installation and operating-system trust are separate
 from connecting to an OffGrid service.
 
+**Normal desktop installations are native and self-contained:** Windows uses
+the bundled Windows service, macOS its bundled macOS service, and Linux its Linux
+service. Ubuntu, WSL and Docker are not desktop prerequisites. They apply only
+when you deliberately connect to a separately managed service running there.
+
 ## Opening a workspace
 
 The desktop opens a lightweight, monochrome window before checking the service.
@@ -50,9 +55,15 @@ spawning another one.
 If a previously attached external service goes offline, Retry waits for that
 service to return; it does not silently start the bundled service in its place.
 That ownership is now remembered across application restarts, separately for
-each configured endpoint and desktop profile. If Docker/WSL starts later than
-OffGrid, start the external service and choose **Retry connection**. No empty
-Windows workspace is substituted. A missing or damaged settings write is
+each configured endpoint and desktop profile. If an external service starts later
+than OffGrid, desktop shows **Waiting for your workspace** during a 30-second
+startup grace period. It then keeps checking every five seconds and automatically
+opens the workspace once its compatibility handshake succeeds. Recovery actions
+remain available after the grace period; Retry starts a fresh bounded check.
+Quitting, choosing isolated recovery or detecting incompatibility stops those
+automatic checks. No empty Windows workspace is substituted. An external service
+that never starts still needs its owner to start it; connection retry does not
+start Docker/WSL or migrate container data. A missing or damaged settings write is
 reported rather than silently ignoring the ownership record. Explicit separate
 workspace recovery remains session-only and does not erase the external choice.
 The record contains only a schema version, local endpoint and external-ownership

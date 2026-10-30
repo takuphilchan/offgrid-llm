@@ -144,6 +144,7 @@ test('a disconnected external workspace never silently becomes a bundled workspa
   assert.equal((await runtime.connect()).state, 'unavailable');
   assert.equal(calls.spawn.length, 0);
   assert.equal(revoked, 1);
+  await runtime.stop();
 });
 
 test('external ownership survives quit and relaunch while its endpoint is offline', async () => {
@@ -173,7 +174,7 @@ test('unreadable ownership and failed persistence never authorize fallback or re
 
 test('explicit isolated recovery does not overwrite the remembered external endpoint', async () => {
   let probes = 0; const saved = [];
-  const {runtime,calls} = fixture(async()=>({state:++probes > 2 ? 'ready' : 'offline'}), {
+  const {runtime,calls} = fixture(async url=>({state:url.endsWith(':34567') && ++probes > 1 ? 'ready' : 'offline'}), {
     attachments:{load:async()=>true,save:async url=>saved.push(url)}
   });
   assert.equal((await runtime.connect()).state, 'unavailable');
@@ -181,6 +182,74 @@ test('explicit isolated recovery does not overwrite the remembered external endp
   assert.equal(calls.spawn.length, 1);
   assert.equal(runtime.state.workspaceMode, 'isolated');
   assert.deepEqual(saved, []);
+  await runtime.stop();
+});
+
+for (const initial of ['offline', 'unavailable']) test(`remembered service recovers from ${initial} during startup without a child`, async () => {
+  let probes = 0;
+  const {runtime,calls} = fixture(async()=>({state:++probes < 3 ? initial : 'ready',workspaceID:'original'}), {
+    attachments:{load:async()=>true,save:async()=>{}}
+  });
+  const states=[]; runtime.on('status', state=>states.push(state));
+  assert.equal((await runtime.connect()).state, 'ready');
+  assert.ok(states.some(state=>state.state === 'checking' && state.autoReconnect));
+  assert.equal(runtime.snapshot().autoReconnect,false);
+  assert.equal(calls.spawn.length,0);
+  await runtime.stop();
+});
+
+test('late external startup reconnects automatically after grace period without overlapping probes', {timeout:2000}, async () => {
+  let ready=false, active=0, maximum=0;
+  const {runtime,calls}=fixture(async()=>{
+    maximum=Math.max(maximum,++active);
+    await new Promise(resolve=>setTimeout(resolve,2)); active--;
+    return {state:ready?'ready':'offline',workspaceID:'original'};
+  }, {reconnectMs:5,attachments:{load:async()=>true,save:async()=>{}}});
+  assert.equal((await runtime.connect()).autoReconnect,true);
+  ready=true;
+  await new Promise(resolve=>runtime.on('status',state=>{if(state.state==='ready')resolve();}));
+  assert.equal(maximum,1); assert.equal(calls.spawn.length,0);
+  await runtime.stop();
+});
+
+test('manual retry joins pending recovery and cancels its previously scheduled timer', async () => {
+  let ready=false,probes=0;
+  const {runtime,calls}=fixture(async()=>{probes++;return {state:ready?'ready':'offline'};}, {
+    reconnectMs:10,attachments:{load:async()=>true,save:async()=>{}}
+  });
+  await runtime.connect(); ready=true;
+  const retry=runtime.connect(); assert.equal(runtime.connect(),retry);
+  assert.equal((await retry).state,'ready');
+  const count=probes; await new Promise(resolve=>setTimeout(resolve,25));
+  assert.equal(probes,count); assert.equal(calls.spawn.length,0);
+  await runtime.stop();
+});
+
+test('automatic retry stops on incompatible identity and quit cancels queued checks', async () => {
+  let state='offline', probes=0;
+  const {runtime}=fixture(async()=>{probes++;return {state};}, {reconnectMs:5,attachments:{load:async()=>true}});
+  await runtime.connect(); state='incompatible';
+  await new Promise(resolve=>runtime.on('status',value=>{if(value.state==='incompatible')resolve();}));
+  const before=probes; await new Promise(resolve=>setTimeout(resolve,20)); assert.equal(probes,before);
+  state='offline'; await runtime.connect(); await runtime.stop();
+  const stopped=probes; await new Promise(resolve=>setTimeout(resolve,20)); assert.equal(probes,stopped);
+});
+
+test('quit cancels initial external waiting and never spawns or accepts a service', async () => {
+  const {runtime,calls}=fixture(async()=>({state:'offline'}),{timeoutMs:1000,attachments:{load:async()=>true}});
+  const waiting=new Promise(resolve=>runtime.on('status',state=>{if(state.autoReconnect)resolve();}));
+  const pending=runtime.connect(); await waiting; await runtime.stop(); await pending;
+  assert.notEqual(runtime.snapshot().state,'ready'); assert.equal(calls.spawn.length,0);
+});
+
+test('separate workspace cancels scheduled reconnection to external endpoint', async () => {
+  const urls=[];
+  const {runtime,calls}=fixture(async(url,...args)=>{
+    urls.push(url); return {state:args[4]==='owned'?'ready':'offline'};
+  },{reconnectMs:10,attachments:{load:async()=>true}});
+  await runtime.connect(); assert.equal((await runtime.connect(true)).state,'ready');
+  const count=urls.length; await new Promise(resolve=>setTimeout(resolve,25));
+  assert.equal(urls.length,count); assert.equal(calls.spawn.length,1);
   await runtime.stop();
 });
 
