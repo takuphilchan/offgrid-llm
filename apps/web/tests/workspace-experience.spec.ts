@@ -59,6 +59,11 @@ test('language is directly discoverable in Settings and preserves the selected l
   const language = page.locator('#settings-language');
   await expect(language).toHaveAccessibleName('Language');
   await expect(language.locator('option')).toHaveCount(9);
+  for (const locale of ['en','fr','es','de','ar','sw','sn','nd','zu']) {
+    await language.selectOption(locale);
+    const options = page.locator('.workspace-options > button');
+    await expect(options).toHaveAccessibleName(await options.locator('span').innerText());
+  }
   await language.selectOption('ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.reload();
