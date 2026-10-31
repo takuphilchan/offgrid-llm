@@ -11,9 +11,13 @@ export function useFocusScope(ref: RefObject<HTMLElement | null>, open: boolean,
     candidates()[0]?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.isComposing || event.keyCode === 229) return;
-      // A nested top-layer confirmation or utility owns keyboard dismissal first.
-      const topLayer = document.querySelector('dialog[open], :popover-open');
-      if (topLayer && topLayer !== element) return;
+      // A modal confirmation owns its own focus scope. A nonmodal utility in
+      // this drawer owns Escape, but its controls still belong to the drawer's
+      // Tab order; otherwise the final utility control can tab into browser UI.
+      const dialog = Array.from(document.querySelectorAll('dialog[open]')).find(item => item !== element);
+      if (dialog) return;
+      const utility = document.querySelector(':popover-open');
+      if (utility && (event.key === 'Escape' || !element.contains(utility))) return;
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); latestClose.current(); }
       if (event.key !== 'Tab') return;
       const items = candidates(); const first = items[0], last = items.at(-1);
