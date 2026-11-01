@@ -379,3 +379,36 @@ and SHA-256 digests, and the CPU container tag exposed Linux AMD64 and ARM64.
 The CUDA container was still building and the release remained a draft. Final
 publication/checksum/container evidence must be recorded after it completes.
 The installed desktop, production workspace, models and service were not replaced.
+
+### Authorized native installation while publication builds
+
+The user subsequently requested installation while CI/CD continued and confirmed
+quitting OffGrid. The running desktop, native service and worker were verified
+closed before replacing files. A rollback copy of the previous application,
+workspace data/configuration and desktop profile was retained under the local
+OffGrid install-backup directory; application and saved-data copies were hashed.
+
+The official setup download was unusually slow. Instead, Electron Builder's
+prepackaged NSIS path wrapped the already downloaded, digest-verified v0.4.23
+desktop payload using installer sources identical to the release tag. This was
+a local installer envelope, not a claim that the official setup asset had been
+downloaded or verified. Its SHA-256 was
+`5eee84363bd72278dd5a00ad05858000f4de0339cb01c9946c9a34b994d40fcd`.
+The superseded partial download was stopped and retained with a `.partial`
+suffix; it was never executed.
+
+The normal per-user installer exited successfully. All 611 candidate payload
+files matched the installed application. All 430 saved-data files matched their
+pre-install hashes before startup. Model inventory paths, sizes and modification
+times were unchanged; the configured GPU worker's SHA-256 and workspace
+configuration also remained unchanged. Models were not downloaded or replaced.
+
+The installed app reopened with one desktop parent and one bundled service.
+Windows registration reported 0.4.23; the service was healthy, exposed the same
+workspace identity and all five installed models, and reported renderer identity
+`f74cb8bf0ff3e1f88150c66faa72694e3a714f958342102a845faef603e82117`.
+Installed UI compatibility and the 0.4.23 executor pack verified successfully.
+This checks installation, preservation and startup; it is not a new inference or
+native-control qualification run. Docker and the separately installed WSL CLI
+were not changed. Public v0.4.23 publication still awaited the CUDA build at this
+checkpoint.
