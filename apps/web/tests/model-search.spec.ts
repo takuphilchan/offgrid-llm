@@ -1,3 +1,4 @@
+import { chooseModel } from './helpers/model-choice';
 import { expect, test } from '@playwright/test';
 
 test('model discovery is explicit, offers large quantizations, and downloads only the chosen file', async ({ page }) => {
@@ -30,6 +31,7 @@ test('model discovery is explicit, offers large quantizations, and downloads onl
   });
   await page.goto('/ui/#/models');
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   const search = page.getByRole('region', { name: 'Find more models' });
   await expect(search).toBeVisible();
   expect(searches).toBe(0);
@@ -39,10 +41,10 @@ test('model discovery is explicit, offers large quantizations, and downloads onl
   await expect(search.getByRole('heading', { name: 'owner/large-GGUF' })).toBeVisible();
   expect(fileQueries).toBe(0);
   await search.getByRole('button', { name: 'Review download' }).click();
-  await expect(search.getByRole('combobox')).toHaveValue('model-q4-aaa');
-  await expect(search.getByRole('option', { name: /80.0 GB/ })).toHaveCount(1);
-  await expect(search.getByRole('option', { name: /model-00001/ })).toBeDisabled();
-  await search.getByRole('combobox').selectOption('model-q8-bbb');
+  await expect(search.getByRole('radio', { checked:true })).toHaveValue('model-q4-aaa');
+  await expect(search.getByRole('radio', { name: /80.0 GB/ })).toHaveCount(1);
+  await expect(search.getByRole('radio', { name: /model-00001/ })).toBeDisabled();
+  await chooseModel(search, 'GGUF file / quantization', 'model-q8-bbb');
   expect(downloads).toBe(0);
   await expect(search.getByText('Required free space', { exact: true })).toBeVisible();
   await expect(search.getByText('Unpinned revision', { exact: false })).toBeVisible();

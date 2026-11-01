@@ -1,0 +1,51 @@
+import { test, expect } from '@playwright/test';
+import { craftFixture } from './helpers/craft-fixture';
+import { modelComparison } from '../src/i18n/model-comparison';
+import { modelAcquisition } from '../src/i18n/model-acquisition';
+import { modelLibrary } from '../src/i18n/model-library';
+import type { LocaleCode } from '../src/i18n';
+
+test('filtering or changing discovery source never hides an active download', async ({page}) => {
+  const state=await craftFixture(page,'en','light');state.download=true;
+  await page.goto('/ui/#/models');await page.locator('#model-view-discover').click();
+  await expect(page.getByRole('progressbar')).toHaveCount(1);
+  await page.getByRole('searchbox',{name:modelComparison.en.filter}).fill('does not match');
+  await expect(page.locator('.catalog-grid article')).toHaveCount(0);
+  await expect(page.getByRole('progressbar')).toHaveCount(1);
+  await page.getByRole('button',{name:modelLibrary('en').search,exact:true}).click();
+  await expect(page.getByRole('progressbar')).toHaveCount(1);
+  expect(state.writes).toEqual([]);
+});
+
+for (const locale of Object.keys(modelComparison) as LocaleCode[]) test(`catalog comparison is bounded, honest and read-only: ${locale}`, async ({page},info) => {
+  const state=await craftFixture(page,locale,locale==='ar'?'dark':'light'),copy=modelComparison[locale];
+  const catalog=[...Array.from({length:4},(_,i)=>({id:`model-${i}`,name:`Model ${i}`,description:'Catalog description',type:'chat',parameters:'7B',size_bytes:i?1024**3:0,min_ram_gb:i?8:0,quant:'Q4_K_M',license:i?'Apache-2.0':'',repo:'fixture/models',file:`model-${i}.gguf`})),{id:'embed',name:'Embedding',description:'Search documents',type:'embedding',parameters:'300M',size_bytes:1024,min_ram_gb:2,quant:'F16',license:'MIT',repo:'fixture/embed',file:'embed.gguf'}];
+  await page.route('**/v1/catalog',r=>r.fulfill({json:{models:catalog}}));
+  await page.setViewportSize({width:390,height:844});await page.goto('/ui/#/models');
+  await page.locator('#model-view-discover').click();
+  const comparison=page.getByRole('region',{name:copy.title}),cards=page.locator('.catalog-grid');
+  await expect(comparison).toContainText(copy.hint);
+  for(let i=0;i<3;i++) await cards.getByRole('checkbox',{name:`${copy.choose} Model ${i}`,exact:true}).check();
+  await expect(cards.getByRole('checkbox',{name:`${copy.choose} Model 3`,exact:true})).toBeDisabled();
+  await expect(comparison.locator('article')).toHaveCount(3);
+  await expect(comparison.locator('article').first()).toContainText(modelLibrary(locale).unknown);
+  await expect(comparison.locator('article').nth(1)).toContainText('Apache-2.0');
+  const filter=page.getByRole('searchbox',{name:copy.filter,exact:true});
+  await filter.fill('model-3');await expect(cards.locator('article')).toHaveCount(1);
+  await expect(comparison.locator('article')).toHaveCount(3);
+  await page.getByRole('button',{name:modelLibrary(locale).search,exact:true}).click();
+  await expect(filter).toHaveCount(0);await expect(page.locator('#model-search-query')).toBeVisible();
+  await page.getByRole('button',{name:modelLibrary(locale).curated,exact:true}).click();
+  await expect(page.locator('#model-search-query')).toHaveCount(0);await expect(filter).toHaveValue('model-3');
+  await page.getByRole('button',{name:modelAcquisition[locale].embeddings,exact:true}).click();
+  await expect(comparison.locator('article')).toHaveCount(0);
+  await expect(filter).toHaveValue('');
+  await page.getByRole('button',{name:modelAcquisition[locale].language,exact:true}).click();
+  await expect(filter).toHaveValue('model-3');await expect(comparison.locator('article')).toHaveCount(3);
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(locale==='en'||locale==='ar') await page.screenshot({path:info.outputPath(`comparison-${locale}.png`),fullPage:true});
+  await comparison.getByRole('button',{name:copy.clear}).click();
+  await expect(comparison.locator('article')).toHaveCount(0);
+  await expect(cards.getByRole('checkbox')).toBeEnabled();
+  expect(state.writes).toEqual([]);
+});

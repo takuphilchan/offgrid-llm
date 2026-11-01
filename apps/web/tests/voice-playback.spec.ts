@@ -1,3 +1,4 @@
+import { chooseModel } from './helpers/model-choice';
 import { expect, test, type Page } from '@playwright/test';
 import { installChatJob, openAgentChat } from './fixtures/chat-job';
 
@@ -271,7 +272,7 @@ test('late microphone permission after navigation releases tracks without starti
 test('dictation retains concurrent draft edits and sends the selected recognition model', async ({ page }) => {
   await microphoneFixture(page);
   await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
-  await page.getByLabel('Recognition model', { exact: true }).selectOption('asr-b@r2');
+  await chooseModel(page, 'Recognition model', 'asr-b@r2');
   await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
   await page.locator('.composer textarea').fill('original');
   await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
@@ -303,7 +304,7 @@ test('Stop recording remains usable while a text response is generating', async 
 test('speech selection stays pinned across chunks when preferences change', async ({ page }, info) => {
   await microphoneFixture(page);
   await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
-  await page.getByLabel('Speech model', { exact: true }).selectOption('tts-a@r1');
+  await chooseModel(page, 'Speech model', 'tts-a@r1');
   await page.getByLabel('Voice', { exact: true }).selectOption('0');
   await page.screenshot({ path: info.outputPath('voice-settings.png'), fullPage: true });
   await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
@@ -317,7 +318,7 @@ test('speech selection stays pinned across chunks when preferences change', asyn
   await page.evaluate(() => (window as any).emitText('First sentence. Tail'));
   await expect.poll(() => page.evaluate(() => (window as any).speechRequests.length)).toBe(1);
   await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
-  await page.getByLabel('Speech model', { exact: true }).selectOption('tts-b@r2');
+  await chooseModel(page, 'Speech model', 'tts-b@r2');
   await page.evaluate(() => (window as any).finishSpeech(false));
   await expect.poll(() => page.evaluate(() => Boolean((window as any).player?.onended))).toBe(true);
   await page.evaluate(() => { (window as any).player.onended(); (window as any).finishText(); });
@@ -328,8 +329,8 @@ test('speech selection stays pinned across chunks when preferences change', asyn
 test('a removed explicit speech selection never falls back or opens the microphone', async ({ page }) => {
   await microphoneFixture(page);
   await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
-  await page.getByLabel('Recognition model', { exact: true }).selectOption('asr-b@r2');
-  await page.getByLabel('Speech model', { exact: true }).selectOption('tts-b@r2');
+  await chooseModel(page, 'Recognition model', 'asr-b@r2');
+  await chooseModel(page, 'Speech model', 'tts-b@r2');
   await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
   await page.route('**/v1/audio/status', route => route.fulfill({ json: { asr: { available: true }, tts: { available: true }, profiles: [] } }));
   await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
@@ -350,6 +351,9 @@ test('voice settings remain visible and keyboard reachable on narrow light and d
     await summary.focus(); await page.keyboard.press('Enter');
     const panel = page.locator('.voice-settings-panel');
     await expect(panel).toBeVisible();
+    // Readiness temporarily disables selectors while installed profiles load.
+    await expect(page.getByRole('button', { name: 'Recognition model', exact: true })).toContainText('Recognition A');
+    await expect(page.getByLabel('Recognition model', { exact: true })).toBeEnabled();
     await page.getByLabel('Recognition model', { exact: true }).focus();
     await expect(page.getByLabel('Recognition model', { exact: true })).toBeFocused();
     const box = await panel.boundingBox();
@@ -424,14 +428,14 @@ for (const surface of ['chat', 'agents']) {
     await expect(panel).toBeHidden();
     await button.click();
     await expect(button).toHaveAttribute('aria-expanded', 'true');
-    await page.getByLabel('Recognition model', { exact: true }).selectOption('asr-b@r2');
+    await chooseModel(page, 'Recognition model', 'asr-b@r2');
     await expect(panel).toBeVisible();
     await outside.click();
     await expect(panel).toBeHidden();
     await expect(button).toHaveAttribute('aria-expanded', 'false');
     if (surface === 'chat') { await editor.click(); await expect(editor).toBeFocused(); }
     await button.click();
-    await expect(page.getByLabel('Recognition model', { exact: true })).toHaveValue('asr-b@r2');
+    await expect(page.getByRole('button', { name: 'Recognition model', exact: true })).toContainText('Recognition B');
     await page.getByLabel('Speech model', { exact: true }).focus();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();

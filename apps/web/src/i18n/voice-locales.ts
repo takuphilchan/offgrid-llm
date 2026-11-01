@@ -1,0 +1,78 @@
+import type { LocaleCode } from './index';
+import type { VoiceCopy } from './voice';
+
+// Draft UI translations. Independent speaker review remains a release gate.
+export const voiceLocales: Record<Exclude<LocaleCode, 'en'>, VoiceCopy> = {
+  fr: {
+    record: 'Utiliser le microphone', stop: 'Arrêter l’enregistrement', recording: 'Enregistrement…', transcribing: 'Transcription…',
+    unavailable: 'La reconnaissance vocale n’est pas prête. Installez un moteur et un modèle locaux compatibles dans Modèles.',
+    permission: 'L’accès au microphone a été refusé. Autorisez-le pour OffGrid, puis réessayez.', unsupported: 'Cette application ou ce navigateur ne permet pas l’enregistrement au microphone.',
+    failed: 'La saisie vocale a échoué. Réessayez ou saisissez votre demande.', speak: 'Lire à voix haute', stopSpeaking: 'Arrêter la lecture', preparing: 'Préparation audio · Arrêter',
+    preparingHint: 'Génération de la voix sur le service connecté. Vous pouvez arrêter à tout moment.', speechFailed: 'La lecture audio a échoué. Vérifiez le modèle vocal et le périphérique de sortie.',
+    speechTimeout: 'La génération vocale a pris trop de temps. Lecture arrêtée ; essayez un passage plus court ou un modèle plus léger.', noSpeech: 'Cette réponse ne contient pas de texte à lire.',
+    speechUnavailable: 'Aucune voix compatible n’est prête. Ouvrez Modèles pour installer un modèle de synthèse vocale.', speakResponses: 'Lire les réponses', speechWaiting: 'En attente du texte de la réponse', provisionalSpeech: 'Lecture du brouillon. Le texte n’est définitif qu’une fois enregistré.',
+  },
+  de: {
+    record: 'Mikrofon verwenden', stop: 'Aufnahme stoppen', recording: 'Aufnahme läuft…', transcribing: 'Wird transkribiert…',
+    unavailable: 'Die Spracherkennung ist nicht bereit. Installieren Sie unter Modelle eine kompatible lokale Laufzeit und ein Modell.',
+    permission: 'Der Mikrofonzugriff wurde verweigert. Erlauben Sie ihn für OffGrid und versuchen Sie es erneut.', unsupported: 'Diese App oder dieser Browser unterstützt keine Mikrofonaufnahme.',
+    failed: 'Die Spracheingabe ist fehlgeschlagen. Versuchen Sie es erneut oder geben Sie Ihre Anfrage ein.', speak: 'Vorlesen', stopSpeaking: 'Vorlesen stoppen', preparing: 'Audio vorbereiten · Stoppen',
+    preparingHint: 'Sprache wird auf dem verbundenen Dienst erzeugt. Sie können jederzeit stoppen.', speechFailed: 'Die Audiowiedergabe ist fehlgeschlagen. Prüfen Sie Sprachmodell und Ausgabegerät.',
+    speechTimeout: 'Die Spracherzeugung dauerte zu lange. Wiedergabe gestoppt; versuchen Sie einen kürzeren Abschnitt oder ein kleineres Modell.', noSpeech: 'Diese Antwort enthält keinen vorlesbaren Text.',
+    speechUnavailable: 'Keine kompatible Stimme ist bereit. Installieren Sie unter Modelle ein Sprachsynthesemodell.', speakResponses: 'Antworten vorlesen', speechWaiting: 'Warten auf Antworttext', provisionalSpeech: 'Der Entwurf wird vorgelesen. Erst der gespeicherte Text ist endgültig.',
+  },
+  es: {
+    record: 'Usar micrófono', stop: 'Detener grabación', recording: 'Grabando…', transcribing: 'Transcribiendo…',
+    unavailable: 'El reconocimiento de voz no está listo. Instala un motor y un modelo locales compatibles en Modelos.',
+    permission: 'Se denegó el acceso al micrófono. Permítelo para OffGrid y vuelve a intentarlo.', unsupported: 'Esta aplicación o navegador no admite grabación con micrófono.',
+    failed: 'Falló la entrada de voz. Vuelve a intentarlo o escribe tu solicitud.', speak: 'Leer en voz alta', stopSpeaking: 'Detener lectura', preparing: 'Preparando audio · Detener',
+    preparingHint: 'Generando voz en el servicio conectado. Puedes detenerla en cualquier momento.', speechFailed: 'Falló la reproducción de audio. Revisa el modelo de voz y el dispositivo de salida.',
+    speechTimeout: 'La voz tardó demasiado. Se detuvo la reproducción; prueba un fragmento más corto o un modelo más ligero.', noSpeech: 'Esta respuesta no contiene texto legible en voz alta.',
+    speechUnavailable: 'No hay una voz compatible lista. Abre Modelos para instalar un modelo de síntesis de voz.', speakResponses: 'Leer respuestas', speechWaiting: 'Esperando el texto de la respuesta', provisionalSpeech: 'Leyendo el borrador. El texto solo es definitivo cuando se guarda.',
+  },
+  ar: {
+    record: 'استخدام الميكروفون', stop: 'إيقاف التسجيل', recording: 'جارٍ التسجيل…', transcribing: 'جارٍ تحويل الصوت إلى نص…',
+    unavailable: 'التعرّف على الكلام غير جاهز. ثبّت محركًا ونموذجًا محليين متوافقين في النماذج.',
+    permission: 'رُفض إذن الميكروفون. اسمح به لتطبيق OffGrid ثم حاول مجددًا.', unsupported: 'هذا التطبيق أو المتصفح لا يدعم التسجيل بالميكروفون.',
+    failed: 'فشل الإدخال الصوتي. حاول مجددًا أو اكتب طلبك.', speak: 'قراءة بصوت عالٍ', stopSpeaking: 'إيقاف القراءة', preparing: 'جارٍ تحضير الصوت · إيقاف',
+    preparingHint: 'يُولَّد الكلام على الخدمة المتصلة. يمكنك الإيقاف في أي وقت.', speechFailed: 'فشل تشغيل الصوت. تحقّق من نموذج الكلام وجهاز إخراج الصوت.',
+    speechTimeout: 'استغرق توليد الكلام وقتًا طويلًا. أُوقف التشغيل؛ جرّب مقطعًا أقصر أو نموذجًا أخف.', noSpeech: 'لا يحتوي هذا الرد على نص قابل للقراءة الصوتية.',
+    speechUnavailable: 'لا يوجد صوت متوافق جاهز. افتح النماذج لتثبيت نموذج لتوليد الكلام.', speakResponses: 'قراءة الردود صوتيًا', speechWaiting: 'بانتظار نص الرد', provisionalSpeech: 'تُقرأ مسودة الرد. لا يصبح النص نهائيًا إلا بعد حفظه.',
+  },
+  sw: {
+    record: 'Tumia maikrofoni', stop: 'Simamisha kurekodi', recording: 'Inarekodi…', transcribing: 'Inabadilisha sauti kuwa maandishi…',
+    unavailable: 'Utambuzi wa sauti hauko tayari. Sakinisha injini na modeli za ndani zinazolingana katika Modeli.',
+    permission: 'Ruhusa ya maikrofoni imekataliwa. Iruhusu kwa OffGrid kisha ujaribu tena.', unsupported: 'Programu au kivinjari hiki hakiruhusu kurekodi kwa maikrofoni.',
+    failed: 'Uingizaji wa sauti umeshindwa. Jaribu tena au andika ombi lako.', speak: 'Soma kwa sauti', stopSpeaking: 'Simamisha kusoma', preparing: 'Inaandaa sauti · Simamisha',
+    preparingHint: 'Inazalisha sauti kwenye huduma iliyounganishwa. Unaweza kusimamisha wakati wowote.', speechFailed: 'Uchezaji wa sauti umeshindwa. Angalia modeli ya sauti na kifaa cha kutoa sauti.',
+    speechTimeout: 'Uzalishaji wa sauti umechukua muda mrefu. Uchezaji umesimamishwa; jaribu kifungu kifupi au modeli nyepesi.', noSpeech: 'Jibu hili halina maandishi yanayoweza kusomwa.',
+    speechUnavailable: 'Hakuna sauti inayolingana iliyo tayari. Fungua Modeli usakinishe modeli ya kuzalisha sauti.', speakResponses: 'Soma majibu kwa sauti', speechWaiting: 'Inasubiri maandishi ya jibu', provisionalSpeech: 'Inasoma rasimu ya jibu. Maandishi ni ya mwisho baada ya kuhifadhiwa.',
+  },
+  sn: {
+    record: 'Shandisa maikorofoni', stop: 'Misa kurekodha', recording: 'Kurekodha…', transcribing: 'Kushandura izwi kuita zvinyorwa…',
+    unavailable: 'Kuziva mazwi hakusati kwagadzirira. Isa injini nemodhi dzemuno zvinoenderana muModhi.',
+    permission: 'Mvumo yemaikorofoni yarambwa. Ipe kuOffGrid woedza zvakare.', unsupported: 'App kana bhurawuza iri haritsigiri kurekodha nemaikorofoni.',
+    failed: 'Kupinza izwi kwakundikana. Edza zvakare kana kunyora chikumbiro chako.', speak: 'Verenga zvinonzwika', stopSpeaking: 'Misa kuverenga', preparing: 'Kugadzira odhiyo · Misa',
+    preparingHint: 'Kugadzira izwi pasevhisi yakabatana. Unogona kumisa chero nguva.', speechFailed: 'Kuridza odhiyo kwakundikana. Tarisa modhi yezwi nemudziyo unobudisa ruzha.',
+    speechTimeout: 'Kugadzira izwi kwatora nguva yakareba. Kuridza kwamiswa; edza ndima pfupi kana modhi diki.', noSpeech: 'Mhinduro iyi haina zvinyorwa zvinogona kuverengwa.',
+    speechUnavailable: 'Hapana izwi rinoenderana ragadzirira. Vhura Modhi kuti uise modhi yekugadzira izwi.', speakResponses: 'Verenga mhinduro zvinonzwika', speechWaiting: 'Kumirira zvinyorwa zvemhinduro', provisionalSpeech: 'Kuverenga gwaro rekutanga remhinduro. Zvinyorwa zvinova zvekupedzisira kana zvachengetwa.',
+  },
+  nd: {
+    record: 'Sebenzisa imayikhrofoni', stop: 'Misa ukurekhoda', recording: 'Kuyarekhodwa…', transcribing: 'Ilizwi liguqulwa libe ngumbhalo…',
+    unavailable: 'Ukubona amazwi akukalungi. Faka injini lemodeli zalapha ezihambelanayo kuMamodeli.',
+    permission: 'Imvumo yemayikhrofoni yaliwe. Yivumele kuOffGrid uzame futhi.', unsupported: 'Lolu hlelo kumbe isiphequluli asisekeli ukurekhoda ngemayikhrofoni.',
+    failed: 'Ukufaka ilizwi kwehlulekile. Zama futhi kumbe ubhale isicelo sakho.', speak: 'Bala ngokuzwakalayo', stopSpeaking: 'Misa ukubala', preparing: 'Kulungiswa umsindo · Misa',
+    preparingHint: 'Ilizwi liyenziwa kusevisi exhunyiweyo. Ungamisa loba nini.', speechFailed: 'Ukudlala umsindo kwehlulekile. Hlola imodeli yelizwi ledivayisi ekhipha umsindo.',
+    speechTimeout: 'Ukwenza ilizwi kuthethe isikhathi eside. Ukudlala kumisiwe; zama indima emfutshane kumbe imodeli encane.', noSpeech: 'Le mpendulo ayilambhalo ongabalwa.',
+    speechUnavailable: 'Akulalizwi elihambelanayo elilungileyo. Vula Amamodeli ufake imodeli yokwenza ilizwi.', speakResponses: 'Bala izimpendulo ngokuzwakalayo', speechWaiting: 'Kulindelwe umbhalo wempendulo', provisionalSpeech: 'Kubalwa impendulo esalungiswayo. Umbhalo uba ngowokucina nxa usugciniwe.',
+  },
+  zu: {
+    record: 'Sebenzisa imakrofoni', stop: 'Misa ukurekhoda', recording: 'Iyarekhoda…', transcribing: 'Iguqula izwi libe umbhalo…',
+    unavailable: 'Ukubona amazwi akukalungi. Faka injini nemodeli yasendaweni ehambisanayo kuMamodeli.',
+    permission: 'Imvume yemakrofoni yenqatshiwe. Yivumele kuOffGrid bese uzama futhi.', unsupported: 'Lolu hlelo noma isiphequluli asisekeli ukurekhoda ngemakrofoni.',
+    failed: 'Ukufaka izwi kwehlulekile. Zama futhi noma ubhale isicelo sakho.', speak: 'Funda ngokuzwakalayo', stopSpeaking: 'Misa ukufunda', preparing: 'Ilungisa umsindo · Misa',
+    preparingHint: 'Izwi liyakhiqizwa kusevisi exhunyiwe. Ungamisa noma nini.', speechFailed: 'Ukudlala umsindo kwehlulekile. Hlola imodeli yezwi nedivayisi ekhipha umsindo.',
+    speechTimeout: 'Ukukhiqiza izwi kuthathe isikhathi eside. Ukudlala kumisiwe; zama isigaba esifushane noma imodeli encane.', noSpeech: 'Le mpendulo ayinawo umbhalo ongafundwa.',
+    speechUnavailable: 'Alikho izwi elihambisanayo elilungile. Vula Amamodeli ufake imodeli yokukhiqiza izwi.', speakResponses: 'Funda izimpendulo ngokuzwakalayo', speechWaiting: 'Ilinde umbhalo wempendulo', provisionalSpeech: 'Ifunda impendulo esalungiswa. Umbhalo uba owokugcina uma usulondoloziwe.',
+  },
+};

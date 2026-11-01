@@ -8,6 +8,7 @@ import { LegacyDownloadReview } from './LegacyDownloadReview';
 import { modelAcquisition } from '../../i18n/model-acquisition';
 import { modelLibrary } from '../../i18n/model-library';
 import { SearchField } from '../../components/SearchField';
+import { ModelChoice } from '../../components/ModelChoice';
 
 type Props = {
   category?: ModelCategory;
@@ -77,11 +78,8 @@ export function ModelSearch({ category, models, progress, busy, download, cancel
           <button className="secondary-button" aria-expanded={repo === result.id} disabled={repo === result.id && filesLoading} onClick={() => void chooseRepo(result.id)}>{repo === result.id && filesLoading ? text.common.loading : modelAcquisition[locale].preview}</button></div>
         {repo === result.id && !filesLoading && <div className="model-search-files">
           {!files.some(file => file.supported) ? <p role="status">{copy.noFiles}</p> : <>
-            {files.filter(file => file.supported).length > 1 && <><label htmlFor="model-search-file">{copy.file}</label>
-            <select id="model-search-file" value={selected} onChange={event => setSelected(event.target.value)}>
-              {!selected && <option value="">{copy.noFiles}</option>}
-              {files.map(file => <option key={file.id} value={file.id} disabled={!file.supported}>{file.file} · {file.size_bytes > 0 ? formatBytes(file.size_bytes) : copy.unknownSize}{!file.supported ? ` · ${copy.unsupported}` : ''}</option>)}
-            </select></>}
+            {files.filter(file => file.supported).length > 1 && <ModelChoice defaultOpen label={copy.file} placeholder={copy.noFiles} value={selected} disabled={busy} onChange={setSelected}
+              options={files.map(file => ({ id: file.id, name: file.file, disabled: !file.supported, details: [file.size_bytes > 0 ? formatBytes(file.size_bytes) : copy.unknownSize, file.quant, !file.supported ? copy.unsupported : ''].filter(Boolean).join(' · ') }))} />}
             {choice && <LegacyDownloadReview repository={repo} file={choice.file} bytes={choice.size_bytes} />}
             {current && current.status !== 'complete' && <ModelDownloadProgress download={current} />}
             <div className="catalog-actions">{installed ? <span className="installed-status" role="status">{text.models.installed}</span> : current && isActiveDownload(current)

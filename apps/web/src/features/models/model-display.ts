@@ -8,8 +8,14 @@ export type ModelDisplay = {
   engine?: string; format?: string; backend?: string;
 };
 const bytes = (value: number | undefined) => Number.isSafeInteger(value) && value! > 0 ? value : undefined;
+/** Presentation only; callers retain the exact identifier for selection/provenance. */
+export function readableModelName(id: string): string {
+  return id.replace(/\.gguf$/i, '').replace(/[-_][a-f0-9]{12,64}$/i, '')
+    .replace(/[-_](?:I?Q\d(?:_[A-Z0-9]+)*|BF16|F16|F32)$/i, '')
+    .replace(/[-_]+/g, ' ').trim() || id;
+}
 export function legacyDisplay(model: Model, catalog?: CatalogModel): ModelDisplay {
-  return { id: model.id, name: catalog?.name || model.id.replace(/\.gguf$/i, '').replaceAll('_', ' '), category: model.type === 'embedding' ? 'embeddings' : supportsChat(model) ? 'language' : undefined,
+  return { id: model.id, name: catalog?.name || readableModelName(model.id), category: model.type === 'embedding' ? 'embeddings' : supportsChat(model) ? 'language' : undefined,
     // The legacy inventory has no immutable provenance. A matching filename is
     // not evidence that this file came from the curated repository.
     bytes: bytes(model.size), sizeMeaning: 'installed', runtime: model.loaded ? 'loaded' : 'unchecked', quant: catalog?.quant,

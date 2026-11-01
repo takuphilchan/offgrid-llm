@@ -1,0 +1,13 @@
+@layer controls {
+  .model-select { min-width: 0; max-width: 100%; }
+  .model-select > .utility-popover { min-width: 0; width: 100%; }
+  .model-select-trigger { min-width: 0; width: 100%; max-width: 100%; gap: 8px; }
+  .model-select-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .model-select-trigger > svg { flex-shrink: 0; }
+  .model-select-options { display: grid; gap: 4px; max-height: 22rem; overflow: auto; margin-block: 12px; }
+  .model-select-options > button { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; text-align: start; gap: 4px; padding: 12px; width: 100%; min-width: 0; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text); }
+  .model-select-options > button:is(:hover, [aria-selected="true"]) { background: var(--surface-2); border-color: var(--line); }
+  .model-select-name { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+  .model-select-options small { color: var(--muted); overflow-wrap: anywhere; font-size: var(--type-caption); line-height: 1.5; }
+  .model-select-id { font-family: var(--mono); }
+}

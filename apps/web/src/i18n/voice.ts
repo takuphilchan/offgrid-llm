@@ -1,4 +1,5 @@
 import type { LocaleCode } from './index';
+import { voiceLocales } from './voice-locales';
 
 export type VoiceCopy = {
   record: string;
@@ -44,10 +45,8 @@ const english: VoiceCopy = {
   provisionalSpeech: 'Speaking the draft response. Text is final only when saved.'
 };
 
-export function voiceText(_locale: LocaleCode): VoiceCopy {
-  // Keep the control available in every supported locale until the complete
-  // speech copy set is translated. The task and transcript remain editable.
-  return english;
+export function voiceText(locale: LocaleCode): VoiceCopy {
+  return locale === 'en' ? english : voiceLocales[locale];
 }
 
 const runtimeCopy: Record<LocaleCode, { available: string; tested: string; unavailable: string }> = {

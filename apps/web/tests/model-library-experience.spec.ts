@@ -1,3 +1,4 @@
+import { chooseModel } from './helpers/model-choice';
 import { expect, test, type Page } from '@playwright/test';
 
 async function fixture(page: Page, role = 'admin') {
@@ -32,7 +33,6 @@ for (const theme of ['light', 'dark']) test(`library selection remains visible i
   const installed = page.getByRole('tab', { name: 'Installed', exact: true });
   const discover = page.getByRole('tab', { name: 'Discover models', exact: true });
   const background = (control: typeof installed) => control.evaluate(el => getComputedStyle(el).backgroundColor);
-  const border = (control: typeof installed) => control.evaluate(el => getComputedStyle(el).borderColor);
   await expect(installed).toHaveAttribute('aria-selected', 'true');
   await expect.poll(async () => (await background(installed)) !== (await background(discover))).toBe(true);
   await installed.hover();
@@ -44,9 +44,10 @@ for (const theme of ['light', 'dark']) test(`library selection remains visible i
   const embeddings = page.getByRole('button', { name: 'Embeddings', exact: true });
   await embeddings.click(); await page.mouse.move(0, 0);
   await expect(embeddings).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(async () => (await border(language)) !== (await border(embeddings))).toBe(true);
+  await expect.poll(async () => (await background(language)) !== (await background(embeddings))).toBe(true);
+  await expect(embeddings).toHaveCSS('font-weight', '600');
   await embeddings.hover();
-  await expect.poll(async () => (await border(language)) !== (await border(embeddings))).toBe(true);
+  await expect.poll(async () => (await background(language)) !== (await background(embeddings))).toBe(true);
   expect(state.mutations).toEqual([]);
 });
 
@@ -62,10 +63,11 @@ test('all four categories keep Installed local and Discover explicit, with retai
     await expect(inventory).toContainText('No models match this filter');
     await expect(inventory).not.toContainText('No local models');
     await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+    await expect(page.getByText('No catalog models in this category.', { exact: false })).toBeVisible();
+    if (category === 'Language' || category === 'Embeddings') await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
     await expect(page.getByRole('searchbox')).toHaveCount(1);
     await page.getByRole('searchbox').fill(category);
     expect(state.searches).toEqual([]);
-    await expect(page.getByText('No catalog models in this category.', { exact: false })).toBeVisible();
     await page.getByRole('tab', { name: 'Installed', exact: true }).click();
     await expect(page.getByRole('searchbox')).toHaveValue('absent');
     await page.getByRole('searchbox').fill('');
@@ -111,6 +113,7 @@ test('non-administrators cannot initiate discovery transfers or package administ
   const state = await fixture(page, 'user'); await page.goto('/ui/#/models');
   await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   await expect(page.getByText('Administrator access required', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Speech generation', exact: true }).click();
   await page.getByRole('searchbox').fill('voice');
@@ -147,10 +150,10 @@ test('curated package alternatives resolve the selected identity in place, never
   const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Voice collection', exact: true }) });
   await card.getByRole('button', { name: 'Review download' }).click();
   expect(resolutions).toEqual([]); await expect(card.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0);
-  await card.getByRole('combobox').selectOption('large');
+  await chooseModel(card, 'Model variant', 'large');
   await expect(card.locator('.package-download-details')).toContainText('8 KB');
   await expect(card).toContainText('Required free space'); expect(resolutions).toEqual(['large']); expect(state.mutations).toEqual([]);
-  await card.getByRole('combobox').selectOption('small');
+  await chooseModel(card, 'Model variant', 'small');
   await expect(card.locator('.package-download-details')).toContainText('4 KB');
   expect(resolutions).toEqual(['large', 'small']); expect(state.mutations).toEqual([]);
   for (const width of [320, 390]) {

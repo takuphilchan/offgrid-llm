@@ -1,0 +1,16 @@
+@layer controls {
+  .model-choice { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+  .model-choice-label { color: var(--muted); font-size: var(--type-caption); }
+  .model-choice-trigger { width: 100%; min-width: 0; justify-content: space-between; text-align: start; gap: 12px; }
+  .model-choice-trigger > span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .model-choice-panel { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; }
+  .model-choice-options { display: grid; gap: 4px; max-height: 240px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .model-choice-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--text); cursor: pointer; }
+  .model-choice-option:has(:checked), .model-choice-option:not(.unavailable):hover { background: var(--surface-2); border-color: var(--line-strong); }
+  .model-choice-option:focus-within { outline: 2px solid var(--text); outline-offset: -2px; }
+  .model-choice-option input { margin-block-start: 3px; }
+  .model-choice-option > span { display: grid; gap: 3px; min-width: 0; }
+  .model-choice-option strong { font-weight: var(--weight-medium); font-size: var(--type-body); }
+  .model-choice-option code, .model-choice-option small, .model-choice-missing, .model-choice-summary { font-size: var(--type-caption); line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+  .model-choice-option.unavailable { cursor: default; }
+}

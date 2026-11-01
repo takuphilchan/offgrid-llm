@@ -19,6 +19,22 @@
   .model-display .installed-model-main strong { white-space: normal; overflow-wrap: anywhere; font-size: var(--type-body); }
   .installed-model .model-actions { flex-wrap: wrap; }
   .model-section > .workspace-search-field { max-width: 560px; }
+  .model-discovery-sources { display: flex; flex-wrap: wrap; gap: 8px; }
+  .model-discovery-sources > button[aria-pressed=true] { border-color: var(--line-strong); background: var(--surface-2); }
+  .catalog-comparison { margin-block: 20px; padding-block: 16px; border-block: 1px solid var(--line); min-width: 0; }
+  .catalog-comparison[data-empty=true] { margin-block: 0; padding-block: 0; border: 0; }
+  .catalog-comparison[data-empty=true] > p { margin-block: 8px 0; }
+  .catalog-comparison-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .catalog-comparison h3, .catalog-comparison h4 { margin: 0; font-size: var(--type-body); }
+  .catalog-comparison p { max-width: 80ch; font-size: .875rem; line-height: 1.6; }
+  .catalog-comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 16px; margin-block-start: 16px; }
+  .catalog-comparison article { min-width: 0; padding: 16px; background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-md); overflow-wrap: anywhere; }
+  .catalog-comparison small { display: block; color: var(--muted); margin-block: 4px 12px; }
+  .catalog-comparison dl { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; font-size: .875rem; }
+  .catalog-comparison dt { color: var(--muted); }
+  .catalog-comparison dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .catalog-compare-choice { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: .875rem; width: fit-content; }
+  @media (pointer: coarse) { .catalog-compare-choice { min-height: 44px; } }
   .model-verification { grid-column: 1 / -1; grid-row: 2; display: grid; margin: 0 16px 16px; overflow-wrap: anywhere; }
   @media (max-width: 600px) {
     .installed-model .model-actions { padding: 0 16px 16px; }

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { chooseModel } from './helpers/model-choice';
 
 test.describe('complete package acquisition through a real isolated service', () => {
   test.skip(process.env.OFFGRID_E2E_MODEL_FIXTURES !== '1', 'Requires the explicitly fixture-tagged service, never a live installation.');
@@ -21,11 +22,10 @@ test.describe('complete package acquisition through a real isolated service', ()
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     const repo = page.locator('article.model-search-result').filter({ hasText: 'fixture/whisper' });
     await repo.getByRole('button', { name: 'Review download', exact: true }).click();
-    const variants = repo.getByRole('combobox');
-    await expect(variants).toHaveValue('');
+    await expect(repo.getByRole('radiogroup', {name:'Model variant'}).getByRole('radio', {checked:true})).toHaveCount(0);
     expect(resolutions).toBe(0); expect(installs).toBe(0);
     await expect(repo.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0);
-    await variants.selectOption(choice.id);
+    await chooseModel(repo, 'Model variant', choice.id);
     await expect(repo.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
     expect(resolutions).toBe(1); expect(installs).toBe(0);
     await expect(repo.getByText('Required free space', { exact: true })).toBeVisible();

@@ -17,10 +17,13 @@ import { modelLibrary } from '../../i18n/model-library';
 import type { LibraryView } from './LibraryNavigation';
 import { PackageOperation } from './PackageOperation';
 import { SearchField } from '../../components/SearchField';
+import { ModelChoice } from '../../components/ModelChoice';
+import { EmptyState, SectionHeading } from '../../components/WorkspacePresentation';
+import { workspaceRefinement } from '../../i18n/workspace-refinement';
 
 const packageOf = (operation: ModelOperation) => operation.target.kind === 'package' ? operation.target.package : undefined;
 
-export function PackageModels({ category, view }: { category: ModelCategory; view: LibraryView }) {
+export function PackageModels({ category, view, onDiscover }: { category: ModelCategory; view: LibraryView; onDiscover: () => void }) {
   const { messages: text, locale } = useI18n();
   const copy = modelAcquisition[locale], readiness = speechModels[locale];
   const feedback = operationFeedback(locale);
@@ -140,10 +143,10 @@ export function PackageModels({ category, view }: { category: ModelCategory; vie
     {operationsError && <div className="inline-error" role="alert">{copy.operations}: {operationsError}<button className="secondary-button" disabled={busy} onClick={() => void refreshInventory()}>{feedback.checkStatus}</button></div>}
     {metadata.failure && <div className="inline-error" role="alert">{metadata.failure.message}<button className="secondary-button" disabled={mutating} onClick={() => { if (metadata.failure) void metadata.run(metadata.failure.action); }}>{metadata.failure.action.label}</button></div>}
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed} aria-busy={loading}>
-      <div className="section-heading"><h2>{text.models.installed}</h2></div>
-      {!loading && !inventoryError && !installed.length && <p className="compact-empty">{text.models.empty}</p>}
-      {!!installed.length && <SearchField className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={setFilter} />}
-      {!!installed.length && !filtered.length && <p role="status">{modelLibrary(locale).noMatches}</p>}
+      <SectionHeading title={`${text.models.installed} · ${installed.length}`} />
+      {!loading && !inventoryError && !installed.length && <EmptyState title={text.models.empty} action={<button type="button" className="secondary-button" onClick={onDiscover}>{text.models.discover}</button>} />}
+      {!!installed.length && <SearchField id="package-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={setFilter} />}
+      {!!installed.length && !filtered.length && <EmptyState title={modelLibrary(locale).noMatches} action={<button type="button" className="secondary-button" onClick={() => { setFilter(''); document.getElementById('package-model-search')?.focus(); }}>{workspaceRefinement[locale].clear}</button>} />}
       <div className="catalog-grid">{filtered.map(item => {
         const source = operations.find(o => o.state === 'complete' && !o.discarded && packageOf(o)?.id === item.id && packageOf(o)?.revision === item.revision);
         const state = item.package ?? item.readiness;
@@ -176,11 +179,11 @@ export function PackageModels({ category, view }: { category: ModelCategory; vie
       {metadata.pending && <p role="status">{text.common.loading}</p>}
       {repositories?.length === 0 && <p role="status">{text.modelSearch.empty}</p>}
       {repositories?.map(repo => <article className="model-search-result" key={repo.id}><div className="model-search-repo"><div><h3>{repo.id}</h3><p className="model-identity">{modelLibrary(locale).repositorySize}: {repo.size_bytes && repo.size_bytes > 0 ? formatBytes(repo.size_bytes) : text.modelSearch.unknownSize}</p></div><button className="secondary-button" disabled={!admin || busy} onClick={() => void choose(repo.id)}>{copy.preview}</button></div>
-        {discovery?.repository === repo.id && discovery.choices.filter(c => c.supported).length > 1 && <label className="field"><span>{copy.variant}</span><select disabled={busy} value={variant} onChange={event => {
-          const value = event.target.value; setVariant(value); setPreview(null);
+        {discovery?.repository === repo.id && discovery.choices.filter(c => c.supported).length > 1 && <ModelChoice defaultOpen label={copy.variant} placeholder={copy.variant} disabled={busy} value={variant} onChange={value => {
+          setVariant(value); setPreview(null);
           const choice = discovery.choices.find(c => c.id === value);
           if (choice) void resolve({ repository: discovery.repository, revision: discovery.revision, variant: choice.id, architecture: choice.architecture });
-        }}><option value="">{copy.variant}</option>{discovery.choices.map(c => <option key={c.id} value={c.id} disabled={!c.supported}>{c.name} · {c.architecture}</option>)}</select></label>}
+        }} options={discovery.choices.map(choice => ({ id: choice.id, name: choice.name, disabled: !choice.supported, details: [choice.architecture, choice.reason].filter(Boolean).join(' · ') }))} />}
         {discovery?.repository === repo.id && preview?.resolution.provenance.repository === repo.id && downloadDetails}
       </article>)}
     </section>
@@ -189,13 +192,13 @@ export function PackageModels({ category, view }: { category: ModelCategory; vie
       <h2>{text.models.catalog}</h2>{!catalogError && !catalog.length && <p role="status">{modelLibrary(locale).emptyCatalog}</p>}<div className="catalog-grid">{catalog.map(item => <article className="catalog-card package-card" key={item.id}>
         <ModelIdentity model={packageCatalogDisplay(item)} /><p>{item.description}</p>
         <div className="catalog-actions"><button className="secondary-button" aria-expanded={catalogReview === item.id} disabled={!admin || busy || !item.variants.length} onClick={() => chooseCatalog(item)}>{copy.preview}</button></div>
-        {catalogReview === item.id && item.variants.length > 1 && <label className="field"><span>{copy.variant}</span><select value={variant} disabled={busy} onChange={event => {
-          const value = event.target.value; setVariant(value); setPreview(null);
+        {catalogReview === item.id && item.variants.length > 1 && <ModelChoice defaultOpen label={copy.variant} placeholder={copy.variant} value={variant} disabled={busy} onChange={value => {
+          setVariant(value); setPreview(null);
           const choice = item.variants.find(v => v.id === value);
           // Each package target has its own existing curated resolution. Never
           // silently use the first variant or construct a new source authority.
           if (choice?.target.kind === 'package') void resolve({ catalog_id: choice.target.package.id });
-        }}><option value="">{copy.variant}</option>{item.variants.map(choice => <option key={choice.id} value={choice.id} disabled={choice.target.kind !== 'package'}>{choice.name} · {choice.size_bytes > 0 ? formatBytes(choice.size_bytes) : modelLibrary(locale).unknown}</option>)}</select></label>}
+        }} options={item.variants.map(choice => ({ id: choice.id, name: choice.name, disabled: choice.target.kind !== 'package', details: [choice.size_bytes > 0 ? formatBytes(choice.size_bytes) : modelLibrary(locale).unknown, choice.target.kind === 'package' ? `${choice.target.package.id}@${choice.target.package.revision}` : '', choice.readiness?.issue].filter(Boolean).join(' · ') }))} />}
         {!discovery && catalogReview === item.id && downloadDetails}
       </article>)}</div>
     </section>
