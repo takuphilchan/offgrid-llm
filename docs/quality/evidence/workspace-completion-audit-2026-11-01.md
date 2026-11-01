@@ -479,7 +479,173 @@ Installer SHA-256:
 `89aff2946ead4624c8c4bda33ecba5c638b43adba66af823572392b319417238`.
 
 Automatic approval review blocked the subsequent installed-app launch command.
-The owner was asked to open the app normally. Installed live startup verification
-is pending; the isolated packaged startup results above must not be substituted
-for that check. This is the local corrective build, not a replacement of the
+The owner opened the app normally. Live verification matched the installed UI
+identity and all three entry-point assets, the same workspace and five models.
+The process snapshot showed one desktop parent, three Electron helpers and one
+owned service. This is the local corrective build, not a replacement of the
 published v0.4.23 assets. Docker and the WSL CLI were not changed.
+
+### Blocked conversation and model actions follow-up
+
+The owner confirmed that the installed look improved, then reported a generic
+blocked-conversation banner and oversized model actions. The saved workspace
+contains an uncertain task cancelled during `skill_draft`; that write's outcome
+cannot be declared resolved from cancellation alone. No saved task was mutated.
+Chat's Enter path previously generated a generic error whose status action
+reloaded history instead of focusing the available recovery controls.
+
+The corrected composer derives guidance from the canonical job state, focuses
+its controls on review/Enter, retains the draft and exposes a separate blank
+conversation without cancellation or replay. Settled/steerable snapshots remove
+the notice. Model maintenance now uses compact action rows, quiet metadata and
+an explicit narrow selection indicator; confirmation and authorization remain.
+This is correction of the existing continuity and management acceptance scope.
+
+The first focused agent run passed 72 tests and failed two assertions: the new
+test used the wrong localized New chat label, and repeated uncertain copy made
+an existing global locator ambiguous. The test label and redundant presentation
+were corrected. The combined agent/model/layout run then passed **94 tests**.
+English light and Arabic narrow dark model-menu captures were visually inspected.
+Build/type/API, source-size, layout and hygiene checks are recorded separately
+from the full renderer and packaged startup runs below.
+
+The initial full follow-up renderer run passed 711 tests, skipped 28 and failed
+one: an old global New chat locator now matched both the header and the new
+contextual action. Scoping that test to the header preserves the original
+assertion. Subsequent owner screenshots exposed a double-scroll model picker
+and a numeric zero rendered from an empty artifact count. The picker now has
+one scrolling list with fixed search/footer, and the empty result guard is
+explicitly boolean. Terminal task continuation uses a compact New chat link to
+`#/chat/new`, rather than reopening the previous conversation.
+
+The targeted picker, result, navigation and task-first suite passed **81 tests**,
+including English/Arabic, light/dark, keyboard scrolling and no-mutation checks.
+
+At the owner's explicit request, the live service's 82 saved conversations were
+backed up privately outside the repository and removed through its session API
+with `work=retain`. Verification returned zero remaining conversations and zero
+deletion failures. Task evidence remains in Activity; models, Knowledge and
+profiles were not changed. The open window's cached selection is not evidence
+that the deleted server-side conversation still exists. No private conversation
+content or backup is included in this repository.
+
+The next full renderer run passed 716 tests, skipped 28 and failed one old
+history assertion expecting the former Chat link label. That assertion now
+expects New chat. Visual review also caught two defects not covered by the
+initial geometry assertions: grid rows compressed their text, and the composite
+picker could flip below its anchor using its already-clipped height. Rows now
+use intrinsic content height; the picker supplies a stable preferred placement
+height. Tests check visible row contents and usable list height in addition to
+scroll ownership. English light and Arabic dark captures were inspected again.
+
+The owner additionally reported the workspace chooser. It now has one access
+label, a compact folder action, Refresh in the heading, and secondary guidance.
+Native desktop folder selection does not show the browser's CLI-only setup
+instructions. The unsandboxed-command warning appears when command access is
+selected, while the actual access enum and native-grant flow remain unchanged.
+The revised focused suite passed 98 tests, including grant/stop behavior.
+Short-height navigation spacing was also corrected after visual inspection
+showed the English Knowledge label splitting mid-word.
+
+### Profile-first composer, Help and typography extension
+
+The owner approved group 21 and then explicitly requested a type-size audit.
+Agent settings now consolidates the read-only pinned model, revision and step
+budget with existing resource/permission restrictions. It does not update saved
+profiles or expand grants. Services supporting on-demand access omit the unused
+folder selector until a workspace is attached; old services retain the selector.
+Active selections and computer access controls remain visible.
+
+Help is available from the top bar and Quick actions. It contains local examples,
+profile/access explanations, returning-work guidance and links to existing pages.
+Opening Help does not submit examples or fetch an external help site. Keyboard
+dismissal restores the prior focus, background scrolling is locked while open,
+and the close action stays visible while the dialog scrolls.
+
+Computed-style checks across the six primary routes found two visible 11px
+remnants: the Quick actions shortcut and Knowledge source status. These now use
+caption and metadata tokens. Other legacy declarations were not blindly rewritten
+where later styles already supplied the correct computed size. The new Help
+prose/sections use 16px/18px and localized line-height tokens. This is fixture
+coverage, not a native-speaker or screen-reader qualification claim.
+
+The first extension suite passed 94 tests and failed one test that queried the
+command search as a textbox rather than its combobox role. A subsequent focused
+run passed 21 tests and failed an incorrect focus expectation: Help launched via
+Quick actions returns to the original draft, not necessarily the Help button.
+Both test expectations were corrected. The expanded full renderer suite passed
+**733 tests, with 28 skipped**. Final copy clarification, Help scroll locking and
+on-demand selector changes then passed **100 focused tests** covering Help,
+typography, composer, agent access/state and navigation overlays.
+
+The final candidate passed packaged Windows startup (1089ms initial window,
+1265ms recovery) and saved/live theme checks, nine readable native option checks,
+all seven route zoom checks and Help at actual 200% Electron zoom. Captures were
+inspected in English light and Arabic dark; no user workspace was used by these
+fixtures. Final candidate UI identity:
+`f01060e4ef1473f7b33dea68fd1deda0fad319e69d5081cff3d0f696454cd164`.
+API/type/build, source-size, layout, hygiene, docs and OpenSpec checks are recorded
+alongside this evidence. The existing bundle-size advisory remains. No new full
+Go/race, macOS/Linux native, real-model or human-participant qualification is
+claimed for this renderer correction. Installation remains a separate operation.
+
+### Installed follow-up verification
+
+After the owner quit OffGrid, the prepared installer completed successfully.
+All 611 installed payload files matched the candidate, and 349 saved-data files
+matched the preservation baseline. The GPU runtime and model inventory remained
+unchanged. A verified external rollback backup was retained; no backup was
+deleted. Installer SHA-256:
+`18ae2a78e0a3b19140c74cac1689cd8c62617b01d326d012bcd87bdb6a506bfd`.
+
+The owner reopened OffGrid. The live system endpoint reported the final
+`f01060e4ef1473f7b33dea68fd1deda0fad319e69d5081cff3d0f696454cd164`
+UI identity. The installed and served HTML fingerprints matched, as did all
+three referenced entry assets byte-for-byte. The workspace identity matched the
+existing local workspace and the service listed five models. Process inspection
+found one desktop parent, its three Electron helpers, one owned service and two
+runtime children owned by that service; this snapshot does not establish a
+general process-leak qualification. No task was dispatched by this verification.
+
+This is the locally installed 0.4.23 corrective build. It does not replace the
+already-published release tag or assets. Docker and WSL were not changed by this
+UI installation. Human usability, screen-reader, native-speaker and other-platform
+qualification remain outstanding as recorded above.
+
+### Activity cleanup and attention-menu follow-up
+
+The owner requested removal of all old activity after observing that conversation
+deletion had retained the canonical jobs. Before mutation, all 284 listed jobs
+were exported into a verified private external backup. Existing cancel/delete
+APIs stopped 16 old waiting/interrupted jobs and removed 277 job records, with no
+request failures. Subsequent reads returned zero conversations and seven jobs in
+both canonical and diagnostic activity APIs. The seven remaining records have
+unknown effects, including unconfirmed command-stop receipts. They were not
+falsely reconciled or deleted by direct database editing. A proposed explicit
+discard-history extension is awaiting the owner's scope confirmation; current
+service deletion restrictions remain intact.
+
+The presentation follow-up replaces oversized attention-menu buttons with
+two-line links and secondary status, bounds the panel to 440px with one inner
+scroll region and a reachable history link, exposes existing removable-history
+cleanup outside the overflow menu, and makes Show more content-sized. Response
+settings replaces the ambiguous Context & response label and sun-like icon;
+context allocation/token controls are disclosed under Advanced without changing
+their values. Knowledge and voice controls remain accessible.
+
+Initial focused coverage passed 80 tests and failed three expectations: a
+label-based selector for the native context combobox, the former hidden deletion
+control, and a regression removing known completed conversations from the work
+menu. The two selectors were corrected and the conversation links restored.
+The revised focused suite passed 32 tests. Full-suite follow-up and any later
+installation are recorded separately; this source correction is not proof that
+the seven protected records have been removed.
+
+The full renderer run passed 724 tests, skipped 28 and failed 12 stale
+expectations: three exercised the former overflow-menu cleanup route, and nine
+looked up the former context-label translation. After updating only those test
+expectations, all 51 tests in their three affected files passed. No application
+source changed after that full run. API generation, TypeScript/build, docs,
+source-size, repository hygiene and OpenSpec checks passed; the existing bundle
+size advisory remains. The compact attention capture was inspected. These later
+presentation edits are not part of the installed `f01060e...` build yet.
