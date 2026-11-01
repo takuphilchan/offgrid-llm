@@ -72,6 +72,39 @@ A clean checkout of the original HEAD would omit its uncommitted shell changes
 and is not an equivalent baseline. A new benchmark against another release must
 be labelled separately and cannot retroactively satisfy the missing comparison.
 
+## Downloaded Windows desktop attempt
+
+The actual draft-release portable desktop was downloaded and its SHA-256 matched
+GitHub's asset digest:
+`8e85d38b3b5d805950509c50eb3f0bf1a0286e54b59c958a9599727fc89b88d8`.
+The embedded archive was extracted into ignored build storage, without installing
+or replacing the user's desktop. The existing native journey was invoked with
+that desktop, the independently verified downloaded Windows CPU worker bundle,
+the retained Qwen2.5 3B Q4_K_M model, and `--agent`.
+
+This attempt **failed before the first reply**. The service rejected even the
+512-token allocation with `insufficient_runtime_capacity`; the unchanged
+120-second first-answer assertion then expired. At inspection, Windows reported
+3,632,368 KiB available physical memory on a 16,470,736 KiB system. The CPU
+estimator subtracts the approximately 2,008 MiB model and approximately 1,608 MiB
+system reserve, leaving no context budget at that observation. This explains the
+admission rejection; it does not establish an out-of-memory crash or a broken
+GPU runtime. The isolated test explicitly disables GPU use.
+
+The screenshot reported by the user matches this test's retained failure view.
+Its temporary home is `offgrid-desktop-native-reply-wvrNK0`; private captures and
+the full failure stay there, with the invocation log in ignored
+`build/release-0.4.22-download/native-agent-release.log`. The test exited, and a
+process check found no remaining OffGrid or llama-server test workers. No user
+applications were stopped, no safety reserve was reduced, and no inference was
+silently moved to a different model or device.
+
+The raw capacity message and generic "Check request status" action are a
+remaining recovery-presentation weakness. Zero estimated context capacity must
+not be described as zero physical RAM. Download integrity, extraction, and
+startup are verified; successful inference from this downloaded desktop remains
+unverified. Earlier candidate successes are not substituted for this failure.
+
 ## Completion boundary
 
 No checkbox is closed by this audit and the change is not archived. Participant
