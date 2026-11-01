@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../../api/client';
+import type { ChatMessage, ChatSession } from '../../api/client';
 import { readPreference } from '../../lib/preferences';
 
 export function readPreferences(key: string): { profile: string; maxTokens: number } {
@@ -21,4 +21,15 @@ export function newSessionName(prompt: string): string {
 
 export function visibleSessionName(name: string): string {
   return name.replace(/ · \d{14}$/, '');
+}
+
+export function visibleSessionTitle(session: ChatSession): string {
+  if (/^agent-[a-f0-9-]{32,36}$/i.test(session.name)) {
+    const first = session.messages?.find(message => message.role === 'user');
+    if (first) {
+      const title = messageText(first.content).replace(/\s+/g, ' ').trim().slice(0, 80);
+      if (title) return title;
+    }
+  }
+  return visibleSessionName(session.name);
 }

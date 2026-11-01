@@ -1,10 +1,11 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 /** Nonmodal utilities only. Consequential confirmations keep their dialog contract. */
-export function UtilityPopover({ label, trigger, children, className = '', triggerClassName = 'text-button', panelClassName = '', align = 'start', onOpenChange }: {
+export function UtilityPopover({ label, trigger, children, className = '', triggerClassName = 'text-button', panelClassName = '', align = 'start', compact = false, onOpenChange }: {
   label: string; trigger?: ReactNode; children: ReactNode; className?: string;
   triggerClassName?: string; panelClassName?: string; align?: 'start' | 'end';
   onOpenChange?: (open: boolean) => void;
+  compact?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -25,7 +26,7 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
         panel.current.hidePopover();
         return;
       }
-      const panelWidth = Math.min(340, Math.max(0, width - 2 * margin));
+      const panelWidth = Math.min(compact ? 240 : 340, Math.max(0, width - 2 * margin));
       const above = Math.max(0, anchor.top - top - margin - gap);
       const below = Math.max(0, top + height - anchor.bottom - margin - gap);
       const upwards = below < Math.min(panel.current.scrollHeight, 360) && above > below;
@@ -75,12 +76,12 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       window.visualViewport?.removeEventListener('resize', position);
       window.visualViewport?.removeEventListener('scroll', position);
     };
-  }, [open, align]);
+  }, [open, align, compact]);
 
   return <div className={`utility-popover ${className}`}>
     <button ref={button} type="button" className={triggerClassName} title={label} aria-label={label}
       popoverTarget={id} aria-expanded={open} aria-controls={id}>{trigger ?? label}</button>
-    <div ref={panel} id={id} className={`utility-popover-panel ${panelClassName}`} popover="auto" role="region" aria-label={label} tabIndex={0}
+    <div ref={panel} id={id} className={`utility-popover-panel ${compact ? 'utility-action-panel' : ''} ${panelClassName}`} popover="auto" role="region" aria-label={label} tabIndex={0}
       onKeyDown={event => {
         // Chromium/Electron do not consistently give a focused generic region
         // native scroll keys. Only handle the region itself, never its controls.

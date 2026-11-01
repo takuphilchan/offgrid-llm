@@ -10,7 +10,8 @@ import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessag
 import { Icon } from '../../components/Icon';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ModelSelect } from '../../components/ModelSelect';
-import { HistoryDeleteDialog, type HistoryItem } from '../../components/HistoryDeleteDialog';
+import type { HistoryItem } from '../../components/HistoryDeleteDialog';
+import { ChatHistoryDelete } from './ChatHistoryDelete';
 import { useI18n } from '../../i18n';
 import { copyText } from '../../lib/clipboard';
 import { clearSubmittedDraft, draftKey, readDraft, useDraft, writeDraft } from '../../lib/drafts';
@@ -149,8 +150,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const setError = (message: string, code = '') => { setErrorText(message); setErrorCode(code); };
   const [errorAction, setErrorAction] = useState<'history' | 'request' | 'cancel' | null>('history');
   const [deleteItems, setDeleteItems] = useState<HistoryItem[] | null>(null);
-  const [deleteWork, setDeleteWork] = useState<'' | 'retain' | 'stop'>('');
-  useEffect(() => setDeleteWork(''), [deleteItems]);
   const [historyNotice, setHistoryNotice] = useState('');
   const [copiedMessage, setCopiedMessage] = useState('');
   const controller = useRef<AbortController | null>(null);
@@ -531,7 +530,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const lastAssistant = conversation.reduce((last, message, index) => message.role === 'assistant' ? index : last, -1);
   const linkedOutputSaved = !!linkedTurn && conversation.some(message => 'turn_id' in message && message.turn_id === linkedTurn.id && message.role === 'assistant');
   return <div className="chat-workspace">
-    {deleteItems && <HistoryDeleteDialog items={deleteItems} kind="chats" remove={name => api.deleteSession(name, deleteWork || undefined)} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} options={locked => <><label>{jobCopy.deleteChoice}<select disabled={locked} value={deleteWork} onChange={event => setDeleteWork(event.target.value as '' | 'retain' | 'stop')}><option value="">{jobCopy.preserveActive}</option><option value="retain">{jobCopy.retain}</option><option value="stop">{jobCopy.stop}</option></select></label><p>{jobCopy.deleteHint}</p></>} />}
+    {deleteItems && <ChatHistoryDelete items={deleteItems} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     <SidebarSlot action><button className="new-chat-button" title={text.chat.newChat} aria-label={text.chat.newChat} disabled={!!deleteItems} onClick={() => { sidebar.close(); startNew(); }}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></button></SidebarSlot>
     <SidebarSlot><ConversationHistory sessions={sessions} activeName={activeName} busy={busy} loading={loading} locked={!!deleteItems} notice={historyNotice} select={selectSession} remove={setDeleteItems} refresh={() => void loadSessions()} /></SidebarSlot>
     <div className="chat-layout">

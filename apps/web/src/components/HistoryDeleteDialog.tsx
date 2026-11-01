@@ -2,15 +2,18 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { APIError } from '../api/client';
 import { useI18n } from '../i18n';
 import { interaction } from '../i18n/interaction';
+import { deleteConversationBody } from '../i18n/history-deletion';
 
 export type HistoryItem = { id: string; label: string };
 
 // Delete exactly the snapshot the user confirmed, not items added in another
 // tab afterwards. Partial failure keeps only failed items selected for retry.
-export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose, options }: {
+export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose, options, onFailure, confirmDisabled = false }: {
   items: HistoryItem[]; kind: 'chats' | 'tasks'; remove: (id: string) => Promise<unknown>;
   onDeleted: (ids: string[]) => void; onClose: () => void;
   options?: (busy: boolean) => ReactNode;
+  onFailure?: (reason: unknown) => void;
+  confirmDisabled?: boolean;
 }) {
   const { messages: text, locale } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -47,7 +50,7 @@ export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose, o
       try { await remove(item.id); removed.push(item.id); }
       catch (reason) {
         if (reason instanceof APIError && reason.status === 404) removed.push(item.id);
-        else { failures.push(item); failure = true; }
+        else { failures.push(item); failure = true; onFailure?.(reason); }
       }
       setProcessed(index + 1);
     }
@@ -57,12 +60,12 @@ export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose, o
     else { setRemaining(failures); setFailed(failure); }
   };
   return <dialog ref={dialog} className="history-delete-dialog" aria-labelledby={`${id}-title`} aria-describedby={`${id}-body`} onCancel={event => { event.preventDefault(); if (!locked.current) onClose(); }}>
-    <h2 id={`${id}-title`}>{text.history.confirmTitle}</h2>
-    <p id={`${id}-body`}>{(kind === 'chats' ? text.history.deleteChatsBody : text.history.deleteTasksBody).replace('{count}', String(remaining.length))}</p>
+    <h2 id={`${id}-title`}>{kind === 'chats' && items.length === 1 ? text.chat.deleteConversation : text.history.confirmTitle}</h2>
+    <p id={`${id}-body`}>{kind === 'chats' && remaining.length === 1 ? deleteConversationBody[locale] : (kind === 'chats' ? text.history.deleteChatsBody : text.history.deleteTasksBody).replace('{count}', String(remaining.length))}</p>
     <ul>{remaining.slice(0, 5).map(item => <li key={item.id}>{item.label}</li>)}{remaining.length > 5 && <li>+{remaining.length - 5}</li>}</ul>
     {options?.(busy)}
     {failed && <p role="alert">{text.history.partialFailure.replace('{count}', String(remaining.length))}</p>}
     {busy && <p role="status">{interaction[locale].deleteProgress.replace('{done}', String(processed)).replace('{total}', String(remaining.length))}</p>}
-    <div className="history-dialog-actions"><button ref={cancel} className="secondary-button" disabled={stopping && busy} onClick={() => { if (busy) { stopRequested.current = true; setStopping(true); } else onClose(); }}>{busy ? interaction[locale].stopAfterCurrent : text.models.cancel}</button><button className="danger-button" disabled={busy} onClick={() => void confirm()}>{busy ? text.history.deleting : text.models.confirmDelete}</button></div>
+    <div className="history-dialog-actions"><button ref={cancel} className="secondary-button" disabled={stopping && busy} onClick={() => { if (busy) { stopRequested.current = true; setStopping(true); } else onClose(); }}>{busy ? interaction[locale].stopAfterCurrent : text.models.cancel}</button><button className="danger-button" disabled={busy || confirmDisabled} onClick={() => void confirm()}>{busy ? text.history.deleting : text.models.confirmDelete}</button></div>
   </dialog>;
 }

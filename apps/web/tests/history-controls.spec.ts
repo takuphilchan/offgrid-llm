@@ -5,7 +5,8 @@ async function fixture(page: Page) {
   let chats = ['Keep this', 'Delete 日本語', 'Delete second'].map(name => ({ name, model_id: 'model', messages: [{role:'user',content:'Saved text'}], created_at: date, updated_at: date }));
   let tasks = Array.from({ length: 25 }, (_, i) => ({ id: `run-${String(i).padStart(32,'0')}`, prompt: `Task ${String(i).padStart(2,'0')}`, status: i === 0 ? 'running' : i === 1 ? 'uncertain' : 'completed', deletable: i > 1, created_at: date }));
   const calls: string[] = [];
-  let failing = '';
+  let failing = '', failureCode = '';
+  const policies: string[] = [];
   await page.addInitScript(() => { localStorage.setItem('offgrid.locale','en'); localStorage.setItem('offgrid.onboarding.complete','true'); });
   await page.route('**/health', r => r.fulfill({ json: {status:'healthy'} }));
   await page.route('**/api/v2/system', r => r.fulfill({ json: {product:'offgrid',version:'test',api_version:2,workspace_id:'history-test',capabilities:['task-first-agents-v2']} }));
@@ -18,8 +19,8 @@ async function fixture(page: Page) {
     else if (path.startsWith('/v1/sessions/')) {
       const name = path.slice('/v1/sessions/'.length);
       if (r.request().method() === 'DELETE') {
-        calls.push(name);
-        if (name === failing) return r.fulfill({status:409,json:{error:'Conversation is busy'}});
+        calls.push(name); policies.push(new URL(r.request().url()).searchParams.get('work') ?? '');
+        if (name === failing) return r.fulfill({status:409,json:{error:failureCode ? {code:failureCode,message:'Active work requires a choice'} : 'Conversation is busy'}});
         chats = chats.filter(item => item.name !== name); json = {success:true};
       } else json = chats.find(item => item.name === name);
     } else if (path === '/api/v2/jobs') json = tasks;
@@ -33,7 +34,7 @@ async function fixture(page: Page) {
     else if (path === '/v1/integrations') json = {integrations:[]};
     await r.fulfill({json});
   });
-  return { calls, fail:(name: string) => {failing=name;}, chats:()=>chats, tasks:()=>tasks };
+  return { calls, policies, fail:(name: string, code = '') => {failing=name;failureCode=code;}, chats:()=>chats, tasks:()=>tasks };
 }
 
 test('chat deletion is visible, confirmed, searchable and survives reload', async ({page}) => {
@@ -48,9 +49,14 @@ test('chat deletion is visible, confirmed, searchable and survives reload', asyn
   const menu = row.locator('.history-item-menu');
   await menu.click();
   const button = page.getByRole('button',{name:'Delete conversation',exact:true});
+  const panel = page.locator('.utility-action-panel:popover-open');
+  expect((await panel.boundingBox())!.width).toBeLessThanOrEqual(240);
+  expect((await panel.boundingBox())!.height).toBeLessThan(70);
   expect(await button.evaluate(e => getComputedStyle(e).color)).not.toBe('rgba(0, 0, 0, 0)');
   await button.click();
   const dialog = page.locator('dialog.history-delete-dialog');
+  await expect(dialog.getByRole('combobox')).toHaveCount(0);
+  await expect(dialog.locator('.history-work-choice')).toHaveCount(0);
   await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
   await page.keyboard.press('Escape');
   expect(state.calls).toEqual([]);
@@ -65,6 +71,30 @@ test('chat deletion is visible, confirmed, searchable and survives reload', asyn
   await page.getByRole('searchbox',{name:'Search conversations'}).fill('Keep');
   await expect(page.locator('.history-row')).toHaveCount(1);
   expect(state.calls).toEqual(['Delete 日本語']);
+});
+
+for (const policy of ['stop','retain'] as const) test(`active conversation deletion reveals an explicit ${policy} decision only after a typed conflict`, async ({page}) => {
+  const state=await fixture(page);state.fail('Keep this','conversation_has_work');
+  await page.goto('/ui/#/chat');
+  const row=page.locator('.history-row',{hasText:'Keep this'});
+  const open=async()=>{await row.locator('.history-item-menu').click();await page.getByRole('button',{name:'Delete conversation',exact:true}).click();};
+  await open();const dialog=page.locator('dialog.history-delete-dialog');
+  await expect(dialog.getByRole('radio')).toHaveCount(0);
+  await dialog.getByRole('button',{name:'Confirm delete'}).click();
+  await expect(dialog.getByRole('radio')).toHaveCount(2);
+  await expect(dialog.getByRole('button',{name:'Confirm delete'})).toBeDisabled();
+  await dialog.getByRole('radio',{name:policy==='stop'?'Stop active work first':'Keep work in Agents'}).check();
+  expect(state.policies).toEqual(['']);
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(row.locator('.history-item-menu')).toBeFocused();
+  await open();await expect(dialog.getByRole('radio')).toHaveCount(0);
+  await dialog.getByRole('button',{name:'Confirm delete'}).click();
+  await expect(dialog.getByRole('radio',{checked:true})).toHaveCount(0);
+  await dialog.getByRole('radio',{name:policy==='stop'?'Stop active work first':'Keep work in Agents'}).check();
+  state.fail('');
+  await dialog.getByRole('button',{name:'Confirm delete'}).click();
+  await expect(row).toHaveCount(0);
+  expect(state.policies).toEqual(['','',policy]);
 });
 
 test('Chat and Agent history use compact accessible search without a visible list scrollbar', async ({page},info) => {
@@ -94,6 +124,7 @@ test('bulk chat deletion only removes confirmed matches and retries failures, no
   await expect(dialog).toContainText('Delete 2 listed conversations');
   await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();
   await expect(dialog.getByRole('alert')).toContainText('1 items could not be deleted');
+  await expect(dialog.getByRole('radio')).toHaveCount(0);
   expect(state.chats().map(item=>item.name)).toEqual(['Keep this','Delete second']);
   state.fail('');
   await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();

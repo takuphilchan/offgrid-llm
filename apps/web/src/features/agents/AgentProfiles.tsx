@@ -109,7 +109,7 @@ export function AgentProfiles({ models }: { models: Model[] }) {
   const providerCopy = modelProviderDetails(locale);
   const visibleProfiles = profiles.filter(item => `${item.settings.name} ${item.settings.description ?? ''}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   return <section className="agent-profiles" aria-label={copy.profiles}>
-    <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p><div className="action-group"><a className="text-button" href="#/chat">{messages.nav.chat}</a><a className="text-button" href="#/activity">{messages.nav.activity}</a></div></div><button type="button" className="primary-button" disabled={busy} onClick={() => choose(fresh())}>{copy.create}</button></header>
+    <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p></div><button type="button" className="primary-button" disabled={busy} onClick={() => choose(fresh())}>{copy.create}</button></header>
     {error && <div className="inline-error" role="alert"><p>{error}</p>{!conflict && <button type="button" className="secondary-button" onClick={() => void refresh()} disabled={loading || busy}>{messages.common.refresh}</button>}</div>}
     {notice && <p role="status">{notice}</p>}
     <div className="profile-library-layout">

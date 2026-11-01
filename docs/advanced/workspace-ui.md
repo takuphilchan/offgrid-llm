@@ -392,6 +392,15 @@ data; this is scope isolation, not a new secret store.
   never reported as ready.
 - Bulk deletion operates on the confirmed snapshot and shows processed counts.
   Stop finishes the current request, then leaves remaining entries untouched.
+- Conversation deletion starts with a compact confirmation. A running agent's
+  explicit stop/keep-work choice appears only if the service reports that it is
+  needed. Selecting that choice does not execute it; confirm again to proceed.
+  Closing the dialog forgets the choice. Ordinary generation conflicts remain
+  protected and do not offer unsupported job-retention options.
+- History action menus use compact rows. Generated agent conversation names use
+  the first available request as their display title; the original stored identity
+  remains unchanged. Profile workspace limits use a direct checkbox and cannot
+  grant permissions beyond the separately approved folder access.
 - Desktop startup and custom menu labels share the nine-locale presentation
   resource in `apps/web/public/desktop-presentation.json`. Validated locale/theme
   preferences are saved by trusted host IPC, independently of backend availability.

@@ -33,6 +33,15 @@ for (const locale of ['en', 'ar'] as const) for (const width of [390, 1440]) tes
   await page.getByRole('button', { name: order.selectModel, exact: true }).click();
   await expect(page.getByRole('button', { name: order.selectModel, exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.goto('/ui/#/activity');
+  const views=page.locator('.model-library-tabs');
+  const selectedFill=await views.locator('[aria-pressed=true]').evaluate(el=>getComputedStyle(el).backgroundColor);
+  const idleFill=await views.locator('[aria-pressed=false]').evaluate(el=>getComputedStyle(el).backgroundColor);
+  expect(selectedFill).not.toBe(idleFill);
+  const aligned=await page.locator('.activity-page').evaluate(el=>{
+    const list=el.querySelector('.task-list')!.getBoundingClientRect(),parent=el.getBoundingClientRect();
+    return getComputedStyle(el).direction==='rtl'?parent.right-list.right:list.left-parent.left;
+  });
+  expect(Math.abs(aligned)).toBeLessThanOrEqual(1);
   await expect(page.locator('.agent-schedules')).toHaveCount(0);
   await page.getByRole('button', { name: agentSchedulesText[locale].title, exact: true }).click();
   await expect(page.getByText(agentSchedulesText[locale].unsupported, { exact: true })).toBeVisible();

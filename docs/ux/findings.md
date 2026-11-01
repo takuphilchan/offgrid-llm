@@ -210,3 +210,29 @@ passed: history p95 34.6 ms, slowest measured warm route 148 ms.
 
 The later user-authorized gradient phase has its own palette-token proof and
 performance report. Screenshots use synthetic content and remain build artifacts.
+
+## Installed-build correction ? 2026-11-01
+
+The owner rejected the installed v0.4.23 presentation as too incremental. The
+release's passing fixtures did not establish satisfactory whole-product design.
+The subsequent review found concrete defects:
+
+- A single history action inherited the same 340px padded popup as configuration.
+- Ordinary deletion exposed a three-option active-work policy before any conflict.
+- Agent profile headers repeated Chat/Activity navigation already in the sidebar.
+- A two-option workspace dropdown used technical host-ceiling language.
+- Activity's selected view had no visible selected fill, and the actual work list
+  and diagnostics retained a second centered content edge.
+- Quit could skip later cleanup on an earlier rejection and remain permanently
+  marked as quitting; forced service shutdown discarded ownership without exit proof.
+
+The corrective pass uses compact menu rows, conditional typed-conflict deletion
+choices, direct limits, consistent Activity alignment and retryable owned cleanup.
+A seven-process installed snapshot consisted of one Electron parent, three Electron
+helpers, one service and separate chat/embedding workers; no orphan was established
+by that snapshot. Isolated ownership tests are separate evidence.
+
+These corrections do not establish competitor parity or complete the broader
+composition review. Native-speaker, screen-reader and participant checks remain
+unavailable. Keep focus indicators and consequential confirmations; do not remove
+them merely to make screenshots look quieter.

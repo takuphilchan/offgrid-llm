@@ -12,7 +12,7 @@ export const attachWorkspaceText: Record<LocaleCode,string> = {
   en:'Use this workspace',fr:'Utiliser cet espace',de:'Diesen Arbeitsbereich verwenden',es:'Usar este espacio',ar:'استخدام مساحة العمل هذه',sw:'Tumia eneo hili la kazi',sn:'Shandisa nzvimbo iyi',nd:'Sebenzisa indawo le yokusebenza',zu:'Sebenzisa le ndawo yokusebenza',
 };
 export const executionPolicyText: Record<LocaleCode,{inherit:string;limit:string;hint:string;exit:string;incomplete:string}>={
-  en:{inherit:'Inherit the selected host ceiling',limit:'Limit this agent',hint:'A limit cannot create access. Local host approval is still required.',exit:'Exit code',incomplete:'Output is incomplete'},
+  en:{inherit:'Use the approved folder permissions',limit:'Limit this agent',hint:'A limit cannot create access. Local host approval is still required.',exit:'Exit code',incomplete:'Output is incomplete'},
   fr:{inherit:'Hériter des limites de l’hôte',limit:'Limiter cet agent',hint:'Une limite ne crée aucun accès. L’accord local reste nécessaire.',exit:'Code de sortie',incomplete:'Sortie incomplète'},
   de:{inherit:'Grenzen des gewählten Hosts übernehmen',limit:'Diesen Agenten begrenzen',hint:'Ein Limit erteilt keinen Zugriff. Lokale Genehmigung bleibt erforderlich.',exit:'Exitcode',incomplete:'Ausgabe unvollständig'},
   es:{inherit:'Heredar límites del host elegido',limit:'Limitar este agente',hint:'Un límite no concede acceso. Se requiere aprobación local.',exit:'Código de salida',incomplete:'Salida incompleta'},

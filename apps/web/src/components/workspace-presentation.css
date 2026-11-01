@@ -127,4 +127,5 @@
    stretches every select to its grid track regardless of selector specificity. */
 @layer controls {
   .settings-panel > select { width: min(100%, 20rem); justify-self: start; }
+  .activity-page > div > .task-workspace, .activity-page > .activity-diagnostics { max-width: none; margin-inline: 0; }
 }

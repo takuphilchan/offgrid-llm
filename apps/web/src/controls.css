@@ -52,6 +52,16 @@
   .history-item-menu { opacity: .65; }
   :is(.history-row, .task-history-row):hover .history-item-menu, .history-item-menu:focus-visible { opacity: 1; }
   .history-item-actions p { margin: 8px 0 0; }
+  .utility-action-panel { padding: 6px; scrollbar-gutter: auto; border-radius: 10px; }
+  .utility-action-panel .utility-popover-content { gap: 2px; }
+  .utility-action-panel button { width: 100%; justify-content: flex-start; text-align: start; background: transparent; border-color: transparent; }
+  .utility-action-panel button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
+  .utility-action-panel p { padding: 6px; font-size: 13px; line-height: 1.5; }
+  .history-work-choice { border: 0; border-block-start: 1px solid var(--line); padding: 16px 0 0; margin: 16px 0; min-width: 0; }
+  .history-work-choice legend { font-weight: var(--weight-medium); padding: 0 8px 0 0; }
+  .history-work-choice label { display: flex; align-items: start; gap: 10px; padding-block: 8px; font-size: 14px; cursor: pointer; }
+  .history-work-choice input { flex: none; margin-block-start: 4px; accent-color: var(--text); }
+  .history-work-choice p { color: var(--muted); margin-block-end: 0; }
   .message-heading, .message-actions { flex-wrap: wrap; }
   .message-actions { max-width: 100%; }
   .known-work-list :is(button, a) { justify-content: flex-start; text-align: start; }
@@ -68,7 +78,7 @@
   /* Selection belongs in the final control layer too: generic secondary-button
      styling must not hide the current library view or category. */
   :is(.model-library-tabs, .model-category-picker, .model-discovery-sources) > button { background: transparent; border-color: transparent; color: var(--muted); }
-  .model-library-tabs [aria-selected='true'], .model-discovery-sources > button[aria-pressed='true'] {
+  .model-library-tabs [aria-selected='true'], .model-library-tabs > button[aria-pressed='true'], .model-discovery-sources > button[aria-pressed='true'] {
     color: var(--text); background: var(--surface-2); border-color: transparent;
   }
   .model-category-picker button[aria-pressed='true'] {
@@ -238,7 +248,7 @@
   .workspace-options > button[aria-expanded='true'] { background: var(--surface-2); color: var(--text); border-color: var(--line); }
   @media (forced-colors: active) {
     :is(.primary-button, .secondary-button, .new-chat-button) { border-color: ButtonText; }
-    :is(.model-library-tabs [aria-selected='true'], .model-category-picker [aria-pressed='true'], .model-discovery-sources [aria-pressed='true']) { border-color: Highlight; }
+    :is(.model-library-tabs [aria-selected='true'], .model-library-tabs [aria-pressed='true'], .model-category-picker [aria-pressed='true'], .model-discovery-sources [aria-pressed='true']) { border-color: Highlight; }
   }
   @media (max-width: 420px) {
     .navigation-trigger { width: 44px; min-width: 44px; min-height: 44px; padding: 8px; justify-content: center; }

@@ -1,0 +1,51 @@
+import { test, expect } from '@playwright/test';
+import { craftFixture } from './helpers/craft-fixture';
+import { executionPolicyText } from '../src/i18n/execution-workspace';
+
+for (const locale of ['en','ar'] as const) for (const theme of ['light','dark'] as const) test(`corrected management surfaces ${locale} ${theme}`, async ({page},info) => {
+  const width=locale==='ar'?390:1440;
+  await page.setViewportSize({width,height:900});
+  const state=await craftFixture(page,locale,theme);
+  await page.goto('/ui/#/chat');
+  if(width<1024)await page.locator('.navigation-trigger').click();
+  const trigger=page.locator('.history-item-menu').first();
+  await trigger.click();
+  const menu=page.locator('.utility-action-panel:popover-open');
+  await expect(menu).toHaveCSS('opacity','1');
+  const bounds=(await menu.boundingBox())!;
+  expect(bounds.width).toBeLessThanOrEqual(240);expect(bounds.height).toBeLessThan(80);
+  expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
+  await page.screenshot({path:info.outputPath('history-menu.png')});
+  await menu.getByRole('button').click();
+  const dialog=page.locator('.history-delete-dialog');
+  await expect(dialog).toBeVisible();await expect(dialog.getByRole('combobox')).toHaveCount(0);
+  await expect(dialog.getByRole('radio')).toHaveCount(0);
+  await page.screenshot({path:info.outputPath('delete-confirmation.png')});
+  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
+  if(width<1024)await page.keyboard.press('Escape');
+  await page.goto('/ui/#/agents/profiles');
+  await expect(page.locator('.profile-library-header a')).toHaveCount(0);
+  await page.locator('.profile-library-header > button').click();
+  const advanced=page.locator('.profile-advanced');await advanced.locator(':scope > summary').click();
+  const limit=advanced.getByRole('checkbox',{name:executionPolicyText[locale].limit,exact:true});
+  await limit.scrollIntoViewIfNeeded();await expect(limit).not.toBeChecked();
+  await expect(advanced.getByRole('combobox')).toHaveCount(0);
+  await expect(advanced.locator('.profile-execution-policy')).toHaveCSS('border-top-width','0px');
+  await limit.check();
+  await expect(advanced.locator('.profile-execution-policy input[type=checkbox]')).toHaveCount(4);
+  await page.screenshot({path:info.outputPath('profile-limits.png')});
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(state.writes).toEqual([]);
+});
+
+test('generated conversation IDs display their request without changing deletion identity',async({page})=>{
+  const state=await craftFixture(page,'en','light');
+  const name='agent-4ae2af57-b180-4b21-9f30-4eca949ed44d';
+  await page.route('**/v1/sessions',r=>r.fulfill({json:{sessions:[{name,model_id:'model',updated_at:new Date().toISOString(),messages:[{role:'user',content:'Prepare the café demo checklist'}]}]}}));
+  await page.goto('/ui/#/chat');
+  const row=page.locator('.history-row');await expect(row).toContainText('Prepare the café demo checklist');await expect(row).not.toContainText(name);
+  await row.locator('.history-item-menu').click();await page.getByRole('button',{name:'Delete conversation',exact:true}).click();
+  await expect(page.getByRole('dialog')).toContainText('Prepare the café demo checklist');
+  await page.getByRole('dialog').getByRole('button',{name:'Confirm delete'}).click();
+  expect(state.writes).toEqual([`/v1/sessions/${name}`]);
+});

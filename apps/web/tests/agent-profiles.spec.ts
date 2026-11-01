@@ -56,7 +56,7 @@ async function fixture(page: Page, initial = [profile('Researcher')], locale: Lo
 test('profile execution ceilings are explicit configuration and do not grant a host',async({page})=>{
   const f=await fixture(page);await page.goto('/ui/#/agents/profiles');await page.getByRole('button',{name:/Researcher/}).click();
   const advanced=page.locator('.profile-advanced');await advanced.locator(':scope > summary').click();
-  const selector=advanced.getByRole('combobox',{name:'Workspace',exact:true});await expect(selector).toHaveValue('inherit');await selector.selectOption('limit');
+  const selector=advanced.getByRole('checkbox',{name:executionPolicyText.en.limit,exact:true});await expect(selector).not.toBeChecked();await selector.check();
   await expect(advanced.getByRole('checkbox',{name:'Read files',exact:true})).toBeChecked();await expect(advanced.getByRole('checkbox',{name:'Edit files',exact:true})).not.toBeChecked();
   await expect(advanced.getByText(executionPolicyText.en.hint,{exact:true})).toBeVisible();await page.getByRole('button',{name:'Save agent',exact:true}).click();
   await expect.poll(()=>f.mutations.length).toBe(1);expect(f.mutations[0].body.settings.execution).toEqual({read:true,write:false,processes:false});expect(f.mutations[0].body.execution).toBeUndefined();
