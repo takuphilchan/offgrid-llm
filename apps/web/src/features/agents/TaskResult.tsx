@@ -5,6 +5,7 @@ import { taskPresentation } from '../../i18n/task-presentation';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { ScopedNotice } from '../../components/WorkspacePresentation';
 import { taskAccessText } from '../../i18n/task-access';
+import { ArtifactPreview, canPreviewArtifact } from './ArtifactPreview';
 
 type Artifact = NonNullable<AgentRun['artifacts']>[number];
 function ArtifactRow({ id, artifact }: { id: string; artifact: Artifact }) {
@@ -30,9 +31,10 @@ function ArtifactRow({ id, artifact }: { id: string; artifact: Artifact }) {
     } finally { if (download.current === controller) download.current = null; if (!controller.signal.aborted) setBusy(false); }
   };
   return <li className="task-artifact">
-    <div><strong>{artifact.name}</strong><p>{artifact.format} · {artifact.bytes.toLocaleString(locale)} B · {checked ? copy.integrity : copy.unverified}</p><p>{copy.noPreview}</p></div>
+    <div><strong>{artifact.name}</strong><p>{artifact.format} · {artifact.bytes.toLocaleString(locale)} B · {checked ? copy.integrity : copy.unverified}</p>{!canPreviewArtifact(artifact) && <p>{copy.noPreview}</p>}</div>
     <button className="secondary-button" disabled={busy} onClick={() => void save()} aria-label={`${copy.download}: ${artifact.name}`}>{busy ? messages.common.loading : copy.download}</button>
     {error && <ScopedNotice kind="error">{error}</ScopedNotice>}
+    {canPreviewArtifact(artifact) && <ArtifactPreview runID={id} artifact={artifact} />}
   </li>;
 }
 
@@ -44,7 +46,7 @@ export function TaskResult({ run, compact = false, hideOutput = false, explainOu
     {run.output && !hideOutput && <>{!compact && <h3>{run.status === 'completed' ? copy.answer : messages.agents.result}</h3>}<div className="message-body markdown-body"><MarkdownMessage content={run.output} /></div>{!compact && <p className="workspace-secondary">{copy.generated}</p>}</>}
     {!!run.artifacts?.length && <section className="task-artifacts" aria-label={copy.files}>
       <h3>{copy.files}</h3><p className="workspace-secondary">{copy.integrityHint}</p>
-      <ul>{run.artifacts.map((artifact, index) => <ArtifactRow key={`${run.run_id}:${artifact.sha256}:${index}`} id={run.run_id} artifact={artifact} />)}</ul>
+      <ul>{run.artifacts.map((artifact, index) => <ArtifactRow key={`${run.run_id}:${artifact.sha256}:${artifact.bytes}:${artifact.format}:${index}`} id={run.run_id} artifact={artifact} />)}</ul>
     </section>}
   </section>;
 }

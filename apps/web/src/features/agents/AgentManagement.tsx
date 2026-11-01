@@ -21,6 +21,7 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
   const [toolBusy, setToolBusy] = useState('');
   const [error, setError] = useState('');
   const [runtimeError, setRuntimeError] = useState('');
+  const [integrationError, setIntegrationError] = useState('');
   const [connectionName, setConnectionName] = useWorkspaceState('agent.connectorName', '');
   const [connectionURL, setConnectionURL] = useWorkspaceState('agent.connectorURL', '');
   const [connectionBusy, setConnectionBusy] = useState<'test' | 'connect' | 'remove' | ''>('');
@@ -36,21 +37,26 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
 
   const refreshRuntime = async () => {
     const request = ++runtimeRequest.current;
-    setLoadingRuntime(true); setRuntimeError('');
-    const [toolResult, serverResult, integrationResult] = await Promise.allSettled([api.agentTools(), api.mcpServers(), api.integrations(model)]);
+    setLoadingRuntime(true); setRuntimeError(''); setIntegrationError('');
+    const [toolResult, serverResult, integrationResult] = await Promise.allSettled([
+      view === 'tools' ? api.agentTools() : Promise.resolve(null),
+      view === 'connections' ? api.mcpServers() : Promise.resolve(null),
+      view === 'connections' ? api.integrations(model) : Promise.resolve(null),
+    ]);
     if (request !== runtimeRequest.current) return;
-    if (toolResult.status === 'fulfilled') { setTools(toolResult.value.tools); setEnabledTools(toolResult.value.enabled_count); }
-    if (serverResult.status === 'fulfilled') setServers(serverResult.value);
-    if (integrationResult.status === 'fulfilled') setIntegrations(integrationResult.value.integrations);
-    const failed = [toolResult, serverResult, integrationResult].find(item => item.status === 'rejected');
+    if (toolResult.status === 'fulfilled' && toolResult.value) { setTools(toolResult.value.tools); setEnabledTools(toolResult.value.enabled_count); }
+    if (serverResult.status === 'fulfilled' && serverResult.value) setServers(serverResult.value);
+    if (integrationResult.status === 'fulfilled' && integrationResult.value) setIntegrations(integrationResult.value.integrations);
+    const failed = [toolResult, serverResult].find(item => item.status === 'rejected');
     if (failed?.status === 'rejected') setRuntimeError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
+    if (integrationResult.status === 'rejected') setIntegrationError(integrationResult.reason instanceof Error ? integrationResult.reason.message : text.common.error);
     setLoadingRuntime(false);
   };
   useEffect(() => {
     integrationRequest.current++; setIntegrationBusy(''); setIntegrationSetup(null);
     void refreshRuntime();
     return () => { integrationRequest.current++; runtimeRequest.current++; };
-  }, [model]);
+  }, [model, view]);
   useWorkspaceRefresh(refreshRuntime);
 
   const toggleTool = async (tool: AgentTool) => {
@@ -114,11 +120,11 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
 
   return <div className="agents-page agent-management-page">
     <AgentNavigation view={view} />
-    {runtimeError && <p className="inline-error" role="alert">{runtimeError}</p>}
+    {runtimeError && <div className="inline-error" role="alert">{runtimeError} <button type="button" className="secondary-button" disabled={loadingRuntime} onClick={() => void refreshRuntime()}>{text.common.retry}</button></div>}
     {error && <div className="inline-error" role="alert">{error}</div>}
     {view === 'tools' && <div id="agent-tools-panel" className="agent-view" role="region" aria-labelledby="agent-tools-tab"><section className="runtime-panel management-list-panel">
       <SectionHeading title={text.agentRuntime.tools} description={`${enabledTools}/${tools.length} ${text.agentRuntime.enabled}`} />
-      {tools.length === 0 ? loadingRuntime ? <p role="status">{text.common.loading}</p> : runtimeError ? null : <EmptyState title={text.agentRuntime.noTools} /> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><h3>{tool.name}</h3><p>{tool.description}</p><details><summary>{presentation[locale].details}</summary><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></details></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}
+      {tools.length === 0 ? loadingRuntime ? <p role="status">{text.common.loading}</p> : runtimeError ? null : <EmptyState title={text.agentRuntime.noTools} action={<a className="secondary-button" href="#/agents/connections">{text.agentRuntime.connectors}</a>} /> : <div className="tool-list">{tools.map(tool => <article key={tool.name}><div><h3>{tool.name}</h3><p>{tool.description}</p><details><summary>{presentation[locale].details}</summary><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></details></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}
     </section></div>}
 
     {view === 'connections' && <div id="agent-connections-panel" className="agent-view" role="region" aria-labelledby="agent-connections-tab">
@@ -139,8 +145,8 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
         </div>
         <form onSubmit={connect} aria-label={text.agentRuntime.connect}>
           <h3>{text.agentRuntime.connect}</h3>
-          <label><span>{text.agentRuntime.connectorName}</span><input value={connectionName} onChange={event => setConnectionName(event.target.value)} /></label>
-          <label><span>{text.agentRuntime.connectorURL}</span><input type="url" placeholder="https://mcp.example.com/mcp" value={connectionURL} onChange={event => setConnectionURL(event.target.value)} /></label>
+          <label><span>{text.agentRuntime.connectorName}</span><input disabled={connectionBusy !== ''} value={connectionName} onChange={event => { setConnectionName(event.target.value); setConnectionMessage(''); }} /></label>
+          <label><span>{text.agentRuntime.connectorURL}</span><input type="url" disabled={connectionBusy !== ''} placeholder="https://mcp.example.com/mcp" value={connectionURL} onChange={event => { setConnectionURL(event.target.value); setConnectionMessage(''); }} /></label>
           <ActionGroup>
             <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button>
             <button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button>
@@ -148,7 +154,7 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
         </form>
       </section>
       {removeServer && <ConfirmDialog title={mcpText.title.replace('{name}', removeServer.name)} body={mcpText.body} confirmLabel={mcpText.remove} confirm={removeConnection} close={() => setRemoveServer(null)} />}
-      <ExternalProvidersPanel integrations={integrations} loading={loadingRuntime} busy={integrationBusy} setup={integrationSetup} copied={copied} onSetup={showIntegrationSetup} onCopy={copyIntegrationSetup} />
+      <ExternalProvidersPanel integrations={integrations} loading={loadingRuntime} error={integrationError} onRetry={() => void refreshRuntime()} busy={integrationBusy} setup={integrationSetup} copied={copied} onSetup={showIntegrationSetup} onCopy={copyIntegrationSetup} />
     </div>}
   </div>;
 }
@@ -156,6 +162,8 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
 type ExternalProvidersPanelProps = {
   integrations: ExternalIntegration[];
   loading: boolean;
+  error: string;
+  onRetry: () => void;
   busy: string;
   setup: { id: string; name: string; setup: IntegrationSetup } | null;
   copied: boolean;
@@ -163,13 +171,14 @@ type ExternalProvidersPanelProps = {
   onCopy: () => void;
 };
 
-function ExternalProvidersPanel({ integrations, loading, busy, setup, copied, onSetup, onCopy }: ExternalProvidersPanelProps) {
+function ExternalProvidersPanel({ integrations, loading, error, onRetry, busy, setup, copied, onSetup, onCopy }: ExternalProvidersPanelProps) {
   const { messages: text } = useI18n();
   const { locale } = useI18n();
   const labels = externalIntegrations[locale];
   return <section className="runtime-panel external-providers">
     <SectionHeading title={text.agentRuntime.providerPluginsTitle} description={text.agentRuntime.externalProvidersBody} />
-    {!loading && integrations.length === 0 && <EmptyState title={text.agentRuntime.noExternalProviders} />}
+    {error && <div className="inline-error" role="alert">{error} <button type="button" className="secondary-button" disabled={loading} onClick={onRetry}>{text.common.retry}</button></div>}
+    {!loading && !error && integrations.length === 0 && <EmptyState title={text.agentRuntime.noExternalProviders} />}
     <div className="provider-grid">{integrations.map(item => <article key={item.id} className="provider-card">
       <div><span className={item.ready ? 'status-pill' : 'status-pill warning'}>{item.ready ? labels.ready : labels.blocked}</span><h3>{item.name}</h3><p>{item.description}</p></div>
       <dl><div><dt>{text.agentRuntime.provider}</dt><dd>{item.provider_id}</dd></div><div><dt>{text.agentRuntime.transport}</dt><dd>{item.transport}</dd></div><div><dt>{text.agentRuntime.model}</dt><dd>{item.model_id ?? '—'}</dd></div><div><dt>{text.agentRuntime.context}</dt><dd>{item.context_window.toLocaleString()} / {item.minimum_context.toLocaleString()}</dd></div></dl>

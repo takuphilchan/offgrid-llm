@@ -31,6 +31,104 @@ async function fixture(page: Page) {
   return state;
 }
 
+for (const recovery of [
+  { status: 'failed', resumable: false, hint: 'This task did not finish.', resume: false },
+  { status: 'interrupted', resumable: true, hint: 'Review the last activity before choosing Resume.', resume: true },
+  { status: 'interrupted', resumable: false, hint: 'This saved task has no resumable checkpoint.', resume: false },
+  { status: 'cancelled', resumable: false, hint: 'This task was cancelled.', resume: false },
+]) test(`saved ${recovery.status} work explains the next step (resumable: ${recovery.resumable}) without a misleading Refresh`, async ({ page }) => {
+  const state = await fixture(page);
+  Object.assign(state.run, { status: recovery.status, resumable: recovery.resumable, error: 'Original service reason' });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await expect(page.locator('.work-recovery-guidance')).toContainText(recovery.hint);
+  await expect(page.locator('.work-recovery-guidance')).toContainText('Original service reason');
+  await expect(page.locator('.work-recovery-guidance')).toContainText('Saved answers and files remain available');
+  await expect(page.locator('.work-inspector').getByRole('button', { name: 'Refresh', exact: true })).toHaveCount(0);
+  await expect(page.locator('.work-inspector').getByRole('button', { name: 'Resume', exact: true })).toHaveCount(recovery.resume ? 1 : 0);
+  await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
+  expect(state.writes).toEqual([]);
+});
+
+test('expired desktop access explains reconnect without offering a conflicting Resume', async ({ page }) => {
+  const state = await fixture(page);
+  Object.assign(state.run, { status: 'interrupted', resumable: true, computer_session_expired: true, last_access: { id: 'input', mode: 'desktop' } });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await expect(page.locator('.work-recovery-guidance')).toContainText('Desktop access ended.');
+  await expect(page.locator('.work-inspector').getByRole('button', { name: 'Reconnect access' })).toBeVisible();
+  await expect(page.locator('.work-inspector').getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+});
+
+test('specialists expose their own status, dependencies and draft without claiming the parent is complete', async ({ page }) => {
+  const state = await fixture(page), childA = 'run-' + 'b'.repeat(32), childB = 'run-' + 'c'.repeat(32);
+  Object.assign(state.run, { status: 'interrupted', children: [
+    { id: childA, spec: { key: 'research', goal: 'Find supporting sources', depends_on: [], tools: [] } },
+    { id: childB, spec: { key: 'write', goal: 'Draft the briefing', depends_on: ['research'], tools: [] } },
+  ] });
+  await page.route(`**/api/v2/jobs/${childA}`, route => route.fulfill({ json: { ...state.run, run_id: childA, parent_id: id, status: 'completed', output: 'Research findings', children: [], artifacts: [] } }));
+  await page.route(`**/api/v2/jobs/${childB}`, route => route.fulfill({ json: { ...state.run, run_id: childB, parent_id: id, status: 'failed', error: 'The draft needs more evidence.', output: 'Partial specialist draft', children: [], artifacts: [] } }));
+  await page.goto(`/ui/#/agents/task/${id}`);
+  const rows = page.locator('.specialist-row');
+  await expect(rows.nth(0)).toContainText('Completed');
+  await expect(rows.nth(1)).toContainText('Failed');
+  await expect(page.getByText('Partial specialist draft', { exact: true })).not.toBeVisible();
+  await rows.nth(1).locator('summary').click();
+  await expect(rows.nth(1)).toContainText('Depends on: Find supporting sources');
+  await expect(page.getByText('Partial specialist draft', { exact: true })).toBeVisible();
+  await expect(page.locator('.work-status')).toHaveText('Interrupted');
+  await expect(rows.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+});
+
+test('conflicting and blocked branches remain attributable without completing or restarting the parent', async ({ page }) => {
+  const state = await fixture(page);
+  const branches = [
+    { key: 'source-a', goal: 'Inspect first source', status: 'completed', output: 'Source A reports twelve participants.', depends_on: [] },
+    { key: 'source-b', goal: 'Inspect second source', status: 'completed', output: 'Source B reports fifteen participants.', depends_on: [] },
+    { key: 'verify', goal: 'Verify disputed count', status: 'failed', output: '', error: 'The primary record is unavailable.', depends_on: ['source-a', 'source-b'] },
+    { key: 'draft', goal: 'Draft verified result', status: 'cancelled', output: '', error: 'Cancelled after the verification prerequisite failed.', depends_on: ['verify'] },
+  ];
+  Object.assign(state.run, { status: 'failed', output: 'The counts conflict. No verified conclusion is available.', artifacts: [],
+    children: branches.map((branch, i) => ({ id: 'run-' + String(i + 1).repeat(32), spec: { key: branch.key, goal: branch.goal, depends_on: branch.depends_on, tools: [] } })) });
+  for (const [i, branch] of branches.entries()) {
+    const childId = state.run.children[i].id;
+    await page.route(`**/api/v2/jobs/${childId}`, route => route.fulfill({ json: { ...state.run, ...branch, run_id: childId, parent_id: id, children: [] } }));
+  }
+  await page.goto(`/ui/#/agents/task/${id}`);
+  const rows = page.locator('.specialist-row');
+  for (let i = 0; i < branches.length; i++) await rows.nth(i).locator('summary').click();
+  await expect(rows.nth(0)).toContainText('Source A reports twelve participants.');
+  await expect(rows.nth(1)).toContainText('Source B reports fifteen participants.');
+  await expect(rows.nth(2)).toContainText('The primary record is unavailable.');
+  await expect(rows.nth(3)).toContainText('Depends on: Verify disputed count');
+  await expect(rows.nth(3)).toContainText('Cancelled after the verification prerequisite failed.');
+  await expect(page.locator('.work-status')).toHaveText('Failed');
+  await expect(page.getByText('The counts conflict. No verified conclusion is available.', { exact: true })).toBeVisible();
+  await expect(rows.getByRole('button', { name: /Resume|Retry|Approve|Stop/ })).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+});
+
+test('specialist reads are bounded and unrelated or revoked child output is not displayed', async ({ page }) => {
+  const state = await fixture(page), reads: string[] = [];
+  state.run.children = Array.from({ length: 6 }, (_, i) => ({ id: 'run-' + String(i + 1).repeat(32), spec: { key: `child-${i}`, goal: `Specialist ${i + 1}`, depends_on: [], tools: [] } }));
+  await page.route(/\/api\/v2\/jobs\/run-[1-6]{32}$/, route => {
+    const child = new URL(route.request().url()).pathname.split('/').pop()!; reads.push(child);
+    if (child.endsWith('2')) return route.fulfill({ status: 403, json: { error: 'Access revoked' } });
+    return route.fulfill({ json: { ...state.run, run_id: child, parent_id: 'different-parent', output: 'Unrelated private draft', children: [] } });
+  });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await expect.poll(() => reads.length).toBe(4);
+  await expect(page.locator('.specialist-row')).toHaveCount(6);
+  await page.locator('.specialist-row').nth(0).locator('summary').click();
+  await expect(page.locator('body')).not.toContainText('Unrelated private draft');
+  await page.locator('.specialist-row').nth(1).locator('summary').click();
+  await expect(page.getByText('Access revoked', { exact: true })).toBeVisible();
+  await page.locator('.specialist-row').last().locator('summary').click();
+  await expect(page.locator('.specialist-row').last()).toContainText('Open this subtask to inspect its current state.');
+  expect(reads.length).toBe(4);
+  expect(state.writes).toEqual([]);
+});
+
 test('saved answer and files precede collapsed logs without turning generation into verification', async ({ page }) => {
   const state = await fixture(page); await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
@@ -64,6 +162,78 @@ test('incorrect artifact bytes cannot be downloaded as verified output', async (
   expect(downloads).toBe(0);
 });
 
+test('artifact preview checks bytes in context, closes and rechecks revoked access', async ({ page }) => {
+  const state = await fixture(page);
+  let reads = 0, downloads = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/artifact')) reads++; });
+  page.on('download', () => downloads++);
+  await page.goto(`/ui/#/agents/task/${id}`);
+  expect(reads).toBe(0);
+  await page.getByRole('button', { name: 'Preview: summary.csv', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'Preview: summary.csv' });
+  await expect(preview.locator('pre')).toHaveText(content);
+  await expect(page.locator('.task-artifacts').getByText('The recorded check covers stored bytes and format, not factual correctness.', { exact: true })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Close preview: summary.csv' }).click();
+  await expect(preview).toHaveCount(0);
+  state.artifactStatus = 403;
+  await page.getByRole('button', { name: 'Preview: summary.csv', exact: true }).click();
+  await expect(preview.getByRole('alert')).toContainText('Preview unavailable');
+  await expect(preview.locator('pre')).toHaveCount(0);
+  expect(reads).toBe(2); expect(downloads).toBe(0); expect(state.writes).toEqual([]);
+});
+
+test('preview rejects mismatched content and metadata above its limit', async ({ page }) => {
+  const state = await fixture(page); state.artifactBody = 'untrusted replacement';
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.getByRole('button', { name: 'Preview: summary.csv', exact: true }).click();
+  await expect(page.locator('.artifact-preview').getByRole('alert')).toBeVisible();
+  await expect(page.locator('.artifact-preview pre')).toHaveCount(0);
+  state.run.artifacts[0] = { ...artifact, bytes: 65537 };
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Preview: summary.csv', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download: summary.csv' })).toBeVisible();
+});
+
+test('closing a pending preview discards its late content and reopening requires another read', async ({ page }) => {
+  await fixture(page);
+  let release!: () => void, reads = 0;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/artifact?*', async route => { reads++; if (reads === 1) await pending; await route.fulfill({ contentType: 'application/octet-stream', body: content }); });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.getByRole('button', { name: 'Preview: summary.csv', exact: true }).click();
+  await expect.poll(() => reads).toBe(1);
+  await page.getByRole('button', { name: 'Close preview: summary.csv', exact: true }).click();
+  release();
+  await expect(page.locator('.artifact-preview-content')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Preview: summary.csv', exact: true }).click();
+  await expect(page.locator('.artifact-preview-content pre')).toContainText(content.trim());
+  expect(reads).toBe(2);
+});
+
+test('Markdown preview renders Unicode and blocks active content and remote images', async ({ page }) => {
+  const state = await fixture(page);
+  const body = '# Café 日本語\n\n<script>window.artifactExecuted=true</script>\n\n![private](https://artifact.invalid/image)\n\n[unsafe](javascript:alert(1))';
+  state.run.artifacts = [{ ...artifact, name: 'report.md', format: 'markdown', bytes: Buffer.byteLength(body), sha256: createHash('sha256').update(body).digest('hex') }];
+  state.artifactBody = body;
+  const remote: string[] = []; page.on('request', request => { if (request.url().includes('artifact.invalid')) remote.push(request.url()); });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.getByRole('button', { name: 'Preview: report.md' }).click();
+  await expect(page.locator('.artifact-preview').getByRole('heading', { name: 'Café 日本語' })).toBeVisible();
+  await expect(page.locator('.artifact-preview script, .artifact-preview img, .artifact-preview iframe')).toHaveCount(0);
+  await expect(page.locator('.artifact-preview a[href^="javascript:"]')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).artifactExecuted)).toBeUndefined(); expect(remote).toEqual([]);
+});
+
+for (const bytes of [Buffer.from([0xc3, 0x28]), Buffer.from([0x61, 0, 0x62])]) test(`preview rejects invalid text ${bytes.toString('hex')}`, async ({ page }) => {
+  const state = await fixture(page);
+  state.run.artifacts = [{ ...artifact, name: 'invalid.txt', format: 'txt', bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }];
+  await page.route('**/artifact?*', r => r.fulfill({ contentType: 'application/octet-stream', body: bytes }));
+  await page.goto(`/ui/#/agents/task/${id}`);
+  await page.getByRole('button', { name: 'Preview: invalid.txt' }).click();
+  await expect(page.locator('.artifact-preview').getByRole('alert')).toBeVisible();
+  await expect(page.locator('.artifact-preview pre')).toHaveCount(0);
+});
+
 test('unknown formats have a download fallback, never an executable preview', async ({ page }) => {
   const state = await fixture(page);
   const body = '<script>window.executedArtifact=true</script>';
@@ -85,8 +255,10 @@ test('results and long file names fit a narrow screen in both themes', async ({ 
   for (const theme of ['light', 'dark']) {
     await page.goto(`/ui/#/agents/task/${id}`); await page.evaluate(theme => localStorage.setItem('offgrid.theme', theme), theme); await page.reload();
     await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
+    await page.getByRole('button', { name: /^Preview:/ }).click();
+    await expect(page.locator('.artifact-preview-content pre')).toContainText(content.trim());
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
-    await page.screenshot({ path: info.outputPath(`result-${theme}.png`), fullPage: true });
+    await page.screenshot({ path: info.outputPath(`result-${theme}.png`), fullPage: true, animations: 'disabled' });
   }
 });
 

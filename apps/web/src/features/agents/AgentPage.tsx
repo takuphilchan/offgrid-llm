@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Model } from '../../api/client';
 import { useI18n } from '../../i18n';
-import { interaction } from '../../i18n/interaction';
+import { PermissionNotice } from '../../components/PermissionNotice';
 import { agentAvailability } from '../../i18n/agent-availability';
 import { useWorkspace } from '../../lib/workspace-context';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
@@ -54,6 +54,6 @@ export function AgentPage({ models, model }: { models: Model[]; model: string })
   if (view === 'profiles' || view === 'home' || view === 'workspace') return <><AgentNavigation view="profiles" />{identity?.profiles
     ? <AgentProfiles key={identity.workspace} models={models} />
     : identityError || identity ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refresh()}>{messages.common.retry}</button>}>{identityError ? copy.connection : agentProfilesText[locale].unsupported}</ScopedNotice> : <p role="status">{messages.common.loading}</p>}</>;
-  if (!admin) return <><AgentNavigation /><p className="permission-notice" role="status">{interaction[locale].adminOnly}</p></>;
+  if (!admin) return <><AgentNavigation /><PermissionNotice /></>;
   return <AgentManagement model={model} view={view} />;
 }

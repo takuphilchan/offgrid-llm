@@ -221,8 +221,10 @@ test('Chat exposes specialist handoffs without expanding technical payloads', as
   ]});
   await page.goto('/ui/#/chat');
   const activity=page.getByRole('region',{name:'Agent activity'});
-  await expect(activity.getByRole('link',{name:'Research sources'})).toBeVisible();
-  await expect(activity.getByRole('link',{name:'Draft the document'})).toBeVisible();
+  await expect(activity.locator('.specialist-row summary').filter({hasText:'Research sources'})).toBeVisible();
+  await expect(activity.locator('.specialist-row summary').filter({hasText:'Draft the document'})).toBeVisible();
+  await activity.locator('.specialist-row summary').filter({hasText:'Research sources'}).click();
+  await expect(activity.locator('.specialist-row').first().getByRole('link', {name:'Inspect work'})).toHaveAttribute('href', `#/agents/task/run-${'c'.repeat(32)}`);
   await expect(activity.locator('.conversation-work-details')).not.toHaveAttribute('open');
   expect(f.submissions).toEqual([]);
 });
@@ -479,6 +481,8 @@ test('speech waits for the parent response and never narrates child activity or 
   await page.getByRole('checkbox',{name:'Speak responses',exact:true}).focus();
   await page.keyboard.press('Space');
   await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Voice settings', exact: true })).toBeFocused();
   f.setStatus('waiting_for_children',{progress:{preview:'PRIVATE child draft'},steps:[{id:1,type:'tool',tool_name:'read_docs',tool_result:'PRIVATE tool payload'}]});
   await sendWithWriter(page);
   await expect(page.getByRole('region',{name:'Agent activity'})).toBeVisible();
@@ -487,7 +491,7 @@ test('speech waits for the parent response and never narrates child activity or 
   await page.clock.install();await page.clock.fastForward(301000);
   expect(speech).toEqual([]);
   f.complete();
-  await page.getByRole('button',{name:'Refresh',exact:true}).first().click();
+  await page.clock.fastForward(3000);
   await expect.poll(()=>speech.length).toBe(1);
   expect(JSON.stringify(speech[0])).toContain('A saved, verified outline.');
   expect(JSON.stringify(speech)).not.toContain('PRIVATE');

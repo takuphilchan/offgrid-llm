@@ -1,5 +1,17 @@
 import type { LocaleCode } from './index';
 
+export const profileSelectionPrompt: Record<LocaleCode, string> = {
+  en: 'Choose an agent to review its instructions, model and resources.',
+  fr: 'Choisissez un agent pour examiner ses consignes, son modèle et ses ressources.',
+  de: 'Wähle einen Agenten, um seine Anweisungen, sein Modell und seine Ressourcen zu prüfen.',
+  es: 'Elige un agente para revisar sus instrucciones, modelo y recursos.',
+  ar: 'اختر وكيلاً لمراجعة تعليماته ونموذجه وموارده.',
+  sw: 'Chagua wakala ili ukague maagizo, modeli na rasilimali zake.',
+  sn: 'Sarudza mubatsiri kuti uongorore mirayiridzo, modhi nezviwanikwa zvake.',
+  nd: 'Khetha umsizi ukuze uhlole imiyalo, imodeli lezinsiza zakhe.',
+  zu: 'Khetha umsizi ukuze uhlole imiyalo, imodeli nezinsiza zakhe.',
+};
+
 const en = {
   profiles: 'Agent profiles', introduction: 'Configure reusable agents here. Talk and work with them in Chat.',
   create: 'New agent', edit: 'Edit agent', empty: 'Create an agent for the work you do often.',

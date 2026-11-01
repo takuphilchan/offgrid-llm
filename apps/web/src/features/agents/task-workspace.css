@@ -81,9 +81,9 @@
   .task-management a[aria-current="page"] { background: var(--surface-2); color: var(--text); font-weight: 500; }
   .task-management a:hover { background: var(--surface-2); }
   .agent-management-page { gap: 1.5rem; }
-  .agent-management-page .runtime-panel { padding: clamp(1rem,3vw,2rem); border: 1px solid var(--line); border-radius: 1rem; background: var(--surface-1); }
+  .agent-management-page .runtime-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
   .agent-management-page .tool-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,22rem),1fr)); gap: 1rem; max-height: none; overflow: visible; border: 0; margin-block-start: 1.5rem; }
-  .agent-management-page .tool-list article { padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; align-items: start; }
+  .agent-management-page .tool-list article { padding: 1rem 0; border: 0; border-block-end: 1px solid var(--line); border-radius: 0; align-items: start; }
   .agent-management-page .tool-list strong, .agent-management-page .connector-list strong { font-size: 1rem; overflow-wrap: anywhere; }
   .agent-management-page .tool-list p { font-size: .9rem; line-height: 1.6; margin-block: .5rem; }
   .agent-management-page .tool-list small, .agent-management-page .connector-list small { font-size: .8rem; line-height: 1.5; }
@@ -153,6 +153,9 @@
   .task-artifact p { margin-block: 4px; color: var(--muted); }
   .task-result > .workspace-secondary, .task-artifacts > .workspace-secondary, .task-artifact p { font-size: .875rem; line-height: 1.5; }
   .task-artifact > .workspace-notice { flex-basis: 100%; }
+  .artifact-preview { flex-basis: 100%; min-width: 0; }
+  .artifact-preview-content { margin-block-start: 12px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); max-height: 32rem; overflow: auto; }
+  .artifact-preview-content pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .875rem; line-height: 1.65; }
   .task-result { display: grid; gap: 12px; }
   .task-result h3, .task-steering h3 { margin: 0; }
   .task-steering { padding-block: 20px; border-block-start: 1px solid var(--line); }

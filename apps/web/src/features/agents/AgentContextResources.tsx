@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { api, type AgentSkill, type AgentSkillReference, type AgentSkillInspection, type AgentMemoryEntry } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { agentContextText } from '../../i18n/agent-context';
+import { SkillLibrary, sameSkill } from './SkillLibrary';
+import { skillLibraryText } from '../../i18n/skill-library';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 function decoded(content:string) {
@@ -10,7 +12,7 @@ function decoded(content:string) {
 }
 
 export function AgentContextResources({profile,selected,onChange,disabled=false}:{profile?:string;selected:AgentSkillReference[];onChange:(refs:AgentSkillReference[])=>void;disabled?:boolean}) {
-  const {locale,messages}=useI18n(),copy=agentContextText[locale];
+  const {locale,messages}=useI18n(),copy=agentContextText[locale],library=skillLibraryText[locale];
   const formId=useId();
   const [supported,setSupported]=useState<boolean>(),[skills,setSkills]=useState<AgentSkill[]>([]),[inspection,setInspection]=useState<AgentSkillInspection>();
   const [memory,setMemory]=useState<Awaited<ReturnType<typeof api.agentMemory>>>(),[editing,setEditing]=useState<AgentMemoryEntry>();
@@ -48,7 +50,7 @@ export function AgentContextResources({profile,selected,onChange,disabled=false}
     }
     await api.importAgentSkill(payload);await refreshSkills();
   };
-  const inspect=async(ref:AgentSkillReference)=>{const value=await api.inspectAgentSkill(ref);if(alive.current)setInspection(value);};
+  const inspect=async(ref:AgentSkillReference)=>{setInspection(undefined);const value=await api.inspectAgentSkill(ref);if(alive.current)setInspection(value);};
   const edit=(entry?:AgentMemoryEntry)=>{setEditing(entry);setLabel(entry?.label??'');setContent(entry?.content??'');writeIdentity.current=undefined;};
   const saveMemory=async()=>{
     if(!profile)return;
@@ -58,22 +60,19 @@ export function AgentContextResources({profile,selected,onChange,disabled=false}
     if(alive.current)edit();await refreshMemory();
   };
   if(supported===false)return <p className="profile-hint">{copy.unsupported}</p>;
-  return <section className="profile-context-resources" aria-label={`${copy.skills} / ${copy.memory}`} onKeyDown={event=>{if(event.key==='Enter'&&!event.nativeEvent.isComposing&&event.target instanceof HTMLInputElement&&event.target.type==='text')event.preventDefault();}}>
+  return <section className="profile-context-resources" aria-label={`${copy.skills} / ${copy.memory}`} onKeyDown={event=>{if(event.key==='Enter'&&!event.nativeEvent.isComposing&&event.target instanceof HTMLInputElement&&['text','search'].includes(event.target.type))event.preventDefault();}}>
     {error&&<p role="alert">{error}</p>}
     <details><summary>{copy.skills} · {selected.length}</summary>
       <p className="profile-hint">{copy.skillHint}</p>
-      <fieldset disabled={disabled||busy||!supported}><legend>{copy.skills}</legend>
+      <fieldset className="skill-controls" disabled={disabled||busy||!supported}><legend className="sr-only">{copy.skills}</legend>
+        <div className="skill-toolbar">
         <label>{copy.import}<input type="file" multiple {...{webkitdirectory:''}} onChange={event=>{const files=Array.from(event.currentTarget.files??[]);event.currentTarget.value='';void run(()=>importFiles(files));}}/></label>
         <button type="button" className="secondary-button" onClick={()=>void run(refreshSkills)}>{copy.refresh}</button>
-        <div className="profile-options">{skills.map(skill=>{
-          const chosen=selected.some(ref=>ref.id===skill.id && ref.revision===skill.revision && ref.digest===skill.digest);
-          return <div key={skill.id}>
-            <label className="profile-option"><input type="checkbox" disabled={skill.draft||!chosen&&selected.length>=16} checked={chosen} onChange={event=>onChange(event.target.checked?[...selected.filter(ref=>ref.id!==skill.id),{id:skill.id,revision:skill.revision,digest:skill.digest}]:selected.filter(ref=>ref.id!==skill.id))}/><span>{skill.name}<small>{skill.description}</small><small>{skill.draft?copy.draft:`v${skill.revision}`}</small></span></label>
-            <button type="button" className="utility-button" onClick={()=>void run(()=>inspect(skill))}>{copy.inspect}: {skill.name}</button>
-          </div>;
-        })}
-        {selected.filter(ref=>!skills.some(item=>item.id===ref.id && item.revision===ref.revision && item.digest===ref.digest)).map(ref=><div key={`${ref.id}:${ref.revision}`}><label className="profile-option"><input type="checkbox" checked onChange={()=>onChange(selected.filter(item=>item.id!==ref.id))}/><span>{ref.id} · v{ref.revision}</span></label><button type="button" className="utility-button" onClick={()=>void run(()=>inspect(ref))}>{copy.inspect}</button></div>)}</div>
-        {inspection&&<section aria-label={copy.inspect}><h4>{inspection.skill.name} · v{inspection.skill.revision}</h4><p>{copy.inert}</p><p>{inspection.skill.digest}</p>
+        </div>
+        <SkillLibrary skills={skills} selected={selected} onChange={onChange} inspect={ref=>void run(()=>inspect(ref))}/>
+        {inspection&&<section className="skill-inspection" aria-label={copy.inspect}><h4>{inspection.skill.name} · v{inspection.skill.revision}</h4><p>{copy.inert}</p><details className="skill-revision"><summary>{library.details}</summary><p>{inspection.skill.id} · v{inspection.skill.revision}</p><p>{inspection.skill.digest}</p></details>
+          <div className="skill-example"><strong>{library.example}</strong><p>{library.prompt.replace('{name}',inspection.skill.name)}</p></div>
+          {!inspection.skill.draft&&(selected.some(ref=>sameSkill(ref,inspection.skill))?<p role="status">{library.attached}</p>:<button type="button" className="secondary-button" disabled={selected.length>=16} onClick={()=>onChange([...selected.filter(ref=>ref.id!==inspection.skill.id),{id:inspection.skill.id,revision:inspection.skill.revision,digest:inspection.skill.digest}])}>{library.attach}</button>)}
           <details open><summary>{copy.files}</summary>{inspection.bundle.files.map(file=><details key={file.path} open={file.path==='SKILL.md'}><summary>{file.path}</summary><pre className="tool-output">{decoded(file.content)}</pre></details>)}</details>
           {inspection.skill.draft&&<button type="button" className="secondary-button" onClick={()=>void run(async()=>{const reviewed=await api.reviewAgentSkill(inspection.skill);await refreshSkills();await inspect(reviewed);})}>{copy.review}</button>}
         </section>}

@@ -291,7 +291,8 @@ test('subtasks are linked evidence, not a second task composer', async ({page}) 
   f.setState('waiting_for_children',{children:[{id:child,spec:{key:'compare',goal:'Compare the two findings',tools:[],depends_on:[]}}]});
   await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByText('Waiting for subtasks',{exact:true}).first()).toBeVisible();
-  await expect(page.getByRole('link',{name:'Compare the two findings'})).toHaveAttribute('href',`#/agents/task/${child}`);
+  await page.locator('.specialist-row summary').filter({ hasText: 'Compare the two findings' }).click();
+  await expect(page.locator('.specialist-row').getByRole('link',{name:'Inspect work'})).toHaveAttribute('href',`#/agents/task/${child}`);
   await expect(page.getByRole('button',{name:'Pause',exact:true})).toBeVisible();
   expect(f.submissions).toHaveLength(0);
 });
@@ -320,7 +321,7 @@ test('completed subtasks do not hide paused instruction updates; active delegati
   expect(f.commands.at(-1)?.action).toBe('steer');
   expect(f.commands.at(-1)?.data.instruction).toBe('Summarize the completed findings.');
   f.setState('interrupted',{children,can_steer:false});await page.reload();
-  await expect(page.getByRole('link',{name:'Completed analysis'})).toBeVisible();
+  await expect(page.locator('.specialist-row summary').filter({ hasText: 'Completed analysis' })).toBeVisible();
   await expect(page.getByRole('textbox',{name:'Update instruction'})).toHaveCount(0);
 });
 

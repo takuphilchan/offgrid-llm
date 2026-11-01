@@ -8,9 +8,9 @@ import { HistoryDeleteDialog, type HistoryItem } from '../../components/HistoryD
 import { HistoryToolbar } from '../../components/HistoryToolbar';
 import { HistoryItemActions } from '../../components/HistoryItemActions';
 import { EmptyState, ScopedNotice } from '../../components/WorkspacePresentation';
+import { PermissionNotice } from '../../components/PermissionNotice';
 import { Icon } from '../../components/Icon';
 import { copyText } from '../../lib/clipboard';
-import { interaction } from '../../i18n/interaction';
 import { useTaskRun } from './useTaskRun';
 import { ConversationWork } from '../chat/ConversationWork';
 import { useTaskStatus } from './useTaskStatus';
@@ -88,7 +88,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
       {run ? <ConversationWork key={run.run_id} run={run} refresh={() => { refresh(); void refreshHistory(); }} connection={connection} readError={readError} outputSaved={false} recover={async () => {}} recoveryNeeded={false} inspector childStatus={childID => { const child = tasks.find(task => task.id === childID); return child ? status(child) : taskPresentation(locale).unavailable; }} />
         : readError ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={refresh}>{text.common.retry}</button>}>{readError}</ScopedNotice>
         : <p role="status">{text.common.loading}</p>}
-    </section> : !admin ? <p className="permission-notice">{interaction[locale].adminOnly}</p> : <section className="task-list" aria-label={text.agentRuntime.history}>
+    </section> : !admin ? <PermissionNotice /> : <section className="task-list" aria-label={text.agentRuntime.history}>
       <h2>{text.agentRuntime.history}</h2>
       <HistoryToolbar query={query} onQuery={value => { setQuery(value); setLimit(20); setScroll(0); }} searchLabel={text.history.searchTasks} title={text.agentRuntime.history} count={tasks.length} refresh={() => void refreshHistory()} clearLabel={text.history.clearTasks} clearDisabled={!filtered.some(task => task.deletable)} clear={() => setDeleting(filtered.filter(task => task.deletable).map(task => ({id:task.id,label:task.prompt})))} protection={text.history.protectedTasks} />
       {historyError && <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refreshHistory()}>{text.common.retry}</button>}>{historyError}</ScopedNotice>}

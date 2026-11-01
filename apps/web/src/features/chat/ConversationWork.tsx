@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, type AgentRun } from '../../api/client';
 import { useI18n } from '../../i18n';
-import { taskControls } from '../../i18n/task-controls';
 import { taskStopText, taskPresentation } from '../../i18n/task-presentation';
 import { taskSteering } from '../../i18n/task-steering';
 import { TaskAccess } from '../agents/TaskAccess';
@@ -22,6 +21,8 @@ import { TaskContinuation } from '../agents/TaskContinuation';
 import { useTaskStatus } from '../agents/useTaskStatus';
 import { AgentProgress, AgentPreview } from '../agents/AgentProgress';
 import { ExecutionActivity,ExecutionLocation } from '../agents/ExecutionActivity';
+import { WorkRecovery } from '../agents/WorkRecovery';
+import { SpecialistActivity } from '../agents/SpecialistActivity';
 
 export const workSettled = (status: string) => ['completed', 'failed', 'cancelled'].includes(status);
 
@@ -33,7 +34,7 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
   inspector?: boolean;
   childStatus?: (id: string) => string;
 }) {
-  const { messages, locale } = useI18n(), copy = conversationWorkText[locale], controls = taskControls(locale), presentation = taskPresentation(locale);
+  const { messages, locale } = useI18n(), copy = conversationWorkText[locale], presentation = taskPresentation(locale);
   const { workspace, scope, admin } = useWorkspace();
   const statusText = useTaskStatus();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -84,11 +85,11 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
     : statusText(run.status, run.outcome);
   return <section className={`conversation-work${inspector ? ' work-inspector' : ''}`} aria-label={copy.activity}>
     <header><div><span className="work-status" role="status">{status}</span>{run.profile && <small className="conversation-work-profile">{run.profile.name} · {agentProfilesText[locale].revision.replace('{revision}', String(run.profile.revision))}</small>}</div>{!inspector && <a className="utility-button" href={`#/agents/task/${encodeURIComponent(run.run_id)}`}>{copy.inspect}</a>}
-    {!workSettled(run.status) && <div className="button-row"><TaskLifecycle run={run} busy={busy} act={action => void act(action)} />{run.resumable && ['pending', 'interrupted'].includes(run.status) && <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('resume')}>{messages.models.resume}</button>}</div>}</header>
+    {!workSettled(run.status) && <div className="button-row"><TaskLifecycle run={run} busy={busy} act={action => void act(action)} />{run.resumable && !run.computer_session_expired && ['pending', 'interrupted'].includes(run.status) && <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('resume')}>{messages.models.resume}</button>}</div>}</header>
     <TaskResult run={run} compact hideOutput={outputSaved} explainOutcome={inspector} />
     {inspector && run.output && <p className="workspace-secondary">{presentation.generated}</p>}
     <DocumentProgress run={run} />
-    {!!run.children?.length && <div className="conversation-work-delegates" aria-label={controls.children}><strong>{controls.children}</strong><ol>{run.children.map(child => <li key={child.id}><a href={`#/agents/task/${encodeURIComponent(child.id)}`}>{child.spec.goal}</a></li>)}</ol></div>}
+    <SpecialistActivity run={run} />
     {connection !== 'live' && !workSettled(run.status) && <p role="status">{messages.agentLive.reconnectHint}</p>}
     {stopping !== 'idle' && <ScopedNotice kind={stopping === 'unconfirmed' ? 'error' : 'status'}>{taskStopText(locale)[stopping]}</ScopedNotice>}
     {run.pending_input && run.status === 'waiting_for_input' && <TaskAccess key={run.pending_input.id} run={run} workspace={workspace} onResolved={refresh} cancelSignal={accessCancellation.signal} initialConsentPending={consentPending} />}
@@ -100,7 +101,7 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
     </details></section>}
     {run.pending_instructions?.length && !(inspector && admin) ? <p role="status">{taskSteering[locale].queued}</p> : null}
     {recoveryNeeded && <ScopedNotice action={<button className="secondary-button" disabled={busy} onClick={async () => { if (lock.current) return; lock.current = true; setBusy(true); try { await recover(); } catch (reason) { setError(reason instanceof Error ? reason.message : messages.common.error); } finally { lock.current = false; if (alive.current) setBusy(false); } }}>{copy.attach}</button>}>{copy.savedJob}</ScopedNotice>}
-    {(run.error || error || readError) && <ScopedNotice kind="error" action={<button type="button" className="secondary-button" onClick={refresh}>{messages.common.refresh}</button>}>{error || readError || run.error}</ScopedNotice>}
+    <WorkRecovery run={run} readError={readError} actionError={error} refresh={refresh} />
     <details className="conversation-work-details"><summary>{copy.details}{run.steps.length ? ` · ${run.steps.length}` : ''}</summary>
       <ExecutionLocation run={run}/>
       <AgentProgress run={run} connection={connection === 'live' ? 'live' : connection === 'connecting' ? 'connecting' : 'reconnecting'} showPreview={showPreview} setShowPreview={setShowPreview} />

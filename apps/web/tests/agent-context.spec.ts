@@ -1,6 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import {agentContextText} from '../src/i18n/agent-context';
 import {agentProfilesText} from '../src/i18n/agent-profiles';
+import {skillLibraryText} from '../src/i18n/skill-library';
 import type {LocaleCode} from '../src/i18n';
 
 const digest='a'.repeat(64),model='local-model';
@@ -61,10 +62,84 @@ test('skills pin exact revisions; memory is opt-in, inspectable and deletable wi
   expect(writes.some(x=>x.path==='/api/v2/jobs'||x.path.includes('/turns'))).toBe(false);
 });
 
+test('discover, inspect and attach a skill before explicitly using the saved agent',async({page},info)=>{
+  const {writes}=await fixture(page),copy=agentContextText.en,library=skillLibraryText.en;
+  const panel=page.getByRole('region',{name:`${copy.skills} / ${copy.memory}`});
+  await panel.locator('summary').first().click();
+  const search=panel.getByRole('searchbox',{name:library.search});
+  await search.fill('EXACT NOTES'); await search.press('Enter');
+  await expect(panel.getByRole('checkbox',{name:/test-writer/})).not.toBeChecked(); expect(writes).toEqual([]);
+  await panel.getByRole('button',{name:`${copy.inspect}: test-writer`}).click();
+  await expect(panel.getByText(library.prompt.replace('{name}','test-writer'),{exact:true})).toBeVisible();
+  await panel.getByRole('button',{name:library.attach}).click();
+  await search.fill('absent'); await expect(panel.getByText(library.noMatch)).toBeVisible();
+  await search.fill(''); await expect(panel.getByRole('checkbox',{name:/test-writer/})).toBeChecked();
+  expect(writes).toEqual([]);
+  await page.getByRole('button',{name:agentProfilesText.en.save,exact:true}).click();
+  expect(writes[0].body.settings.skills).toEqual([{id:skill.id,revision:1,digest}]);
+  await page.screenshot({path:info.outputPath('skill-library.png'),fullPage:true});
+  await page.getByRole('button',{name:'Use in Chat',exact:true}).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await expect(page.locator('.chat-agent-selector > button')).toContainText('Writer');
+  await expect(page.locator('.composer textarea')).toHaveValue('');
+  expect(writes).toHaveLength(1);
+});
+
+test('unavailable pinned skills remain explicit and never become another revision',async({page})=>{
+  const {writes}=await fixture(page),copy=agentContextText.en,library=skillLibraryText.en;
+  const panel=page.getByRole('region',{name:`${copy.skills} / ${copy.memory}`});
+  await panel.locator('summary').first().click();
+  await panel.getByRole('checkbox',{name:/test-writer/}).check();
+  await panel.getByRole('button',{name:`${copy.inspect}: test-writer`}).click();
+  await page.route('**/api/v2/agent-skills',r=>r.fulfill({json:{skills:[{...skill,revision:2,digest:'b'.repeat(64)}]}}));
+  await panel.getByRole('button',{name:copy.refresh}).click();
+  await expect(panel.locator('.skill-missing')).toContainText(library.unavailable);
+  await expect(panel.getByRole('checkbox',{name:/test-writer/})).not.toBeChecked();
+  await page.route('**/api/v2/agent-skills/skill-one?*',r=>r.fulfill({status:404,json:{error:'This pinned revision is no longer available.'}}));
+  await panel.locator('.skill-missing').getByRole('button',{name:copy.inspect,exact:true}).click();
+  await expect(panel.getByRole('alert')).toContainText('This pinned revision is no longer available.');
+  await expect(panel.locator('.skill-inspection')).toHaveCount(0);
+  expect(writes).toEqual([]);
+  await panel.getByRole('button',{name:library.remove}).click();
+  await expect(panel.locator('.skill-missing')).toHaveCount(0);
+  await expect(panel.getByRole('checkbox',{name:/test-writer/})).not.toBeChecked();
+});
+
+test('draft review failure keeps the skill inactive, then explicit review pins the returned revision',async({page})=>{
+  const {writes}=await fixture(page),copy=agentContextText.en,library=skillLibraryText.en;
+  let current={...skill,draft:true},reject=true;const reviews:any[]=[];
+  await page.route('**/api/v2/agent-skills',r=>r.fulfill({json:{skills:[current]}}));
+  await page.route('**/api/v2/agent-skills/skill-one?*',r=>r.fulfill({json:{skill:current,bundle:{files:[{path:'SKILL.md',content:Buffer.from(content).toString('base64')}]},executable:false}}));
+  await page.route('**/api/v2/agent-skills/skill-one/review',r=>{
+    reviews.push(r.request().postDataJSON());
+    if(reject)return r.fulfill({status:409,json:{error:'Review conflict. Refresh and inspect the current revision.'}});
+    current={...current,draft:false,revision:2,digest:'b'.repeat(64)};
+    return r.fulfill({json:current});
+  });
+  const panel=page.getByRole('region',{name:`${copy.skills} / ${copy.memory}`});
+  await panel.locator('summary').first().click();await panel.getByRole('button',{name:copy.refresh}).click();
+  await expect(panel.getByRole('checkbox',{name:/test-writer/})).toBeDisabled();
+  await panel.getByRole('button',{name:`${copy.inspect}: test-writer`}).click();
+  await expect(panel.getByRole('button',{name:library.attach})).toHaveCount(0);
+  await panel.getByRole('button',{name:copy.review}).click();
+  await expect(panel.getByRole('alert')).toContainText('Review conflict');
+  await expect(panel.getByRole('checkbox',{name:/test-writer/})).toBeDisabled();
+  reject=false;await panel.getByRole('button',{name:copy.refresh}).click();
+  await panel.getByRole('button',{name:`${copy.inspect}: test-writer`}).click();
+  await panel.getByRole('button',{name:copy.review}).click();
+  await expect(panel.getByRole('checkbox',{name:/test-writer/})).not.toBeChecked();
+  await panel.getByRole('button',{name:library.attach}).click();
+  await page.getByRole('button',{name:agentProfilesText.en.save,exact:true}).click();
+  expect(writes[0].body.settings.skills).toEqual([{id:skill.id,revision:2,digest:'b'.repeat(64)}]);
+  expect(reviews).toEqual([{expected_revision:1,digest},{expected_revision:1,digest}]);
+});
+
 for(const locale of Object.keys(agentContextText) as LocaleCode[])test(`context controls: ${locale}, narrow layout, no implicit writes`,async({page})=>{
   await page.setViewportSize({width:320,height:480});const {writes}=await fixture(page,locale),copy=agentContextText[locale];
   const panel=page.getByRole('region',{name:`${copy.skills} / ${copy.memory}`});await panel.locator('summary').first().click();
   await expect(panel.getByLabel(copy.import,{exact:true})).toBeVisible();
+  await panel.getByRole('searchbox',{name:skillLibraryText[locale].search}).fill('no matching skill');
+  await expect(panel.getByText(skillLibraryText[locale].noMatch,{exact:true})).toBeVisible();
   await panel.locator('summary').filter({hasText:copy.memory}).click();await expect(panel.getByRole('checkbox',{name:copy.enabled})).not.toBeChecked();
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(writes).toEqual([]);
 });

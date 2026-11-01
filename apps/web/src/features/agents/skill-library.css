@@ -1,0 +1,19 @@
+.skill-library { display: grid; gap: .75rem; min-width: 0; }
+.skill-controls { border: 0; margin: 0; padding: .75rem 0; min-width: 0; }
+.skill-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; margin-block-end: 1rem; }
+.skill-toolbar label { display: grid; gap: .4rem; min-width: 0; font-size: .875rem; flex: 1 1 15rem; }
+.skill-toolbar input[type="file"] { padding: 0; border: 0; background: transparent; font-size: .8rem; }
+.skill-toolbar input::file-selector-button { min-height: 32px; margin-inline-end: .5rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--text); background: var(--surface-1); font: inherit; padding: .35rem .6rem; cursor: pointer; }
+.skill-toolbar input::file-selector-button:hover { background: var(--surface-2); }
+.skill-toolbar input:focus-visible { outline: 2px solid var(--line-strong); outline-offset: 3px; }
+@media (pointer: coarse) { .skill-toolbar input::file-selector-button { min-height: 44px; } }
+.skill-search { display: grid; gap: .35rem; max-width: 28rem; }
+.skill-library-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .65rem; }
+.skill-card { min-width: 0; padding: .8rem 0; border: 0; border-block-end: 1px solid var(--line); background: transparent; }
+.skill-card .profile-option { align-items: start; }
+.skill-card strong, .skill-card small, .skill-card p { overflow-wrap: anywhere; }
+.skill-card > .utility-button { margin-block-start: .45rem; }
+.skill-inspection { margin-block-start: .8rem; padding-block-start: .8rem; border-block-start: 1px solid var(--line); }
+.skill-example { padding: .75rem; border-inline-start: 2px solid var(--line); }
+.skill-example p { margin: .4rem 0 0; overflow-wrap: anywhere; }
+.skill-revision { overflow-wrap: anywhere; font-size: .8rem; }

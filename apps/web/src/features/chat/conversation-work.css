@@ -37,6 +37,14 @@
   .conversation-work-details pre { padding: .75rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface-0); font: .75rem/1.6 var(--mono); }
   .conversation-work pre { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
   .conversation-work-recovery { min-width: 0; font-size: .875rem; line-height: 1.5; }
+  .work-recovery-guidance { display: grid; gap: 12px; border-inline-start: 2px solid var(--line); padding-inline-start: var(--space-4, 1rem); font-size: var(--text-body, .875rem); line-height: 1.6; }
+  .work-recovery-guidance p { margin: 0; }
+  .conversation-work-delegates > ul { list-style: none; padding: 0; margin-block: .5rem 0; }
+  .specialist-row { border-block-end: 1px solid var(--line); }
+  .specialist-row:last-child { border: 0; }
+  .specialist-row summary { padding-block: .7rem; font-size: .875rem; overflow-wrap: anywhere; }
+  .specialist-row summary small { display: block; margin-block-start: .25rem; color: var(--muted); }
+  .specialist-detail { padding: .25rem .75rem 1rem; min-width: 0; }
   .conversation-work-recovery p { margin-block: 0 .75rem; }
   .conversation-work-recovery label { display: grid; gap: .5rem; }
   .conversation-work-recovery textarea { width: 100%; margin-block-end: .75rem; }

@@ -5,12 +5,16 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { SearchField } from '../../components/SearchField';
 import { useI18n } from '../../i18n';
 import { modelProviderDetails } from '../../i18n/model-library';
-import { agentProfilesText } from '../../i18n/agent-profiles';
+import { agentProfilesText, profileSelectionPrompt } from '../../i18n/agent-profiles';
+import { workspaceRefinement } from '../../i18n/workspace-refinement';
+import { EmptyState } from '../../components/WorkspacePresentation';
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import './agent-profiles.css';
 import { ExecutionPolicy } from './ExecutionPolicy';
 import { AgentContextResources } from './AgentContextResources';
+import { AgentPurpose } from './AgentPurpose';
+import { ProfileCapability } from './ProfileCapability';
 
 type Draft = { original: AgentProfile | null; settings: AgentProfileSettings };
 type Resources = Awaited<ReturnType<typeof api.agentProfileResources>>;
@@ -103,14 +107,16 @@ export function AgentProfiles({ models }: { models: Model[] }) {
   const modelMissing = !!draft?.settings.model && !models.some(item => item.id === draft.settings.model);
   const selectedModel = models.find(item => item.id === draft?.settings.model);
   const providerCopy = modelProviderDetails(locale);
+  const visibleProfiles = profiles.filter(item => `${item.settings.name} ${item.settings.description ?? ''}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   return <section className="agent-profiles" aria-label={copy.profiles}>
     <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p><div className="action-group"><a className="text-button" href="#/chat">{messages.nav.chat}</a><a className="text-button" href="#/activity">{messages.nav.activity}</a></div></div><button type="button" className="primary-button" disabled={busy} onClick={() => choose(fresh())}>{copy.create}</button></header>
     {error && <div className="inline-error" role="alert"><p>{error}</p>{!conflict && <button type="button" className="secondary-button" onClick={() => void refresh()} disabled={loading || busy}>{messages.common.refresh}</button>}</div>}
     {notice && <p role="status">{notice}</p>}
     <div className="profile-library-layout">
-      <aside className="profile-library-list"><SearchField className="profile-search" label={copy.search} value={query} onChange={setQuery} />
+      <aside className="profile-library-list"><SearchField id="agent-profile-search" className="profile-search" label={copy.search} value={query} onChange={setQuery} />
         {loading && <p role="status">{messages.common.loading}</p>}
-        <ul>{profiles.filter(item => `${item.settings.name} ${item.settings.description ?? ''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(item => <li key={item.id}>
+        {profiles.length > 0 && !visibleProfiles.length && <EmptyState title={messages.history.noMatches} action={<button type="button" className="text-button" onClick={() => { setQuery(''); document.getElementById('agent-profile-search')?.focus(); }}>{workspaceRefinement[locale].clear}</button>} />}
+        <ul>{visibleProfiles.map(item => <li key={item.id}>
           <button type="button" className="profile-list-item" aria-current={draft?.original?.id === item.id ? 'true' : undefined} disabled={busy} onClick={() => choose({ original: item, settings: item.settings })}><strong>{item.settings.name}</strong><span>{item.settings.description || item.settings.model}</span></button>
         </li>)}</ul>
       </aside>
@@ -120,31 +126,30 @@ export function AgentProfiles({ models }: { models: Model[] }) {
         {conflict && <div className="profile-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => void loadLatest()}>{copy.loadLatest}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void save(true)}>{copy.saveCopy}</button></div>}
         <fieldset disabled={busy} className="profile-fields">
           <div className="profile-basics">
+          <AgentPurpose value={draft.settings.instructions ?? ''} onChange={instructions => update({ instructions })} />
           <label>{copy.name}<input required value={draft.settings.name} maxLength={128} onChange={event => update({ name: event.target.value })} /></label>
           <label>{copy.description}<input value={draft.settings.description ?? ''} maxLength={512} onChange={event => update({ description: event.target.value })} /></label>
           <ModelSelect models={models} value={draft.settings.model} onChange={model => update({ model })} />
           {selectedModel && <p className="profile-hint" role="status">{[selectedModel.engine || 'llama_cpp', selectedModel.format, selectedModel.backend].filter(Boolean).join(' · ')}{selectedModel.context_window ? ` · ${providerCopy.context}: ${selectedModel.context_window.toLocaleString(locale)}` : ''} · {providerCopy.qualified}: {selectedModel.qualified ? providerCopy.yes : providerCopy.unmeasured}</p>}
           {modelMissing && <p role="status">{draft.settings.model}: {copy.modelMissing}</p>}
-          <label>{copy.instructions}<textarea rows={6} value={draft.settings.instructions ?? ''} maxLength={8192} onChange={event => update({ instructions: event.target.value })} aria-describedby="profile-instructions-hint" /></label>
-          <p id="profile-instructions-hint" className="profile-hint">{copy.instructionHint}</p>
           </div>
           <fieldset className="profile-resources"><legend>{copy.resources}</legend>
             <label className="profile-option"><input type="checkbox" checked={draft.settings.computer ?? false} disabled={!resources?.computer_permitted && !draft.settings.computer} onChange={event => update({ computer: event.target.checked })} /><span>{copy.computer}<small>{copy.computerHint}</small></span></label>
-            <section className="profile-resource-section"><h4>{copy.tools} · {selectedTools.length}</h4><p className="profile-hint">{copy.workspaceConnections}</p><div className="profile-options">
+            <ProfileCapability key={`${draft.original?.id ?? 'new'}-tools`} title={copy.tools} count={selectedTools.length}><p className="profile-hint">{copy.workspaceConnections}</p><div className="profile-options">
               {availableTools.map(tool => { const ref = reference(tool), key = toolKey(ref); return <label className="profile-option" key={key}><input type="checkbox" checked={selectedTools.some(value => toolKey(value) === key)} onChange={event => update({ tools: event.target.checked ? [...selectedTools, ref] : selectedTools.filter(value => toolKey(value) !== key) })} /><span>{tool.name}<small>{tool.description}</small><small>{tool.source} · {tool.location} · {tool.kind}</small></span></label>; })}
               {unavailableTools.map(tool => <label className="profile-option" key={toolKey(tool)}><input type="checkbox" checked onChange={() => update({ tools: selectedTools.filter(value => toolKey(value) !== toolKey(tool)) })} /><span>{tool.tool}<small>{copy.unavailable}</small></span></label>)}
               {!availableTools.length && !unavailableTools.length && <p>{copy.noResources}</p>}
-            </div></section>
-            <section className="profile-resource-section"><h4>{copy.knowledge} · {draft.settings.knowledge?.length ?? 0}</h4><div className="profile-options">
+            </div></ProfileCapability>
+            <ProfileCapability key={`${draft.original?.id ?? 'new'}-knowledge`} title={copy.knowledge} count={draft.settings.knowledge?.length ?? 0}><div className="profile-options">
               {documents.map(doc => <label className="profile-option" key={doc.id}><input type="checkbox" checked={draft.settings.knowledge?.includes(doc.id) ?? false} onChange={event => toggle('knowledge', doc.id, event.target.checked)} /><span>{doc.name}</span></label>)}
               {(draft.settings.knowledge ?? []).filter(id => !documents.some(doc => doc.id === id)).map(id => <label className="profile-option" key={id}><input type="checkbox" checked onChange={() => toggle('knowledge', id, false)} /><span>{id}<small>{copy.unavailable}</small></span></label>)}
               {!documents.length && !draft.settings.knowledge?.length && <p>{copy.noResources}</p>}
-            </div></section>
+            </div></ProfileCapability>
             <AgentContextResources key={JSON.stringify([scope,workspace,draft.original?.id??'new'])} profile={draft.original?.id} selected={draft.settings.skills??[]} onChange={skills=>update({skills})} disabled={busy}/>
-            <fieldset className="profile-resources"><legend>{copy.delegates}</legend><p className="profile-hint">{copy.delegateHint}</p><div className="profile-options">
+            <ProfileCapability key={`${draft.original?.id ?? 'new'}-delegates`} title={copy.delegates} count={draft.settings.delegates?.length ?? 0}><p className="profile-hint">{copy.delegateHint}</p><div className="profile-options">
               {profiles.filter(item => item.id !== draft.original?.id && !item.settings.delegates?.length).map(item => { const selected = draft.settings.delegates?.includes(item.id) ?? false; return <label className="profile-option" key={item.id}><input type="checkbox" checked={selected} disabled={!selected && (draft.settings.delegates?.length ?? 0) >= 4} onChange={event => toggle('delegates', item.id, event.target.checked)} /><span>{item.settings.name}</span></label>; })}
               {(draft.settings.delegates ?? []).filter(id => !profiles.some(item => item.id === id && !item.settings.delegates?.length)).map(id => <label className="profile-option" key={id}><input type="checkbox" checked onChange={() => toggle('delegates', id, false)} /><span>{id}<small>{copy.unavailable}</small></span></label>)}
-            </div></fieldset>
+            </div></ProfileCapability>
           </fieldset>
           <details className="profile-advanced"><summary>{copy.advanced}</summary><label>{copy.iterations}<input type="number" required min={1} max={50} value={draft.settings.max_iterations} onChange={event => update({ max_iterations: event.target.valueAsNumber || 1 })} /></label>
             <ExecutionPolicy value={draft.settings.execution} onChange={execution=>update({execution})} />
@@ -154,7 +159,7 @@ export function AgentProfiles({ models }: { models: Model[] }) {
         <footer className="profile-actions"><button type="submit" className="primary-button" disabled={busy || conflict || !draft.settings.name.trim() || !draft.settings.model || modelMissing}>{busy ? messages.common.loading : copy.save}</button>
           {draft.original && <><button type="button" className="secondary-button" disabled={busy || dirty || issues.length > 0} onClick={() => { setChatAgent(draft.original); window.location.hash = '#/chat'; }}>{copy.use}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => choose({ original: null, settings: { ...draft.settings, name: copy.duplicateName.replace('{name}', draft.settings.name) } })}>{copy.duplicate}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => setArchiving(draft.original)}>{copy.archive}</button></>}
         </footer>
-      </form> : <div className="profile-empty"><p>{copy.empty}</p></div>}
+      </form> : !loading && !error ? <div className="profile-empty"><p>{profiles.length ? profileSelectionPrompt[locale] : copy.empty}</p></div> : null}
     </div>
     {discardTo && <ConfirmDialog title={copy.discard} body={copy.discardBody} confirmLabel={copy.discard} close={() => setDiscardTo(null)} confirm={async () => { setDraft(discardTo); setConflict(false); setError(''); setNotice(''); }} />}
     {archiving && <ConfirmDialog title={`${copy.archive}: ${archiving.settings.name}`} body={copy.archiveBody} confirmLabel={copy.archive} close={() => setArchiving(null)} confirm={async () => {

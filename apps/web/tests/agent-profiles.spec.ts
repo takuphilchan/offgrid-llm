@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { AgentProfile, AgentProfileSettings } from '../src/api/client';
 import { executionPolicyText } from '../src/i18n/execution-workspace';
+import { agentPurpose } from '../src/i18n/agent-purpose';
+import { agentProfilesText } from '../src/i18n/agent-profiles';
+import type { LocaleCode } from '../src/i18n';
 
 const model = 'installed-local-model';
 const profile = (id: string, settings: Partial<AgentProfileSettings> = {}, revision = 1): AgentProfile => ({
@@ -8,10 +11,10 @@ const profile = (id: string, settings: Partial<AgentProfileSettings> = {}, revis
   settings: { name: id, model, instructions: 'Answer accurately.', max_iterations: 10, ...settings },
 });
 
-async function fixture(page: Page, initial = [profile('Researcher')]) {
-  await page.addInitScript(() => {
-    localStorage.setItem('offgrid.locale', 'en'); localStorage.setItem('offgrid.onboarding.complete', 'true');
-  });
+async function fixture(page: Page, initial = [profile('Researcher')], locale: LocaleCode = 'en') {
+  await page.addInitScript(locale => {
+    localStorage.setItem('offgrid.locale', locale); localStorage.setItem('offgrid.onboarding.complete', 'true');
+  }, locale);
   let profiles = structuredClone(initial), conflict = false, supported = true;
   const mutations: { path: string; body: any }[] = [];
   await page.route('**/health', route => route.fulfill({ json: { status: 'healthy' } }));
@@ -59,6 +62,27 @@ test('profile execution ceilings are explicit configuration and do not grant a h
   await expect.poll(()=>f.mutations.length).toBe(1);expect(f.mutations[0].body.settings.execution).toEqual({read:true,write:false,processes:false});expect(f.mutations[0].body.execution).toBeUndefined();
 });
 
+for (const locale of Object.keys(agentProfilesText) as LocaleCode[]) test(`optional profile capabilities preserve selections and drafts: ${locale}`, async ({page}) => {
+  const f=await fixture(page,[profile('Researcher',{knowledge:['doc-one']})],locale),copy=agentProfilesText[locale];
+  await page.setViewportSize({width:390,height:720});await page.goto('/ui/#/agents/profiles');
+  await page.getByRole('button',{name:/Researcher/}).click();
+  const editor=page.locator('.profile-editor'),knowledge=editor.locator('.profile-capability').filter({has:page.locator('summary').filter({hasText:copy.knowledge})});
+  await expect(knowledge).toHaveAttribute('open');
+  await expect(knowledge.getByRole('checkbox',{name:'Design notes',exact:true})).toBeChecked();
+  await knowledge.locator('summary').focus();await page.keyboard.press('Enter');
+  await expect(knowledge).not.toHaveAttribute('open');
+  await editor.getByRole('textbox',{name:copy.instructions,exact:true}).fill('Keep these exact instructions.');
+  await expect(knowledge).not.toHaveAttribute('open');
+  await knowledge.locator('summary').click();
+  await expect(knowledge.getByRole('checkbox',{name:'Design notes',exact:true})).toBeChecked();
+  await page.getByRole('button',{name:copy.create,exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:copy.discard,exact:true}).click();
+  await expect(editor.locator('.profile-capability[open]')).toHaveCount(0);
+  await expect(editor.getByRole('textbox',{name:copy.instructions,exact:true})).toHaveValue('');
+  expect(f.mutations).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
 test('a temporary capability withdrawal cannot restore task composition over the profile home',async({page})=>{
   const f=await fixture(page);await page.goto('/ui/#/agents');
   await page.getByRole('button',{name:/Researcher/}).click();
@@ -76,13 +100,17 @@ test('profile creation, revision editing, duplication and archive do not execute
   await page.getByRole('button', { name: 'New agent', exact: true }).click();
   const editor = page.locator('.profile-editor');
   await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Writing assistant');
-  await editor.getByRole('combobox', { name: 'Model', exact: true }).selectOption(model);
+  await editor.getByRole('button', { name: 'Model', exact: true }).click();
+  await editor.getByRole('option').filter({ hasText: model }).click();
   await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('Use short paragraphs. Cite supporting documents.');
+  await editor.locator('.profile-capability > summary').filter({hasText:agentProfilesText.en.tools}).click();
   await expect(editor.getByRole('checkbox', { name: /read_docs/ })).toBeVisible();
   await editor.getByRole('checkbox', { name: /read_docs/ }).check();
+  await editor.locator('.profile-capability > summary').filter({hasText:agentProfilesText.en.knowledge}).click();
   await expect(editor.getByRole('checkbox', { name: 'Design notes', exact: true })).toBeVisible();
   await editor.getByRole('checkbox', { name: 'Design notes', exact: true }).check();
   await expect(editor.locator('.profile-advanced')).not.toHaveAttribute('open');
+  await editor.locator('.profile-capability > summary').filter({hasText:agentProfilesText.en.delegates}).click();
   await editor.getByRole('checkbox', { name: 'Researcher', exact: true }).check();
   await editor.getByRole('button', { name: 'Save agent', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Agent saved' })).toBeVisible();
@@ -101,6 +129,60 @@ test('profile creation, revision editing, duplication and archive do not execute
   await dialog.getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Agent archived' })).toBeVisible();
   expect(f.mutations).toHaveLength(4);
+});
+
+test('Enter in model search cannot submit the enclosing profile form', async ({ page }) => {
+  const f = await fixture(page);
+  await page.goto('/ui/#/agents/profiles');
+  await page.getByRole('button', { name: /Researcher/ }).click();
+  await page.getByRole('textbox', { name: 'Description', exact: true }).fill('An unsaved change');
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Filter installed models' }).fill(model);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('listbox', { name: 'Model', exact: true }).getByRole('option')).toBeFocused();
+  expect(f.mutations).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('An unsaved change');
+  await page.getByRole('button', { name: 'Save agent', exact: true }).click();
+  await expect.poll(() => f.mutations.length).toBe(1);
+});
+
+test('purpose examples edit only instructions and hand off the explicitly saved revision', async ({ page }) => {
+  const f = await fixture(page);
+  await page.goto('/ui/#/agents/profiles');
+  await page.getByRole('button', { name: 'New agent', exact: true }).click();
+  await page.getByRole('button', { name: 'Draft and refine', exact: true }).click();
+  const instructions = page.getByRole('textbox', { name: 'Instructions', exact: true });
+  await expect(instructions).toBeFocused();
+  await expect(instructions).toHaveValue(/unless I explicitly ask you to save or publish/);
+  await expect(page.getByRole('group', { name: 'Start from an example' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: /Computer use/ })).not.toBeChecked();
+  expect(f.mutations).toEqual([]);
+  await instructions.fill('My reviewed writing instructions.');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Demo writer');
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('listbox', { name: 'Model', exact: true }).getByRole('option').click();
+  await page.getByRole('button', { name: 'Save agent', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Agent saved' })).toBeVisible();
+  expect(f.mutations[0].body.settings).toMatchObject({ instructions: 'My reviewed writing instructions.', tools: [], knowledge: [], delegates: [], computer: false });
+  await page.getByRole('button', { name: 'Use in Chat', exact: true }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await expect(page.locator('.chat-agent-selector > button')).toContainText('Demo writer');
+  expect(f.mutations).toHaveLength(1);
+});
+
+for (const locale of Object.keys(agentPurpose) as LocaleCode[]) test(`purpose-first creation fits ${locale} at narrow width without granting resources`, async ({ page }) => {
+  const f = await fixture(page, undefined, locale);
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.goto('/ui/#/agents/profiles');
+  await page.getByRole('button', { name: agentProfilesText[locale].create, exact: true }).click();
+  const purpose = page.getByRole('region', { name: agentPurpose[locale].title });
+  await expect(purpose).toBeVisible();
+  await expect(purpose.getByRole('button')).toHaveCount(3);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await purpose.getByRole('button').first().click();
+  await expect(purpose.getByRole('textbox')).toHaveValue(agentPurpose[locale].options[0][1]);
+  expect(f.mutations).toEqual([]);
 });
 
 test('conflict keeps draft, cannot overwrite, and allows explicit save as a new profile', async ({ page }) => {
@@ -131,7 +213,8 @@ test('unavailable model and changed tools stay explicit without substituting res
   await expect(editor.getByRole('checkbox', { name: /read_docs Search approved/ })).not.toBeChecked();
   await unavailable.click();
   await expect(unavailable).toHaveCount(0);
-  await editor.getByRole('combobox', { name: 'Model', exact: true }).selectOption(model);
+  await editor.getByRole('button', { name: 'Model', exact: true }).click();
+  await editor.getByRole('option').filter({ hasText: model }).click();
   await editor.getByRole('button', { name: 'Save agent', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Agent saved' })).toBeVisible();
   expect(f.mutations[0].body.settings.tools).toEqual([]);
