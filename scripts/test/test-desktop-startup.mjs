@@ -72,8 +72,13 @@ try {
     'Desktop must show its native startup window before backend recovery completes');
   await page.locator('#recovery:not([hidden])').waitFor();
   const recoveryMs = Math.round(performance.now() - start);
+  assert.equal(await page.locator('#technical').getAttribute('open'), null,
+    'Startup keeps version and address metadata secondary to recovery');
+  await page.locator('#technical > summary').click();
   assert.equal(await page.locator('#service-version').innerText(), responseVersion);
   assert.equal(await page.locator('#desktop-version').innerText(), version);
+  assert.equal(await page.locator('#address').innerText(), url);
+  await page.locator('#technical > summary').click();
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1);
   assert.equal(requests, 1, 'One startup controller, no duplicate renderer probes');
   const status = await page.evaluate(() => window.electron.getBackendInfo());

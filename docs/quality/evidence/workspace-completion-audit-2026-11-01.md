@@ -302,3 +302,25 @@ startup/image journeys and the five-participant usability study remain open.
 Group 19 is implemented and automatically tested; the original ten qualification
 items remain unchecked. No installed desktop, running service, container, model,
 workspace data or published release was replaced during this follow-up.
+
+### Packaged startup regression and v0.4.23 preparation
+
+CI run `41282611012` exposed a test migration omission on Windows and both macOS
+runners: `test-desktop-startup.mjs` read `innerText` from version elements while
+their new Technical details disclosure was closed. The actual value was empty;
+the expected fixture version was still present in state. The test now asserts
+that details start closed, opens them, checks both versions and the exact service
+address, and closes them before continuing the original recovery scenarios.
+The assertion was not replaced with a hidden-DOM check.
+
+A newly packaged Windows v0.4.23 candidate passed the corrected complete startup
+and recovery script in isolated state: first window 517 ms, recovery 590 ms.
+This is one local timing observation, not a p95 guarantee. macOS must pass the
+new exact-source CI run before tagging. The first local packaging invocation used
+the repository root and Electron Builder rejected its hook path; running from
+`apps/desktop` as CI does succeeded. No installed package was replaced.
+
+Release finalizer contract tests passed under WSL. The initial Windows invocation
+hung in its Bash bridge; only that test's identified child processes were stopped.
+Targeted MCP/discovery tests passed after updating advertised version metadata.
+The v0.4.23 notes retain open qualification limits; preparation is not publication.
