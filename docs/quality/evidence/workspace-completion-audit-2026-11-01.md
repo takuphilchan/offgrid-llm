@@ -152,3 +152,95 @@ represented as a test participant. Real-vision tests require explicit local
 compatible artifacts; no model download or fallback is authorized by this audit.
 Release publication and local installation are separate actions. The broader
 goal remains incomplete until the outstanding criteria have genuine evidence.
+
+## Published v0.4.22 and local replacement
+
+The superseded draft described above was rebuilt with the approved memory-recovery
+fix. The published tag resolves to `0c576b84dda2c486b2f445641edbc54c07ab8ef2`.
+CI run `41268276153` passed all eight jobs; release run `41269737965` passed
+all 21 jobs. GitHub published the release at 2026-11-01 04:27:38 UTC. The
+checksum manifest matches all 14 package asset digests. This supersedes the
+earlier draft identity, without erasing its native inference failure.
+
+The Windows installer completed successfully. Installed application archive,
+renderer index and service binary match the downloaded portable package. All
+26 model files and 17 native GPU runtime files match their preservation hashes;
+the computer pack, execution pack and UI compatibility manifest verify. The
+desktop was reopened during the final data comparison, creating new session
+files: a post-launch identical data-directory count is neither claimed nor
+required. The pre-install data backup was compared before installation. No data
+backup was restored over the reopened workspace.
+
+The published GPU container image was imported with its registry config digest
+`sha256:6417ad98dc743c3ec4be89204e9bea8ceda5148b141a07b5eb2402044f994a74`
+and all 20 uncompressed layer identities checked. Docker's local manifest
+identity differs after archive import; its config descriptor was independently
+read back from containerd and matched. The replacement retains the named data
+and model volumes, loopback port binding, GPU request and security restrictions.
+The old container and a compared data-volume backup remain recoverable. The new
+container is intentionally stopped: native Windows remains the active workspace,
+and starting the old Docker workspace on the same port would be incorrect.
+
+## Post-release pressure and control audit
+
+The later "Server under heavy load" report was reproduced at the admission
+boundary: the pressure manager rejected every request at its emergency level,
+including when the resident model had no active or queued generation. Its
+advertised emergency concurrency was one. The follow-up enforces its advertised
+10/5/2/1 request limits atomically, while retaining loader memory/context checks.
+All three chat transports return typed `inference_busy` on exhausted slots.
+The renderer explains that rejection, retains the draft and does not offer a
+misleading status action or automatically resubmit.
+
+The installed v0.4.22 renderer identity matched the release; the reported
+full-width language selector was a CSS precedence defect, not evidence of an
+old executable. A shared file-picker control replaces the two remaining exposed
+browser file inputs (skills and offline model packages), retaining native file
+dialogs, explicit imports, scoped permissions and repeat folder selection.
+Knowledge and Chat images already use labelled custom triggers. Settings now
+constrains the language field in the controls layer.
+
+Initial browser failures exposed incorrect test selectors and an unmocked v2
+read falling through to the installed service. Fixture-mode Vite now disables
+all backend proxying; the streaming fixture explicitly supplies its v2 state.
+Read-only work from the installed workspace is no longer mixed into test results.
+Private traces remain outside tracked source. These new fixes are newer than
+published v0.4.22 and must not be described as included in its release assets.
+
+Checks completed before installation of the follow-up: Windows `go test -p 1
+./...`; focused WSL race checks for pressure/admission/capacity; API generation,
+TypeScript/build; 50 focused renderer tests with one isolated-service test skipped;
+92 desktop tests with one existing skip; installed pack verification and the
+source-size ratchet. The first race invocation failed shell quoting, the second
+could not find Go on the non-login PATH; the explicit Go-path invocation passed.
+The first full renderer invocation used the wrong working directory and stopped
+before running tests. Full renderer results and follow-up installation identity
+are recorded separately after completion. No native inference qualification is
+inferred from these fixture checks.
+
+The full disposable-service renderer run subsequently passed **684 tests with
+28 existing skips**. A fixture-only run passed 679, skipped 29 and failed four
+checks that require service state; it is retained rather than reported as a
+passing integration run. The final profile permission-field presentation cleanup
+then passed **56 focused tests** after rebuilding the renderer. A separate
+67-test presentation/journey capture run passed. Passing these checks is not a
+claim that the product's information hierarchy is finished or validated by users.
+
+The post-release Windows follow-up was installed with a new recovery backup.
+All 430 current data files compared unchanged across replacement. The desktop
+reopened against the original workspace; normalized renderer identity
+`02109877d085f294df9f37b513bc86b0ef861c930303df13cfa7877976d6ad04`
+matches the packaged compatibility manifest and the service reports a ready
+desktop bridge. The original model/runtime preservation check remains separate
+from this startup verification. The first launch inherited the automation
+environment's `ELECTRON_RUN_AS_NODE=1`; removing that variable only in the launch
+process restored normal Electron startup, without changing user settings.
+
+The matching local container follow-up is
+`offgrid-llm:local-ui-pressure-20261101`, with image identity
+`sha256:88a16a2b128148924345ea80d1b9ded75dc2b55f113060f176596ce49ed69893`.
+It remains stopped with the same volumes and security settings. Both the
+published-release container and pre-release container remain available for
+rollback. These are local follow-up builds based on v0.4.22, not replacements of
+the published Git tag or assets. Service changes are in `5c8136f`; control changes
+in `099b7ed` and `a38367e`; fixture isolation is in `ce3747b`.
