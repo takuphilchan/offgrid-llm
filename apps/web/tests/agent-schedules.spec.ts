@@ -1,6 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import {agentSchedulesText} from '../src/i18n/agent-schedules';
 import type {LocaleCode} from '../src/i18n';
+import {scheduleExperience} from '../src/i18n/schedule-experience';
 
 const profile={id:'reporter',workspace:'schedule-fixture',actor:'local-admin',revision:2,digest:'d'.repeat(64),settings:{name:'Reporter',model:'fixture-model',max_iterations:8},archived:false};
 const schedule={id:'schedule-one',version:1,revision:1,digest:'a'.repeat(64),settings:{name:'Morning report',prompt:'Read the approved workspace.',calendar:{zone:'Africa/Harare',hour:9,minute:0,weekdays:[1,2,3,4,5]},enabled:true},next_at:'2026-10-27T07:00:00Z',created_at:'2026-10-26T00:00:00Z',profile:{id:profile.id,revision:profile.revision,digest:profile.digest,name:profile.settings.name},model:'fixture-model',max_iterations:8};
@@ -19,6 +20,7 @@ async function fixture(page:Page,locale:LocaleCode='en'){
     else if(path==='/api/v2/jobs')data=[];
     else if(path==='/api/v2/computer/sessions')data={sessions:[]};
     else if(path==='/api/v2/agent-profiles')data={profiles:[profile]};
+    else if(path==='/api/v2/agent-schedules/preview') data={calendar:schedule.settings.calendar,as_of:'2026-10-26T08:00:00Z',occurrences:['2026-10-27T07:00:00Z','2026-10-28T07:00:00Z','2026-10-29T07:00:00Z']};
     else if(path==='/api/v2/agent-schedules'){
       if(req.method()==='POST'){const body=req.postDataJSON();const item={...schedule,id:'schedule-two',...body,profile:schedule.profile,revision:1};items=[...items,item];data=item;}else data={schedules:items};
     }else if(path==='/api/v2/agent-schedules/schedule-one/disable'){items=items.map(x=>x.id===schedule.id?{...x,revision:x.revision+1,settings:{...x.settings,enabled:false}}:x);data=items[0];}
@@ -38,7 +40,7 @@ test('reviewed creation pins policy; management and history never submit or repl
   await panel.getByRole('button',{name:copy.create,exact:true}).click();const editor=panel.getByRole('form',{name:copy.edit});
   await editor.getByLabel(copy.name,{exact:true}).fill('Exact Unicode café 日本語');await editor.getByLabel(copy.prompt,{exact:true}).fill('Report findings only.');
   await editor.getByLabel(copy.profile,{exact:true}).selectOption('reporter:2');
-  await editor.getByLabel(copy.zone,{exact:true}).fill('Africa/Harare');await editor.getByRole('checkbox',{name:copy.enabled,exact:true}).check();
+  await editor.getByLabel(scheduleExperience.en.zone,{exact:true}).fill('Africa/Harare');await editor.getByRole('checkbox',{name:copy.enabled,exact:true}).check();
   const save=editor.getByRole('button',{name:copy.save,exact:true});await expect(save).toBeDisabled();
   await editor.getByRole('checkbox',{name:copy.review,exact:true}).check();await expect(save).toBeEnabled();
   await editor.getByLabel(copy.time,{exact:true}).fill('10:30');await expect(save).toBeDisabled();
@@ -67,6 +69,7 @@ for(const theme of ['light','dark'] as const)test(`schedule review visual matrix
   await expect(editor.getByLabel(copy.time,{exact:true})).toHaveCSS('min-height','40px');
   await expect(editor.getByLabel(copy.time,{exact:true})).toHaveCSS('border-radius','8px');
   await editor.getByLabel(copy.name,{exact:true}).fill('Reviewed report — café 日本語');await editor.getByLabel(copy.profile,{exact:true}).selectOption('reporter:2');
+  await expect(editor.locator('.schedule-calendar-preview time')).toHaveCount(3);
   for(const size of [{width:1440,height:900},{width:1280,height:720},{width:390,height:844},{width:320,height:480}]){
     await page.setViewportSize(size);await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.screenshot({path:info.outputPath(`schedule-${theme}-${size.width}.png`),fullPage:true});
@@ -74,4 +77,49 @@ for(const theme of ['light','dark'] as const)test(`schedule review visual matrix
   await page.setViewportSize({width:1280,height:720});await page.evaluate(()=>document.documentElement.style.zoom='2');
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await editor.getByRole('button',{name:copy.cancel,exact:true}).click();await expect(start).toBeFocused();expect(writes).toEqual([]);
+});
+
+test('calendar search and preview never save work or bypass resource review', async ({page}) => {
+  const {panel,writes}=await fixture(page),copy=agentSchedulesText.en,experience=scheduleExperience.en;
+  await panel.getByRole('button',{name:copy.create,exact:true}).click();
+  const editor=panel.getByRole('form',{name:copy.edit});
+  const zone=editor.getByRole('combobox',{name:experience.zone,exact:true});
+  await zone.fill('Missing/Zone');await zone.press('ArrowDown');
+  await expect(zone).not.toHaveAttribute('aria-activedescendant');
+  await zone.fill('Harare');await zone.press('ArrowDown');await zone.press('Enter');
+  await expect(zone).toHaveValue('Africa/Harare');await expect(zone).toBeFocused();
+  await expect(zone).toHaveAttribute('aria-expanded','false');
+  const preview=editor.getByRole('region',{name:experience.preview});
+  await expect(preview.locator('time')).toHaveCount(3);
+  await expect(preview.locator('time').first()).toHaveAttribute('datetime','2026-10-27T07:00:00Z');
+  await expect(editor.getByLabel(copy.budget,{exact:true})).not.toBeVisible();
+  await editor.getByText(new RegExp('^Advanced limits')).click();
+  await expect(editor.getByLabel(copy.budget,{exact:true})).toBeVisible();
+  await expect(editor.getByRole('button',{name:copy.save,exact:true})).toBeDisabled();
+  await preview.getByRole('button',{name:experience.refresh}).click();
+  await expect(preview.locator('time')).toHaveCount(3);
+  expect(writes).toEqual([]);
+});
+
+test('calendar changes clear old predictions and reject late or unavailable previews', async ({page}) => {
+  const {panel,writes}=await fixture(page),copy=agentSchedulesText.en,experience=scheduleExperience.en;
+  const pending: (()=>void)[]=[];
+  await page.route('**/api/v2/agent-schedules/preview?**', async route => {
+    const query=new URL(route.request().url()).searchParams;
+    if(query.get('zone')==='UTC') return route.fulfill({json:{as_of:'2026-10-26T08:00:00Z',occurrences:['2026-10-27T09:00:00Z','2026-10-28T09:00:00Z','2026-10-29T09:00:00Z']}});
+    if(query.get('zone')==='Europe/London') await new Promise<void>(resolve=>pending.push(resolve));
+    await route.fulfill({status:503,json:{error:{message:'unavailable'}}}).catch(()=>{});
+  });
+  await panel.getByRole('button',{name:copy.create,exact:true}).click();
+  const editor=panel.getByRole('form',{name:copy.edit}),preview=editor.getByRole('region',{name:experience.preview});
+  await expect(preview.locator('time')).toHaveCount(3);
+  const zone=editor.getByRole('combobox',{name:experience.zone});
+  await zone.fill('Europe/London');await zone.press('Escape');
+  await expect(preview.locator('time')).toHaveCount(0);await expect.poll(()=>pending.length).toBe(1);
+  await zone.fill('UTC');await zone.press('Escape');await expect(preview.locator('time')).toHaveCount(3);
+  pending[0]();await expect(preview.locator('time')).toHaveCount(3);
+  await zone.fill('Missing/Zone');await zone.press('Escape');
+  await expect(preview.getByRole('status')).toHaveText(experience.failed);
+  await expect(preview.locator('time')).toHaveCount(0);
+  expect(writes).toEqual([]);
 });

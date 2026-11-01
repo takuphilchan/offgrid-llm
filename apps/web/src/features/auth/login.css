@@ -1,0 +1,14 @@
+@layer workspace {
+  .login-screen { min-height: 100dvh; padding: 24px 16px; place-content: safe center; }
+  .login-card { width: min(440px, calc(100vw - 32px)); min-width: 0; gap: 20px; padding: 28px; }
+  .login-card > .login-account-hint { margin: 0; line-height: 1.6; }
+  .login-service { display: grid; gap: 6px; padding: 0; font-size: var(--type-caption); }
+  .login-service code { color: var(--text); overflow-wrap: anywhere; }
+  .login-password { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .login-password > button { justify-self: start; }
+  .login-card input { width: 100%; min-width: 0; font-size: 16px; }
+  .login-card input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .login-recovery { display: grid; gap: 8px; overflow-wrap: anywhere; }
+  .login-recovery p { margin: 0; }
+  @media (max-width: 390px) { .login-card { padding: 20px; gap: 16px; } }
+}

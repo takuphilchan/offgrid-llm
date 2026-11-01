@@ -10,6 +10,8 @@ import { ActionGroup, ScopedNotice, SectionHeading } from '../../components/Work
 import { ExecutionWorkspace } from '../chat/ExecutionWorkspace';
 import { useTaskStatus } from '../agents/useTaskStatus';
 import './agent-schedules.css';
+import { CalendarPreview, TimezoneField } from './ScheduleCalendar';
+import { scheduleExperience } from '../../i18n/schedule-experience';
 
 export function AgentSchedules() {
   const {scope,workspace}=useWorkspace();
@@ -94,9 +96,10 @@ function ScheduleEditor({original,onCancel,onSaved}:{original:AgentSchedule|null
       <label htmlFor={field('name')}>{copy.name}</label><input ref={firstInput} id={field('name')} required maxLength={128} value={name} onChange={e=>setName(e.target.value)}/>
       <label htmlFor={field('prompt')}>{copy.prompt}</label><textarea id={field('prompt')} required maxLength={32000} rows={4} value={prompt} onChange={e=>setPrompt(e.target.value)}/>
       <label htmlFor={field('profile')}>{copy.profile}</label><select id={field('profile')} required value={selected} onChange={e=>{setSelected(e.target.value);const p=profiles.find(p=>`${p.id}:${p.revision}`===e.target.value);if(p)setBudget(p.settings.max_iterations);}}><option value="">—</option>{profiles.map(p=><option key={`${p.id}:${p.revision}`} value={`${p.id}:${p.revision}`}>{p.settings.name} · {p.revision} · {p.settings.model}</option>)}</select>
-      <div className="schedule-calendar"><label>{copy.zone}<input required value={zone} onChange={e=>setZone(e.target.value)} autoComplete="off" dir="ltr"/></label><label>{copy.time}<input required type="time" value={time} onChange={e=>setTime(e.target.value)}/></label></div>
+      <div className="schedule-calendar"><TimezoneField value={zone} onChange={value=>{setZone(value);setReviewed(false);}}/><label>{copy.time}<input required type="time" value={time} onChange={e=>setTime(e.target.value)}/></label></div>
       <fieldset className="schedule-days"><legend>{copy.days}</legend><ActionGroup><button type="button" className="secondary-button" onClick={()=>{setDays([0,1,2,3,4,5,6]);setReviewed(false);}}>{copy.daily}</button><button type="button" className="secondary-button" onClick={()=>{setDays([1,2,3,4,5]);setReviewed(false);}}>{copy.weekdays}</button></ActionGroup><div>{[0,1,2,3,4,5,6].map(day=><label key={day}><input type="checkbox" checked={days.includes(day)} onChange={e=>setDays(e.target.checked?[...days,day].sort():days.filter(d=>d!==day))}/>{new Intl.DateTimeFormat(locale,{weekday:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2026,9,25+day)))}</label>)}</div></fieldset>
-      <label htmlFor={field('budget')}>{copy.budget}</label><input id={field('budget')} type="number" min={1} max={profile?.settings.max_iterations??50} required value={budget} onChange={e=>setBudget(Number(e.target.value))}/>
+      <CalendarPreview zone={zone} time={time} days={days}/>
+      <details className="schedule-limits"><summary>{scheduleExperience[locale].advanced} · {copy.budget}: {budget}</summary><label htmlFor={field('budget')}>{copy.budget}</label><input id={field('budget')} type="number" min={1} max={profile?.settings.max_iterations??50} required value={budget} onChange={e=>setBudget(Number(e.target.value))}/></details>
       <ExecutionWorkspace value={host} disabled={busy} onReady={setHostReady} ceiling={profile?.settings.execution} onChange={next=>{setHost(next);setReviewed(false);}}/>
       <label className="schedule-check"><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)}/>{copy.enabled}</label>
     </fieldset>

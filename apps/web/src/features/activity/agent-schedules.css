@@ -11,6 +11,18 @@
   .schedule-fields > label, .schedule-calendar label { font-size: .875rem; }
   .schedule-calendar { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1rem; margin-block: .5rem; }
   .schedule-calendar label { display: grid; gap: .5rem; }
+  .timezone-field { position: relative; min-width: 0; display: grid; gap: .5rem; }
+  .timezone-options { position: absolute; inset-inline: 0; top: 100%; z-index: 2; background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px; max-height: 16rem; overflow: auto; }
+  .timezone-options > button { display: block; width: 100%; min-height: 36px; text-align: start; padding: 8px; overflow-wrap: anywhere; }
+  .timezone-options > button:is(:hover, [aria-selected=true]) { background: var(--surface-2); }
+  .timezone-options p { margin: 8px; font-size: var(--type-caption); }
+  .schedule-calendar-preview { padding-block: 12px; }
+  .schedule-calendar-preview h4 { margin: 0; }
+  .schedule-calendar-preview p { margin-block: 8px; font-size: .875rem; }
+  .schedule-calendar-preview ol { padding-inline-start: 1.5rem; line-height: 1.8; }
+  .schedule-calendar-preview small { display: block; margin-block-end: 8px; color: var(--muted); }
+  .schedule-limits > label { display: block; margin-block: 12px 8px; }
+  .schedule-limits input[type=number] { max-width: 10rem; }
   .schedule-days { min-width: 0; border: 0; padding: .5rem 0; margin: 0; }
   .schedule-days > div { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
   .schedule-days label, .schedule-check { display: flex; align-items: center; gap: .5rem; min-height: 44px; }
@@ -21,4 +33,5 @@
   .schedule-history li { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding-block: .75rem; }
   .schedule-history code { overflow-wrap: anywhere; white-space: normal; }
   @media(max-width:480px) { .schedule-calendar { grid-template-columns: minmax(0,1fr); } }
+  @media(pointer:coarse) { .timezone-options > button { min-height: 44px; } }
 }

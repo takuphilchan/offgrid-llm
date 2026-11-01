@@ -90,12 +90,11 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
     <section className="settings-group" aria-labelledby="workspace-title">
       <SectionHeading title={management.workspace} id="workspace-title" />
       <p className="model-search-hint">{health === 'offline' ? text.guidance.serviceOffline : text.guidance.connectionMeaning}</p>
-      <div className="settings-panel desktop-storage"><h3>{text.settings.service}</h3><dl>
-      <div><dt>{text.settings.service}</dt><dd>{backend?.url ?? window.location.origin}</dd></div>
+      <div className="settings-panel desktop-storage"><h3>{text.settings.service}</h3><div className="settings-service-details"><code dir="ltr">{backend?.url ?? window.location.origin}</code><dl>
       <div><dt>{management.serviceState}</dt><dd>{health === 'ready' ? text.status.ready : health === 'checking' ? text.status.checking : text.status.offline}</dd></div>
       <div><dt>{text.settings.version}</dt><dd>{details.identity?.version ?? details.config?.version ?? unknown}</dd></div>
       {backend && <div><dt>Desktop</dt><dd>{backend.desktopVersion}</dd></div>}
-    </dl></div>
+    </dl></div></div>
       <div className="settings-panel"><div><h3>{text.settings.computerUse}</h3><p>{!admin ? interaction[locale].adminOnly : !details.computer ? unknown : details.computer.available ? text.settings.available : text.settings.unavailable}</p></div>{admin && details.computer?.available && <div className="settings-actions"><span role="status" className={details.computer.emergency_stop ? 'status-pill danger' : 'status-pill'}>{details.computer.emergency_stop ? text.settings.stopped : `${details.computer.active_sessions} ${text.settings.sessions}`}</span><button className="danger-button" disabled={stopping} onClick={() => void stopComputer()}>{stopping ? text.common.loading : text.settings.emergencyStop}</button></div>}</div>
     </section>
     <details className="settings-diagnostics desktop-storage"><summary>{management.diagnostics}</summary><dl>
