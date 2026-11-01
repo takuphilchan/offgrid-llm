@@ -1,16 +1,17 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync, mkdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 // Chromium rendering of the real startup assets with an inert bridge. This
 // does not launch Electron, connect a service or exercise native window controls.
 const root=resolve('../..'), desktop=resolve(root,'apps/desktop');
 const copy=JSON.parse(readFileSync(resolve(root,'apps/web/public/desktop-presentation.json'),'utf8'));
+// Exact startup.css from 7357acae431e40092fd40a5458207d3649d503e8.
+// Keep the historical comparison reproducible in shallow checkouts/source archives.
+const oldCSS=readFileSync(resolve(root,'apps/web/tests/fixtures/desktop-startup-before.css'),'utf8');
 for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const width of [390,1440]) test(`startup surface ${theme} ${locale} ${width}`,async({page})=>{
   await page.setViewportSize({width,height:900});
   let before=false;
-  const oldCSS=execFileSync('git',['show','7357acae431e40092fd40a5458207d3649d503e8:apps/desktop/startup.css'],{cwd:root,encoding:'utf8'});
   await page.addInitScript(({theme,locale,copy})=>{
     Object.defineProperty(window,'electron',{value:{
       presentation:{locale,effectiveTheme:theme,copy},

@@ -248,3 +248,12 @@ the cancellation under CI's Node **22.23.2**; the corrected runtime suite passes
 one skip**. Linux Node 24 passes the corrected suite too. Logs retain before/after
 results under `runtime-reconnect-node22*.log`; cross-platform CI must rerun on the
 corrected source before tagging.
+
+The next revision (`f00f607d`, run `41259715522`) passed both macOS native jobs
+and the earlier failing desktop test on Windows. Its Linux browser job passed
+658 cases but failed eight startup comparisons because they read historical CSS
+with `git show` from a shallow checkout. The exact baseline file is now a test
+fixture (SHA-256 `3622a5a27f91d402f4489506f7e0b4c037f80b8afd417b84d8391fb7f872902d`),
+not a changed baseline or skipped assertion. All eight comparisons passed locally
+after this fixture repair. The historical CSS remains test-only and is not shipped
+in the renderer. CI must still complete on the final revision.
