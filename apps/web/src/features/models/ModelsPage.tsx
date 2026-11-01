@@ -190,9 +190,9 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
         <ModelIdentity model={legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model])))} />
         {verifications[model.id] && <div className="verification model-verification" role="status"><strong>{verifications[model.id].file_name}</strong><span>{verifications[model.id].message}</span><span>{verifications[model.id].sha256}</span></div>}
         <div className="model-actions">
-          {supportsChat(model) && <button className="secondary-button" aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{workspaceOrder(locale).selectModel}</button>}
-          <UtilityPopover label={`${workspaceOrder(locale).modelActions}: ${model.id}`} trigger={<Icon name="more" size={18} />} triggerClassName="icon-button" className="model-maintenance">
-            <button className="secondary-button" disabled={!admin || operation !== ''} onClick={() => void verify(model)}>{operation === `verify:${model.id}` ? text.common.loading : text.models.verify}</button><button className="danger-button" disabled={!admin || operation !== ''} onClick={() => setConfirmDelete(model.id)}>{text.models.delete}</button>
+          {supportsChat(model) && <button className="text-button" aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{selected === model.id && <Icon name="check" size={16} />}{workspaceOrder(locale).selectModel}</button>}
+          <UtilityPopover compact align="end" label={`${workspaceOrder(locale).modelActions}: ${model.id}`} trigger={<Icon name="more" size={18} />} triggerClassName="utility-button icon-button" className="model-maintenance">
+            <button className="text-button" disabled={!admin || operation !== ''} onClick={event => { event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover(); void verify(model); }}><Icon name="check" size={16} />{operation === `verify:${model.id}` ? text.common.loading : text.models.verify}</button><button className="danger-button" disabled={!admin || operation !== ''} onClick={event => { event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover(); setConfirmDelete(model.id); }}><Icon name="trash" size={16} />{text.models.delete}</button>
           </UtilityPopover>
         </div>
       </article>)}</div>}

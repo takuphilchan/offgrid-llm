@@ -31,14 +31,14 @@ export function ModelSelect({ models, value, onChange }: { models: Model[]; valu
     if (next >= 0 && !event.nativeEvent.isComposing) { event.preventDefault(); options[next]?.focus(); }
   };
   return <div ref={root} className="model-select" onKeyDown={navigate}>
-    <UtilityPopover label={text.chat.model} triggerClassName="secondary-button model-select-trigger" panelClassName="model-select-panel"
+    <UtilityPopover label={text.chat.model} triggerClassName="secondary-button model-select-trigger" panelClassName="model-select-panel" panelTabIndex={-1} preferredHeight={360}
       trigger={<><Icon name="models" size={16} /><span>{value ? readableModelName(value) : text.chat.selectModel}</span></>}
       onOpenChange={open => { if (open) { setQuery(''); root.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); } }}>
       <SearchField label={copy.filterInstalled} value={query} onChange={setQuery} />
       <div role="listbox" aria-label={text.chat.model} className="model-select-options">
         {matches.map((model, index) => <button type="button" role="option" aria-selected={model.id === value} tabIndex={model.id === value || !matches.some(m => m.id === value) && index === 0 ? 0 : -1} key={model.id} onClick={() => choose(model.id)}>
           <span className="model-select-name"><strong>{readableModelName(model.id)}</strong>{model.id === value && <Icon name="check" size={16} />}</span>
-          <small className="model-select-id" dir="auto">{model.id}</small>
+          <small className="model-select-id" dir="auto" title={model.id}>{model.id}</small>
           <small>{model.loaded ? copy.loaded : model.runtime_ready === true ? runtime.ready : model.runtime_ready === false ? `${runtime.ready}: ${runtime.no}` : copy.unchecked}{model.context_window ? ` · ${runtime.context}: ${model.context_window.toLocaleString(locale)}` : ''}</small>
         </button>)}
       </div>

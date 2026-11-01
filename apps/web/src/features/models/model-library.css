@@ -9,7 +9,8 @@
   .model-display h3 { font-size: var(--type-body); line-height: var(--leading-ui); }
   .model-display .model-meta { gap: 8px; }
   .model-summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); font-variant-numeric: tabular-nums; }
-  .model-display .model-meta span { font-size: 13px; }
+  .model-display .model-meta span { padding: 0; border-radius: 0; background: transparent; font-size: 13px; }
+  .model-display .model-meta span + span::before { content: '·'; margin-inline-end: 8px; color: var(--muted); }
   .model-display .model-size, .model-display-details { color: var(--muted); font-size: 13px; line-height: 1.6; }
   .model-display-details p { margin-block-start: 8px; }
   .model-display-details summary { cursor: pointer; }
@@ -21,8 +22,10 @@
   .installed-model > .model-display { padding: 16px; }
   .model-display .installed-model-main { display: block; text-align: start; width: fit-content; max-width: 100%; }
   .model-display .installed-model-main strong { white-space: normal; overflow-wrap: anywhere; font-size: var(--type-body); }
-  .installed-model .model-actions { flex-wrap: wrap; }
-  .model-maintenance .utility-popover-content { display: grid; gap: 8px; }
+  .installed-model { border-inline-start: 3px solid transparent; }
+  .installed-models .installed-model.selected { background: transparent; border-inline-start-color: var(--text); }
+  .installed-model .model-actions { flex-wrap: wrap; align-self: start; padding-block-start: 16px; }
+  .model-maintenance .utility-popover-content { display: grid; gap: 2px; }
   .model-section > .workspace-search-field { max-width: 560px; }
   .model-discovery-sources { display: flex; flex-wrap: wrap; gap: 8px; }
   .model-discovery-sources > button[aria-pressed=true] { border-color: var(--line-strong); background: var(--surface-2); }

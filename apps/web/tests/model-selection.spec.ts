@@ -57,6 +57,37 @@ test('model picker searches exact identifiers, shows actual readiness and preser
   await expect(picker).toBeFocused();
 });
 
+for(const locale of ['en','ar']) for(const theme of ['light','dark']) test(`model picker has one scrolling list with fixed search: ${locale} ${theme}`,async({page},info)=>{
+  const state=await craftFixture(page,locale,theme);
+  const models=Array.from({length:30},(_,i)=>({id:`Research-Model-${i}-Q4_K_M`,type:'chat',context_window:32768}));
+  await page.route('**/v1/models',r=>r.fulfill({json:{data:models}}));
+  await page.setViewportSize({width:locale==='ar'?390:1280,height:640});
+  await page.goto('/ui/#/chat');
+  const trigger=page.locator('.model-select-trigger');await trigger.click();
+  const panel=page.locator('.model-select-panel'),search=panel.getByRole('searchbox'),list=panel.getByRole('listbox');
+  await expect(search).toBeFocused();
+  await expect(panel).toHaveCSS('opacity','1');
+  const top=(await search.boundingBox())!.y;
+  const overflow=await panel.evaluate(el=>[el,...Array.from(el.querySelectorAll('*'))].filter(n=>n.scrollHeight>n.clientHeight+1&&['auto','scroll'].includes(getComputedStyle(n).overflowY)).map(n=>n.className));
+  expect(overflow).toEqual(['model-select-options']);
+  await search.press('ArrowDown'); await page.keyboard.press('End');
+  await expect(list.getByRole('option').last()).toBeFocused();
+  await expect.poll(()=>list.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+  expect(Math.abs((await search.boundingBox())!.y-top)).toBeLessThan(1);
+  await expect(panel.getByRole('link')).toBeInViewport();
+  const row = list.getByRole('option').last();
+  expect((await row.boundingBox())!.height).toBeLessThan(105);
+  expect((await list.boundingBox())!.height).toBeGreaterThan(150);
+  expect(await row.evaluate(el=>{
+    const outer=el.getBoundingClientRect();
+    return Array.from(el.children).every(child=>{const box=child.getBoundingClientRect();return box.top>=outer.top&&box.bottom<=outer.bottom;});
+  })).toBe(true);
+  await expect(row).toBeInViewport({ratio:1});
+  await page.screenshot({path:info.outputPath('model-picker.png')});
+  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
+  expect(state.writes).toEqual([]);
+});
+
 for (const locale of ['en', 'ar']) test(`model picker fits narrow ${locale} and distinguishes same-family variants`, async ({ page }, info) => {
   const state = await craftFixture(page, locale, 'dark');
   await page.route('**/v1/models', r => r.fulfill({ json: { data: ['Q4_K_M', 'Q8_0'].map(quant => ({ id: `Qwen2.5-7B-Instruct-${quant}`, type: 'chat' })) } }));

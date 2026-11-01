@@ -4,10 +4,13 @@
   .model-select-trigger { min-width: 0; width: 100%; max-width: 100%; gap: 8px; }
   .model-select-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .model-select-trigger > svg { flex-shrink: 0; }
-  .model-select-options { display: grid; gap: 4px; max-height: 22rem; overflow: auto; margin-block: 12px; }
-  .model-select-options > button { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; text-align: start; gap: 4px; padding: 12px; width: 100%; min-width: 0; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text); }
-  .model-select-options > button:is(:hover, [aria-selected="true"]) { background: var(--surface-2); border-color: var(--line); }
+  .model-select-panel:popover-open { display: flex; flex-direction: column; overflow: hidden; padding: 8px; scrollbar-gutter: auto; }
+  .model-select-panel .utility-popover-content { display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+  .model-select-panel .utility-popover-content > :not(.model-select-options) { flex-shrink: 0; }
+  .model-select-options { display: grid; grid-auto-rows: max-content; align-content: start; flex: 1 1 auto; min-height: 0; gap: 2px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; margin: 0; }
+  .model-select-options > button { display: grid; height: auto; min-height: max-content; grid-template-columns: minmax(0, 1fr); align-content: start; justify-content: stretch; text-align: start; gap: 2px; padding: 8px 10px; width: 100%; min-width: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text); }
+  .model-select-options > button:is(:hover, [aria-selected="true"]) { background: var(--surface-2); border-color: transparent; }
   .model-select-name { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
   .model-select-options small { color: var(--muted); overflow-wrap: anywhere; font-size: var(--type-caption); line-height: 1.5; }
-  .model-select-id { font-family: var(--mono); }
+  .model-select-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: inherit; }
 }

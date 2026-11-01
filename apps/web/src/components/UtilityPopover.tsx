@@ -1,11 +1,13 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 /** Nonmodal utilities only. Consequential confirmations keep their dialog contract. */
-export function UtilityPopover({ label, trigger, children, className = '', triggerClassName = 'text-button', panelClassName = '', align = 'start', compact = false, onOpenChange }: {
+export function UtilityPopover({ label, trigger, children, className = '', triggerClassName = 'text-button', panelClassName = '', align = 'start', compact = false, panelTabIndex = 0, preferredHeight, onOpenChange }: {
   label: string; trigger?: ReactNode; children: ReactNode; className?: string;
   triggerClassName?: string; panelClassName?: string; align?: 'start' | 'end';
   onOpenChange?: (open: boolean) => void;
   compact?: boolean;
+  panelTabIndex?: 0 | -1;
+  preferredHeight?: number;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -29,7 +31,9 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       const panelWidth = Math.min(compact ? 240 : 340, Math.max(0, width - 2 * margin));
       const above = Math.max(0, anchor.top - top - margin - gap);
       const below = Math.max(0, top + height - anchor.bottom - margin - gap);
-      const upwards = below < Math.min(panel.current.scrollHeight, 360) && above > below;
+      // Composite panels scroll internally; their clipped outer height is not
+      // their desired height and must not flip placement after layout shrinks.
+      const upwards = below < Math.min(preferredHeight ?? panel.current.scrollHeight, 360) && above > below;
       const space = Math.max(above, below);
       // At extreme zoom or short height, use the viewport rather than an unusable sliver.
       const overlay = space < 100;
@@ -76,12 +80,12 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       window.visualViewport?.removeEventListener('resize', position);
       window.visualViewport?.removeEventListener('scroll', position);
     };
-  }, [open, align, compact]);
+  }, [open, align, compact, preferredHeight]);
 
   return <div className={`utility-popover ${className}`}>
     <button ref={button} type="button" className={triggerClassName} title={label} aria-label={label}
       popoverTarget={id} aria-expanded={open} aria-controls={id}>{trigger ?? label}</button>
-    <div ref={panel} id={id} className={`utility-popover-panel ${compact ? 'utility-action-panel' : ''} ${panelClassName}`} popover="auto" role="region" aria-label={label} tabIndex={0}
+    <div ref={panel} id={id} className={`utility-popover-panel ${compact ? 'utility-action-panel' : ''} ${panelClassName}`} popover="auto" role="region" aria-label={label} tabIndex={panelTabIndex}
       onKeyDown={event => {
         // Chromium/Electron do not consistently give a focused generic region
         // native scroll keys. Only handle the region itself, never its controls.

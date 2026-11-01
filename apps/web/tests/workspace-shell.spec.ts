@@ -139,5 +139,7 @@ test('expanded navigation remains usable in a short desktop viewport', async ({ 
   await openSettings(page);
   await expect(page).toHaveURL(/#\/settings$/);
   await expect(page.locator('.sidebar-foot')).toBeInViewport();
+  const knowledge = page.locator('.primary-nav a[href="#/knowledge"] span');
+  expect(await knowledge.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(30);
   await page.screenshot({ path: info.outputPath('shell-expanded-desktop.png') });
 });

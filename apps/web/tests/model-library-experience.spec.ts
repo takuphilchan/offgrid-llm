@@ -187,6 +187,27 @@ test('failed operations retain the exact model and safe recovery across library 
   expect(state.mutations).toEqual([]);
 });
 
+test('model actions are compact rows and deletion still requires confirmation', async ({page}, info) => {
+  const state = await fixture(page);
+  await page.goto('/ui/#/models');
+  const trigger = page.getByRole('button',{name:'Model actions: fixture-chat',exact:true});
+  await trigger.click();
+  const menu = page.getByRole('region',{name:'Model actions: fixture-chat',exact:true});
+  await expect(menu).toHaveCSS('opacity','1');
+  expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(240);
+  expect((await menu.boundingBox())!.height).toBeLessThan(110);
+  const verify=menu.getByRole('button',{name:'Verify',exact:true});
+  await expect(verify).toHaveCSS('justify-content','flex-start');
+  await expect(verify).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  await page.screenshot({path:info.outputPath('model-actions.png')});
+  await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
+  await trigger.click(); await menu.getByRole('button',{name:'Delete',exact:true}).click();
+  await expect(menu).toBeHidden(); await expect(page.getByRole('dialog')).toBeVisible();
+  expect(state.mutations).toEqual([]);
+  await page.getByRole('dialog').getByRole('button',{name:'Cancel',exact:true}).click();
+  expect(state.mutations).toEqual([]);
+});
+
 test('legacy verification remains attached to its model after navigating away and back', async ({ page }) => {
   await fixture(page); let checks = 0;
   await page.route('**/v1/models/verify?*', route => {

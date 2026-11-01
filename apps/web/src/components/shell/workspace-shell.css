@@ -93,7 +93,7 @@
     .sidebar { gap: 8px; padding-block: 8px; }
     .primary-nav { grid-template-columns: 1fr 1fr; gap: 0; }
     .nav-group { display: contents; }
-    .nav-link { padding-inline: 8px; gap: 8px; }
+    .nav-link { padding-inline: 4px; gap: 6px; }
     .sidebar-context { padding-block-start: 8px; }
     .service-state { padding-block-start: 4px; }
   }

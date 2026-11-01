@@ -34,6 +34,14 @@ for (const locale of ['en','ar'] as const) for (const theme of ['light','dark'] 
   await limit.check();
   await expect(advanced.locator('.profile-execution-policy input[type=checkbox]')).toHaveCount(4);
   await page.screenshot({path:info.outputPath('profile-limits.png')});
+  await page.goto('/ui/#/models');
+  await page.locator('.model-maintenance > button').first().click();
+  const modelMenu=page.locator('.model-maintenance .utility-action-panel:popover-open');
+  await expect(modelMenu).toHaveCSS('opacity','1');
+  const modelBounds=(await modelMenu.boundingBox())!;
+  expect(modelBounds.width).toBeLessThanOrEqual(240);expect(modelBounds.height).toBeLessThan(110);
+  expect(modelBounds.x).toBeGreaterThanOrEqual(0);expect(modelBounds.x+modelBounds.width).toBeLessThanOrEqual(width);
+  await page.screenshot({path:info.outputPath('model-actions.png')});
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(state.writes).toEqual([]);
 });
