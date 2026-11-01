@@ -440,15 +440,18 @@ app.on('before-quit', event => {
   quitting = true;
   clearTimeout(saveTimer);
   void (async () => {
-    await saveWindowState();
-    await presentationQueue.catch(() => {});
-    await computer.stop();
-    await execution.stop();
-    await runtime.stop(); // Only our child, never a Docker/external service.
+    await require('./shutdown').shutdownDesktop({
+      save: async () => { await saveWindowState(); await presentationQueue; },
+      computer, execution, runtime,
+    });
     tray?.destroy();
     shutdownComplete = true;
     app.quit();
-  })();
+  })().catch(() => {
+    quitting = false;
+    runtime.publish({ state: 'error', reason: 'OffGrid could not confirm that all local work stopped. Quit again to retry. No new service was started.' });
+    showWindow();
+  });
 });
 process.on('unhandledRejection', () => {
   if (!quitting) runtime.publish({ state: 'error', reason: 'A desktop operation failed. Retry the connection or close and reopen OffGrid.' });

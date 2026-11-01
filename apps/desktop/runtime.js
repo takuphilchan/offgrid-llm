@@ -166,19 +166,30 @@ class DesktopRuntime extends EventEmitter {
     return this.snapshot();
   }
 
-  async stop() {
+  stop() {
+    if (this.stopping) return this.stopping;
+    this.stopping = this.stopOwned().finally(() => { this.stopping = null; });
+    return this.stopping;
+  }
+
+  async stopOwned() {
     this.closing = true;
     clearTimeout(this.reconnectTimer);
     this.abort?.abort();
     await this.pending;
     const child = this.child;
     if (!child) return;
-    await new Promise(resolve => {
-      let timer;
-      const done = () => { clearTimeout(timer); if (this.child === child) this.child = null; resolve(); };
+    await new Promise((resolve, reject) => {
+      let timer, acknowledgement;
+      const clear = () => { clearTimeout(timer); clearTimeout(acknowledgement); child.removeListener('exit', done); };
+      const done = () => { clear(); if (this.child === child) this.child = null; resolve(); };
+      const unconfirmed = () => { clear(); reject(Error('service_stop_unconfirmed')); };
       child.once('exit', done);
-      timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} done(); }, 5000);
-      try { child.kill('SIGTERM'); } catch { done(); }
+      timer = setTimeout(() => {
+        acknowledgement = setTimeout(unconfirmed, this.options.stopAckMs ?? 1000);
+        try { child.kill('SIGKILL'); } catch { unconfirmed(); }
+      }, this.options.stopGraceMs ?? 5000);
+      try { child.kill('SIGTERM'); } catch { unconfirmed(); }
     });
   }
 }

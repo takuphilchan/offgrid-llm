@@ -35,6 +35,31 @@ function waitForState(runtime, expected) {
   });
 }
 
+test('unconfirmed service termination retains ownership and permits a shutdown retry', async () => {
+  let probes=0;
+  const {runtime,child}=fixture(async()=>({state:++probes===1?'offline':'ready'}), {stopGraceMs:5,stopAckMs:5});
+  await runtime.connect();
+  child.kill=()=>false;
+  const stopping=runtime.stop();
+  assert.equal(runtime.stop(),stopping);
+  await assert.rejects(stopping,/service_stop_unconfirmed/);
+  assert.equal(runtime.child,child);
+  child.kill=()=>{queueMicrotask(()=>child.emit('exit',0));return true;};
+  await runtime.stop();
+  assert.equal(runtime.child,null);
+  assert.equal(child.listenerCount('exit'),0);
+});
+
+test('forced service shutdown waits for the exit acknowledgement', async () => {
+  let probes=0;const signals=[];
+  const {runtime,child}=fixture(async()=>({state:++probes===1?'offline':'ready'}), {stopGraceMs:5,stopAckMs:100});
+  await runtime.connect();
+  child.kill=signal=>{signals.push(signal);if(signal==='SIGKILL')setTimeout(()=>child.emit('exit',0),5);return true;};
+  await runtime.stop();
+  assert.deepEqual(signals,['SIGTERM','SIGKILL']);
+  assert.equal(runtime.child,null);
+});
+
 test('an incompatible external service is never stopped, modified, or replaced', async () => {
   const result = { state: 'incompatible', version: '0.4.3-history-dev', canOpenBrowser: true };
   const { runtime, calls } = fixture(async () => result);

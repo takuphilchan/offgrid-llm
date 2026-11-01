@@ -115,6 +115,16 @@ this desktop; it never stops an externally managed container/service. Failed
 first launches are not silently hidden in the tray. A stopped child returns the
 window to recovery rather than leaving a blank page.
 
+Quit attempts cleanup of every owned component even if one reports a failure.
+A failed or stalled preference save cannot prevent input and service cleanup.
+The app waits for the owned service's exit acknowledgement after termination;
+if stopping cannot be confirmed, it keeps ownership and shows an error so Quit
+can be retried. It does not claim that a sent termination request proves exit.
+Electron normally has separate renderer/GPU/utility processes, and chat and
+embedding models can have separate owned workers. These are distinct from
+duplicate application instances or orphaned workers; process counts alone do
+not demonstrate a leak.
+
 For isolated testing, set `OFFGRID_DESKTOP_HOME` to an absolute, empty test
 directory before launching. This also isolates Electron's profile. Set
 `OFFGRID_PORT` to the external test service's port. Do not point qualification
