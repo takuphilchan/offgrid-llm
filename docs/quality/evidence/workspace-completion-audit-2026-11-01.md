@@ -649,3 +649,15 @@ source changed after that full run. API generation, TypeScript/build, docs,
 source-size, repository hygiene and OpenSpec checks passed; the existing bundle
 size advisory remains. The compact attention capture was inspected. These later
 presentation edits are not part of the installed `f01060e...` build yet.
+
+The owner subsequently requested installation of this follow-up. The packaged
+Windows presentation fixture passed native options, all seven routes at 200%
+zoom, Help, live/saved appearance and restart checks. The installer completed
+while OffGrid was closed. All 611 payload files and 349 saved-data files matched
+their manifests; GPU runtime and model inventory were unchanged. The installed
+UI fingerprint was verified against the candidate:
+`6736697a5c4002342d86e27cc2e8d4228157f61a3b7ad536227bca49c4cb68af`.
+Installer SHA-256:
+`b7eee3b8f593a969f55b3268fefa09bfebb0a738d78e8f0f8f3722a9b96bdb6f`.
+A verified external rollback backup was retained. This installation does not
+remove the seven protected records or change the published 0.4.23 release.
