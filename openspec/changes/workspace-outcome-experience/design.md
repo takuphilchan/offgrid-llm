@@ -1,5 +1,29 @@
 # Design
 
+## Corrective review after installation (2026-11-01)
+
+Utility panels distinguish compact action lists from configuration panels rather
+than assigning every popup 340px. Single-history actions use one quiet row, with
+keyboard focus and coarse-pointer targets retained. Single-chat confirmation uses
+readable identity and singular copy. Default deletion sends no work policy; only
+the service's typed `conversation_has_work`/`task_stop_pending` response reveals
+radio choices. Selection alone never executes; confirmation is required, and a
+new dialog resets the choice. Partial deletion retains only failed items. Plain
+generation conflicts cannot offer unsupported job-retention semantics.
+
+Profile setup relies on the global Chat/Activity navigation instead of duplicating
+it beneath its heading. A direct limit checkbox replaces the two-option workspace
+select without changing its permission intersection. Activity's selected view must
+be visibly distinct and its actual work list must align with the page leading edge.
+
+Quit attempts each owned input cleanup even if another rejects, then attempts the
+owned service cleanup. Preference persistence is bounded and cannot prevent stop.
+Service termination requires an exit acknowledgement; timeout retains ownership.
+Any unconfirmed worker keeps Quit visibly failed and retryable instead of leaving
+the application in a permanent quitting state. No externally attached service is
+terminated. Process counts distinguish Electron helpers and embedding/chat workers
+from actual duplicate or orphaned processes; a snapshot is not a shutdown test.
+
 ## Order and presentation follow-up (2026-11-01)
 
 Apply the approved hierarchy consistently rather than adding another visual theme.

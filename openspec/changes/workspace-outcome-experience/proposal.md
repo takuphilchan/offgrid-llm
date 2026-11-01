@@ -1,5 +1,16 @@
 # Proposal
 
+## Corrective review after installation (2026-11-01)
+
+The owner rejected the installed presentation as insufficient and identified
+oversized history menus, unconditional deletion policy choices, duplicate profile
+navigation, confusing workspace limits, and possible lingering processes. Correct
+these within the existing shared renderer and owned-runtime lifecycle. Ordinary
+deletion keeps its confirmation and service restrictions; only typed active-work
+conflicts reveal explicit stop/retain choices. No automatic cancellation, retention
+decision, permission change, global process killing or replacement UI is added.
+Group 20 records this correction independently of the earlier passed fixtures.
+
 ## Order and presentation follow-up (2026-11-01)
 
 The whole-app review identified remaining hierarchy gaps in the already approved

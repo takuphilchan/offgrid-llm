@@ -42,6 +42,11 @@ bounded startup grace period followed by paced automatic reconnection when
 offline or unresponsive. Reconnection SHALL retain compatibility and workspace
 authority checks and SHALL NOT spawn a substitute service or replay work.
 
+#### Scenario: A cleanup component fails during Quit
+- **WHEN** preference saving or an owned input worker fails to finish during Quit
+- **THEN** other owned cleanup still runs and preference saving cannot indefinitely block shutdown
+- **AND** unconfirmed owned worker/service exits remain visible and retryable without claiming successful termination, discarding ownership or stopping an external service
+
 #### Scenario: Service starts after desktop
 - **WHEN** a remembered external endpoint becomes compatible and ready during or after startup grace
 - **THEN** the desktop automatically opens that workspace without a Retry click

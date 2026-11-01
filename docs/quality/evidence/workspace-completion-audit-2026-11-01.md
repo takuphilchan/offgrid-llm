@@ -412,3 +412,74 @@ This checks installation, preservation and startup; it is not a new inference or
 native-control qualification run. Docker and the separately installed WSL CLI
 were not changed. Public v0.4.23 publication still awaited the CUDA build at this
 checkpoint.
+
+## v0.4.23 publication checkpoint
+
+Release workflow 41284247749 completed successfully. The release is now public
+(non-draft, non-prerelease), with 15 uploaded assets. The checksum manifest's 14
+payload digests match the GitHub asset digests. This is metadata cross-checking,
+not a claim that all platform payloads were downloaded and executed locally.
+The Windows downloaded payload checks above remain the local artifact evidence.
+
+## Corrective pass following installed feedback
+
+The owner reported that the installed UI still felt disorganized. Group 20 was
+added without rewriting previous test evidence or closing the ten unavailable
+qualification gates. Corrections cover history/deletion, profile limits and
+navigation, Activity selection/alignment and owned desktop shutdown.
+
+Initial checks: 105 focused renderer tests passed; desktop tests passed 99 with
+one existing platform skip. The first full renderer run passed 695, skipped 28
+and failed one Activity alignment assertion. It exposed diagnostics still using
+the old centered width; the layout was corrected without weakening the assertion.
+
+Windows isolated inference ownership tests passed:
+
+`go test ./internal/inference -run '^TestOwnedRuntimeDiesWithWindowsService$|^TestOwnedProcessExitObservation$' -count=1`
+
+The packaged corrective candidate passed saved/live theme, nine option-contrast
+checks and 200% zoom across seven routes. Its first startup check showed the first
+window in 540ms and recovery in 698ms. These are fixture observations, not timing
+guarantees or live model/desktop-control qualification.
+
+Before images are retained under ignored `build/ui-composition-before-v0423`
+with source identity and hashes. New captures cover compact menus, confirmation
+and profile limits in light/dark English desktop and Arabic narrow layouts;
+selected captures were visually inspected. The correction is a local follow-up
+to v0.4.23, not the payload of the published immutable tag.
+
+Final corrected renderer run: **696 passed, 28 skipped**, using the downloaded
+v0.4.23 Windows service and the newly built UI in disposable state:
+
+`node scripts/test/test-web-workspace.mjs build/release-0.4.23-verify/runtime/offgrid-v0.4.23-windows-amd64-cpu-avx2/offgrid.exe --workers=2 --reporter=line`
+
+API generation, TypeScript/build, source-size, application layout, repository
+hygiene, maintained documentation and strict OpenSpec validation passed. The
+existing >500 kB bundle advisory remains. Full Go/race and other-OS native suites
+were not rerun for this JS/CSS correction. No claim of new model qualification.
+After the alignment correction, the packaged native startup fixture passed again
+(first window 674ms; recovery 894ms). Final candidate UI identity:
+`19a6276aaf16721d24caf33b65a70911e8941fd6808673d34f18d39be2a000ff`.
+Group 20's four corrective tasks are implemented and automatically checked;
+95/105 tasks are now checked, with the same ten broader qualification gates open.
+
+### Corrective build installation
+
+After the owner quit OffGrid, the per-user installer completed successfully.
+All 611 installed payload files matched the candidate; 430 saved-data files
+matched their pre-install hashes. Model inventory paths, sizes and modification
+times and the configured GPU runtime digest remained unchanged. The rollback
+backup is retained outside the repository under the per-user
+`OffGrid-install-backups/v0.4.23-ui-correction-20261101-175609` directory.
+
+The first backup attempt stopped before installation because PowerShell could
+not copy a long Electron cache path. A path-validated Node copy completed the
+profile backup on the next attempt. Both backup directories remain retained.
+Installer SHA-256:
+`89aff2946ead4624c8c4bda33ecba5c638b43adba66af823572392b319417238`.
+
+Automatic approval review blocked the subsequent installed-app launch command.
+The owner was asked to open the app normally. Installed live startup verification
+is pending; the isolated packaged startup results above must not be substituted
+for that check. This is the local corrective build, not a replacement of the
+published v0.4.23 assets. Docker and the WSL CLI were not changed.

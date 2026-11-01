@@ -125,6 +125,15 @@ Settings SHALL group personal preferences, workspace/capability setup and diagno
 ### Requirement: Contextual management and deletion
 History, document and model maintenance SHALL use consistent labelled controls, selection and confirmation patterns. Consequential deletion SHALL describe exactly what is removed or retained, honor service eligibility and avoid claiming undo when none exists. Bulk operations SHALL retain snapshot-based execution and partial-result reporting.
 
+#### Scenario: Ordinary versus protected conversation deletion
+- **WHEN** an ordinary conversation is selected for deletion
+- **THEN** confirmation identifies the conversation without an unconditional active-work policy form
+- **AND** a typed active-work conflict reveals explicit stop/retain choices without sending either until confirmation, while a newly opened dialog forgets previous choices
+
+#### Scenario: Compact management actions
+- **WHEN** a history row's action menu opens
+- **THEN** actions use a compact anchored list without nested button frames, preserve keyboard dismissal/focus restoration and remain usable on narrow, RTL and coarse-pointer surfaces
+
 #### Scenario: Partial deletion
 - **WHEN** some selected items cannot be removed or deletion is stopped
 - **THEN** processed and remaining items are distinguished and the selection is updated accurately

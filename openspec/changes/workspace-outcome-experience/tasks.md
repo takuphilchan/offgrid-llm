@@ -1,5 +1,12 @@
 # Tasks
 
+## 20. Corrective interaction and lifecycle review (2026-11-01)
+
+- [x] 20.1 Replace oversized history utilities with compact action rows; simplify ordinary chat deletion while retaining typed active-work conflict choices, confirmation, exact snapshots and partial retry. Verify `history-controls.spec.ts`, `agent-chat.spec.ts` and narrow/RTL keyboard captures.
+- [x] 20.2 Remove duplicate profile navigation, clarify workspace limits without changing permissions, and fix actual Activity list alignment and selected-view visibility. Verify profile and workspace-order fixtures plus shared control/accessibility regressions.
+- [x] 20.3 Make owned desktop shutdown failure-isolated, exit-acknowledged and retryable; bound preference saving and verify no duplicate service on retry. Run desktop lifecycle tests and isolated native ownership checks without touching the user's active workspace.
+- [x] 20.4 Inspect current before/after screenshots and run API/type/build, full isolated renderer, desktop, documentation/source-size and OpenSpec checks. Record exact results and remaining whole-product/manual/platform gaps; do not label this corrective subset complete product qualification.
+
 ## 19. Whole-app order and presentation follow-up (2026-11-01)
 
 The renewed review found composition gaps despite passing earlier control tests.
