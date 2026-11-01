@@ -85,17 +85,13 @@ func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
 	} else {
 		copy.Messages = append([]api.ChatMessage{{Role: "system", Content: protocol}}, copy.Messages...)
 	}
-	// Changing stage schemas must not invalidate the stable instruction/history
-	// prefix and force a full CPU prefill every action. Keep the owned catalog near
-	// the current exchange; retain the final tool result for capture attachment.
+	// Anchor the catalog before the current user exchange, including its tool
+	// continuations. Moving it after that request on the next decision invalidates
+	// an otherwise identical cached prefix and repeats expensive CPU prefill.
+	// A new user exchange still keeps earlier history ahead of its active catalog.
 	position := len(copy.Messages)
-	if position > 0 && copy.Messages[position-1].Role == "user" {
-		// The catalog is supporting context, not the task. Keep the current
-		// request last on initial/follow-up decisions just as for context indexes.
-		position--
-	}
-	for i := len(copy.Messages) - 1; position == len(copy.Messages) && i >= 2; i-- {
-		if copy.Messages[i].Role == "assistant" {
+	for i := len(copy.Messages) - 1; i >= 0; i-- {
+		if copy.Messages[i].Role == "user" {
 			position = i
 			break
 		}
@@ -145,6 +141,7 @@ func embedSingleStepParameters(parameters map[string]any, root string) (map[stri
 		}
 	}
 	rebase(copied)
+	constrainSingleStepStrings(copied)
 	return copied, nil
 }
 
@@ -211,8 +208,9 @@ func decodeSingleStep(req *api.ChatCompletionRequest, choice *api.ChatCompletion
 	return nil
 }
 
-// Keep private JSON and arguments out of public streaming deltas. Nothing is
-// emitted until a clean terminal response and DONE have both been received.
+// Keep private JSON and arguments out of public streaming deltas. No decision
+// is emitted until a clean terminal response and DONE have both been received;
+// separate presentation observers may report draft text or tool preparation.
 type singleStepStream struct {
 	text   strings.Builder
 	finish string
@@ -284,6 +282,9 @@ func singleStepRuntimeRejection(body []byte) *DecisionValidationError {
 func (s *singleStepStream) emit(req *api.ChatCompletionRequest, callback ChatCompletionStreamCallback) error {
 	choice := api.ChatCompletionChoice{Message: api.ChatMessage{Role: "assistant", Content: s.text.String()}, FinishReason: s.finish}
 	if err := decodeSingleStep(req, &choice); err != nil {
+		return err
+	}
+	if err := ValidateToolDecision(req, &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{choice}}); err != nil {
 		return err
 	}
 	delta := map[string]any{"role": "assistant", "content": choice.Message.Content}

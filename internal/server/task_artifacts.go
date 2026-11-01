@@ -58,7 +58,7 @@ func taskArtifactTool() api.Tool {
 			"properties": map[string]any{
 				"name":    map[string]any{"type": "string", "maxLength": 120, "pattern": `^[^/\\:]+\` + suffix + "$", "description": "Plain filename, at most 120 UTF-8 bytes, ending in " + suffix + "; no directories or control characters."},
 				"format":  map[string]any{"type": "string", "enum": []string{format}},
-				"content": map[string]any{"type": "string", "minLength": 1, "maxLength": 131072, "description": "Nonempty UTF-8 content, at most 131072 bytes (not characters), without NUL. JSON and CSV must parse; CSV formulas are forbidden."},
+				"content": map[string]any{"type": "string", "minLength": 1, "maxLength": 131072, "description": "Nonempty UTF-8 content, at most 131072 bytes (not characters), without NUL. Copy user-supplied exact text without trimming, including any requested trailing newline. JSON and CSV must parse; CSV formulas are forbidden."},
 			},
 		})
 	}
