@@ -19,6 +19,22 @@ function fixture(inspect, extra = {}) {
   return { runtime, calls, child };
 }
 
+// The production reconnect timer is intentionally unreferenced so it cannot
+// prevent Quit. Unlike Electron, this isolated Node test has no window loop;
+// hold a bounded test-owned deadline while observing the background event.
+function waitForState(runtime, expected) {
+  return new Promise((resolve, reject) => {
+    const finish = error => {
+      clearTimeout(timer);
+      runtime.off('status', listener);
+      if (error) reject(error); else resolve();
+    };
+    const listener = state => { if (state.state === expected) finish(); };
+    const timer = setTimeout(() => finish(new Error(`Expected runtime state: ${expected}`)), 2000);
+    runtime.on('status', listener);
+  });
+}
+
 test('an incompatible external service is never stopped, modified, or replaced', async () => {
   const result = { state: 'incompatible', version: '0.4.3-history-dev', canOpenBrowser: true };
   const { runtime, calls } = fixture(async () => result);
@@ -207,7 +223,7 @@ test('late external startup reconnects automatically after grace period without 
   }, {reconnectMs:5,attachments:{load:async()=>true,save:async()=>{}}});
   assert.equal((await runtime.connect()).autoReconnect,true);
   ready=true;
-  await new Promise(resolve=>runtime.on('status',state=>{if(state.state==='ready')resolve();}));
+  await waitForState(runtime, 'ready');
   assert.equal(maximum,1); assert.equal(calls.spawn.length,0);
   await runtime.stop();
 });
@@ -229,7 +245,7 @@ test('automatic retry stops on incompatible identity and quit cancels queued che
   let state='offline', probes=0;
   const {runtime}=fixture(async()=>{probes++;return {state};}, {reconnectMs:5,attachments:{load:async()=>true}});
   await runtime.connect(); state='incompatible';
-  await new Promise(resolve=>runtime.on('status',value=>{if(value.state==='incompatible')resolve();}));
+  await waitForState(runtime, 'incompatible');
   const before=probes; await new Promise(resolve=>setTimeout(resolve,20)); assert.equal(probes,before);
   state='offline'; await runtime.connect(); await runtime.stop();
   const stopped=probes; await new Promise(resolve=>setTimeout(resolve,20)); assert.equal(probes,stopped);

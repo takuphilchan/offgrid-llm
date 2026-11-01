@@ -231,3 +231,20 @@ Commands are the existing `.github/workflows/ci.yml` commands, with Windows
 `build/workspace-outcome-experience/release-*`; no private captures or raw model
 traces are included in Git. Other-platform native behavior, real vision quality,
 screen-reader/manual usability and participant gates remain unverified.
+
+### CI reconnect-test correction
+
+The first pushed candidate (`12146185`, CI run `41258825366`) passed parser,
+Windows dependency packaging and both Python jobs, but its native jobs cancelled
+seven desktop tests. The first background-reconnect test awaited an unreferenced
+production timer without a test-owned event-loop handle. Electron's window keeps
+the real application alive; standalone Node 22 correctly exited that test wait.
+
+An explicit two-second referenced observation deadline now keeps only the test
+alive, rejects a missing state, and cleans up its listener/timer. The production
+timer remains unreferenced so Quit is not delayed. The original test reproduces
+the cancellation under CI's Node **22.23.2**; the corrected runtime suite passes
+**23/23** under that version, and the full local desktop suite passes **92 with
+one skip**. Linux Node 24 passes the corrected suite too. Logs retain before/after
+results under `runtime-reconnect-node22*.log`; cross-platform CI must rerun on the
+corrected source before tagging.
