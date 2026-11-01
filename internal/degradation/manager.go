@@ -149,17 +149,19 @@ func (m *Manager) OnLevelChange(callback func(DegradationLevel)) {
 	m.callbacks = append(m.callbacks, callback)
 }
 
-// RequestStart records a request start
+// RequestStart admits bounded work at the current pressure level. Pressure
+// reduces concurrency; the inference loader still owns model/context memory
+// admission. Rejecting all requests here would also block an idle resident model.
 func (m *Manager) RequestStart() bool {
-	level := m.CurrentLevel()
-
-	// In emergency mode, reject new requests
-	if level == LevelEmergency {
-		return false
+	for {
+		active := atomic.LoadInt64(&m.activeRequests)
+		if active >= int64(m.MaxConcurrentRequests()) {
+			return false
+		}
+		if atomic.CompareAndSwapInt64(&m.activeRequests, active, active+1) {
+			return true
+		}
 	}
-
-	atomic.AddInt64(&m.activeRequests, 1)
-	return true
 }
 
 // RequestEnd records a request end

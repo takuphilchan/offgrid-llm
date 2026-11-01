@@ -106,7 +106,7 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 		return nil, err
 	}
 	if s.degradationMgr != nil && !s.degradationMgr.RequestStart() {
-		return nil, newServiceError(http.StatusServiceUnavailable, "server under heavy load, please try again later", nil)
+		return nil, newCodedServiceError(http.StatusServiceUnavailable, "inference_busy", "All available inference request slots are in use; wait for current work to finish, then send again", nil)
 	}
 	if s.degradationMgr != nil {
 		defer s.degradationMgr.RequestEnd()

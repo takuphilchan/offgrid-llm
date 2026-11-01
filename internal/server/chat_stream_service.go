@@ -41,7 +41,7 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	}
 	if s.degradationMgr != nil {
 		if !s.degradationMgr.RequestStart() {
-			return result, newServiceError(http.StatusServiceUnavailable, "Server under heavy load; retry shortly", nil)
+			return result, newCodedServiceError(http.StatusServiceUnavailable, "inference_busy", "All available inference request slots are in use; wait for current work to finish, then send again", nil)
 		}
 		defer s.degradationMgr.RequestEnd()
 	}

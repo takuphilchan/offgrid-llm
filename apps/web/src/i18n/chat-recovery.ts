@@ -12,3 +12,15 @@ export const chatRecovery = {
   nd: 'Akulandawo eyaneleyo yememori yemodeli le lengxoxo le. Vala izinhlelo ezisebenzisa imemori enengi kumbe ukhethe imodeli encane, ubusuthumela futhi. Okubhalileyo lezilungiselelo zakho akuntshintshanga.',
   zu: 'Ayikho inkumbulo eyanele yale modeli nengxoxo. Vala izinhlelo ezisebenzisa inkumbulo eningi noma ukhethe imodeli encane, bese uthumela futhi. Okubhalile nezilungiselelo zakho akushintshile.',
 } satisfies Record<LocaleCode, string>;
+
+export const chatBusyRecovery = {
+  en: 'OffGrid is processing other requests. Wait for that work to finish, then send again. Your draft is retained; this request was not sent to the model.',
+  fr: 'OffGrid traite d’autres demandes. Attendez la fin de ce travail, puis renvoyez votre demande. Votre brouillon est conservé ; cette demande n’a pas été envoyée au modèle.',
+  de: 'OffGrid verarbeitet andere Anfragen. Warten Sie, bis diese abgeschlossen sind, und senden Sie erneut. Ihr Entwurf bleibt erhalten; diese Anfrage wurde nicht an das Modell gesendet.',
+  es: 'OffGrid está procesando otras solicitudes. Espera a que terminen y vuelve a enviar. Tu borrador se conserva; esta solicitud no se envió al modelo.',
+  ar: 'يعالج OffGrid طلبات أخرى. انتظر حتى تنتهي، ثم أرسل مجددًا. تم الاحتفاظ بمسودتك؛ لم يُرسل هذا الطلب إلى النموذج.',
+  sw: 'OffGrid inashughulikia maombi mengine. Subiri kazi hiyo ikamilike, kisha tuma tena. Rasimu yako imehifadhiwa; ombi hili halikutumwa kwa modeli.',
+  sn: 'OffGrid iri kugadzirisa zvimwe zvikumbiro. Mirira kuti basa iroro ripere, wozotumira zvakare. Gwaro rako rakachengetwa; chikumbiro ichi hachina kutumirwa kumodeli.',
+  nd: 'I-OffGrid isebenza kwezinye izicelo. Linda umsebenzi lowo uphele, ubusuthumela futhi. Okubhalileyo kugciniwe; isicelo lesi asithunyelwanga kumodeli.',
+  zu: 'I-OffGrid icubungula ezinye izicelo. Linda lowo msebenzi uphele, bese uthumela futhi. Okubhalile kugciniwe; lesi sicelo asithunyelwanga kumodeli.',
+} satisfies Record<LocaleCode, string>;

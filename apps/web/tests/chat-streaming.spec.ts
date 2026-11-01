@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { chatRecovery } from '../src/i18n/chat-recovery';
+import { chatRecovery, chatBusyRecovery } from '../src/i18n/chat-recovery';
 
 async function streamingWorkspace(page: Page, locale = 'en') {
   await page.addInitScript(locale => {
@@ -36,6 +36,13 @@ async function streamingWorkspace(page: Page, locale = 'en') {
     };
   }, locale);
   const sessions: Record<string, any> = {};
+  await page.route('**/api/v2/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    const json = path === '/api/v2/system'
+      ? { product: 'offgrid', api_version: 2, version: 'fixture', workspace_id: 'stream-fixture', capabilities: ['task-first-agents-v2'] }
+      : path === '/api/v2/jobs' ? [] : {};
+    return route.fulfill({ json });
+  });
   await page.route('**/health', route => route.fulfill({ json: { status: 'healthy' } }));
   await page.route('**/v1/**', route => {
     const request = route.request();
@@ -129,6 +136,17 @@ test('typed memory failure offers model recovery, retains the draft and stops cl
   expect(await page.evaluate(() => (window as any).generationCount ?? 0)).toBe(0);
   await page.goto('/ui/#/chat');
   await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
+});
+
+test('busy inference preserves the draft without a misleading status action or automatic retry', async ({page}) => {
+  await streamingWorkspace(page);
+  await page.evaluate(() => (window as any).failGeneration('All request slots occupied','inference_busy'));
+  const notice=page.getByRole('alert');
+  await expect(notice).toContainText(chatBusyRecovery.en);
+  await expect(notice.getByRole('button')).toHaveCount(0);
+  await expect(notice.locator('details p')).toBeHidden();
+  await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
+  expect(await page.evaluate(()=>(window as any).generationCount)).toBe(1);
 });
 
 test('unknown stream failure codes preserve the diagnostic and do not suggest memory recovery', async ({ page }) => {

@@ -46,7 +46,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Streaming requests keep their inference lease for the lifetime of the
 	// response and therefore perform admission here.
 	if s.degradationMgr != nil && !s.degradationMgr.RequestStart() {
-		writeError(w, "Server under heavy load, please try again later", http.StatusServiceUnavailable)
+		writeServiceError(w, newCodedServiceError(http.StatusServiceUnavailable, "inference_busy", "All available inference request slots are in use; wait for current work to finish, then send again", nil))
 		return
 	}
 	if s.degradationMgr != nil {
