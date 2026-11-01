@@ -1,5 +1,6 @@
 # ordered route registrations
 mux.HandleFunc("/api/v2/system", s.handleSystemIdentity)
+mux.HandleFunc("/api/v2/work/search", s.handleWorkSearch)
 mux.HandleFunc("/health", s.handleHealth)
 mux.HandleFunc("/ready", s.handleReady)
 mux.HandleFunc("/livez", s.handleLiveness)
