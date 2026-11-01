@@ -42,6 +42,9 @@ test('chat deletion is visible, confirmed, searchable and survives reload', asyn
   const row = page.locator('.history-row', {hasText:'Delete 日本語'});
   await row.locator('.history-open').click();
   await page.locator('.composer textarea').fill('draft to remove with the chat');
+  const imageURL=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;return canvas.toDataURL('image/png');});
+  await page.locator('.composer input[type=file]').setInputFiles({name:'draft.png',mimeType:'image/png',buffer:Buffer.from(imageURL.split(',')[1],'base64')});
+  await expect(page.locator('.composer .image-attachments img')).toBeVisible();
   const menu = row.locator('.history-item-menu');
   await menu.click();
   const button = page.getByRole('button',{name:'Delete conversation',exact:true});
@@ -55,6 +58,8 @@ test('chat deletion is visible, confirmed, searchable and survives reload', asyn
   await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();
   await expect(row).toHaveCount(0);
   await expect(page.locator('.composer textarea')).toHaveValue('');
+  await expect(page.locator('.composer .image-attachments')).toHaveCount(0);
+  expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>key.includes(':chat-images:')&&key.endsWith(encodeURIComponent('Delete 日本語'))).map(key=>localStorage.getItem(key)))).toEqual(['']);
   await page.reload();
   await expect(row).toHaveCount(0);
   await page.getByRole('searchbox',{name:'Search conversations'}).fill('Keep');

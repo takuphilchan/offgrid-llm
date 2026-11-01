@@ -5,6 +5,7 @@ import { useI18n } from '../../i18n';
 import { agentProfilesText } from '../../i18n/agent-profiles';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { ExecutionPolicy } from '../agents/ExecutionPolicy';
+import { Icon } from '../../components/Icon';
 
 export function AgentSelector({ value, onChange, disabled }: { value: AgentProfile | null; onChange: (profile: AgentProfile | null) => void; disabled: boolean }) {
   const { locale, messages } = useI18n(), copy = agentProfilesText[locale];
@@ -26,7 +27,7 @@ export function AgentSelector({ value, onChange, disabled }: { value: AgentProfi
   };
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, []);
   useWorkspaceRefresh(refresh);
-  return <UtilityPopover label={copy.selector} trigger={<>{copy.selector}<span className="composer-choice">{value?.settings.name ?? copy.plain}</span></>} triggerClassName="secondary-button" className="chat-agent-selector" onOpenChange={open => { if (open) void refresh(); }}>
+  return <UtilityPopover label={copy.selector} trigger={<><Icon name="agents" size={16} /><span className="composer-choice">{value?.settings.name ?? copy.plain}</span></>} triggerClassName="secondary-button" className="chat-agent-selector" onOpenChange={open => { if (open) void refresh(); }}>
     <fieldset disabled={disabled}><legend>{copy.selector}</legend>
       <label className="profile-option"><input type="radio" name="chat-agent" checked={!value} onChange={() => onChange(null)} /><span>{copy.plain}</span></label>
       {profiles.map(profile => <label className="profile-option" key={profile.id}><input type="radio" name="chat-agent" checked={value?.id === profile.id && value.revision === profile.revision} onChange={() => onChange(profile)} /><span>{profile.settings.name}<small>{profile.settings.description || profile.settings.model}</small><small>{copy.revision.replace('{revision}', String(profile.revision))}</small></span></label>)}

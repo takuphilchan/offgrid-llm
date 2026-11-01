@@ -14,6 +14,13 @@ import { SectionHeading, ListSearch, EmptyState } from '../../components/Workspa
 import { UtilityPopover } from '../../components/UtilityPopover';
 import { workspaceManagement } from '../../i18n/workspace-management';
 import { useSetupHandoff } from '../../lib/setup-handoff';
+import { knowledgeScope } from '../../i18n/knowledge-scope';
+import { ModelChoice } from '../../components/ModelChoice';
+import { modelLibrary } from '../../i18n/model-library';
+import { workspaceRefinement } from '../../i18n/workspace-refinement';
+import { PermissionNotice } from '../../components/PermissionNotice';
+import { readableModelName } from '../models/model-display';
+import '../chat/knowledge-scope.css';
 
 type Props = {
   models: Model[];
@@ -23,20 +30,23 @@ type Props = {
 
 export function KnowledgePage(props: Props) {
   const { knowledge } = useWorkspace();
-  const { locale } = useI18n();
-  return knowledge ? <KnowledgeWorkspace {...props} /> : <p className="permission-notice" role="status">{interaction[locale].adminOnly}</p>;
+  return knowledge ? <KnowledgeWorkspace {...props} /> : <PermissionNotice />;
 }
 
 function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
   const { messages: text, locale } = useI18n();
   const copy = workflow[locale];
   const management = workspaceManagement(locale);
+  const scopeCopy = knowledgeScope[locale];
   const handoff = useSetupHandoff();
   const permissions = useWorkspace();
   const [deleting, setDeleting] = useState<Document | null>(null);
   const [sourceID, setSourceID] = useState('');
   const [query, setQuery] = useWorkspaceState('knowledge.query', '');
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [selection, setSelection] = useWorkspaceState<string[]>('knowledge.selection', []);
+  const [scopedReady, setScopedReady] = useState(false);
+  useEffect(() => { let active = true; void api.systemIdentity().then(identity => { if (active) setScopedReady(identity.capabilities?.includes('scoped-knowledge-chat-v1') === true); }).catch(() => {}); return () => { active = false; }; }, []);
   const [status, setStatus] = useState<RAGStatus | null>(null);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const [embeddingModel, setEmbeddingModel] = useState('');
@@ -174,35 +184,41 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
 	{typeof status?.stats?.index_error === 'string' && <div className="error-banner" role="alert">{status.stats.index_error}</div>}
     {sourceID && <DocumentSourceDialog id={sourceID} close={() => setSourceID('')} />}
     {deleting && <ConfirmDialog title={deleting.name} body={copy.deleteDocument} close={() => setDeleting(null)} confirm={async () => { await api.deleteDocument(deleting.id); await refresh(); }} />}
-    <SectionHeading title={`${management.documents} · ${documents.length}`} description={text.guidance.knowledge} actions={
+    <SectionHeading title={`${management.documents} · ${documents.length}`} description={text.guidance.knowledge} actions={<>
+      {enabled && <UtilityPopover label={management.manageKnowledge} triggerClassName="utility-button">
+        <p className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model || presentation[locale].unknown}</p>
+        {permissions.admin && <button className="secondary-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
+      </UtilityPopover>}
       <button className="primary-button" onClick={() => input.current?.click()} disabled={busy || !enabled || !permissions.admin}><Icon name="upload" size={17} />{busy ? text.common.loading : text.knowledge.add}</button>
-    } />
+    </>} />
     <input ref={input} hidden type="file" onChange={event => void upload(event.target.files?.[0])} />
     {permissions.admin && !enabled && !busy && status !== null && <section className="knowledge-setup">
       <div className="knowledge-setup-copy"><div className="model-glyph"><Icon name="knowledge" /></div><div><span className="eyebrow">{text.knowledgeSetup.title}</span><h2>{text.knowledge.disabled}</h2><p>{text.knowledgeSetup.body}</p></div></div>
       <div className="knowledge-setup-controls">
-        <label><span>{text.knowledgeSetup.model}</span><select value={embeddingModel} onChange={event => { setEmbeddingModel(event.target.value); setDownload(null); setError(''); }} disabled={setupBusy}>
-          {installedEmbeddings.map(model => <option key={model.id} value={model.id}>{model.id} · {text.models.installed}</option>)}
-          {embeddingCatalog.filter(model => !installedEmbeddings.some(local => local.id === model.id)).map(model => <option key={model.id} value={model.id}>{model.name} · {formatBytes(model.size_bytes)}</option>)}
-        </select></label>
-        <button className="primary-button" onClick={() => void prepare()} disabled={!embeddingModel || setupBusy}>{setupBusy ? text.knowledgeSetup.preparing : selectedInstalled ? text.knowledgeSetup.enable : text.knowledgeSetup.installEnable}</button>
+        <ModelChoice label={text.knowledgeSetup.model} placeholder={text.knowledgeSetup.model} missing={modelLibrary(locale).unknown} value={embeddingModel} disabled={setupBusy} onChange={value => { setEmbeddingModel(value); setDownload(null); setError(''); }}
+          options={[
+            ...installedEmbeddings.map(model => ({ id: model.id, name: readableModelName(model.id), details: `${text.models.installed} · ${model.loaded ? modelLibrary(locale).loaded : modelLibrary(locale).unchecked}` })),
+            ...embeddingCatalog.filter(model => !installedEmbeddings.some(local => local.id === model.id)).map(model => ({ id: model.id, name: model.name, details: `${text.models.catalog} · ${model.size_bytes > 0 ? formatBytes(model.size_bytes) : modelLibrary(locale).unknown}${model.license ? ` · ${model.license}` : ''}` })),
+          ]} />
+        <button className="primary-button" onClick={() => void prepare()} disabled={(!selectedInstalled && !embeddingCatalog.some(model => model.id === embeddingModel)) || setupBusy}>{setupBusy ? text.knowledgeSetup.preparing : selectedInstalled ? text.knowledgeSetup.enable : text.knowledgeSetup.installEnable}</button>
         <button className="text-button" onClick={onOpenModels}>{text.knowledgeSetup.openModels}</button>
         {download && download.status !== 'complete' && <ModelDownloadProgress download={download} />}
       </div>
     </section>}
 
     {enabled && <div className="knowledge-actions">
-      <button className="secondary-button" disabled={busy || !documents.length || !!status?.stats?.index_error} onClick={handoff.askKnowledge}>{management.askKnowledge}</button>
-      <UtilityPopover label={management.manageKnowledge} triggerClassName="secondary-button">
-        <p className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model || presentation[locale].unknown}</p>
-        {permissions.admin && <button className="secondary-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
-      </UtilityPopover>
-      <p>{management.retrievalScope}</p>
+      <button className="secondary-button" aria-describedby="knowledge-retrieval-scope" disabled={busy || !documents.length || !!status?.stats?.index_error} onClick={() => handoff.askKnowledge()}>{management.askKnowledge}</button>
+      <p id="knowledge-retrieval-scope">{management.retrievalScope}</p>
     </div>}
     {!enabled && documents.length > 0 && <p>{copy.offlineLibrary}</p>}
     {error && <div className="inline-error" role="alert">{error}<button onClick={() => void refresh()}>{text.common.retry}</button></div>}
-    {documents.length > 0 && <ListSearch label={management.searchDocuments} value={query} onChange={setQuery} />}
-    {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? !error && <EmptyState title={query ? management.noDocuments : text.knowledge.empty} /> : <div className="knowledge-documents">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><p className="document-readiness">{readiness(document)}</p>{document.last_error && <p role="status">{document.last_error}</p>}<div className="resource-actions"><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button className="secondary-button" disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><UtilityPopover label={`${management.manageDocument}: ${document.name}`} trigger={management.manageDocument} triggerClassName="secondary-button"><p>{document.chunk_count} {text.knowledge.chunks}</p><button className="secondary-button" disabled={!permissions.admin || !document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button className="danger-button" disabled={!permissions.admin || busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></UtilityPopover></div>{!document.source_retained && <p className="workspace-secondary">{copy.sourceMissing}</p>}</div></article>)}</div>}
+    {documents.length > 0 && <ListSearch id="knowledge-document-search" label={management.searchDocuments} value={query} onChange={setQuery} />}
+    {selection.length > 0 && <div className="knowledge-selection">
+      <button className="primary-button" disabled={busy || !enabled || !scopedReady || !!status?.stats?.index_error || selection.some(id => !documents.some(doc => doc.id === id && doc.index_status === 'ready'))} onClick={() => handoff.askKnowledge(selection.map(id => ({ id, name: documents.find(doc => doc.id === id)!.name })))}>{scopeCopy.ask} · {selection.length}/16</button>
+      <button className="text-button" onClick={() => setSelection([])}>{text.models.cancel}</button>
+      {!scopedReady && <p role="status">{scopeCopy.unsupported}</p>}
+    </div>}
+    {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? !error && <EmptyState title={query ? management.noDocuments : text.knowledge.empty} action={query ? <button type="button" className="secondary-button" onClick={() => { setQuery(''); document.getElementById('knowledge-document-search')?.focus(); }}>{workspaceRefinement[locale].clear}</button> : undefined} /> : <div className="knowledge-documents">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><p className="document-readiness">{readiness(document)}</p>{document.last_error && <p role="status">{document.last_error}</p>}<div className="resource-actions"><label className="knowledge-source-select"><input type="checkbox" checked={selection.includes(document.id)} disabled={!selection.includes(document.id) && (document.index_status !== 'ready' || selection.length >= 16)} onChange={event => setSelection(current => event.target.checked ? [...current, document.id] : current.filter(id => id !== document.id))} aria-label={scopeCopy.select + ': ' + document.name} />{scopeCopy.select}</label><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button className="text-button" disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><UtilityPopover label={`${management.manageDocument}: ${document.name}`} trigger={management.manageDocument} triggerClassName="utility-button"><p>{document.chunk_count} {text.knowledge.chunks}</p><button className="secondary-button" disabled={!permissions.admin || !document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button className="danger-button" disabled={!permissions.admin || busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></UtilityPopover></div>{!document.source_retained && <p className="workspace-secondary">{copy.sourceMissing}</p>}</div></article>)}</div>}
   </div>;
 }
 

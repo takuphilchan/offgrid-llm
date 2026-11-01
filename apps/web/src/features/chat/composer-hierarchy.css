@@ -1,0 +1,32 @@
+@layer controls {
+  .composer .composer-context { gap: 6px 10px; }
+  /* One editor boundary; nested selectors use labels and hover/focus rather
+     than permanent boxes. Popover contents keep their own control roles. */
+  .composer .composer-context > .utility-popover > button,
+  .composer .model-select-trigger,
+  .composer .composer-actions .voice-button {
+    background: transparent; border-color: transparent; color: var(--muted); font-weight: var(--weight-regular);
+  }
+  .composer .composer-context > .utility-popover > button:hover:not(:disabled),
+  .composer .model-select-trigger:hover:not(:disabled),
+  .composer .composer-actions .voice-button:hover:not(:disabled) {
+    background: var(--surface-2); border-color: transparent; color: var(--text);
+  }
+  .composer .composer-choice { border: 0; padding: 0; font-size: inherit; }
+  .composer .composer-context .model-select { max-width: min(100%, 22rem); flex: 1 1 12rem; }
+  .composer .chat-agent-model { display: block; max-width: min(100%, 22rem); flex: 1 1 12rem; }
+  .pinned-model-trigger { width: 100%; min-width: 0; justify-content: start; }
+  .pinned-model-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .pinned-model-trigger > svg { flex: 0 0 auto; }
+  .chat-agent-model .utility-popover-panel code { overflow-wrap: anywhere; }
+  .composer .composer-footer { grid-column: 1 / -1; grid-row: 3; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
+  .composer .composer-utilities { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; flex: 1 1 15rem; }
+  .composer .composer-utilities > .chat-speech-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+  .composer .composer-footer > .composer-actions { margin-inline-start: auto; }
+  .composer .composer-context-menu > button { font-weight: var(--weight-regular); }
+  @media (max-width: 600px) {
+    .composer .composer-context { display: flex; }
+    .composer .composer-context .model-select, .composer .chat-agent-model { flex-basis: calc(100% - 1rem); max-width: 100%; }
+    .composer .composer-context-menu { flex: 0 1 auto; }
+  }
+}

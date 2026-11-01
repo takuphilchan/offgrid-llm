@@ -12,10 +12,13 @@ export function useWorkspaceState<T>(name: string, initial: T): [T, Dispatch<Set
   const { scope, workspace } = useWorkspace();
   const key = JSON.stringify([scope, workspace, name]);
   const [value, update] = useState<T>(() => state.has(key) ? state.get(key) as T : initial);
-  const setValue: Dispatch<SetStateAction<T>> = next => update(previous => {
+  const setValue: Dispatch<SetStateAction<T>> = next => {
+    // Publish before the caller navigates. React may defer a state updater until
+    // after this view unmounts; external state must not be a side effect of it.
+    const previous = state.has(key) ? state.get(key) as T : initial;
     const resolved = typeof next === 'function' ? (next as (value: T) => T)(previous) : next;
     state.set(key, resolved);
-    return resolved;
-  });
+    update(() => resolved);
+  };
   return [value, setValue];
 }

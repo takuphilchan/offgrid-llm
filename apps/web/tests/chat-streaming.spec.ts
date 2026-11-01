@@ -10,6 +10,8 @@ async function streamingWorkspace(page: Page) {
       const request = JSON.parse(init!.body as string);
       (window as any).generationRequest = request;
       const name = decodeURIComponent(String(input).split('/')[3]);
+      (window as any).generationSession = name;
+      (window as any).generationCount = ((window as any).generationCount ?? 0) + 1;
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -91,6 +93,49 @@ test('unexpected stream closure retains the draft and labels partial text as uns
   await expect(page.locator('.streaming-response')).toContainText('Partial response');
   await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
   await expect(page.locator('.composer-actions > button')).toHaveText('Send');
+});
+
+for (const backgroundCheck of [false, true]) test(`new chat detaches and returns to saved work without replay (background check: ${backgroundCheck})`, async ({ page }) => {
+  if (backgroundCheck) await page.clock.install();
+  await streamingWorkspace(page);
+  const source = await page.evaluate(() => (window as any).generationSession as string);
+  const cancels: string[] = [];
+  page.on('request', request => { if (request.url().endsWith('/turn/cancel')) cancels.push(request.url()); });
+  await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await expect(page.locator('.streaming-response')).toHaveCount(0);
+  await page.locator('.composer textarea').fill('A separate unsent draft');
+  const session = { name: source, model_id: 'stream-model', updated_at: new Date().toISOString(), messages: [{ role: 'user', content: 'Stream my answer' }, { role: 'assistant', content: 'Saved in the background.' }] };
+  let reads = 0;
+  await page.route('**/v1/sessions/*/turn', route => { reads++; return route.fulfill({ json: { turn: { id: 'original-turn', status: 'completed', prompt: 'Stream my answer', output: 'Saved in the background.' } } }); });
+  await page.route(`**/v1/sessions/${encodeURIComponent(source)}`, route => route.fulfill({ json: session }));
+  if (backgroundCheck) { await page.clock.fastForward(6000); await expect.poll(() => reads).toBeGreaterThan(0); }
+  await page.locator('.history-open').first().click();
+  await expect(page.locator('.message.assistant')).toContainText('Saved in the background.');
+  expect(await page.evaluate(() => (window as any).generationCount)).toBe(1);
+  expect(cancels).toEqual([]);
+  await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await expect(page.locator('.composer textarea')).toHaveValue('A separate unsent draft');
+});
+
+test('late Stop acknowledgment for a previous conversation cannot abort the new conversation', async ({ page }) => {
+  await streamingWorkspace(page);
+  let release!: () => void;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  let requested = false;
+  await page.route('**/turn/cancel', async route => { requested = true; await delayed; await route.fulfill({ json: { success: true } }); });
+  await page.locator('.composer-actions > button').click();
+  await expect.poll(() => requested).toBe(true);
+  await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await page.locator('.composer textarea').fill('Second independent question');
+  await page.locator('.composer-actions > button').click();
+  await expect(page.locator('.streaming-response')).toContainText('Hello 世界');
+  release();
+  await page.evaluate(() => (window as any).emitTimedDelta(' Still running in the second conversation.'));
+  await expect(page.locator('.streaming-response')).toContainText('Still running in the second conversation.');
+  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
+  await page.evaluate(() => (window as any).finishGeneration());
+  await expect(page.locator('.message.assistant')).toContainText('Hello 世界 — finished');
+  expect(await page.evaluate(() => (window as any).generationCount)).toBe(2);
 });
 
 test('stop aborts generation and preserves the draft and partial text', async ({ page }) => {

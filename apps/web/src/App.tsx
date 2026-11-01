@@ -2,6 +2,7 @@ import { refreshWorkspace } from './lib/workspace-refresh';
 import { supportsChat } from './api/model-capabilities';
 import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
 import { APIError, api, setAgentReplayScope, type Model, type PublicUser } from './api/client';
+import { WorkSearchNavigation, WorkSearchReturn } from './components/WorkSearchNavigation';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
 import { Icon } from './components/Icon';
 import { ActivityPage } from './features/activity/ActivityPage';
@@ -70,6 +71,7 @@ export function App() {
   const [loadError, setLoadError] = useState('');
   const [workspaceID, setWorkspaceID] = useState('');
   const [taskFirst, setTaskFirst] = useState(false);
+  const [workSearch, setWorkSearch] = useState(false);
   const [onboardingPending, setOnboardingPending] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true');
   const [showOnboarding, setShowOnboarding] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true' && readPreference('offgrid.onboarding.stage') !== 'working');
   const [showCommands, setShowCommands] = useState(false);
@@ -113,6 +115,7 @@ export function App() {
     // remount drafts. This is presentation state, never an access grant.
     lastIdentity.current = { actor: identityActor, workspace, taskFirst: supported };
     setWorkspaceID(workspace); setTaskFirst(supported);
+    setWorkSearch(identityResult.status === 'fulfilled' && identityResult.value.capabilities?.includes('work-search-v1') === true);
     setAgentReplayScope(JSON.stringify([identityActor, workspace]));
     setAuthUser(userResult.value.authenticated ? userResult.value.user : null);
     setGuest(userResult.value.guest === true);
@@ -196,7 +199,7 @@ export function App() {
   const admin = !authRequired || authUser?.role === 'admin';
   const actor = authUser?.id ?? (authRequired && guest ? 'guest' : 'local');
   const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role]);
-  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst}><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
+  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
     <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} footer={<WorkspaceOptions refreshing={refreshing} onRefresh={() => void refreshCurrentWorkspace()} theme={theme.choice} onThemeChange={theme.setChoice} username={authUser?.username} onLogout={() => void logout()} />} />
     {narrow && navigationOpen && <button className="navigation-scrim" tabIndex={-1} aria-label={text.models.cancel} onClick={closeNavigation} />}
 
@@ -205,6 +208,7 @@ export function App() {
       {admin && <ComputerActivity key={authUser?.id ?? 'local'} />}
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
       <section className="page-content">
+        <WorkSearchReturn />
         {(page === 'chat' || page === 'agents') && <DraftRecoveryNotice />}
         <SetupHandoffProvider key={workspaceScope} refresh={refreshBase}>
         <PageBoundary key={`${page}:${workspaceScope}`} message={text.common.error} retry={text.common.retry}>
@@ -218,9 +222,9 @@ export function App() {
         </SetupHandoffProvider>
       </section>
     </main>
-    {showCommands && !showOnboarding && <CommandPalette actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
+    {showCommands && !showOnboarding && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
     {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} pending={onboardingPending} onAction={() => continueSetup(chatModels.length > 0 ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
-  </div></SidebarContext.Provider></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
+  </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
 function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClose }: {

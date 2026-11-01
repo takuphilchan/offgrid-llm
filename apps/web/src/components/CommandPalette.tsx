@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon, type IconName } from './Icon';
 import { useFocusScope } from '../lib/focus-scope';
+import { useWorkSearch } from '../lib/work-search';
+import { useI18n } from '../i18n';
+import { workSearchPlaceholder, workSearchText } from '../i18n/work-search';
+import { useWorkSearchNavigation } from './WorkSearchNavigation';
 
 export type CommandAction = {
   id: string;
@@ -11,15 +15,18 @@ export type CommandAction = {
   run: () => void;
 };
 
-export function CommandPalette({ actions, title, placeholder, empty, closeLabel, onClose }: {
+export function CommandPalette({ actions, title, placeholder, empty, closeLabel, onClose, workSearch = false }: {
   actions: CommandAction[];
   title: string;
   placeholder: string;
   empty: string;
   closeLabel: string;
   onClose: () => void;
+  workSearch?: boolean;
 }) {
   const [query, setQuery] = useState('');
+  const { locale } = useI18n(), copy = workSearchText[locale];
+  const search = useWorkSearch(query, workSearch), navigation = useWorkSearchNavigation();
   const dialog = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const keyboardSelection = useRef(false);
@@ -28,8 +35,12 @@ export function CommandPalette({ actions, title, placeholder, empty, closeLabel,
   const results = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle) return actions;
-    return actions.filter(action => `${action.label} ${action.group} ${action.keywords ?? ''}`.toLocaleLowerCase().includes(needle));
-  }, [actions, query]);
+    const commands = actions.filter(action => `${action.label} ${action.group} ${action.keywords ?? ''}`.toLocaleLowerCase().includes(needle));
+    const saved: CommandAction[] = (search.data?.results ?? []).map(result => ({ id: `saved-${result.kind}-${encodeURIComponent(result.id)}`, label: result.title, group: result.kind === 'chat' ? copy.names : copy.tasks, icon: result.kind === 'chat' ? 'chat' : 'agents', run: () => navigation.open(result.kind, result.id) }));
+    // Keep each work type contiguous so keyboard indices and group labels agree.
+    return [...commands, ...saved.filter(item => item.group === copy.names), ...saved.filter(item => item.group === copy.tasks)];
+  }, [actions, query, search.data, copy, navigation]);
+  useEffect(() => { setActive(current => Math.min(current, Math.max(0, results.length - 1))); }, [results.length]);
   const groups = useMemo(() => results.reduce<Array<{ name: string; actions: Array<{ action: CommandAction; index: number }> }>>((all, action, index) => {
     const group = all.at(-1);
     if (group?.name === action.group) group.actions.push({ action, index });
@@ -66,8 +77,10 @@ export function CommandPalette({ actions, title, placeholder, empty, closeLabel,
   };
 
   return <dialog ref={dialog} className="command-palette" aria-label={title} onCancel={event => { event.preventDefault(); onClose(); }} onClick={event => { if (event.target === event.currentTarget) { const box = event.currentTarget.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) onClose(); } }}>
-      <div className="command-search"><Icon name="search" size={18} /><input role="combobox" aria-expanded="true" aria-autocomplete="list" autoFocus value={query} onChange={event => { setQuery(event.target.value); setActive(0); if (list.current) list.current.scrollTop = 0; }} onKeyDown={keyDown} placeholder={placeholder} aria-label={placeholder} aria-controls="command-results" aria-activedescendant={results[active] ? `command-${results[active].id}` : undefined} /><button type="button" className="command-dismiss" aria-label={closeLabel} title={`${closeLabel} (Esc)`} onClick={onClose}><kbd aria-hidden="true">Esc</kbd></button></div>
-      <div ref={list} className="command-results" id="command-results" role="listbox">{results.length === 0 ? <p>{empty}</p> : groups.map(group => <div className="command-group" role="group" aria-label={group.name} key={group.name}>
+      <div className="command-search"><Icon name="search" size={18} /><input role="combobox" aria-expanded="true" aria-autocomplete="list" autoFocus maxLength={64} aria-describedby="command-search-scope" value={query} onChange={event => { setQuery(event.target.value); setActive(0); if (list.current) list.current.scrollTop = 0; }} onKeyDown={keyDown} placeholder={workSearch ? workSearchPlaceholder[locale] : placeholder} aria-label={workSearch ? workSearchPlaceholder[locale] : placeholder} aria-controls="command-results" aria-activedescendant={results[active] ? `command-${results[active].id}` : undefined} /><button type="button" className="command-dismiss" aria-label={closeLabel} title={`${closeLabel} (Esc)`} onClick={onClose}><kbd aria-hidden="true">Esc</kbd></button></div>
+      <p className="command-search-scope" id="command-search-scope">{workSearch ? copy.scope : copy.unavailable}</p>
+      <p className="command-search-status" role="status">{!workSearch ? '' : search.loading ? copy.loading : search.failed ? copy.failed : search.data?.partial ? copy.partial : [...query.trim()].length < 2 ? copy.hint : (search.data?.scopes ?? []).map(scope => scope === 'conversation_names' ? copy.names : copy.tasks).join(' · ')}</p>
+      <div ref={list} className="command-results" id="command-results" role="listbox">{results.length === 0 ? <p>{search.loading ? copy.loading : empty}</p> : groups.map(group => <div className="command-group" role="group" aria-label={group.name} key={group.name}>
         <span>{group.name}</span>
         {group.actions.map(({ action, index }) => <button id={`command-${action.id}`} role="option" aria-selected={index === active} onMouseEnter={() => setActive(index)} onFocus={() => setActive(index)} onClick={() => choose(action)} key={action.id}><Icon name={action.icon} size={17} /><strong>{action.label}</strong></button>)}
       </div>)}</div>

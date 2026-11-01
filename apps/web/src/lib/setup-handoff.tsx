@@ -5,8 +5,9 @@ import { workspaceExperience } from '../i18n/workspace-experience';
 import { ScopedNotice } from '../components/WorkspacePresentation';
 
 type DraftReference = { kind: 'chat' | 'task'; id: string };
+export type KnowledgeSource = { id: string; name: string };
 type Handoff = { origin: string; destination: 'models' | 'knowledge'; draft?: DraftReference };
-const Context = createContext<{ begin: (handoff: Handoff) => void; returning: DraftReference | undefined; consumed: () => void; requestedKnowledge: boolean; askKnowledge: () => void; consumeKnowledge: () => void }>({ begin: () => {}, returning: undefined, consumed: () => {}, requestedKnowledge: false, askKnowledge: () => {}, consumeKnowledge: () => {} });
+const Context = createContext<{ begin: (handoff: Handoff) => void; returning: DraftReference | undefined; consumed: () => void; requestedKnowledge: boolean; requestedSources: KnowledgeSource[]; askKnowledge: (sources?: KnowledgeSource[]) => void; consumeKnowledge: () => void }>({ begin: () => {}, returning: undefined, consumed: () => {}, requestedKnowledge: false, requestedSources: [], askKnowledge: () => {}, consumeKnowledge: () => {} });
 export const useSetupHandoff = () => useContext(Context);
 
 // Mounted with the actor/workspace/permissions key by App. No prompts or tokens
@@ -17,6 +18,7 @@ export function SetupHandoffProvider({ children, refresh }: { children: ReactNod
   const [handoff, setHandoff] = useState<Handoff>();
   const [returning, setReturning] = useState<DraftReference>();
   const [requestedKnowledge, setRequestedKnowledge] = useState(false);
+  const [requestedSources, setRequestedSources] = useState<KnowledgeSource[]>([]);
   const [route, setRoute] = useState(window.location.hash);
   const mounted = useRef(true);
   useEffect(() => {
@@ -40,12 +42,13 @@ export function SetupHandoffProvider({ children, refresh }: { children: ReactNod
     if (mounted.current) void refresh();
   };
   const inSetup = /^#\/(models|knowledge)(?:\/|$)/.test(route);
-  const askKnowledge = () => {
+  const askKnowledge = (sources: KnowledgeSource[] = []) => {
     if (!knowledge) return;
     setReturning(undefined); setHandoff(undefined); setRequestedKnowledge(true);
+    setRequestedSources(sources.slice(0, 16).map(({ id, name }) => ({ id, name })));
     window.location.hash = '#/chat';
   };
-  return <Context.Provider value={{ begin, returning, consumed: () => { setReturning(undefined); setHandoff(undefined); }, requestedKnowledge, askKnowledge, consumeKnowledge: () => setRequestedKnowledge(false) }}>
+  return <Context.Provider value={{ begin, returning, consumed: () => { setReturning(undefined); setHandoff(undefined); }, requestedKnowledge, requestedSources, askKnowledge, consumeKnowledge: () => { setRequestedKnowledge(false); setRequestedSources([]); } }}>
     {handoff && inSetup && <ScopedNotice className="setup-return" action={<button className="secondary-button" onClick={returnDraft}>{workspaceExperience[locale].returnDraft}</button>}>{messages.nav[handoff.destination]}</ScopedNotice>}
     {children}
   </Context.Provider>;

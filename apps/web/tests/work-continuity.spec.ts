@@ -20,6 +20,8 @@ async function fixture(page: Page, count = 1) {
       [`/api/v2/jobs/${id}`]: { ...task, run_id: id, output: '', steps: [] },
     };
     if (path.endsWith('/turn')) return r.fulfill({ json: { turn: { id: 'turn', status: 'completed', prompt: '', output: '' } } });
+    const session = chats.find(chat => path === `/v1/sessions/${encodeURIComponent(chat.name)}`);
+    if (session) return r.fulfill({ json: session });
     return r.fulfill({ json: data[path] ?? {} });
   });
   return state;

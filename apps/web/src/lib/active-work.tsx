@@ -6,7 +6,7 @@ import { useDraftScope } from './draft-scope';
 import { useWorkspaceRefresh } from './workspace-refresh';
 
 export type KnownWork = { kind: 'task' | 'chat'; id: string; title: string; status: string; stale?: boolean };
-type Actions = { rememberChat: (name: string, status: string) => void; needsRecovery: (name: string) => boolean; forgetChat: (name: string) => void; claimChat: (name: string) => () => void; seedJobs: (jobs: AgentTask[]) => void; openChat: (name: string) => void };
+type Actions = { rememberChat: (name: string, status: string) => void; hasChat: (name: string) => boolean; needsRecovery: (name: string) => boolean; forgetChat: (name: string) => void; claimChat: (name: string) => () => void; seedJobs: (jobs: AgentTask[]) => void; openChat: (name: string) => void };
 const ActionsContext = createContext<Actions | null>(null);
 const StateContext = createContext<{ entries: KnownWork[]; more: boolean; taskIDs: string[] }>({ entries: [], more: false, taskIDs: [] });
 export const useKnownWork = () => useContext(StateContext);
@@ -31,6 +31,7 @@ export function ActiveWorkProvider({ children, taskFirst }: { children: ReactNod
       setState(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     };
     return {
+      hasChat(name) { return model.current.chats.has(name); },
       needsRecovery(name) { const chat = model.current.chats.get(name); return !!chat && !terminal(chat.status); },
       rememberChat(name, status) {
         if (!workspace || !alive.current || !name || name.length > 1024) return;

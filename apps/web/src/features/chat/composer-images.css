@@ -1,0 +1,10 @@
+@layer controls {
+ .image-attachments { display:flex; flex-wrap:wrap; gap:12px; margin-block:8px; min-width:0; }
+ .image-attachments figure { position:relative; margin:0; min-width:0; width:min(100%,160px); padding:8px; border-radius:var(--radius-md); background:var(--surface-2); }
+ .image-attachments img { display:block; width:100%; height:112px; object-fit:contain; border-radius:4px; }
+ .image-attachments figcaption { margin-block-start:6px; font-size:12px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+ .composer .image-attachments .icon-button { position:absolute; inset-block-start:4px; inset-inline-end:4px; background:var(--surface-1); color:var(--text); }
+ .image-input-notice { margin:4px 10px; color:var(--muted); font-size:13px; line-height:1.5; }
+ .composer .composer-image-add { color:var(--muted); background:transparent; border-color:transparent; }
+ .composer .composer-image-add:hover:not(:disabled) { color:var(--text); background:var(--surface-2); }
+}
