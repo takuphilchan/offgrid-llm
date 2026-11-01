@@ -1,9 +1,10 @@
-import { isValidElement, useState, type ReactNode } from 'react';
+import { isValidElement, memo, useState, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { copyText } from '../lib/clipboard';
 import { useI18n } from '../i18n';
 import { Icon } from './Icon';
+import { AsyncMarkdown } from './AsyncMarkdown';
 
 function nodeText(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -45,6 +46,8 @@ function safeUrl(url: string): string {
   return /^(https?:|mailto:)/i.test(url.trim()) ? url : '';
 }
 
-export function MarkdownMessage({ content }: { content: string }) {
+// Input, lifecycle and unrelated progress updates must not reparse saved prose.
+export const MarkdownMessage = memo(function MarkdownMessage({ content, streaming = false }: { content: string; streaming?: boolean }) {
+  if (streaming || content.length > 4096) return <AsyncMarkdown content={content} components={components} />;
   return <Markdown remarkPlugins={[remarkGfm]} components={components} urlTransform={safeUrl}>{content}</Markdown>;
-}
+});

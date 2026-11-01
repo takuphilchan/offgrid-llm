@@ -3,10 +3,15 @@ import react from '@vitejs/plugin-react';
 import computerCopy from './src/i18n/computer-experience.json' with { type: 'json' };
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import compatibility from '../desktop/compatibility.cjs';
 
 export default defineConfig({
   base: '/ui/',
+  // The package's browser export requires document at module initialization.
+  // Its data-only decoder has identical entity semantics and also runs inside
+  // the Markdown worker, where no DOM exists.
+  resolve: { alias: { 'decode-named-character-reference': createRequire(import.meta.url).resolve('decode-named-character-reference') } },
   plugins: [react(), {name:'shared-computer-copy', generateBundle() {
     this.emitFile({type:'asset',fileName:'computer-experience.json',source:JSON.stringify(computerCopy)});
   }}, {name:'desktop-compatibility', writeBundle(options) {
