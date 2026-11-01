@@ -1,9 +1,10 @@
 # Workspace experience completion audit — 2026-11-01
 
 The implementation and release candidate are not proof that the entire experience
-program is complete. `workspace-outcome-experience` remains **83/93 tasks**. This
-audit preserves its original acceptance criteria rather than replacing them with
-the checks that happen to be available.
+program is complete. This audit began at **83/93 tasks**; after the order and
+presentation follow-up, `workspace-outcome-experience` is **91/101 tasks**, with
+the same ten qualification items open. This audit preserves its original
+acceptance criteria rather than replacing them with the checks available here.
 
 ## Verified source and distribution evidence
 
@@ -324,3 +325,52 @@ Release finalizer contract tests passed under WSL. The initial Windows invocatio
 hung in its Bash bridge; only that test's identified child processes were stopped.
 Targeted MCP/discovery tests passed after updating advertised version metadata.
 The v0.4.23 notes retain open qualification limits; preparation is not publication.
+
+### Exact-source CI and downloaded v0.4.23 artifacts
+
+Source `b1c97c797fdbe287329954ea8cf429acc675a5d2` passed all eight jobs in
+[CI 41283252472](https://github.com/takuphilchan/offgrid-llm/actions/runs/41283252472).
+This includes both macOS architectures, Windows installation lifecycle, Linux
+packaged startup/theme, Go/race, native parser, Python and renderer checks.
+The Linux renderer run passed 689 tests with 28 skips, followed by six acquisition
+and one restart real-service tests. Only after this exact-source gate passed was
+the immutable `v0.4.23` tag pushed. Publication is tracked by
+[release run 41284247749](https://github.com/takuphilchan/offgrid-llm/actions/runs/41284247749).
+
+Independent downloads matched GitHub's SHA-256 asset digests:
+
+| Asset | SHA-256 |
+| --- | --- |
+| Windows portable desktop | `0fc2e26709286a9dbff016864a7b5d15dd6e17318e370e48c43b7c842ebd0e19` |
+| Windows CPU runtime archive | `5a13b0463acff2081af5955b9c323b9a74943d630ce89424b61fa978a3729e86` |
+
+The portable desktop was extracted, not installed. Using those downloaded
+artifacts, `test-desktop-native-reply.mjs` passed with Qwen2.5 3B Q4_K_M on Windows
+CPU, a 2,048-token context and isolated local state. It verified one saved user
+message and one matching assistant response, first-reply onboarding, restart,
+image-draft retention, and unsupported-image rejection without creating a turn.
+The response was `hello there` in 3,424 ms for this one run; this is not a cold-load
+or latency guarantee. The model SHA-256 was
+`626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d`.
+The service reported `0.4.23` and renderer identity
+`f74cb8bf0ff3e1f88150c66faa72694e3a714f958342102a845faef603e82117`.
+Runtime dependency-manifest hashes were checked before copying/loading.
+
+Separate local candidate checks passed packaged startup/recovery, browser control
+through private IPC, saved/live theme preferences and 200% zoom. These candidate
+checks are distinct from the downloaded-artifact inference run above.
+
+Retained failure: the extended candidate invocation with BGE-M3 and `--agent`
+requested 8,192 tokens and was rejected by memory admission before the initial
+reply. Its 120-second response assertion expired; the UI preserved the draft and
+displayed the localized memory explanation. Knowledge and agent stages were not
+reached and are not claimed passed. A preceding attempt used an incorrect runtime
+directory and stopped before application launch; correcting that path allowed
+the basic candidate run to pass. No context/model was silently changed to turn
+the extended failure into a success.
+
+At this checkpoint, all 14 downloadable assets were uploaded with nonzero sizes
+and SHA-256 digests, and the CPU container tag exposed Linux AMD64 and ARM64.
+The CUDA container was still building and the release remained a draft. Final
+publication/checksum/container evidence must be recorded after it completes.
+The installed desktop, production workspace, models and service were not replaced.

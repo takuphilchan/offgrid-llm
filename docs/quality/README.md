@@ -6,4 +6,8 @@ Start with [native document evidence](evidence/native-documents-2026-10.md), [mo
 
 Keep three states distinct: implemented in source, automatically tested, and qualified on a real platform/model. A mock, compilation, Xvfb run, or checked OpenSpec task does not by itself establish installed-user readiness. Unrun checks remain unverified.
 
+The [workspace completion audit](evidence/workspace-completion-audit-2026-11-01.md)
+records the latest presentation follow-up, v0.4.23 candidate and downloaded-package
+checks, retained failures, and the remaining human/native qualification gates.
+
 For opt-in, disposable-folder real-model checks, see the [native-agent workflow fixtures](native-agent-workflows.md) and their [dated results](evidence/native-agent-execution-2026-10-25.md).
