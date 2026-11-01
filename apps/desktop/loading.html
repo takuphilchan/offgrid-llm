@@ -18,14 +18,16 @@
     </section>
     <section class="connection" aria-labelledby="status-title">
       <div class="status-row"><span id="indicator" class="indicator" aria-hidden="true"></span><div><h2 id="status-title">Checking your service</h2><p id="status-text" role="status" aria-live="polite">Connecting to OffGrid…</p></div></div>
-      <dl><div><dt>Desktop</dt><dd id="desktop-version">—</dd></div><div><dt data-copy="service">Service</dt><dd id="service-version">Checking…</dd></div><div class="address"><dt data-copy="address">Address</dt><dd id="address">—</dd></div></dl>
-      <p id="timing" class="muted"></p>
+
       <div id="recovery" hidden>
         <div class="actions"><button id="retry" data-copy="retry" type="button">Retry connection</button><button id="browser" data-copy="browser" type="button" class="secondary" hidden>Open existing web workspace</button></div>
         <details id="separate"><summary data-copy="separate">Open an isolated recovery workspace</summary><p data-copy="separateBody">This temporarily starts the bundled service on another local port with separate models and history. It does not copy, upgrade, or stop your existing workspace, and the next launch reconnects to the normal workspace.</p><button id="local" data-copy="local" type="button" class="secondary">Open recovery workspace</button></details>
         <button id="help" data-copy="guide" type="button" class="text-button">Setup and recovery guide ↗</button>
       </div>
-      <details id="technical" hidden><summary data-copy="details">Technical details</summary><p id="technical-reason"></p></details>
+      <details id="technical"><summary data-copy="details">Technical details</summary>
+      <dl><div><dt>Desktop</dt><dd id="desktop-version">—</dd></div><div><dt data-copy="service">Service</dt><dd id="service-version">Checking…</dd></div><div class="address"><dt data-copy="address">Address</dt><dd id="address">—</dd></div></dl>
+      <p id="timing" class="muted"></p>
+<p id="technical-reason"></p></details>
       <p id="action-error" role="alert" hidden></p>
     </section>
     <footer><span>OffGrid</span><span id="footer-state">Starting locally</span></footer>

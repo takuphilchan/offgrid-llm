@@ -29,6 +29,11 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
     before=phase==='before';await page.goto('http://desktop-fixture.invalid/loading.html');
     await expect(page.locator('html')).toHaveAttribute('data-theme',theme);
     await expect(page.locator('#status-title')).toHaveText(copy[locale].starting);
+    await expect(page.locator('#desktop-version')).toBeHidden();
+    await page.locator('#technical summary').click();
+    await expect(page.locator('#desktop-version')).toHaveText('fixture');
+    await expect(page.locator('#address')).toHaveText('http://isolated-fixture.invalid');
+    await page.locator('#technical summary').click();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({path:resolve(dir,`${phase}.png`),fullPage:true,animations:'disabled'});
     await expect(page.locator('body')).toHaveCSS('background-image','none');

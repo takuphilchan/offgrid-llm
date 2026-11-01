@@ -24,17 +24,19 @@ function render(state) {
   const recoveryKind = state.code === 'bundle_inconsistent' ? 'bundleRepair' : state.state === 'incompatible' ? (state.canOpenBrowser ? 'serviceUpdate' : 'addressConflict') : null;
   byId('title').textContent = t(busy ? 'opening' : ready ? 'ready' : 'attention');
   byId('status-title').textContent = t(({ checking: 'checking', starting: 'starting', ready: 'ready', incompatible: 'incompatible', unavailable: 'unavailable', error: 'attention', offline: 'unavailable' })[state.state] || 'checking');
-  byId('status-text').textContent = t(busy ? 'intro' : ready ? 'ready' : 'guidance');
+  byId('status-text').hidden = busy || ready;
+  byId('status-text').textContent = t(ready ? 'ready' : 'guidance');
   if (recoveryKind) {
     byId('status-title').textContent = t(recoveryKind + 'Title');
     byId('status-text').textContent = t(recoveryKind + 'Body');
   } else if (['unavailable','offline'].includes(state.state)) byId('status-text').textContent = t('unavailableBody');
   if (state.autoReconnect) {
+    byId('status-text').hidden = false;
     byId('title').textContent = t('opening');
     byId('status-title').textContent = t('reconnecting');
     byId('status-text').textContent = t('reconnectingBody');
   }
-  byId('technical').hidden = !state.reason;
+  byId('technical-reason').hidden = !state.reason;
   byId('technical-reason').textContent = state.reason || '';
   byId('indicator').classList.toggle('idle', !busy && !state.autoReconnect);
   byId('desktop-version').textContent = state.desktopVersion || '—';

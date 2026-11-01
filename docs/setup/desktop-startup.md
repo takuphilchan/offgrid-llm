@@ -22,8 +22,9 @@ for what has actually been built and tested.
 ## Opening a workspace
 
 The desktop opens a lightweight, monochrome window before checking the service.
-It shows the desktop version, detected service version, local address and actual
-connection state. It does not show an invented installation percentage.
+It leads with the actual connection state and any needed recovery action.
+**Technical details** contains the desktop version, detected service version,
+local address and elapsed time. It does not show an invented installation percentage.
 
 The updated desktop uses explicit API and renderer/desktop bridge compatibility
 for independently managed services. Different release numbers alone no longer
