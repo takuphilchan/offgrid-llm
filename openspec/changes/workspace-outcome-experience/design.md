@@ -1,5 +1,84 @@
 # Design
 
+## Approved material refinement (2026-10-31)
+
+The reviewed prototype uses three decorative families: a neutral directional
+sidebar ramp, a lifted composer ramp, and floating utility material. Primary
+actions become solid with palette-derived hover fills, so opening a popup never
+adds a fourth decorative family. Progress retains its functional static ramp.
+Keep all material definitions in the generated token block and reuse them in
+the shared web/Electron renderer. No whole-window transparency or OS wallpaper
+sampling is introduced. Answer, code, input text and focus indicators stay opaque.
+
+Floating utilities and the bounded command palette use a 96% surface-color fill
+and at most 12px backdrop blur when supported. A small neutral directional wash
+adds depth without a new hue, border overlay or glow. Full-screen drawers and
+reading surfaces do not blur. Unsupported browsers retain an opaque fill.
+Reduced transparency, increased contrast, forced colors and the existing central
+off switch disable the material and decorative gradients. Reduced motion keeps
+static materials but removes existing entrance/press animation.
+
+Measure foreground contrast across both themes and extreme black/white
+underlays; test opening a utility during streaming at 4x/6x CPU throttling, plus
+the unchanged Stop and frame-p95 gates. Nested nonmodal utilities retain their
+parent drawer's Tab containment while owning Escape dismissal. Existing modal
+confirmations retain their own focus scope. Capture viewport-sized overlays only
+after their entrance is visible; full-page screenshots are not overlay evidence.
+Earlier rejected-overlay statements describe the previous phase and are
+superseded only for these explicit consumers. Physical/native and human checks
+remain separate from browser fixtures.
+
+## Whole-product review implementation (2026-10-30)
+
+Continue the shared renderer rather than adding a second application. The owner
+approved every outcome in the subsequent review. Earlier presentation-only
+constraints yield to the following concrete behavior; authority, privacy, exact
+identity, no uncertain replay and existing-data preservation remain invariant.
+
+1. Separate conversation selection from generation. Use existing durable turn
+   recovery and scoped work references; selecting another conversation detaches
+   observation, never cancellation or submission. In-flight acceptance must stay
+   correlated with its original session. Late results cannot populate another
+   conversation. Return reconciles saved state without replaying speech.
+2. Preview bounded supported textual artifacts on explicit request through the
+   existing authenticated artifact API. Validate size and SHA-256 before display,
+   decode UTF-8 strictly, render text inertly and Markdown through the existing
+   safe renderer. Unknown/binary/oversized content keeps an honest download path.
+   Preview integrity is not semantic correctness. Revoke/dispose private content
+   on scope change, and do not execute embedded HTML or scripts.
+3. Derive recovery from typed state and operation, not English error matching.
+   Explain retained output and offer the appropriate existing status, reconnect,
+   reconciliation or continuation action. Unknown cases retain diagnostics.
+4. Bound streaming rendering and isolate input/control scheduling. Keep final
+   output exact; do not hide loss or delay cancellation feedback behind Markdown.
+   Run the existing throttled stress fixture without relaxing its 250ms gate.
+5. Use readable reversible model identity and truthful readiness at selection;
+   search includes exact IDs. Never invent hardware fit or replace the model.
+6. Group agent creation around purpose, identity/model and chosen capabilities,
+   with optional advanced budgets. Preserve drafts/revisions and explicit save;
+   offer examples and an isolated test path without granting or running on select.
+7. Keep the composer focused on the request, active context chips and Send/Stop.
+   Move occasional configuration into labelled panels; preserve voice opt-in,
+   microphone lifecycle, permission scope and context discoverability.
+8. Expand work retrieval with bounded authorized search and explicit result types;
+   preserve filters/return paths. Document questions must pin actual supported
+   source scope end to end, with additive service enforcement if needed. Never
+   imply a selected source restriction from a frontend chip alone.
+9. Skills expose purpose/examples/use; collaborator summaries show actual returned
+   state and deliverables, not fabricated progress. Schedules lead with task and
+   calendar, searchable time zone and next-run preview; resource review remains.
+10. Enforce consistent screen hierarchy, setting controls, menus, status and
+    responsive layouts. Simplify connections/voice/login/permissions/empty states
+    with action-specific guidance. Retain 44px coarse-pointer access and all nine
+    locales. Shared semantic primitives replace repeated competing patterns.
+11. Repair runtime distribution at its existing packaging owner, then verify
+    fresh installation/startup/restart/update in isolated state on each supported
+    platform. This machine's manually prepared GPU runtime is not release proof.
+
+Verification combines regression tests, rendered state matrices, real-service
+journeys, packaged installations and consented formative evaluation. All must
+retain their evidence category. Missing human/platform evidence remains open.
+
 ## Compact control and configuration feedback (2026-10-30)
 
 The user's follow-up supersedes uniform 40px desktop actions: use 32px compact
@@ -22,7 +101,8 @@ reading order. No automatic grants, settings or resource selection are added.
 The approved briefs refine the existing composition. The baseline is commit
 `7357acae431e40092fd40a5458207d3649d503e8`. A parser-backed inventory freezes
 color-bearing CSS declarations and UI color literals, including desktop startup.
-Existing palette, borders, shadows and color pairings are retained. New work uses
+Existing palette, shadows and color pairings are retained. The subsequent approved
+2026-10-31 border review below supersedes retention of every decorative outline. New work uses
 geometry, typography, spacing and transform/opacity motion. The freeze takes
 precedence over suggested new shadow, scrollbar or focus colors.
 
@@ -70,6 +150,20 @@ banding and native platform checks as unverified when unavailable.
 
 ## Context
 
+### Restart recovery (2026-10-30)
+
+DesktopRuntime owns one startup attempt and one optional reconnect timer. A
+remembered external endpoint receives the existing bounded startup grace period;
+offline/timeouts remain checking rather than immediately becoming a fatal screen.
+After grace expires, recoverable waiting exposes recovery actions and schedules
+one read-only handshake every five seconds. No concurrent probes, process launch,
+task replay or external restart is introduced. Incompatibility and storage errors
+stop automatic retries. Quit aborts probes/timers; isolated recovery cancels the
+external timer. Identity changes still revoke local dispatch before readiness.
+All nine startup locales explain automatic waiting. Standalone installs retain
+the native bundled service path, independent of Docker/WSL. Existing container
+data is never implicitly migrated into a native workspace.
+
 See `proposal.md` for motivation. This is the next interaction layer over the completed `workspace-state-recovery` and `workspace-shell-foundation` changes, not a second shell redesign. Existing ownership and release boundaries are in `docs/advanced/workspace-ui.md`, `client-contracts.md` and `production-readiness.md`.
 
 Observed in the source and current fixture screenshots:
@@ -93,6 +187,46 @@ Observed in the source and current fixture screenshots:
 
 ## Decisions
 
+### Approved image-input extension
+
+Keep the text composer central. An attachment control beside voice input accepts
+file selection, paste and drop; thumbnails above the text have explicit remove
+controls. Use at most four PNG/JPEG images, 2 MiB decoded each, with the existing
+8192-edge/32-megapixel limits. Reject unsupported or malformed files without
+discarding the text or existing images. Never fetch image URLs or run SVG.
+
+Add bounded `images` records (display name and local data URL) to durable ordinary
+Chat requests, turns and saved user messages. Preserve existing string content
+and API clients. Store accepted image bytes atomically with the scoped session,
+include them in request identity, and rebuild typed inference content for history.
+Bound total encoded conversation images to 12 MiB, enforced atomically at turn
+admission. Completed turns keep image bytes once, in their saved user message.
+Keep unsent drafts scoped to actor/workspace/conversation; storage failure must
+be visible and must not silently discard attachments. Reject unsupported agents,
+non-durable legacy image submissions and absent local projector/runtime paths;
+never drop images to answer as text. Text-only legacy submissions stay compatible.
+
+Installed projector metadata permits image submission but is not a quality claim.
+The shared inference path revalidates it before generation; missing/stale metadata
+leaves the draft intact. No automatic model changes, downloads, new permissions,
+camera capture or external uploads. UI capabilities are negotiated with the service.
+
+Verification covers upload/paste/drop, replacement/removal, errors, size/type
+limits, image-only prompts, multilingual labels, keyboard/RTL, text and voice
+coexistence, scope changes, history/restart, request deduplication, cancellation,
+unsupported model/agent paths and real model qualification separately.
+
+CLI parity uses one bounded local-file loader and pending-image command handler
+for plain and TUI chat. Read bytes when explicitly attached, not after an unrelated
+file replacement; reject non-regular, malformed, unsupported and oversized input.
+Keep attachments through failed or incomplete responses and clear them only after
+a confirmed response. Preserve bytes in existing local saved sessions and rebuild
+typed history on load. The service remains responsible for projector readiness;
+the CLI never substitutes a model or strips images to retry. `/image PATH` accepts
+paths with spaces, `/images` lists pending input, and `/remove-image [N|all]`
+removes pending input explicitly. Repeated `--image PATH` uses the same four-file
+limit. Local session storage errors remain visible rather than claiming a save.
+
 ### 1. Use one common interaction grammar, not one enormous page
 
 Retain the six primary destinations and established routes. Share the pattern **start / current work / result / details**, but let collections such as Models and Knowledge use lists rather than copying a chat layout.
@@ -108,7 +242,14 @@ Alternative rejected: merge Chat, Agents and every administrative screen into a 
 
 ### 2. Keep controls proper while reducing visual competition
 
-Use the current monochrome tokens, IBM Plex fonts, icons and outlined action controls. Reduce visual weight through grouping, whitespace and conditional relevance, not unframed link-like action buttons. Navigation, selectable rows, statuses and source references keep their own semantics.
+Use the current monochrome tokens, IBM Plex fonts and icons. The user's 2026-10-31
+whole-app border review supersedes the earlier requirement for outlined actions:
+solid primary actions, tonal secondary actions and quiet labelled utilities share
+the same geometry and keyboard behavior. Preserve input, floating-panel, error and
+focus boundaries; remove redundant nested profile/tool/skill frames. Composer
+selectors sit inside one editor boundary. Navigation, selectable rows, statuses
+and source references keep their own semantics. Forced-colors and coarse-pointer
+behavior must remain usable; screenshots and interaction tests are separate checks.
 
 Shared primitives should cover page heading/action groups, list toolbars, scoped notices, empty states, result/artifact rows and history management. Reuse `UtilityPopover`, existing dialogs and the final control layer. Extract when two surfaces need the same behavior; avoid creating a component library without consumers.
 

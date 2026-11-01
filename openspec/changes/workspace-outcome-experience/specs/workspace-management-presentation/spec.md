@@ -4,6 +4,43 @@ Make documents, work history and preferences useful to ordinary users while reta
 
 ## ADDED Requirements
 
+### Requirement: Purpose-led capability configuration
+Agent setup SHALL lead with purpose, identity and model, grouping optional
+capabilities into discoverable sections. This supersedes the earlier requirement
+that every tool and Knowledge choice be expanded at once. Examples, skill use
+and explicit test/use actions SHALL preserve drafts, pinned revisions and grants.
+
+#### Scenario: Configure and try an agent
+- **WHEN** a user chooses a purpose example and configures selected capabilities
+- **THEN** changes remain an editable draft until explicitly saved
+- **AND** using or testing the agent requires explicit submission under existing authority
+
+### Requirement: Source-specific questions
+Document question handoffs SHALL identify actual selected source scope and enforce
+it through the service, preserving explicit retrieval choice and the draft. This
+extends the earlier broad-scope handoff without permitting a frontend-only claim.
+
+#### Scenario: Selected source becomes unavailable
+- **WHEN** a selected document is revoked, removed or unavailable for retrieval
+- **THEN** the request reports that limitation and does not silently search unrelated documents
+
+### Requirement: Readable scheduling and setup
+Schedules SHALL lead with task/calendar and readable next-run review, with a
+searchable time zone and subordinate budgets. Connections, voice, login and
+permissions SHALL expose relevant readiness, scope and recovery without implicit
+grants, capture, model downloads or commands on another host.
+
+#### Scenario: Review a recurring task
+- **WHEN** the user changes time, days or time zone
+- **THEN** the next-run explanation updates before explicit reviewed save
+- **AND** no scheduling preview executes or replays a task
+
+#### Scenario: Preview follows the execution calendar
+- **WHEN** an authorized user previews a recurring calendar
+- **THEN** the service returns three future instants using its execution calendar and clock, including DST gap/fold rules
+- **AND** changing the calendar clears obsolete predictions and late responses cannot replace the current preview
+- **AND** unavailable previews remain explicit without granting authority, claiming occurrences or creating jobs
+
 ### Requirement: Direct profile resource configuration
 Agent creation SHALL use available desktop width for identity/instructions and
 resource selection. Tools and Knowledge SHALL be visible without opening a

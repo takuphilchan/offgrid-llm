@@ -1,5 +1,57 @@
 # Tasks
 
+## 18. Approved surface-material refinement (2026-10-31)
+
+- [x] 18.1 Implement shared generated sidebar/composer/floating-material tokens, solid primary/hover fills and bounded blur with opaque accessibility/unsupported fallbacks; preserve palette, text opacity, geometry and the three-family budget. Repair nested drawer focus containment and run type/build/generator checks.
+- [x] 18.2 Verify composited contrast, material on/off and reduced-transparency/contrast/forced-color states, keyboard dismissal, all routes and light/dark narrow RTL captures; run applicable renderer regressions and inspect the captures.
+- [x] 18.3 Measure floating material during streaming at 4x/6x CPU throttle and rerun unchanged Stop/frame-p95 gates; record exact commands, failures and current evidence in the maintained gradient/reliability guides. Do not close outstanding real-model, platform or human qualification gates.
+
+## 17. Approved image-input extension (2026-10-31)
+
+- [x] 17.1 Add bounded image records and validation to ordinary durable Chat, scoped persistence, inference history and request identity; reject unsupported agents/legacy image paths and retain text compatibility. Update API/schema clients and run session/server/API tests including cross-scope access, malformed/oversized input, deduplication and restart.
+- [x] 17.2 Add one shared composer attachment control with PNG/JPEG upload/paste/drop, previews/removal, scoped drafts, visible readiness/storage errors and saved images; preserve voice, keyboard, narrow/RTL and all nine locales. Run API/type/build and image/text/voice/continuity renderer tests.
+- [ ] 17.3 Verify packaged desktop and web image journeys with isolated data; record actual local vision-model evidence separately from fixtures, preserve failed evidence and leave unavailable real-model/platform qualification unchecked. Update API/workspace guides and reliability evidence; no deployment or publication under these tasks.
+- [x] 17.4 Repair ordinary CLI image input and add shared `/image`, `/images`, `/remove-image` handling in plain/TUI sessions; preserve repeated flags, failure retention, exact saved/reloaded bytes and explicit service vision gates. Run CLI/TUI/API regressions for invalid, oversized, missing files, failed/truncated streams and successful history; document commands and actual vision qualification limits.
+
+## 16. Whole-product review implementation (2026-10-30)
+
+These tasks implement the full approved review; they do not inherit completion
+from earlier presentation tasks. Use current paths: `npm.cmd --prefix apps/web
+run check`, `npm.cmd --prefix apps/web run api:check`, `npm.cmd --prefix apps/web
+run build`, `go build -o build/workspace-outcome-experience/offgrid.exe ./cmd/offgrid`
+and `node scripts/test/test-web-workspace.mjs build/workspace-outcome-experience/offgrid.exe
+<specs> --workers=1 --reporter=line`. Record actual evidence in the reliability
+documentation; leave unavailable installed-platform/participant gates open.
+
+- [x] 16.1 Permit navigation/new conversations during generation with origin-bound acceptance, view detachment, durable return, no replay, no cross-session output or speech; extend chat-streaming/work-continuity fixtures and workspace guidance.
+- [x] 16.2 Add authenticated, bounded text/Markdown artifact previews with independent integrity validation, strict UTF-8, inert content, cancellation, revocation and unsupported/oversized fallback; extend work-results fixtures and output guidance.
+- [x] 16.3 Present typed state-specific recovery and retained-result explanations; preserve exact approvals, uncertain effects and no-replay semantics; test lost acknowledgment, revoked access, partial result and resumed inspection.
+- [x] 16.4 Fix measured heavy-stream responsiveness, preserve exact final output and immediate Stop feedback; pass repeated unchanged 250ms stress gates, record frame/input/bundle measurements and limitations.
+- [ ] 16.5 Repair native runtime distribution dependencies and verify fresh install, first reply, restart, sleep/wake and update/recovery on Windows/macOS/Linux in isolated state; preserve hardware claims and retained user data.
+- [x] 16.6 Implement purpose-led agent configuration, optional capability sections, examples and explicit use/test flow; preserve revision conflicts, dirty drafts, grants and save validation; test narrow/wide/RTL and real handoff.
+- [x] 16.7 Implement searchable readable model selection with exact-ID inspection, actual readiness/capabilities and resident state where known; improve discovery decisions without invented fit, automatic download or substitution; test all categories and unavailable models.
+- [x] 16.8 Simplify composer hierarchy with active context and labelled secondary controls; retain accessible Send/Stop, keyboard/IME, follow-latest, voice opt-in and explicit workspace scope; test plain and agent turns in all layouts.
+- [x] 16.9 Improve history/navigation space and bounded cross-work search with truthful result scopes, authorization and preserved return state; test active work, logout, workspace switching and long histories.
+- [x] 16.10 Implement document/collection question handoff with end-to-end enforced source scope and inspectable supporting passages; preserve drafts and explicit retrieval choice, test missing/revoked/unindexed sources and no unrelated-source fallback.
+- [x] 16.11 Improve skill discovery, examples, review and attach/use workflow; keep revision/digest authority and provide actionable unavailable/rejected states; test real skill handoff without automatic execution.
+- [x] 16.12 Add subordinate specialist summaries for actual state, dependencies/blockers and returned deliverables; retain one parent conversation and bounded authorized subscriptions; test partial/conflicting/failed branches.
+- [x] 16.13 Simplify schedules with searchable time zones, readable next-run preview and optional budgets; preserve explicit resource review, disabled state and no missed-run replay; test calendar/DST/permissions and narrow layouts.
+- [x] 16.14 Apply screen-level hierarchy, appropriate field widths and shared action/menu/setting representations across all routes; remove competing/repeated headings and containers while preserving palette, focus, touch targets and state ownership. The 2026-10-31 user-directed border/placement refinement uses solid/tonal/quiet roles; final renderer: 627 passed, 27 skipped; manual/native qualification remains in 16.16–16.18.
+- [x] 16.15 Improve connection capability/setup feedback, voice readiness/recording/transcription, login context/recovery, permission explanations and actionable empty states; test capability absence, role restrictions, no implicit grants/capture and context-preserving return. Evidence: setup and whole-screen hierarchy sections in workspace-experience-2026-10-30.md; source/UI fixtures do not qualify real speech or native hardware.
+- [ ] 16.16 Update all nine locales and maintained guides; run keyboard, screen-reader, RTL, reduced-motion, 200% zoom, short/narrow and long-label journeys; preserve missing manual evidence as open.
+- [ ] 16.17 Run complete first-reply, document-grounded and reviewed-agent-output journeys with failure/cancel/navigation, plus all applicable existing CI and installed-edition checks; independently verify output and no unauthorized/duplicate effects.
+- [ ] 16.18 Run the consented five-participant formative comparison required by 7.2, record completion/detours/help/recovery and iterate against its target; do not substitute screenshots or automation for users.
+
+## Restart recovery follow-up (2026-10-30)
+
+- [x] R1 Implement single-owner external startup grace and paced reconnect, preserving native standalone startup, compatibility, cancellation and workspace identity; pass `npm.cmd --prefix apps/desktop test`.
+- [x] R2 Localize waiting in all nine desktop locales, test presentation and delayed packaged startup, and update desktop setup guidance. Record Windows evidence separately from unrun macOS/Linux/reboot qualification.
+
+Evidence: `docs/quality/evidence/desktop-reconnection-2026-10-30.md`. The user's
+container-to-native migration was verified separately in
+`docs/quality/evidence/native-windows-migration-2026-10-30.md`; reconnect is not
+external-service lifecycle management.
+
 ## 15. User feedback: compact controls and direct configuration (2026-10-30)
 
 - [x] 15.1 Introduce compact fine-pointer actions, retaining larger coarse-pointer targets, keyboard focus and the existing palette.
@@ -19,10 +71,11 @@ Unchanged earlier hardware, participant and throttled-stream gates remain open.
 - [ ] 14.4 Verify every treatment on/off, worst-point contrast, supported syntax, RTL/reflow, throttled stream/download paint and local feedback; run full applicable checks and record physical/native limits.
 - [x] 14.5 Update evidence/token inventory/rejections and commit the verified gradient phases separately.
 
-14.4 remains open: the ordinary renderer and contrast/gating checks pass, but
-three 4x/6x throttled Stop samples exceed 250 ms (including flat mode). See
-`docs/ux/gradients.md`; physical display, native and screen-reader qualification
-remain unverified. The subsequent user request authorizes replacing the local
+14.4 remains open for physical-display and screen-reader qualification. The
+earlier three failing 4x/6x Stop samples are retained in `docs/ux/gradients.md`;
+the later worker-parsing repair passed three repeated unchanged stress runs
+(16.4), as recorded in the whole-product evidence. Installed-platform coverage
+is still incomplete. The subsequent user request authorizes replacing the local
 container and desktop for testing, with backups; it does not authorize release.
 
 ## 12. Approved color-frozen presentation refinement (2026-10-30)

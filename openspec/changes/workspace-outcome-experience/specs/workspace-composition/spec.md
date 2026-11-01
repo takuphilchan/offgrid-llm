@@ -4,6 +4,67 @@ Let people start ordinary conversations and governed tasks without navigating se
 
 ## ADDED Requirements
 
+### Requirement: Scoped image input in ordinary Chat
+The shared composer SHALL accept up to four PNG/JPEG images of at most 2 MiB
+each through explicit selection, paste or drop. It SHALL show removable previews,
+preserve text and voice input, and reject invalid formats, oversized or malformed
+images without discarding the draft. Image URLs SHALL be local data only.
+
+#### Scenario: Send and reopen images
+- **WHEN** a user sends images to a compatible installed local vision model
+- **THEN** the accepted bytes and names are saved with the actor/workspace-scoped turn and user message
+- **AND** inference receives those images, history displays them after restart, and reconnect does not replay the submission
+
+#### Scenario: Unavailable image inference
+- **WHEN** the service, selected model or selected agent cannot support the image request
+- **THEN** it explains the limitation and retains the draft
+- **AND** it does not discard images, change models, download dependencies or grant access
+
+#### Scenario: Scope and failure boundaries
+- **WHEN** a conversation, actor or workspace changes or image storage fails
+- **THEN** attachments cannot leak into another scope and unsaved state is explicitly reported
+- **AND** unsupported URLs, spoofed formats and excessive images fail before inference
+
+### Requirement: Ordinary CLI image parity
+Plain and TUI `offgrid run` SHALL support explicit `--image PATH` and interactive
+`/image PATH`, `/images`, `/remove-image [N|all]` with shared PNG/JPEG limits.
+
+#### Scenario: Failed image request
+- **WHEN** a file is unreadable or invalid, or inference fails or ends incompletely
+- **THEN** the CLI reports the error without submitting an unintended text-only request or recording a completed answer
+- **AND** previously accepted pending attachments remain available for inspection or removal
+
+#### Scenario: Continue a saved image conversation
+- **WHEN** a successful image exchange is saved and later loaded
+- **THEN** its original image bytes remain in typed inference history and terminal history identifies its attachments
+- **AND** the selected service enforces local vision readiness without a silent model change
+
+### Requirement: Purposeful control boundaries
+The workspace SHALL use shared solid primary, tonal secondary and quiet labelled
+utility actions rather than enclosing every action in an outline. It SHALL retain
+visible keyboard focus, explicit input and floating-panel boundaries, selected
+state, and minimum 44px coarse-pointer action targets. Profile, tool and skill
+sections SHALL avoid redundant nested frames while remaining visibly grouped.
+
+#### Scenario: Quiet composer and Knowledge actions
+- **WHEN** the user visits Chat or Knowledge in either theme
+- **THEN** the main action has distinct visual weight, contextual utilities remain labelled and keyboard reachable, and opening a control does not submit work, grant access or start microphone capture
+
+#### Scenario: Accessibility modes preserve affordances
+- **WHEN** the user navigates with a keyboard, coarse pointer or forced colors
+- **THEN** focus and selected states remain visible, touch actions retain their minimum targets, and necessary control boundaries are restored in forced colors
+
+### Requirement: Task-focused composer and work retrieval
+The composer SHALL prioritize the request, active context and Send/Stop, with
+labelled secondary configuration. Workspace search SHALL disclose the authorized
+work types it searches and preserve origin/return state. It SHALL NOT imply that
+navigation/theme commands constitute searching conversation or artifact content.
+
+#### Scenario: Find previous work while another task runs
+- **WHEN** the user searches and opens an authorized work result
+- **THEN** the original work remains discoverable and no execution is replayed
+- **AND** private results are disposed when the actor or workspace changes
+
 ### Requirement: Combined contextual navigation
 Chat SHALL use one 248px application/history sidebar with an explicit compact-collapse control and existing state/controllers. Below 1024px the same sidebar SHALL be a dismissible modal drawer with focus restoration. Navigation and the consolidated workspace/settings footer SHALL remain reachable independently of history scrolling. New chat SHALL precede contextual history; history row actions SHALL be available through labelled keyboard/touch-accessible controls without permanent delete-icon clutter.
 

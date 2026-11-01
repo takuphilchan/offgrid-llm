@@ -4,6 +4,23 @@ Give all model categories a coherent library experience while preserving the exi
 
 ## ADDED Requirements
 
+### Requirement: Searchable model choice
+Every ordinary model choice SHALL support readable identity and search including
+exact identifiers. Actual capability and readiness SHALL be available at the
+decision point; unknown runtime fitness SHALL remain unknown. Selection SHALL
+preserve the exact model ID and SHALL NOT download, load or substitute models.
+
+#### Scenario: Find a long model identifier
+- **WHEN** a user searches by a readable name or exact identifier
+- **THEN** matching eligible models remain identifiable without relying on a clipped filename
+- **AND** unavailable selection and readiness details do not falsely claim runtime qualification
+
+#### Scenario: Compare catalog choices without downloading
+- **WHEN** a user filters curated language or embedding choices and compares up to three models
+- **THEN** comparison shows supplied download size, parameter count, quantization, license and labelled catalog RAM estimates, with unknown values explicit
+- **AND** comparison and filter state remain category/workspace scoped without changing the active model or starting transfers
+- **AND** changing between curated browsing and online search retains their independent filters and leaves active downloads inspectable
+
 ### Requirement: Distinct library intents
 Models SHALL distinguish Installed, Discover and ongoing operations without simultaneous competing search boxes. Language, embedding, recognition and synthesis categories SHALL retain their capability boundaries and meaningful filter state across navigation.
 

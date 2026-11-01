@@ -4,6 +4,38 @@ Keep current work, meaningful progress and useful results understandable across 
 
 ## ADDED Requirements
 
+### Requirement: Conversation navigation during generation
+Accepted work SHALL continue independently of conversation selection. Navigation
+SHALL NOT cancel, resubmit or attach output to another conversation. Returning
+SHALL reconcile the original durable turn without replaying speech. Acceptance
+still pending SHALL remain correlated with the original submission identity.
+
+#### Scenario: Switch while generating
+- **WHEN** a user opens another conversation or starts a new draft during generation
+- **THEN** the selected conversation and its draft are usable while the original work remains discoverable
+- **AND** late events and acknowledgments cannot change the selected conversation's output
+
+### Requirement: Integrity-checked artifact preview
+Supported bounded text and Markdown artifacts SHALL be previewable inside the
+work view through authorized reads. Size and digest SHALL be checked before
+strict UTF-8 decoding and safe rendering. Unsupported or oversized content SHALL
+retain a labelled download path. Integrity SHALL NOT imply task correctness.
+
+#### Scenario: Inspect a text artifact
+- **WHEN** the user opens a supported artifact preview
+- **THEN** the authenticated content is checked and displayed without downloading to disk or executing embedded content
+- **AND** a revoked read, mismatched digest, invalid encoding or changed scope exposes no unchecked preview
+
+### Requirement: Action-specific recovery and specialist summaries
+Recovery SHALL name the affected work, retained output and appropriate safe next
+action from typed state. Child summaries SHALL show actual available status and
+deliverables while preserving parent ownership and authorized bounded observation.
+
+#### Scenario: A specialist cannot complete
+- **WHEN** a child is blocked or fails while independent work remains
+- **THEN** the parent view identifies that branch and available partial results
+- **AND** it neither claims full completion nor retries uncertain effects
+
 ### Requirement: Scoped active-work access
 The workspace SHALL provide compact access to known active conversations and jobs, showing their titles and actual status. Entries SHALL be scoped to the authenticated actor and connected workspace. Counts SHALL NOT imply complete discovery when the service cannot enumerate all active work.
 

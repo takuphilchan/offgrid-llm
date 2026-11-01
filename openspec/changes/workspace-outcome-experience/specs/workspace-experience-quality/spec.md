@@ -4,6 +4,58 @@ Set observable visual and behavioral quality gates for the shared web and deskto
 
 ## ADDED Requirements
 
+### Requirement: Bounded accessible surface materials
+The shared renderer SHALL use palette-derived sidebar, composer and floating
+utility material as at most three decorative families per screen. Primary
+actions SHALL use solid fills. Floating utilities and the command palette MAY
+use at most 12px backdrop blur with a 96% surface-color fill; text SHALL remain
+fully opaque. Answer/code surfaces and full-screen drawers SHALL NOT blur.
+No animated gradient, wallpaper capture or new color palette is permitted.
+
+#### Scenario: Material fallback
+- **WHEN** backdrop filtering is unavailable, transparency is reduced, contrast is increased, forced colors are active or the central material off switch is set
+- **THEN** floating surfaces retain opaque readable fills and geometry without blur
+- **AND** accessibility and off modes flatten decorative gradients without hiding controls or changing work state
+
+#### Scenario: Popup readability and interaction
+- **WHEN** a floating utility overlaps light or dark content in either theme
+- **THEN** its ordinary text meets 4.5:1 contrast across the composited surface envelope
+- **AND** focus remains visible, nested drawer Tab containment and Escape dismissal remain predictable, and unchanged 250ms fixture feedback gates pass
+
+### Requirement: Whole-product experience qualification
+The approved review SHALL be implemented and verified across all routes and
+distributed editions. Screen hierarchy, field widths, settings, menus and status
+feedback SHALL be consistent. Existing palette and 44px coarse-pointer targets
+remain. Earlier 40px desktop references are superseded by the approved compact
+fine-pointer geometry. Actual participant, screen-reader and installed-platform
+evidence SHALL remain separate from structural and fixture checks.
+
+#### Scenario: Candidate completion audit
+- **WHEN** the whole-product implementation is considered complete
+- **THEN** all group 16 outcomes have matching current-state evidence including the unchanged responsiveness gates
+- **AND** missing platform, fresh-install or participant evidence is reported as incomplete rather than inferred from earlier checked tasks
+
+### Requirement: Automatic desktop startup recovery
+Standalone desktop installations SHALL start their bundled native service without
+requiring Docker, WSL or Ubuntu. Remembered external endpoints SHALL receive a
+bounded startup grace period followed by paced automatic reconnection when
+offline or unresponsive. Reconnection SHALL retain compatibility and workspace
+authority checks and SHALL NOT spawn a substitute service or replay work.
+
+#### Scenario: Service starts after desktop
+- **WHEN** a remembered external endpoint becomes compatible and ready during or after startup grace
+- **THEN** the desktop automatically opens that workspace without a Retry click
+- **AND** waiting copy explains reconnection without reporting a completed connection
+
+#### Scenario: Recovery is cancelled or incompatible
+- **WHEN** the user quits, selects isolated recovery, or a probe reports incompatible identity
+- **THEN** automatic checks of the previous endpoint stop
+- **AND** no duplicate process or stale local authority is introduced
+
+#### Scenario: Ordinary standalone installation
+- **WHEN** a fresh desktop profile opens with a free configured port and bundled service
+- **THEN** one native service starts with the desktop workspace and no Linux subsystem command
+
 ### Requirement: Palette-preserving gradient budget
 Decorative gradients SHALL use only existing neutral palette tokens, be defined
 centrally, and have a flat fallback and one central off switch. No screen SHALL

@@ -1,5 +1,39 @@
 # Proposal
 
+## Approved material refinement (2026-10-31)
+
+Following the isolated light/dark and narrow RTL prototype, the user approved
+stronger palette-derived sidebar/composer gradients and lightly frosted floating
+utilities. This supersedes the earlier exclusion of overlay gradients and blur,
+not the palette freeze or three-treatment budget. Replace decorative primary
+button gradients with solid controls; keep answer/code surfaces and text opaque.
+Use bounded blur only on floating utilities and the command palette, with solid
+unsupported-browser, reduced-transparency, increased-contrast and forced-color
+fallbacks. No animated gradients, native wallpaper capture or new dependencies.
+Verify worst-case composited contrast, focus/dismissal, reflow and unchanged
+responsiveness gates before adopting the treatment. Retain all outstanding
+installed-platform, real-model and human qualification gates.
+
+## Approved whole-product implementation (2026-10-30)
+
+The owner explicitly requested implementation of the complete subsequent UI/UX
+review. This extends the earlier presentation-only scope to working journeys:
+background conversation navigation; authenticated result previews; specific
+recovery; responsive streaming; reproducible native packaging; guided agent
+configuration; decision-ready model selection; a simpler composer; work search;
+document-scoped questions; usable skills, collaboration and schedules; consistent
+settings; connection, voice, authentication and permission guidance; and complete
+accessibility, localization, installed-platform and participant verification.
+
+This approval supersedes earlier exclusions only where needed for these reviewed
+outcomes (including additive source-scoped retrieval and bounded preview APIs if
+the existing service cannot provide them). It does not authorize new execution
+authority, automatic grants/downloads, rewriting user data, deployment or Git
+publication. Preserve the monochrome palette and shared web/desktop renderer.
+Historical checked tasks prove only their named earlier scope. Group 16 tracks
+the new scope individually, including evidence still requiring real people or
+other platforms. Completing a subset cannot establish whole-product completion.
+
 Follow-up feedback (2026-10-30) adds compact desktop controls, direct visible
 agent resource configuration, a grouped Workspace options panel and consistent
 chat-history scrollbars. This supersedes the earlier single-size desktop control
@@ -29,6 +63,17 @@ and its color proof; compare gradient-on/off independently. Cap decorative
 treatments at three per screen and prefer omission to unreadable or costly effects.
 
 ## Why
+
+### Approved restart recovery fix (2026-10-30)
+
+The user requested a fix for immediate startup failure after laptop restart.
+Preserve automatic bundled native service startup for standalone Windows/macOS/
+Linux installations; these installations do not require WSL, Ubuntu or Docker.
+For remembered external endpoints, wait through transient connection failures
+and reconnect automatically without replacing the workspace or restarting an
+external service. Preserve compatibility checks, cancellation and local authority
+revocation. Data migration and automatic management of external Docker/WSL are
+outside this fix. Verify delayed readiness, expiry, manual retry, isolation and quit.
 
 The completed state/recovery and shell slices make OffGrid more consistent, but everyday work still competes with setup, maintenance and repeated status controls. This follow-up makes the existing shared renderer outcome-led across Chat, Agents, Models, Knowledge, Activity and Settings, with observable workflow and usability gates rather than an unsupported claim of parity with leading AI products.
 
@@ -83,6 +128,27 @@ evidence. No deployment, installation or publication is included.
 None. No main capabilities have yet been published under `openspec/specs`; this change references rather than duplicates the completed shell/popover and pending model-package changes.
 
 ## Impact
+
+### Approved image-input extension (2026-10-31)
+
+The user approved text, voice and image input in the shared web/desktop composer.
+Add PNG/JPEG attachment, clipboard paste and drag/drop with previews/removal,
+bounded actor/workspace-scoped persistence, history/restart recovery and explicit
+local vision readiness. This extends the earlier presentation-only API scope
+additively; existing text clients remain compatible. Do not download or switch
+models automatically, fetch image URLs, enable cameras, or grant desktop access.
+Agent turns reject images until that execution path is separately supported and
+qualified. Real vision-model qualification remains distinct from fixture coverage.
+
+The approved CLI follow-up extends ordinary `offgrid run` with the same bounded
+PNG/JPEG validation: repeatable `--image`, interactive `/image`, `/images` and
+`/remove-image`, failure retention, and image-preserving saved-session reload.
+Both terminal modes share attachment logic. This does not enable agent vision.
+
+The user's 2026-10-31 review explicitly includes excessive borders throughout the
+app, with Knowledge actions and the composer as examples. Task 16.14 includes a
+shared solid/tonal/quiet action hierarchy and removal of redundant nested frames,
+preserving the current palette, field affordances, focus, access and state ownership.
 
 Shared React components and presentation state; Chat, task-first Agents and legacy compatibility presentation; Models, Knowledge, Activity and Settings; existing API client consumers; localization; CSS ownership; Playwright and desktop presentation checks; workspace, workflow and reliability documentation. Existing HTTP/CLI/Python contracts and desktop IPC trust remain unchanged. No additional production dependency is assumed.
 
