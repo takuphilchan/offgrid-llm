@@ -86,9 +86,9 @@ test('workspace and voice utilities share keyboard and outside dismissal without
   await expect(panel).toBeHidden(); await expect(options).toBeFocused();
   await options.click(); await page.locator('.composer textarea').click();
   await expect(panel).toBeHidden(); await expect(page.locator('.composer textarea')).toBeFocused();
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await options.click();
-  await expect(page.getByRole('region', { name: 'Context & response', exact: true })).toBeHidden();
+  await expect(page.getByRole('region', { name: 'Response settings', exact: true })).toBeHidden();
   await expect(panel).toBeVisible();
   await expect(page.getByRole('link', { name: 'Service details', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');

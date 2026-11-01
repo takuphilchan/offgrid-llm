@@ -162,14 +162,14 @@ test('Knowledge checking, failed check and setup are distinct; unused Knowledge 
     else await route.fulfill({ json: { enabled: false } });
   });
   await page.goto('/ui/#/chat');
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await expect(page.getByText('Checking Knowledge…', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).toBeDisabled();
   await page.keyboard.press('Escape');
   await page.locator('.composer textarea').fill('Ordinary question');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   release();
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await expect(page.getByText('Could not check Knowledge.', { exact: true })).toBeVisible();
   fail = false;
   await page.getByRole('button', { name: 'Check Knowledge again' }).click();
@@ -191,7 +191,7 @@ test('superseded Knowledge reads cannot replace readiness; selected Knowledge is
   await expect.poll(() => pending.length).toBeGreaterThan(0);
   mode = 'ready';
   await refreshWorkspace(page);
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   const knowledge = page.getByRole('checkbox', { name: 'Use knowledge base' });
   await expect(knowledge).toBeEnabled(); await knowledge.focus(); await page.keyboard.press('Space');
   for (const finish of pending) await finish();
@@ -200,7 +200,7 @@ test('superseded Knowledge reads cannot replace readiness; selected Knowledge is
   mode = 'unavailable';
   await refreshWorkspace(page);
   await expect(page.locator('.composer > [role="status"]')).toBeVisible();
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Set up Knowledge' })).toBeVisible();
   await expect(knowledge).toBeChecked();
   await expect(knowledge).toBeEnabled(); // User can turn it off; never silently downgrade.

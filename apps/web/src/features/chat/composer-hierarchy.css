@@ -25,6 +25,10 @@
   .composer .composer-footer > .composer-actions { margin-inline-start: auto; }
   .composer .composer-context-menu > button { font-weight: var(--weight-regular); }
   .composer-context-menu { --utility-panel-max-height: min(480px, 60vh); }
+  .response-advanced > summary { font-size: var(--type-ui); }
+  .response-advanced > summary small { display: block; margin-inline-start: 18px; color: var(--muted); font-size: var(--type-meta); }
+  .response-advanced > .field { margin-block-start: 12px; }
+  .response-advanced > p { font-size: var(--type-meta); line-height: var(--leading-prose); color: var(--muted); }
   .chat-work-blocker { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: .5rem 1rem; flex-wrap: wrap; width: 100%; max-width: 800px; margin: 0 auto .75rem; color: var(--muted); font-size: .875rem; }
   .chat-work-blocker > div:first-child { flex: 1 1 20rem; min-width: 0; }
   .chat-work-blocker strong { color: var(--text); font-weight: var(--weight-medium); }

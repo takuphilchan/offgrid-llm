@@ -17,9 +17,12 @@
     gap: 1rem;
   }
   .task-list > h2 { font-size: 18px; font-weight: 500; margin: 0; }
+  .task-list > .task-show-more { align-self: center; width: auto; }
+  .task-surface > h2 { font-size: var(--type-section); line-height: var(--leading-prose); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
   .task-list .history-toolbar-title { display: none; }
   .task-list .history-tools { grid-column: 2; grid-row: 1; }
   .task-list .workspace-history-toolbar .history-search { grid-column: 1; grid-row: 1; }
+  .task-list .history-clear-visible { grid-column: 1 / -1; justify-self: end; width: auto; }
   .task-list ul {
     list-style: none;
     margin: 0;

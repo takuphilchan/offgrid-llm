@@ -90,7 +90,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
         : <p role="status">{text.common.loading}</p>}
     </section> : !admin ? <PermissionNotice /> : <section className="task-list" aria-label={text.agentRuntime.history}>
       <h2>{text.agentRuntime.history}</h2>
-      <HistoryToolbar query={query} onQuery={value => { setQuery(value); setLimit(20); setScroll(0); }} searchLabel={text.history.searchTasks} title={text.agentRuntime.history} count={tasks.length} refresh={() => void refreshHistory()} clearLabel={text.history.clearTasks} clearDisabled={!filtered.some(task => task.deletable)} clear={() => setDeleting(filtered.filter(task => task.deletable).map(task => ({id:task.id,label:task.prompt})))} protection={text.history.protectedTasks} />
+      <HistoryToolbar visibleClear query={query} onQuery={value => { setQuery(value); setLimit(20); setScroll(0); }} searchLabel={text.history.searchTasks} title={text.agentRuntime.history} count={tasks.length} refresh={() => void refreshHistory()} clearLabel={text.history.clearTasks} clearDisabled={!filtered.some(task => task.deletable)} clear={() => setDeleting(filtered.filter(task => task.deletable).map(task => ({id:task.id,label:task.prompt})))} protection={text.history.protectedTasks} />
       {historyError && <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refreshHistory()}>{text.common.retry}</button>}>{historyError}</ScopedNotice>}
       {!tasks.length && !historyError && (loading ? <p role="status">{text.common.loading}</p> : <EmptyState title={text.agentRuntime.noTasks} action={<a className="secondary-button" href="#/chat">{text.nav.chat}</a>} />)}
       {!!tasks.length && !filtered.length && <EmptyState title={text.history.noMatches} />}
@@ -101,7 +101,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
         </button>
         <HistoryItemActions title={task.prompt} label={text.history.deleteTask} disabled={!task.deletable} protection={text.history.protectedTasks} onDelete={() => setDeleting([{id:task.id,label:task.prompt}])} />
       </li>)}</ul>
-      {filtered.length > limit && <button className="secondary-button" onClick={() => setLimit(value => value + 20)}>{text.history.showMore}</button>}
+      {filtered.length > limit && <button className="text-button task-show-more" onClick={() => setLimit(value => value + 20)}>{text.history.showMore}</button>}
     </section>}
     {error && <ScopedNotice kind="error">{error}</ScopedNotice>}
     {deleting && <HistoryDeleteDialog items={deleting} kind="tasks" remove={api.deleteJob} onClose={() => setDeleting(null)} onDeleted={ids => {

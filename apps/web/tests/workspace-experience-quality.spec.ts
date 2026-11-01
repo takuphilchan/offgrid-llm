@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 import { locales, type LocaleCode } from '../src/i18n';
-import { workspaceExperience } from '../src/i18n/workspace-experience';
 import { voiceSettingsText } from '../src/i18n/voice-settings';
 import { speechFeedback } from '../src/i18n/speech-feedback';
 import { workspaceManagement } from '../src/i18n/workspace-management';
@@ -124,7 +123,7 @@ for (const locale of Object.keys(locales) as LocaleCode[]) test(`voice preferenc
   const writes = await fixture(page, locale), copy = voiceSettingsText(locale);
   for (const route of ['chat']) {
     await page.goto(`/ui/#/${route}`);
-    const trigger = page.getByRole('button', { name: workspaceExperience[locale].context, exact: true });
+    const trigger = page.getByRole('button', { name: locales[locale].messages.chatStreaming.options, exact: true });
     await trigger.click();
     await expect(page.getByRole('heading', { name: copy.title, exact: true })).toBeVisible();
     await expect(page.getByLabel(copy.recognition, { exact: true })).toBeEnabled();
@@ -197,7 +196,7 @@ test('IME input, reduced motion, focus restoration and status announcements rema
   await input.fill('日本語の入力 — مرحباً');
   await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
   expect(writes).toEqual([]);
-  const trigger = page.getByRole('button', { name: 'Context & response', exact: true });
+  const trigger = page.getByRole('button', { name: 'Response settings', exact: true });
   await trigger.focus(); await trigger.press('Enter');
   await expect(page.getByLabel('Recognition model', { exact: true })).toBeEnabled();
   await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();

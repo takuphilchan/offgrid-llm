@@ -51,6 +51,7 @@ import { executionWorkspaceText } from '../../i18n/execution-workspace';
 import { messageText, newSessionName, readPreferences } from './chat-presentation';
 import { ConversationHistory } from './ConversationHistory';
 import './composer-hierarchy.css';
+import { agentProfilesText } from '../../i18n/agent-profiles';
 
 export function ChatPage({ scope, models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: {
   scope: string;
@@ -572,16 +573,18 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         {selectedSources.length > 0 ? <div className="composer-source-scope"><strong>{scopeCopy.selected}</strong><span>{selectedSources.map(source => source.name).join(' · ')}</span><button type="button" className="icon-button" disabled={busy} onClick={clearSources} aria-label={scopeCopy.clear} title={scopeCopy.clear}><Icon name="close" size={16} /></button>{!scopedReady && <p role="status">{scopeCopy.unsupported}</p>}</div> : !agent && knowledge && <p className="composer-retrieval-scope">{workspaceManagement(locale).retrievalScope}</p>}
         <div className="composer-footer">
           <div className="composer-utilities">
-          <UtilityPopover label={experience.context} trigger={<><Icon name="settings" size={16} /><span>{!agent && (knowledge || selectedSources.length > 0) ? experience.knowledgeOn : experience.context}</span></>} triggerClassName="utility-button" className="composer-context-menu" onOpenChange={setResponseSettingsOpen}>
+          <UtilityPopover label={text.chatStreaming.options} trigger={<><Icon name="sliders" size={16} /><span>{!agent && (knowledge || selectedSources.length > 0) ? experience.knowledgeOn : text.chatStreaming.options}</span></>} triggerClassName="utility-button" className="composer-context-menu" onOpenChange={setResponseSettingsOpen}>
             {!agent && <label className="switch"><input type="checkbox" checked={knowledge || selectedSources.length > 0} disabled={busy || selectedSources.length > 0 || (!knowledge && knowledgeState !== 'ready')} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label>}
             {!agent && permissions.knowledge && knowledgeState !== 'ready' && <div className="knowledge-readiness">
               {knowledgeState === 'checking' ? <span role="status">{feedback.checkingKnowledge}</span>
                 : knowledgeState === 'failed' ? <><span role="status">{feedback.knowledgeCheckFailed}</span> <button className="text-button" onClick={() => void refreshKnowledge()}>{feedback.retryKnowledge}</button></>
                 : <SetupLink destination="knowledge" draft={{ kind: 'chat', id: activeName }}>{feedback.configureKnowledge}</SetupLink>}
             </div>}
+            <details className="response-advanced"><summary>{agentProfilesText[locale].advanced}<small>{profile === 'extended' ? text.chatStreaming.extended : text.chatStreaming.interactive} · {maxTokens.toLocaleString(locale)}</small></summary>
             <label className="field">{text.chatStreaming.profile}<select value={profile} disabled={busy} onChange={event => updatePreferences({ ...preferences, profile: event.target.value })}><option value="interactive">{text.chatStreaming.interactive}</option><option value="extended">{text.chatStreaming.extended}</option></select></label>
             <label className="field">{text.chatStreaming.responseLimit}<select value={maxTokens} disabled={busy} onChange={event => updatePreferences({ ...preferences, maxTokens: Number(event.target.value) })}>{[256, 1024, 4096].map(count => <option value={count} key={count}>{count.toLocaleString(locale)}</option>)}</select></label>
             <p>{text.chatStreaming.profileHint}</p>
+            </details>
             {responseSettingsOpen && <ComposerSpeech presentation="settings" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />}
           </UtilityPopover>
           {imageDraft.control}<ComposerSpeech presentation="status" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />

@@ -3,6 +3,22 @@ import { craftFixture } from './helpers/craft-fixture';
 import { agentProfilesText } from '../src/i18n/agent-profiles';
 import { workspaceHelp } from '../src/i18n/workspace-help';
 
+test('response tuning is disclosed without changing defaults or the draft', async ({page}) => {
+  const state=await craftFixture(page,'en','light');
+  await page.goto('/ui/#/chat');
+  const draft=page.locator('.composer textarea');await draft.fill('Keep my draft');
+  const trigger=page.getByRole('button',{name:'Response settings',exact:true});await trigger.click();
+  const panel=page.locator('.composer-context-menu .utility-popover-panel');
+  await expect(panel.getByRole('combobox',{name:'Context profile',exact:true})).not.toBeVisible();
+  await panel.locator('.response-advanced > summary').click();
+  const context=panel.getByRole('combobox',{name:'Context profile',exact:true});
+  await expect(context).toBeVisible();
+  const previous=await context.inputValue();
+  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();await trigger.click();
+  await expect(context).toHaveValue(previous);
+  await expect(draft).toHaveValue('Keep my draft');expect(state.writes).toEqual([]);
+});
+
 for (const locale of ['en', 'ar'] as const) for (const width of [320, 768, 1280]) test(`composer preserves pinned model and explicit controls: ${locale} ${width}`, async ({ page }, info) => {
   const state = await craftFixture(page, locale, 'dark');
   const model = 'Meta-Llama-3.1-8B-Instruct-Q4_K_L-f1e3673a9589';

@@ -537,8 +537,8 @@ test('Chat resource popovers keep separated rows, fields and recovery actions', 
       await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
     }
   }
-  const voice=page.getByRole('button',{name:'Context & response',exact:true}); await voice.click();
-  const voicePanel=page.getByRole('region',{name:'Context & response',exact:true});
+  const voice=page.getByRole('button',{name:'Response settings',exact:true}); await voice.click();
+  const voicePanel=page.getByRole('region',{name:'Response settings',exact:true});
   await expect.poll(()=>voicePanel.evaluate(el=>el.getAnimations().every(animation=>animation.playState==='finished'))).toBe(true);
   const alert=voicePanel.getByRole('alert'); await expect(alert).toBeVisible();
   const gap=await alert.evaluate(el=>el.querySelector('button')!.getBoundingClientRect().top-el.querySelector('small')!.getBoundingClientRect().bottom);
@@ -569,12 +569,12 @@ test('speech waits for the parent response and never narrates child activity or 
   const f=await fixture(page);const speech:any[]=[];
   await page.route('**/v1/audio/speech',route=>{speech.push(route.request().postDataJSON());return route.fulfill({status:503,json:{error:{message:'Fixture playback unavailable'}}});});
   await page.goto('/ui/#/chat');
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await page.getByRole('checkbox',{name:'Speak responses',exact:true}).focus();
   await page.keyboard.press('Space');
   await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Context & response', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Response settings', exact: true })).toBeFocused();
   f.setStatus('waiting_for_children',{progress:{preview:'PRIVATE child draft'},steps:[{id:1,type:'tool',tool_name:'read_docs',tool_result:'PRIVATE tool payload'}]});
   await sendWithWriter(page);
   await expect(page.getByRole('region',{name:'Agent activity'})).toBeVisible();

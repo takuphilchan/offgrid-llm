@@ -10,9 +10,9 @@ export function KnownWork() {
   const relevant = entries.filter(entry => !['completed', 'failed', 'cancelled'].includes(entry.status));
   const running = relevant.filter(entry => !entry.stale && ['running', 'pending', 'waiting_for_children'].includes(entry.status)).length;
   if (!relevant.length) return null;
-  return <UtilityPopover label={copy.title} triggerClassName="utility-button" trigger={<>{running ? messages.recovery.running : attentionWorkText[locale]} · {running || relevant.length}{more ? '+' : ''}</>} className="known-work" align="end">
+  return <UtilityPopover label={copy.title} triggerClassName="utility-button" trigger={<>{running ? messages.recovery.running : attentionWorkText[locale]} · {running || relevant.length}{more ? '+' : ''}</>} className="known-work" align="end" preferredHeight={440} panelTabIndex={-1}>
     <p>{copy.scope}</p>
     <WorkLinks entries={entries} />
-    {more && <a className="secondary-button" href="#/activity">{messages.agentRuntime.history}</a>}
+    <a className="text-button" href="#/activity">{messages.agentRuntime.history}</a>
   </UtilityPopover>;
 }

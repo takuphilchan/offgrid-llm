@@ -145,11 +145,11 @@ for (const theme of ['light', 'dark']) test(`workspace actions preserve secondar
   await fixture(page, 'en', theme);
   await page.route('**/v1/rag/status', route => route.fulfill({ json: { enabled: false } }));
   await page.goto('/ui/#/chat');
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   // Measure the resting surface, not the pointer hover left by opening the menu.
   await page.mouse.move(0, 0);
   const actions = [
-    page.getByRole('button', { name: 'Context & response', exact: true }),
+    page.getByRole('button', { name: 'Response settings', exact: true }),
     page.getByRole('button', { name: 'Use microphone', exact: true }),
     page.getByRole('link', { name: 'Set up Knowledge', exact: true }),
   ];
@@ -168,7 +168,7 @@ for (const theme of ['light', 'dark']) test(`workspace actions preserve secondar
     await page.keyboard.press('Tab'); await action.focus(); await expect(action).toHaveCSS('outline-width', '2px');
     await page.mouse.move(0, 0);
   }
-  const voiceSettings = page.getByRole('button', { name: 'Context & response', exact: true });
+  const voiceSettings = page.getByRole('button', { name: 'Response settings', exact: true });
   await voiceSettings.focus(); if (await voiceSettings.getAttribute('aria-expanded') !== 'true') await voiceSettings.press('Enter');
   const manage = page.getByRole('link', { name: 'Manage speech models' });
   await expect(manage).toHaveCSS('min-height', '32px');

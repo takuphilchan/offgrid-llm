@@ -45,7 +45,7 @@ for(const locale of ['en','ar'] as const) for(const width of [320,1440]) test(`K
 test('composer keeps one outer boundary and usable inner selectors',async({page})=>{
  const state=await craftFixture(page,'en','light');await page.goto('/ui/#/chat');
  await expect(page.locator('.composer')).toHaveCSS('border-top-width','1px');
- for(const name of ['Agent','Model','Context & response']){
+ for(const name of ['Agent','Model','Response settings']){
   const control=page.getByRole('button',{name,exact:true});await expect(control).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
   await control.focus();await control.press('Enter');await expect(control).toHaveAttribute('aria-expanded','true');
   await page.keyboard.press('Escape');await expect(control).toBeFocused();

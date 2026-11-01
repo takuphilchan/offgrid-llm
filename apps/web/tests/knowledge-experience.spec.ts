@@ -51,14 +51,14 @@ test('explicit Knowledge handoff preserves the current draft, states broad scope
   await page.locator('.composer textarea').fill('Keep this draft — 日本語');
   await page.locator('.sidebar a[href="#/knowledge"]').click();
   await page.locator('.sidebar a[href="#/chat"]').click();
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).not.toBeChecked();
   await page.keyboard.press('Escape'); await page.locator('.sidebar a[href="#/knowledge"]').click();
   await page.getByRole('button', { name: 'Ask using Knowledge', exact: true }).click();
   await expect(page).toHaveURL(/#\/chat$/);
   await expect(page.locator('.composer textarea')).toHaveValue('Keep this draft — 日本語');
   await expect(page.locator('.composer-retrieval-scope')).toContainText('not just one selected document');
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).toBeChecked();
   expect(state.writes).toEqual([]);
 });

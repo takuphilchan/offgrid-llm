@@ -185,9 +185,11 @@ grow; do not set fixed heights that clip translated labels.
   regression suite includes 320px/390px and desktop layouts; Electron packages
   consume the same compiled renderer, not a separate styling implementation.
 
-Chat groups the selected model, **Context & response**, and voice settings next to
-the prompt. Context & response contains Knowledge readiness and optional response
-limits; selected Knowledge remains visible on the trigger, and a failed check of
+Chat groups the selected model and **Response settings** next to the prompt.
+Response settings contains Knowledge readiness and voice controls. Context
+allocation and maximum response tokens are under **Advanced**, with the current
+values summarized before expansion; opening this panel does not change them.
+Selected Knowledge remains visible on the trigger, and a failed check of
 selected context stays visible outside the panel. Unused Knowledge setup does not
 occupy the conversation. Response timing/context metrics are under **Response
 details** in that saved answer's action footer, beside Copy and Read aloud.

@@ -176,7 +176,6 @@ test('connector drafts and selected Activity survive navigation without refetchi
 
 test('bulk deletion can stop after the in-flight item without deleting remaining entries', async ({ page }) => {
   const state = await fixture(page); await page.goto('/ui/#/activity');
-  await page.getByRole('button', { name: 'Manage history', exact: true }).click();
   await page.getByRole('button', { name: 'Clear removable tasks' }).click();
   const dialog = page.getByRole('dialog'); await dialog.getByRole('button', { name: 'Confirm delete' }).click();
   await expect(dialog.getByRole('status')).toHaveText('0 of 3 processed');
@@ -191,7 +190,7 @@ test('unknown index status is never presented as ready and unavailable knowledge
   await fixture(page); await page.goto('/ui/#/knowledge');
   await expect(page.locator('.resource-card')).toContainText('Status unavailable');
   await page.locator('.sidebar a[href="#/chat"]').click();
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).toBeDisabled();
 });
 

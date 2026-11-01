@@ -49,10 +49,18 @@
   .command-trigger { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 13px; cursor: pointer; }
   .command-trigger:hover { background: var(--surface-2); color: var(--text); }
   .command-trigger kbd { padding: 2px 4px; font: var(--type-caption)/var(--leading-ui) var(--mono); color: var(--faint); }
-  .known-work-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-  .known-work-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; }
-  .known-work-list :is(button, a) { overflow-wrap: anywhere; text-align: start; }
-  .known-work-list small { color: var(--muted); max-width: 14ch; overflow-wrap: anywhere; }
+  .known-work-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
+  .known-work-list li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-width: 0; padding-block: 8px; border-block-end: 1px solid var(--line); }
+  .known-work-list .known-work-link { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; text-align: start; min-height: 0; width: 100%; padding: 4px; margin: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text); font-size: var(--type-ui); font-weight: var(--weight-medium); line-height: var(--leading-ui); text-decoration: none; }
+  .known-work-list .known-work-link:hover { background: var(--surface-2); }
+  .known-work-list small { color: var(--muted); padding-inline: 4px; font-size: var(--type-meta); line-height: var(--leading-ui); }
+  .known-work .utility-popover-content > p { margin: 0; font-size: var(--type-meta); line-height: var(--leading-prose); color: var(--muted); }
+  .known-work { --utility-panel-max-height: 440px; }
+  .known-work .utility-popover-panel { display: none; overflow: hidden; }
+  .known-work .utility-popover-panel:popover-open { display: flex; }
+  .known-work .utility-popover-content { display: flex; flex-direction: column; min-height: 0; gap: 12px; }
+  .known-work .utility-popover-content > :not(.known-work-list) { flex-shrink: 0; }
+  .known-work .known-work-list { min-height: 0; overflow-y: auto; grid-auto-rows: max-content; scrollbar-width: thin; }
   .workspace-account { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-block-start: 12px; border-block-start: 1px solid var(--line); }
   .page-content { max-width: 1440px; min-height: calc(100dvh - var(--header-height)); margin: 0 auto; padding: var(--page-block-space) var(--page-gutter); }
   .workspace.chat-page { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }

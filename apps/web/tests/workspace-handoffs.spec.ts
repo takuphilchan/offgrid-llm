@@ -45,12 +45,12 @@ test('Knowledge setup return does not silently turn retrieval on', async ({ page
   const state = await fixture(page); state.models = true;
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Keep this question');
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await page.getByRole('link', { name: 'Set up Knowledge' }).click();
   state.knowledge = true;
   await page.getByRole('button', { name: 'Return to your draft' }).click();
   await expect(page.locator('.composer textarea')).toHaveValue('Keep this question');
-  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
+  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).toBeEnabled();
   await expect(page.getByRole('checkbox', { name: 'Use knowledge base' })).not.toBeChecked();
   expect(state.writes).toEqual([]);

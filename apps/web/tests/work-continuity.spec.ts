@@ -2,6 +2,25 @@ import { openActivityArchive } from './helpers/workspace-actions';
 import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 const id = 'run-' + 'a'.repeat(32);
+
+test('attention list keeps long task titles compact and links to activity', async ({page},info) => {
+  const state = await fixture(page, 16);
+  const title = 'Open Microsoft Edge and search for public tourism sources. Summarize the findings with links without signing in or changing profiles. '.repeat(3);
+  await page.route('**/api/v2/jobs', r => r.fulfill({json:Array.from({length:16},(_,i)=>({id:'run-'+String(i).padStart(32,'0'),prompt:title,status:'uncertain',created_at:'2026-10-08T00:00:00Z'}))}));
+  await page.setViewportSize({width:1000,height:720});
+  await page.goto('/ui/#/models');
+  await page.getByRole('button',{name:'Known work',exact:true}).click();
+  const panel=page.getByRole('region',{name:'Known work'});
+  await expect(panel.locator('li')).toHaveCount(16);
+  const rows=await panel.locator('li').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height));
+  expect(Math.max(...rows)).toBeLessThan(100);
+  await expect(panel.locator('.known-work-link').first()).toHaveAttribute('title',title.slice(0,180));
+  await expect(panel.locator('.secondary-button')).toHaveCount(0);
+  await page.screenshot({path:info.outputPath('compact-attention.png')});
+  await panel.getByRole('link',{name:'Recent tasks'}).click();
+  await expect(page).toHaveURL(/#\/activity$/);
+  expect(state.writes).toEqual([]);
+});
 async function fixture(page: Page, count = 1) {
   const state = { actor: 'alice', workspace: 'one', role: 'admin', writes: [] as string[], reads: [] as string[], completed: false };
   await page.addInitScript(() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); localStorage.setItem('offgrid.locale', 'en'); });

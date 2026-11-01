@@ -228,7 +228,6 @@ test('unrecoverable interrupted history can be deleted while active and uncertai
     if (title.startsWith('Legacy')) await expect(remove).toBeEnabled(); else await expect(remove).toBeDisabled();
     await page.keyboard.press('Escape');
   }
-  await history.getByRole('button', { name: 'Manage history', exact: true }).click();
   await history.getByRole('button', { name: 'Clear removable tasks' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Remove 1 selected tasks');

@@ -46,13 +46,12 @@ test('task deletion is visible beside history and confirmed without affecting ac
   expect(deleted).toHaveLength(1);
 });
 
-test('task history management is contextual and excludes protected work', async ({ page }) => {
+test('task history cleanup is visible and excludes protected work', async ({ page }) => {
   const deleted = await fixture(page);
   await page.goto('/ui/#/agents/workspace');
-  await expect(page.getByRole('button', { name: 'Clear removable tasks', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Clear removable tasks', exact: true })).toBeVisible();
   await page.getByRole('searchbox', { name: 'Search task history' }).fill('Finished');
-  const manage = page.getByRole('button', { name: 'Manage history', exact: true });
-  await manage.focus(); await manage.press('Enter');
+  const manage = page.getByRole('button', { name: 'Clear removable tasks', exact: true });
   await page.getByRole('button', { name: 'Clear removable tasks', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('Finished report');
   await expect(page.getByRole('dialog')).not.toContainText('Current task');
@@ -113,7 +112,6 @@ for (const layout of [
 
 test('Activity clears removable task records through the shared deletion API', async ({page}) => {
   const deleted=await fixture(page);await page.goto('/ui/#/activity');
-  await page.getByRole('button',{name:'Manage history',exact:true}).click();
   await page.getByRole('button',{name:'Clear removable tasks',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('Finished report');
   await expect(page.getByRole('dialog')).not.toContainText('Current task');

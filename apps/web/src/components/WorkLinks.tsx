@@ -7,8 +7,8 @@ export function WorkLinks({ entries }: { entries: KnownWork[] }) {
   const actions = useWorkActions(), { locale, messages } = useI18n(), copy = knownWorkText[locale];
   const status = useTaskStatus();
   return <ul className="known-work-list">{entries.map(work => <li key={`${work.kind}:${work.id}`}>
-    {work.kind === 'task' ? <a className="secondary-button" href={`#/agents/task/${encodeURIComponent(work.id)}`}>{work.title}</a>
-      : <button className="secondary-button" onClick={event => { actions.openChat(work.id); (event.currentTarget.closest('[popover]') as HTMLElement | null)?.hidePopover(); }}>{work.title}</button>}
+    {work.kind === 'task' ? <a className="known-work-link" title={work.title} href={`#/agents/task/${encodeURIComponent(work.id)}`}>{work.title}</a>
+      : <button className="known-work-link" title={work.title} onClick={event => { actions.openChat(work.id); (event.currentTarget.closest('[popover]') as HTMLElement | null)?.hidePopover(); }}>{work.title}</button>}
     <small>{work.stale || work.status === 'unavailable' ? copy.stale : status(work.status)}</small>
   </li>)}</ul>;
 }
