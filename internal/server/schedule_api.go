@@ -38,6 +38,10 @@ func (s *Server) handleAgentSchedules(w http.ResponseWriter, r *http.Request) {
 		action = parts[1]
 	}
 	if r.Method == http.MethodGet {
+		if id == "preview" && action == "" {
+			s.previewScheduleCalendar(w, r)
+			return
+		}
 		if id == "" {
 			items, err := s.agentManager.ListSchedules(s.workspaceID, actor)
 			if err != nil {
