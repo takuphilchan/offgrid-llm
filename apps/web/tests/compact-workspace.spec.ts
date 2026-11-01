@@ -8,12 +8,15 @@ for(const width of [390,1440]) for(const locale of ['en','ar']) test(`direct edi
  await page.locator('.profile-library-header > button').click();
  const basics=page.locator('.profile-basics'),resources=page.locator('.profile-fields > .profile-resources');
  await expect(basics).toBeVisible(); await expect(resources).toBeVisible();
- await expect(page.locator('.profile-resource-section')).toHaveCount(2);
+ await expect(page.locator('.profile-capability > summary')).toHaveCount(3);
+ await expect(page.locator('.profile-capability[open]')).toHaveCount(0);
  await expect(page.locator('.profile-advanced .profile-context-resources')).toHaveCount(0);
  const [a,b]=await Promise.all([basics.boundingBox(),resources.boundingBox()]);
  if(width===1440)expect(Math.abs(a!.y-b!.y)).toBeLessThan(25);
  else expect(b!.y).toBeGreaterThan(a!.y+a!.height);
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ const fields=await page.locator('.profile-fields').boundingBox(),actions=await page.locator('.profile-editor > .profile-actions').boundingBox();
+ expect(actions!.y).toBeGreaterThanOrEqual(fields!.y+fields!.height);
  expect(state.writes).toEqual([]);
  await page.screenshot({path:info.outputPath('editor.png'),fullPage:true});
  if(width<1024)await page.locator('.navigation-trigger').click();

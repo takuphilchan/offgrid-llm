@@ -1,7 +1,7 @@
 /* Tokens and feature presentation. Shell geometry lives in components/shell;
    legacy feature layout remains in styles.css until migrated. */
 @layer workspace {
-  /* Three decorative families maximum: sidebar, composer, primary controls.
+  /* Three decorative families maximum: sidebar, composer, floating utilities.
      Reading surfaces and code remain flat. All ramps resolve centrally. */
   .app-shell > .sidebar { background-image: var(--gradient-sidebar); }
   .chat-workspace .composer { background-image: var(--gradient-composer); }
@@ -22,6 +22,11 @@
   .utility-popover-content { display: grid; gap: var(--space-4); min-width: 0; overflow-wrap: anywhere; }
   .utility-popover-panel:popover-open, .command-palette, dialog.onboarding[open] {
     animation: workspace-enter var(--motion-enter) var(--ease-enter) both;
+  }
+  .utility-popover-panel, dialog.command-palette {
+    background-color: var(--material-fill);
+    background-image: var(--gradient-floating);
+    backdrop-filter: var(--material-blur);
   }
   @media (prefers-reduced-motion: reduce) {
     .utility-popover-panel:popover-open, .command-palette, dialog.onboarding[open] { animation: none; }
@@ -313,6 +318,12 @@
   .command-group button { width: 100%; min-height: 42px; display: flex; align-items: center; gap: 11px; padding: 0 10px; color: var(--muted); background: transparent; border-radius: 7px; cursor: pointer; text-align: start; }
   .command-group button[aria-selected='true'] { color: var(--text); background: var(--surface-2); }
   .command-group button strong { font-size: 13px; font-weight: 500; }
+  .command-group button strong { min-width: 0; overflow-wrap: anywhere; }
+  .command-group button { padding-block: 9px; }
+  .command-group button svg { flex: 0 0 auto; }
+  .command-search-scope, .command-search-status { margin: 0; padding: 8px 18px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .command-search-status { min-height: 26px; padding-bottom: 6px; }
+  .work-search-return { margin-block-end: 12px; }
   .onboarding { width: min(580px, 100%); padding: var(--space-8); background: var(--surface-1); border-color: var(--line-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
   .onboarding { position: relative; }
   .onboarding-close { position: absolute; inset-block-start: 18px; inset-inline-end: 18px; }

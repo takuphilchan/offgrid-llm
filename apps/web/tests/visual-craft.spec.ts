@@ -6,7 +6,8 @@ import { resolve } from 'node:path';
 // Opt-in evidence matrix. All API traffic is intercepted; no installed state,
 // model inference, native input or external network is used.
 const phase = process.env.OFFGRID_VISUAL_PHASE;
-const prototype = phase === 'gradient-prototype' ? readFileSync(resolve('../../build/ui-craft/gradient-prototype.css'), 'utf8') : '';
+const prototype = phase === 'gradient-prototype' || phase === 'materials-prototype'
+  ? readFileSync(resolve(`../../build/ui-craft/${phase}.css`), 'utf8') : '';
 test.describe.configure({ mode: 'parallel' });
 for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const width of [390,768,1024,1440]) {
   test(`visual craft ${theme} ${locale} ${width}`,async({page})=>{
@@ -20,7 +21,13 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
       await page.evaluate(()=>document.fonts.ready);
       await expect(page.locator('.page-failure')).toHaveCount(0);
       await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
-      await page.screenshot({path:resolve(dir,`${name}.png`),fullPage:true,animations:'disabled'});
+      // Floating UI belongs to the viewport, not an expanded full-page capture.
+      // Wait for its entrance before recording evidence of its actual contents.
+      const overlay = name === 'popover' ? page.locator('.workspace-options-panel')
+        : name === 'palette' ? page.locator('dialog.command-palette')
+        : name === 'onboarding' ? page.locator('.onboarding') : null;
+      if (overlay) await expect(overlay).toHaveCSS('opacity', '1');
+      await page.screenshot({path:resolve(dir,`${name}.png`),fullPage:!overlay,animations:'disabled'});
     };
     for(const route of ['agents','activity','knowledge','models','settings']) {
       await page.goto(`/ui/#/${route}`);
@@ -30,6 +37,11 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
       if(route==='knowledge') await expect(page.locator('.knowledge-documents article')).toHaveCount(1);
       if(route==='models') await expect(page.locator('.installed-model')).toHaveCount(1);
       await capture(route);
+      if(route==='agents') {
+        await page.locator('.profile-library-header > button').click(); await expect(page.locator('.profile-editor')).toBeVisible(); await capture('agent-editor');
+        await page.goto('/ui/#/agents/tools'); await expect(page.locator('.agent-management-page')).toBeVisible(); await capture('tools');
+        await page.goto('/ui/#/agents/connections'); await expect(page.locator('.connector-panel')).toBeVisible(); await capture('connections');
+      }
       if(route==='models') { await page.locator('#model-view-discover').click(); await expect(page.locator('.catalog-card')).toHaveCount(1); await capture('models-discover'); }
     }
     for(const mode of ['empty','error','loading']) {

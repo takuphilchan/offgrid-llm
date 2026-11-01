@@ -17,7 +17,9 @@ async function fixture(page: Page, locale: LocaleCode = 'en', theme = 'light', h
     const path = new URL(r.request().url()).pathname;
     if (r.request().method() !== 'GET') writes.push(path);
     const bodies: Record<string, unknown> = {
-      '/api/v2/system': { product: 'offgrid', version: 'quality', workspace_id: 'quality', api_version: 2, capabilities: ['task-first-agents-v2'] },
+      '/api/v2/system': { product: 'offgrid', version: 'quality', workspace_id: 'quality', api_version: 2, capabilities: ['task-first-agents-v2', 'agent-profiles-v1'] },
+      '/api/v2/agent-profiles': { profiles: [] },
+      '/api/v2/agent-profiles/resources': { tools: {}, computer_permitted: false, connection_scope: 'workspace-admin' },
       '/v1/users/me': { authenticated: false, user: null }, '/v1/system/config': { version: 'quality', inference_slots: 1 },
       '/v1/models': { data: [{ id: 'quality-model.Q4_K_M', type: 'chat', size: 1024 ** 3 }] },
       '/v1/catalog': { models: [] }, '/v1/models/download/progress': {},
@@ -207,18 +209,35 @@ test('IME input, reduced motion, focus restoration and status announcements rema
 
 test('bounded history filtering and warm controls meet the fixture feedback budget', async ({ page }, info) => {
   const writes = await fixture(page, 'en', 'light', 1000);
-  const routes: Record<string, number> = {};
-  for (const route of ['chat', 'models', 'settings', 'agents', 'knowledge', 'activity']) {
-    const start = Date.now(); await page.goto(`/ui/#/${route}`); await expect(page.locator('.topbar h1')).toBeVisible();
-    routes[route] = Date.now() - start;
+  const routes: Record<string, { cold: number; warm: number }> = {};
+  const ready: Record<string, string> = {chat: '.history-open', models: '.installed-model', settings: '#settings-language', agents: '.profile-empty', knowledge: '.knowledge-documents article', activity: '.task-list .workspace-empty'};
+  // A visible shell heading alone does not establish that route data rendered.
+  for (const [route, selector] of Object.entries(ready)) {
+    await page.goto(`/ui/#/${route}`);
+    const cold = Date.now(); await page.reload(); await expect(page.locator(selector).first()).toBeVisible();
+    const coldElapsed = Date.now() - cold;
+    await page.goto('/ui/#/agents/tools'); await expect(page.locator('.tool-list article')).toBeVisible();
+    const warm = Date.now(); await page.goto(`/ui/#/${route}`); await expect(page.locator(selector).first()).toBeVisible();
+    routes[route] = {cold: coldElapsed, warm: Date.now() - warm};
   }
   await page.goto('/ui/#/chat'); await expect(page.getByRole('searchbox', { name: 'Search conversations' })).toBeVisible();
   const samples = await page.getByRole('searchbox', { name: 'Search conversations' }).evaluate(async input => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     const durations: number[] = [];
     for (let i = 0; i < 30; i++) {
-      const start = performance.now(); setter.call(input, i % 2 ? '' : 'Conversation 99');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const filtered = i % 2 === 0, expected = filtered ? 11 : 20;
+      const start = performance.now();
+      await new Promise<void>((resolve, reject) => {
+        const observer = new MutationObserver(() => {
+          const rows = [...document.querySelectorAll('.history-list .history-row')];
+          if (rows.length !== expected || filtered && !rows.every(row => row.textContent?.includes('Conversation 99'))) return;
+          observer.disconnect(); clearTimeout(timeout); resolve();
+        });
+        const timeout = setTimeout(() => { observer.disconnect(); reject(Error('History did not render the expected filtered rows')); }, 2000);
+        observer.observe(document.querySelector('.history-list')!, {childList: true, subtree: true, characterData: true});
+        setter.call(input, filtered ? 'Conversation 99' : '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       durations.push(performance.now() - start);
     }
@@ -228,7 +247,7 @@ test('bounded history filtering and warm controls meet the fixture feedback budg
   expect(p95).toBeLessThanOrEqual(250);
   const rows = await page.locator('.history-list .history-row').count();
   console.log(JSON.stringify({ fixture: 'history-feedback', p95, routes, rows, history: 1000 }));
-  await info.attach('ui-performance.json', { body: JSON.stringify({ samples, p95, routes, rows, history: 1000, kind: 'API fixtures; route navigation includes local transport; no inference' }, null, 2), contentType: 'application/json' });
+  await info.attach('ui-performance.json', { body: JSON.stringify({ samples, p95, routes, rows, history: 1000, kind: 'Verified DOM result then two animation frames; cold includes document reload with normal cache, warm is hash navigation; fixture transport, no inference' }, null, 2), contentType: 'application/json' });
   expect(rows).toBe(20);
   await page.getByRole('button', { name: 'Show more (980)', exact: true }).click();
   await expect(page.locator('.history-list .history-row')).toHaveCount(40);

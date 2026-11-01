@@ -40,11 +40,13 @@
     border-color: var(--accent-strong);
     font-weight: var(--weight-heading);
   }
-  /* Legacy text-button call sites use the same visible secondary control.
-     Workspace actions must not depend on hover to reveal their boundary. */
+  /* Action weight is shared across routes: solid primary, tonal secondary,
+     quiet text/utility. Input and floating-panel boundaries remain explicit. */
+  .secondary-button, .new-chat-button { background: var(--surface-2); border-color: transparent; }
+  .text-button, .message-copy { background: transparent; border-color: transparent; }
   .message-copy { opacity: 1; }
   .utility-button { color: var(--muted); background: transparent; border-color: transparent; padding-inline: 10px; }
-  .utility-button:hover:not(:disabled) { color: var(--text); background: var(--surface-2); border-color: var(--line); }
+  .utility-button:hover:not(:disabled) { color: var(--text); background: var(--surface-2); border-color: transparent; }
   .utility-button:focus-visible { color: var(--text); }
   .history-item-actions { flex: none; }
   .history-item-menu { opacity: .65; }
@@ -60,14 +62,17 @@
     background: var(--surface-2);
     border-color: var(--line-strong);
   }
-  :where(.primary-button, .composer-actions > button):hover:not(:disabled) { opacity: .87; transform: none; }
+  :where(.primary-button, .composer-actions > button):hover:not(:disabled) { opacity: 1; background-color: var(--primary-hover); transform: none; }
+  :is(.secondary-button, .new-chat-button):hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+  :is(.text-button, .message-copy):hover:not(:disabled) { color: var(--text); background: var(--surface-2); border-color: transparent; }
   /* Selection belongs in the final control layer too: generic secondary-button
      styling must not hide the current library view or category. */
-  .model-library-tabs [aria-selected='true'] {
-    color: var(--text); background: var(--surface-2); border-color: var(--line-strong);
+  :is(.model-library-tabs, .model-category-picker, .model-discovery-sources) > button { background: transparent; border-color: transparent; color: var(--muted); }
+  .model-library-tabs [aria-selected='true'], .model-discovery-sources > button[aria-pressed='true'] {
+    color: var(--text); background: var(--surface-2); border-color: transparent;
   }
   .model-category-picker button[aria-pressed='true'] {
-    color: var(--text); background: var(--surface-2); border-color: var(--text); font-weight: 600;
+    color: var(--text); background: var(--surface-2); border-color: transparent; font-weight: 600;
   }
   button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
   :where(button, a.primary-button, a.secondary-button):active:not(:disabled) { transform: translateY(var(--press-distance)); }
@@ -122,7 +127,8 @@
   .workspace-search-field input::-webkit-search-cancel-button { display: none; }
   .workspace-search-field .search-clear { width: 40px; height: 40px; min-width: 40px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
   .workspace-search-field .search-clear:hover { background: var(--surface-2); color: var(--text); }
-  .message-actions :is(button, a), .response-details > button { background: transparent; border-color: var(--line); color: var(--muted); padding-inline: 12px; font-size: 13px; }
+  .message-actions :is(button, a), .response-details > button { background: transparent; border-color: transparent; color: var(--muted); padding-inline: 12px; font-size: 13px; }
+  .message-actions :is(button, a):hover:not(:disabled), .response-details > button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; color: var(--text); }
   .navigation-trigger { display: none; }
   @media (max-width: 1023px) { .navigation-trigger { display: inline-flex; } }
   dialog.command-palette {
@@ -141,7 +147,8 @@
   .command-group button > svg { flex-shrink: 0; }
   .command-group button strong { overflow-wrap: anywhere; }
   dialog.command-palette::backdrop { background: var(--scrim); }
-  .permission-notice { padding: 12px 16px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .permission-notice { padding: 12px 16px; color: var(--muted); border: 1px solid transparent; background: var(--surface-2); border-radius: 8px; font-size: 13px; }
+  .segmented-control, .section-tabs { border-color: transparent; }
   .diagnostic-details summary { cursor: pointer; padding-block: 12px; }
   .command-search input { min-height: 56px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 15px; }
   .composer textarea { border: 0; background: transparent; padding: 10px; resize: none; font-size: 16px; }
@@ -198,6 +205,7 @@
   @media (pointer: coarse) {
     :where(.primary-button, .secondary-button, .utility-button, .text-button, .danger-button, .nav-link, .history-open, .new-chat-button) { min-height: 44px; }
     .icon-button { min-width: 44px; min-height: 44px; }
+    :is(input:not([type='checkbox']):not([type='radio']), select, .segmented-control button, .composer button, .voice-button, .message-copy, .resource-actions button, .model-actions button) { min-height: 44px; }
   }
   @media (pointer: fine) {
     :where(.secondary-button, .text-button, .utility-button, .danger-button,
@@ -228,6 +236,10 @@
   .workspace-options > button { transition: none; }
   .workspace-options > button:active:not(:disabled) { transform: none; }
   .workspace-options > button[aria-expanded='true'] { background: var(--surface-2); color: var(--text); border-color: var(--line); }
+  @media (forced-colors: active) {
+    :is(.primary-button, .secondary-button, .new-chat-button) { border-color: ButtonText; }
+    :is(.model-library-tabs [aria-selected='true'], .model-category-picker [aria-pressed='true'], .model-discovery-sources [aria-pressed='true']) { border-color: Highlight; }
+  }
   @media (max-width: 420px) {
     .navigation-trigger { width: 44px; min-width: 44px; min-height: 44px; padding: 8px; justify-content: center; }
   }

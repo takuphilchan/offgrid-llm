@@ -165,7 +165,7 @@ test('statistics failure does not hide available run history', async ({ page }) 
 test('connector drafts and selected Activity survive navigation without refetching online searches', async ({ page }) => {
   await fixture(page); await page.goto('/ui/#/agents/connections');
   await page.locator('.connector-panel input').nth(0).fill('Private connector'); await page.locator('.connector-panel input').nth(1).fill('http://localhost:3000/mcp');
-  await page.locator('.sidebar a[href="#/models"]').click(); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
+  await page.locator('.sidebar a[href="#/models"]').click(); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
   await page.locator('.sidebar a[href="#/agents"]').click(); await page.getByRole('link', { name: 'Connections', exact: true }).click();
   await expect(page.locator('.connector-panel input').nth(0)).toHaveValue('Private connector');
   await page.locator('.sidebar a[href="#/models"]').click(); await expect(page.getByLabel('Model name or publisher', { exact: true })).toHaveValue('Research model');
@@ -209,7 +209,8 @@ test('late provider setup cannot overwrite instructions for a newly selected mod
   await page.locator('.provider-card button').click();
   await expect.poll(() => requested).toBe(true);
   await page.locator('.sidebar a[href="#/chat"]').click();
-  await page.getByRole('combobox', { name: 'Model', exact: true }).selectOption('model-b');
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option').filter({ hasText: 'model-b' }).click();
   release();
   await page.locator('.sidebar a[href="#/agents"]').click();
   await page.getByRole('link', { name: 'Connections', exact: true }).click();

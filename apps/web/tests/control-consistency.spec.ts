@@ -77,6 +77,7 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   await fixture(page);
   await page.goto('/ui/#/models');
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   const query = page.locator('#model-search-query');
   const searchField = page.locator('.model-search-form .workspace-search-field');
   await expect(query).toBeVisible();
@@ -128,7 +129,7 @@ test('Knowledge and model searches use the compact accessible search surface', a
   await expect(page.getByText('test-model-with-a-long-name.Q4_K_M')).toHaveCount(0);
 });
 
-for (const theme of ['light', 'dark']) test(`workspace actions have consistent visible button boundaries in ${theme}`, async ({ page }, info) => {
+for (const theme of ['light', 'dark']) test(`workspace actions preserve secondary and utility hierarchy in ${theme}`, async ({ page }, info) => {
   await fixture(page, 'en', theme);
   await page.route('**/v1/rag/status', route => route.fulfill({ json: { enabled: false } }));
   await page.goto('/ui/#/chat');
@@ -145,9 +146,16 @@ for (const theme of ['light', 'dark']) test(`workspace actions have consistent v
     await expect(action).toHaveCSS('min-height', await action.evaluate(el => el.classList.contains('voice-button') ? '40px' : '32px'));
     await expect(action).toHaveCSS('border-radius', '8px');
     await expect(action).toHaveCSS('text-decoration-line', 'none');
-    await expect(action).toHaveCSS('background-color', theme === 'dark' ? 'rgb(24, 24, 25)' : 'rgb(255, 255, 255)');
+    const utility = await action.evaluate(el => el.classList.contains('utility-button'));
+    const quiet = utility || await action.evaluate(el => el.classList.contains('voice-button'));
+    const surface = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--surface-2').trim());
+    await expect(action).toHaveCSS('background-color', quiet ? 'rgba(0, 0, 0, 0)' : await page.evaluate(value => { const el=document.createElement('span');el.style.color=value;document.body.append(el);const color=getComputedStyle(el).color;el.remove();return color; }, surface));
     await expect(action).toHaveCSS('border-top-width', '1px');
-    expect(await action.evaluate(el => getComputedStyle(el).borderTopColor)).not.toBe('rgba(0, 0, 0, 0)');
+    await expect(action).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+    await action.hover();
+    await expect(action).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await page.keyboard.press('Tab'); await action.focus(); await expect(action).toHaveCSS('outline-width', '2px');
+    await page.mouse.move(0, 0);
   }
   const voiceSettings = page.getByRole('button', { name: 'Voice settings', exact: true });
   await voiceSettings.focus(); await voiceSettings.press('Enter');

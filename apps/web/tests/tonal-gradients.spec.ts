@@ -7,8 +7,9 @@ for (const theme of ['light', 'dark']) test(`tonal gradients preserve contrast a
   await craftFixture(page, 'en', theme);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('A test draft');
-  const treatments=['.app-shell > .sidebar','.chat-workspace .composer','.composer-actions > button:last-child'];
+  const treatments=['.app-shell > .sidebar','.chat-workspace .composer'];
   for (const selector of treatments) await expect(page.locator(selector)).toHaveCSS('background-image', /linear-gradient/);
+  await expect(page.locator('.composer-actions > button:last-child')).toHaveCSS('background-image', 'none');
   await expect(page.locator('.composer-actions .voice-button')).toHaveCSS('background-image','none');
   const contrast = await page.evaluate(() => {
     const probe=document.createElement('i'); document.body.append(probe);
@@ -23,7 +24,7 @@ for (const theme of ['light', 'dark']) test(`tonal gradients preserve contrast a
     const pairs:Record<string,number>={};
     // Sample the full neutral envelope, including points beyond the actual
     // light composer endpoint: a conservative bound, not just midpoint contrast.
-    for(const foreground of ['text','muted','faint']) for(const [name,a,b] of [['sidebar','surface-0','surface-1'],['composer','surface-1','surface-2']]) {
+    for(const foreground of ['text','muted','faint']) for(const [name,a,b] of [['sidebar','surface-0','surface-2'],['composer','surface-1','surface-2']]) {
       pairs[`${name}/${foreground}`]=Math.min(...Array.from({length:101},(_,p)=>ratio(`var(--${foreground})`,`color-mix(in oklab, var(--${a}) ${p}%, var(--${b}))`)));
     }
     pairs['primary/text']=Math.min(...Array.from({length:19},(_,p)=>ratio('var(--on-accent)',`color-mix(in oklab, var(--text) ${82+p}%, var(--surface-3))`)));
@@ -107,6 +108,7 @@ test('gradient paint comparison under 4x and 6x CPU throttling', async({browser}
     if(workload==='stream'){
       stopMs=await page.evaluate(async()=>{const start=performance.now();(document.querySelector('.composer-actions > button:last-child') as HTMLButtonElement).click();await new Promise(requestAnimationFrame);return performance.now()-start;});
       expect.soft(stopMs, `${rate}x ${mode}: unqualified stress Stop feedback`).toBeLessThan(250);
+      expect.soft(frames[Math.floor(frames.length*.95)], `${rate}x ${mode}: stream frame p95`).toBeLessThanOrEqual(250);
     }
     results.push({rate,mode,workload,paintMs:paint,paintEvents:events.filter(e=>e.name==='Paint').length,frameP95:frames[Math.floor(frames.length*.95)],stopMs});
     mkdirSync(resolve('../../build/ui-craft'),{recursive:true});

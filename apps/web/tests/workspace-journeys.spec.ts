@@ -1,3 +1,4 @@
+import { chooseModel } from './helpers/model-choice';
 import { openSettings } from './helpers/workspace-actions';
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
@@ -110,14 +111,14 @@ test('04 synthetic dictation is editable, chosen speech models persist and playb
   const wav=Buffer.alloc(364);wav.write('RIFF');wav.writeUInt32LE(356,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(16000,24);wav.writeUInt32LE(32000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(320,40);
   await page.route('**/v1/audio/speech',r=>r.fulfill({contentType:'audio/wav',body:wav}));
   await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Voice settings',exact:true}).click();
-  await page.getByLabel('Recognition model',{exact:true}).selectOption('asr@r1');await page.getByLabel('Speech model',{exact:true}).selectOption('tts@r1');await page.keyboard.press('Escape');
+  await chooseModel(page, 'Recognition model', 'asr@r1');await chooseModel(page, 'Speech model', 'tts@r1');await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Use microphone',exact:true}).click();await page.locator('.voice-input-control[data-capture-phase="recording"] button').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Dictated draft.');expect(s.turns).toEqual([]);
   await page.getByRole('button',{name:'Voice settings',exact:true}).click();
   await page.getByRole('checkbox',{name:'Speak responses',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();await page.keyboard.press('Escape');await send(page,'Edited dictated draft.');
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(true);await page.getByRole('button',{name:'Stop reading',exact:true}).first().click();
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(false);expect(s.turns).toHaveLength(1);expect(await page.evaluate(()=>(window as any).trackStopped)).toBe(true);
-  await nav(page,'agents');await nav(page,'chat');await page.getByRole('button',{name:'Voice settings',exact:true}).click();await expect(page.getByLabel('Recognition model',{exact:true})).toHaveValue('asr@r1');
+  await nav(page,'agents');await nav(page,'chat');await page.getByRole('button',{name:'Voice settings',exact:true}).click();await page.getByRole('button',{name:'Recognition model',exact:true}).click();await expect(page.getByRole('radiogroup',{name:'Recognition model'}).getByRole('radio',{checked:true})).toHaveValue('asr@r1');
 });
 test('05 ordinary task creates once and exposes saved output with an integrity-checked artifact',async({page})=>{
   const s=await workspace(page);await start(page,s);await expect(page.locator('.message.assistant')).toContainText(output.trim());
@@ -151,9 +152,9 @@ test('08 lost acceptance is recovered by saved identity without repeating uncert
 test('09 discovery keeps meaningful variants in one review and transfers only the chosen file',async({page})=>{
   const s=await workspace(page);await page.route('**/v1/search?*',r=>r.fulfill({json:{results:[{id:'fixture/repo',name:'Fixture model',author:'fixture',size_bytes:12288}]}}));
   await page.route('**/v1/search/files?*',r=>r.fulfill({json:{files:[{id:'small',file:'small.gguf',size_bytes:4096,supported:true},{id:'large',file:'large.gguf',size_bytes:8192,supported:true}]}}));
-  await page.goto('/ui/#/models');await page.getByRole('tab',{name:'Discover models',exact:true}).click();await page.getByRole('searchbox').fill('fixture');await page.getByRole('button',{name:'Search',exact:true}).click();
+  await page.goto('/ui/#/models');await page.getByRole('tab',{name:'Discover models',exact:true}).click();await page.getByRole('button',{name:'Search Hugging Face',exact:true}).click();await page.getByRole('searchbox').fill('fixture');await page.getByRole('button',{name:'Search',exact:true}).click();
   await page.getByRole('button',{name:'Review download',exact:true}).click();
-  await page.getByRole('combobox').last().selectOption('large');expect(s.writes).toEqual([]);await page.getByRole('button',{name:'Download',exact:true}).click();
+  await chooseModel(page,'GGUF file / quantization','large');expect(s.writes).toEqual([]);await page.getByRole('button',{name:'Download',exact:true}).click();
   expect(s.writes).toHaveLength(1);expect(JSON.stringify(s.writes[0].data)).toContain('large.gguf');
 });
 test('10 interrupted model transfer survives navigation, resumes explicitly and removal targets only that model',async({page})=>{

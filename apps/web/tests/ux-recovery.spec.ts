@@ -78,6 +78,7 @@ test('an active chat reconnects after navigation without submitting new work',as
  const session={name:'recoverable-chat',model_id:'chat-model',messages:[],updated_at:new Date().toISOString(),created_at:new Date().toISOString(),turn};let cancellations=0;
  await workspace(page,(path,route)=>{
   if(path==='/v1/sessions')return{sessions:[session]};
+  if(path==='/v1/sessions/recoverable-chat')return session;
   if(path.endsWith('/turn'))return{turn};
   if(path.endsWith('/turn/cancel')){expect(route.request().postDataJSON()).toEqual({id:turn.id});cancellations++;return{success:true};}
  });

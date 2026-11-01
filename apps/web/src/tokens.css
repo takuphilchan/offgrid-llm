@@ -104,19 +104,29 @@
     --gradient-composer: none;
     --gradient-primary: none;
     --gradient-progress: none;
+    --gradient-floating: none;
+    --material-fill: var(--surface-1);
+    --material-blur: none;
+    --primary-hover: var(--accent-strong);
   }
   @supports (background-image: linear-gradient(180deg in oklab, currentColor, currentColor)) and (color: color-mix(in oklab, currentColor, currentColor)) {
     :root {
-      --gradient-sidebar: linear-gradient(180deg in oklab, var(--surface-1) 0%, var(--surface-0) 70%);
-      --gradient-composer: linear-gradient(180deg in oklab, var(--surface-2) 0%, var(--surface-1) 55%);
-      --gradient-primary: linear-gradient(180deg in oklab, var(--text) 0%, color-mix(in oklab, var(--text) 92%, var(--surface-3)) 100%);
+      --gradient-sidebar: linear-gradient(165deg in oklab, var(--surface-2) 0%, var(--surface-1) 35%, var(--surface-0) 100%);
+      --gradient-composer: linear-gradient(165deg in oklab, var(--surface-2) 0%, var(--surface-1) 70%);
+      --gradient-floating: linear-gradient(165deg in oklab, color-mix(in oklab, var(--surface-2) 35%, transparent), transparent 65%);
+      --primary-hover: color-mix(in oklab, var(--text) 92%, var(--surface-3));
       --gradient-progress: linear-gradient(180deg in oklab, color-mix(in oklab, var(--text) 100%, var(--surface-3)) 0%, color-mix(in oklab, var(--text) 99.484%, var(--surface-3)) 12.5%, color-mix(in oklab, var(--text) 98.125%, var(--surface-3)) 25%, color-mix(in oklab, var(--text) 96.203%, var(--surface-3)) 37.5%, color-mix(in oklab, var(--text) 94%, var(--surface-3)) 50%, color-mix(in oklab, var(--text) 91.797%, var(--surface-3)) 62.5%, color-mix(in oklab, var(--text) 89.875%, var(--surface-3)) 75%, color-mix(in oklab, var(--text) 88.516%, var(--surface-3)) 87.5%, color-mix(in oklab, var(--text) 88%, var(--surface-3)) 100%);
     }
     :root[data-theme='light'] {
-      --gradient-sidebar: linear-gradient(180deg in oklab, var(--surface-1) 0%, var(--surface-0) 100%);
-      --gradient-composer: linear-gradient(180deg in oklab, var(--surface-1) 0%, color-mix(in oklab, var(--surface-1) 60%, var(--surface-2)) 100%);
-      --gradient-primary: linear-gradient(180deg in oklab, color-mix(in oklab, var(--text) 90%, var(--surface-3)) 0%, var(--text) 100%);
+      --gradient-sidebar: linear-gradient(165deg in oklab, var(--surface-1) 0%, var(--surface-0) 35%, var(--surface-2) 100%);
+      --gradient-composer: linear-gradient(165deg in oklab, var(--surface-1) 0%, color-mix(in oklab, var(--surface-1) 60%, var(--surface-2)) 100%);
       --gradient-progress: linear-gradient(180deg in oklab, color-mix(in oklab, var(--text) 100%, var(--surface-3)) 0%, color-mix(in oklab, var(--text) 99.227%, var(--surface-3)) 12.5%, color-mix(in oklab, var(--text) 97.188%, var(--surface-3)) 25%, color-mix(in oklab, var(--text) 94.305%, var(--surface-3)) 37.5%, color-mix(in oklab, var(--text) 91%, var(--surface-3)) 50%, color-mix(in oklab, var(--text) 87.695%, var(--surface-3)) 62.5%, color-mix(in oklab, var(--text) 84.813%, var(--surface-3)) 75%, color-mix(in oklab, var(--text) 82.773%, var(--surface-3)) 87.5%, color-mix(in oklab, var(--text) 82%, var(--surface-3)) 100%);
+    }
+  }
+  @supports (backdrop-filter: blur(12px)) and (color: color-mix(in srgb, currentColor, transparent)) {
+    :root {
+      --material-fill: color-mix(in srgb, var(--surface-1) 96%, transparent);
+      --material-blur: blur(12px);
     }
   }
   :root[data-gradients='off'] {
@@ -124,13 +134,19 @@
     --gradient-composer: none;
     --gradient-primary: none;
     --gradient-progress: none;
+    --gradient-floating: none;
+    --material-fill: var(--surface-1);
+    --material-blur: none;
   }
-  @media (forced-colors: active), (prefers-contrast: more) {
+  @media (forced-colors: active), (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
     :root, :root[data-theme='light'] {
     --gradient-sidebar: none;
     --gradient-composer: none;
     --gradient-primary: none;
     --gradient-progress: none;
+    --gradient-floating: none;
+    --material-fill: var(--surface-1);
+    --material-blur: none;
     }
   }
 }

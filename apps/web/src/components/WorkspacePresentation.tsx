@@ -18,6 +18,6 @@ export function ScopedNotice({ children, action, title, kind = 'status', classNa
   return <div className={`workspace-notice ${kind === 'error' ? 'inline-error' : ''} ${className}`} role={kind === 'error' ? 'alert' : 'status'}><div>{title && <strong className="notice-title">{title}</strong>}{children}</div>{action && <ActionGroup>{action}</ActionGroup>}</div>;
 }
 
-export function ListSearch({ label, value, onChange, className = '' }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
-  return <SearchField className={`workspace-list-search ${className}`} label={label} value={value} onChange={onChange} />;
+export function ListSearch({ label, value, onChange, className = '', id }: { label: string; value: string; onChange: (value: string) => void; className?: string; id?: string }) {
+  return <SearchField id={id} className={`workspace-list-search ${className}`} label={label} value={value} onChange={onChange} />;
 }

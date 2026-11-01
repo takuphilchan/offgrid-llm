@@ -66,6 +66,7 @@ test('completed download is not retrieval readiness and setup stays compact', as
   await page.screenshot({ path: info.outputPath('knowledge-disabled.png') });
   await page.goto('/ui/#/models');
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   expect((await page.locator('#model-search-query').boundingBox())!.y).toBeLessThan(500);
   const card = page.locator('.catalog-card').filter({ has: page.getByRole('heading', { name: 'BGE M3', exact: true }) });
   await page.getByRole('button', { name: 'Embeddings', exact: true }).click();
