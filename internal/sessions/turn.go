@@ -3,29 +3,35 @@ package sessions
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 var ErrTurnConflict = errors.New("conversation turn changed or is still active")
+var ErrImageCapacity = errors.New("conversation image capacity reached; start a new conversation")
 
 // Turn is a recoverable generation snapshot, separate from completed context.
 // A final answer and its completed status are committed in the SAME session file.
 type Turn struct {
-	Agent        *AgentSelection `json:"agent,omitempty"`
-	JobID        string          `json:"job_id,omitempty"`
-	JobAdmission string          `json:"job_admission,omitempty"`
-	ID           string          `json:"id"`
-	RequestHash  string          `json:"request_hash"`
-	Prompt       string          `json:"prompt"`
-	Model        string          `json:"model"`
-	Profile      string          `json:"profile"`
-	Knowledge    bool            `json:"knowledge"`
-	MaxTokens    int             `json:"max_tokens"`
-	Status       string          `json:"status"`
-	Phase        string          `json:"phase"`
-	Output       string          `json:"output"`
-	Error        string          `json:"error,omitempty"`
-	FinishReason string          `json:"finish_reason,omitempty"`
-	Metrics      json.RawMessage `json:"metrics,omitempty"`
+	Images             []api.SessionImage `json:"images,omitempty"`
+	Agent              *AgentSelection    `json:"agent,omitempty"`
+	JobID              string             `json:"job_id,omitempty"`
+	JobAdmission       string             `json:"job_admission,omitempty"`
+	ID                 string             `json:"id"`
+	RequestHash        string             `json:"request_hash"`
+	Prompt             string             `json:"prompt"`
+	Model              string             `json:"model"`
+	Profile            string             `json:"profile"`
+	Knowledge          bool               `json:"knowledge"`
+	KnowledgeDocuments []string           `json:"knowledge_documents,omitempty"`
+	KnowledgeSources   []KnowledgePassage `json:"knowledge_sources,omitempty"`
+	MaxTokens          int                `json:"max_tokens"`
+	Status             string             `json:"status"`
+	Phase              string             `json:"phase"`
+	Output             string             `json:"output"`
+	Error              string             `json:"error,omitempty"`
+	FinishReason       string             `json:"finish_reason,omitempty"`
+	Metrics            json.RawMessage    `json:"metrics,omitempty"`
 }
 
 func (t *Turn) Active() bool {
@@ -61,6 +67,20 @@ func (s *ScopedManager) BeginTurn(name string, turn *Turn) (*Turn, bool, error) 
 	if session.TurnRequests[turn.ID] {
 		return nil, false, ErrTurnConflict
 	}
+	// Admission and the history byte budget share the mutation lock. Concurrent
+	// completed turns cannot race a handler's earlier projection of this limit.
+	imageBytes := 0
+	for _, item := range turn.Images {
+		imageBytes += len(item.DataURL)
+	}
+	for _, message := range session.Messages {
+		for _, item := range message.Images {
+			imageBytes += len(item.DataURL)
+		}
+	}
+	if imageBytes > api.MaxSessionImageRequestBytes {
+		return nil, false, ErrImageCapacity
+	}
 	if session.TurnRequests == nil {
 		session.TurnRequests = map[string]bool{}
 	}
@@ -89,7 +109,10 @@ func (s *ScopedManager) SaveTurn(name string, turn *Turn) error {
 		}
 		session.ModelID = turn.Model
 		session.AddMessage("user", turn.Prompt)
+		session.Messages[len(session.Messages)-1].Images = turn.Images
+		turn.Images = nil // Completed bytes live once, in the saved user message.
 		session.AddMessage("assistant", turn.Output)
+		session.Messages[len(session.Messages)-1].KnowledgeSources = turn.KnowledgeSources
 	}
 	return s.manager.save(session)
 }

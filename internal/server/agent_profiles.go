@@ -246,6 +246,7 @@ type profileKnowledgeSource interface {
 func attachProfileKnowledge(w http.ResponseWriter, r *http.Request, prompt string, config *agents.AgentConfig, source profileKnowledgeSource) bool {
 	documents := selectedProfileKnowledge(*config)
 	config.KnowledgeDocuments, config.KnowledgeContext = nil, ""
+	config.KnowledgeSources = nil
 	if len(documents) > 0 {
 		if source == nil || !source.IsEnabled() {
 			writeJobError(w, 503, "knowledge_unavailable", "Enable Knowledge before running this profile.", true)
@@ -258,6 +259,25 @@ func attachProfileKnowledge(w http.ResponseWriter, r *http.Request, prompt strin
 				return false
 			}
 			config.KnowledgeDocuments = append(config.KnowledgeDocuments, agents.KnowledgeDocument{ID: id, Name: doc.Name})
+		}
+		if scope, _ := r.Context().Value(knowledgeScopeKey{}).(knowledgeScope); scope.documents != nil {
+			filtered, ok := source.(knowledgeRetriever)
+			if !ok {
+				writeJobError(w, 503, "knowledge_unavailable", "Selected-source retrieval is unavailable on this runtime.", false)
+				return false
+			}
+			// Children already intersect their own resources with the parent's.
+			// Keep that narrower scope instead of copying the parent's documents.
+			ctx := withKnowledgeScope(r.Context(), documents, &config.KnowledgeSources)
+			material, err := retrieveKnowledge(ctx, filtered, prompt)
+			if err != nil || material == nil || len(material.Results) == 0 {
+				writeJobError(w, 422, "knowledge_unavailable", "The selected sources are unavailable or have no matching passages. No task was started.", false)
+				return false
+			}
+			material.TruncateContext(6000)
+			config.KnowledgeContext = material.Context
+			captureKnowledge(ctx, material)
+			return true
 		}
 		opts := rag.DefaultSearchOptions()
 		opts.DocumentFilter = append([]string(nil), documents...)

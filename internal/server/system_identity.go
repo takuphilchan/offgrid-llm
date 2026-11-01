@@ -78,6 +78,7 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	identity := SystemIdentity{Product: "offgrid", Version: s.version, APIVersion: 2, Revision: BuildRevision, Capabilities: []string{"sessions-v1", "chat-streaming-v1", "durable-agent-runs-v1", "exclusive-workspace-v1", "offline-backup-v1"}}
 	identity.WorkspaceID = s.workspaceID
 	identity.Capabilities = append(identity.Capabilities, "agent-response-profiles-v1")
+	identity.Capabilities = append(identity.Capabilities, "scoped-knowledge-chat-v1", "session-images-v1")
 	if s.executionEnrollment != nil && s.config != nil && s.config.EnableExecutionPreview {
 		identity.Capabilities = append(identity.Capabilities, "native-execution-preview-v1", "execution-access-request-v1")
 	}

@@ -31,6 +31,7 @@ type AgentConfig struct {
 	MemoryConsentRevision   int                                `json:"memory_consent_revision,omitempty"`
 	KnowledgeContext        string                             `json:"knowledge_context,omitempty"`
 	KnowledgeDocuments      []KnowledgeDocument                `json:"knowledge_documents,omitempty"`
+	KnowledgeSources        []api.KnowledgePassage             `json:"knowledge_sources,omitempty"`
 	ContextWindow           int                                `json:"context_window,omitempty"`
 	AllowedTools            []string                           `json:"allowed_tools,omitempty"`
 	AllowedCapabilities     map[string]capabilities.Descriptor `json:"allowed_capabilities,omitempty"`

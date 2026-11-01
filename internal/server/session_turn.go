@@ -13,7 +13,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-func (h *SessionHandlers) generateDurable(w http.ResponseWriter, r *http.Request, name, id, prompt, model string, knowledge bool, profile string, tokens int) {
+func (h *SessionHandlers) generateDurable(w http.ResponseWriter, r *http.Request, name, id, prompt, model string, knowledge bool, profile string, tokens int, documents []string, images []api.SessionImage) {
 	if !isSafeModelID(id) || len(id) > 128 || h.streamer == nil {
 		writeError(w, "A valid request_id and streaming runtime are required", 400)
 		return
@@ -32,6 +32,8 @@ func (h *SessionHandlers) generateDurable(w http.ResponseWriter, r *http.Request
 		return
 	}
 	turn := &sessions.Turn{ID: id, Prompt: prompt, Model: model, Knowledge: knowledge, Profile: profile, MaxTokens: tokens, Status: "pending", Phase: "queued"}
+	turn.KnowledgeDocuments = documents
+	turn.Images = images
 	encoded, _ := json.Marshal(turn)
 	hash := sha256.Sum256(encoded)
 	turn.RequestHash = hex.EncodeToString(hash[:])
@@ -87,9 +89,9 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 		if err == nil {
 			messages := make([]api.ChatMessage, 0, len(session.Messages)+1)
 			for _, msg := range session.Messages {
-				messages = append(messages, api.ChatMessage{Role: msg.Role, Content: msg.Content})
+				messages = append(messages, api.ChatMessage{Role: msg.Role, Content: api.SessionContent(msg.Content, msg.Images)})
 			}
-			messages = append(messages, api.ChatMessage{Role: "user", Content: turn.Prompt})
+			messages = append(messages, api.ChatMessage{Role: "user", Content: api.SessionContent(turn.Prompt, turn.Images)})
 			lastSave := time.Time{}
 			emit := func(event ChatStreamEvent) error {
 				if ctx.Err() != nil {
@@ -114,6 +116,7 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 				return nil
 			}
 			var result ChatStreamResult
+			ctx = withKnowledgeScope(ctx, turn.KnowledgeDocuments, &turn.KnowledgeSources)
 			result, err = h.streamer(ctx, &api.ChatCompletionRequest{Model: turn.Model, Messages: messages, UseKnowledgeBase: &turn.Knowledge, MaxTokens: &turn.MaxTokens, Stream: true}, turn.Profile, emit)
 			if err == nil {
 				err = ctx.Err()
@@ -132,6 +135,9 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 	if err != nil {
 		turn.Status = "failed"
 		turn.Error = "Response could not finish. Your draft and partial output are retained; review before retrying."
+		if typed, ok := err.(*serviceError); ok {
+			turn.Error = typed.message
+		}
 		if ctx.Err() != nil {
 			turn.Status = "cancelled"
 			turn.Error = "Generation stopped. Partial output is not completed conversational context."
@@ -270,7 +276,7 @@ func (h *SessionHandlers) followTurn(w http.ResponseWriter, r *http.Request, nam
 			if turn.Status == "completed" {
 				var metrics ChatTimings
 				_ = json.Unmarshal(turn.Metrics, &metrics)
-				_ = write(ChatStreamEvent{Type: "done", Session: session, Message: &sessions.Message{Role: "assistant", Content: turn.Output, Timestamp: session.UpdatedAt}, Metrics: &metrics, FinishReason: turn.FinishReason})
+				_ = write(ChatStreamEvent{Type: "done", Session: session, Message: &sessions.Message{Role: "assistant", Content: turn.Output, Timestamp: session.UpdatedAt, KnowledgeSources: turn.KnowledgeSources}, Metrics: &metrics, FinishReason: turn.FinishReason})
 			} else {
 				_ = write(ChatStreamEvent{Type: "error", Error: turn.Error})
 			}

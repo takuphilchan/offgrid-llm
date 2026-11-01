@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 var (
@@ -22,11 +24,13 @@ var (
 
 // Message represents a single chat message
 type Message struct {
-	JobID     string    `json:"job_id,omitempty"`
-	TurnID    string    `json:"turn_id,omitempty"`
-	Role      string    `json:"role"` // "user" or "assistant"
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	Images           []api.SessionImage `json:"images,omitempty"`
+	KnowledgeSources []KnowledgePassage `json:"knowledge_sources,omitempty"`
+	JobID            string             `json:"job_id,omitempty"`
+	TurnID           string             `json:"turn_id,omitempty"`
+	Role             string             `json:"role"` // "user" or "assistant"
+	Content          string             `json:"content"`
+	Timestamp        time.Time          `json:"timestamp"`
 }
 
 // Session represents a conversation session

@@ -24,6 +24,7 @@ type SessionHandlers struct {
 	manager        *sessions.SessionManager
 	completer      SessionCompleter
 	streamer       SessionStreamer
+	imageReady     func(string) error
 	requireAuth    bool
 	locksMu        sync.Mutex
 	sessionLocks   map[string]*sessionLock
@@ -124,6 +125,8 @@ func writeSessionError(w http.ResponseWriter, err error) {
 		writeError(w, "Session name is already in use", http.StatusConflict)
 	case errors.Is(err, sessions.ErrTurnConflict):
 		writeError(w, "Conversation changed or has active work. Refresh before retrying.", http.StatusConflict)
+	case errors.Is(err, sessions.ErrImageCapacity):
+		writeError(w, "This conversation's image limit is reached. Start a new conversation; your current draft is retained.", http.StatusBadRequest)
 	case errors.Is(err, sessions.ErrAccessDenied):
 		writeError(w, "Forbidden", http.StatusForbidden)
 	default:
@@ -299,11 +302,13 @@ func (h *SessionHandlers) HandleSessionAddMessage(w http.ResponseWriter, r *http
 // exchange under the same session. Calls for one session are serialized so
 // concurrent browser tabs cannot lose messages.
 type sessionGenerateRequest struct {
+	Images                  []api.SessionImage         `json:"images,omitempty"`
 	ExecutionRequestVersion int                        `json:"execution_request_version,omitempty"`
 	Execution               *execution.Reference       `json:"execution,omitempty"`
 	Content                 string                     `json:"content"`
 	ModelID                 string                     `json:"model_id,omitempty"`
 	UseKnowledgeBase        bool                       `json:"use_knowledge_base,omitempty"`
+	KnowledgeDocuments      []string                   `json:"knowledge_documents,omitempty"`
 	Stream                  bool                       `json:"stream,omitempty"`
 	Profile                 string                     `json:"profile,omitempty"`
 	MaxTokens               int                        `json:"max_tokens,omitempty"`
@@ -321,12 +326,16 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		return
 	}
 	var req sessionGenerateRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, api.MaxSessionImageRequestBytes)).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	req.Content = strings.TrimSpace(req.Content)
-	if req.Content == "" {
+	if len(req.Content) > 64<<10 {
+		writeError(w, "Content exceeds 64 KiB", 400)
+		return
+	}
+	if req.Content == "" && len(req.Images) == 0 {
 		writeError(w, "Content is required", http.StatusBadRequest)
 		return
 	}
@@ -335,12 +344,20 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		writeServiceError(w, err)
 		return
 	}
+	if err := validateKnowledgeSelection(&req); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	if err := h.validateSessionImageRequest(r, name, &req); err != nil {
+		writeServiceError(w, err)
+		return
+	}
 	if req.Agent != nil {
 		if h.agentServer == nil {
 			writeError(w, "Agent conversations require a matching service", 503)
 			return
 		}
-		h.agentServer.submitConversationJob(w, r, name, req)
+		h.agentServer.submitConversationJob(w, r.WithContext(withKnowledgeScope(r.Context(), req.KnowledgeDocuments, nil)), name, req)
 		return
 	}
 	if req.Execution != nil || req.Restrictions != nil || req.ComputerScope != "" || req.ComputerApprovalMode != "" {
@@ -360,10 +377,10 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 			req.MaxTokens = 1024
 		}
 		if req.Durable {
-			h.generateDurable(w, r, name, req.RequestID, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens)
+			h.generateDurable(w, r, name, req.RequestID, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens, req.KnowledgeDocuments, req.Images)
 			return
 		}
-		h.generateStream(w, r, name, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens)
+		h.generateStream(w, r, name, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens, req.KnowledgeDocuments)
 		return
 	}
 	if h.completer == nil {
@@ -392,15 +409,16 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 	}
 	messages := make([]api.ChatMessage, 0, len(session.Messages)+1)
 	for _, message := range session.Messages {
-		messages = append(messages, api.ChatMessage{Role: message.Role, Content: message.Content})
+		messages = append(messages, api.ChatMessage{Role: message.Role, Content: api.SessionContent(message.Content, message.Images)})
 	}
 	messages = append(messages, api.ChatMessage{Role: "user", Content: req.Content})
-	answer, err := h.completer(r.Context(), modelID, messages, req.UseKnowledgeBase)
+	var passages []sessions.KnowledgePassage
+	answer, err := h.completer(withKnowledgeScope(r.Context(), req.KnowledgeDocuments, &passages), modelID, messages, req.UseKnowledgeBase)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
-	updated, err := h.scoped(r).AppendExchange(name, modelID, req.Content, answer)
+	updated, err := h.scoped(r).AppendExchange(name, modelID, req.Content, answer, passages)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -408,7 +426,7 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"session": updated,
-		"message": sessions.Message{Role: "assistant", Content: answer, Timestamp: updated.UpdatedAt},
+		"message": updated.Messages[len(updated.Messages)-1],
 	})
 }
 

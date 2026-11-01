@@ -18,6 +18,15 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	if err := s.authorizeChat(ctx, request); err != nil {
 		return result, err
 	}
+	hasImages, validationErr := api.ValidateChatMessages(request.Messages)
+	if validationErr != nil {
+		return result, newServiceError(400, "Invalid image or message content", nil)
+	}
+	if hasImages {
+		if err := s.sessionImageReady(request.Model); err != nil {
+			return result, err
+		}
+	}
 	var nativeDescriptor inference.ProviderDescriptor
 	native := false
 	if _, err := s.registry.GetChatModel(request.Model); err != nil {

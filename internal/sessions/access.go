@@ -115,7 +115,7 @@ func (s *ScopedManager) AddMessage(name, role, content string) error {
 	return s.manager.save(session)
 }
 
-func (s *ScopedManager) AppendExchange(name, modelID, userContent, assistantContent string) (*Session, error) {
+func (s *ScopedManager) AppendExchange(name, modelID, userContent, assistantContent string, sources ...[]KnowledgePassage) (*Session, error) {
 	if userContent == "" || assistantContent == "" {
 		return nil, fmt.Errorf("user and assistant content are required")
 	}
@@ -133,6 +133,9 @@ func (s *ScopedManager) AppendExchange(name, modelID, userContent, assistantCont
 	}
 	session.AddMessage("user", userContent)
 	session.AddMessage("assistant", assistantContent)
+	if len(sources) > 0 {
+		session.Messages[len(session.Messages)-1].KnowledgeSources = sources[0]
+	}
 	if err := s.manager.save(session); err != nil {
 		return nil, err
 	}

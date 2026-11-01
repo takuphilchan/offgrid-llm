@@ -208,7 +208,7 @@ func injectKnowledge(ctx context.Context, request *api.ChatCompletionRequest, kn
 		if request.Messages[index].Role != "user" {
 			continue
 		}
-		_, ragContext, err := knowledge.EnhancePrompt(ctx, request.Messages[index].StringContent())
+		ragContext, err := retrieveKnowledge(ctx, knowledge, request.Messages[index].StringContent())
 		if err != nil {
 			return newServiceError(http.StatusServiceUnavailable, "Knowledge retrieval failed; retry or explicitly turn off knowledge for this message", err)
 		}
@@ -216,6 +216,7 @@ func injectKnowledge(ctx context.Context, request *api.ChatCompletionRequest, kn
 			return newServiceError(http.StatusUnprocessableEntity, "No supporting knowledge was found; add relevant documents or turn off knowledge for this message", nil)
 		}
 		ragMessage := api.ChatMessage{Role: "system", Content: ragContext.Context}
+		captureKnowledge(ctx, ragContext)
 		request.Messages = append(request.Messages, api.ChatMessage{})
 		copy(request.Messages[index+1:], request.Messages[index:])
 		request.Messages[index] = ragMessage

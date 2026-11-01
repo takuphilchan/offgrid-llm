@@ -46,7 +46,7 @@ type ChatStreamResult struct {
 
 type SessionStreamer func(context.Context, *api.ChatCompletionRequest, string, func(ChatStreamEvent) error) (ChatStreamResult, error)
 
-func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request, name, content, model string, knowledge bool, profile string, maxTokens int) {
+func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request, name, content, model string, knowledge bool, profile string, maxTokens int, documents ...[]string) {
 	started := time.Now()
 	if h.streamer == nil {
 		writeError(w, "Session streaming is unavailable", http.StatusServiceUnavailable)
@@ -128,11 +128,17 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		}
 		messages := make([]api.ChatMessage, 0, len(current.Messages)+1)
 		for _, message := range current.Messages {
-			messages = append(messages, api.ChatMessage{Role: message.Role, Content: message.Content})
+			messages = append(messages, api.ChatMessage{Role: message.Role, Content: api.SessionContent(message.Content, message.Images)})
 		}
 		messages = append(messages, api.ChatMessage{Role: "user", Content: content})
 		waitMS := time.Since(started).Milliseconds()
-		result, err := h.streamer(ctx, &api.ChatCompletionRequest{Model: model, Messages: messages, UseKnowledgeBase: &knowledge, MaxTokens: &maxTokens, Stream: true}, profile, emit)
+		var passages []sessions.KnowledgePassage
+		var ids []string
+		if len(documents) > 0 {
+			ids = documents[0]
+		}
+		inferenceCtx := withKnowledgeScope(ctx, ids, &passages)
+		result, err := h.streamer(inferenceCtx, &api.ChatCompletionRequest{Model: model, Messages: messages, UseKnowledgeBase: &knowledge, MaxTokens: &maxTokens, Stream: true}, profile, emit)
 		if err != nil {
 			fail(err)
 			return
@@ -146,7 +152,7 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		if ctx.Err() != nil {
 			return
 		}
-		updated, err := h.scoped(r).AppendExchange(name, model, content, result.Answer)
+		updated, err := h.scoped(r).AppendExchange(name, model, content, result.Answer, passages)
 		if err != nil {
 			fail(err)
 			return
@@ -155,7 +161,7 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		result.Metrics.ReadyMS += waitMS
 		result.Metrics.QueueMS += waitMS
 		result.Metrics.FirstTextMS += waitMS
-		_ = emit(ChatStreamEvent{Type: "done", Session: updated, Message: &sessions.Message{Role: "assistant", Content: result.Answer, Timestamp: updated.UpdatedAt}, Metrics: &result.Metrics, FinishReason: result.FinishReason})
+		_ = emit(ChatStreamEvent{Type: "done", Session: updated, Message: &sessions.Message{Role: "assistant", Content: result.Answer, Timestamp: updated.UpdatedAt, KnowledgeSources: passages}, Metrics: &result.Metrics, FinishReason: result.FinishReason})
 	}()
 	heartbeat := time.NewTicker(10 * time.Second)
 	defer heartbeat.Stop()

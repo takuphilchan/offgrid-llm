@@ -214,6 +214,10 @@ func (s *Server) finishConversationAdmission(scope *sessions.ScopedManager, inte
 		return nil, agents.ErrRunConflict
 	}
 	turn := &sessions.Turn{ID: intent.Origin.TurnID, RequestHash: intent.Digest, Prompt: prompt, Model: model, Profile: config.ConversationProfile, MaxTokens: config.MaxTokens, Agent: &sessions.AgentSelection{ID: config.Profile.ID, Revision: config.Profile.Revision}, Knowledge: len(selectedProfileKnowledge(config)) > 0}
+	turn.KnowledgeSources = config.KnowledgeSources
+	if len(config.KnowledgeSources) > 0 {
+		turn.KnowledgeDocuments = selectedProfileKnowledge(config)
+	}
 	if _, _, err := scope.BeginJobTurn(intent.Origin.Conversation, turn); err != nil {
 		return nil, err
 	}
