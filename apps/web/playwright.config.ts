@@ -19,6 +19,8 @@ export default defineConfig({
   ...(externalURL ? {} : {
     webServer: {
       command: 'npm run dev -- --host 127.0.0.1',
+      // Fixture tests must never fall through to an installed user service.
+      env: { OFFGRID_FIXTURE_TEST: '1' },
       url: `${localURL}/ui/`,
       reuseExistingServer: false,
       timeout: 120_000
