@@ -413,7 +413,7 @@ test("task first: no setup wall; saved task hands off without a pairing code or 
     page.getByRole("heading", { name: "Access needed" }),
   ).toBeVisible();
   expect(f.submissions).toHaveLength(1);
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.locator('.new-chat-button').click();
   await expect(
     page.locator('.composer textarea'),
   ).toBeVisible();

@@ -51,24 +51,24 @@ export function ExecutionWorkspace({value, onChange, disabled, onReady,ceiling,i
     }catch{if(alive.current)setNativeError(copy.unavailable);}
     finally{if(alive.current)setNativeBusy(false);}
   };
-  return <UtilityPopover label={copy.label} trigger={<>{copy.label}<span className="composer-choice">{value ? value.reference.host : copy.none}</span></>} triggerClassName="secondary-button" className="chat-execution-workspace" onOpenChange={open => {if (open) void refresh();}}>
-    <p>{copy.help}</p>
-    <fieldset disabled={disabled}><legend>{copy.label}</legend>
+  return <UtilityPopover label={copy.label} trigger={<>{copy.label}<span className="composer-choice">{value ? value.reference.host : copy.none}</span></>} triggerClassName="secondary-button" className="chat-execution-workspace" panelClassName="execution-workspace-panel" onOpenChange={open => {if (open) void refresh();}}>
+    <div className="execution-workspace-heading"><strong>{copy.label}</strong><button type="button" className="text-button" disabled={loading} onClick={() => void refresh()}>{copy.refresh}</button></div>
+    <fieldset disabled={disabled}><legend className="sr-only">{copy.label}</legend>
       <label className="profile-option"><input type="radio" name="chat-execution" checked={!value} onChange={() => onChange(null)} /><span>{copy.none}</span></label>
       {hosts.map(host => <label className="profile-option" key={JSON.stringify(host.reference)}><input type="radio" name="chat-execution" checked={!!value && sameExecutionWorkspace(value, host)} onChange={() => onChange(host)} /><span>{host.reference.host}<small dir="auto" style={{overflowWrap:'anywhere'}}>{host.root}</small><small>{host.backend === 'isolated_linux' ? copy.isolated : copy.local}</small><small>{[host.permissions.read && ceiling?.read!==false && copy.read, host.permissions.write && ceiling?.write!==false && copy.edit, host.permissions.processes && ceiling?.processes!==false && copy.commands].filter(Boolean).join(' · ')}</small></span></label>)}
     </fieldset>
-    {window.electron?.startExecutionWorkspace && supported && <fieldset disabled={disabled||nativeBusy}>
-      <legend>{nativeCopy.access}</legend><label>{nativeCopy.access}<select value={access} onChange={event=>setAccess(event.target.value as typeof access)}><option value="read">{copy.read}</option><option value="edit">{copy.read} · {copy.edit}</option><option value="trusted">{copy.read} · {copy.edit} · {copy.commands}</option></select></label>
-      <p>{copy.local}</p><button type="button" className="secondary-button" disabled={!['idle','stopped','error'].includes(nativeState)} onClick={()=>void nativeAction(false)}>{nativeCopy.choose}</button>
+    {window.electron?.startExecutionWorkspace && supported && <fieldset className="execution-folder-access" disabled={disabled||nativeBusy}>
+      <legend>{nativeCopy.access}</legend><select aria-label={nativeCopy.access} value={access} onChange={event=>setAccess(event.target.value as typeof access)}><option value="read">{copy.read}</option><option value="edit">{copy.read} · {copy.edit}</option><option value="trusted">{copy.read} · {copy.edit} · {copy.commands}</option></select>
+      {access==='trusted'&&<p className="execution-workspace-hint">{copy.local}</p>}<button type="button" className="secondary-button" disabled={!['idle','stopped','error'].includes(nativeState)} onClick={()=>void nativeAction(false)}>{nativeCopy.choose}</button>
     </fieldset>}
     {window.electron?.stopExecutionWorkspace && !['idle','stopped','error'].includes(nativeState) && <button type="button" className="secondary-button" disabled={nativeBusy} onClick={()=>void nativeAction(true)}>{nativeCopy.stop}</button>}
     {nativeBusy && <p role="status">{nativeCopy.preparing}</p>}
     {nativeError && <p role="alert">{nativeError}</p>}
     {loading && <p role="status">{messages.common.loading}</p>}
     {!loading && !supported && <p role="status">{copy.unsupported}</p>}
-    {!loading && supported && !hosts.length && !error && <p role="status">{copy.empty}</p>}
+    {!loading && supported && !hosts.length && !error && !window.electron?.startExecutionWorkspace && <p role="status" className="execution-workspace-hint">{copy.empty}</p>}
     {!ready && value && <p role="alert">{copy.unavailable}</p>}
     {error && <p role="alert">{error}</p>}
-    <button type="button" className="secondary-button" disabled={loading} onClick={() => void refresh()}>{copy.refresh}</button>
+    <p className="execution-workspace-hint">{copy.help}</p>
   </UtilityPopover>;
 }

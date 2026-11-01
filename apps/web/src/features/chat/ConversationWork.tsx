@@ -83,7 +83,7 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
   const status = run.status === 'completed' && run.verification?.state && run.verification.state !== 'checks_passed'
     ? taskEvidenceText(locale)[run.verification.state]
     : statusText(run.status, run.outcome);
-  return <section className={`conversation-work${inspector ? ' work-inspector' : ''}`} aria-label={copy.activity}>
+  return <section className={`conversation-work${inspector ? ' work-inspector' : ''}`} tabIndex={-1} aria-label={copy.activity}>
     <header><div><span className="work-status" role="status">{status}</span>{run.profile && <small className="conversation-work-profile">{run.profile.name} · {agentProfilesText[locale].revision.replace('{revision}', String(run.profile.revision))}</small>}</div>{!inspector && <a className="utility-button" href={`#/agents/task/${encodeURIComponent(run.run_id)}`}>{copy.inspect}</a>}
     {!workSettled(run.status) && <div className="button-row"><TaskLifecycle run={run} busy={busy} act={action => void act(action)} />{run.resumable && !run.computer_session_expired && ['pending', 'interrupted'].includes(run.status) && <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('resume')}>{messages.models.resume}</button>}</div>}</header>
     <TaskResult run={run} compact hideOutput={outputSaved} explainOutcome={inspector} />

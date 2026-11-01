@@ -64,3 +64,16 @@
 .execution-step p, .execution-location { overflow-wrap: anywhere; }
 .chat-execution-workspace fieldset { min-width: 0; border: 0; padding: 0; display: grid; gap: 12px; }
 .chat-execution-workspace select { min-width: 0; max-width: 100%; width: 100%; }
+@layer controls {
+  .execution-workspace-panel { padding: 16px; }
+  .execution-workspace-panel .utility-popover-content { gap: 16px; }
+  .execution-workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .execution-workspace-heading strong { font-size: var(--type-body); }
+  .execution-workspace-heading button { font-size: var(--type-caption); padding-inline: 6px; }
+  .execution-workspace-panel fieldset { margin: 0; gap: 8px; }
+  .execution-folder-access legend { font-size: var(--type-meta); color: var(--muted); margin-block-end: 8px; }
+  .execution-workspace-panel button { justify-self: start; }
+  .execution-workspace-panel .profile-option { padding: 8px; border-radius: 6px; font-size: var(--type-meta); }
+  .execution-workspace-panel .profile-option:has(input:checked) { background: var(--surface-2); }
+  .execution-workspace-panel .execution-workspace-hint { margin: 0; color: var(--muted); font-size: var(--type-caption); line-height: 1.5; }
+}

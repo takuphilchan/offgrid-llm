@@ -162,6 +162,11 @@
   .task-result { display: grid; gap: 12px; }
   .task-result h3, .task-steering h3 { margin: 0; }
   .task-steering { padding-block: 20px; border-block-start: 1px solid var(--line); }
+  .task-continuation-new { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 16px; padding-block: 12px; border-block-start: 0; }
+  .task-continuation-new h3 { font-size: 1rem; }
+  .task-continuation-new p { margin: 0; max-width: 70ch; font-size: .875rem; line-height: 1.6; color: var(--muted); }
+  .task-continuation-new > a { grid-column: 2; grid-row: 1 / span 2; width: fit-content; justify-self: start; }
+  @media (max-width: 600px) { .task-continuation-new { grid-template-columns: minmax(0, 1fr); } .task-continuation-new > a { grid-column: 1; grid-row: auto; } }
   .approval-destination { overflow-wrap: anywhere; }
   .task-children small { display: block; color: var(--text-muted); }
   .task-workspace .button-row {

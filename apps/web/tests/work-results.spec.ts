@@ -272,13 +272,29 @@ test('results and long file names fit a narrow screen in both themes', async ({ 
 test('unsupported continuation links to Chat without resubmitting or losing the old result', async ({ page }) => {
   const state = await fixture(page); await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByRole('region', { name: 'Next step' })).toContainText('does not change or rerun');
-  await page.getByRole('region',{name:'Next step'}).getByRole('link', { name: 'Chat',exact:true }).click();
+  await page.getByRole('region',{name:'Next step'}).getByRole('link', { name: 'New chat',exact:true }).click();
   await expect(page).toHaveURL(/#\/chat$/);
   await expect(page.locator('.composer textarea')).toHaveValue('');
   expect(state.writes).toEqual([]);
   await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByRole('button', { name: 'Start a new task from this' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
+});
+
+test('cancelled empty work renders no zero and offers a compact new-chat action', async ({page}, info) => {
+  const state=await fixture(page);
+  Object.assign(state.run,{status:'cancelled',output:'',artifacts:[],steps:[]});
+  await page.goto(`/ui/#/agents/task/${id}`);
+  const recovery=page.locator('.work-recovery-guidance');
+  await expect(recovery).toContainText('This task was cancelled.');
+  expect(await recovery.evaluate(el=>Array.from(el.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent?.trim()).filter(Boolean))).toEqual([]);
+  const continuation=page.getByRole('region',{name:'Next step'}), link=continuation.getByRole('link',{name:'New chat',exact:true});
+  await expect(link).toHaveAttribute('href','#/chat/new');
+  expect((await link.boundingBox())!.width).toBeLessThan(200);
+  await continuation.scrollIntoViewIfNeeded();
+  await page.screenshot({path:info.outputPath('cancelled-task.png')});
+  await link.click(); await expect(page.locator('.composer textarea')).toHaveValue('');
+  expect(state.writes).toEqual([]);
 });
 
 test('lost steering acknowledgment reconciles the accepted instruction without another submission', async ({ page }) => {

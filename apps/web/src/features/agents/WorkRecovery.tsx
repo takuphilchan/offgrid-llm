@@ -17,7 +17,7 @@ export function WorkRecovery({ run, readError, actionError, refresh }: {
     {(hint || run.error) && <section className="work-recovery-guidance" role={run.error ? 'alert' : 'status'}>
       {run.error && <p>{run.error}</p>}
       {hint && <p>{hint}</p>}
-      {(run.output || run.artifacts?.length) && <p className="workspace-secondary">{copy.retained}</p>}
+      {!!(run.output || run.artifacts?.length) && <p className="workspace-secondary">{copy.retained}</p>}
     </section>}
   </>;
 }

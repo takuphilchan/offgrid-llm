@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { agentProfilesText } from '../src/i18n/agent-profiles';
 import { conversationWorkText } from '../src/i18n/conversation-work';
+import { chatUncertainHint, chatWorkBlockerText } from '../src/i18n/chat-work-blocker';
 import type { LocaleCode } from '../src/i18n';
 import { executionWorkspaceText,executionNativeText,executionPolicyText,attachWorkspaceText } from '../src/i18n/execution-workspace';
 
@@ -25,7 +26,7 @@ for(const locale of Object.keys(attachWorkspaceText) as LocaleCode[]) test(`on-d
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
-test('desktop folder UI invokes only an access enum, pins the native grant and stops without submitting',async({page})=>{
+test('desktop folder UI invokes only an access enum, pins the native grant and stops without submitting',async({page},info)=>{
   const f=await fixture(page);await desktopFixture(page);
   const resource={reference:{host:'desktop fixture',session:'native-session',grant:'native-grant',revision:1},backend:'local',root:'C:/disposable folder',directory:'.',permissions:{read:true,write:true,processes:false}};
   await page.addInitScript(resource=>{
@@ -41,6 +42,17 @@ test('desktop folder UI invokes only an access enum, pins the native grant and s
   await page.route('**/api/v2/execution/workspaces',async route=>route.fulfill({json:{protocol:1,workspaces:await page.evaluate(()=> (window as any).executionFixture.state==='ready')?[resource]:[]}}));
   await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Agent',exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Workspace',exact:true}).click();
+  const panel=page.locator('.execution-workspace-panel');
+  await expect(panel.getByRole('combobox',{name:executionNativeText.en.access})).toBeVisible();
+  await expect(panel.getByText(executionNativeText.en.access,{exact:true})).toHaveCount(1);
+  await expect(panel).not.toContainText('offgrid agent workspace start');
+  await expect(panel).not.toContainText(executionWorkspaceText.en.local);
+  await panel.getByRole('combobox').selectOption('trusted');
+  await expect(panel).toContainText(executionWorkspaceText.en.local);
+  await panel.getByRole('combobox').selectOption('edit');
+  const choose=panel.getByRole('button',{name:executionNativeText.en.choose,exact:true});
+  expect((await choose.boundingBox())!.width).toBeLessThan((await panel.boundingBox())!.width-50);
+  await page.screenshot({path:info.outputPath('desktop-workspace-picker.png')});
   await page.getByRole('button',{name:executionNativeText.en.choose,exact:true}).click();
   await expect(page.getByRole('radio',{name:/desktop fixture/})).toBeChecked();
   expect(await page.evaluate(()=>(window as any).executionFixture.starts)).toEqual([{access:'edit'}]);expect(f.submissions).toEqual([]);
@@ -318,6 +330,75 @@ test('lost final persistence attaches the saved result without another submissio
   await expect(page.getByText('A saved, verified outline.',{exact:true})).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Attach saved result',exact:true})).toHaveCount(0);
   expect(f.submissions).toEqual([]); expect(f.commands).toEqual([{action:'recover'}]);
+});
+
+test('blocked conversation offers recovery without the generic Enter error and preserves its draft', async ({page}, info) => {
+  const f = await fixture(page, 'uncertain');
+  f.setStatus('uncertain', {uncertain_call:{tool:'skill_draft',arguments:{}},uncertain_call_id:'call-1'});
+  await page.goto('/ui/#/chat');
+  const blocker = page.locator('.chat-work-blocker'), draft = page.locator('.composer textarea');
+  await expect(blocker).toContainText(chatUncertainHint.en);
+  await page.screenshot({path:info.outputPath('blocked-conversation.png')});
+  await draft.fill('A separate question — café 日本語');
+  await draft.press('Enter');
+  await expect(page.locator('.conversation-work')).toBeFocused();
+  await expect(page.getByText(conversationWorkText.en.unavailable, {exact:true})).toHaveCount(0);
+  await expect(draft).toHaveValue('A separate question — café 日本語');
+  await expect(page.locator('.composer-actions button').last()).toBeDisabled();
+  await blocker.getByRole('button', {name:'New chat', exact:true}).click();
+  await expect(blocker).toHaveCount(0);
+  await expect(draft).toHaveValue('');
+  await page.getByRole('button', {name:'Existing work', exact:true}).click();
+  await expect(draft).toHaveValue('A separate question — café 日本語');
+  await expect(blocker).toBeVisible();
+  expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
+});
+
+test('blocked guidance clears when the canonical task settles without a reload', async ({page}) => {
+  const f = await fixture(page, 'interrupted');
+  await page.goto('/ui/#/chat');
+  const blocker = page.locator('.chat-work-blocker'), draft = page.locator('.composer textarea');
+  await expect(blocker).toBeVisible(); await draft.fill('My next question');
+  f.complete();
+  await expect(blocker).toHaveCount(0);
+  await expect(page.locator('.composer-actions button').last()).toBeEnabled();
+  await expect(draft).toHaveValue('My next question');
+  expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
+});
+
+test('blocked guidance yields to service-authorized steering without stale errors', async ({page}) => {
+  const f = await fixture(page, 'interrupted');
+  await page.goto('/ui/#/chat');
+  await expect(page.locator('.chat-work-blocker')).toBeVisible();
+  f.setStatus('running', {can_steer:true});
+  await expect(page.locator('.chat-work-blocker')).toHaveCount(0);
+  await page.locator('.composer textarea').fill('A safe correction');
+  await page.getByRole('button', {name:'Send instruction',exact:true}).click();
+  await expect.poll(()=>f.commands.length).toBe(1);
+  expect(f.commands[0]).toMatchObject({action:'steer',instruction:'A safe correction'});
+  expect(f.submissions).toEqual([]);
+});
+
+for (const [state, index] of [['waiting_for_input',1],['waiting_for_approval',2],['waiting_for_children',3]] as const) test(`blocked ${state} guidance identifies the actual wait`, async ({page}) => {
+  const f = await fixture(page, state);
+  await page.goto('/ui/#/chat');
+  const blocker = page.locator('.chat-work-blocker');
+  await expect(blocker).toContainText(chatWorkBlockerText.en[index]);
+  await blocker.getByRole('button',{name:'Inspect work',exact:true}).click();
+  await expect(page.locator('.conversation-work')).toBeFocused();
+  expect(f.commands).toEqual([]); expect(f.submissions).toEqual([]);
+});
+
+for(const locale of Object.keys(chatWorkBlockerText) as LocaleCode[]) test(`blocked-work controls fit narrow ${locale} layouts`,async({page})=>{
+  const f=await fixture(page,'waiting_for_children');
+  await page.addInitScript(value=>localStorage.setItem('offgrid.locale',value),locale);
+  await page.setViewportSize({width:390,height:844}); await page.goto('/ui/#/chat');
+  const blocker=page.locator('.chat-work-blocker');
+  await expect(blocker).toContainText(chatWorkBlockerText[locale][3]);
+  await blocker.getByRole('button').first().click();
+  await expect(page.locator('.conversation-work')).toBeFocused();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(f.commands).toEqual([]);expect(f.submissions).toEqual([]);
 });
 
 for (const state of ['pending','waiting_for_children','waiting_for_approval','failed','uncertain','interrupted','cancelled']) test(`inline ${state} work does not dispatch or hide its recovery boundary`, async ({ page }) => {

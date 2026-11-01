@@ -50,7 +50,7 @@ export function TaskContinuation({ run, scope, refresh }: { run: AgentRun; scope
     } finally { lock.current = false; if (mounted.current) setSaving(false); }
   };
   if (!canSteer && !['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status)) return null;
-  return <section className="task-steering" aria-label={presentation.next}>
+  return <section className={`task-steering${canSteer ? '' : ' task-continuation-new'}`} aria-label={presentation.next}>
     <h3>{presentation.next}</h3>
     {canSteer ? <>
       <label className="field"><span>{copy.instruction}</span><textarea rows={3} value={draft.value} maxLength={16000} onChange={e => { draft.setValue(e.target.value); setSaved(false); }} /></label>
@@ -61,7 +61,7 @@ export function TaskContinuation({ run, scope, refresh }: { run: AgentRun; scope
       {error && <ScopedNotice kind="error">{error}</ScopedNotice>}
     </> : <>
       <p>{presentation.newTaskHint}</p>
-      <a className="secondary-button" href="#/chat">{messages.nav.chat}</a>
+      <a className="text-button" href="#/chat/new">{messages.chat.newChat}</a>
     </>}
   </section>;
 }

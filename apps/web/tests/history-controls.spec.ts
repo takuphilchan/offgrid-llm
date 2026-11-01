@@ -144,7 +144,7 @@ test('agent activity browses older tasks and deletes selected output without aff
   await row.locator('.task-list-item').click();
   await expect(page.locator('.task-surface')).toContainText('Result for run-00000000000000000000000000000024');
   await expect(page.getByRole('button',{name:'Start a new task from this',exact:true})).toHaveCount(0);
-  await expect(page.locator('.task-surface').getByRole('link',{name:'Chat',exact:true})).toBeVisible();
+  await expect(page.locator('.task-surface').getByRole('link',{name:'New chat',exact:true})).toBeVisible();
   await page.locator('.task-inspector-toolbar .history-item-menu').click();
   await page.getByRole('button',{name:'Delete task',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();

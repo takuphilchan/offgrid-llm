@@ -2,9 +2,11 @@ import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { SidebarContext, SidebarSlot } from '../../components/shell/SidebarSlot';
 import { interaction } from '../../i18n/interaction';
 import { ChatFailureNotice } from './ChatFailureNotice';
+import { ChatWorkBlocker } from './ChatWorkBlocker';
+import { reviewConversationWork, submitComposerInput } from './chat-input';
 import { APIError } from '../../api/client';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
-import { useContext, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useContext, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { workspaceRefinement } from '../../i18n/workspace-refinement';
 import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessage, type ChatSession, type Model, type SessionTurn, type ExecutionWorkspace as ExecutionWorkspaceResource } from '../../api/client';
 import { Icon } from '../../components/Icon';
@@ -126,6 +128,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const currentLinked = useRef<SessionTurn | null>(null); currentLinked.current = linkedTurn;
   const linkedUnsettled = !!linkedTurn && !workSettled(linkedRun?.status ?? linkedTurn.status);
   const canSendInstruction = linkedUnsettled && linkedRun?.can_steer === true;
+  const workBlocked = linkedUnsettled && !canSendInstruction;
   const jobCopy = conversationWorkText[locale];
   const spokenJob = useRef('');
   const submittedJob = useRef('');
@@ -373,6 +376,8 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     if (names.length) setHistoryNotice(text.history.removed.replace('{count}', String(names.length)));
   };
 
+  const reviewLinkedWork = () => reviewConversationWork(conversationContent.current, followOutput, refreshJob);
+
   const send = async () => {
     setErrorAction('request');
     const prompt = draft.trim();
@@ -380,7 +385,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     if(imageDraft.blocker){setError(imageDraft.blocker);return;}
     if (selectedSources.length && (!scopedReady || linkedUnsettled)) { setError(linkedUnsettled ? scopeCopy.active : scopeCopy.unsupported); return; }
     if (linkedUnsettled) {
-      if (!linkedRun || !canSendInstruction) { setError(jobCopy.unavailable); return; }
+      if (!linkedRun || !canSendInstruction) { reviewLinkedWork(); return; }
       setBusy(true); setError('');
       const submitted = draft, key = draftKey(draftScope, 'chat-agent-instruction', linkedRun.run_id);
       const revision = selectionRevision.current;
@@ -505,16 +510,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     catch (reason) { if (mounted.current && revision === selectionRevision.current) setError(reason instanceof Error ? reason.message : text.common.error); }
   };
 
-  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter can confirm an IME candidate rather than submit. Some WebKit
-    // composition-end events clear isComposing but retain keyCode 229.
-    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void send();
-    }
-  };
-
   const copyMessage = async (key: string, content: string) => {
     setErrorAction(null);
     try {
@@ -566,8 +561,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         </div>
       </div>
       {showLatest && <button type="button" className="secondary-button chat-latest" onClick={() => { userScrollUntil.current = 0; followOutput.current = true; const pane = conversationPane.current; pane?.focus({ preventScroll: true }); setShowLatest(false); requestAnimationFrame(() => { pane?.scrollTo({ top: pane.scrollHeight, behavior: 'instant' }); }); }}>{refinement.latest}</button>}
+      {workBlocked && <ChatWorkBlocker run={linkedRun} review={reviewLinkedWork} refresh={refreshJob} startNew={startNew} />}
       <div className="composer" onPaste={imageDraft.paste} onDragOver={imageDraft.dragOver} onDrop={imageDraft.drop}>
-        <div className="composer-input">{imageDraft.preview}<textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={keyDown} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small>{text.chat.enterHint}</small>{imageDraft.blocker&&<p className="image-input-notice" role="status">{imageDraft.blocker}</p>}</div>
+        <div className="composer-input">{imageDraft.preview}<textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => submitComposerInput(event, send)} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small>{text.chat.enterHint}</small>{imageDraft.blocker&&<p className="image-input-notice" role="status">{imageDraft.blocker}</p>}</div>
         <div className="composer-context">
           <AgentSelector value={agent} onChange={value => { setAgent(value); setAgentResources({ profile: value ? `${value.id}:${value.revision}` : '', restrictions: {} }); }} disabled={busy} />
           {agent && <ExecutionWorkspace value={executionWorkspace} onChange={setExecutionWorkspace} disabled={busy || linkedUnsettled} onReady={setExecutionReady} ceiling={restrictions.execution??agent.settings.execution} />}
