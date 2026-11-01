@@ -6,6 +6,11 @@ presentation follow-up, `workspace-outcome-experience` is **91/101 tasks**, with
 the same ten qualification items open. This audit preserves its original
 acceptance criteria rather than replacing them with the checks available here.
 
+On 2026-11-01, the user confirmed that non-developer usability participants and
+manual screen-reader/localization reviewers are unavailable and instructed us to
+keep those checks unverified. Automated release work may proceed independently;
+the related tasks remain unchecked and no human-evaluation result is claimed.
+
 ## Verified source and distribution evidence
 
 - Release source: `7f72bd76431e7dba86802278789af8b9debaa732`, tag `v0.4.22`.
