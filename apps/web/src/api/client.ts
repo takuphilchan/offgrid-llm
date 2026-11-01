@@ -4,6 +4,7 @@ import { readAgentStream } from './agent-stream';
 import { workflowText } from '../i18n/workflow';
 
 export type Model = components['schemas']['Model'];
+export type WorkSearchResponse = components['schemas']['WorkSearchResponse'];
 export type ModelPackageManifest = components['schemas']['ModelPackageManifest'];
 export type ModelPackageState = components['schemas']['ModelPackageState'];
 export type ModelCategory = components['schemas']['ModelCategory'];
@@ -15,6 +16,7 @@ export type ModelOperation = components['schemas']['ModelOperation'];
 export type Document = components['schemas']['Document'];
 export type ChatMessage = components['schemas']['ChatMessage'];
 export type SessionMessage = components['schemas']['SessionMessage'];
+export type SessionImage = components['schemas']['SessionImage'];
 export type SessionTurn = components['schemas']['SessionTurn'];
 export type ChatSession = components['schemas']['ChatSession'];
 export type CatalogModel = components['schemas']['CatalogModel'];
@@ -109,6 +111,7 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
 }
 
 export const api = {
+  searchWork: (query: string, signal?: AbortSignal) => request<WorkSearchResponse>(`/api/v2/work/search?query=${encodeURIComponent(query)}`, { signal }),
   typedModels: async (category?: ModelCategory, signal?: AbortSignal) => (await request<{ models: InstalledTypedModel[] }>(`/api/v2/models?${new URLSearchParams(category ? { category } : {})}`, { signal })).models,
   typedCatalog: (category: ModelCategory, query?: string, signal?: AbortSignal) => request<{ models: TypedCatalogModel[]; repositories: { id: string; downloads: number; likes: number; size_bytes?: number }[] }>(`/api/v2/models/catalog?${new URLSearchParams(query === undefined ? { category } : { category, source: 'huggingface', q: query })}`, { signal }),
   discoverPackage: (repository: string, signal?: AbortSignal) => request<PackageDiscovery>(`/api/v2/models/discover?${new URLSearchParams({ repository })}`, { signal }, 180_000),
@@ -177,6 +180,7 @@ export const api = {
     // agent selection silently turn into an unrestricted/plain Chat request.
     const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system', {signal});
     if (!identity.capabilities?.includes('agent-conversations-v1')) throw new APIError('This service does not support agent conversations. Update the service before retrying.', 409);
+    if (data.knowledge_documents && !identity.capabilities?.includes('scoped-knowledge-chat-v1')) throw new APIError('This service does not support selected Knowledge sources. Nothing was submitted.', 409);
     if (data.execution && !identity.capabilities?.includes('native-execution-preview-v1')) throw new APIError('This service does not support the selected execution workspace. No work was submitted.', 409);
     return request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/generate`, { method: 'POST', signal, body: JSON.stringify(data) });
   },
@@ -192,6 +196,7 @@ export const api = {
   updateAgentProfile: (id: string, expected_revision: number, settings: AgentProfileSettings) => request<AgentProfile>(`/api/v2/agent-profiles/${encodeURIComponent(id)}`, {method:'PUT',body:JSON.stringify({expected_revision,settings})}),
   archiveAgentProfile: (id: string, expected_revision: number) => request<{id:string; archived:true}>(`/api/v2/agent-profiles/${encodeURIComponent(id)}/archive`, {method:'POST',body:JSON.stringify({expected_revision})}),
   agentSchedules: (signal?:AbortSignal)=>request<{schedules:AgentSchedule[]}>('/api/v2/agent-schedules',{signal}),
+  previewAgentSchedule: (calendar:components['schemas']['AgentCalendar'],signal?:AbortSignal)=>request<components['schemas']['AgentCalendarPreview']>(`/api/v2/agent-schedules/preview?${new URLSearchParams({zone:calendar.zone,hour:String(calendar.hour),minute:String(calendar.minute),weekdays:calendar.weekdays.join(',')})}`,{signal}),
   agentScheduleOccurrences: (id:string,signal?:AbortSignal)=>request<{occurrences:AgentScheduleOccurrence[]}>(`/api/v2/agent-schedules/${encodeURIComponent(id)}/occurrences`,{signal}),
   saveAgentSchedule: (body:AgentScheduleWrite,id?:string)=>request<AgentSchedule>(`/api/v2/agent-schedules${id?`/${encodeURIComponent(id)}`:''}`,{method:id?'PUT':'POST',body:JSON.stringify(body)}),
   disableAgentSchedule: (id:string,revision:number)=>request<AgentSchedule>(`/api/v2/agent-schedules/${encodeURIComponent(id)}/disable`,{method:'POST',body:JSON.stringify({expected_revision:revision})}),
@@ -209,11 +214,16 @@ export const api = {
     if (!response.ok) throw new APIError('Conversation progress unavailable. Refresh to reconnect.', response.status);
     return readSessionStream(response, onEvent);
   },
-  streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal, requestID = crypto.randomUUID()) => {
+  streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal, requestID = crypto.randomUUID(), knowledgeDocuments?: string[], images?: SessionImage[]) => {
+    if(images?.length){const identity=await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});if(!identity.capabilities?.includes('session-images-v1'))throw new APIError('Image input requires an updated service. Your draft is retained.',409);}
+    if (knowledgeDocuments) {
+      const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system', { signal });
+      if (!identity.capabilities?.includes('scoped-knowledge-chat-v1')) throw new APIError('This service does not support selected Knowledge sources. Nothing was submitted.', 409);
+    }
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
       method: 'POST', credentials: 'same-origin', signal,
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase, stream: true, durable: true, request_id: requestID, profile, max_tokens: maxTokens })
+      body: JSON.stringify({ content, images, model_id: modelID, use_knowledge_base: useKnowledgeBase, knowledge_documents: knowledgeDocuments, stream: true, durable: true, request_id: requestID, profile, max_tokens: maxTokens })
     });
     if (!response.ok) {
       const body = await response.text();

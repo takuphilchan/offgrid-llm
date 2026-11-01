@@ -268,6 +268,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/work/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search authorized conversation names and root task requests
+         * @description Metadata only; does not search message bodies or artifact contents. Returns at most 20 matches. Partial indicates a scan, time, storage or result limit; refine the query. No execution or replay occurs.
+         */
+        get: operations["searchWork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/system": {
         parameters: {
             query?: never;
@@ -751,6 +771,23 @@ export interface paths {
         get: operations["listAgentSchedules"];
         put?: never;
         post: operations["createAgentSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-schedules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read-only calendar projection from the service clock. Does not save, enable, authorize, claim or execute a schedule. Missing wall times are skipped; repeated wall times use the first instant. */
+        get: operations["previewAgentScheduleCalendar"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1474,6 +1511,18 @@ export interface components {
             supported: boolean;
             reason?: string;
         };
+        WorkSearchResponse: {
+            partial: boolean;
+            scopes: ("conversation_names" | "task_requests")[];
+            results: {
+                /** @enum {string} */
+                kind: "chat" | "task";
+                id: string;
+                title: string;
+                /** Format: date-time */
+                updated_at: string;
+            }[];
+        };
         SystemIdentity: {
             /** @constant */
             product: "offgrid";
@@ -1988,11 +2037,25 @@ export interface components {
                 detail?: "auto" | "low" | "high";
             };
         };
+        SessionImage: {
+            name: string;
+            /** @description Local PNG/JPEG base64 data URL. Maximum 2 MiB decoded */
+            data_url: string;
+        };
         SessionMessage: components["schemas"]["ChatMessage"] & {
             /** Format: date-time */
             timestamp: string;
+            images?: components["schemas"]["SessionImage"][];
             job_id?: string;
             turn_id?: string;
+            knowledge_sources?: components["schemas"]["KnowledgePassage"][];
+        };
+        KnowledgePassage: {
+            document_id: string;
+            name: string;
+            chunk_id: string;
+            content: string;
+            content_hash: string;
         };
         AgentSelection: {
             id: string;
@@ -2021,9 +2084,13 @@ export interface components {
             job_admission?: "intent" | "linked";
             id: string;
             prompt: string;
+            /** @description Pending or interrupted images; completed images are stored in the user message. */
+            images?: components["schemas"]["SessionImage"][];
             model: string;
             profile: string;
             knowledge: boolean;
+            knowledge_documents?: string[];
+            knowledge_sources?: components["schemas"]["KnowledgePassage"][];
             max_tokens: number;
             /** @enum {string} */
             status: "pending" | "running" | "completed" | "failed" | "cancelled" | "interrupted" | "waiting_for_input" | "waiting_for_approval" | "waiting_for_children" | "uncertain";
@@ -2244,6 +2311,12 @@ export interface components {
             minute: number;
             /** @description Sunday=0; gaps skipped, repeated wall times use the first instant. */
             weekdays: number[];
+        };
+        AgentCalendarPreview: {
+            calendar: components["schemas"]["AgentCalendar"];
+            /** Format: date-time */
+            as_of: string;
+            occurrences: string[];
         };
         AgentScheduleSettings: {
             name: string;
@@ -3387,6 +3460,49 @@ export interface operations {
             };
         };
     };
+    searchWork: {
+        parameters: {
+            query: {
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized work metadata, sorted newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSearchResponse"];
+                };
+            };
+            /** @description Invalid query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No permission to search either work type */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Method not allowed */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getSystemIdentity: {
         parameters: {
             query?: never;
@@ -3801,10 +3917,15 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Text is optional when images are attached; at most 64 KiB. */
                     content: string;
+                    /** @description Ordinary durable streaming only. Local vision model required; never silently discarded or used by agents. */
+                    images?: components["schemas"]["SessionImage"][];
                     model_id?: string;
                     /** @default false */
                     use_knowledge_base?: boolean;
+                    /** @description Optional explicit retrieval scope. Requires Knowledge enabled; unavailable sources fail without broader fallback. Agent turns may only narrow attached profile documents. */
+                    knowledge_documents?: string[];
                     /** @default false */
                     stream?: boolean;
                     /**
@@ -4305,6 +4426,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentSchedule"];
                 };
+            };
+        };
+    };
+    previewAgentScheduleCalendar: {
+        parameters: {
+            query: {
+                zone: string;
+                hour: number;
+                minute: number;
+                /** @description Comma-separated distinct weekdays, Sunday=0 through Saturday=6. */
+                weekdays: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Next three calendar instants; actual admission still depends on service and resource readiness */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCalendarPreview"];
+                };
+            };
+            /** @description Invalid or ambiguous calendar input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Chat permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -348,6 +348,26 @@ paths:
         '400': { description: Invalid repository name. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '502': { description: Upstream file discovery unavailable. }
+  /api/v2/work/search:
+    get:
+      operationId: searchWork
+      summary: Search authorized conversation names and root task requests
+      description: Metadata only; does not search message bodies or artifact contents. Returns at most 20 matches. Partial indicates a scan, time, storage or result limit; refine the query. No execution or replay occurs.
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 256 }
+      responses:
+        '200':
+          description: Authorized work metadata, sorted newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSearchResponse'
+        '400': { description: Invalid query }
+        '403': { description: No permission to search either work type }
+        '405': { description: Method not allowed }
   /api/v2/system:
     get:
       operationId: getSystemIdentity
@@ -619,9 +639,11 @@ paths:
               type: object
               required: [content]
               properties:
-                content: { type: string, minLength: 1 }
+                content: { type: string, description: Text is optional when images are attached; at most 64 KiB. }
+                images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' }, description: Ordinary durable streaming only. Local vision model required; never silently discarded or used by agents. }
                 model_id: { type: string }
                 use_knowledge_base: { type: boolean, default: false }
+                knowledge_documents: { type: array, minItems: 1, maxItems: 16, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 256 }, description: Optional explicit retrieval scope. Requires Knowledge enabled; unavailable sources fail without broader fallback. Agent turns may only narrow attached profile documents. }
                 stream: { type: boolean, default: false }
                 durable: { type: boolean, default: false, description: Persist admission and run independently of the stream connection. Reconnect using the turn endpoints. }
                 request_id: { type: string, maxLength: 128, description: Required for durable streaming or agent selection (8–128 characters for agent turns). Identical agent retries retrieve the canonical job; different payload or deleted-history reuse returns 409. }
@@ -934,6 +956,27 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentSchedule' }
+  /api/v2/agent-schedules/preview:
+    get:
+      operationId: previewAgentScheduleCalendar
+      description: Read-only calendar projection from the service clock. Does not save, enable, authorize, claim or execute a schedule. Missing wall times are skipped; repeated wall times use the first instant.
+      parameters:
+        - { in: query, name: zone, required: true, schema: { type: string, maxLength: 128 } }
+        - { in: query, name: hour, required: true, schema: { type: integer, minimum: 0, maximum: 23 } }
+        - { in: query, name: minute, required: true, schema: { type: integer, minimum: 0, maximum: 59 } }
+        - { in: query, name: weekdays, required: true, schema: { type: string, maxLength: 13 }, description: 'Comma-separated distinct weekdays, Sunday=0 through Saturday=6.' }
+      responses:
+        '200':
+          description: Next three calendar instants; actual admission still depends on service and resource readiness
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCalendarPreview' }
+        '400':
+          description: Invalid or ambiguous calendar input
+        '401':
+          description: Authentication required
+        '403':
+          description: Chat permission required
   /api/v2/agent-schedules/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
@@ -1934,6 +1977,25 @@ components:
         quant: { type: string }
         supported: { type: boolean }
         reason: { type: string }
+    WorkSearchResponse:
+      type: object
+      required: [results, scopes, partial]
+      properties:
+        partial: { type: boolean }
+        scopes:
+          type: array
+          items: { type: string, enum: [conversation_names, task_requests] }
+        results:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [kind, id, title, updated_at]
+            properties:
+              kind: { type: string, enum: [chat, task] }
+              id: { type: string }
+              title: { type: string }
+              updated_at: { type: string, format: date-time }
     SystemIdentity:
       type: object
       required: [product, version, revision, api_version, ui_build_id, capabilities]
@@ -2518,6 +2580,13 @@ components:
                   type: string
                   description: Bounded base64 data URL using image/png or image/jpeg. Remote and file URLs are rejected.
                 detail: { type: string, enum: [auto, low, high] }
+    SessionImage:
+      type: object
+      additionalProperties: false
+      required: [name, data_url]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        data_url: { type: string, description: Local PNG/JPEG base64 data URL. Maximum 2 MiB decoded, 8192 pixels per edge and 32 megapixels. Remote/file URLs are forbidden. }
     SessionMessage:
       allOf:
         - $ref: '#/components/schemas/ChatMessage'
@@ -2525,8 +2594,19 @@ components:
           required: [timestamp]
           properties:
             timestamp: { type: string, format: date-time }
+            images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' } }
             job_id: { type: string }
             turn_id: { type: string }
+            knowledge_sources: { type: array, items: { $ref: '#/components/schemas/KnowledgePassage' } }
+    KnowledgePassage:
+      type: object
+      required: [document_id, name, chunk_id, content, content_hash]
+      properties:
+        document_id: { type: string }
+        name: { type: string }
+        chunk_id: { type: string }
+        content: { type: string }
+        content_hash: { type: string }
     AgentSelection:
       type: object
       required: [id, revision]
@@ -2557,9 +2637,12 @@ components:
         job_admission: { type: string, enum: [intent, linked], description: Durable conversation bookkeeping, not execution or consent. }
         id: { type: string }
         prompt: { type: string }
+        images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' }, description: Pending or interrupted images; completed images are stored in the user message. }
         model: { type: string }
         profile: { type: string }
         knowledge: { type: boolean }
+        knowledge_documents: { type: array, items: { type: string } }
+        knowledge_sources: { type: array, items: { $ref: '#/components/schemas/KnowledgePassage' } }
         max_tokens: { type: integer }
         status: { type: string, enum: [pending, running, completed, failed, cancelled, interrupted, waiting_for_input, waiting_for_approval, waiting_for_children, uncertain] }
         phase: { type: string }
@@ -2804,6 +2887,13 @@ components:
         hour: { type: integer, minimum: 0, maximum: 23 }
         minute: { type: integer, minimum: 0, maximum: 59 }
         weekdays: { type: array, minItems: 1, maxItems: 7, uniqueItems: true, items: { type: integer, minimum: 0, maximum: 6 }, description: 'Sunday=0; gaps skipped, repeated wall times use the first instant.' }
+    AgentCalendarPreview:
+      type: object
+      required: [calendar, as_of, occurrences]
+      properties:
+        calendar: { $ref: '#/components/schemas/AgentCalendar' }
+        as_of: { type: string, format: date-time }
+        occurrences: { type: array, minItems: 3, maxItems: 3, items: { type: string, format: date-time } }
     AgentScheduleSettings:
       type: object
       additionalProperties: false
