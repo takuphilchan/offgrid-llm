@@ -60,10 +60,12 @@ deadline.unref();
 async function launch() {
   console.log('Launching isolated packaged theme check');
   app = await electron.launch({executablePath:binary,env,timeout:30000});
-  if (process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(960,720));
   app.context().setDefaultTimeout(15000);
   app.context().setDefaultNavigationTimeout(15000);
   const page = await app.firstWindow();
+  // Electron's process handshake can finish before its first BrowserWindow.
+  // Wait for that window before sizing it, including after a saved-state restart.
+  if (process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(960,720));
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete','true'));
   await page.waitForURL(/\/ui\//);
   await page.reload();
@@ -102,6 +104,13 @@ try {
       await language.press('Enter');
     }
     await expect(language).toHaveValue('fr');
+    // A Windows native select can also dismiss its parent popover when it
+    // commits. Reopen through the visible trigger, never force a hidden select.
+    if (!await language.isVisible()) {
+      if (drawer && !await page.locator('.sidebar').isVisible()) await page.locator('.navigation-trigger').click();
+      await page.locator('.workspace-options > button').click();
+      await expect(language).toBeVisible();
+    }
     await language.selectOption('en');
     await page.keyboard.press('Escape');
     // Native popup dismissal can consume Escape before the parent popover.
