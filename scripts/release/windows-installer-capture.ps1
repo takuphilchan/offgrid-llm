@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][long]$Window,
     [Parameter(Mandatory = $true)][uint32]$OwnerId,
-    [Parameter(Mandatory = $true)][string]$OutputPath
+    [Parameter(Mandatory = $true)][string]$OutputPath,
+    [Parameter(Mandatory = $true)][string]$ReadyPath
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -14,4 +15,5 @@ if (-not [OffGridWizard]::IsWindow($handle) -or [OffGridWizard]::Owner($handle) 
 }
 # This call may block indefinitely. The parent owns and bounds this helper's
 # lifetime while continuing its independent responsiveness probes.
+[IO.File]::WriteAllText($ReadyPath, 'ready')
 [OffGridWizard]::Capture($handle, $OutputPath)

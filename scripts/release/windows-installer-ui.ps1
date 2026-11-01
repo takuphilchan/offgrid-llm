@@ -109,32 +109,49 @@ function Assert-WizardResponsive([IntPtr]$Window, [hashtable]$Failures, [Diagnos
 
 # PrintWindow is synchronous and cannot be cancelled in-process. Only an owned
 # capture helper may block on it; the watchdog never waits for that helper.
+# PowerShell startup and Add-Type compilation have a separate bounded deadline.
+# Otherwise a busy CI host can consume the capture budget before PrintWindow runs.
+function Get-WizardCaptureTimeout([long]$ElapsedMs, [long]$ReadyAtMs) {
+    if ($ReadyAtMs -lt 0) {
+        if ($ElapsedMs -ge 15000) { return 'startup-timed-out' }
+    } elseif ($ElapsedMs - $ReadyAtMs -ge 5000 -or $ElapsedMs -ge 20000) {
+        return 'timed-out'
+    }
+    return ''
+}
+
 function Start-WizardCapture([IntPtr]$Window, [string]$OutputPath, [string]$DiagnosticPath) {
     $worker = Join-Path $PSScriptRoot 'windows-installer-capture.ps1'
     $ownerId = [OffGridWizard]::Owner($Window)
-    $process = Start-Process powershell.exe -ArgumentList "-NoProfile -File `"$worker`" -Window $($Window.ToInt64()) -OwnerId $ownerId -OutputPath `"$OutputPath`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$OutputPath.stdout.log" -RedirectStandardError "$OutputPath.stderr.log"
+    $readyPath = "$OutputPath.$([Guid]::NewGuid().ToString('N')).ready"
+    $process = Start-Process powershell.exe -ArgumentList "-NoProfile -File `"$worker`" -Window $($Window.ToInt64()) -OwnerId $ownerId -OutputPath `"$OutputPath`" -ReadyPath `"$readyPath`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$OutputPath.stdout.log" -RedirectStandardError "$OutputPath.stderr.log"
     # Retain the handle before the child exits. Windows PowerShell's asynchronous
     # Start-Process object can otherwise lose the exit code when polling HasExited.
     [void]$process.Handle
     Write-WizardDiagnostic $DiagnosticPath 'capture-start' @{ window = $Window.ToInt64(); owner = $ownerId; helper = $process.Id; output = $OutputPath }
-    return [PSCustomObject]@{ process = $process; clock = [Diagnostics.Stopwatch]::StartNew(); output = $OutputPath; diagnosticPath = $DiagnosticPath; done = $false; status = 'running' }
+    return [PSCustomObject]@{ process = $process; clock = [Diagnostics.Stopwatch]::StartNew(); output = $OutputPath; diagnosticPath = $DiagnosticPath; readyPath = $readyPath; readyAtMs = -1L; done = $false; status = 'running' }
 }
 
 function Update-WizardCapture($Capture, [switch]$Stop) {
     if ($Capture.done) { return }
+    if ($Capture.readyAtMs -lt 0 -and (Test-Path -LiteralPath $Capture.readyPath)) {
+        $Capture.readyAtMs = $Capture.clock.ElapsedMilliseconds
+        Write-WizardDiagnostic $Capture.diagnosticPath 'capture-ready' @{ helper = $Capture.process.Id; elapsedMs = $Capture.readyAtMs }
+    }
+    $timeout = Get-WizardCaptureTimeout $Capture.clock.ElapsedMilliseconds $Capture.readyAtMs
     if ($Capture.process.HasExited) {
         $Capture.status = if ($Capture.process.ExitCode -eq 0 -and (Test-Path -LiteralPath $Capture.output)) { 'captured' } else { 'failed' }
-    } elseif ($Stop -or $Capture.clock.ElapsedMilliseconds -ge 5000) {
+    } elseif ($Stop -or $timeout) {
         # This Process object is the exact child we launched, never the installer
         # or a user app located by name/port. Termination is bounded as well.
         try { $Capture.process.Kill() } catch { if (-not $Capture.process.HasExited) { throw } }
         if (-not $Capture.process.WaitForExit(2000)) { throw 'Capture helper did not stop within its deadline.' }
-        $Capture.status = if ($Stop) { 'cancelled' } else { 'timed-out' }
+        $Capture.status = if ($Stop) { 'cancelled' } else { $timeout }
     } else {
         return
     }
     $Capture.done = $true
-    Write-WizardDiagnostic $Capture.diagnosticPath 'capture-end' @{ helper = $Capture.process.Id; status = $Capture.status; exitCode = $Capture.process.ExitCode; elapsedMs = $Capture.clock.ElapsedMilliseconds }
+    Write-WizardDiagnostic $Capture.diagnosticPath 'capture-end' @{ helper = $Capture.process.Id; status = $Capture.status; exitCode = $Capture.process.ExitCode; elapsedMs = $Capture.clock.ElapsedMilliseconds; readyAtMs = $Capture.readyAtMs }
     if ($Capture.status -ne 'captured') { Write-Warning "Installer diagnostic capture $($Capture.status): $($Capture.output)" }
     $Capture.process.Dispose()
 }

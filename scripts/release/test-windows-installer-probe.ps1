@@ -57,6 +57,15 @@ exit
 
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
 
+# Slow helper initialization is not a hung PrintWindow. Both phases still have
+# hard limits, including an overall ceiling if the parent observes readiness late.
+if (Get-WizardCaptureTimeout 6000 -1) { throw 'Helper startup consumed the capture deadline.' }
+if ((Get-WizardCaptureTimeout 15000 -1) -ne 'startup-timed-out') { throw 'Unready helper has no startup deadline.' }
+if (Get-WizardCaptureTimeout 10999 6000) { throw 'Capture deadline started before readiness.' }
+if ((Get-WizardCaptureTimeout 11000 6000) -ne 'timed-out') { throw 'Blocked capture exceeded its five-second deadline.' }
+if ((Get-WizardCaptureTimeout 20000 19999) -ne 'timed-out') { throw 'Late readiness bypassed the total capture deadline.' }
+Write-Output 'PASS: separate bounded helper startup and capture deadlines.'
+
 # Deterministic time-series checks cover gaps, recovery and hidden/closed targets
 # without waiting on the scheduler or pre-aging a real failure timestamp.
 $timing = @{}
@@ -126,6 +135,7 @@ try {
         Start-Sleep -Milliseconds 50
     }
     if ($capture.status -ne 'timed-out') { throw "Blocked capture did not hit its deadline: $($capture.status)" }
+    if ($capture.readyAtMs -lt 0) { throw 'Blocked-capture test never reached PrintWindow.' }
     if ($probesDuringCapture -lt 2) { throw 'Capture blocked independent monitoring.' }
     $capture = Start-WizardCapture $healthy (Join-Path $directory 'healthy.png') $diagnosticPath
     while (-not $capture.done) { Update-WizardCapture $capture; Start-Sleep -Milliseconds 50 }

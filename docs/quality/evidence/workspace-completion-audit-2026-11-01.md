@@ -661,3 +661,29 @@ Installer SHA-256:
 `b7eee3b8f593a969f55b3268fefa09bfebb0a738d78e8f0f8f3722a9b96bdb6f`.
 A verified external rollback backup was retained. This installation does not
 remove the seven protected records or change the published 0.4.23 release.
+
+### Release-candidate CI follow-up
+
+CI run `41307904841` passed the Go/race, API, renderer/browser, Linux desktop,
+Python, parser, Windows worker packaging and macOS client/storage jobs. The
+Windows client/storage job passed its earlier checks but failed the isolated
+installer probe: the healthy-window screenshot helper exceeded its five-second
+total lifetime. Its logs did not distinguish PowerShell/Add-Type startup from
+PrintWindow execution. The same baseline probe passed locally, so this evidence
+does not establish a desktop application hang or prove the CI timeout's phase.
+
+The capture harness now reports readiness after target validation and separates
+bounded helper startup (15 seconds) from capture (5 seconds, with a 20-second
+overall ceiling). It retains the original window/process identity checks and
+independent UI responsiveness watchdog. Deterministic deadline checks and the
+real isolated probe passed locally: sustained visible hangs were rejected,
+blocked capture timed out after reaching PrintWindow while 109 independent
+probes continued, healthy capture succeeded, and an invalid target was refused.
+Command: `powershell.exe -NoProfile -File scripts/release/test-windows-installer-probe.ps1`.
+The Windows CI rerun remains required; the timing split is not evidence of a
+passing remote run.
+
+The three release-context/finalization/CI-gate tests passed under WSL's native
+Node/bash environment. An earlier native-Windows invocation used the Windows
+Apps WSL bash launcher with Windows paths and failed; it is not counted as a
+passing Windows release-shell test.
