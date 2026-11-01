@@ -5,14 +5,15 @@ import type { ThemeChoice } from '../../theme';
 import { Icon } from '../Icon';
 import { UtilityPopover } from '../UtilityPopover';
 import { KnownWork } from './KnownWork';
+import { workspaceHelp } from '../../i18n/workspace-help';
 
-export function WorkspaceHeader({ title, shortcut, onCommands, navigationOpen, onNavigation }: {
-  title: string; shortcut: string; onCommands: () => void; navigationOpen: boolean; onNavigation: () => void;
+export function WorkspaceHeader({ title, shortcut, onCommands, onHelp, navigationOpen, onNavigation }: {
+  title: string; shortcut: string; onCommands: () => void; onHelp:()=>void; navigationOpen: boolean; onNavigation: () => void;
 }) {
   const { messages: text, locale } = useI18n();
   return <header className="topbar">
     <div className="topbar-leading"><button className="secondary-button navigation-trigger" aria-label={workspaceShell[locale].navigation} aria-expanded={navigationOpen} aria-controls="workspace-sidebar" onClick={onNavigation}><Icon name="menu" size={18} /><span>{workspaceShell[locale].navigation}</span></button><h1>{title}</h1></div>
-    <div className="topbar-actions"><KnownWork /><button className="command-trigger" onClick={onCommands} aria-label={`${text.shell.quickActions} (${shortcut})`} title={`${text.shell.quickActions} (${shortcut})`}><Icon name="search" size={16} /><span>{text.shell.quickActions}</span><kbd>{shortcut}</kbd></button></div>
+    <div className="topbar-actions"><KnownWork /><button className="utility-button icon-button help-trigger" onClick={onHelp} aria-label={workspaceHelp[locale].help} title={workspaceHelp[locale].help}><Icon name="help" size={18}/></button><button className="command-trigger" onClick={onCommands} aria-label={`${text.shell.quickActions} (${shortcut})`} title={`${text.shell.quickActions} (${shortcut})`}><Icon name="search" size={16} /><span>{text.shell.quickActions}</span><kbd>{shortcut}</kbd></button></div>
   </header>;
 }
 

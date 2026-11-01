@@ -1,5 +1,32 @@
 # Design
 
+## Profile-first composer and contextual Help
+
+Supersede the earlier always-visible pinned-model and Tools controls with one
+Agent settings disclosure. Its read-only model/revision/decision-budget summary
+comes from the selected profile. Resource and execution restrictions use existing
+state and payloads; changing these does not mutate the saved profile. Provide a
+clear route to edit the reusable profile. Keep active workspace and desktop
+access visible and preserve on-demand access requests; no profile setting is a
+grant. Ordinary Chat retains its model picker. No nested configuration popovers.
+When the service supports on-demand folder access, omit the unused No host folder
+selector until a workspace is attached. The task's existing access request owns
+setup. Older services retain the explicit selector; active selections remain
+visible and their readiness checks still block unavailable authority.
+
+Add one persistent Help entry and a Quick actions entry. Help is a keyboard-safe
+local dialog with short task examples, profile/default explanations, workspace
+access boundaries, returning-work guidance and direct links to existing pages.
+Opening Help or following guidance does not submit a task, erase a draft, alter
+configuration or download a model. Closing restores focus. Localized nine-locale
+copy, narrow/RTL layouts and automated no-write checks are required; human
+usability and screen-reader qualification remain explicitly unverified.
+The owner's typography follow-up requires checking computed styles, not merely
+counting old CSS declarations: retain 12px captions, 13px metadata, 14px controls,
+16px prose, 18px sections and 24px page titles with locale-aware line heights.
+Replace confirmed undersized visible remnants; do not blindly enlarge every
+legacy selector or collapse semantic roles to one size.
+
 ## Corrective review after installation (2026-11-01)
 
 Utility panels distinguish compact action lists from configuration panels rather

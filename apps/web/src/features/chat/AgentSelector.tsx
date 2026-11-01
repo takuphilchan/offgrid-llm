@@ -6,6 +6,8 @@ import { agentProfilesText } from '../../i18n/agent-profiles';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { ExecutionPolicy } from '../agents/ExecutionPolicy';
 import { Icon } from '../../components/Icon';
+import { workspaceHelp } from '../../i18n/workspace-help';
+import { readableModelName } from '../models/model-display';
 
 export function AgentSelector({ value, onChange, disabled }: { value: AgentProfile | null; onChange: (profile: AgentProfile | null) => void; disabled: boolean }) {
   const { locale, messages } = useI18n(), copy = agentProfilesText[locale];
@@ -52,8 +54,10 @@ export function AgentTools({ profile, restrictions, onChange, disabled }: { prof
     if (profile.settings.knowledge?.length) void api.documents().then(result => { if (current) setDocumentNames(Object.fromEntries(result.documents.map(doc => [doc.id, doc.name]))); }).catch(() => {});
     return () => { current = false; };
   }, [profile.id, profile.revision]);
-  return <UtilityPopover label={copy.resources} trigger={<>{copy.tools}<span className="composer-choice">{tools.length}</span></>} triggerClassName="secondary-button" className="chat-agent-tools">
-    <p>{copy.future}</p><fieldset disabled={disabled}><legend>{copy.resources}</legend>
+  const help = workspaceHelp[locale];
+  return <UtilityPopover label={help.settings} trigger={<><Icon name="settings" size={16} /><span>{help.settings}</span></>} triggerClassName="utility-button" className="chat-agent-tools" panelClassName="agent-settings-panel">
+    <div className="agent-settings-summary"><strong>{profile.settings.name}</strong><span>{copy.revision.replace('{revision}',String(profile.revision))}</span><strong>{readableModelName(profile.settings.model)}</strong><code dir="auto">{profile.settings.model}</code><span>{copy.iterations}: {profile.settings.max_iterations}</span></div>
+    <p className="workspace-secondary">{help.defaults}</p><fieldset disabled={disabled}><legend>{copy.resources} · {tools.length}</legend>
       {profile.settings.computer && <label className="profile-option"><input type="checkbox" checked={restrictions.computer !== false} onChange={event => onChange({ ...restrictions, computer: event.target.checked })} /><span>{copy.computer}<small>{copy.computerHint}</small></span></label>}
       {(profile.settings.tools ?? []).map(tool => <label className="profile-option" key={`${tool.provider}:${tool.tool}`}><input type="checkbox" checked={tools.some(value => value.provider === tool.provider && value.tool === tool.tool)} onChange={event => onChange({ ...restrictions, tools: event.target.checked ? [...tools, tool] : tools.filter(value => value.tool !== tool.tool || value.provider !== tool.provider) })} /><span>{tool.tool}<small>{tool.provider} · {tool.location}</small></span></label>)}
       {!!profile.settings.knowledge?.length && <details><summary>{copy.knowledge} · {knowledge.length}</summary><div className="agent-resource-options">{profile.settings.knowledge.map(id => <label className="profile-option" key={id}><input type="checkbox" checked={knowledge.includes(id)} onChange={event => onChange({ ...restrictions, knowledge: event.target.checked ? [...knowledge, id] : knowledge.filter(value => value !== id) })} /><span>{documentNames[id] ?? id}</span></label>)}</div></details>}

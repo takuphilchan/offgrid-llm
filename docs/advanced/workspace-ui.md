@@ -99,6 +99,17 @@ Member inspection does not enumerate administrator-only job history.
 Ordinary typed Chat retains its streaming path. An older service cannot silently
 interpret a selected profile as plain Chat.
 
+When a saved task cannot accept another instruction, the composer shows its
+actual waiting or recovery state. **Inspect work** focuses that task's controls;
+pressing Enter does the same without dispatching or adding a generic error.
+**New chat** opens a separate blank draft. The original draft and task remain in
+their conversation; no action is cancelled, retried or marked resolved. The
+notice clears when the service reports completion or allows steering again.
+
+Installed model rows keep their name, readiness and size together. A narrow
+marker and checked selection control identify the selected model. The compact
+action menu contains Verify and Delete; deletion still requires confirmation.
+
 Complex features use a small second level of deep-linkable navigation. Agents
 keeps profiles, tool administration, and MCP/external-agent connections in
 `#/agents/profiles`, `#/agents/tools`, and `#/agents/connections`.
@@ -616,6 +627,31 @@ No palette color was added. Removing decoration does not remove grouping:
 Empty/search/error states remain distinct. Filtering a model, source or profile
 never removes the underlying record, submits work or changes an existing editor
 draft. These renderer checks do not qualify native screen readers or platforms.
+
+Model pickers keep their search and management link visible while only the model
+list scrolls. Exact model identifiers are truncated visually in the list and
+remain available on hover. Cancelled tasks keep their saved evidence and offer
+a compact **New chat** link to a blank conversation; this does not replay work.
+The workspace chooser keeps Refresh beside its heading and labels folder access
+once. Desktop users can choose a local folder directly; browser users retain
+the connected-host setup guidance. Choosing command access displays the local
+unsandboxed-execution notice before requesting a grant.
+
+### Agent defaults and Help
+
+Choose an agent once to reuse its saved model, instructions, tools, Knowledge
+and step budget. **Agent settings** shows the pinned model/revision and limits
+together with resource restrictions. These overrides do not edit the saved
+profile; edit the reusable configuration under Agents. Folder and computer
+access are separate grants, and their controls remain available in Chat.
+
+The **Help** button in the top bar and the Help entry in Quick actions open local
+guidance with conversation examples, profile configuration, access boundaries
+and returning-work advice. Help preserves the current draft and never submits
+the example prompts. Its navigation links open existing pages; interrupted or
+uncertain work still requires its normal review. Help and configuration copy use
+the shared typography scale and all nine interface locales. Automated rendering
+is not a substitute for native-speaker or assistive-technology review.
 
 ### Images alongside text and voice
 

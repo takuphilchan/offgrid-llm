@@ -4,6 +4,17 @@ Set observable visual and behavioral quality gates for the shared web and deskto
 
 ## ADDED Requirements
 
+### Requirement: Consistent readable typography
+The shared renderer SHALL use semantic size and line-height roles for titles,
+sections, prose, controls, metadata and captions. Visible interface copy SHALL
+not retain legacy sub-12px text. Exact technical identifiers MAY use monospace
+without adopting a smaller unreadable size.
+
+#### Scenario: Inspect primary pages and enlarged guidance
+- **WHEN** the six primary pages and Help are rendered with representative content
+- **THEN** visible text follows the shared type scale and localized line-height rules
+- **AND** 200% desktop zoom retains readable content and reachable controls without clipped dialogs
+
 ### Requirement: Bounded accessible surface materials
 The shared renderer SHALL use palette-derived sidebar, composer and floating
 utility material as at most three decorative families per screen. Primary

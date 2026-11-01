@@ -1,5 +1,16 @@
 # Proposal
 
+## Approved profile-first composer and Help (2026-11-01)
+
+The owner approved consolidating repeated Chat configuration into one Agent
+settings panel and adding accessible in-app Help for first-time and returning
+users. Existing pinned profiles supply model, tools, Knowledge and limits;
+Chat overrides only narrow that configuration. Folder selection and computer
+access remain explicit, with active access visible and recovery in the task.
+Add local guidance and navigation, not an automatic setup wizard, grants, model
+downloads, profile migration or a new executor. Group 21 verifies this extension
+separately from the preceding 717-pass renderer checkpoint.
+
 ## Corrective review after installation (2026-11-01)
 
 The owner rejected the installed presentation as insufficient and identified

@@ -200,7 +200,7 @@
   .resource-card h3 { max-width: none; margin: 0 0 var(--space-2); font-size: var(--type-body); line-height: var(--leading-ui); white-space: normal; overflow-wrap: anywhere; }
   .resource-card p, .resource-card small { font-size: var(--type-meta); line-height: var(--leading-ui); }
   .file-icon, .model-glyph { color: var(--text); background: var(--surface-2); border-radius: 8px; }
-  .source-state, .source-state.retained { color: var(--muted); font-size: 11px; }
+  .source-state, .source-state.retained { color: var(--muted); font-size: var(--type-meta); }
   .empty-panel, .compact-empty { color: var(--muted); border-color: var(--line-strong); border-radius: 10px; font-size: 13px; }
   .empty-lines i { background: var(--line-strong); }
   .knowledge-workspace { container-type: inline-size; }

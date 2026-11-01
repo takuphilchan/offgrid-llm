@@ -48,7 +48,7 @@
   .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .command-trigger { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 13px; cursor: pointer; }
   .command-trigger:hover { background: var(--surface-2); color: var(--text); }
-  .command-trigger kbd { padding: 2px 4px; font: 11px/1.3 var(--mono); color: var(--faint); }
+  .command-trigger kbd { padding: 2px 4px; font: var(--type-caption)/var(--leading-ui) var(--mono); color: var(--faint); }
   .known-work-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
   .known-work-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; }
   .known-work-list :is(button, a) { overflow-wrap: anywhere; text-align: start; }

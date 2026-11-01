@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 import { agentProfilesText } from '../src/i18n/agent-profiles';
+import { workspaceHelp } from '../src/i18n/workspace-help';
 
 for (const locale of ['en', 'ar'] as const) for (const width of [320, 768, 1280]) test(`composer preserves pinned model and explicit controls: ${locale} ${width}`, async ({ page }, info) => {
   const state = await craftFixture(page, locale, 'dark');
   const model = 'Meta-Llama-3.1-8B-Instruct-Q4_K_L-f1e3673a9589';
-  const profile = { id: 'writer', revision: 7, settings: { name: 'Writer', model, tools: [], knowledge: [], computer: false } };
+  const profile = { id: 'writer', revision: 7, settings: { name: 'Writer', model, max_iterations:30, tools: [], knowledge: [], computer: false } };
   await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', api_version: 2, workspace_id: 'craft', capabilities: ['agent-profiles-v1', 'agent-conversations-v1'] } }));
   await page.route('**/api/v2/agent-profiles', r => r.fulfill({ json: { profiles: [profile] } }));
   await page.setViewportSize({ width, height: 720 });
@@ -14,12 +15,12 @@ for (const locale of ['en', 'ar'] as const) for (const width of [320, 768, 1280]
   await editor.fill('Keep this exact draft — café 日本語');
   await page.getByRole('button', { name: agentProfilesText[locale].selector, exact: true }).click();
   await page.getByRole('radio', { name: /Writer/ }).check(); await page.keyboard.press('Escape');
-  const trigger = page.locator('.pinned-model-trigger');
-  await expect(trigger).toContainText('Meta Llama 3.1 8B Instruct');
+  const trigger = page.getByRole('button',{name:workspaceHelp[locale].settings,exact:true});
   await trigger.click();
-  await expect(page.locator('.chat-agent-model code')).toHaveText(model);
-  await expect(page.locator('.chat-agent-model strong')).toContainText(agentProfilesText[locale].revision.replace('{revision}', '7'));
-  await expect(page.locator('.chat-agent-model input, .chat-agent-model select')).toHaveCount(0);
+  await expect(page.locator('.agent-settings-summary code')).toHaveText(model);
+  await expect(page.locator('.agent-settings-summary')).toContainText(agentProfilesText[locale].revision.replace('{revision}', '7'));
+  await expect(page.locator('.agent-settings-summary')).toContainText('30');
+  await expect(page.locator('.agent-settings-summary input, .agent-settings-summary select')).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
   await expect(editor).toHaveValue('Keep this exact draft — café 日本語');
   await expect(page.locator('.composer-context .chat-execution-workspace')).toBeVisible();

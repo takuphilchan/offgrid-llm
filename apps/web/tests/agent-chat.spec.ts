@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { agentProfilesText } from '../src/i18n/agent-profiles';
+import { workspaceHelp } from '../src/i18n/workspace-help';
 import { conversationWorkText } from '../src/i18n/conversation-work';
 import { chatUncertainHint, chatWorkBlockerText } from '../src/i18n/chat-work-blocker';
 import type { LocaleCode } from '../src/i18n';
@@ -7,6 +8,16 @@ import { executionWorkspaceText,executionNativeText,executionPolicyText,attachWo
 
 const jobID = `run-${'b'.repeat(32)}`, model = 'local-chat-model';
 const profile = { id:'writer', revision:1, actor:'local', workspace:'chat-agent-fixture', digest:'fixture', archived:false, created_at:'2026-10-13T00:00:00Z', settings:{ name:'Writer', description:'Write with evidence', model, max_iterations:10, instructions:'Keep it clear.', tools:[], knowledge:[], computer:false } };
+
+test('on-demand access keeps an unused folder selector out of the composer',async({page})=>{
+  const f=await fixture(page);
+  await page.route('**/api/v2/system',route=>route.fulfill({json:{product:'offgrid',api_version:2,version:'fixture',workspace_id:'chat-agent-fixture',capabilities:['agent-profiles-v1','agent-conversations-v1','native-execution-preview-v1','execution-access-request-v1']}}));
+  await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  await expect(page.locator('.composer .chat-execution-workspace')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Agent settings',exact:true})).toBeVisible();
+  expect(f.submissions).toEqual([]);expect(f.commands).toEqual([]);
+});
 
 for(const locale of Object.keys(attachWorkspaceText) as LocaleCode[]) test(`on-demand folder access attaches once without computer consent in ${locale}`,async({page})=>{
   const f=await fixture(page,'waiting_for_input');
@@ -435,7 +446,7 @@ test('agent and Tools selection preserve the draft and dismiss without submittin
   const agent=page.getByRole('button',{name:'Agent',exact:true}); await agent.click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
   await page.keyboard.press('Escape'); await expect(agent).toBeFocused();
-  const tools=page.getByRole('button',{name:'Tools and context',exact:true}); await tools.click();
+  const tools=page.getByRole('button',{name:'Agent settings',exact:true}); await tools.click();
   await page.getByRole('checkbox',{name:/read_docs/}).uncheck();
   await page.keyboard.press('Escape'); await expect(tools).toBeFocused();
   await agent.click(); await draft.click();
@@ -458,7 +469,7 @@ test('profile and tool choices do not leak into another workspace or actor',asyn
     await page.getByRole('region', { name: 'Workspace options', exact: true }).getByRole('button',{name:'Refresh',exact:true}).click();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button',{name:'Agent',exact:true})).toContainText('No agent');
-    await expect(page.getByRole('button',{name:'Tools and context',exact:true})).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'Agent settings',exact:true})).toHaveCount(0);
   }
   expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
 });
@@ -476,11 +487,11 @@ test('localized agent controls fit short screens, scroll and preserve IME in bot
     const selector=page.getByRole('button',{name:copy.selector,exact:true}); await selector.click();
     await page.getByRole('radio',{name:/Writer Write with evidence/}).check(); await page.keyboard.press('Escape');
     await expect(selector).toBeFocused();
-    const trigger=page.getByRole('button',{name:copy.resources,exact:true});
+    const trigger=page.getByRole('button',{name:workspaceHelp[locale].settings,exact:true});
     for(const theme of ['light','dark']) {
       await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);
       await trigger.click();
-      const panel=page.getByRole('region',{name:copy.resources,exact:true});
+      const panel=page.getByRole('region',{name:workspaceHelp[locale].settings,exact:true});
       await panel.focus(); await page.keyboard.press('End');
       await expect.poll(()=>panel.evaluate(el=>el.scrollHeight-el.clientHeight-el.scrollTop)).toBeLessThan(2);
       const box=await panel.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x+box!.width).toBeLessThanOrEqual(600); expect(box!.y+box!.height).toBeLessThanOrEqual(500);
@@ -507,9 +518,9 @@ test('Chat resource popovers keep separated rows, fields and recovery actions', 
     await page.setViewportSize(size);
     for(const theme of ['light','dark']) {
       await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);
-      const trigger=page.getByRole('button',{name:'Tools and context',exact:true});
+      const trigger=page.getByRole('button',{name:'Agent settings',exact:true});
       await trigger.click();
-      const panel=page.getByRole('region',{name:'Tools and context',exact:true});
+      const panel=page.getByRole('region',{name:'Agent settings',exact:true});
       await expect.poll(()=>panel.evaluate(el=>el.getAnimations().every(animation=>animation.playState==='finished'))).toBe(true);
       const details=panel.locator('details');
       if(!(await details.evaluate(el=>(el as HTMLDetailsElement).open))) await details.locator('summary').click();

@@ -24,6 +24,8 @@ import { WorkspaceContext, clearWorkspaceState } from './lib/workspace-context';
 import { SetupHandoffProvider } from './lib/setup-handoff';
 import { WorkspaceDraftProvider, DraftRecoveryNotice } from './lib/draft-scope';
 import { ActiveWorkProvider } from './lib/active-work';
+import { WorkspaceHelp } from './components/WorkspaceHelp';
+import { workspaceHelp } from './i18n/workspace-help';
 
 class PageBoundary extends Component<{ children: ReactNode; message: string; retry: string }, { failed: boolean }> {
   state = { failed: false };
@@ -75,6 +77,7 @@ export function App() {
   const [onboardingPending, setOnboardingPending] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true');
   const [showOnboarding, setShowOnboarding] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true' && readPreference('offgrid.onboarding.stage') !== 'working');
   const [showCommands, setShowCommands] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const refreshLock = useRef(false);
   const accessRevision = useRef(0);
@@ -146,14 +149,14 @@ export function App() {
   useEffect(() => { if (model) writePreference('offgrid.model', model); }, [model]);
   useEffect(() => {
     const toggleCommands = (event: globalThis.KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k' && !showOnboarding) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k' && !showOnboarding && !showHelp) {
         event.preventDefault();
         setShowCommands(current => !current);
       }
     };
     window.addEventListener('keydown', toggleCommands);
     return () => window.removeEventListener('keydown', toggleCommands);
-  }, [showOnboarding]);
+  }, [showOnboarding, showHelp]);
 
   const finishOnboarding = useCallback(() => {
     writePreference('offgrid.onboarding.complete', 'true');
@@ -178,6 +181,7 @@ export function App() {
   };
   const chatModels = models.filter(supportsChat);
   const commandActions: CommandAction[] = [
+    { id:'help',label:workspaceHelp[locale].help,group:text.shell.system,icon:'help',run:()=>setShowHelp(true) },
     ...navigationGroups.flatMap(group => group.items.map(item => ({ id: `page-${item}`, label: text.nav[item], group: text.shell[group.label], icon: item, run: () => { window.location.hash = `#/${item}`; } }))),
     { id: 'theme-system', label: text.shell.systemTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('system') },
     { id: 'theme-dark', label: text.shell.darkTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('dark') },
@@ -204,7 +208,7 @@ export function App() {
     {narrow && navigationOpen && <button className="navigation-scrim" tabIndex={-1} aria-label={text.models.cancel} onClick={closeNavigation} />}
 
     <main className={`workspace${page === 'chat' ? ' chat-page' : ''}`} inert={narrow && navigationOpen}>
-      <WorkspaceHeader title={text[page].title} shortcut={commandShortcut} onCommands={() => setShowCommands(true)} navigationOpen={navigationOpen} onNavigation={() => setNavigationOpen(true)} />
+      <WorkspaceHeader title={text[page].title} shortcut={commandShortcut} onCommands={() => setShowCommands(true)} onHelp={()=>setShowHelp(true)} navigationOpen={navigationOpen} onNavigation={() => setNavigationOpen(true)} />
       {admin && <ComputerActivity key={authUser?.id ?? 'local'} />}
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
       <section className="page-content">
@@ -222,7 +226,8 @@ export function App() {
         </SetupHandoffProvider>
       </section>
     </main>
-    {showCommands && !showOnboarding && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
+    {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
+    {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
     {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} pending={onboardingPending} onAction={() => continueSetup(chatModels.length > 0 ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
   </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }

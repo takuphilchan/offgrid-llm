@@ -156,6 +156,19 @@ try {
     assert.equal(capture.zoom,2);
     await writeFile(join(evidence,`zoom-200-${route.replaceAll('/','-')}.png`),Buffer.from(capture.image,'base64'));
   }
+  console.log('Checking Help at 200% zoom');
+  await page.locator('.help-trigger').click();
+  const help = page.getByRole('dialog', {name:'Help',exact:true});
+  await expect(help).toBeVisible();
+  await expect(help.getByRole('button',{name:'Close help'})).toBeInViewport();
+  await help.evaluate(el=>{el.scrollTop=el.scrollHeight;});
+  await expect(help.getByRole('button',{name:'Close help'})).toBeInViewport();
+  const helpBounds=await help.boundingBox(), viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));
+  assert.ok(helpBounds.x>=0&&helpBounds.y>=0&&helpBounds.x+helpBounds.width<=viewport.width+1&&helpBounds.y+helpBounds.height<=viewport.height+1);
+  const helpCapture=await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'));
+  await writeFile(join(evidence,'help-zoom-200.png'),Buffer.from(helpCapture,'base64'));
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.help-trigger')).toBeFocused();
   await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
   await app.close(); app = null;
   console.log('Checking saved appearance after restart');

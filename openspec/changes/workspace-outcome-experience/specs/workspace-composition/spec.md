@@ -4,6 +4,27 @@ Let people start ordinary conversations and governed tasks without navigating se
 
 ## ADDED Requirements
 
+### Requirement: Profile-first agent composition and discoverable Help
+Chat SHALL use the selected pinned profile's model, resources and limits without
+requiring repeated setup. One Agent settings disclosure SHALL show that identity
+and offer existing scoped restrictions. Active access SHALL remain discoverable;
+neither profile selection nor opening settings SHALL create a grant.
+
+#### Scenario: Submit with existing profile defaults
+- **WHEN** a user selects a saved profile and sends a request without overrides
+- **THEN** the existing profile ID/revision and resource policy govern the turn
+- **AND** ordinary conversation requires no folder grant, and required access is requested through the existing task path
+
+#### Scenario: Inspect or narrow agent configuration
+- **WHEN** a user opens Agent settings or narrows an attached resource
+- **THEN** the pinned model and decision limit are visible, saved profiles remain unchanged, and the submitted restrictions cannot expand authority
+- **AND** active folder/computer access and revocation remain reachable
+
+#### Scenario: Learn and return to work
+- **WHEN** a first-time or returning user opens Help from the shell or Quick actions
+- **THEN** localized local examples, configuration guidance and recovery navigation are available without submitting work or changing settings
+- **AND** dismissal restores focus, drafts survive, and narrow and RTL layouts remain usable
+
 ### Requirement: Scoped image input in ordinary Chat
 The shared composer SHALL accept up to four PNG/JPEG images of at most 2 MiB
 each through explicit selection, paste or drop. It SHALL show removable previews,

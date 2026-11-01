@@ -1,0 +1,20 @@
+@layer controls {
+  .workspace-help { margin: auto; width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; overflow: auto; color: var(--text); background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
+  .workspace-help::backdrop { background: var(--scrim); }
+  .workspace-help header, .workspace-help footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 24px; }
+  .workspace-help header { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
+  .workspace-help h2 { margin: 0; font-size: var(--type-title); line-height: var(--leading-ui); }
+  .workspace-help-body { padding: 0 24px; }
+  .workspace-help section { padding-block: 16px; border-block-start: 1px solid var(--line); }
+  .workspace-help h3 { margin: 0 0 8px; font-size: var(--type-section); line-height: var(--leading-ui); }
+  .workspace-help p { margin: 0 0 8px; font-size: var(--type-body); line-height: var(--leading-prose); }
+  .workspace-help .workspace-help-example { padding: 12px; border-radius: 8px; background: var(--surface-2); font-size: var(--type-ui); }
+  .workspace-help section > a { margin-inline-start: -10px; }
+  .agent-settings-summary { display: grid; gap: 4px; min-width: 0; }
+  .agent-settings-summary strong { font-size: var(--type-ui); line-height: var(--leading-ui); }
+  .agent-settings-summary span, .agent-settings-summary code { font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--muted); overflow-wrap: anywhere; }
+  .agent-settings-panel fieldset { margin: 0; }
+  .agent-settings-panel legend { font-size: var(--type-ui); font-weight: var(--weight-medium); }
+  .agent-settings-panel .workspace-secondary, .agent-settings-panel > .utility-popover-content > p { font-size: var(--type-meta); line-height: var(--leading-prose); }
+  @media (max-width: 420px) { .workspace-help header, .workspace-help footer { padding: 12px 16px; } .workspace-help-body { padding-inline: 16px; } .workspace-help footer { flex-wrap: wrap; } }
+}

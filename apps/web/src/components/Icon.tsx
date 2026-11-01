@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'speaker' | 'more' | 'sidebar';
+export type IconName = 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'speaker' | 'more' | 'sidebar';
 
 const paths: Record<IconName, string[]> = {
+  help: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20', 'M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5', 'M12 18h.01'],
   more: ['M5 12h.01M12 12h.01M19 12h.01'],
   sidebar: ['M4 3h16v18H4z', 'M9 3v18'],
   speaker: ['M11 4 6 8H3v8h3l5 4V4z', 'M15 8a6 6 0 0 1 0 8', 'M18 5a10 10 0 0 1 0 14'],
