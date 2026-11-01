@@ -44,6 +44,9 @@
   .profile-option span { min-width: 0; overflow-wrap: anywhere; }
   .profile-option small { display: block; line-height: 1.5; margin-block-start: .2rem; }
   .profile-advanced > :not(summary) { margin-block-start: 1rem; }
+  .profile-execution-policy { display: grid; gap: .75rem; min-width: 0; margin: 0; padding: 0; border: 0; }
+  .profile-execution-policy > label:not(.profile-option) { display: grid; gap: .5rem; font-size: .875rem; }
+  .profile-execution-policy > p { margin: 0; }
   .profile-context-resources { min-width: 0; overflow-wrap: anywhere; }
   .profile-context-field { display: grid; gap: .5rem; margin-block: .75rem; }
   .profile-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
