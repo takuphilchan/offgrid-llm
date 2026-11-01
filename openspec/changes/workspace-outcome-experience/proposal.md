@@ -1,5 +1,15 @@
 # Proposal
 
+## Order and presentation follow-up (2026-11-01)
+
+The whole-app review identified remaining hierarchy gaps in the already approved
+scope: crowded composer preferences, long profile configuration, maintenance-led
+model rows, scattered Knowledge actions, mixed Activity concerns, inconsistent
+page alignment, prominent startup internals and unbounded long-file labels.
+Task group 19 tracks their correction and realistic-content acceptance separately
+from earlier passing control tests. Existing human/hardware gates remain open;
+this is not a new authority or execution feature.
+
 ## Approved material refinement (2026-10-31)
 
 Following the isolated light/dark and narrow RTL prototype, the user approved

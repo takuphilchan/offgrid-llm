@@ -1,5 +1,25 @@
 # Design
 
+## Order and presentation follow-up (2026-11-01)
+
+Apply the approved hierarchy consistently rather than adding another visual theme.
+Management content shares a leading edge and bounded width; reading and settings
+controls retain appropriate measures. Headings allocate room for their actions
+before wrapping. Chat groups occasional response/voice preferences, while input,
+attachments, microphone, active scope and Stop remain visible. Profile identity
+and model precede purpose and capabilities, with explicit save/use actions.
+Installed model selection is separate from maintenance; unqualified packages
+remain ineligible. Knowledge groups filtering and question entry, keeping selected
+sources explicit. Activity separates work, schedules and diagnostics without
+changing canonical task identity. Long artifact names use a bounded summary and
+an accessible full-name disclosure, never a changed download name. Startup puts
+versions/address in technical details while recovery stays visible. Tests must
+check useful density and discovery, not only absence of horizontal overflow.
+
+All eight follow-up tasks reuse existing state, authority, localization and
+controllers. No selection loads a model, no navigation submits work, and no
+presentation state permits replay. Existing qualification gates are unchanged.
+
 ## Approved material refinement (2026-10-31)
 
 The reviewed prototype uses three decorative families: a neutral directional

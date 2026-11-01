@@ -1,5 +1,20 @@
 # Tasks
 
+## 19. Whole-app order and presentation follow-up (2026-11-01)
+
+The renewed review found composition gaps despite passing earlier control tests.
+These tasks implement the already approved whole-product hierarchy outcomes;
+previous hardware, human and performance-baseline gates remain open.
+
+- [x] 19.1 Align management-page leading edges and shared heading/action layouts; keep readable Chat and settings measures. Check wide, narrow, short and RTL layouts without changing routes.
+- [x] 19.2 Consolidate occasional response and voice preferences while keeping text/image/microphone, active context and Stop directly available. Verify voice opt-in, focus return and draft preservation.
+- [x] 19.3 Give profile identity/model and purpose a clear reading order, with explicit save/use actions accessible during configuration. Preserve drafts, revisions, validation and permissions.
+- [x] 19.4 Give eligible installed models an explicit selection action and put verification/removal in labelled maintenance controls. Preserve package ineligibility and confirmation; selection must not load/download a model.
+- [x] 19.5 Group Knowledge search and question actions into a library toolbar and keep selected-source actions contextual. Verify exact scope and draft handoff.
+- [x] 19.6 Separate Activity's work, scheduling and diagnostic views; keep canonical inspection and filter restoration. Bound long artifact-name presentation with keyboard/touch access to the exact name and unchanged verified download.
+- [x] 19.7 Put desktop startup technical metadata in its existing disclosure and retain immediate progress/recovery actions. Verify readiness, errors, cancellation and localized layouts.
+- [x] 19.8 Strengthen realistic-content fixtures and density/discoverability assertions, inspect screenshots and run API/type/build, full isolated renderer, desktop, source-size and OpenSpec checks. Record exact results and remaining qualification limits in the existing evidence log.
+
 ## 18. Approved surface-material refinement (2026-10-31)
 
 - [x] 18.1 Implement shared generated sidebar/composer/floating-material tokens, solid primary/hover fills and bounded blur with opaque accessibility/unsupported fallbacks; preserve palette, text opacity, geometry and the three-family budget. Repair nested drawer focus containment and run type/build/generator checks.

@@ -118,6 +118,11 @@ Main pages SHALL retain the monochrome palette, visible action-button boundaries
 - **THEN** corresponding controls share geometry and interaction states while primary work remains identifiable
 - **AND** navigation links, actions, statuses and content references remain semantically distinct
 
+#### Scenario: Realistic content density
+- **WHEN** management pages contain long names and descriptions at narrow and desktop widths
+- **THEN** headings reserve room for contextual actions, comparable pages share a leading edge, and long artifact names have a bounded summary with explicit full-name access
+- **AND** maintenance does not compete with selection, work history does not require scrolling past schedule configuration, and technical startup metadata remains available in details
+
 ### Requirement: Complete contextual localization
 All new and touched user-facing workflow copy, including voice preferences, readiness and recovery, SHALL use typed resources for the nine existing interface locales. Stable identifiers and model names SHALL remain unchanged. Mixed-language UI SHALL NOT be accepted as completed localization.
 

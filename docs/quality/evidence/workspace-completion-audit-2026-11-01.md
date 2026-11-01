@@ -244,3 +244,61 @@ published-release container and pre-release container remain available for
 rollback. These are local follow-up builds based on v0.4.22, not replacements of
 the published Git tag or assets. Service changes are in `5c8136f`; control changes
 in `099b7ed` and `a38367e`; fixture isolation is in `ce3747b`.
+
+
+## Whole-app order and presentation follow-up
+
+This follow-up addresses the user's report that the app still lacks coherent
+order. It changes the shared renderer and desktop startup presentation, not
+inference or task authority. Management pages share a leading edge; Chat groups
+occasional voice/response preferences; profiles put identity/model before purpose
+and keep wide-screen save actions reachable; Models makes selection explicit and
+moves maintenance into a labelled menu; Knowledge groups search/question actions;
+Activity separates tasks and schedules while retaining an unsaved schedule when
+switching views. Long artifact names are bounded with an exact-name disclosure.
+Startup technical metadata stays available behind its existing disclosure.
+
+Validation on the final source:
+
+- `npm --prefix apps/web run check` and `npm --prefix apps/web run api:check` passed.
+- Vite production build passed; the existing bundle-over-500-kB warning remains.
+- `node scripts/test/test-web-workspace.mjs build/release-0.4.22-rebuild/followup/offgrid.exe --workers=2 --reporter=line`
+  passed **689 tests, 28 existing skips** in 3.5 minutes. The wrapper uses isolated
+  service state and the newly built renderer, not the installed workspace.
+- `npm --prefix apps/desktop test` passed **92 tests, one existing skip**.
+- Source-size, application-layout, repository-hygiene and documentation checks
+  passed; documentation checked 283 maintained Markdown files with zero problems.
+- `openspec validate workspace-outcome-experience --strict --no-interactive` and
+  `git diff --check` passed. These are structural checks, not usability evidence.
+
+The final fixture history-feedback p95 was 34.6 ms; measured warm route costs
+were 10?37 ms. These are synthetic local-feedback measurements, not inference
+latency promises or a completed historical performance comparison.
+
+Failed intermediate runs remain recorded in local build logs. The initial
+focused run passed 186 and failed 20; its next run passed 141 and failed two.
+The first full run passed 669, failed 19 and skipped 28. It exposed stale tests
+for relocated controls as well as real width/spacing and popover-height issues;
+those were corrected. The next full run passed 687 and failed two new focus
+checks. Diagnostic output showed those checks selected hidden inputs inside the
+closed model picker (zero-size bounds), not obscured visible fields. Restricting
+the focus check to visible inputs retained its hit-testing assertion; all six
+focused layout tests and the subsequent full run passed. No assertion requiring
+safe deletion, exact source scope, draft preservation or verified download was
+removed. PowerShell stderr redirection reported a nonzero command wrapper for
+one six-test run despite Playwright reporting all six passed; the final full
+run used a Node process wrapper and returned exit code zero.
+
+Direct screenshot review covered the wide Chat composer, model library and
+profile editor; narrow Arabic Settings; long-filename task output; and desktop
+startup. The broader light/dark, RTL, short/narrow and localized matrix is
+captured/tested, not claimed individually human-reviewed. Startup screenshots
+use an inert bridge in Chromium and do not qualify a native installation.
+
+Remaining concerns are explicit in `docs/ux/findings.md`: 320px composer density,
+technical profile concepts, advanced metadata consistency and unmeasured novice
+comprehension. Native screen-reader speech, native-speaker review, real platform
+startup/image journeys and the five-participant usability study remain open.
+Group 19 is implemented and automatically tested; the original ten qualification
+items remain unchecked. No installed desktop, running service, container, model,
+workspace data or published release was replaced during this follow-up.
