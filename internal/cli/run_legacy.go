@@ -45,7 +45,8 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 		fmt.Fprintf(env.Stdout, "  %sOptions%s\n", colorBold, colorReset)
 		fmt.Fprintf(env.Stdout, "    %s--save%s <name>      Save conversation to session\n", brandPrimary, colorReset)
 		fmt.Fprintf(env.Stdout, "    %s--load%s <name>      Load and continue existing session\n", brandPrimary, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s--image%s <path>     Attach an image (for VLM models)\n", brandPrimary, colorReset)
+		fmt.Fprintf(env.Stdout, "    %s--image%s <path>     Attach PNG/JPEG (2 MiB each; repeat for up to four)\n", brandPrimary, colorReset)
+		fmt.Fprintln(env.Stdout, "                       In chat: /image PATH, /images, /remove-image [N|all]")
 		fmt.Fprintf(env.Stdout, "    %s--rag%s              Enable knowledge base (RAG)\n", brandPrimary, colorReset)
 		fmt.Fprintf(env.Stdout, "    %s--allow-embedding-chat%s  Force chat with an embedding-like model\n", brandPrimary, colorReset)
 		fmt.Fprintln(env.Stdout)
@@ -64,7 +65,7 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 	var sessionName string
 	var loadSession bool
 	var saveSession bool
-	var imagePath string
+	var images []api.SessionImage
 	var useKnowledgeBase bool
 	var allowEmbeddingChat bool
 
@@ -77,8 +78,14 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 		} else if args[i] == "--load" && i+1 < len(args) {
 			sessionName = args[i+1]
 			loadSession = true
-		} else if args[i] == "--image" && i+1 < len(args) {
-			imagePath = args[i+1]
+			i++
+		} else if args[i] == "--image" {
+			if i+1 >= len(args) {
+				return Usage("--image requires a local PNG/JPEG path")
+			}
+			if _, _, err := ChatImageCommand("/image "+args[i+1], &images); err != nil {
+				return err
+			}
 			i++
 		} else if args[i] == "--rag" {
 			useKnowledgeBase = true
@@ -384,6 +391,9 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 			for _, msg := range sess.Messages {
 				if msg.Role == "user" {
 					fmt.Fprintf(env.Stdout, "  %sYou:%s %s\n", brandPrimary, colorReset, msg.Content)
+					for _, image := range msg.Images {
+						fmt.Fprintf(env.Stdout, "    Image: %s\n", TerminalSafe(image.Name))
+					}
 				} else {
 					fmt.Fprintf(env.Stdout, "  %sAssistant:%s %s\n", brandSuccess, colorReset, msg.Content)
 				}
@@ -508,27 +518,12 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 
 	// Load messages from session if continuing
 	if currentSession != nil && currentSession.MessageCount() > 0 {
-		for _, msg := range currentSession.Messages {
-			messages = append(messages, ChatMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
-			})
-		}
+		messages = SavedChatMessages(currentSession)
 	}
 
 	// Handle initial image if provided
-	if imagePath != "" {
-		// Verify image file exists and is readable
-		_, err := env.ReadFile(imagePath)
-		if err != nil {
-			presenter.Error(fmt.Sprintf("Failed to read image file: %v", err))
-			return ReportedError{}
-		}
-
-		fmt.Fprintf(env.Stdout, "%sImage attached:%s %s\n", brandSuccess, colorReset, filepath.Base(imagePath))
-		fmt.Fprintln(env.Stdout)
-
-		// We'll attach this to the first user message
+	if len(images) > 0 {
+		fmt.Fprintln(env.Stdout, ChatImagesSummary(images))
 	}
 
 	chatRuntime := &InteractiveTUIState{
@@ -537,7 +532,7 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 		ServerPort:       cfg.ServerPort,
 		Client:           client,
 		UseKnowledgeBase: useKnowledgeBase,
-		ImagePath:        imagePath,
+		Images:           images,
 		Messages:         messages,
 		SessionMgr:       sessionMgr,
 		CurrentSession:   currentSession,
@@ -553,14 +548,14 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 			presenter.Warning(fmt.Sprintf("TUI unavailable, falling back to plain chat: %v", err))
 		} else {
 			usedTUI = true
-			messages = chatRuntime.Messages
-			imagePath = chatRuntime.ImagePath
-			useKnowledgeBase = chatRuntime.UseKnowledgeBase
 		}
+		messages = chatRuntime.Messages
+		images = chatRuntime.Images
+		useKnowledgeBase = chatRuntime.UseKnowledgeBase
 	}
 
 	if !usedTUI {
-		if err := runPlainChat(ctx, env, cfg, client, resolvedModelName, useKnowledgeBase, imagePath, messages, currentSession, sessionMgr); err != nil {
+		if err := runPlainChat(ctx, env, cfg, client, resolvedModelName, useKnowledgeBase, images, messages, currentSession, sessionMgr); err != nil {
 			return err
 		}
 	}

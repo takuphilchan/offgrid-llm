@@ -40,18 +40,17 @@ func osInteractiveDependencies() cli.InteractiveDependencies {
 				ServerPort:       state.ServerPort,
 				Client:           state.Client,
 				UseKnowledgeBase: state.UseKnowledgeBase,
-				ImagePath:        state.ImagePath,
+				Images:           state.Images,
 				Messages:         state.Messages,
 				SessionMgr:       state.SessionMgr,
 				CurrentSession:   state.CurrentSession,
 			}
-			if err := runChatTUI(ctx, runtime); err != nil {
-				return err
-			}
-			state.Messages = runtime.Messages
-			state.ImagePath = runtime.ImagePath
-			state.UseKnowledgeBase = runtime.UseKnowledgeBase
-			return nil
+			defer func() {
+				state.Messages = runtime.Messages
+				state.Images = runtime.Images
+				state.UseKnowledgeBase = runtime.UseKnowledgeBase
+			}()
+			return runChatTUI(ctx, runtime)
 		},
 		IsEmbeddingModel:   isLikelyEmbeddingModel,
 		EmbeddingChatError: embeddingModelChatError,

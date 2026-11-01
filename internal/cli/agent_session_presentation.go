@@ -87,6 +87,11 @@ func ReadAgentPlainLine(reader *bufio.Reader, w io.Writer, style PresentationSty
 // Local commands inspect the pinned profile only. They do not attach resources,
 // grant authority, create jobs, or change the profile used by the conversation.
 func renderAgentSessionCommand(w io.Writer, text, name string, p agentSessionPresentation) bool {
+	command, _, _ := strings.Cut(text, " ")
+	if command == "/image" || command == "/images" || command == "/remove-image" {
+		fmt.Fprintln(w, "\nAgent image execution is not supported yet. Use ordinary Chat: offgrid run MODEL --image PATH, with an installed vision model and matching projector. No image was attached or sent.")
+		return true
+	}
 	s := p.Style
 	heading := func(title string) { fmt.Fprintf(w, "\n%s%s%s\n", s.Bold, title, s.Reset) }
 	if p.Profile.Settings.Name == "" && (text == "/skills" || text == "/agents" || text == "/tools") {

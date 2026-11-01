@@ -4,13 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -18,8 +16,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/takuphilchan/offgrid-llm/internal/cli"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 type ChatRuntime struct {
@@ -28,7 +28,7 @@ type ChatRuntime struct {
 	ServerPort       int
 	Client           *http.Client
 	UseKnowledgeBase bool
-	ImagePath        string
+	Images           []api.SessionImage
 	Messages         []ChatMessage
 	SessionMgr       *sessions.SessionManager
 	CurrentSession   *sessions.Session
@@ -49,33 +49,10 @@ func (rt *ChatRuntime) Stream(input string) <-chan chatStreamMsg {
 }
 
 func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
-	var userContent interface{} = input
-
-	if rt.ImagePath != "" {
-		imageData, err := os.ReadFile(rt.ImagePath)
-		if err != nil {
-			return fmt.Errorf("failed to read image file: %w", err)
-		}
-
-		base64Image := base64.StdEncoding.EncodeToString(imageData)
-		mimeType := "image/jpeg"
-		switch strings.ToLower(filepath.Ext(rt.ImagePath)) {
-		case ".png":
-			mimeType = "image/png"
-		case ".webp":
-			mimeType = "image/webp"
-		case ".gif":
-			mimeType = "image/gif"
-		}
-
-		userContent = []map[string]interface{}{
-			{"type": "text", "text": input},
-			{"type": "image_url", "image_url": map[string]string{
-				"url": fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image),
-			}},
-		}
-		rt.ImagePath = ""
+	if err := cli.ValidateChatImageBudget(rt.Messages, rt.Images); err != nil {
+		return err
 	}
+	userContent := api.SessionContent(input, rt.Images)
 
 	userMessage := ChatMessage{Role: "user", Content: userContent}
 	requestMessages := append(append([]ChatMessage{}, rt.Messages...), userMessage)
@@ -116,6 +93,7 @@ func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 
 	scanner := bufio.NewScanner(resp.Body)
 	var assistantMsg strings.Builder
+	complete := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {
@@ -124,12 +102,13 @@ func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
+			complete = true
 			break
 		}
 
 		var chunk ChatCompletionChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil || len(chunk.Error) > 0 && string(chunk.Error) != "null" {
+			return fmt.Errorf("invalid or failed response stream; pending images are retained")
 		}
 		if len(chunk.Choices) == 0 {
 			continue
@@ -143,6 +122,9 @@ func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 		return fmt.Errorf("stream interrupted: %w", err)
 	}
 
+	if !complete {
+		return fmt.Errorf("stream ended before completion; pending images are retained")
+	}
 	assistantText := strings.TrimSpace(assistantMsg.String())
 	if assistantText == "" {
 		return fmt.Errorf("%s", embeddingModelChatError(rt.ResolvedModel))
@@ -153,8 +135,11 @@ func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 		Content: assistantText,
 	})
 
+	images := rt.Images
+	rt.Images = nil
 	if rt.CurrentSession != nil {
 		rt.CurrentSession.AddMessage("user", input)
+		rt.CurrentSession.Messages[len(rt.CurrentSession.Messages)-1].Images = append([]api.SessionImage(nil), images...)
 		rt.CurrentSession.AddMessage("assistant", assistantText)
 		if err := rt.SessionMgr.Save(rt.CurrentSession); err != nil {
 			return fmt.Errorf("response received, but failed to save session: %w", err)
@@ -166,7 +151,7 @@ func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 
 func (rt *ChatRuntime) Clear() error {
 	rt.Messages = []ChatMessage{}
-	rt.ImagePath = ""
+	rt.Images = nil
 	if rt.CurrentSession != nil {
 		rt.CurrentSession.Messages = []sessions.Message{}
 		return rt.SessionMgr.Save(rt.CurrentSession)
@@ -263,6 +248,9 @@ func newChatTUIModel(rt *ChatRuntime) chatTUIModel {
 			if msg.Role == "user" {
 				userText := msg.StringContent()
 				m.appendUser(userText)
+				if count := msg.ImageCount(); count > 0 {
+					m.appendSystem(fmt.Sprintf("%d saved image(s) included in context", count))
+				}
 				m.addHistory(userText)
 			} else {
 				m.appendAssistant(msg.StringContent())
@@ -271,8 +259,8 @@ func newChatTUIModel(rt *ChatRuntime) chatTUIModel {
 	} else {
 		m.appendSystem("Type /help for commands. Use Ctrl+C or /exit to leave.")
 	}
-	if rt.ImagePath != "" {
-		m.appendSystem(fmt.Sprintf("Image attached: %s", filepath.Base(rt.ImagePath)))
+	if len(rt.Images) > 0 {
+		m.appendSystem(cli.ChatImagesSummary(rt.Images))
 	}
 	return m
 }
@@ -303,7 +291,7 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			input := strings.TrimSpace(m.input.Value())
 			m.input.SetValue("")
-			if input == "" {
+			if input == "" && len(m.rt.Images) == 0 {
 				return m, nil
 			}
 			m.addHistory(input)
@@ -384,11 +372,19 @@ func (m chatTUIModel) View() string {
 }
 
 func (m chatTUIModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
+	if handled, message, err := cli.ChatImageCommand(cmd, &m.rt.Images); handled {
+		if err != nil {
+			m.appendError(err.Error())
+		} else {
+			m.appendSystem(message)
+		}
+		return m, nil
+	}
 	switch strings.ToLower(strings.TrimSpace(cmd)) {
 	case "exit", "quit", "q":
 		return m, tea.Quit
 	case "help", "?":
-		m.appendSystem("Commands: /help, /status, /clear, /rag, /exit")
+		m.appendSystem("Commands: /help, /status, /clear, /rag, /image PATH, /images, /remove-image [N|all], /exit")
 	case "status":
 		m.appendSystem(m.rt.StatusText())
 	case "clear":

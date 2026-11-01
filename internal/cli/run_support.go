@@ -47,4 +47,5 @@ func printRunHeader(env Environment, modelName string, ragEnabled bool, sessionN
 func printRunCommands(env Environment) {
 	s := env.Style
 	fmt.Fprintf(env.Stdout, "  %sCommands:%s /help /status /clear /rag /exit\n", s.Muted, s.Reset)
+	fmt.Fprintln(env.Stdout, "  Images: /image PATH · /images · /remove-image [N|all]")
 }

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,11 +12,12 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 // runPlainChat owns the legacy line-oriented terminal exchange. All I/O is
 // supplied by the invocation environment; completed exchanges are saved once.
-func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, client *http.Client, resolvedModelName string, useKnowledgeBase bool, imagePath string, messages []ChatMessage, currentSession *sessions.Session, sessionMgr *sessions.SessionManager) error {
+func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, client *http.Client, resolvedModelName string, useKnowledgeBase bool, images []api.SessionImage, messages []ChatMessage, currentSession *sessions.Session, sessionMgr *sessions.SessionManager) error {
 	s := env.Style
 	brandPrimary, brandMuted, brandSuccess := s.Primary, s.Muted, s.Success
 	colorBold, colorReset, colorYellow := s.Bold, s.Reset, s.Accent
@@ -36,8 +36,19 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 
 		input = strings.TrimSpace(input)
 
-		if input == "" {
+		if input == "" && len(images) == 0 {
 			continue
+		}
+
+		if strings.HasPrefix(input, "/") {
+			if handled, message, err := ChatImageCommand(input, &images); handled {
+				if err != nil {
+					presenter.Error(err.Error())
+				} else {
+					fmt.Fprintln(env.Stdout, message)
+				}
+				continue
+			}
 		}
 
 		// Normalize slash commands
@@ -61,6 +72,7 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 			fmt.Fprintf(env.Stdout, "    %s/rag%s      Toggle knowledge base retrieval\n", colorBold, colorReset)
 			fmt.Fprintf(env.Stdout, "    %s/exit%s     Exit the chat\n", colorBold, colorReset)
 			fmt.Fprintln(env.Stdout)
+			fmt.Fprintln(env.Stdout, "    /image PATH  /images  /remove-image [N|all] (PNG/JPEG, 2 MiB each)")
 			fmt.Fprintf(env.Stdout, "  %sAliases:%s exit, quit, q, help, status, clear, rag\n", brandMuted, colorReset)
 			continue
 		}
@@ -101,7 +113,7 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 				}
 			}
 			// Clear image path so it doesn't get re-attached
-			imagePath = ""
+			images = nil
 			// Clear the terminal screen
 			fmt.Fprint(env.Stdout, "\033[2J\033[H")
 			// Reprint the header
@@ -128,46 +140,12 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 			continue
 		}
 
-		// Build the next user message. Only commit it to history after a successful response.
-		var userContent interface{} = input
-
-		// If we have an image pending, attach it to this message
-		if imagePath != "" {
-			// Read image file again (or we could have cached the dataURI)
-			imageData, err := env.ReadFile(imagePath)
-			if err == nil {
-				base64Image := base64.StdEncoding.EncodeToString(imageData)
-				mimeType := "image/jpeg"
-				if strings.HasSuffix(strings.ToLower(imagePath), ".png") {
-					mimeType = "image/png"
-				} else if strings.HasSuffix(strings.ToLower(imagePath), ".webp") {
-					mimeType = "image/webp"
-				} else if strings.HasSuffix(strings.ToLower(imagePath), ".gif") {
-					mimeType = "image/gif"
-				}
-
-				dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Image)
-
-				// Create multimodal content
-				userContent = []map[string]interface{}{
-					{
-						"type": "text",
-						"text": input,
-					},
-					{
-						"type": "image_url",
-						"image_url": map[string]string{
-							"url": dataURI,
-						},
-					},
-				}
-
-				// Clear image path so it's only sent once
-				imagePath = ""
-			} else {
-				presenter.Error(fmt.Sprintf("Failed to read image file: %v", err))
-			}
+		// Never strip images to recover from invalid input or unavailable inference.
+		if err := ValidateChatImageBudget(messages, images); err != nil {
+			presenter.Error(err.Error())
+			continue
 		}
+		userContent := api.SessionContent(input, images)
 
 		userMessage := ChatMessage{
 			Role:    "user",
@@ -221,6 +199,7 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 		fmt.Fprintf(env.Stdout, "\n%sOffGrid%s\n", brandSuccess+colorBold, colorReset)
 		scanner := bufio.NewScanner(resp.Body)
 		var assistantMsg strings.Builder
+		complete := false
 		lineLength := 0
 
 		for scanner.Scan() {
@@ -231,12 +210,13 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 
 			data := strings.TrimPrefix(line, "data: ")
 			if data == "[DONE]" {
+				complete = true
 				break
 			}
 
 			var chunk ChatCompletionChunk
-			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-				continue
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil || len(chunk.Error) > 0 && string(chunk.Error) != "null" {
+				break // Keep pending input; malformed/error streams cannot complete.
 			}
 
 			if len(chunk.Choices) > 0 {
@@ -271,6 +251,10 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 		}
 		resp.Body.Close()
 
+		if !complete {
+			presenter.Error("Stream ended before completion; pending images are retained.")
+			continue
+		}
 		assistantText := strings.TrimSpace(assistantMsg.String())
 		if assistantText == "" {
 			presenter.Warning("No response text received")
@@ -287,6 +271,7 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 		// Save messages to session after the exchange succeeds.
 		if currentSession != nil {
 			currentSession.AddMessage("user", input)
+			currentSession.Messages[len(currentSession.Messages)-1].Images = append([]api.SessionImage(nil), images...)
 			currentSession.AddMessage("assistant", assistantText)
 			// Auto-save after each exchange
 			if err := sessionMgr.Save(currentSession); err != nil {
@@ -294,6 +279,7 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 				fmt.Fprintf(env.Stdout, "%sFailed to save session: %v%s\n", brandMuted, err, colorReset)
 			}
 		}
+		images = nil
 	}
 	return nil
 }

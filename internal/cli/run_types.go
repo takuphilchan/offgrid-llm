@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 // ChatMessage is the legacy terminal-run wire message. The terminal TUI uses
@@ -19,6 +21,15 @@ func (m ChatMessage) StringContent() string {
 	}
 	if str, ok := m.Content.(string); ok {
 		return str
+	}
+	if parts, ok := m.Content.([]api.ChatContentPart); ok {
+		var text string
+		for _, part := range parts {
+			if part.Type == "text" {
+				text += part.Text
+			}
+		}
+		return text
 	}
 	if parts, ok := m.Content.([]interface{}); ok {
 		var text string
@@ -36,6 +47,28 @@ func (m ChatMessage) StringContent() string {
 	return ""
 }
 
+func (m ChatMessage) ImageCount() int {
+	parts, ok := m.Content.([]api.ChatContentPart)
+	if !ok {
+		return 0
+	}
+	count := 0
+	for _, part := range parts {
+		if part.Type == "image_url" {
+			count++
+		}
+	}
+	return count
+}
+
+func SavedChatMessages(session *sessions.Session) []ChatMessage {
+	var messages []ChatMessage
+	for _, message := range session.Messages {
+		messages = append(messages, ChatMessage{Role: message.Role, Content: api.SessionContent(message.Content, message.Images)})
+	}
+	return messages
+}
+
 type ChatCompletionRequest struct {
 	Model            string        `json:"model"`
 	Messages         []ChatMessage `json:"messages"`
@@ -44,6 +77,7 @@ type ChatCompletionRequest struct {
 }
 
 type ChatCompletionChunk struct {
+	Error   json.RawMessage `json:"error,omitempty"`
 	Choices []struct {
 		Delta struct {
 			Content interface{} `json:"content"`
@@ -60,7 +94,7 @@ type InteractiveTUIState struct {
 	ServerPort       int
 	Client           *http.Client
 	UseKnowledgeBase bool
-	ImagePath        string
+	Images           []api.SessionImage
 	Messages         []ChatMessage
 	SessionMgr       *sessions.SessionManager
 	CurrentSession   *sessions.Session

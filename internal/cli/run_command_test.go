@@ -97,11 +97,12 @@ func TestRunAliasDownloadUsesTypedArgumentsAndContext(t *testing.T) {
 
 func TestRunPlainChatUsesInjectedModelHTTPAndTerminal(t *testing.T) {
 	t.Run("plain", func(t *testing.T) { testInjectedRunConversation(t, false, false) })
+	t.Run("repeated image flags", func(t *testing.T) { testInjectedRunConversation(t, false, false, cliImageFile(t), cliImageFile(t)) })
 	t.Run("TUI failure falls back to plain", func(t *testing.T) { testInjectedRunConversation(t, true, false) })
 	t.Run("TUI cancellation does not replay in plain mode", func(t *testing.T) { testInjectedRunConversation(t, true, true) })
 }
 
-func testInjectedRunConversation(t *testing.T, useTUI, cancelTUI bool) {
+func testInjectedRunConversation(t *testing.T, useTUI, cancelTUI bool, imagePaths ...string) {
 	modelDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(modelDir, "fixture.gguf"), []byte("isolated test fixture"), 0600); err != nil {
 		t.Fatal(err)
@@ -125,8 +126,19 @@ func testInjectedRunConversation(t *testing.T, useTUI, cancelTUI bool) {
 		case "/v1/chat/completions":
 			requests++
 			data, err := io.ReadAll(req.Body)
-			if err != nil || !bytes.Contains(data, []byte(`"content":"hello"`)) {
+			if err != nil || len(imagePaths) == 0 && !bytes.Contains(data, []byte(`"content":"hello"`)) {
 				t.Fatalf("wrong chat request: %q %v", data, err)
+			}
+			if len(imagePaths) > 0 {
+				if bytes.Count(data, []byte(`"type":"image_url"`)) != len(imagePaths) {
+					t.Fatal("repeated image flags lost")
+				}
+				for _, path := range imagePaths {
+					image, err := ReadChatImage(path)
+					if err != nil || !bytes.Contains(data, []byte(image.DataURL)) {
+						t.Fatal("image bytes changed", err)
+					}
+				}
 			}
 			body = "data: {\"choices\":[{\"delta\":{\"content\":\"world\"}}]}\n\ndata: [DONE]\n\n"
 		default:
@@ -162,7 +174,11 @@ func testInjectedRunConversation(t *testing.T, useTUI, cancelTUI bool) {
 			return &resource.SystemResources{AvailableRAM: 8192, CPUCores: 4}, nil
 		},
 	}
-	code := Execute(ctx, []string{"run", "fixture"}, env)
+	args := []string{"run", "fixture"}
+	for _, path := range imagePaths {
+		args = append(args, "--image", path)
+	}
+	code := Execute(ctx, args, env)
 	if cancelTUI {
 		if code != 130 || requests != 0 || strings.Contains(errOut.String(), "TUI unavailable") {
 			t.Fatalf("cancellation replayed: code=%d requests=%d stdout=%q stderr=%q", code, requests, out.String(), errOut.String())
