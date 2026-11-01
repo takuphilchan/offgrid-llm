@@ -55,6 +55,71 @@ func TestSingleStepPreviewCallbackFailure(t *testing.T) {
 	}
 }
 
+func TestToolDecisionActivityOnlyOwnedPrefix(t *testing.T) {
+	for _, raw := range []string{`{"tool_call":{"name":"private","arguments":{}}}`, " \n{ \"tool_call\" : {", `{"message":"tool_call"}`, `{"reasoning":"private","tool_call":{`, `prose {"tool_call":{`, `{"tool_call":null}`, `{"tool_call_extra":{`} {
+		for size := 1; size <= len(raw); size++ {
+			notified, calls := false, 0
+			for end := size; ; end += size {
+				if end > len(raw) {
+					end = len(raw)
+				}
+				if err := observeToolDecision(raw[:end], &notified, func() error { calls++; return nil }); err != nil {
+					t.Fatal(err)
+				}
+				if end == len(raw) {
+					break
+				}
+			}
+			want := 0
+			if strings.HasPrefix(raw, `{"tool_call":{`) || strings.HasPrefix(raw, " \n{") {
+				want = 1
+			}
+			if calls != want {
+				t.Fatalf("prefix %q split %d: got %d signals, want %d", raw, size, calls, want)
+			}
+		}
+	}
+	notified := false
+	want := errors.New("presentation cancelled")
+	if err := observeToolDecision(`{"tool_call":{`, &notified, func() error { return want }); !errors.Is(err, want) {
+		t.Fatal(err)
+	}
+}
+
+func TestToolDecisionActivityDoesNotDispatchPartialCall(t *testing.T) {
+	activity := make(chan struct{}, 1)
+	release := make(chan struct{})
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		data, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"content": `{"tool_call":{"name":"fixture_open","arguments":{`}}}})
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer backend.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	ctx = WithToolDecisionActivity(ctx, func() error { activity <- struct{}{}; return nil })
+	ctx = WithDecisionPreview(ctx, func(string) error { t.Error("tool content leaked into answer preview"); return nil })
+	completed := make(chan error, 1)
+	calls := 0
+	go func() {
+		completed <- NewLlamaHTTPEngine(backend.URL).ChatCompletionStreamRaw(ctx, singleStepFixture(), func(json.RawMessage) error { calls++; return nil })
+	}()
+	select {
+	case <-activity:
+	case <-ctx.Done():
+		t.Error("tool activity buffered until completion")
+	}
+	close(release)
+	if err := <-completed; err == nil || calls != 0 {
+		t.Fatal("partial activity became a decision", err, calls)
+	}
+}
+
 func TestSingleStepPreviewIsSeparateFromValidatedDecision(t *testing.T) {
 	for _, tail := range []string{` world"}`, `","tool_call":{"name":"fixture_open","arguments":{}}}`, ` world`} {
 		t.Run(tail, func(t *testing.T) {

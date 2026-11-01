@@ -4,9 +4,28 @@ package inference
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
+
+var toolDecisionPrefix = regexp.MustCompile(`^\s*\{\s*"tool_call"\s*:\s*\{`)
+
+// Inspect only a bounded literal envelope prefix, never argument content or
+// arbitrary model prose. Terminal validation remains the dispatch boundary.
+func observeToolDecision(raw string, notified *bool, activity func() error) error {
+	if *notified || activity == nil {
+		return nil
+	}
+	if len(raw) > 512 {
+		raw = raw[:512]
+	}
+	if !toolDecisionPrefix.MatchString(raw) {
+		return nil
+	}
+	*notified = true
+	return activity()
+}
 
 // Recognize only the owned envelope's first, literal "message" string. Never
 // search inside arguments, metadata, reasoning, or arbitrary model prose. An

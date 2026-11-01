@@ -71,6 +71,7 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	accumulator := agentStreamAccumulator{calls: make(map[int]*api.ToolCall)}
 	err = lease.Run(ctx, func(ctx context.Context) error {
 		previewed := false
+		ctx = inference.WithToolDecisionActivity(ctx, func() error { return emit("preparing_tool", "") })
 		ctx = inference.WithDecisionPreview(ctx, func(text string) error {
 			previewed = true
 			return emit("generating", text)

@@ -292,6 +292,7 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 		completed := false
 		sequential := singleStepStream{}
 		preview := singleStepPreview{}
+		toolStarted := false
 		native := nativeToolStream{}
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -313,6 +314,9 @@ func (e *LlamaHTTPEngine) ChatCompletionStreamRaw(ctx context.Context, req *api.
 			if singleStepRequest(req) {
 				deliver = func(data json.RawMessage) error {
 					if err := sequential.add(data); err != nil {
+						return err
+					}
+					if err := observeToolDecision(sequential.text.String(), &toolStarted, toolDecisionActivity(ctx)); err != nil {
 						return err
 					}
 					return preview.update(sequential.text.String(), decisionPreview(ctx))
