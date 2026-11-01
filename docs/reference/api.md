@@ -11,6 +11,43 @@ curl http://127.0.0.1:11611/openapi.yaml
 The OpenAPI document is the source of truth for request and response fields.
 This page explains the main workflows and persistence semantics.
 
+## Images in saved Chat
+
+Services advertising `session-images-v1` accept an optional `images` array on
+`POST /v1/sessions/{name}/generate`, alongside the existing string `content`.
+Each item has `name` (1–200 UTF-8 bytes) and `data_url` (PNG/JPEG base64 only).
+Use `stream: true`, `durable: true` and a stable `request_id`. Text may be empty
+when images are attached. Up to four images of 2 MiB decoded each are accepted,
+with 8192-pixel edges and a 32-megapixel limit. Session image content is bounded
+to 12 MiB encoded. Remote/file URLs, SVG, malformed pixels and agent image turns
+are rejected before inference. A compatible installed local projector is required.
+
+Images participate in durable request identity: identical retries retrieve saved
+work; changing image bytes or names under the same ID conflicts. Accepted images
+are stored in pending turns and completed user messages under existing session
+ownership checks. Completion stores one copy in the user message. History feeds
+typed text/image parts to inference; images are never silently converted to text
+or omitted when the model changes. Existing text-only clients remain compatible.
+The generated OpenAPI contract defines the additive `SessionImage` fields.
+
+## Saved-work search
+
+`GET /api/v2/work/search?query=demo` returns at most 20 navigation metadata
+results (`kind`, `id`, `title`, `updated_at`) plus the actual searched `scopes`
+and `partial`. Queries require at least two characters and at most 256 UTF-8
+bytes. Conversation-name access follows session ownership and `sessions:all`;
+root task-request access follows existing Chat/profile/actor restrictions.
+It does not search message bodies or artifacts and never initiates execution.
+
+Requests have a two-second scan deadline. Conversation scanning additionally
+stops after 4,096 directory entries or 32 MiB of reads, with a 4 MiB per-file
+limit. Task scanning snapshots at most 4,096 records and performs matching
+outside the runner lock. Corrupt, oversized, unavailable or omitted results make the response
+partial; an empty partial response is not proof that no matching work exists.
+Responses are `no-store`, do not expose transcripts or tool arguments, and
+support ordinary request cancellation. The `work-search-v1` system capability
+advertises this additive endpoint; older clients and routes are unchanged.
+
 ## Native execution workspaces (development)
 
 `GET /api/v2/execution/workspaces` returns ready, already locally approved hosts
@@ -213,6 +250,13 @@ it does not select that private protocol. The governed adapter normalizes one co
 validated response into the existing tool-call contract. Partial JSON, duplicate
 keys, unknown tools, truncated generations and incomplete streams cannot
 dispatch input. Counting and generation use the same wire messages and schemas.
+For this owned envelope, the pinned runtime's regex-to-grammar conversion does
+not preserve JSON string boundaries. The generation-only schema therefore uses
+JSON-aware string rules instead of `pattern`; the original catalog, schema
+identity and prompt constraints are unchanged. Both completion and SSE decisions
+must still pass the original argument schema, including every pattern, before
+being emitted as completed tool calls. This does not alter external native-tool
+requests or public user-supplied `response_format` schemas.
 The changing catalog stays near the current exchange to preserve the cached
 instruction/history prefix. Tool-enabled terminal text is delivered after this
 envelope finishes; ordinary text-only Chat retains token streaming.
@@ -887,8 +931,25 @@ request explicitly requires retrieval. It is never silently ignored:
 
 These rules apply to streaming, non-streaming, and saved-conversation chat.
 Successful retrieval supplies untrusted source context to the model; it does
-not guarantee that every generated statement is supported. Structured, persisted
-citations and source-only evaluation remain planned work.
+not guarantee that every generated statement is supported. Source-only answer
+quality evaluation remains a separate requirement.
+
+Services advertising `scoped-knowledge-chat-v1` accept `knowledge_documents`
+on `POST /v1/sessions/{name}/generate`: one to sixteen unique document IDs,
+with `use_knowledge_base: true`. The service retrieves only those documents;
+missing, unindexed or changed sources fail without searching the broader index.
+Agent turns intersect the selection with their pinned profile and turn restrictions;
+references never grant additional access. Older services must not receive this
+field because they may ignore it. Clients must check the capability first.
+
+Completed session messages and durable turns include `knowledge_sources` when
+retrieval evidence was captured. Each entry contains `document_id`, `name`,
+`chunk_id`, `content` and `content_hash` (SHA-256 of the supplied UTF-8 passage).
+These are bounded excerpts actually supplied to inference, not model-authored
+citations or a guarantee of answer correctness. The durable request digest includes
+the selected IDs: reusing a request ID with a different source scope returns a
+conflict instead of replaying generation. Historical messages without these
+optional fields remain valid.
 
 The knowledge index is currently shared by callers granted RAG access. Session
 ownership does not make uploaded documents private to their uploader; separate
@@ -1273,6 +1334,12 @@ data from issue reports.
 Services advertising `agent-schedules-v1` expose actor/workspace-owned Chat APIs:
 
 - `GET /api/v2/agent-schedules` lists reviewed policy projections.
+- `GET /api/v2/agent-schedules/preview?zone=Africa%2FHarare&hour=9&minute=0&weekdays=1,2,3,4,5`
+  returns the canonical calendar, service-clock `as_of`, and three future UTC
+  `occurrences`. Each query parameter is required exactly once. It uses the same
+  DST rules as execution and requires Chat permission; responses are not cached.
+  This read-only calculation creates no policy, occurrence claim, or job and
+  does not establish resource readiness or authorize execution.
 - `POST /api/v2/agent-schedules` creates a policy without creating a job.
 - `GET /api/v2/agent-schedules/{id}?revision=N` inspects a current/historical revision.
 - `PUT /api/v2/agent-schedules/{id}` performs a full live-resource review with

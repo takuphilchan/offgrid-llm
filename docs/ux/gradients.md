@@ -1,4 +1,36 @@
-# Tonal gradient review — 2026-10-30
+# Surface materials
+
+## Current refinement — 2026-10-31
+
+The approved material prototype strengthens neutral depth without changing the
+base palette. The three decorative families are now sidebar, composer and
+floating surfaces. Primary buttons use solid fills, including on hover; text
+never inherits a surface opacity. The older review below records the previous
+treatment and its evidence, not the current overlay restriction.
+
+Sidebar and composer use static 165-degree palette-derived ramps. Utility
+popovers and the command palette use a 96% surface fill, a faint tonal wash and
+at most 12px backdrop blur. Blur is bounded to these floating panels: there is
+no wallpaper sampling, full-window glass, animated gradient or inference effect.
+This is CSS presentation, not a native Mica or Liquid Glass implementation.
+
+Unsupported CSS, reduced transparency, increased contrast and forced colors
+retain opaque surfaces with no gradients or blur. The diagnostic root attribute
+`data-gradients="off"` also disables all material enhancements. Reduced motion
+continues to disable entrance motion independently. Generator ownership remains
+`scripts/maintenance/generate-ui-gradients.mjs`; edit it rather than its generated
+block in `apps/web/src/tokens.css`.
+
+Compositing tests sample the floating wash over black and white backgrounds.
+Minimum normal-text contrast is **4.91:1 in light** and **5.57:1 in dark**; opaque
+text and muted text are higher. Keyboard tests include a floating menu inside
+the mobile navigation drawer: Tab stays in the drawer, first Escape closes the
+menu and second Escape closes the drawer, restoring the appropriate trigger.
+Current performance and regression results, including failed development-mode
+measurements, are recorded in the
+[workspace evidence](../quality/evidence/workspace-experience-2026-10-30.md).
+
+## Historical tonal gradient review — 2026-10-30
 
 This is the third approved UI brief, following the flat presentation/usability
 checkpoint `f1ed3f9`. It permits new palette-derived backgrounds, not palette
@@ -153,3 +185,14 @@ advisory remains. Local evidence: `gradient-full.log`, `gradient-matrix.log`,
 Subsequent installation added actual Windows startup/theme/zoom evidence using
 isolated profiles. See the [installation record](../quality/evidence/ui-craft-install-2026-10-30.md).
 Other operating systems, assistive technology and the stress gate remain open.
+
+### Current follow-up status — 2026-10-31
+
+The failing stress results above describe the earlier implementation. The
+whole-product follow-up moved Markdown parsing off the main thread and passed
+three repetitions of the unchanged 4x/6x, gradients-on/off workload, including
+both the 250 ms Stop and stream-frame p95 gates. The actual ranges, retained
+failure evidence and worker compatibility repair are recorded in the
+[whole-product evidence](../quality/evidence/workspace-experience-2026-10-30.md).
+Those measurements establish fixture responsiveness, not physical-display,
+screen-reader or all-platform qualification; those parts remain open.

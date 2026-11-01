@@ -293,6 +293,14 @@ Unknown tools show their technical identity, an explicit effects warning and
 exact canonical arguments. Stop immediately shows a pending acknowledgment;
 failed acknowledgment remains labelled unconfirmed, not undone.
 
+### Create an agent for an outcome
+
+When creating a reusable agent, start with the outcome and instructions. The
+writing, source-comparison and learning examples fill only the unsaved instruction
+field; edit them for your work. They do not attach tools, allow computer access or
+run a task. Choose a name and installed model, add only the resources needed, then
+save. **Use in Chat** selects that saved revision without sending a message.
+
 ### Read results and output files
 
 Saved answers and **Output files** precede the collapsed activity log. Generated
@@ -303,10 +311,27 @@ the selected digest and length before offering a file.
 
 Downloads use the owner-authorized task artifact endpoint. Revoked, removed or
 failed-integrity files show an error beside that file while retaining the saved
-answer. There is no executable embedded document preview; download an unfamiliar
-format and inspect it with an appropriate application. **Export evidence** under
+answer. **Preview** opens text, Markdown, JSON and CSV files up to 64 KiB directly
+in the result. It checks integrity and UTF-8 before display and does not execute
+HTML or load remote images. Close the preview to clear it; reopening checks access
+again. Larger or unfamiliar formats still offer **Download** for inspection in
+an appropriate application. **Export evidence** under
 **Context usage** retains the saved job record for inspection. These views do not
 independently prove that a model's requested real-world outcome occurred.
+
+Specialists appear under **Subtasks** with their actual observed status. Expand
+one to see its prerequisites and returned draft or files without leaving the
+parent conversation. A completed specialist does not mean the whole task is
+complete. Unavailable or revoked results remain explicit; **Inspect work** opens
+the permitted saved task. Large legacy plans do not automatically subscribe to
+more than four specialists.
+
+You can start or select another conversation while a reply is running. Returning
+checks the original saved turn rather than sending the request again. Use
+**Stop** to cancel work; navigating away only closes the current view. For
+interrupted tasks, follow the saved checkpoint or desktop-reconnection guidance.
+A connection check reads current status; it does not repair or replay a failed
+action. Existing answers and files remain inspectable when available.
 
 Stopping from a task's access panel cancels that saved task and its own pending
 computer setup; it does not stop another task's connected application. The local
@@ -651,6 +676,14 @@ missed slots. DST gaps skip; repeated wall times use the first instant. Startup,
 clock jumps or delayed preparation can record missed work. Prior running,
 approval-waiting, interrupted or uncertain work blocks overlap. Occurrences link
 one canonical root in Activity; there is no schedule replay/run-now button.
+
+The schedule editor supports searching time zones and shows the next three
+calendar times calculated by the service. Changing the calendar clears the old
+preview; Refresh recalculates it without saving or running anything. The preview
+shows when it was calculated and does not guarantee execution: resource and
+permission checks still apply at admission. An unavailable preview is reported
+explicitly. Decision budgets remain editable under Advanced limits, and saving
+still requires review of the selected resources.
 
 Profiles/models/budgets/grants are pinned, not silently upgraded. Knowledge
 excerpts refresh under the same document IDs before admission; stale excerpts do

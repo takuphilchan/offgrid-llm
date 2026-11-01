@@ -6,6 +6,13 @@ React UI rather than maintaining a fork. A change to a workflow should therefore
 work in both environments unless it is explicitly guarded by a desktop
 capability.
 
+Shared surface tokens provide neutral sidebar/composer depth and lightly frosted
+utility menus and the command palette. Text remains opaque; primary actions use
+solid fills. Reduced transparency, increased contrast, forced colors and browsers
+without the required CSS support receive opaque surfaces. Effects are static and
+bounded to three decorative surface families. See the maintained
+[surface-material guide](../ux/gradients.md) for ownership and verification.
+
 ## Product structure
 
 The primary navigation is organized by user intent:
@@ -30,6 +37,18 @@ with connection status below it. Below 1024px a labelled navigation button opens
 the expanded sidebar as a drawer; Escape/outside click closes it and restores
 focus. All six destinations remain available.
 These controls do not grant permissions or restart active work.
+
+Quick actions also finds saved work on services advertising `work-search-v1`.
+It searches authorized **conversation names and root task requests**, not message
+bodies, artifacts or file contents. Search starts after two characters, is
+debounced and cancelled when replaced or closed, and returns at most 20 metadata
+matches. A partial-search notice means a result, time, storage or scan limit was
+reached; refine the query rather than treating an empty partial result as proof
+that work does not exist. Older services retain command-only search.
+Opening a result navigates through the existing conversation/task identity and
+offers **Back to previous view**, preserving its draft and active work. Search
+results and return state are discarded when the actor or workspace changes;
+search never starts, resumes or replays execution.
 
 The Workspace options Refresh control reloads the current page's data without remounting its
 editor or clearing drafts. Normal lists do not repeat it in each section heading.
@@ -118,10 +137,11 @@ redefine those values. Default actions and fields use a 40px minimum height,
 8px radius, 14px text and 8px action spacing. Text can wrap and controls can
 grow; do not set fixed heights that clip translated labels.
 
-- Use `primary-button` for the main action, `secondary-button` for alternatives,
-  and `danger-button` for destructive operations. Legacy `text-button` call sites
-  use the same outlined secondary treatment: actions have a visible boundary
-  before hover. Destructive actions still require their existing confirmations.
+- Use `primary-button` for the solid main action, `secondary-button` for tonal
+  alternatives, and `danger-button` for destructive operations. `text-button`
+  and `utility-button` are quiet, labelled actions with visible hover and keyboard
+  focus. Do not add an outline to every action. Destructive actions still require
+  their existing confirmations; forced-colors mode restores explicit boundaries.
 - Route-changing setup/recovery actions and artifact downloads retain anchor
   semantics but use `secondary-button`, including its sizing and focus states.
   Navigation rows and actual content/reference links remain distinct; references
@@ -276,7 +296,7 @@ The coordinator retains at most 200 link identities from its existing jobs read,
 not another history store. Statistics failure does not hide available history.
 Settings groups Preferences, Workspace and Diagnostics, with one service identity
 section. Desktop-local paths are labelled separately from external service storage.
-Tools and Connections share labelled headings, list states and outlined actions;
+Tools and Connections share labelled headings, list states and action roles;
 their administration remains outside the ordinary task composer.
 
 **Known work** in the header links to existing tasks and conversations. It is a
@@ -391,10 +411,42 @@ saved terminal state; no action is described as undone.
 
 The result view distinguishes model output from file integrity. Artifact reads
 retain authentication, cancellation, the current 128 KiB service limit and
-digest/size checks. All formats download as attachments, not embedded active
-content. Errors stay with the affected file. A supported correction targets the
+digest/size checks. Text, Markdown, JSON and CSV files up to 64 KiB offer an
+explicit in-place Preview. Preview checks the bytes again, decodes strict UTF-8
+and uses inert text or the safe Markdown renderer. It does not execute HTML,
+load remote images or fetch a file until requested. Closing clears the content
+and cancels pending reads; reopening checks current authorization again.
+Unsupported or larger files retain Download. All downloads remain attachments.
+Errors stay with the affected file. A supported correction targets the
 same task with its existing request ID; unsupported continuation explicitly
 links back to Chat without resubmitting or overwriting another draft.
+
+New chat and conversation selection remain available while a reply is running.
+Navigation detaches the view, not the saved work; Stop is the explicit cancellation
+action. Returning reconciles the original turn and refreshes its saved messages,
+including when the background coordinator already observed completion. Late
+events and Stop acknowledgments stay bound to the originating conversation.
+History browsing is a separate presentation component; deletion remains guarded.
+
+The model picker searches readable names and exact installed IDs. Each option
+retains its exact ID and shows only reported runtime readiness, loaded state and
+context capacity. Selection neither loads nor downloads a model. Unknown
+readiness is not presented as qualified. Search, arrow keys, Enter and Escape
+work within the bounded popover, including narrow and RTL layouts.
+
+Recovery guidance follows saved task states rather than interpreting error prose.
+Connection errors offer a read-only connection check. Interrupted work explains
+its checkpoint or expired desktop access, and unavailable checkpoints are explicit.
+Expired desktop access does not also offer a conflicting Resume button. Failed
+work keeps its original reason and any saved output; Refresh is not offered as
+an execution repair. Uncertain effects still require inspection and reconciliation.
+
+Specialist activity shows each observed child's actual state under the parent,
+with dependencies and returned output behind an individual disclosure. The first
+four children reuse the existing authorized read-only followers; larger legacy
+plans retain explicit inspect links for the others. A child result is shown only
+when its returned parent identity matches. Child failure or completion never
+changes the parent's displayed outcome or adds independent lifecycle controls.
 
 This redesign is incremental, but new screens must not extend the legacy visual
 language. When materially changing a feature, move its styles into the
@@ -436,7 +488,126 @@ switch, contrast measurements and the outstanding throttled streaming limitation
 Installed-app feedback supersedes the uniform desktop control size above:
 fine-pointer secondary actions are 32px and primary/form controls 36px, with
 44px coarse-pointer targets retained. Workspace options is grouped into compact
-rows. Agent editing uses two columns when space permits, with Tools/Knowledge
-visible and Skills/collaborators outside Advanced. Narrow layouts stack in
-reading order. No resource, grant or draft is changed merely by opening the form.
+rows. Agent editing uses two columns when space permits, with purpose examples
+and identity/model fields alongside optional capabilities. Tools, Knowledge and
+collaborators have labelled disclosures with selection counts; sections with
+existing selections open initially, and collapsing them does not remove anything.
+Skills/collaborators remain outside Advanced. Narrow layouts stack in reading
+order. Save follows the fields without covering them. No resource, grant or draft
+is changed merely by opening the form. Explicit Use in Chat selects the saved
+revision and does not automatically submit a task.
 Chat-history scrolling keeps the footer fixed and reserves its scrollbar lane.
+
+Language/embedding discovery separates curated catalog browsing from Hugging Face
+search. Catalog filters and comparison shortlists remain scoped to category and
+workspace. Up to three models can be compared using supplied size, RAM estimate,
+quantization and license metadata; missing values remain unknown. Catalog RAM
+estimates are not measured runtime fit. Comparing or filtering does not download
+or select a model, and filtering never hides ongoing downloads. Speech packages
+retain their existing reviewed variant/installation flow.
+
+Knowledge supports selecting one document or a temporary collection of up to
+sixteen ready documents, then asking about those sources in Chat. This preserves
+the current draft and submits nothing during navigation. The composer names the
+selected sources; removing them turns retrieval off instead of silently expanding
+to the whole library. Selection belongs to that conversation and workspace.
+An older service without `scoped-knowledge-chat-v1` cannot accept this request.
+
+The service checks the selection and fails if a source is unavailable or there
+are no matching passages. Agent turns can only narrow documents already attached
+to the pinned profile, including subordinate agents' effective resources. Saved
+responses expose the actual bounded passages supplied to inference, with source
+and chunk identities and content digests. Passages render as inert text; they
+help the reader evaluate an answer, but do not prove every generated claim.
+
+Skills can be searched by name or description before attachment. Inspect shows
+the exact revision, inert source files and an example request. Drafts remain
+inactive until explicitly reviewed; review does not attach or execute them.
+Attach selects that revision in the profile draft, and Save agent persists it.
+Use in Chat selects the saved agent without submitting the example or replacing
+the conversation draft. Unavailable pinned revisions stay visible with refresh,
+inspection and removal actions; a newer revision is never silently substituted.
+
+Specialist activity shows each subordinate task's actual state, dependency names
+and returned draft or files under the parent task. At most four child followers
+run automatically. Inspection does not start, approve or retry a child, and
+conflicting drafts remain attributable rather than becoming a claimed conclusion.
+
+Streaming and long saved Markdown responses parse in a local worker with one
+active parse and at most one pending revision per mounted response. This keeps
+parsing off the main interface thread. Raw HTML and images remain inert, and
+copying uses the complete canonical response. If the parser fails or stalls,
+the source remains readable as plain text. This does not change inference speed.
+
+The composer groups agent/model and workspace choices above a separate voice and
+Send/Stop action row. Secondary settings retain visible labels but use quieter
+controls. An agent's pinned model has a readable label and a read-only disclosure
+of its exact identifier and profile revision; opening it cannot switch models.
+Folder scope and tool restrictions remain explicit. Voice settings, microphone
+capture and automatic speech opt-in remain distinct, with no automatic capture.
+
+Model choices use readable names and searchable lists, while preserving exact
+model IDs and package revisions for inspection. Speech preferences, embedding
+setup and multi-variant discovery use inline lists that remain keyboard-accessible
+inside their existing panels. Search and selection never start a transfer, capture
+audio or submit a Chat draft. Escape closes the list before its containing panel.
+Unavailable saved choices remain visible rather than silently selecting another.
+Installed, runtime-ready, loaded and smoke-tested states remain distinct; a speech
+smoke test does not establish quality or latency. Voice controls and recovery
+messages now have explicit resources for all nine locales; independent speaker
+review remains outstanding.
+
+Sign-in identifies the connected service and distinguishes its accounts from the
+computer's login. Desktop metadata contributes only the service origin; URL
+credentials, paths and query parameters are not displayed. Password visibility is
+an explicit local toggle. Failed sign-in preserves the entered details and offers
+service/account guidance; it does not imply that OffGrid has an automatic password
+reset flow. The authentication API and credential destination are unchanged.
+
+Tools loads its own inventory independently of optional external-agent setup.
+Connections keeps MCP inventory errors separate from external-provider readiness
+errors, with a read-only retry beside the failed section. Editing a connection
+draft clears the previous test result; pending test/connect operations hold the
+submitted fields stable. None of these views grants tools to an agent implicitly.
+
+The 2026-10-31 review replaces blanket outlined actions with shared visual roles.
+Primary actions stay solid, secondary actions use an existing tonal surface, and
+text/utility actions keep visible labels with hover and keyboard focus. Input
+fields and floating panels retain their boundaries. Forced-colors mode restores
+explicit secondary/selected boundaries; coarse-pointer actions retain 44px targets.
+No palette color was added. Removing decoration does not remove grouping:
+
+| Surface | Organization and boundaries |
+| --- | --- |
+| Chat | The editor has one outer boundary. Agent/model/workspace choices are grouped together; context and voice settings share a lower utility group opposite microphone and Send/Stop. Response actions are quiet. |
+| Agents | A wider profile list sits beside the unboxed editor; instructions and resources share the available desktop width. Existing profiles prompt selection rather than creation. Tool and skill rows use separators instead of nested cards. |
+| Knowledge | Add document and library management sit in the heading. Ask using Knowledge has its retrieval-scope explanation immediately beneath it. Document inspection and management remain beside the source they affect. Empty filters clear locally and restore focus. |
+| Models | Installed counts describe inventory, not readiness. Selected tabs/categories use surface and weight, with explicit accessibility states. Comparison remains compact until there are selected models. Discovery and downloads remain separate. |
+| Activity | Recent tasks, schedules and diagnostics align to one content width. Empty history can return to Chat without submitting the retained draft. |
+| Settings | Labels and bounded controls align in two columns when space allows and stack on narrow screens. Service identity is shown once; account permissions and diagnostics retain their existing scope. |
+| Sign-in and restricted areas | The service address stays visible without an extra nested card. Permission notices explain who can help and provide a draft-preserving return to Chat. |
+
+Empty/search/error states remain distinct. Filtering a model, source or profile
+never removes the underlying record, submits work or changes an existing editor
+draft. These renderer checks do not qualify native screen readers or platforms.
+
+### Images alongside text and voice
+
+Ordinary Chat accepts PNG/JPEG files through **Add images**, clipboard paste or
+drag-and-drop. Previews and remove controls stay above the text input; attachment
+and voice controls share the composer. Up to four images of 2 MiB each are allowed
+per turn (8192 pixels per edge, 32 megapixels). A conversation is additionally
+bounded to 12 MiB of encoded image data; start a new conversation if it fills.
+
+Images require an installed local vision model and matching projector. File
+presence is not proof of visual accuracy. Unsupported models, older services and
+agent turns show a limitation without discarding images, switching models or
+downloading anything. Plain text and voice remain available for text-only chats.
+
+Accepted images are stored with the scoped conversation and displayed after
+reload. Unsent images use the same actor/workspace/conversation draft boundaries
+as text. If browser storage fills, an explicit warning says to keep the window
+open: the preview remains in memory but cannot be promised after a restart.
+Images are sent to the connected OffGrid service only on Send; remote image URLs,
+SVG and camera capture are not supported. Do not confuse an attached image with
+permission for desktop control or a qualified visual-agent workflow.

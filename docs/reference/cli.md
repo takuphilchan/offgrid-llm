@@ -18,6 +18,41 @@ Examples assume the executable is on `PATH`. In PowerShell, use
 
 ## Service connection
 
+### Images in ordinary interactive Chat
+
+Use an installed vision-capable model and its matching local projector:
+
+```bash
+offgrid run YOUR_VISION_MODEL --image "./photo.jpg"
+offgrid run YOUR_VISION_MODEL --image "./first.png" --image "./second.jpg" --save image-review
+offgrid run YOUR_VISION_MODEL --load image-review
+```
+
+Inside either the terminal UI or plain interactive mode:
+
+```text
+/image ./folder with spaces/photo.png
+/images
+/remove-image 1
+/remove-image all
+```
+
+`/image` attaches to the next prompt; it does not submit immediately. `/images`
+lists pending attachments. Enter a question, or press Enter with pending images
+to send an image-only prompt. Up to four PNG/JPEG files of 2 MiB each are supported,
+with the same pixel and conversation-image limits as saved web Chat. Files are
+validated and snapshotted when attached, so changing the source file later does
+not replace the accepted bytes. Failed or incomplete inference retains pending
+images; successful exchanges keep them in history, including `--save`/`--load`.
+`/clear` explicitly clears conversation context and pending images.
+
+These commands belong to ordinary `offgrid run`, whose saved sessions use the
+existing local CLI session store. They do not add image execution to native agent
+sessions, change folder/desktop grants, select another model or fetch image URLs.
+The service checks projector availability. Real vision-model qualification is
+separate from the CLI's transport/persistence tests; see the
+[image verification record](../quality/evidence/workspace-experience-2026-10-30.md).
+
 ### External agent lifecycle
 
 ```bash

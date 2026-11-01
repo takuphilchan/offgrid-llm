@@ -11,6 +11,7 @@ This former long-form record is split into dated evidence sections. These preser
 - [Native document workflows, October](../quality/evidence/native-documents-2026-10.md)
 - [Desktop access and consent, October](../quality/evidence/desktop-access-2026-10.md)
 - [Workspace and UI, October](../quality/evidence/workspace-2026-10.md)
+- [Whole-product experience implementation, October 30](../quality/evidence/workspace-experience-2026-10-30.md)
 - [Voice program, October](../quality/evidence/voice-2026-10.md)
 - [Quality stages and release evidence](../quality/evidence/quality-stages-and-release-evidence.md)
 - [September release and recovery evidence](../quality/evidence/release-evidence-2026-09.md)
