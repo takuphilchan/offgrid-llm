@@ -24,7 +24,10 @@ for (const locale of ['en', 'ar'] as const) for (const width of [320, 768, 1280]
   await expect(editor).toHaveValue('Keep this exact draft — café 日本語');
   await expect(page.locator('.composer-context .chat-execution-workspace')).toBeVisible();
   await expect(page.locator('.composer-context .chat-agent-tools')).toBeVisible();
-  await expect(page.locator('.composer-footer .voice-settings > button')).toBeVisible();
+  await expect(page.locator('.composer-footer .voice-settings > button')).toHaveCount(0);
+  const preferences=page.locator('.composer-context-menu > button');await preferences.click();
+  await expect(page.locator('.voice-settings-inline')).toBeVisible();
+  await page.keyboard.press('Escape');await expect(preferences).toBeFocused();
   await expect(page.locator('.composer-context .composer-context-menu')).toHaveCount(0);
   await expect(page.locator('.composer-footer .composer-utilities .composer-context-menu > button')).toBeVisible();
   const identity=await page.locator('.composer-context').boundingBox(),utilities=await page.locator('.composer-utilities').boundingBox(),actions=await page.locator('.composer-actions').boundingBox();

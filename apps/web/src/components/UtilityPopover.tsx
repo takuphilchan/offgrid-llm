@@ -38,7 +38,7 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
         width: `${panelWidth}px`, left: `${Math.max(left + margin, Math.min(start, left + width - panelWidth - margin))}px`,
         top: overlay ? `${top + margin}px` : upwards ? 'auto' : `${anchor.bottom + gap}px`,
         bottom: !overlay && upwards ? `${window.innerHeight - anchor.top + gap}px` : 'auto',
-        maxHeight: `${overlay ? Math.max(0, height - 2 * margin) : upwards ? above : below}px`,
+        maxHeight: `min(${overlay ? Math.max(0, height - 2 * margin) : upwards ? above : below}px, var(--utility-panel-max-height, 100vh))`,
       });
     };
     position();

@@ -255,6 +255,13 @@ test('results and long file names fit a narrow screen in both themes', async ({ 
   for (const theme of ['light', 'dark']) {
     await page.goto(`/ui/#/agents/task/${id}`); await page.evaluate(theme => localStorage.setItem('offgrid.theme', theme), theme); await page.reload();
     await expect(page.getByRole('heading', { name: 'Generated summary' })).toBeVisible();
+    const name = page.locator('.artifact-name');
+    await expect(name).toHaveText(state.run.artifacts[0].name);
+    expect(await name.evaluate(el => el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight))).toBeLessThanOrEqual(2.1);
+    await page.getByText('Full filename', { exact: true }).click();
+    await expect(page.locator('.artifact-name-details p')).toBeVisible();
+    await expect(page.locator('.artifact-name-details p')).toHaveText(state.run.artifacts[0].name);
+    await page.getByText('Full filename', { exact: true }).click();
     await page.getByRole('button', { name: /^Preview:/ }).click();
     await expect(page.locator('.artifact-preview-content pre')).toContainText(content.trim());
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);

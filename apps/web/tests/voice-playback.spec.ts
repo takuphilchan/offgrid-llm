@@ -143,6 +143,7 @@ test('unavailable speech is explained before a synthesis request', async ({ page
   await expect(page.getByRole('alert')).toContainText('Install CustomVoice');
   await openVoicePreferences(page);
   await expect(page.getByRole('checkbox', { name: 'Speak responses' })).not.toBeChecked();
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
   await expect(page.locator('.voice-error')).toContainText('Install CustomVoice');
   expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(0);
@@ -271,9 +272,9 @@ test('late microphone permission after navigation releases tracks without starti
 
 test('dictation retains concurrent draft edits and sends the selected recognition model', async ({ page }) => {
   await microphoneFixture(page);
-  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await chooseModel(page, 'Recognition model', 'asr-b@r2');
-  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await page.locator('.composer textarea').fill('original');
   await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
@@ -303,11 +304,11 @@ test('Stop recording remains usable while a text response is generating', async 
 
 test('speech selection stays pinned across chunks when preferences change', async ({ page }, info) => {
   await microphoneFixture(page);
-  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await chooseModel(page, 'Speech model', 'tts-a@r1');
   await page.getByLabel('Voice', { exact: true }).selectOption('0');
   await page.screenshot({ path: info.outputPath('voice-settings.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await openVoicePreferences(page);
   await page.getByText('Speak responses', { exact: true }).click();
   await openVoicePreferences(page);
@@ -317,7 +318,7 @@ test('speech selection stays pinned across chunks when preferences change', asyn
   await expect.poll(() => page.evaluate(() => typeof (window as any).emitText)).toBe('function');
   await page.evaluate(() => (window as any).emitText('First sentence. Tail'));
   await expect.poll(() => page.evaluate(() => (window as any).speechRequests.length)).toBe(1);
-  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await chooseModel(page, 'Speech model', 'tts-b@r2');
   await page.evaluate(() => (window as any).finishSpeech(false));
   await expect.poll(() => page.evaluate(() => Boolean((window as any).player?.onended))).toBe(true);
@@ -328,10 +329,10 @@ test('speech selection stays pinned across chunks when preferences change', asyn
 
 test('a removed explicit speech selection never falls back or opens the microphone', async ({ page }) => {
   await microphoneFixture(page);
-  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await chooseModel(page, 'Recognition model', 'asr-b@r2');
   await chooseModel(page, 'Speech model', 'tts-b@r2');
-  await page.getByRole('button', { name: 'Voice settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Context & response', exact: true }).click();
   await page.route('**/v1/audio/status', route => route.fulfill({ json: { asr: { available: true }, tts: { available: true }, profiles: [] } }));
   await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
   await expect(page.locator('.composer .voice-error')).toContainText('no longer installed');
@@ -347,9 +348,9 @@ test('voice settings remain visible and keyboard reachable on narrow light and d
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => localStorage.setItem('offgrid.theme', theme), theme);
     await page.reload();
-    const summary = page.getByRole('button', { name: 'Voice settings', exact: true });
+    const summary = page.getByRole('button', { name: 'Context & response', exact: true });
     await summary.focus(); await page.keyboard.press('Enter');
-    const panel = page.locator('.voice-settings-panel');
+    const panel = page.locator('.composer-context-menu > .utility-popover-panel');
     await expect(panel).toBeVisible();
     // Readiness temporarily disables selectors while installed profiles load.
     await expect(page.getByRole('button', { name: 'Recognition model', exact: true })).toContainText('Recognition A');
@@ -368,9 +369,9 @@ test('voice settings remain visible and keyboard reachable on narrow light and d
 test('voice utility remains bounded after resizing to a short viewport', async ({ page }) => {
   await microphoneFixture(page);
   await page.setViewportSize({ width: 320, height: 480 });
-  const trigger = page.getByRole('button', { name: 'Voice settings', exact: true });
+  const trigger = page.getByRole('button', { name: 'Context & response', exact: true });
   await trigger.click();
-  const panel = page.getByRole('region', { name: 'Voice settings', exact: true });
+  const panel = page.getByRole('region', { name: 'Context & response', exact: true });
   await expect(panel).toBeVisible();
   await expect.poll(async () => {
     const box = await panel.boundingBox();
@@ -397,7 +398,7 @@ test('dismissed voice metadata is cancelled and cannot replace a reopened panel'
       ] }), { headers: { 'Content-Type': 'application/json' } }))));
     };
   });
-  const trigger = page.getByRole('button', { name: 'Voice settings', exact: true });
+  const trigger = page.getByRole('button', { name: 'Context & response', exact: true });
   await trigger.click();
   await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.length)).toBe(1);
   await page.keyboard.press('Escape');
@@ -421,8 +422,8 @@ for (const surface of ['chat', 'agents']) {
       await page.route('**/v1/agents/mcp', route => route.fulfill({ json: { servers: [] } }));
       await openAgentChat(page);
     }
-    const button = page.getByRole('button', { name: 'Voice settings', exact: true });
-    const panel = page.getByRole('region', { name: 'Voice settings', exact: true });
+    const button = page.getByRole('button', { name: 'Context & response', exact: true });
+    const panel = page.getByRole('region', { name: 'Context & response', exact: true });
     const editor = page.locator('.composer textarea');
     const outside = page.locator('.topbar h1');
     await expect(panel).toBeHidden();
@@ -445,7 +446,7 @@ for (const surface of ['chat', 'agents']) {
     await button.click();
     await expect(panel).toBeHidden();
     if (surface === 'chat') {
-      await expect(page.locator('.composer').getByRole('button', { name: 'Voice settings', exact: true })).toBeVisible();
+      await expect(page.locator('.composer').getByRole('button', { name: 'Context & response', exact: true })).toBeVisible();
       await openVoicePreferences(page);
       await expect(page.locator('.composer').getByRole('checkbox', { name: 'Speak responses' })).toBeVisible();
     }
@@ -466,6 +467,6 @@ for (const surface of ['chat', 'agents']) {
   });
 }
 async function openVoicePreferences(page: import('@playwright/test').Page) {
-  const trigger = page.getByRole('button', { name: 'Voice settings', exact: true });
+  const trigger = page.getByRole('button', { name: 'Context & response', exact: true });
   if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
 }

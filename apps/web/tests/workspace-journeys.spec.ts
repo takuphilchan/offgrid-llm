@@ -110,15 +110,15 @@ test('04 synthetic dictation is editable, chosen speech models persist and playb
   });
   const wav=Buffer.alloc(364);wav.write('RIFF');wav.writeUInt32LE(356,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(16000,24);wav.writeUInt32LE(32000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(320,40);
   await page.route('**/v1/audio/speech',r=>r.fulfill({contentType:'audio/wav',body:wav}));
-  await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Voice settings',exact:true}).click();
+  await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Context & response',exact:true}).click();
   await chooseModel(page, 'Recognition model', 'asr@r1');await chooseModel(page, 'Speech model', 'tts@r1');await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Use microphone',exact:true}).click();await page.locator('.voice-input-control[data-capture-phase="recording"] button').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Dictated draft.');expect(s.turns).toEqual([]);
-  await page.getByRole('button',{name:'Voice settings',exact:true}).click();
+  await page.getByRole('button',{name:'Context & response',exact:true}).click();
   await page.getByRole('checkbox',{name:'Speak responses',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();await page.keyboard.press('Escape');await send(page,'Edited dictated draft.');
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(true);await page.getByRole('button',{name:'Stop reading',exact:true}).first().click();
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(false);expect(s.turns).toHaveLength(1);expect(await page.evaluate(()=>(window as any).trackStopped)).toBe(true);
-  await nav(page,'agents');await nav(page,'chat');await page.getByRole('button',{name:'Voice settings',exact:true}).click();await page.getByRole('button',{name:'Recognition model',exact:true}).click();await expect(page.getByRole('radiogroup',{name:'Recognition model'}).getByRole('radio',{checked:true})).toHaveValue('asr@r1');
+  await nav(page,'agents');await nav(page,'chat');await page.getByRole('button',{name:'Context & response',exact:true}).click();await page.getByRole('button',{name:'Recognition model',exact:true}).click();await expect(page.getByRole('radiogroup',{name:'Recognition model'}).getByRole('radio',{checked:true})).toHaveValue('asr@r1');
 });
 test('05 ordinary task creates once and exposes saved output with an integrity-checked artifact',async({page})=>{
   const s=await workspace(page);await start(page,s);await expect(page.locator('.message.assistant')).toContainText(output.trim());

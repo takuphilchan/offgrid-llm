@@ -21,7 +21,7 @@ async function fixture(page: Page, locale='en') {
 test('speech choices distinguish revisions, filter locally and never capture or submit',async({page})=>{
   const {state,audio}=await fixture(page);
   await page.locator('.composer textarea').fill('Keep this unsent draft');
-  await page.getByRole('button',{name:'Voice settings',exact:true}).click();
+  await page.getByRole('button',{name:'Context & response',exact:true}).click();
   await page.getByRole('button',{name:'Recognition model',exact:true}).click();
   const group=page.getByRole('radiogroup',{name:'Recognition model'});
   await expect(group.getByRole('radio')).toHaveCount(4);
@@ -37,7 +37,7 @@ test('speech choices distinguish revisions, filter locally and never capture or 
   await expect(page.locator('.composer textarea')).toHaveValue('Keep this unsent draft');
   expect(state.writes).toEqual([]);
   await page.keyboard.press('Escape');audio.profiles=profiles.filter(p=>p.revision!=='r2');
-  await page.getByRole('button',{name:'Voice settings',exact:true}).click();
+  await page.getByRole('button',{name:'Context & response',exact:true}).click();
   await expect(page.locator('.model-choice-missing')).toContainText('whisper@r2');
   await expect(page.getByRole('button',{name:'Recognition model',exact:true})).toContainText('unavailable');
   expect(state.writes).toEqual([]);
@@ -63,9 +63,9 @@ for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu']) test(`speech
  const {state}=await fixture(page,locale);await page.setViewportSize({width:320,height:480});
  const copy=voiceText(locale as LocaleCode);
  await expect(page.getByRole('button',{name:copy.record,exact:true})).toBeVisible();
- const voice=page.locator('.voice-settings > button');await voice.click();
+ const voice=page.locator('.composer-context-menu > button');await voice.click();
  await expect(page.getByRole('checkbox',{name:copy.speakResponses,exact:true})).not.toBeChecked();
- const panel=page.locator('.voice-settings-panel'),trigger=panel.locator('.model-choice-trigger').first();
+ const panel=page.locator('.composer-context-menu > .utility-popover-panel'),trigger=panel.locator('.voice-settings-panel .model-choice-trigger').first();
  await expect(trigger).toBeEnabled();await trigger.click();
  await panel.getByRole('searchbox').fill('r2');
  await panel.getByRole('searchbox').dispatchEvent('keydown',{key:'Enter',isComposing:true});
@@ -92,7 +92,7 @@ test('voice controls and recovery messages have a complete locale-specific copy 
 
 test('unavailable automatic speech is explained without expanding a model chooser',async({page})=>{
  const {state,audio}=await fixture(page);audio.profiles=[];
- await page.getByRole('button',{name:'Voice settings',exact:true}).click();
+ await page.getByRole('button',{name:'Context & response',exact:true}).click();
  await expect(page.locator('.model-choice-summary')).toHaveCount(2);
  await expect(page.locator('.model-choice-summary').first()).toContainText('No compatible speech model is ready');
  await expect(page.getByRole('radiogroup')).toHaveCount(0);

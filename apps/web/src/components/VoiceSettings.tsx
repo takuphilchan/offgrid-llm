@@ -7,7 +7,7 @@ import { voiceSettingsText } from '../i18n/voice-settings';
 import { Icon } from './Icon';
 import { SpeechModelChoice } from './SpeechModelChoice';
 
-export function VoiceSettings({ children, compact = false, subtle = false }: { children?: ReactNode; compact?: boolean; subtle?: boolean }) {
+export function VoiceSettings({ children, compact = false, subtle = false, inline = false }: { children?: ReactNode; compact?: boolean; subtle?: boolean; inline?: boolean }) {
   const id = useId();
   const { locale, messages } = useI18n(), copy = voiceSettingsText(locale);
   const { preferences, setPreferences } = useVoicePreferences();
@@ -24,10 +24,11 @@ export function VoiceSettings({ children, compact = false, subtle = false }: { c
     catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : copy.failed); }
     finally { if (!controller.signal.aborted) setLoading(false); }
   };
+  // Inline preferences are mounted only while their containing utility is open.
+  // Disposal cancels metadata reads just as dismissing the standalone menu does.
+  useEffect(() => { if (inline) void refresh(); }, [inline]);
   const tts = status?.profiles?.find(p => preferences.tts ? `${p.id}@${p.revision}` === preferences.tts : p.available && p.capabilities.includes('speech_synthesis'));
-  return <UtilityPopover label={copy.title} trigger={compact ? <Icon name="speaker" size={18} /> : undefined} triggerClassName={compact ? 'icon-button' : subtle ? 'utility-button' : 'text-button'} className="voice-settings" panelClassName="voice-settings-panel" onOpenChange={expanded => {
-      if (expanded) void refresh(); else request.current?.abort();
-    }}>
+  const content = <>
       {children}
       {(['asr', 'tts'] as const).map(kind => {
         const profiles = status?.profiles?.filter(p => p.capabilities.includes(kind === 'asr' ? 'transcription' : 'speech_synthesis')) ?? [];
@@ -41,5 +42,8 @@ export function VoiceSettings({ children, compact = false, subtle = false }: { c
       {loading && <small role="status">{messages.common.loading}</small>}
       {error && <div role="alert"><small>{error}</small><button className="secondary-button" onClick={() => void refresh()}>{messages.common.retry}</button></div>}
       <a className="secondary-button" href="#/models">{copy.manage}</a>
-  </UtilityPopover>;
+  </>;
+  const changed = (expanded: boolean) => { if (expanded) void refresh(); else request.current?.abort(); };
+  if (inline) return <section className="voice-settings-inline" aria-label={copy.title}><h3>{copy.title}</h3><div className="voice-settings-panel">{content}</div></section>;
+  return <UtilityPopover label={copy.title} trigger={compact ? <Icon name="speaker" size={18} /> : undefined} triggerClassName={compact ? 'icon-button' : subtle ? 'utility-button' : 'text-button'} className="voice-settings" panelClassName="voice-settings-panel" onOpenChange={changed}>{content}</UtilityPopover>;
 }

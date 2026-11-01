@@ -24,6 +24,7 @@
   .composer .composer-utilities > .chat-speech-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
   .composer .composer-footer > .composer-actions { margin-inline-start: auto; }
   .composer .composer-context-menu > button { font-weight: var(--weight-regular); }
+  .composer-context-menu { --utility-panel-max-height: min(480px, 60vh); }
   @media (max-width: 600px) {
     .composer .composer-context { display: flex; }
     .composer .composer-context .model-select, .composer .chat-agent-model { flex-basis: calc(100% - 1rem); max-width: 100%; }

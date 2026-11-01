@@ -28,6 +28,7 @@ async function fixture(page:Page,locale:LocaleCode='en'){
     return route.fulfill({json:data});
   });
   await page.goto('/ui/#/activity');
+  await page.getByRole('button',{name:agentSchedulesText[locale].title,exact:true}).click();
   await expect(page.getByRole('region',{name:agentSchedulesText[locale].title,exact:true})).toBeVisible();
   return {writes,panel:page.getByRole('region',{name:agentSchedulesText[locale].title,exact:true})};
 }
@@ -49,6 +50,16 @@ test('reviewed creation pins policy; management and history never submit or repl
   await panel.getByRole('button',{name:copy.disable,exact:true}).first().click();await expect.poll(()=>writes.length).toBe(2);
   expect(writes[1]).toEqual({path:'/api/v2/agent-schedules/schedule-one/disable',body:{expected_revision:1}});
   expect(writes.some(x=>x.path==='/api/v2/jobs'||x.path.includes('/resume')||x.path.includes('/input'))).toBe(false);
+});
+
+test('switching between work and schedules retains an unsaved schedule without creating it',async({page})=>{
+  const {writes,panel}=await fixture(page),copy=agentSchedulesText.en;
+  await panel.getByRole('button',{name:copy.create,exact:true}).click();
+  const name=panel.getByLabel(copy.name,{exact:true});await name.fill('Keep this unsaved schedule');
+  await page.locator('.activity-page > [role="group"] button').first().click();
+  await expect(panel).toBeHidden();
+  await page.getByRole('button',{name:copy.title,exact:true}).click();
+  await expect(name).toHaveValue('Keep this unsaved schedule');expect(writes).toEqual([]);
 });
 
 for(const locale of Object.keys(agentSchedulesText) as LocaleCode[])test(`schedule controls ${locale} remain readable at 320×480`,async({page})=>{

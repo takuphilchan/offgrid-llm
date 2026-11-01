@@ -150,6 +150,9 @@
   .task-artifacts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
   .task-artifact { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; padding-block: 16px; border-block-start: 1px solid var(--line); }
   .task-artifact > div:first-child { flex: 1 1 16rem; min-width: 0; }
+  .artifact-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.5; }
+  .artifact-name-details { font-size: .875rem; margin-block-start: 8px; }
+  .artifact-name-details > summary { cursor: pointer; padding-block: 4px; color: var(--muted); }
   .task-artifact p { margin-block: 4px; color: var(--muted); }
   .task-result > .workspace-secondary, .task-artifacts > .workspace-secondary, .task-artifact p { font-size: .875rem; line-height: 1.5; }
   .task-artifact > .workspace-notice { flex-basis: 100%; }

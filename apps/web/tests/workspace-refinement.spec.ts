@@ -84,7 +84,7 @@ for (const theme of ['light', 'dark']) test(`six-page visual matrix ${theme}`, a
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (route === 'chat') {
         await expect(page.locator('.composer-actions > button')).toBeInViewport({ ratio: 1 });
-        await expect(page.getByRole('button', { name: 'Voice settings', exact: true })).toBeInViewport({ ratio: 1 });
+        await expect(page.getByRole('button', { name: 'Context & response', exact: true })).toBeInViewport({ ratio: 1 });
       }
       await page.screenshot({ path: info.outputPath(`${route}-${width}-${theme}.png`), fullPage: true });
     }

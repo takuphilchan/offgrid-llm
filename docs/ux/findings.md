@@ -1,5 +1,39 @@
 # Presentation and usability review — 2026-10-30
 
+## Follow-up: order and presentation (2026-11-01)
+
+Reviewing populated screens revealed that consistent buttons did not establish
+consistent hierarchy. Composer preferences competed with input; model maintenance
+was more explicit than model selection; profile save actions required scrolling;
+Knowledge search and question entry occupied separate sections; Activity mixed
+task browsing and scheduling; management pages had different leading edges;
+startup repeated technical metadata; and long artifact names could consume ten
+lines while passing overflow tests. These are workflow and composition findings,
+not evidence that a different gradient or smaller border alone would help.
+
+Group 19 of `workspace-outcome-experience` tracks the corrections and stronger
+realistic-content tests. Shared management alignment, grouped preference/library
+controls, separate Activity views and bounded artifact names reuse existing
+controllers. No presentation change supplies authorization or verification.
+Human usability, assistive-technology and unavailable native-platform gates stay
+open. Browser screenshots and automated journeys cannot establish competitor parity.
+
+Remaining presentation concerns after this pass:
+
+- At 320px, the composer still spends substantial height on active agent,
+  workspace, model and tool context. Grouping preferences helps, but this is not
+  yet a compact mobile composition. Hiding active authority or Stop is not an
+  acceptable density fix.
+- Agent creation remains a configuration form with technical concepts. The
+  reordered identity/purpose fields and persistent wide-screen save action reduce
+  searching; they do not establish that a first-time user understands resources.
+- Empty libraries and advanced model metadata still have uneven density. A
+  readable sparse screen is preferable to decorative filler, but populated,
+  empty and unavailable states need continued comparison in user testing.
+- Shared controls and alignment now have regression coverage. Native-speaker
+  wording, actual screen-reader announcements and physical display behavior do
+  not have equivalent evidence and remain release-qualification limitations.
+
 This is a heuristic review and cognitive walkthrough, not a user study. No
 participant success rate or competitor parity is claimed. Source baseline:
 `7357acae431e40092fd40a5458207d3649d503e8`. Live read-only inspection covered the

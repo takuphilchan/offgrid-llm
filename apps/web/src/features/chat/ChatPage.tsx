@@ -74,6 +74,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
   const [speechError, setSpeechError] = useState('');
   const [checkingSpeech, setCheckingSpeech] = useState(false);
+  const [responseSettingsOpen, setResponseSettingsOpen] = useState(false);
   const speechCheck = useRef<AbortController | null>(null);
   const speech = useRef<ResponseSpeech | null>(null);
   const stopSpeech = () => { speech.current?.stop(); speech.current = null; };
@@ -572,14 +573,12 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           <AgentSelector value={agent} onChange={value => { setAgent(value); setAgentResources({ profile: value ? `${value.id}:${value.revision}` : '', restrictions: {} }); }} disabled={busy} />
           {agent && <ExecutionWorkspace value={executionWorkspace} onChange={setExecutionWorkspace} disabled={busy || linkedUnsettled} onReady={setExecutionReady} ceiling={restrictions.execution??agent.settings.execution} />}
           {agent ? <><PinnedAgentModel profile={agent} /><AgentTools profile={agent} restrictions={restrictions} onChange={value => setAgentResources({ profile: agentKey, restrictions: value })} disabled={busy} />{agent.settings.computer && restrictions.computer !== false && <TaskAccessPolicy value={computerPolicy} onChange={setComputerPolicy} disabled={busy} scope="desktop" workspace={permissions.workspace} />}</> : <ModelSelect models={models} value={model} onChange={setModel} />}
-
-
         </div>
         {!agent && knowledge && knowledgeState !== 'ready' && <ScopedNotice action={<button className="secondary-button" onClick={() => void refreshKnowledge()}>{feedback.retryKnowledge}</button>}>{knowledgeState === 'checking' ? feedback.checkingKnowledge : knowledgeState === 'failed' ? feedback.knowledgeCheckFailed : interaction[locale].knowledgeUnavailable}</ScopedNotice>}
         {selectedSources.length > 0 ? <div className="composer-source-scope"><strong>{scopeCopy.selected}</strong><span>{selectedSources.map(source => source.name).join(' · ')}</span><button type="button" className="icon-button" disabled={busy} onClick={clearSources} aria-label={scopeCopy.clear} title={scopeCopy.clear}><Icon name="close" size={16} /></button>{!scopedReady && <p role="status">{scopeCopy.unsupported}</p>}</div> : !agent && knowledge && <p className="composer-retrieval-scope">{workspaceManagement(locale).retrievalScope}</p>}
         <div className="composer-footer">
           <div className="composer-utilities">
-          <UtilityPopover label={experience.context} trigger={<><Icon name="settings" size={16} /><span>{!agent && (knowledge || selectedSources.length > 0) ? experience.knowledgeOn : experience.context}</span></>} triggerClassName="utility-button" className="composer-context-menu">
+          <UtilityPopover label={experience.context} trigger={<><Icon name="settings" size={16} /><span>{!agent && (knowledge || selectedSources.length > 0) ? experience.knowledgeOn : experience.context}</span></>} triggerClassName="utility-button" className="composer-context-menu" onOpenChange={setResponseSettingsOpen}>
             {!agent && <label className="switch"><input type="checkbox" checked={knowledge || selectedSources.length > 0} disabled={busy || selectedSources.length > 0 || (!knowledge && knowledgeState !== 'ready')} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label>}
             {!agent && permissions.knowledge && knowledgeState !== 'ready' && <div className="knowledge-readiness">
               {knowledgeState === 'checking' ? <span role="status">{feedback.checkingKnowledge}</span>
@@ -589,8 +588,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
             <label className="field">{text.chatStreaming.profile}<select value={profile} disabled={busy} onChange={event => updatePreferences({ ...preferences, profile: event.target.value })}><option value="interactive">{text.chatStreaming.interactive}</option><option value="extended">{text.chatStreaming.extended}</option></select></label>
             <label className="field">{text.chatStreaming.responseLimit}<select value={maxTokens} disabled={busy} onChange={event => updatePreferences({ ...preferences, maxTokens: Number(event.target.value) })}>{[256, 1024, 4096].map(count => <option value={count} key={count}>{count.toLocaleString(locale)}</option>)}</select></label>
             <p>{text.chatStreaming.profileHint}</p>
+            {responseSettingsOpen && <ComposerSpeech presentation="settings" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />}
           </UtilityPopover>
-          {imageDraft.control}<ComposerSpeech enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />
+          {imageDraft.control}<ComposerSpeech presentation="status" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />
           </div>
       <div className="composer-actions"><VoiceInputButton contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => setDraft(draft ? `${draft} ${value}` : value)} /><button aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length) || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
         </div>

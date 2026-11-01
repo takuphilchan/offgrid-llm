@@ -38,6 +38,23 @@ the expanded sidebar as a drawer; Escape/outside click closes it and restores
 focus. All six destinations remain available.
 These controls do not grant permissions or restart active work.
 
+Management pages share a leading edge; Settings keeps a narrower reading measure.
+Library headings reserve space for actions rather than forcing them below long
+descriptions. Models places inventory/discovery and category navigation in one
+wrapping toolbar, with explicit model selection and a separate **Model actions**
+menu for verification/removal. Selection does not load or download a model.
+
+Chat's **Context & response** panel contains response, retrieval and voice
+preferences. Microphone input, image attachment and active speech stopping remain
+in the composer. Voice metadata reads are cancelled when the panel closes.
+Knowledge places search and question entry together, with selected-source actions
+appearing only for the current selection. Activity separates saved work and
+**Schedules**; diagnostics stay secondary to work. Profile editing places
+identity/model before purpose and capabilities, with a persistent action footer
+on sufficiently tall desktop layouts and normal document flow on small screens.
+Long artifact names are summarized in two lines, with **Full filename** disclosure
+and the original name retained for downloads.
+
 Quick actions also finds saved work on services advertising `work-search-v1`.
 It searches authorized **conversation names and root task requests**, not message
 bodies, artifacts or file contents. Search starts after two characters, is

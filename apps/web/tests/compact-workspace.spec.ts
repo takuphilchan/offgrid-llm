@@ -16,7 +16,14 @@ for(const width of [390,1440]) for(const locale of ['en','ar']) test(`direct edi
  else expect(b!.y).toBeGreaterThan(a!.y+a!.height);
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  const fields=await page.locator('.profile-fields').boundingBox(),actions=await page.locator('.profile-editor > .profile-actions').boundingBox();
- expect(actions!.y).toBeGreaterThanOrEqual(fields!.y+fields!.height);
+ if(width<960) expect(actions!.y).toBeGreaterThanOrEqual(fields!.y+fields!.height);
+ else {
+  expect(actions!.y+actions!.height).toBeLessThanOrEqual(900);
+  for(const field of await basics.locator('input:visible, textarea:visible').all()) {
+   await field.focus();
+   await expect.poll(()=>field.evaluate(el=>{const r=el.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return hit===el||el.contains(hit) ? 'visible' : `${el.closest('label')?.textContent}: ${r.y}/${r.height}, covered by ${hit?.tagName}.${hit?.className}`;})).toBe('visible');
+  }
+ }
  expect(state.writes).toEqual([]);
  await page.screenshot({path:info.outputPath('editor.png'),fullPage:true});
  if(width<1024)await page.locator('.navigation-trigger').click();

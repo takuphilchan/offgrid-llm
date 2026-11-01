@@ -18,6 +18,7 @@ import { workspaceRefinement } from '../../i18n/workspace-refinement';
 import { PermissionNotice } from '../../components/PermissionNotice';
 import { TaskWorkspace, taskFromLocation } from '../agents/TaskWorkspace';
 import { AgentSchedules } from './AgentSchedules';
+import { agentSchedulesText } from '../../i18n/agent-schedules';
 
 type Health = 'checking' | 'ready' | 'offline';
 type RuntimeStats = {
@@ -30,6 +31,8 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   const { locale, messages: text } = useI18n();
   const [inspecting, setInspecting] = useState(() => !!taskFromLocation());
   const [diagnostics, setDiagnostics] = useWorkspaceState('activity.diagnostics', false);
+  const [view, setView] = useWorkspaceState<'work' | 'schedules'>('activity.view', 'work');
+  const [schedulesVisited, setSchedulesVisited] = useState(view === 'schedules');
   useEffect(() => {
     const changed = () => setInspecting(!!taskFromLocation());
     window.addEventListener('hashchange', changed);
@@ -38,9 +41,13 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   if (!taskFirst && !inspecting) return <LegacyActivity health={health} />;
   return <div className="stack activity-page">
     {!inspecting && <p className="model-search-hint">{text.guidance.activity}</p>}
-    <TaskWorkspace scope={scope} workspace={workspace} />
-    {!inspecting && <AgentSchedules />}
-    {!inspecting && admin && <details className="activity-diagnostics activity-archive" open={diagnostics} onToggle={event => setDiagnostics(event.currentTarget.open)}><summary>{workspaceManagement(locale).diagnostics}</summary>{diagnostics && <LegacyActivity health={health} />}</details>}
+    {!inspecting && <div className="model-library-tabs" role="group" aria-label={text.nav.activity}>
+      <button className="secondary-button" aria-pressed={view === 'work'} onClick={() => setView('work')}>{text.activity.runs}</button>
+      <button className="secondary-button" aria-pressed={view === 'schedules'} onClick={() => { setSchedulesVisited(true); setView('schedules'); }}>{agentSchedulesText[locale].title}</button>
+    </div>}
+    <div hidden={!inspecting && view !== 'work'}><TaskWorkspace scope={scope} workspace={workspace} /></div>
+    {schedulesVisited && <div hidden={inspecting || view !== 'schedules'}><AgentSchedules key={`${scope}:${workspace}`} /></div>}
+    {!inspecting && view === 'work' && admin && <details className="activity-diagnostics activity-archive" open={diagnostics} onToggle={event => setDiagnostics(event.currentTarget.open)}><summary>{workspaceManagement(locale).diagnostics}</summary>{diagnostics && <LegacyActivity health={health} />}</details>}
   </div>;
 }
 

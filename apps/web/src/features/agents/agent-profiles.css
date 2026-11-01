@@ -19,6 +19,8 @@
   .profile-editor :is(small, .profile-hint) { color: var(--muted); }
   .profile-fields { display: grid; gap: 1rem; padding: 0; border: 0; min-width: 0; margin: 0; }
   .profile-basics { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  .profile-identity { display: grid; gap: 16px; padding-block-end: 20px; border-block-end: 1px solid var(--line); min-width: 0; }
+  .profile-identity > label { display: grid; gap: 8px; font-size: .875rem; }
   .agent-purpose { display: grid; gap: 12px; min-width: 0; }
   .agent-purpose h4 { margin: 0; font-size: var(--type-body); font-weight: var(--weight-heading); line-height: 1.5; }
   .agent-purpose label { display: grid; gap: 8px; font-size: .875rem; }
@@ -50,6 +52,10 @@
   .profile-context-resources { min-width: 0; overflow-wrap: anywhere; }
   .profile-context-field { display: grid; gap: .5rem; margin-block: .75rem; }
   .profile-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+  @media (min-width: 960px) and (min-height: 600px) {
+    .profile-editor > .profile-actions { position: sticky; bottom: 0; z-index: 2; background: var(--surface-1); }
+    .profile-editor :is(input, textarea, select, button, summary) { scroll-margin-block: 80px; }
+  }
   .profile-issues { padding: 1rem; border-inline-start: 3px solid var(--line-strong); background: var(--surface-2); overflow-wrap: anywhere; }
   .profile-issues h4 { margin-block: 0 .5rem; }
   .profile-empty { display: grid; place-items: center; min-height: 15rem; color: var(--muted); text-align: center; padding: 2rem; }

@@ -1,5 +1,9 @@
 @layer workspace {
   .model-library-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .model-library-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; }
+  .model-library-toolbar > * { min-width: 0; }
+  .model-section > .workspace-section-heading { margin-block-end: 16px; }
+  .model-section > .workspace-section-heading .workspace-search-field { width: min(100%, 22rem); }
   .model-display { min-width: 0; display: grid; gap: 8px; }
   .model-display h3, .model-display p { margin: 0; overflow-wrap: anywhere; }
   .model-display h3 { font-size: var(--type-body); line-height: var(--leading-ui); }
@@ -18,6 +22,7 @@
   .model-display .installed-model-main { display: block; text-align: start; width: fit-content; max-width: 100%; }
   .model-display .installed-model-main strong { white-space: normal; overflow-wrap: anywhere; font-size: var(--type-body); }
   .installed-model .model-actions { flex-wrap: wrap; }
+  .model-maintenance .utility-popover-content { display: grid; gap: 8px; }
   .model-section > .workspace-search-field { max-width: 560px; }
   .model-discovery-sources { display: flex; flex-wrap: wrap; gap: 8px; }
   .model-discovery-sources > button[aria-pressed=true] { border-color: var(--line-strong); background: var(--surface-2); }

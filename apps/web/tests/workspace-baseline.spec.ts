@@ -24,6 +24,7 @@ for (const state of ['empty', 'populated', 'busy', 'blocked', 'error', 'complete
       const data: Record<string, unknown> = {
         '/api/v2/system': { product: 'offgrid', version: 'fixture', workspace_id: 'comparison', api_version: 2, ui_build_id: 'a'.repeat(64), capabilities: ['task-first-agents-v2', 'durable-agent-events-v2'] },
         '/v1/users/me': { authenticated: false, user: null },
+        '/api/v2/models': { models: [] },
         '/v1/models': { data: state === 'blocked' ? [] : [{ id: 'fixture-model', type: 'chat', size: 1024 ** 3 }] },
         '/v1/system/config': { version: 'fixture', inference_slots: 1 },
         '/v1/sessions': { sessions: populated ? [session] : [] },
@@ -50,6 +51,7 @@ for (const state of ['empty', 'populated', 'busy', 'blocked', 'error', 'complete
         await page.goto(`/ui/#/${route === 'agents' && populated ? `agents/task/${id}` : route}`);
         await expect(page.locator('.page-content')).toBeVisible();
         await expect(page.locator('.page-failure')).toHaveCount(0);
+        await expect(page.getByText(/Cannot read properties|undefined.*filter/)).toHaveCount(0);
         await page.evaluate(() => document.fonts.ready);
         await page.screenshot({ path: info.outputPath(`${route}-${viewport.width}x${viewport.height}.png`), fullPage: true });
       }

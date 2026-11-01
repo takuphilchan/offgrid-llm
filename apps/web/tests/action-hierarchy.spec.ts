@@ -45,7 +45,7 @@ for(const locale of ['en','ar'] as const) for(const width of [320,1440]) test(`K
 test('composer keeps one outer boundary and usable inner selectors',async({page})=>{
  const state=await craftFixture(page,'en','light');await page.goto('/ui/#/chat');
  await expect(page.locator('.composer')).toHaveCSS('border-top-width','1px');
- for(const name of ['Agent','Model','Context & response','Voice settings']){
+ for(const name of ['Agent','Model','Context & response']){
   const control=page.getByRole('button',{name,exact:true});await expect(control).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
   await control.focus();await control.press('Enter');await expect(control).toHaveAttribute('aria-expanded','true');
   await page.keyboard.press('Escape');await expect(control).toBeFocused();
@@ -67,7 +67,7 @@ test.describe('touch controls',()=>{
   const state=await craftFixture(page,'en','light');
   for(const route of ['settings','chat','knowledge']){
    await page.goto(`/ui/#/${route}`);expect(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches)).toBe(true);
-   const controls=route==='settings'?page.locator('.settings-group :is(select,button):visible'):route==='chat'?page.locator('.composer button:visible'):page.locator('.knowledge-actions button:visible');
+   const controls=route==='settings'?page.locator('.settings-group :is(select,button):visible'):route==='chat'?page.locator('.composer button:visible'):page.locator('.knowledge-library-toolbar button:visible');
    expect(await controls.count()).toBeGreaterThan(0);
    for(const control of await controls.all()){const box=await control.boundingBox();expect(box!.height,await control.getAttribute('class')??'control').toBeGreaterThanOrEqual(44);}
   }

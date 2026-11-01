@@ -206,18 +206,18 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
       </div>
     </section>}
 
-    {enabled && <div className="knowledge-actions">
-      <button className="secondary-button" aria-describedby="knowledge-retrieval-scope" disabled={busy || !documents.length || !!status?.stats?.index_error} onClick={() => handoff.askKnowledge()}>{management.askKnowledge}</button>
-      <p id="knowledge-retrieval-scope">{management.retrievalScope}</p>
-    </div>}
     {!enabled && documents.length > 0 && <p>{copy.offlineLibrary}</p>}
     {error && <div className="inline-error" role="alert">{error}<button onClick={() => void refresh()}>{text.common.retry}</button></div>}
+    <div className="knowledge-library-toolbar">
     {documents.length > 0 && <ListSearch id="knowledge-document-search" label={management.searchDocuments} value={query} onChange={setQuery} />}
+    {enabled && !selection.length && <button className="secondary-button" aria-describedby="knowledge-retrieval-scope" disabled={busy || !documents.length || !!status?.stats?.index_error} onClick={() => handoff.askKnowledge()}>{management.askKnowledge}</button>}
     {selection.length > 0 && <div className="knowledge-selection">
       <button className="primary-button" disabled={busy || !enabled || !scopedReady || !!status?.stats?.index_error || selection.some(id => !documents.some(doc => doc.id === id && doc.index_status === 'ready'))} onClick={() => handoff.askKnowledge(selection.map(id => ({ id, name: documents.find(doc => doc.id === id)!.name })))}>{scopeCopy.ask} · {selection.length}/16</button>
       <button className="text-button" onClick={() => setSelection([])}>{text.models.cancel}</button>
       {!scopedReady && <p role="status">{scopeCopy.unsupported}</p>}
     </div>}
+    </div>
+    {enabled && !selection.length && <p id="knowledge-retrieval-scope" className="workspace-secondary knowledge-scope-hint">{management.retrievalScope}</p>}
     {busy && documents.length === 0 ? <SkeletonCards /> : shownDocuments.length === 0 ? !error && <EmptyState title={query ? management.noDocuments : text.knowledge.empty} action={query ? <button type="button" className="secondary-button" onClick={() => { setQuery(''); document.getElementById('knowledge-document-search')?.focus(); }}>{workspaceRefinement[locale].clear}</button> : undefined} /> : <div className="knowledge-documents">{shownDocuments.map(document => <article className="resource-card" key={document.id}><div className="file-icon"><Icon name="knowledge" /></div><div className="resource-body"><h3>{document.name}</h3><p>{document.content_type || text.common.document} · {formatBytes(document.size)}</p><p className="document-readiness">{readiness(document)}</p>{document.last_error && <p role="status">{document.last_error}</p>}<div className="resource-actions"><label className="knowledge-source-select"><input type="checkbox" checked={selection.includes(document.id)} disabled={!selection.includes(document.id) && (document.index_status !== 'ready' || selection.length >= 16)} onChange={event => setSelection(current => event.target.checked ? [...current, document.id] : current.filter(id => id !== document.id))} aria-label={scopeCopy.select + ': ' + document.name} />{scopeCopy.select}</label><span className={document.source_retained ? 'source-state retained' : 'source-state'}>{document.source_retained ? text.knowledge.retained : text.knowledge.legacy}</span><button className="text-button" disabled={!document.source_retained} title={!document.source_retained ? copy.sourceMissing : undefined} onClick={() => setSourceID(document.id)}>{copy.viewSource}</button><UtilityPopover label={`${management.manageDocument}: ${document.name}`} trigger={management.manageDocument} triggerClassName="utility-button"><p>{document.chunk_count} {text.knowledge.chunks}</p><button className="secondary-button" disabled={!permissions.admin || !document.source_retained || !enabled || reindexing !== ''} onClick={() => void reindex(document)}>{reindexing === document.id ? text.knowledge.reindexing : text.knowledge.reindex}</button><button className="danger-button" disabled={!permissions.admin || busy || reindexing !== ''} onClick={() => setDeleting(document)}>{text.models.delete}</button></UtilityPopover></div>{!document.source_retained && <p className="workspace-secondary">{copy.sourceMissing}</p>}</div></article>)}</div>}
   </div>;
 }

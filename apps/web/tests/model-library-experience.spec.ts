@@ -16,7 +16,7 @@ async function fixture(page: Page, role = 'admin') {
       '/v1/system/config': { require_auth: true }, '/v1/users/me': { authenticated: true, auth_required: true, user: { id: 'reader', username: 'reader', role } },
       '/v1/models': { data: [{ id: 'fixture-chat', type: 'llm', size: 2048 }, { id: 'fixture-embed', type: 'embedding' }, { id: 'must-not-be-chat', type: 'asr' }] },
       '/v1/catalog': { models: [] }, '/v1/models/download/progress': {}, '/api/v2/jobs': [], '/v1/sessions': { sessions: [] },
-      '/api/v2/models': { models: [pkg('recognition-fixture', 'speech_recognition'), pkg('synthesis-fixture', 'speech_generation')] },
+      '/api/v2/models': { models: [pkg('recognition-fixture', 'speech_recognition'), pkg('synthesis-fixture', 'speech_generation')].filter(item => !url.searchParams.has('category') || item.category === url.searchParams.get('category')) },
       '/api/v2/models/operations': { operations: [] }, '/api/v2/models/packages': { packages: [] },
       '/api/v2/models/catalog': { models: [], repositories: [{ id: 'publisher/speech', size_bytes: 8192 }] },
       '/v1/search': { results: [{ id: 'publisher/chat', name: 'Chat', author: 'publisher' }] },
@@ -111,7 +111,9 @@ test('navigation keeps the reviewed intent without online re-search and tabs sup
 
 test('non-administrators cannot initiate discovery transfers or package administration', async ({ page }) => {
   const state = await fixture(page, 'user'); await page.goto('/ui/#/models');
-  await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Model actions: fixture-chat', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Model actions: fixture-chat', exact: true }).getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   await expect(page.getByText('Administrator access required', { exact: true })).toBeVisible();
@@ -191,7 +193,7 @@ test('legacy verification remains attached to its model after navigating away an
     checks++;
     return route.fulfill({ json: { verified: true, file_name: 'fixture-chat', message: 'Fixture integrity evidence', sha256: 'a'.repeat(64) } });
   });
-  await page.goto('/ui/#/models'); await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await page.goto('/ui/#/models'); await page.getByRole('button', { name: 'Model actions: fixture-chat', exact: true }).click(); await page.getByRole('button', { name: 'Verify', exact: true }).click();
   await expect(page.locator('.installed-model')).toContainText('Fixture integrity evidence');
   await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
   await expect(page.getByText('Fixture integrity evidence')).toHaveCount(0);

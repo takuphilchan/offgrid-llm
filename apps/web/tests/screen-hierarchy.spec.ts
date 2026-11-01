@@ -19,8 +19,8 @@ test('profile selection guidance and empty search preserve the selected draft',a
 for(const width of [390,1440]) test(`Activity sections share a single content alignment at ${width}`,async({page})=>{
  await craftFixture(page,'en','light');await page.setViewportSize({width,height:900});await page.goto('/ui/#/activity');
  await expect(page.locator('.task-list-item')).toBeVisible();
- const boxes=await page.locator('.activity-page > .task-workspace, .activity-page > .agent-schedules, .activity-page > .activity-diagnostics').evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,width:r.width};}));
- expect(boxes).toHaveLength(3);for(const box of boxes){expect(Math.abs(box.x-boxes[0].x)).toBeLessThanOrEqual(1);expect(Math.abs(box.width-boxes[0].width)).toBeLessThanOrEqual(1);}
+ const boxes=await page.locator('.activity-page .task-workspace, .activity-page > .activity-diagnostics').evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,width:r.width};}));
+ expect(boxes).toHaveLength(2);for(const box of boxes){expect(Math.abs(box.x-boxes[0].x)).toBeLessThanOrEqual(1);expect(Math.abs(box.width-boxes[0].width)).toBeLessThanOrEqual(1);}
 });
 
 for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu']) for(const width of [320,1280]) test(`settings rows keep labels and bounded controls aligned: ${locale} ${width}`,async({page},info)=>{

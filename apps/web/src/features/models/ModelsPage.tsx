@@ -23,6 +23,8 @@ import { SearchField } from '../../components/SearchField';
 import { LanguagePackageModels } from './LanguagePackageModels';
 import { CatalogComparison } from './CatalogComparison';
 import { modelComparison } from '../../i18n/model-comparison';
+import { UtilityPopover } from '../../components/UtilityPopover';
+import { workspaceOrder } from '../../i18n/workspace-order';
 
 function fileName(path: string): string {
   return path.split('/').pop() ?? path;
@@ -163,8 +165,8 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   };
 
   return <div className="stack models-workspace">
-    <LibraryNavigation view={view} change={setView} />
-    <div className="model-category-picker" role="group" aria-label={categoryCopy.category}>{categories.map(value => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryCopy[value]}</button>)}</div>
+    <div className="model-library-toolbar"><LibraryNavigation view={view} change={setView} />
+    <div className="model-category-picker" role="group" aria-label={categoryCopy.category}>{categories.map(value => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryCopy[value]}</button>)}</div></div>
     <p className="model-search-hint">{view === 'discover' ? text.guidance.discovery : category === 'language' ? text.guidance.languageModels : category === 'embeddings' ? text.guidance.embeddingModels : text.guidance.speechModels}</p>
     <div id="model-library-panel" role="tabpanel" aria-labelledby={`model-view-${view}`} className="stack">
     {packageMode ? <PackageModels key={category} category={category} view={view} onDiscover={discover} /> : <>
@@ -185,9 +187,14 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
       <SectionHeading title={`${text.models.installed} · ${categoryModels.length}`} />
     {!!categoryModels.length && <SearchField id="installed-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={value => setFilters(old => ({ ...old, [category]: value }))} />}
       {visibleModels.length === 0 ? <EmptyState title={categoryModels.length ? modelLibrary(locale).noMatches : text.models.empty} action={<button type="button" className="secondary-button" onClick={() => { if (categoryModels.length) { setFilters(old => ({ ...old, [category]: '' })); document.getElementById('installed-model-search')?.focus(); } else discover(); }}>{categoryModels.length ? workspaceRefinement[locale].clear : text.models.discover}</button>} /> : <div className="installed-models">{visibleModels.map(model => <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
-        <ModelIdentity model={legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model])))} select={supportsChat(model) ? () => setSelected(model.id) : undefined} selected={selected === model.id} />
+        <ModelIdentity model={legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model])))} />
         {verifications[model.id] && <div className="verification model-verification" role="status"><strong>{verifications[model.id].file_name}</strong><span>{verifications[model.id].message}</span><span>{verifications[model.id].sha256}</span></div>}
-        <div className="model-actions"><button className="secondary-button" disabled={!admin || operation !== ''} onClick={() => void verify(model)}>{operation === `verify:${model.id}` ? text.common.loading : text.models.verify}</button><button className="danger-button" disabled={!admin || operation !== ''} onClick={() => setConfirmDelete(model.id)}>{text.models.delete}</button></div>
+        <div className="model-actions">
+          {supportsChat(model) && <button className="secondary-button" aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{workspaceOrder(locale).selectModel}</button>}
+          <UtilityPopover label={`${workspaceOrder(locale).modelActions}: ${model.id}`} trigger={<Icon name="more" size={18} />} triggerClassName="icon-button" className="model-maintenance">
+            <button className="secondary-button" disabled={!admin || operation !== ''} onClick={() => void verify(model)}>{operation === `verify:${model.id}` ? text.common.loading : text.models.verify}</button><button className="danger-button" disabled={!admin || operation !== ''} onClick={() => setConfirmDelete(model.id)}>{text.models.delete}</button>
+          </UtilityPopover>
+        </div>
       </article>)}</div>}
     </section>}
     {view === 'installed' && category === 'language' && <LanguagePackageModels />}

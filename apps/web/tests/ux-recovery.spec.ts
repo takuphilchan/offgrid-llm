@@ -63,8 +63,8 @@ test('disabled knowledge keeps source inspection and confirmed deletion availabl
 
 test('model deletion has a safe Cancel and one explicit confirmation',async({page})=>{
  let deletions=0;await workspace(page,path=>{if(path==='/v1/models/delete'){deletions++;return{success:true};}});
- await page.goto('/ui/#/models');await page.locator('.model-actions').getByRole('button',{name:'Delete',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('Saved chats remain');await page.keyboard.press('Escape');expect(deletions).toBe(0);
- await page.locator('.model-actions').getByRole('button',{name:'Delete',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete'}).click();await expect.poll(()=>deletions).toBe(1);
+ await page.goto('/ui/#/models');if (await page.locator('.model-maintenance > button').getAttribute('aria-expanded') !== 'true') await page.locator('.model-maintenance > button').click();await page.locator('.model-actions').getByRole('button',{name:'Delete',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('Saved chats remain');await page.keyboard.press('Escape');expect(deletions).toBe(0);
+ if (await page.locator('.model-maintenance > button').getAttribute('aria-expanded') !== 'true') await page.locator('.model-maintenance > button').click();await page.locator('.model-actions').getByRole('button',{name:'Delete',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete'}).click();await expect.poll(()=>deletions).toBe(1);
 });
 
 test('a stalled startup request has a bounded recovery path',async({page})=>{

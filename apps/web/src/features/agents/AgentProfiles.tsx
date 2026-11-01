@@ -126,12 +126,14 @@ export function AgentProfiles({ models }: { models: Model[] }) {
         {conflict && <div className="profile-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => void loadLatest()}>{copy.loadLatest}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void save(true)}>{copy.saveCopy}</button></div>}
         <fieldset disabled={busy} className="profile-fields">
           <div className="profile-basics">
-          <AgentPurpose value={draft.settings.instructions ?? ''} onChange={instructions => update({ instructions })} />
+          <div className="profile-identity">
           <label>{copy.name}<input required value={draft.settings.name} maxLength={128} onChange={event => update({ name: event.target.value })} /></label>
           <label>{copy.description}<input value={draft.settings.description ?? ''} maxLength={512} onChange={event => update({ description: event.target.value })} /></label>
           <ModelSelect models={models} value={draft.settings.model} onChange={model => update({ model })} />
           {selectedModel && <p className="profile-hint" role="status">{[selectedModel.engine || 'llama_cpp', selectedModel.format, selectedModel.backend].filter(Boolean).join(' · ')}{selectedModel.context_window ? ` · ${providerCopy.context}: ${selectedModel.context_window.toLocaleString(locale)}` : ''} · {providerCopy.qualified}: {selectedModel.qualified ? providerCopy.yes : providerCopy.unmeasured}</p>}
           {modelMissing && <p role="status">{draft.settings.model}: {copy.modelMissing}</p>}
+          </div>
+          <AgentPurpose value={draft.settings.instructions ?? ''} onChange={instructions => update({ instructions })} />
           </div>
           <fieldset className="profile-resources"><legend>{copy.resources}</legend>
             <label className="profile-option"><input type="checkbox" checked={draft.settings.computer ?? false} disabled={!resources?.computer_permitted && !draft.settings.computer} onChange={event => update({ computer: event.target.checked })} /><span>{copy.computer}<small>{copy.computerHint}</small></span></label>
